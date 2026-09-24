@@ -76,6 +76,22 @@
 #   ./scripts/llm-study.sh energy           # the sitting, recorded by tools/silicon_probe_record.py
 #   ./scripts/llm-study.sh energy-verdict   # the mechanical verdict over the sitting's log
 #
+# Gemma 3 4B, pre-registration (c)'s build: five ONNX Runtime GenAI 0.11.2 models (CPU and DirectML)
+# that read the release's exact weights. tools/gemma_decode.py holds the pins, the checks and the
+# fixes. Not a timing sitting, but a heavy CPU load with brief DirectML use: announce it first.
+#   ./scripts/llm-study.sh decode-build     # fetch, B1-B3, the builds, the fidelity gate, the smoke,
+#                                           # the thread-affinity read-back and the models' SHA-256s
+#   ./scripts/llm-study.sh decode-recheck   # B3, the smoke and the SHA-256s again on the built models
+#                                           # (build 3's B3 subprocesses died before ORT loaded)
+#
+# Gemma 3 4B, pre-registration (c): decode tok/s, J/token and accuracy of the five arms against the
+# NPU's ceilings. tools/gemma_decode_suite.py holds the protocol, the rules and the predictions. A
+# timing sitting on the CPU and the GPU: announce it first.
+#   ./scripts/llm-study.sh decode-prereg     # its pre-registration log; commit it before the sitting
+#   ./scripts/llm-study.sh decode            # the sitting, recorded by tools/silicon_probe_record.py
+#   ./scripts/llm-study.sh decode-accuracy   # the untimed teacher-forced accuracy pass (heavy on RAM)
+#   ./scripts/llm-study.sh decode-verdict    # the mechanical verdict over the sitting and accuracy logs
+#
 # Options: --machine TAG names the logs (default: desktop2 on DESKTOP-CBL5NUA, else required).
 # --tag TAG adds _TAG to the verdict log's name, for a second verdict on the same day.
 #
@@ -101,6 +117,8 @@ while [ $# -gt 0 ]; do
         prefill3b-prereg|prefill3b|prefill3b-verdict) STAGE="${1//-/_}" ;;
         compress-prereg|compress|compress-verdict) STAGE="${1//-/_}" ;;
         energy-prereg|energy|energy-verdict) STAGE="${1//-/_}" ;;
+        decode-build|decode-recheck) STAGE="${1//-/_}" ;;
+        decode-prereg|decode|decode-accuracy|decode-verdict) STAGE="${1//-/_}" ;;
         --machine) MACHINE="$2"; shift ;;
         --tag)     TAG="_$2"; shift ;;
         -h|--help) usage "${BASH_SOURCE[0]}"; exit 0 ;;
@@ -597,6 +615,72 @@ stage_energy_verdict() {
     refuse "$log"
     use_env resnet_env17
     logged "$log" python $EN verdict "$suite" || die "verdict incomplete, see $log"
+}
+
+GD=tools/gemma_decode.py
+
+stage_decode_build() {
+    local log="$OUT/gemma_decode_build_${MACHINE}_${DATE}.log"
+    refuse "$log"
+    use_env resnet_env17
+    logged "$log" python $GD build || die "the build failed, see $log"
+    ok "build done; its log and the models' SHA-256s go into (c)'s pre-registration"
+}
+
+stage_decode_recheck() {
+    local log="$OUT/gemma_decode_recheck_${MACHINE}_${DATE}.log"
+    refuse "$log"
+    use_env resnet_env17
+    logged "$log" python $GD build --steps b3,smoke,pins || die "the recheck failed, see $log"
+    ok "recheck done; it goes into (c)'s pre-registration beside the build log"
+}
+
+GDS=tools/gemma_decode_suite.py
+
+stage_decode_prereg() {
+    local build recheck
+    build="$(ls "$OUT"/gemma_decode_build_"${MACHINE}"_*.log 2>/dev/null | sort | tail -1)"
+    recheck="$(ls "$OUT"/gemma_decode_recheck_"${MACHINE}"_*.log 2>/dev/null | sort | tail -1)"
+    [ -n "$build" ] || die "no (c) build log: run $0 decode-build"
+    [ -n "$recheck" ] || die "no (c) recheck log: run $0 decode-recheck"
+    local log="$OUT/gemma_decode_prereg_${MACHINE}_${DATE}.log"
+    refuse "$log"
+    use_env resnet_env17
+    logged "$log" python $GDS prereg "$build" "$recheck" || die "prereg failed or a pin differs, see $log"
+    ok "commit $log (with $GDS) before: $0 decode"
+}
+
+stage_decode() {
+    ls "$OUT"/gemma_decode_prereg_*.log >/dev/null 2>&1 || die "no (c) pre-registration log: run $0 decode-prereg and commit it"
+    local log="$OUT/gemma_decode_suite_${MACHINE}_${DATE}.log"
+    refuse "$log"
+    use_env resnet_env17
+    # 10,800 s is a hang guard, not a budget: ten arm-passes at the predictions' lower bounds take
+    # about 4,800 s, and each arm-pass has its own READY and run timeouts in $GDS
+    python tools/silicon_probe_record.py --log "$log" --device --seconds 10800 -- \
+        python $GDS suite || die "the sitting failed, see $log"
+    ok "sitting done; next: $0 decode-accuracy"
+}
+
+stage_decode_accuracy() {
+    ls "$OUT"/gemma_decode_prereg_*.log >/dev/null 2>&1 || die "no (c) pre-registration log: run $0 decode-prereg and commit it"
+    local log="$OUT/gemma_decode_accuracy_${MACHINE}_${DATE}.log"
+    refuse "$log"
+    use_env resnet_env17
+    logged "$log" python $GDS accuracy || die "the accuracy pass failed, see $log"
+    ok "accuracy done; next: $0 decode-verdict"
+}
+
+stage_decode_verdict() {
+    local d a
+    d="$(ls "$OUT"/gemma_decode_suite_"${MACHINE}"_*.log 2>/dev/null | sed -n 's/.*_\([0-9]\{8\}\)\.log$/\1/p' | sort | tail -1)"
+    a="$(ls "$OUT"/gemma_decode_accuracy_"${MACHINE}"_*.log 2>/dev/null | sort | tail -1)"
+    [ -n "$d" ] || die "no (c) sitting log"
+    [ -n "$a" ] || die "no (c) accuracy log: run $0 decode-accuracy"
+    local suite="$OUT/gemma_decode_suite_${MACHINE}_${d}.log" log="$OUT/gemma_decode_verdict${TAG}_${MACHINE}_${d}.log"
+    refuse "$log"
+    use_env resnet_env17
+    logged "$log" python $GDS verdict "$suite" "$a" || die "verdict incomplete, see $log"
 }
 
 "stage_$STAGE"

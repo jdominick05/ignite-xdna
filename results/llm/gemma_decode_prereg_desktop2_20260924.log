@@ -1,0 +1,249 @@
+Gemma 3 4B decode on the CPU and DirectML: speed, energy per token and accuracy, and (d)'s rule
+for NPU-only decode (LLM study, pre-registration (c) with (d), locked decision 10), pre-registered
+before any sitting
+
+Question
+  The bar (locked decision 10): an NPU arm earns a role for Gemma 3 4B decode if it is faster, or
+  more accurate, or uses less energy per token, or frees the GPU, or frees the CPU, than both the
+  CPU (ONNX Runtime) and DirectML on the Radeon 780M. The floor is 5 tok/s (the user's number).
+  (c) measures the two rivals on the release's own weights: decode tok/s, J/token (package
+  counters, (b)'s method and labels) and accuracy against the release. (d) applies a mechanical
+  rule to (b) and (c): is there a speed or an energy route for NPU-only decode at this model's
+  bytes? Freeing the GPU and the CPU is (e), pre-registered after (c).
+
+The models: (c)'s build (tools/gemma_decode.py; its log is quoted under BUILD FACTS below)
+  The release is google/gemma-3-4b-it-qat-q4_0-gguf @ 15f73f5e, gemma-3-4b-it-q4_0.gguf: 238 q4_0
+  linears, a tied F16 head [262,144 x 2,560] and 205 F32 norms. onnxruntime-genai 0.11.2's builder
+  (onnxruntime-genai-directml-ryzenai on ONNX Runtime 1.23.3.dev20260320, resnet_env17) built five
+  models from a text-only copy of google/gemma-3-4b-it-qat-q4_0-unquantized @ 7c0881d8 whose
+  embedding is the release's F16 head. The builder's model load was wrapped, so that every linear
+  enters as the GGUF's own codes and scales through the builder's pre-quantized MatMulNBits path.
+  Every weight was then read back against the release by value:
+    linears     all 3,208,642,560 dequantized weights equal the GGUF's d * (q - 8), in every model
+    embedding   the release's F16 head, all 262,144 rows (fp32 on the CPU, fp16 on DirectML); the
+                checkpoint's 64 extra rows (padding and the image token, id 262,144) are not in it
+    head        H16: the release's F16 head (fp32 on the CPU, which holds F16 exactly; fp16 on
+                DirectML). H4: the builder's own RTN int4 (block 32, symmetric) of the release's
+                F16 head, a lossy step the release does not take; its rel-L2 is quoted below
+    norms       N1: the GGUF's F32 norms, written and read back (the builder writes the
+                checkpoint's + 1, which differs; B1's norm check)
+  Three defects of the installed stack were corrected in the graphs and verified:
+    F1  onnxruntime-genai 0.11.2 ignores rope_scaling (linear, factor 8): the global layers' cos/sin
+        caches are written with transformers' values (fixed on genai main, 4859742e)
+    F2  it rounds the embedding scale to 50.6: set to sqrt(2560) (fp32 50.596443; fp16 is 50.59375
+        either way, so the DirectML arms do not change)
+    F3  ORT 1.23.3's GroupQueryAttention CPU kernel keeps local_window_size + 1 keys; the 1.23
+        releases predate the fix (8af9f58086, #25927) and the installed build behaves unfixed
+        (MEASURED on the selftest's tiny model). The CPU arms' 29 local layers get 1023, so they keep
+        1024 keys as transformers does. The DirectML arms keep 1024.
+    F4  (a scope limit, not a fix) DirectML's GroupQueryAttention reads no local_window_size (the
+        ORT main and rel-1.23.0 sources): through ORT's DirectML EP, Gemma 3 past 1024 positions is
+        a different model. That is a limit of DirectML's stack, not of the 780M. D-H16's KL within
+        and past the window at 1100 tokens is quoted below; it is outside every verdict.
+  The fidelity gate: C0-H16 against transformers' fp32 Gemma3ForCausalLM with the release's
+  weights (the GGUF's dequantized linears, F16 head and F32 norms, the norms applied as the GGUF's
+  values bit for bit), streamed one layer at a time, at 64 and 1100 tokens: max KL per position
+  <= 0.0001. Its staged passes (as built, N1, N1+F1+F2, all four) are quoted below.
+  B3', DirectML placement (the gate's amendment of B3, 2026-09-24): every node of D-H4 and D-H16 on
+  DmlExecutionProvider (ORT's verbose placement log) except the two that make GroupQueryAttention's
+  total_sequence_length, input 6, which DirectML's GQA registers with requiredConstantCpuInputs(6)
+  (onnxruntime/core/providers/dml/DmlExecutionProvider/src/Operators/OperatorRegistration.cpp:1179,
+  ORT main and rel-1.23.0), so ORT places its producers on the CPU by design. The CPU node set
+  must EQUAL, by name, {/model/attn_mask_reformat/attn_mask_subgraph/Gather (Shape(attention_mask)[1]),
+  /model/attn_mask_reformat/attn_mask_subgraph/Gather/Cast (to int32)}, and the Cast's only consumers must be the 34 GQA nodes'
+  input 6 (read from each graph by this prereg, B3_PRIME_JSON). Anything else on the CPU voids the
+  arm. The two nodes read no weight and no activation, only the mask's shape, and their cost is
+  inside every timed DirectML window. The build log's B3 subprocesses exited 0xC0000142
+  (STATUS_DLL_INIT_FAILED) before ONNX Runtime loaded (spawned after a host memory guard had killed
+  the console-owning wrapper; the cause is INFERRED), so B3, the smoke and the SHA-256s were run
+  again on the same files (the recheck log; its MODEL_SHA_JSON must equal the build log's).
+  The smoke: 16 greedy tokens per arm through GenAI. 0.11.2's og.Tokenizer.encode adds no BOS
+  for this tokenizer (transformers' adds it), and Gemma 3 without BOS degenerates (the build log:
+  ' is' 16 times on every arm); the recheck gives each arm both rows. The sitting and the
+  accuracy pass prepend BOS themselves.
+
+Arms
+  C0-H4   CPU, MatMulNBits accuracy_level 0 (fp32 compute), H4 head
+  C4-H4   CPU, accuracy_level 4 (int8 compute; the builder's CPU default), H4 head
+  D-H4    DirectML on the 780M (fp16 io and compute), H4 head
+  C0-H16  CPU, accuracy_level 0, H16 head held in fp32: the release at fp32 compute
+  D-H16   DirectML, H16 head
+  Bytes per token (DERIVED): linears 1,804,861,440 B; H4 head 377,487,360 B with fp16 scales
+  (the CPU arms store fp32 scales, 419,430,400 B); H16 head 1,342,177,280 B. So 2.182 GB (H4) and
+  3.147 GB (H16), the figures (d) uses for an NPU reading fp16 or bf16 scales.
+
+Protocol (the gate's decision (A): every arm stays within 1024 positions)
+  The text: Salesforce/wikitext @ b08601e0, wikitext-2-raw-v1/test-00000-of-00001.parquet
+  (sha256 5f1bea067869d048...), its lines joined by a blank line as the Hugging Face
+  perplexity guide joins them, tokenized by the release's tokenizer, BOS + the first 1023 tokens.
+  The ids are pinned by SHA-256 (TEXT_JSON below). Every arm and the reference see exactly one BOS
+  (id 2, prepended by hand; the text is tokenized with add_special_tokens=False), and IDS_SHA pins
+  identical token ids across the arms, the passes and the accuracy pass. transformers 4.57.6 warns
+  of "an incorrect regex pattern" (a Mistral check) when it loads this tokenizer; the pinned ids
+  equal SentencePiece's on the release's tokenizer.model and the raw tokenizer.json's
+  (TOKENIZER_CHECK_JSON, checked by this prereg), so the warning changes no id.
+  Decode: the first 128 ids as the prompt, greedy, min_length = max_length = 1024 positions,
+  so 896 tokens are generated. The window runs from generated token 256's completion to token
+  896's (640 tokens), each completion on perf_counter_ns after generate_next_token and
+  get_next_tokens; warm-up is by position (stage 3b's ramp lesson).
+  Within 1024 positions Gemma 3's 1024-key window never binds: the query at position 1023 sees keys
+  0-1023 in transformers and in every arm. So F3's edit and F4's gap change no (c) measurement; F3
+  matters only to the >= 1100-token fidelity gate.
+  CPU arms: one session per arm-pass, 3 sequences in it. If GenAI 0.11.2 takes the thread
+  affinities (the build's AFFINITY_JSON; PIN below), the session runs 8 intra-op threads, the
+  caller pinned to logical CPU 0 and the pool to 2, 4, 6, 8, 10, 12, 14 (one per physical core); the
+  pinning is read back per session and a mismatch voids the arm-pass (as in the noise study).
+  DirectML arms: 5 fresh sessions per arm-pass, one sequence each, on the 780M (GenAI creates its
+  own DirectML device from provider options {"dml": {}}; the sitting refuses to start unless every
+  hardware adapter DXGI lists is the 780M, ADAPTERS_JSON), each session released (and the release
+  logged with the available RAM) before the next is created.
+  An arm-pass's tok/s is the median of its sequences' window tok/s. Every sequence must generate all
+  896 tokens, or the arm-pass is INCOMPLETE.
+  Order: C4-H4, D-H4, C0-H4, D-H16, C0-H16, then mirrored: two passes. Before each arm-pass the host
+  witness (xrt-smi and the host load, tools/silicon_probe_record.py) and a 10 s settle, then a
+  60 s idle with nothing launched; the reader process starts after the idle, loads its model, runs
+  an untimed check of 8 tokens and reports READY; the counters start then, and the sequences after
+  2.5 s. The host-load gate (busy cores < 2, no peer >= 0.5) runs once at the start, and so
+  does the memory start (the gate's condition): the available RAM and every process of >= 1 GB
+  private are logged (MEMORY_START_JSON), and a process of >= 4 GB refuses the sitting (a builder
+  peaked at 19-21 GB, one arm's session holds 2-6 GB; the desktop's largest was 0.95 GB).
+  tok/s and J/token must each agree within 10% between the passes, or the arm is
+  INCOMPLETE; an arm's value is the mean of its two passes. Every figure is reported beside the
+  5 tok/s floor.
+  Every model file's SHA-256 is verified at the start (MODEL_SHA, from the build log); any mismatch
+  stops the sitting.
+
+Energy ((b)'s method)
+  typeperf at 1 Hz: \Energy Meter(RAPL_Package0_PKG)\Power, the eight core meters, % Processor
+  Time, \Memory\Available MBytes, \Memory\Pages Input/sec and \GPU Engine(*)\Utilization
+  Percentage. A row stamped t holds the second ending at t; it counts if that second lies inside a
+  sequence's window (by wall clock, mapped once per sequence from perf_counter_ns).
+  J/token of an arm-pass = (mean package power over the rows inside its sequences' windows - its
+  idle's mean) / (its window tokens / its windows' total time). The rise of the core meters is
+  reported beside it. Fewer than 50 rows in the idle or in the arm-pass's windows voids it. An
+  idle more than 2 W from the running median of the earlier idles is flagged.
+  Labels ((b), 1e546f0: GPU INSIDE and NPU INSIDE): NPU-vs-DirectML and NPU-vs-CPU energy compare,
+  labelled; a component scaling with each chip's work is inside the package, not shown to be all of
+  it; DRAM power is outside the package (package counters only: completeness is never shown), and
+  shared DRAM pulls ratios toward 1.
+  GPU witness: the 780M's LUIDs are the DXGI adapters with its vendor and device id (0x1002,
+  0x15bf), enumerated at the sitting's start (ADAPTERS_JSON). DXGI lists the 780M twice on this
+  desktop, and the Microsoft Basic Render Driver (a software adapter) also shows a 3D engine while
+  anything renders through it, so "the LUID with a 3D engine" is not unique. The 780M's engines are
+  summed, the reader's own apart; every other LUID (the NPU, the software adapter) is reported as
+  other. DXGI's adapter 0, ORT's DirectML device 0 (EnumAdapters1(device_id),
+  dml_provider_factory.cc:499-502, rel-1.23.0), must be the 780M or the sitting refuses to start.
+  Memory witness (the gate's addition): the available RAM before each arm-pass and after each
+  session release, and \Memory\Pages Input/sec over each sequence's window. A window whose mean
+  exceeds 100 pages/s is VOID, and with it the arm-pass. Reason: 100 pages/s is 0.4 MB/s;
+  a decode whose weights paged would re-read at least 1% of a token's >= 1.8 GB each token (18 MB,
+  about 4,400 pages), >= 22,000 pages/s at the 5 tok/s floor, while this desktop's background
+  hard faults are far below the threshold (an idle sample in the dry run: 0 pages/s in five
+  seconds, 40 in one). (The build log's builder runs peaked at 19.0-20.9 GB private and left as
+  little as 0.74 GB available, 0.03 GB in the stopped run; the sitting holds one model at a time,
+  2-6 GB, and on this APU the 780M's memory is system RAM.)
+
+Accuracy (a separate, untimed pass: gemma_decode_suite.py accuracy)
+  Changed from the draft, named to the gate: each arm is teacher-forced through GenAI's own decode
+  path, one token per step, not a plain ORT prefill, because a prefill runs other kernels
+  (MatMulNBits at M > 1, GQA's prompt path) than the timed decode does. The forcing: after BOS is
+  appended, at each position get_logits is read, the logits are then set (set_logits) to a one-hot
+  on the next pinned id, and a greedy generate_next_token appends that id. GenAI 0.11.2 refuses a
+  second append_tokens on DirectML ("Continuous decoding is not supported on the selected device
+  type (DirectML)", the dry run), so every arm is forced this way. Checked in the accuracy log: each
+  arm's generated sequence must equal the pinned ids, and on each CPU arm the forced logits must
+  equal those of append_tokens one id at a time over the first 31 positions (FORCE_CHECK_JSON,
+  max |diff| 0); either failing withholds the verdict. (Before this prereg, functional only: C4-H4
+  equal bit for bit over 39 positions, and force_check itself 0 on C0-H4, C0-H16 and C4-H4 over 31;
+  D-H4's forced sequence equal to the ids, its forced rows within KL 3e-5 of a single prefill of
+  the same ids. That check also printed D-H4 against C4-H4 over 39 positions, top-1 0.974 and max
+  KL 0.0127: seen before this prereg, used for nothing.) The accuracy pass logs its memory start
+  (MEMORY_START_JSON) too.
+  Over the pinned 1024 ids: 1023 positions, each predicting the next id.
+  Primary reference, common to all arms: the fidelity gate's model (transformers' fp32 Gemma 3 with
+  the release's weights) on the same ids, its final-norm hidden states times the release's F16 head.
+  Secondary: the same hidden states times each arm's own head (the H4 arms' int4 head dequantized
+  from its model; for H16 the secondary is the primary). KL against it isolates the arm's compute
+  error. Reported; it decides nothing.
+  Metric: mean over positions of KL(reference || arm), in nats. Top-1 agreement with the primary and
+  each arm's perplexity are reported beside it, with the reference's. The vocabulary is the
+  release's 262,144 tokens in every arm and in the reference.
+  "At least as accurate": arm A is at least as accurate as B if KL_A <= 1.10 x KL_B, any KL below
+  1e-06 taken as 1e-06 so that near-exact arms tie. A non-finite logit at any position is an accuracy
+  failure: that arm is less accurate than every finite arm.
+
+Written predictions (stated expectations; the rules decide)
+  Speed (tok/s): D-H4 20-30; C4-H4 12-22; C0-H4 6-15; D-H16 14-22; C0-H16 5-12.
+  Energy (J/token, package-reported), above the read floors DERIVED from (b)'s J/GB at full-rate
+  streaming (CPU 0.880 x 2.182 = 1.92 for H4 and 0.880 x 4.489 = 3.95 for C0-H16's fp32 head;
+  DirectML 0.748 x 2.182 = 1.63 for H4 and 0.748 x 3.147 = 2.35 for H16): the CPU arms 2.5-4.5
+  (C0-H16 up to 7), the DirectML arms 1.6-3.0.
+  Accuracy: C0-H16 has the lowest primary KL; D-H4's KL >= 1.10 x D-H16's (the int4 head costs
+  more than DirectML's fp16 compute); C0-H4's primary KL, about the H4 head's cost alone, exceeds
+  every arm's secondary (compute-only) KL. Non-finite logits on DirectML are possible (the
+  builder's own fp16 warning); not scored.
+
+(d): mechanical, on (b) and (c), for an NPU reading head format H in {H4, H16}
+  No NPU decode arm exists, so its accuracy is assumed generously: KL*_H is the lowest primary KL
+  among the measured arms reading H. The rivals are every finite measured arm, of any format, at
+  least as accurate as KL*_H (KL <= 1.10 x KL*_H); the arm that sets KL*_H is always one. A KILL
+  under this assumption is robust; an OPEN needs a real NPU arm to show its own KL. The same rules
+  are also reported with the NPU assumed only as accurate as the least accurate measured arm on H.
+  Speed: the NPU's ceiling is 47.62 GB/s (MEASURED, stage 1) / GB per token: 21.82 tok/s (H4) and
+    15.13 (H16), DERIVED. KILL if the ceiling < 1.10 x the fastest rival's tok/s; otherwise OPEN
+    (exactly 1.10x is OPEN, stage 3's keep rule).
+  Energy: the NPU's floor is E_npu(H) = 0.328 J/GB (R-npu, MEASURED, 1e546f0) x GB per token:
+    0.716 J/token (H4) and 1.032 (H16), DERIVED. KILL if 1.10 x E_npu(H) > the rivals' lowest
+    J/token; otherwise OPEN.
+  Stated in advance (DERIVED from (b), the gate's addition): the energy rule cannot KILL here. Every
+    rival's read floor (1.63 J/token at the lowest, DirectML H4) is already above 1.10 x E_npu
+    (0.787 for H4, 1.135 for H16). So (d)'s energy result will be OPEN whatever (c)
+    measures, and an energy OPEN is not a finding. The energy question is decided only by a real
+    NPU decode arm.
+  Budget (a SKETCH, all DERIVED and untested): to stay 1.10x below DirectML's 0.748 J/GB, an NPU
+    decode must stay under about 0.68 J/GB. Its headroom over R-npu's 0.328 is about 0.35 J/GB,
+    about 16.7 W at 47.62 GB/s. N-c's compute added about 5.6 W over C1 in (b); R-npu's host added
+    only 0.23 W of cores (XRT's waits do not busy-poll); a busy-waiting host thread (C1: about
+    +10 W of cores) would eat most of the headroom.
+  Each outcome carries (b)'s labels. The selftest covers both directions and the edges of both
+  rules and of eligibility (a faster but less accurate arm excluded, two KLs under the floor tying,
+  a non-finite arm excluded, exact 1.10x OPEN).
+
+Unverified by design: DRAM power (outside the package) and completeness; any NPU decode (no NPU
+arm exists); positions past 1024 (F4 makes DirectML a different model there); other prompts, batch
+sizes and sampling; GenAI's prefill speed (not timed); anything about (e).
+
+BUILD FACTS, quoted from results/llm/gemma_decode_build_desktop2_20260924.log (sha256 28e29abc3eb947b45d3cc90263cf37845925c2e0eb03102c07412e15e6056447); B3 and the smoke from results/llm/gemma_decode_recheck_desktop2_20260924.log (sha256 7ecf58bb4ef61ceb899c5aa3c877f57ada90cc53e5e3d7a1280b0eecdb8ac88c)
+BUILD_FACTS_JSON {"b1": {"weights": 3208642560, "blocks": 200540160, "rule_codes": 3179200198, "rule_scales": 12414813, "rule_blocks": 10816768, "ort32_codes": 3180330867, "ort32_scales": 12420549, "ort16_codes": 3180330867, "ort16_scales": 12420549, "head_exact": 113358898, "head_n": 671088640, "norm_n": 368128, "norm_plus1_exact": 143, "norm_plus0_exact": 0, "seconds": 106.8}, "b1_common": {"label": "POST HOC", "norms": {"n": 368128, "bf16_equal": 368114}, "head": {"n": 671088640, "bf16_equal": 638886909}, "linears": {"n": 3208642560, "bf16_equal": 137515356}}, "reference_norms": {"tensors": 205, "n": 368128, "bit_exact": 368128, "forward_rel_err": 4.6798244134025955e-08}, "fidelity": [{"tag": "as built (0.11.2 and ORT 1.23.3; decides nothing)", "pass": false, "passes": [{"arm": "C0-H16", "tokens": 64, "max_kl": 0.09295073685848698, "max_kl_within_window": 0.09295073685848698, "max_kl_past_window": null, "top1_agree": 0.9375}, {"arm": "C0-H16", "tokens": 1100, "max_kl": 6.971859988608605, "max_kl_within_window": 1.0555196277638283, "max_kl_past_window": 6.971859988608605, "top1_agree": 0.9245454545454546}]}, {"tag": "N1 (attributes F1, F2, F3; decides nothing)", "pass": false, "passes": [{"arm": "C0-H16", "tokens": 64, "max_kl": 0.09910829285195251, "max_kl_within_window": 0.09910829285195251, "max_kl_past_window": null, "top1_agree": 0.953125}, {"arm": "C0-H16", "tokens": 1100, "max_kl": 7.037488628611128, "max_kl_within_window": 1.0447953054785601, "max_kl_past_window": 7.037488628611128, "top1_agree": 0.9263636363636364}]}, {"tag": "N1+F1+F2 (attributes F3; decides nothing)", "pass": false, "passes": [{"arm": "C0-H16", "tokens": 64, "max_kl": 2.775960962933335e-10, "max_kl_within_window": 2.775960962933335e-10, "max_kl_past_window": null, "top1_agree": 1.0}, {"arm": "C0-H16", "tokens": 1100, "max_kl": 0.9005739294461856, "max_kl_within_window": 1.7694860517469883e-09, "max_kl_past_window": 0.9005739294461856, "top1_agree": 0.9963636363636363}]}, {"tag": "N1+F1+F2+F3 (the gate: C0-H16; D-H16 reported, F4)", "pass": true, "passes": [{"arm": "C0-H16", "tokens": 64, "max_kl": 2.775960962933335e-10, "max_kl_within_window": 2.775960962933335e-10, "max_kl_past_window": null, "top1_agree": 1.0}, {"arm": "D-H16", "tokens": 64, "max_kl": 5.889536188147527e-05, "max_kl_within_window": 5.889536188147527e-05, "max_kl_past_window": null, "top1_agree": 0.984375}, {"arm": "C0-H16", "tokens": 1100, "max_kl": 3.734920430084421e-09, "max_kl_within_window": 1.7694860517469883e-09, "max_kl_past_window": 3.734920430084421e-09, "top1_agree": 1.0}, {"arm": "D-H16", "tokens": 1100, "max_kl": 3.867431567989035, "max_kl_within_window": 0.0003816620963505458, "max_kl_past_window": 3.867431567989035, "top1_agree": 0.9890909090909091}]}], "release": {"C0-H4": {"ok": null, "linears_exact": 3208642560, "linears": 3208642560, "norms_on_disk": 368128, "gqa_windows": {"-1": 5, "1023": 29}, "embed_scale_on_disk": 50.59644317626953, "head": {"format": "H4", "scales_dtype": "float32", "bytes": 419430400, "rel_l2_vs_release": 0.08892256763022095}}, "C4-H4": {"ok": null, "linears_exact": 3208642560, "linears": 3208642560, "norms_on_disk": 368128, "gqa_windows": {"-1": 5, "1023": 29}, "embed_scale_on_disk": 50.59644317626953, "head": {"format": "H4", "scales_dtype": "float32", "bytes": 419430400, "rel_l2_vs_release": 0.08892256763022095}}, "D-H4": {"ok": null, "linears_exact": 3208642560, "linears": 3208642560, "norms_on_disk": 368128, "gqa_windows": {"-1": 5, "1024": 29}, "embed_scale_on_disk": 50.59375, "head": {"format": "H4", "scales_dtype": "float16", "bytes": 377487360, "rel_l2_vs_release": 0.08892256763022095}}, "C0-H16": {"ok": null, "linears_exact": 3208642560, "linears": 3208642560, "norms_on_disk": 368128, "gqa_windows": {"-1": 5, "1023": 29}, "embed_scale_on_disk": 50.59644317626953, "head": {"format": "H16", "exact": 671088640, "n": 671088640}}, "D-H16": {"ok": null, "linears_exact": 3208642560, "linears": 3208642560, "norms_on_disk": 368128, "gqa_windows": {"-1": 5, "1024": 29}, "embed_scale_on_disk": 50.59375, "head": {"format": "H16", "exact": 671088640, "n": 671088640}}}, "b3": [{"arm": "D-H4", "exit": 0, "session_ok": true, "status": "CPU_NODES", "placed": {"DmlExecutionProvider": 1472, "CPUExecutionProvider": 2}, "cpu_nodes": ["Gather (/model/attn_mask_reformat/attn_mask_subgraph/Gather)", "Cast (/model/attn_mask_reformat/attn_mask_subgraph/Gather/Cast)"], "cpu_ops": ["Cast", "Gather"], "placement_lines": ["Node(s) placed on [DmlExecutionProvider]. Number of nodes: 1472", "Node(s) placed on [CPUExecutionProvider]. Number of nodes: 2"]}, {"arm": "D-H16", "exit": 0, "session_ok": true, "status": "CPU_NODES", "placed": {"DmlExecutionProvider": 1472, "CPUExecutionProvider": 2}, "cpu_nodes": ["Gather (/model/attn_mask_reformat/attn_mask_subgraph/Gather)", "Cast (/model/attn_mask_reformat/attn_mask_subgraph/Gather/Cast)"], "cpu_ops": ["Cast", "Gather"], "placement_lines": ["Node(s) placed on [DmlExecutionProvider]. Number of nodes: 1472", "Node(s) placed on [CPUExecutionProvider]. Number of nodes: 2"]}], "affinity": {"entries": "3;5;7;9;11;13;15", "new_threads": 7, "single_cpu_threads": [[2], [4], [6], [8], [10], [12], [14]], "takes_affinities": true}, "smoke": [{"arm": "C0-H4", "bos_first": false, "prompt_ids": [818, 5279, 529, 7001, 563], "tokens": [563, 563, 563, 563, 563, 563, 563, 563, 563, 563, 563, 563, 563, 563, 563, 563], "text": " is is is is is is is is is is is is is is is is", "seconds": 6.3, "onnxruntime_dll": "C:\\Users\\<user>\\miniforge3\\envs\\resnet_env17\\Lib\\site-packages\\onnxruntime\\capi\\onnxruntime.dll"}, {"arm": "C0-H4", "bos_first": true, "prompt_ids": [2, 818, 5279, 529, 7001, 563], "tokens": [9079, 236761, 108, 50429, 563, 496, 4185, 3988, 573, 1610, 236764, 8013, 236764, 228183, 236764, 532], "text": " Paris.\n\nParis is a global center for art, fashion, gastronomy, and", "seconds": 7.3, "onnxruntime_dll": "C:\\Users\\<user>\\miniforge3\\envs\\resnet_env17\\Lib\\site-packages\\onnxruntime\\capi\\onnxruntime.dll"}, {"arm": "C4-H4", "bos_first": false, "prompt_ids": [818, 5279, 529, 7001, 563], "tokens": [563, 563, 563, 563, 563, 563, 563, 563, 563, 563, 563, 563, 563, 563, 563, 563], "text": " is is is is is is is is is is is is is is is is", "seconds": 8.0, "onnxruntime_dll": "C:\\Users\\<user>\\miniforge3\\envs\\resnet_env17\\Lib\\site-packages\\onnxruntime\\capi\\onnxruntime.dll"}, {"arm": "C4-H4", "bos_first": true, "prompt_ids": [2, 818, 5279, 529, 7001, 563], "tokens": [9079, 236761, 108, 50429, 563, 496, 4185, 3988, 573, 1610, 236764, 8013, 236764, 228183, 236764, 532], "text": " Paris.\n\nParis is a global center for art, fashion, gastronomy, and", "seconds": 8.9, "onnxruntime_dll": "C:\\Users\\<user>\\miniforge3\\envs\\resnet_env17\\Lib\\site-packages\\onnxruntime\\capi\\onnxruntime.dll"}, {"arm": "D-H4", "bos_first": false, "prompt_ids": [818, 5279, 529, 7001, 563], "tokens": [563, 563, 563, 563, 563, 563, 563, 563, 563, 563, 563, 563, 563, 563, 563, 563], "text": " is is is is is is is is is is is is is is is is", "seconds": 6.4, "onnxruntime_dll": "C:\\Users\\<user>\\miniforge3\\envs\\resnet_env17\\Lib\\site-packages\\onnxruntime\\capi\\onnxruntime.dll"}, {"arm": "D-H4", "bos_first": true, "prompt_ids": [2, 818, 5279, 529, 7001, 563], "tokens": [9079, 236761, 108, 50429, 563, 496, 4185, 3988, 573, 1610, 236764, 8013, 236764, 228183, 236764, 532], "text": " Paris.\n\nParis is a global center for art, fashion, gastronomy, and", "seconds": 7.7, "onnxruntime_dll": "C:\\Users\\<user>\\miniforge3\\envs\\resnet_env17\\Lib\\site-packages\\onnxruntime\\capi\\onnxruntime.dll"}, {"arm": "C0-H16", "bos_first": false, "prompt_ids": [818, 5279, 529, 7001, 563], "tokens": [563, 563, 563, 563, 563, 563, 563, 563, 563, 563, 563, 563, 563, 563, 563, 563], "text": " is is is is is is is is is is is is is is is is", "seconds": 12.6, "onnxruntime_dll": "C:\\Users\\<user>\\miniforge3\\envs\\resnet_env17\\Lib\\site-packages\\onnxruntime\\capi\\onnxruntime.dll"}, {"arm": "C0-H16", "bos_first": true, "prompt_ids": [2, 818, 5279, 529, 7001, 563], "tokens": [9079, 236761, 108, 50429, 563, 496, 4185, 3988, 573, 1610, 236764, 8013, 236764, 228183, 236764, 532], "text": " Paris.\n\nParis is a global center for art, fashion, gastronomy, and", "seconds": 14.2, "onnxruntime_dll": "C:\\Users\\<user>\\miniforge3\\envs\\resnet_env17\\Lib\\site-packages\\onnxruntime\\capi\\onnxruntime.dll"}, {"arm": "D-H16", "bos_first": false, "prompt_ids": [818, 5279, 529, 7001, 563], "tokens": [563, 563, 563, 563, 563, 563, 563, 563, 563, 563, 563, 563, 563, 563, 563, 563], "text": " is is is is is is is is is is is is is is is is", "seconds": 8.1, "onnxruntime_dll": "C:\\Users\\<user>\\miniforge3\\envs\\resnet_env17\\Lib\\site-packages\\onnxruntime\\capi\\onnxruntime.dll"}, {"arm": "D-H16", "bos_first": true, "prompt_ids": [2, 818, 5279, 529, 7001, 563], "tokens": [9079, 236761, 108, 50429, 563, 496, 4185, 3988, 573, 1610, 236764, 8013, 236764, 228183, 236764, 532], "text": " Paris.\n\nParis is a global center for art, fashion, gastronomy, and", "seconds": 10.1, "onnxruntime_dll": "C:\\Users\\<user>\\miniforge3\\envs\\resnet_env17\\Lib\\site-packages\\onnxruntime\\capi\\onnxruntime.dll"}], "builders": [{"arm": "C0-H4", "exit": 0, "seconds": 33.0, "peak_private_gb": 20.87, "min_available_gb": 0.74, "cmd": "python[resnet_env17] tools/gemma_decode.py builder --arm C0-H4"}, {"arm": "C4-H4", "exit": 0, "seconds": 34.0, "peak_private_gb": 19.57, "min_available_gb": 1.78, "cmd": "python[resnet_env17] tools/gemma_decode.py builder --arm C4-H4"}, {"arm": "D-H4", "exit": 0, "seconds": 29.0, "peak_private_gb": 19.01, "min_available_gb": 4.86, "cmd": "python[resnet_env17] tools/gemma_decode.py builder --arm D-H4"}, {"arm": "C0-H16", "exit": 0, "seconds": 27.0, "peak_private_gb": 19.24, "min_available_gb": 2.07, "cmd": "python[resnet_env17] tools/gemma_decode.py builder --arm C0-H16"}, {"arm": "D-H16", "exit": 0, "seconds": 23.0, "peak_private_gb": 19.01, "min_available_gb": 5.18, "cmd": "python[resnet_env17] tools/gemma_decode.py builder --arm D-H16"}], "done": "BUILD_DONE OK 1034 s", "build_b3": [{"arm": "D-H4", "exit": 3221225794, "status": "UNPARSED"}, {"arm": "D-H16", "exit": 3221225794, "status": "UNPARSED"}], "build_smoke": [{"arm": "C0-H4", "tokens": [563, 563, 563, 563, 563, 563, 563, 563, 563, 563, 563, 563, 563, 563, 563, 563], "text": " is is is is is is is is is is is is is is is is"}, {"arm": "C4-H4", "tokens": [563, 563, 563, 563, 563, 563, 563, 563, 563, 563, 563, 563, 563, 563, 563, 563], "text": " is is is is is is is is is is is is is is is is"}, {"arm": "D-H4", "tokens": [563, 563, 563, 563, 563, 563, 563, 563, 563, 563, 563, 563, 563, 563, 563, 563], "text": " is is is is is is is is is is is is is is is is"}, {"arm": "C0-H16", "tokens": [563, 563, 563, 563, 563, 563, 563, 563, 563, 563, 563, 563, 563, 563, 563, 563], "text": " is is is is is is is is is is is is is is is is"}, {"arm": "D-H16", "tokens": [563, 563, 563, 563, 563, 563, 563, 563, 563, 563, 563, 563, 563, 563, 563, 563], "text": " is is is is is is is is is is is is is is is is"}], "recheck_done": "BUILD_DONE OK 94 s"}
+  B3 D-H4: CPU_NODES {'DmlExecutionProvider': 1472, 'CPUExecutionProvider': 2}, CPU ops ['Cast', 'Gather']
+  B3 D-H16: CPU_NODES {'DmlExecutionProvider': 1472, 'CPUExecutionProvider': 2}, CPU ops ['Cast', 'Gather']
+  smoke C0-H4 (as encoded): ' is is is is is is is is is is is is is is is is'
+  smoke C0-H4 (BOS first): ' Paris.\n\nParis is a global center for art, fashion, gastronomy, and'
+  smoke C4-H4 (as encoded): ' is is is is is is is is is is is is is is is is'
+  smoke C4-H4 (BOS first): ' Paris.\n\nParis is a global center for art, fashion, gastronomy, and'
+  smoke D-H4 (as encoded): ' is is is is is is is is is is is is is is is is'
+  smoke D-H4 (BOS first): ' Paris.\n\nParis is a global center for art, fashion, gastronomy, and'
+  smoke C0-H16 (as encoded): ' is is is is is is is is is is is is is is is is'
+  smoke C0-H16 (BOS first): ' Paris.\n\nParis is a global center for art, fashion, gastronomy, and'
+  smoke D-H16 (as encoded): ' is is is is is is is is is is is is is is is is'
+  smoke D-H16 (BOS first): ' Paris.\n\nParis is a global center for art, fashion, gastronomy, and'
+  fidelity [as built (0.11.2 and ORT 1.23.3; decides nothing)] C0-H16 64 tokens: max KL 0.093 (within the window 0.093)
+  fidelity [as built (0.11.2 and ORT 1.23.3; decides nothing)] C0-H16 1100 tokens: max KL 6.97 (within the window 1.06, past it 6.97)
+  fidelity [N1 (attributes F1, F2, F3; decides nothing)] C0-H16 64 tokens: max KL 0.0991 (within the window 0.0991)
+  fidelity [N1 (attributes F1, F2, F3; decides nothing)] C0-H16 1100 tokens: max KL 7.04 (within the window 1.04, past it 7.04)
+  fidelity [N1+F1+F2 (attributes F3; decides nothing)] C0-H16 64 tokens: max KL 2.78e-10 (within the window 2.78e-10)
+  fidelity [N1+F1+F2 (attributes F3; decides nothing)] C0-H16 1100 tokens: max KL 0.901 (within the window 1.77e-09, past it 0.901)
+  fidelity [N1+F1+F2+F3 (the gate: C0-H16; D-H16 reported, F4)] C0-H16 64 tokens: max KL 2.78e-10 (within the window 2.78e-10)
+  fidelity [N1+F1+F2+F3 (the gate: C0-H16; D-H16 reported, F4)] D-H16 64 tokens: max KL 5.89e-05 (within the window 5.89e-05)
+  fidelity [N1+F1+F2+F3 (the gate: C0-H16; D-H16 reported, F4)] C0-H16 1100 tokens: max KL 3.73e-09 (within the window 1.77e-09, past it 3.73e-09)
+  fidelity [N1+F1+F2+F3 (the gate: C0-H16; D-H16 reported, F4)] D-H16 1100 tokens: max KL 3.87 (within the window 0.000382, past it 3.87)
+B3_PRIME_JSON {"arm": "D-H4", "ok": true, "cpu_nodes": ["/model/attn_mask_reformat/attn_mask_subgraph/Gather", "/model/attn_mask_reformat/attn_mask_subgraph/Gather/Cast"], "gqa_nodes": 34, "checks": {"cpu_set_equal": true, "gather_of_shape_mask_1": true, "cast_to_int32": true, "gather_feeds_only_the_cast": true, "cast_feeds_only_gqa_input_6": true}, "why": "B3': only GQA's total_sequence_length producers on the CPU"}
+  B3' D-H4: PASS (B3': only GQA's total_sequence_length producers on the CPU)
+B3_PRIME_JSON {"arm": "D-H16", "ok": true, "cpu_nodes": ["/model/attn_mask_reformat/attn_mask_subgraph/Gather", "/model/attn_mask_reformat/attn_mask_subgraph/Gather/Cast"], "gqa_nodes": 34, "checks": {"cpu_set_equal": true, "gather_of_shape_mask_1": true, "cast_to_int32": true, "gather_feeds_only_the_cast": true, "cast_feeds_only_gqa_input_6": true}, "why": "B3': only GQA's total_sequence_length producers on the CPU"}
+The tokenizer you are loading from 'C:\Users\<user>\PycharmProjects\ignite-xdna\.claude\worktrees\llm-study\scratch\llm\gemma\text_only' with an incorrect regex pattern: https://huggingface.co/mistralai/Mistral-Small-3.1-24B-Instruct-2503/discussions/84#69121093e8b480e709447d5e. This will lead to incorrect tokenization. You should set the `fix_mistral_regex=True` flag when loading this tokenizer to fix this issue.
+The tokenizer you are loading from 'C:\Users\<user>\PycharmProjects\ignite-xdna\.claude\worktrees\llm-study\scratch\llm\gemma\text_only' with an incorrect regex pattern: https://huggingface.co/mistralai/Mistral-Small-3.1-24B-Instruct-2503/discussions/84#69121093e8b480e709447d5e. This will lead to incorrect tokenization. You should set the `fix_mistral_regex=True` flag when loading this tokenizer to fix this issue.
+  B3' D-H16: PASS (B3': only GQA's total_sequence_length producers on the CPU)
+TOKENIZER_CHECK_JSON {"sentencepiece_equal": true, "raw_tokenizer_json_equal": true}
+TEXT_JSON {"pin": {"repo": "Salesforce/wikitext", "revision": "b08601e04326c79dfdd32d625aee71d232d685c3", "file": "wikitext-2-raw-v1/test-00000-of-00001.parquet", "size": 732610, "sha256": "5f1bea067869d04849c0f975a2b29c4ff47d867f484f5010ea5e861eab246d91"}, "ids_sha": "c87fda3e20a29a5fd9af2104661438ff63a3c29cd496cb4d95a9000820dfb15e", "prompt": [2, 108, 578, 9877, 151936, 589, 578, 236743, 111, 9877, 151936, 589, 563, 614, 5422, 4103, 1031, 13617, 532, 26470, 13387, 783, 1293, 1053, 496, 15083, 1392, 236772, 236940, 44116, 3853, 580, 506, 13617, 3605, 669, 8599, 528, 236743, 236778, 236771, 236771, 236771, 783, 1174, 691, 6641, 684, 496, 44116, 3853, 528, 506, 1441, 5165, 1190, 5267, 684, 20420, 75474, 1031, 837, 691, 6984, 528, 236743, 236778, 236771, 236771, 236770, 657, 506, 12194, 5762, 25239, 783, 1293, 1053, 496, 15083, 3853, 528, 506, 13617, 3605, 22121, 3415, 145767, 528, 236743, 236778, 236771, 236771, 236778, 783, 799, 236743, 236778, 236771, 236771, 236812, 151936, 589, 30473, 496, 3853, 618, 623, 35359, 623, 528, 506, 11635, 623, 74419, 756, 236751, 16976, 623, 529, 506, 13617, 3605, 669, 8099, 49401, 2895, 668], "tokens_per_word_whole_test_split": 1.2117274916981398, "tokens": 292282, "words": 241211, "prompt_text": "\n\n = Robert Boulter = \n\n\n\n\n Robert Boulter is an English film , television and theatre actor . He had a guest @-@ starring role on the television series The Bill in 2000 . This was followed by a starring role in the play Herons written by Simon Stephens , which was performed in 2001 at the Royal Court Theatre . He had a guest role in the television series Judge John Deed in 2002 . In 2004 Boulter landed a role as \" Craig \" in the episode \" Teddy 's Story \" of the television series The Long Firm ; he"}
+CONSTANTS_JSON {"protocol": {"prompt": 128, "positions": 1024, "generated": 896, "window": [257, 896], "seqs": {"cpu": 3, "dml": 5}, "order": [[1, "C4-H4"], [1, "D-H4"], [1, "C0-H4"], [1, "D-H16"], [1, "C0-H16"], [2, "C0-H16"], [2, "D-H16"], [2, "C0-H4"], [2, "D-H4"], [2, "C4-H4"]], "idle_s": 60, "settle_s": 10.0, "min_rows": 50, "pass_agree": 0.1, "page_max": 100.0}, "pin": true, "pin_cpus": [0, 2, 4, 6, 8, 10, 12, 14], "model_sha": {"C0-H4": {"added_tokens.json": "f8730690481ac3d7ef2249793e7c876ca8d32c14821fe52cfdba1f8521b61c5c", "chat_template.jinja": "e0a1e0983c75b0198f1045cbb20c64506a9ffb30925bd44feba0b91acf2d4f43", "genai_config.json": "14102d8ca482efabc04b50dec7ae00ca287187f5e627afba33256fc14281f2bc", "model.onnx": "b3f63d47ba1e475d4ca82e3561b883577d50d8a38b7beca2fb3c99715fe776ef", "model.onnx.data": "9cf93b883014655b6b85fa5541787f1297f7f451fb5028e08e395e4606a688c1", "special_tokens_map.json": "88d16a8f41b25d29d30b7865c65404fa9527bbc9c5a652f68a1c25c4b0ae0fd1", "tokenizer.json": "4667f2089529e8e7657cfb6d1c19910ae71ff5f28aa7ab2ff2763330affad795", "tokenizer.model": "1299c11d7cf632ef3b4e11937501358ada021bbdf7c47638d13c0ee982f2e79c", "tokenizer_config.json": "6eac11d7a3e6c40d7e0f19195baf61435c1350c9e5da4fea4c097779c65b2fb6"}, "C4-H4": {"added_tokens.json": "f8730690481ac3d7ef2249793e7c876ca8d32c14821fe52cfdba1f8521b61c5c", "chat_template.jinja": "e0a1e0983c75b0198f1045cbb20c64506a9ffb30925bd44feba0b91acf2d4f43", "genai_config.json": "14102d8ca482efabc04b50dec7ae00ca287187f5e627afba33256fc14281f2bc", "model.onnx": "cc93a59575e65ad6b6f4b9e6b47991d4d36aa99fc27c6c948684e1eb4bfed4d4", "model.onnx.data": "9cf93b883014655b6b85fa5541787f1297f7f451fb5028e08e395e4606a688c1", "special_tokens_map.json": "88d16a8f41b25d29d30b7865c65404fa9527bbc9c5a652f68a1c25c4b0ae0fd1", "tokenizer.json": "4667f2089529e8e7657cfb6d1c19910ae71ff5f28aa7ab2ff2763330affad795", "tokenizer.model": "1299c11d7cf632ef3b4e11937501358ada021bbdf7c47638d13c0ee982f2e79c", "tokenizer_config.json": "6eac11d7a3e6c40d7e0f19195baf61435c1350c9e5da4fea4c097779c65b2fb6"}, "D-H4": {"added_tokens.json": "f8730690481ac3d7ef2249793e7c876ca8d32c14821fe52cfdba1f8521b61c5c", "chat_template.jinja": "e0a1e0983c75b0198f1045cbb20c64506a9ffb30925bd44feba0b91acf2d4f43", "genai_config.json": "3ffb436f47461b4fe81d23616d97aa69a1ed24cf0c685ee4ab6c20b5d002583d", "model.onnx": "09b9a2d0ed34033113f11f471aa81b3085d4e72b5d410a24ecc52f77e2de76e3", "model.onnx.data": "46b5050670f6bcae88233fccb35f5e761436429144e8d28b38e1314cab2a5571", "special_tokens_map.json": "88d16a8f41b25d29d30b7865c65404fa9527bbc9c5a652f68a1c25c4b0ae0fd1", "tokenizer.json": "4667f2089529e8e7657cfb6d1c19910ae71ff5f28aa7ab2ff2763330affad795", "tokenizer.model": "1299c11d7cf632ef3b4e11937501358ada021bbdf7c47638d13c0ee982f2e79c", "tokenizer_config.json": "6eac11d7a3e6c40d7e0f19195baf61435c1350c9e5da4fea4c097779c65b2fb6"}, "C0-H16": {"added_tokens.json": "f8730690481ac3d7ef2249793e7c876ca8d32c14821fe52cfdba1f8521b61c5c", "chat_template.jinja": "e0a1e0983c75b0198f1045cbb20c64506a9ffb30925bd44feba0b91acf2d4f43", "genai_config.json": "14102d8ca482efabc04b50dec7ae00ca287187f5e627afba33256fc14281f2bc", "model.onnx": "33c47ffa21a77bda96870e97ad6ce6df9213fca93c1e7e624091d3d2ac4e019c", "model.onnx.data": "11edd445f01760ab1d44d8197fd75e40ae805b968522848d101373c804fb8380", "special_tokens_map.json": "88d16a8f41b25d29d30b7865c65404fa9527bbc9c5a652f68a1c25c4b0ae0fd1", "tokenizer.json": "4667f2089529e8e7657cfb6d1c19910ae71ff5f28aa7ab2ff2763330affad795", "tokenizer.model": "1299c11d7cf632ef3b4e11937501358ada021bbdf7c47638d13c0ee982f2e79c", "tokenizer_config.json": "6eac11d7a3e6c40d7e0f19195baf61435c1350c9e5da4fea4c097779c65b2fb6"}, "D-H16": {"added_tokens.json": "f8730690481ac3d7ef2249793e7c876ca8d32c14821fe52cfdba1f8521b61c5c", "chat_template.jinja": "e0a1e0983c75b0198f1045cbb20c64506a9ffb30925bd44feba0b91acf2d4f43", "genai_config.json": "3ffb436f47461b4fe81d23616d97aa69a1ed24cf0c685ee4ab6c20b5d002583d", "model.onnx": "422b5501095b2eafa777451e0c4ef7f7da378e5bd51ec1013f81b0d0dfe9e4fb", "model.onnx.data": "5e06ff4b9439b0b0d0e9302841d4796bffb876ab2693e6ebff7684e78538cd40", "special_tokens_map.json": "88d16a8f41b25d29d30b7865c65404fa9527bbc9c5a652f68a1c25c4b0ae0fd1", "tokenizer.json": "4667f2089529e8e7657cfb6d1c19910ae71ff5f28aa7ab2ff2763330affad795", "tokenizer.model": "1299c11d7cf632ef3b4e11937501358ada021bbdf7c47638d13c0ee982f2e79c", "tokenizer_config.json": "6eac11d7a3e6c40d7e0f19195baf61435c1350c9e5da4fea4c097779c65b2fb6"}}, "ids_sha": "c87fda3e20a29a5fd9af2104661438ff63a3c29cd496cb4d95a9000820dfb15e", "d": {"jgb_npu": 0.328, "npu_gbps": 47.62, "gb_token": {"H4": 2.1823488, "H16": 3.14703872}, "kl_floor": 1e-06, "tie": [11, 10]}, "pred_tokps": {"D-H4": [20, 30], "C4-H4": [12, 22], "C0-H4": [6, 15], "D-H16": [14, 22], "C0-H16": [5, 12]}, "pred_jtok": {"C0-H4": [2.5, 4.5], "C4-H4": [2.5, 4.5], "C0-H16": [2.5, 7.0], "D-H4": [1.6, 3.0], "D-H16": [1.6, 3.0]}, "git_head": "46b5bdd0fc132fdc76c259ae4a3a27e1f37c4b6c"}
+git HEAD 46b5bdd0fc132fdc76c259ae4a3a27e1f37c4b6c (plus this log's own commit)
