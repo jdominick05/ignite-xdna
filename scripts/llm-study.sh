@@ -113,6 +113,7 @@
 #   ./scripts/llm-study.sh prefill3c-sitting-a2   # 3c step 7: sitting A2, M = 2048 (A was stopped; BFP16 holds)
 #   ./scripts/llm-study.sh prefill3c-sitting-b    # 3c step 7: sitting B, M = 8192 (BFP16 holds the machine)
 #   ./scripts/llm-study.sh prefill3c-verdict      # 3c: the frozen verdict over A2, B, the build and the load check
+#   ./scripts/llm-study.sh prefill3c-posthoc      # 3c, POST-HOC and report-only: binding rivals, E with idle, idles
 #
 # Options: --machine TAG names the logs (default: desktop2 on DESKTOP-CBL5NUA, else required).
 # --tag TAG adds _TAG to the verdict log's name, for a second verdict on the same day.
@@ -145,6 +146,7 @@ while [ $# -gt 0 ]; do
         freeing-build|freeing-dryrun|freeing-prereg|freeing-loadcheck|freeing-suite|freeing-verdict) STAGE="${1//-/_}" ;;
         prefill3c-models|prefill3c-insts|prefill3c-prereg|prefill3c-build|prefill3c-inputs|prefill3c-pins) STAGE="${1//-/_}" ;;
         prefill3c-loadcheck|prefill3c-cadence|prefill3c-sitting-a2|prefill3c-sitting-b|prefill3c-verdict) STAGE="${1//-/_}" ;;
+        prefill3c-posthoc) STAGE="${1//-/_}" ;;
         --machine) MACHINE="$2"; shift ;;
         --tag)     TAG="_$2"; shift ;;
         -h|--help) usage "${BASH_SOURCE[0]}"; exit 0 ;;
@@ -931,6 +933,20 @@ stage_prefill3c_verdict() {
     refuse "$log"
     use_env resnet_env17
     logged "$log" python $P3C verdict "$a" "$b" "$build" "$load" || die "verdict incomplete, see $log"
+}
+
+stage_prefill3c_posthoc() {
+    # no chip; POST-HOC and report-only, asked by the gate after the verdict (7608d0a): each rule's binding
+    # rival and margin, energy with the idle included, and every window's idle, from the committed A2 and B
+    # logs through the frozen verdict functions (imported, never edited). It decides nothing.
+    local a b
+    a="$(ls "$OUT"/llm_prefill3c_sitting_A2_"${MACHINE}"_*.log 2>/dev/null | sort | tail -1)"
+    b="$(ls "$OUT"/llm_prefill3c_sitting_B_"${MACHINE}"_*.log 2>/dev/null | sort | tail -1)"
+    [ -n "$a" ] && [ -n "$b" ] || die "a sitting log is missing"
+    local log="$OUT/llm_prefill3c_posthoc_${MACHINE}_${DATE}.log"
+    refuse "$log"
+    use_env resnet_env17
+    logged "$log" python tools/llm_prefill3c_posthoc.py "$a" "$b" || die "post-hoc read failed, see $log"
 }
 
 "stage_$STAGE"

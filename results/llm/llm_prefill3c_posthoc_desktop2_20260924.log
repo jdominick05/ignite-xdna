@@ -1,0 +1,262 @@
+STAGE 3c POST-HOC: the binding rivals, energy with the idle included, and every window's idle
+POST-HOC, REPORT-ONLY, not pre-registered: it decides nothing and changes no rule, outcome or score
+VERDICT_CODE_SHA256 6e459e560c838909295e554994c950ad3ce32cf0b15a150123ab5481d17dc549 (the frozen value; this script imports the verdict functions and edits none)
+INPUT results/llm/llm_prefill3c_sitting_A2_desktop2_20260924.log sha256_lf bdf265edbc2ef3d2bb523a50d72a921ff13993c185ac4e2fce7932cca01c7f21
+INPUT results/llm/llm_prefill3c_sitting_B_desktop2_20260924.log sha256_lf 9daf5b64cf3808d34fd351d184bc8cb7c5d1a27d000050a90e2e3b265cbb8f7e
+MARGIN 1.1  ACC_TIE 1.1  (the frozen constants)
+E and E_gross are J per prompt token for one layer's seven weight GEMMs (blk.16), printed in mJ; package counters only, DRAM outside
+
+==================== M = 2048  (the frozen role: KEEP)
+
+-- the arms: the frozen arm_record; a COMPLETE arm's two taken passes averaged
+  arm        state          T ms     E mJ  window W  idle W  above W E_gross mJ    rel-L2
+  C-fp32@8   COMPLETE     386.88  13.3480     86.26   15.93    70.34    16.3709  2.93e-07
+  C-fp32@16  COMPLETE     431.97  15.3255     85.75   13.55    72.19    18.2030  2.93e-07
+  C-i8@8     COMPLETE     106.85   3.8205     86.26   13.54    72.72     4.5317  1.72e-02
+  C-i8@16    COMPLETE     102.31   3.6683     86.17   14.60    71.57     4.4176  1.72e-02
+  C-nb0@8    COMPLETE     424.12  15.0787     86.26   14.36    71.90    18.0911  1.69e-06
+  C-nb0@16   COMPLETE     519.97  18.3368     86.28   14.23    72.05    21.9607  1.69e-06
+  C-nb4@8    COMPLETE     385.68  13.6114     86.16   14.24    71.93    16.3063  5.35e-03
+  C-nb4@16   COMPLETE     391.12  13.9947     85.77   14.28    71.49    16.7909  5.35e-03
+  D-fp16     COMPLETE     132.80   3.4719     66.99   13.54    53.45     4.3514  3.38e-04
+  D-fp32     COMPLETE     318.09   9.6781     75.81   13.52    62.29    11.7780  1.69e-06
+  D-i8       COMPLETE     618.10  20.2787     80.59   13.48    67.11    24.3550  1.72e-02
+  D-nb16     COMPLETE      79.49   2.3280     73.61   13.63    59.98     2.8569  4.64e-04
+  N-bf16     COMPLETE     166.00   1.6601     33.82   13.34    20.48     2.7417  2.38e-03
+  N-i8       COMPLETE      96.92   1.0040     34.53   13.31    21.22     1.6334  1.72e-02
+  N-w4       COMPLETE      83.91   0.7949     32.78   13.37    19.41     1.3425         -
+
+-- the rules: per NPU arm, metric and chip, the at-least-as-accurate set's binding member (the COMPLETE member with the lowest value) and its ratio to the NPU arm; beaten needs >= MARGIN
+  N-bf16 speed (T; the frozen outcome: KILL); ref rel-L2 2.378e-03, its own; the set: rel-L2 <= 2.615e-03; the NPU arm 166.00
+    CPU      binding C-fp32@8 386.88 -> 2.331x (beaten by the COMPLETE members); MISSING/BROKEN in or possibly in the set: none; out (less accurate): C-i8@8, C-i8@16, C-nb4@8, C-nb4@16
+    DirectML binding D-nb16 79.49 -> 0.479x (not beaten by the COMPLETE members); MISSING/BROKEN in or possibly in the set: none; out (less accurate): D-i8
+  N-bf16 energy (E; the frozen outcome: KEEP); ref rel-L2 2.378e-03, its own; the set: rel-L2 <= 2.615e-03; the NPU arm 1.6601
+    CPU      binding C-fp32@8 13.3480 -> 8.040x (beaten by the COMPLETE members); MISSING/BROKEN in or possibly in the set: none; out (less accurate): C-i8@8, C-i8@16, C-nb4@8, C-nb4@16
+    DirectML binding D-nb16 2.3280 -> 1.402x (beaten by the COMPLETE members); MISSING/BROKEN in or possibly in the set: none; out (less accurate): D-i8
+  N-i8 speed (T; the frozen outcome: KILL); ref rel-L2 1.716e-02, its own; the set: rel-L2 <= 1.888e-02; the NPU arm 96.92
+    CPU      binding C-i8@16 102.31 -> 1.056x (not beaten by the COMPLETE members); MISSING/BROKEN in or possibly in the set: none; out (less accurate): none
+    DirectML binding D-nb16 79.49 -> 0.820x (not beaten by the COMPLETE members); MISSING/BROKEN in or possibly in the set: none; out (less accurate): none
+  N-i8 energy (E; the frozen outcome: KEEP); ref rel-L2 1.716e-02, its own; the set: rel-L2 <= 1.888e-02; the NPU arm 1.0040
+    CPU      binding C-i8@16 3.6683 -> 3.654x (beaten by the COMPLETE members); MISSING/BROKEN in or possibly in the set: none; out (less accurate): none
+    DirectML binding D-nb16 2.3280 -> 2.319x (beaten by the COMPLETE members); MISSING/BROKEN in or possibly in the set: none; out (less accurate): none
+  N-w4 speed (T; the frozen reading: FAIL); ref rel-L2 5.351e-03, C-nb4's (N-w4 has no float accuracy; U4); the set: rel-L2 <= 5.887e-03; the NPU arm 83.91
+    CPU      binding C-nb4@8 385.68 -> 4.596x (beaten by the COMPLETE members); MISSING/BROKEN in or possibly in the set: none; out (less accurate): C-i8@8, C-i8@16
+    DirectML binding D-nb16 79.49 -> 0.947x (not beaten by the COMPLETE members); MISSING/BROKEN in or possibly in the set: none; out (less accurate): D-i8
+  N-w4 energy (E; the frozen reading: OPEN); ref rel-L2 5.351e-03, C-nb4's (N-w4 has no float accuracy; U4); the set: rel-L2 <= 5.887e-03; the NPU arm 0.7949
+    CPU      binding C-fp32@8 13.3480 -> 16.792x (beaten by the COMPLETE members); MISSING/BROKEN in or possibly in the set: none; out (less accurate): C-i8@8, C-i8@16
+    DirectML binding D-nb16 2.3280 -> 2.929x (beaten by the COMPLETE members); MISSING/BROKEN in or possibly in the set: none; out (less accurate): D-i8
+
+-- energy with the idle included (POST-HOC): each NPU arm's E_gross against the lowest E_gross among the COMPLETE members of its energy set, per chip; the same >= MARGIN line, for reading only
+  N-bf16: E_gross 2.7417 (net 1.6601); CPU C-fp32@8 16.3709 -> 5.971x; DirectML D-nb16 2.8569 -> 1.042x
+  N-i8: E_gross 1.6334 (net 1.0040); CPU C-i8@16 4.4176 -> 2.704x; DirectML D-nb16 2.8569 -> 1.749x
+  N-w4: E_gross 1.3425 (net 0.7949); CPU C-nb4@8 16.3063 -> 12.146x; DirectML D-nb16 2.8569 -> 2.128x
+
+-- every window's idle (all windows, VOID and re-runs included; W, package counter)
+  pos pass arm        rerun state  idle W idle SD rows
+    0    1 C-fp32@8   False OK      18.44    6.89   58
+    1    1 C-fp32@16  False OK      13.47    0.70   58
+    2    1 C-i8@8     False OK      13.49    1.09   58
+    3    1 C-i8@16    False OK      15.58    3.48   58
+    4    1 C-nb0@8    False OK      14.69    2.26   58
+    5    1 C-nb0@16   False OK      14.91    2.21   58
+    6    1 C-nb4@8    False OK      14.86    2.40   58
+    7    1 C-nb4@16   False OK      14.71    2.12   58
+    8    1 D-fp16     False OK      13.54    0.79   58
+    9    1 D-fp32     False OK      13.41    0.67   58
+   10    1 D-i8       False OK      13.43    0.67   58
+   11    1 D-nb16     False OK      13.77    1.22   58
+   12    1 N-bf16     False OK      13.46    0.71   58
+   13    1 N-i8       False OK      13.31    0.68   58
+   14    1 N-w4       False OK      13.44    0.83   58
+   15    2 N-w4       False OK      13.31    0.76   58
+   16    2 N-i8       False OK      13.30    0.89   58
+   17    2 N-bf16     False OK      13.22    0.64   58
+   18    2 D-nb16     False OK      13.48    1.04   58
+   19    2 D-i8       False OK      13.53    0.79   58
+   20    2 D-fp32     False OK      13.63    0.71   58
+   21    2 D-fp16     False OK      13.54    0.78   58
+   22    2 C-nb4@16   False OK      13.85    1.27   58
+   23    2 C-nb4@8    False OK      13.61    0.61   58
+   24    2 C-nb0@16   False OK      13.55    0.62   58
+   25    2 C-nb0@8    False OK      14.03    3.07   58
+   26    2 C-i8@16    False OK      13.62    0.87   58
+   27    2 C-i8@8     False OK      13.59    0.84   58
+   28    2 C-fp32@16  False OK      13.64    0.84   58
+   29    2 C-fp32@8   False OK      13.41    0.63   58
+  idle range 13.22 to 18.44 W over 30 windows
+  N-bf16 idle minus D-nb16's idle, same pass (p1, p2): -0.31, -0.26 W
+  N-i8 idle minus D-nb16's idle, same pass (p1, p2): -0.46, -0.18 W
+  N-w4 idle minus D-nb16's idle, same pass (p1, p2): -0.34, -0.18 W
+
+-- the witnesses per window (report-only; rows after the 1 s trims, row gaps in s, CPU s in the window, the reader's CPU % of one logical CPU, the 780M's summed busy %, other adapters' busy %)
+  pos p arm        state idle  win gap med gap max typeperf s suite s reader %  780M % other %
+    0 1 C-fp32@8   OK      58   55   1.028   1.046      0.141   1.047    796.9     0.0     0.0
+    1 1 C-fp32@16  OK      58   53   1.056   1.171      0.141   1.031   1559.6     0.0     0.0
+    2 1 C-i8@8     OK      58   55   1.036   1.055      0.188   1.375    797.3     0.0     0.0
+    3 1 C-i8@16    OK      58   51   1.108   1.154      0.125   1.109   1571.2     0.2     0.0
+    4 1 C-nb0@8    OK      58   55   1.037   1.055      0.109   1.031    796.4     0.2     0.0
+    5 1 C-nb0@16   OK      58   52   1.102   1.222      0.172   1.734   1562.9     0.2     0.0
+    6 1 C-nb4@8    OK      58   55   1.039   1.058      0.156   0.797    797.1     0.2     0.0
+    7 1 C-nb4@16   OK      58   52   1.103   1.196      0.094   0.875   1548.6     0.4     0.0
+    8 1 D-fp16     OK      58   56   1.022   1.040      0.172   0.953     99.8    88.0     0.0
+    9 1 D-fp32     OK      58   56   1.023   1.026      0.141   0.984     99.7    90.5     0.0
+   10 1 D-i8       OK      58   55   1.023   1.262      0.109   0.719     99.8    95.5     0.0
+   11 1 D-nb16     OK      58   56   1.022   1.030      0.094   0.906     99.6    80.6     0.0
+   12 1 N-bf16     OK      58   56   1.021   1.034      0.203   0.703      4.7     0.0    95.3
+   13 1 N-i8       OK      58   56   1.020   1.026      0.094   0.797     11.1     0.0    89.3
+   14 1 N-w4       OK      58   56   1.020   1.027      0.078   0.781     13.3     0.0    87.7
+   15 2 N-w4       OK      58   56   1.018   1.025      0.047   0.734     12.8     0.0    87.7
+   16 2 N-i8       OK      58   56   1.021   1.026      0.125   0.734     11.0     0.0    89.4
+   17 2 N-bf16     OK      58   56   1.020   1.026      0.094   0.828      4.6     0.0    95.3
+   18 2 D-nb16     OK      58   56   1.022   1.032      0.094   0.844     99.7    80.5     0.0
+   19 2 D-i8       OK      58   55   1.022   1.325      0.062   0.703     99.7    95.2     0.0
+   20 2 D-fp32     OK      58   56   1.023   1.117      0.078   0.938     99.8    90.7     0.0
+   21 2 D-fp16     OK      58   56   1.023   1.091      0.188   0.984     99.8    87.5     0.0
+   22 2 C-nb4@16   OK      58   51   1.117   1.242      0.125   0.922   1563.5     0.4     0.0
+   23 2 C-nb4@8    OK      58   55   1.041   1.056      0.125   0.906    796.0     0.0     0.0
+   24 2 C-nb0@16   OK      58   51   1.095   1.563      0.094   1.734   1576.1     0.0     0.0
+   25 2 C-nb0@8    OK      58   55   1.039   1.057      0.094   0.953    794.6     0.0     0.0
+   26 2 C-i8@16    OK      58   54   1.053   1.103      0.141   1.125   1580.7     0.0     0.0
+   27 2 C-i8@8     OK      58   55   1.038   1.053      0.203   1.375    796.8     0.0     0.0
+   28 2 C-fp32@16  OK      58   52   1.100   1.170      0.094   1.156   1565.8     0.0     0.0
+   29 2 C-fp32@8   OK      58   55   1.027   1.044      0.156   1.016    795.8     0.0     0.0
+
+-- the NPU arms, per taken window: the sum of the 16 dispatch medians and the down sums' median, beside T, and 3b's gate/up concatenation timed once outside the loop (report-only, ms)
+  N-bf16 p1: T 165.68; 16 dispatches 161.90 + down sums 3.25; 3b's concatenation 49.40
+  N-bf16 p2: T 166.32; 16 dispatches 162.47 + down sums 3.29; 3b's concatenation 51.56
+  N-i8 p1: T 96.79; 16 dispatches 90.19 + down sums 6.27; 3b's concatenation 50.23
+  N-i8 p2: T 97.05; 16 dispatches 90.53 + down sums 6.19; 3b's concatenation 50.48
+  N-w4 p1: T 83.89; 16 dispatches 77.31 + down sums 6.21; 3b's concatenation 49.67
+  N-w4 p2: T 83.93; 16 dispatches 77.36 + down sums 6.21; 3b's concatenation 49.97
+
+==================== M = 8192  (the frozen role: INCOMPLETE)
+
+-- the arms: the frozen arm_record; a COMPLETE arm's two taken passes averaged
+  arm        state          T ms     E mJ  window W  idle W  above W E_gross mJ    rel-L2
+  C-fp32@8   COMPLETE    1685.44  14.3822     86.24   16.46    69.78    17.7731  2.93e-07
+  C-fp32@16  MISSING                           (one valid pass; not quoted)  2.93e-07
+  C-i8@8     COMPLETE     464.67   4.0765     86.24   14.74    71.50     4.9167  1.74e-02
+  C-i8@16    MISSING                           (one valid pass; not quoted)  1.74e-02
+  C-nb0@8    COMPLETE    1712.77  15.1728     86.11   14.30    71.81    18.1976  1.69e-06
+  C-nb0@16   COMPLETE    2199.13  19.5755     86.26   13.38    72.88    23.1699  1.69e-06
+  C-nb4@8    COMPLETE    1537.36  13.5436     85.50   13.49    72.00    16.0816  5.35e-03
+  C-nb4@16   MISSING                           (one valid pass; not quoted)  5.35e-03
+  D-fp16     COMPLETE     628.11   3.7677     64.06   14.48    49.58     4.8676  3.37e-04
+  D-fp32     COMPLETE    1304.72  10.0595     76.54   13.45    63.09    12.2036  1.69e-06
+  D-i8       COMPLETE    2361.54  23.8126     77.43   13.29    64.15    28.7455  1.74e-02
+  D-nb16     COMPLETE     346.56   2.2696     67.67   14.03    53.65     2.8631  4.64e-04
+  N-bf16     COMPLETE     612.14   1.5817     34.45   13.29    21.16     2.5749  2.38e-03
+  N-i8       COMPLETE     336.85   0.9076     35.17   13.10    22.07     1.4466  1.74e-02
+  N-w4       COMPLETE     286.55   0.7115     33.36   13.03    20.34     1.1674         -
+
+-- the rules: per NPU arm, metric and chip, the at-least-as-accurate set's binding member (the COMPLETE member with the lowest value) and its ratio to the NPU arm; beaten needs >= MARGIN
+  N-bf16 speed (T; the frozen outcome: KILL); ref rel-L2 2.377e-03, its own; the set: rel-L2 <= 2.615e-03; the NPU arm 612.14
+    CPU      binding C-fp32@8 1685.44 -> 2.753x (beaten by the COMPLETE members); MISSING/BROKEN in or possibly in the set: C-fp32@16 (MISSING); out (less accurate): C-i8@8, C-i8@16, C-nb4@8, C-nb4@16
+    DirectML binding D-nb16 346.56 -> 0.566x (not beaten by the COMPLETE members); MISSING/BROKEN in or possibly in the set: none; out (less accurate): D-i8
+  N-bf16 energy (E; the frozen outcome: INCOMPLETE); ref rel-L2 2.377e-03, its own; the set: rel-L2 <= 2.615e-03; the NPU arm 1.5817
+    CPU      binding C-fp32@8 14.3822 -> 9.093x (beaten by the COMPLETE members); MISSING/BROKEN in or possibly in the set: C-fp32@16 (MISSING); out (less accurate): C-i8@8, C-i8@16, C-nb4@8, C-nb4@16
+    DirectML binding D-nb16 2.2696 -> 1.435x (beaten by the COMPLETE members); MISSING/BROKEN in or possibly in the set: none; out (less accurate): D-i8
+  N-i8 speed (T; the frozen outcome: KILL); ref rel-L2 1.739e-02, its own; the set: rel-L2 <= 1.913e-02; the NPU arm 336.85
+    CPU      binding C-i8@8 464.67 -> 1.379x (beaten by the COMPLETE members); MISSING/BROKEN in or possibly in the set: C-fp32@16 (MISSING), C-i8@16 (MISSING), C-nb4@16 (MISSING); out (less accurate): none
+    DirectML binding D-nb16 346.56 -> 1.029x (not beaten by the COMPLETE members); MISSING/BROKEN in or possibly in the set: none; out (less accurate): none
+  N-i8 energy (E; the frozen outcome: INCOMPLETE); ref rel-L2 1.739e-02, its own; the set: rel-L2 <= 1.913e-02; the NPU arm 0.9076
+    CPU      binding C-i8@8 4.0765 -> 4.492x (beaten by the COMPLETE members); MISSING/BROKEN in or possibly in the set: C-fp32@16 (MISSING), C-i8@16 (MISSING), C-nb4@16 (MISSING); out (less accurate): none
+    DirectML binding D-nb16 2.2696 -> 2.501x (beaten by the COMPLETE members); MISSING/BROKEN in or possibly in the set: none; out (less accurate): none
+  N-w4 speed (T; the frozen reading: INCOMPLETE); ref rel-L2 5.347e-03, C-nb4's (N-w4 has no float accuracy; U4); the set: rel-L2 <= 5.882e-03; the NPU arm 286.55
+    CPU      binding C-nb4@8 1537.36 -> 5.365x (beaten by the COMPLETE members); MISSING/BROKEN in or possibly in the set: C-fp32@16 (MISSING), C-nb4@16 (MISSING); out (less accurate): C-i8@8, C-i8@16
+    DirectML binding D-nb16 346.56 -> 1.209x (beaten by the COMPLETE members); MISSING/BROKEN in or possibly in the set: none; out (less accurate): D-i8
+  N-w4 energy (E; the frozen reading: INCOMPLETE); ref rel-L2 5.347e-03, C-nb4's (N-w4 has no float accuracy; U4); the set: rel-L2 <= 5.882e-03; the NPU arm 0.7115
+    CPU      binding C-nb4@8 13.5436 -> 19.034x (beaten by the COMPLETE members); MISSING/BROKEN in or possibly in the set: C-fp32@16 (MISSING), C-nb4@16 (MISSING); out (less accurate): C-i8@8, C-i8@16
+    DirectML binding D-nb16 2.2696 -> 3.190x (beaten by the COMPLETE members); MISSING/BROKEN in or possibly in the set: none; out (less accurate): D-i8
+
+-- energy with the idle included (POST-HOC): each NPU arm's E_gross against the lowest E_gross among the COMPLETE members of its energy set, per chip; the same >= MARGIN line, for reading only
+  N-bf16: E_gross 2.5749 (net 1.5817); CPU C-fp32@8 17.7731 -> 6.902x (MISSING/BROKEN: C-fp32@16 (MISSING)); DirectML D-nb16 2.8631 -> 1.112x
+  N-i8: E_gross 1.4466 (net 0.9076); CPU C-i8@8 4.9167 -> 3.399x (MISSING/BROKEN: C-fp32@16 (MISSING), C-i8@16 (MISSING), C-nb4@16 (MISSING)); DirectML D-nb16 2.8631 -> 1.979x
+  N-w4: E_gross 1.1674 (net 0.7115); CPU C-nb4@8 16.0816 -> 13.776x (MISSING/BROKEN: C-fp32@16 (MISSING), C-nb4@16 (MISSING)); DirectML D-nb16 2.8631 -> 2.453x
+
+-- every window's idle (all windows, VOID and re-runs included; W, package counter)
+  pos pass arm        rerun state  idle W idle SD rows
+    0    1 C-fp32@8   False OK      19.35    8.28   58
+    1    1 C-fp32@16  False VOID    13.76    1.61   58
+    2    1 C-i8@8     False OK      13.46    0.75   58
+    3    1 C-i8@16    False OK      13.41    0.82   57
+    4    1 C-nb0@8    False OK      13.54    0.82   58
+    5    1 C-nb0@16   False OK      13.37    0.64   58
+    6    1 C-nb4@8    False OK      13.44    0.78   58
+    7    1 C-nb4@16   False OK      13.27    0.66   58
+    8    1 D-fp16     False OK      13.43    1.16   58
+    9    1 D-fp32     False OK      13.20    0.67   58
+   10    1 D-i8       False OK      13.26    0.77   58
+   11    1 D-nb16     False OK      14.77    4.51   58
+   12    1 N-bf16     False OK      13.55    0.97   58
+   13    1 N-i8       False OK      13.23    0.61   58
+   14    1 N-w4       False OK      13.02    0.49   58
+   15    1 C-fp32@16  True  VOID    13.00    0.46   58
+   16    2 N-w4       False OK      13.04    0.57   58
+   17    2 N-i8       False OK      12.98    0.51   58
+   18    2 N-bf16     False OK      13.03    0.56   58
+   19    2 D-nb16     False OK      13.28    0.88   58
+   20    2 D-i8       False OK      13.31    0.60   58
+   21    2 D-fp32     False OK      13.70    1.23   58
+   22    2 D-fp16     False OK      15.54    4.90   58
+   23    2 C-nb4@16   False VOID    13.47    1.05   58
+   24    2 C-nb4@8    False OK      13.55    0.63   58
+   25    2 C-nb0@16   False OK      13.39    0.52   58
+   26    2 C-nb0@8    False OK      15.07    6.55   58
+   27    2 C-i8@16    False VOID    19.70    9.53   58
+   28    2 C-i8@8     False OK      16.02    7.87   58
+   29    2 C-fp32@16  False OK      13.52    0.63   58
+   30    2 C-fp32@8   False OK      13.57    0.54   58
+   31    2 C-nb4@16   True  VOID    13.45    0.50   58
+   32    2 C-i8@16    True  VOID    16.22    7.24   58
+  idle range 12.98 to 19.70 W over 33 windows
+  N-bf16 idle minus D-nb16's idle, same pass (p1, p2): -1.22, -0.25 W
+  N-i8 idle minus D-nb16's idle, same pass (p1, p2): -1.55, -0.30 W
+  N-w4 idle minus D-nb16's idle, same pass (p1, p2): -1.75, -0.24 W
+
+-- the witnesses per window (report-only; rows after the 1 s trims, row gaps in s, CPU s in the window, the reader's CPU % of one logical CPU, the 780M's summed busy %, other adapters' busy %)
+  pos p arm        state idle  win gap med gap max typeperf s suite s reader %  780M % other %
+    0 1 C-fp32@8   OK      58   55   1.029   1.055      0.156   1.328    795.0     0.0     0.0
+    1 1 C-fp32@16  VOID    58   47   1.166   1.779      0.094   1.156   1534.7     0.0     0.0
+    2 1 C-i8@8     OK      58   55   1.037   1.121      0.188   1.844    794.5     0.0     0.0
+    3 1 C-i8@16    OK      57   52   1.087   1.150      0.156   1.688   1574.7     0.0     0.0
+    4 1 C-nb0@8    OK      58   55   1.039   1.056      0.156   1.172    797.8     0.0     0.0
+    5 1 C-nb0@16   OK      58   52   1.106   1.182      0.125   2.078   1563.4     0.0     0.0
+    6 1 C-nb4@8    OK      58   55   1.028   1.061      0.125   0.891    788.9     0.0     0.0
+    7 1 C-nb4@16   OK      58   52   1.100   1.261      0.156   0.938   1563.2     0.0     0.0
+    8 1 D-fp16     OK      58   56   1.022   1.027      0.141   0.891     99.8    90.3     0.0
+    9 1 D-fp32     OK      58   55   1.024   1.252      0.109   1.078     99.6    90.9     0.0
+   10 1 D-i8       OK      58   51   1.024   2.461      0.141   0.734     99.8    89.5     0.0
+   11 1 D-nb16     OK      58   56   1.023   1.028      0.078   0.875     99.8    82.7     0.0
+   12 1 N-bf16     OK      58   56   1.022   1.037      0.094   0.641      2.7     0.0    97.0
+   13 1 N-i8       OK      58   56   1.022   1.027      0.094   0.781      7.9     0.0    91.8
+   14 1 N-w4       OK      58   56   1.022   1.037      0.062   0.750      9.8     0.0    90.4
+   15 1 C-fp32@16  VOID    58   46   1.200   1.628      0.141   1.141   1529.0     0.0     0.0
+   16 2 N-w4       OK      58   56   1.022   1.027      0.125   0.688      9.4     0.0    90.5
+   17 2 N-i8       OK      58   56   1.022   1.028      0.047   0.828      8.1     0.0    91.9
+   18 2 N-bf16     OK      58   56   1.023   1.039      0.203   0.797      2.9     0.0    97.1
+   19 2 D-nb16     OK      58   56   1.024   1.085      0.156   0.828     99.8    82.9     0.0
+   20 2 D-i8       OK      58   53   1.023   2.444      0.109   0.734    100.0    86.4     0.0
+   21 2 D-fp32     OK      58   56   1.023   1.027      0.156   1.062     99.8    91.7     0.0
+   22 2 D-fp16     OK      58   55   1.023   1.361      0.047   0.938     99.9    90.6     0.0
+   23 2 C-nb4@16   VOID    58   47   1.125   1.641      0.172   0.938   1563.7     0.0     0.0
+   24 2 C-nb4@8    OK      58   55   1.029   1.057      0.141   0.891    788.5     0.0     0.0
+   25 2 C-nb0@16   OK      58   52   1.099   1.195      0.109   2.078   1564.2     0.0     0.0
+   26 2 C-nb0@8    OK      58   55   1.036   1.057      0.109   1.219    792.9     1.1     0.0
+   27 2 C-i8@16    VOID    58   44   1.211   1.634      0.141   1.734   1566.5     0.2     0.0
+   28 2 C-i8@8     OK      58   55   1.038   1.055      0.219   1.859    795.1     0.0     0.0
+   29 2 C-fp32@16  OK      58   52   1.087   1.262      0.078   1.156   1526.6     0.0     0.0
+   30 2 C-fp32@8   OK      58   56   1.024   1.044      0.266   1.297    796.0     0.0     0.0
+   31 2 C-nb4@16   VOID    58   49   1.117   1.641      0.188   0.938   1561.1     0.0     0.0
+   32 2 C-i8@16    VOID    58   49   1.106   1.637      0.172   1.656   1573.3     0.0     0.0
+
+-- the NPU arms, per taken window: the sum of the 16 dispatch medians and the down sums' median, beside T, and 3b's gate/up concatenation timed once outside the loop (report-only, ms)
+  N-bf16 p1: T 611.49; 16 dispatches 597.23 + down sums 13.46; 3b's concatenation 220.98
+  N-bf16 p2: T 612.80; 16 dispatches 598.56 + down sums 13.43; 3b's concatenation 204.68
+  N-i8 p1: T 336.83; 16 dispatches 313.20 + down sums 22.86; 3b's concatenation 215.86
+  N-i8 p2: T 336.87; 16 dispatches 313.30 + down sums 22.77; 3b's concatenation 207.15
+  N-w4 p1: T 286.72; 16 dispatches 263.07 + down sums 22.77; 3b's concatenation 216.28
+  N-w4 p2: T 286.38; 16 dispatches 262.84 + down sums 22.77; 3b's concatenation 208.42
+
+CHECK the net E recomputed from the logged powers and window edges against the logged E: max |ratio - 1| = 1.7e-06 (the window edges are logged to 3 decimals)
+POSTHOC_JSON {"2048": {"role": "KEEP", "rules": {"N-bf16 speed": {"frozen": "KILL", "CPU": {"member": "C-fp32@8", "ratio": 2.330635197229165, "other": []}, "DirectML": {"member": "D-nb16", "ratio": 0.4788752926830757, "other": []}}, "N-bf16 energy": {"frozen": "KEEP", "CPU": {"member": "C-fp32@8", "ratio": 8.04033734098268, "other": []}, "DirectML": {"member": "D-nb16", "ratio": 1.4023200287970188, "other": []}, "CPU gross": {"member": "C-fp32@8", "ratio": 5.9711067734093515}, "DirectML gross": {"member": "D-nb16", "ratio": 1.042037449197512}}, "N-i8 speed": {"frozen": "KILL", "CPU": {"member": "C-i8@16", "ratio": 1.0556782832985445, "other": []}, "DirectML": {"member": "D-nb16", "ratio": 0.8202154732897008, "other": []}}, "N-i8 energy": {"frozen": "KEEP", "CPU": {"member": "C-i8@16", "ratio": 3.6538391265562242, "other": []}, "DirectML": {"member": "D-nb16", "ratio": 2.318854642612021, "other": []}, "CPU gross": {"member": "C-i8@16", "ratio": 2.704492419213294}, "DirectML gross": {"member": "D-nb16", "ratio": 1.7490467780504733}}, "N-w4 speed": {"frozen": "FAIL", "CPU": {"member": "C-nb4@8", "ratio": 4.5962182396772295, "other": []}, "DirectML": {"member": "D-nb16", "ratio": 0.9473380640853524, "other": []}}, "N-w4 energy": {"frozen": "OPEN", "CPU": {"member": "C-fp32@8", "ratio": 16.791851244598664, "other": []}, "DirectML": {"member": "D-nb16", "ratio": 2.9286767858427822, "other": []}, "CPU gross": {"member": "C-nb4@8", "ratio": 12.146066230970924}, "DirectML gross": {"member": "D-nb16", "ratio": 2.1280441413127607}}}, "gross": {"C-fp32@8": 0.016370872268359087, "C-fp32@16": 0.018203012075332085, "C-i8@8": 0.004531713102074958, "C-i8@16": 0.004417582344521441, "C-nb0@8": 0.01809112843763732, "C-nb0@16": 0.02196068715074833, "C-nb4@8": 0.016306296043058943, "C-nb4@16": 0.016790939693551443, "D-fp16": 0.00435142799889981, "D-fp32": 0.011777973727482367, "D-i8": 0.024354992711321147, "D-nb16": 0.002856934673422176, "N-bf16": 0.0027416813816262963, "N-i8": 0.0016334238222070762, "N-w4": 0.0013425166414357237}}, "8192": {"role": "INCOMPLETE", "rules": {"N-bf16 speed": {"frozen": "KILL", "CPU": {"member": "C-fp32@8", "ratio": 2.753344775019552, "other": ["C-fp32@16 (MISSING)"]}, "DirectML": {"member": "D-nb16", "ratio": 0.5661459420637567, "other": []}}, "N-bf16 energy": {"frozen": "INCOMPLETE", "CPU": {"member": "C-fp32@8", "ratio": 9.092889309976334, "other": ["C-fp32@16 (MISSING)"]}, "DirectML": {"member": "D-nb16", "ratio": 1.434926622627913, "other": []}, "CPU gross": {"member": "C-fp32@8", "ratio": 6.902357007542079}, "DirectML gross": {"member": "D-nb16", "ratio": 1.111908380212944}}, "N-i8 speed": {"frozen": "KILL", "CPU": {"member": "C-i8@8", "ratio": 1.3794775789276248, "other": ["C-fp32@16 (MISSING)", "C-i8@16 (MISSING)", "C-nb4@16 (MISSING)"]}, "DirectML": {"member": "D-nb16", "ratio": 1.0288364965725185, "other": []}}, "N-i8 energy": {"frozen": "INCOMPLETE", "CPU": {"member": "C-i8@8", "ratio": 4.491503199351652, "other": ["C-fp32@16 (MISSING)", "C-i8@16 (MISSING)", "C-nb4@16 (MISSING)"]}, "DirectML": {"member": "D-nb16", "ratio": 2.5006573302338433, "other": []}, "CPU gross": {"member": "C-i8@8", "ratio": 3.3988670250502655}, "DirectML gross": {"member": "D-nb16", "ratio": 1.9792338088660364}}, "N-w4 speed": {"frozen": "INCOMPLETE", "CPU": {"member": "C-nb4@8", "ratio": 5.365042353182464, "other": ["C-fp32@16 (MISSING)", "C-nb4@16 (MISSING)"]}, "DirectML": {"member": "D-nb16", "ratio": 1.2094200183919082, "other": []}}, "N-w4 energy": {"frozen": "INCOMPLETE", "CPU": {"member": "C-nb4@8", "ratio": 19.034151176324997, "other": ["C-fp32@16 (MISSING)", "C-nb4@16 (MISSING)"]}, "DirectML": {"member": "D-nb16", "ratio": 3.1897049213843096, "other": []}, "CPU gross": {"member": "C-nb4@8", "ratio": 13.775633981433758}, "DirectML gross": {"member": "D-nb16", "ratio": 2.4525389339307617}}}, "gross": {"C-fp32@8": 0.017773056878355935, "C-i8@8": 0.004916666929506951, "C-nb0@8": 0.01819764328460316, "C-nb0@16": 0.023169857398177694, "C-nb4@8": 0.016081605358877316, "D-fp16": 0.004867564710706528, "D-fp32": 0.012203599836543, "D-i8": 0.028745491023659496, "D-nb16": 0.0028630815333735536, "N-bf16": 0.002574925762161482, "N-i8": 0.0014465605430486763, "N-w4": 0.0011673949366360526}}}
