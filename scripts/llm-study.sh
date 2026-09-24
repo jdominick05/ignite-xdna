@@ -96,6 +96,11 @@
 #   ./scripts/llm-study.sh decode-rerun-prereg    # the re-run rule's log; commit it before sitting 2
 #   ./scripts/llm-study.sh decode-rerun           # sitting 2, recorded by tools/silicon_probe_record.py
 #   ./scripts/llm-study.sh decode-rerun-verdict   # its verdict, with sitting 1's accuracy log
+#   ./scripts/llm-study.sh freeing-build          # (e): the C++ host and the NPU proxy, compile only
+#   ./scripts/llm-study.sh freeing-dryrun         # (e): the one disclosed proxy dry run (go/no-go)
+#   ./scripts/llm-study.sh freeing-prereg         # (e): the pre-registration and pins (commit it)
+#   ./scripts/llm-study.sh freeing-suite          # (e): the sitting (BFP16 holds the machine)
+#   ./scripts/llm-study.sh freeing-verdict        # (e): the mechanical verdict over the sitting's log
 #
 # Options: --machine TAG names the logs (default: desktop2 on DESKTOP-CBL5NUA, else required).
 # --tag TAG adds _TAG to the verdict log's name, for a second verdict on the same day.
@@ -125,6 +130,7 @@ while [ $# -gt 0 ]; do
         decode-build|decode-recheck) STAGE="${1//-/_}" ;;
         decode-prereg|decode|decode-accuracy|decode-verdict) STAGE="${1//-/_}" ;;
         decode-gpu-posthoc|decode-rerun-prereg|decode-rerun|decode-rerun-verdict) STAGE="${1//-/_}" ;;
+        freeing-build|freeing-dryrun|freeing-prereg|freeing-suite|freeing-verdict) STAGE="${1//-/_}" ;;
         --machine) MACHINE="$2"; shift ;;
         --tag)     TAG="_$2"; shift ;;
         -h|--help) usage "${BASH_SOURCE[0]}"; exit 0 ;;
@@ -729,6 +735,58 @@ stage_decode_rerun_verdict() {
     refuse "$log"
     use_env resnet_env17
     logged "$log" python $GDS verdict --rerun "$suite" "$a" || die "verdict incomplete, see $log"
+}
+
+# ---- (e): freeing the GPU and the CPU (plan v4, approved by the user 2026-09-24)
+FREE=tools/llm_freeing.py
+
+stage_freeing_build() {
+    # compile only, no chip: the C++ host (with its --paced mode) and the NPU proxy's xclbin
+    local log="$OUT/llm_freeing_build_${MACHINE}_${DATE}.log"
+    refuse "$log"
+    cmd //c 'scripts\build_dispatch_runner.bat' || die "the C++ runner build failed"
+    logged "$log" bash scripts/research-iron.sh $FREE build || die "the proxy build failed, see $log"
+    ok "built, no chip; next: a START REQUEST to BFP16, then $0 freeing-dryrun"
+}
+
+stage_freeing_dryrun() {
+    # the one disclosed dry run, pre-prereg, go/no-go only: the paced proxy on the NPU for 60 s
+    [ -f build/llm_freeing/proxy_c4x2_w286720/insts.bin ] || die "no proxy: run $0 freeing-build"
+    local log="$OUT/llm_freeing_dryrun_${MACHINE}_${DATE}.log"
+    refuse "$log"
+    use_env resnet_env17
+    python tools/silicon_probe_record.py --log "$log" --device --seconds 900 -- \
+        python $FREE dryrun || die "the dry run is NO-GO or failed, see $log"
+    ok "dry run GO; next: the (e) tool and prereg"
+}
+
+stage_freeing_prereg() {
+    # no chip and no timing: the rules, the pins (hashes every pinned file) and the dry run re-read
+    local log="$OUT/llm_freeing_prereg_${MACHINE}_${DATE}.log"
+    refuse "$log"
+    use_env resnet_env17
+    logged "$log" python $FREE prereg || die "the prereg found a mismatch, see $log"
+    ok "prereg written; commit it, then report HEAD to the gate before any sitting"
+}
+
+stage_freeing_suite() {
+    ls "$OUT"/llm_freeing_prereg_*.log >/dev/null 2>&1 || die "no (e) pre-registration log: run $0 freeing-prereg and commit it"
+    local log="$OUT/llm_freeing_suite_${MACHINE}_${DATE}.log"
+    refuse "$log"
+    use_env resnet_env17
+    python tools/silicon_probe_record.py --log "$log" --device --seconds 10800 -- \
+        python $FREE suite || die "the sitting failed, see $log"
+    ok "sitting done; next: $0 freeing-verdict"
+}
+
+stage_freeing_verdict() {
+    local d
+    d="$(ls "$OUT"/llm_freeing_suite_"${MACHINE}"_*.log 2>/dev/null | sed -n 's/.*_\([0-9]\{8\}\)\.log$/\1/p' | sort | tail -1)"
+    [ -n "$d" ] || die "no (e) sitting log"
+    local suite="$OUT/llm_freeing_suite_${MACHINE}_${d}.log" log="$OUT/llm_freeing_verdict_${MACHINE}_${d}.log"
+    refuse "$log"
+    use_env resnet_env17
+    logged "$log" python $FREE verdict "$suite" || die "verdict incomplete, see $log"
 }
 
 "stage_$STAGE"

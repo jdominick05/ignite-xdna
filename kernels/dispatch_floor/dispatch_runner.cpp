@@ -78,6 +78,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "xrt/xrt_bo.h"
@@ -192,6 +193,84 @@ static bool verify_output(BufSet &s, int n) {
     return true;
 }
 
+// --------------------------------------------------------------------------- //
+// paced: the LLM study's (e) NPU decode PROXY (tools/llm_freeing.py)           //
+// --------------------------------------------------------------------------- //
+// A token is `per_token` dependent dispatches, each reading its OWN host buffer of
+// `words` int32 (a decode reads different weights at every GEMV, so no buffer is re-read
+// within a token), then a sleep to the next slot of an ABSOLUTE schedule
+// (t_k = t_start + k * period): a late wake-up delays one token and does not lower the
+// average rate. The design is a read-only sink with one data argument (arg3), so this
+// mode sets args 0-3 only and verifies nothing but completion: every run's wait() must
+// return ERT_CMD_STATE_COMPLETED or the runner exits non-zero. One line per token:
+// TOKEN_JSON {"k", "t0_ns", "t1_ns" (system clock, for the caller's windows), "work_us"}.
+static int run_paced(xrt::device &device, xrt::kernel &kernel, xrt::bo &insts_bo, uint32_t n_words,
+                     int per_token, long long words, double period_ms, double seconds, int warmup_tokens) {
+    using sys = std::chrono::system_clock;
+    auto wall_ns = []() {
+        return std::chrono::duration_cast<std::chrono::nanoseconds>(sys::now().time_since_epoch()).count();
+    };
+    const size_t bytes = static_cast<size_t>(words) * sizeof(int32_t);
+    auto t_alloc = clk::now();
+    std::vector<xrt::bo> bufs;
+    bufs.reserve(per_token);
+    for (int i = 0; i < per_token; ++i) {
+        bufs.emplace_back(device, bytes, xrt::bo::flags::host_only, kernel.group_id(kArgA));
+        auto *p = bufs.back().map<uint32_t *>();
+        std::fill(p, p + words, 0x5A5A5A5Au);          // page every byte in once, outside timing
+        bufs.back().sync(XCL_BO_SYNC_BO_TO_DEVICE);
+    }
+    std::vector<xrt::run> runs;
+    runs.reserve(per_token);
+    for (int i = 0; i < per_token; ++i) {
+        xrt::run r(kernel);
+        r.set_arg(kArgOpcode, kOpcode);
+        r.set_arg(kArgInstBo, insts_bo);
+        r.set_arg(kArgInstCount, n_words);
+        r.set_arg(kArgA, bufs[i]);
+        runs.push_back(r);
+    }
+    auto alloc_s = std::chrono::duration<double>(clk::now() - t_alloc).count();
+    auto one_token = [&]() -> double {
+        auto t0 = clk::now();
+        for (int i = 0; i < per_token; ++i) {
+            runs[i].start();
+            auto st = runs[i].wait();
+            if (st != ERT_CMD_STATE_COMPLETED)
+                throw std::runtime_error("dispatch " + std::to_string(i) + " did not complete: state " +
+                                         std::to_string(static_cast<int>(st)));
+        }
+        return std::chrono::duration<double, std::micro>(clk::now() - t0).count();
+    };
+    for (int k = 0; k < warmup_tokens; ++k) one_token();
+    std::cout << "PACED_SETUP_JSON {\"per_token\": " << per_token << ", \"bytes_per_dispatch\": " << bytes
+              << ", \"bytes_per_token\": " << bytes * per_token << ", \"period_ms\": " << period_ms
+              << ", \"seconds\": " << seconds << ", \"warmup_tokens\": " << warmup_tokens
+              << ", \"alloc_s\": " << std::fixed << std::setprecision(3) << alloc_s << "}\n";
+    std::cout << "READY" << std::endl;
+    const auto period = std::chrono::duration_cast<clk::duration>(std::chrono::duration<double, std::milli>(period_ms));
+    const auto t_start = clk::now();
+    const auto t_end = t_start + std::chrono::duration_cast<clk::duration>(std::chrono::duration<double>(seconds));
+    long long k = 0, late = 0;
+    double work_max = 0.0;
+    for (;;) {
+        auto slot = t_start + period * k;
+        if (slot >= t_end) break;
+        if (clk::now() < slot) std::this_thread::sleep_until(slot);
+        else if (k) ++late;
+        auto w0 = wall_ns();
+        double work_us = one_token();
+        auto w1 = wall_ns();
+        work_max = std::max(work_max, work_us);
+        std::cout << "TOKEN_JSON {\"k\": " << k << ", \"t0_ns\": " << w0 << ", \"t1_ns\": " << w1
+                  << ", \"work_us\": " << std::fixed << std::setprecision(1) << work_us << "}\n";
+        ++k;
+    }
+    std::cout << "PACED_DONE_JSON {\"tokens\": " << k << ", \"late_starts\": " << late
+              << ", \"work_max_us\": " << std::fixed << std::setprecision(1) << work_max << "}" << std::endl;
+    return 0;
+}
+
 static void set_args(xrt::run &r, xrt::bo &insts_bo, uint32_t n_words, BufSet &s) {
     r.set_arg(kArgOpcode, kOpcode);
     r.set_arg(kArgInstBo, insts_bo);
@@ -207,6 +286,10 @@ int main(int argc, char **argv) {
     std::string batches = "1,2,4,8,16,32,64";
     int payload = 4096, iters = 100, warmup = 5;
     bool use_cache = false;
+    bool paced = false;                 // the (e) decode proxy: see run_paced()
+    int per_token = 238, warmup_tokens = 3;
+    long long paced_words = 0;
+    double period_ms = 190.0, seconds = 60.0;
 
     for (int i = 1; i < argc; ++i) {
         std::string a = argv[i];
@@ -222,6 +305,12 @@ int main(int argc, char **argv) {
         else if (a == "--warmup") warmup = std::stoi(next());
         else if (a == "--batch-sizes") batches = next();
         else if (a == "--modes") modes = next();
+        else if (a == "--paced") paced = true;
+        else if (a == "--per-token") per_token = std::stoi(next());
+        else if (a == "--words") paced_words = std::stoll(next());
+        else if (a == "--period-ms") period_ms = std::stod(next());
+        else if (a == "--seconds") seconds = std::stod(next());
+        else if (a == "--warmup-tokens") warmup_tokens = std::stoi(next());
         else if (a == "--help" || a == "-h") {
             std::cout <<
                 "dispatch_runner -- C++ XRT host for the AIE dispatch floor\n\n"
@@ -239,7 +328,12 @@ int main(int argc, char **argv) {
                 "  --iters N          timed iterations per point (default 100)\n"
                 "  --warmup N         untimed warmup dispatches (default 5)\n"
                 "  --batch-sizes L    comma-separated (default 1,2,4,8,16,32,64)\n"
-                "  --modes L          any of single,rebuild,built,persistent (default all four)\n";
+                "  --modes L          any of single,rebuild,built,persistent (default all four)\n"
+                "  --paced            the (e) decode proxy instead of the modes: a read-only sink\n"
+                "                     design with one data argument, --per-token dispatches per\n"
+                "                     token (default 238), each on its own buffer of --words int32,\n"
+                "                     paced on an absolute --period-ms schedule (default 190) for\n"
+                "                     --seconds (default 60) after --warmup-tokens (default 3)\n";
             return 0;
         } else {
             std::cerr << "unknown flag: " << a << "\n";
@@ -297,6 +391,11 @@ int main(int argc, char **argv) {
         auto setup_us = std::chrono::duration<double, std::micro>(clk::now() - t_setup0).count();
 
         std::cout << "   kernel: " << kname << "   instruction words: " << n_words << "\n";
+        if (paced) {
+            if (paced_words <= 0) throw std::runtime_error("--paced needs --words (int32 per dispatch buffer)");
+            return run_paced(device, kernel, insts_bo, n_words, per_token, paced_words, period_ms, seconds,
+                             warmup_tokens);
+        }
         std::cout << "   ONE-TIME SETUP (device+xclbin+context+kernel+instruction upload): "
                   << std::fixed << std::setprecision(1) << setup_us << " us\n"
                   << "   (paid once; every per-dispatch figure below excludes it)\n\n";

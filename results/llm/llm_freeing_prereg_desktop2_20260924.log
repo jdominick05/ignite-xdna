@@ -1,0 +1,168 @@
+Gemma 3 4B decode, stage (e): does an NPU decode free the GPU, or the CPU, where the CPU and
+DirectML decodes do not? (LLM study, locked decision 10; plan v4, approved by the user on 2026-09-24
+with U1-U6 as recommended), pre-registered before the sitting
+
+Question
+  An NPU arm earns a role if it frees the GPU, or frees the CPU, against the rival that frees the same
+  resource. Its distinct claim is freeing both at once: the CPU decode leaves the GPU free, and the
+  DirectML decode leaves most CPU cores free. The floor is 5.00 tok/s (U2). Energy is not part
+  of (e). U1: (e) runs now, with no third (c) sitting.
+
+The arms: Gemma 3 4B at H4 (2,182,348,800 B of weights per token), paced on an absolute 190 ms
+schedule (5.26 tok/s: a pacer capped at exactly 5 could never show ">= 5"). Each is one
+long-lived session per window.
+  CPU   C0-H4 (U3; (c)'s one complete H4 arm) in its most-freeing configuration (U6): the caller on logical
+        CPU 1 and N - 1 pool threads on 3, 5, ... (the odd CPUs, the SMT siblings of Wcpu's), intra-op
+        spinning off (session.intra_op.allow_spinning = 0 through genai_config's session_options.config_entries,
+        the path (c)'s build measured to reach ORT), the masks read back. N is calibrated in the sitting.
+  DML   D-H4 on the 780M: 1 intra-op thread, spinning off, unpinned (its host thread mostly waits).
+  NPU   a PROXY (U4), since no NPU int4 GEMV exists: stage 1's shim-read design at 4 columns x 2 channels,
+        reading one H4 token's bytes in 238 dependent dispatches of 9,175,040 B (2,183,659,520 B per
+        token, 1.0006x H4), each from its own host buffer, by the C++ runner's pacing mode,
+        unpinned. Its host thread is a cost against Wcpu that a real NPU decode would also pay, so it is
+        measured, not corrected out. A GEMV reads at least these bytes and adds synchronization, so a proxy
+        FAIL is robust on the GPU side; a proxy PASS is not a role, only a reason to build the GEMV, which the
+        user decides. The proxy has no accuracy axis.
+  The GenAI arms start a fresh generator from (c)'s pinned 128-token prompt and restart it after 896
+  generated tokens (before position 1024), so F3 and F4 change nothing measured; the prompt passes are
+  part of the paced stream.
+
+The workloads, each also measured alone in the same pass
+  W1    the GPU bandwidth worst case: stage 2's DirectML read loop (a 1 GiB fp32 ReduceSum), in GB/s.
+  W2    a GPU application: YOLO-World v2 FP32 on DirectML, 4b_g2g's frame loop (letterbox, network,
+        decode and NMS) on bus.jpg with COCO's 80 names, flat out, in frames/s. It uses the CPU for its own
+        pre- and post-processing. The text encoder's CPU session is released before READY.
+  Wcpu  CPU-bound: the same model on an ORT CPU session, 8 intra-op threads, the caller on logical CPU 0
+        and the pool on 2, 4, ..., 14 (masks read back), looping a letterboxed bus.jpg, in inferences/s.
+
+The sitting (resnet_env17; a START REQUEST to BFP16 first; no other load is launched)
+  Start: the host-load gate, the memory start (a process of >= 4 GB private refuses the sitting), the
+  DXGI adapter refusal, every pin below, and xrt-smi idle.
+  Calibration (U6): the CPU arm alone and UNPACED at N = 1, 2, 4, 8, each in 2 windows, from N = 1 up;
+  N is the first whose runs both reach >= 6.58 tok/s (1.25 x 5.26: <= 152 ms of work per 190 ms).
+  A calibration window that is not OK does not pass. If no N passes, N = 8 and the report says so. Each
+  run's tok/s and the arm's process CPU% (the spin entry's effect) are logged.
+  The matrix, per pass: each arm alone (3), each W alone (3), each W with each arm (9): 15 windows. Pass 2
+  is pass 1 reversed. The order is in PROTOCOL_JSON.
+  A window: its processes start and load and report READY; the proxy starts last and paces from its own
+  READY; the counters and the fault sampler start; 2.5 s later every other process gets a common start;
+  a 10 s settle; the 60 s measured window [a, b]; a 3 s tail. 5 s between windows.
+  Report-only, after the matrix, not a rival: (c)'s CPU setup (8 threads, the caller on 0 and the pool on
+  2, ..., 14, the same CPUs as Wcpu, default spinning), paced, against Wcpu: Wcpu alone, that arm alone,
+  together, then mirrored. Stopping before it changes no rule.
+  Time (DERIVED): a window is about 88 s plus its processes' load (10-30 s), so 12-16 min of calibration,
+  50-60 of matrix and 10-12 of worst case, about 75-90 min in all (plan v4 estimated about 100).
+
+The numbers
+  An arm's tok/s: the tokens whose completion lies in (a, b], over 60 s.
+  A W's rate: each unit's overlap with [a, b] as a fraction of that unit, summed, times the unit (1 GiB for
+  W1), over 60 s.
+  K_W(arm) = W's rate in the co-run window / W's rate alone, within one pass.
+
+The rules (tri-state: a decided failing input fails a condition; an undecided one leaves it INCOMPLETE)
+  Agreement: a W's alone rate must agree within 10% between the passes (|r1 - r2| / mean), or every K on
+    that W is INCOMPLETE. A K whose two passes differ by more than 0.05 (absolute) is INCOMPLETE; otherwise
+    K is the passes' mean.
+  Holds: an arm holds alone if it reaches >= 5.00 tok/s in its alone window in both passes; it holds
+    with W only if it reaches >= 5.00 in that co-run window in both passes.
+  Frees the GPU, on W in (W1, W2), all three of: the NPU holds with W; K_W(NPU) >= 0.90; K_W(NPU) >= 1.10 x
+    K_W(CPU arm), or the CPU arm does not hold with W. Unqualified, it needs both W1 and W2; otherwise it is
+    stated with its workload.
+  Frees the CPU, on Wcpu: the same three conditions, against the DirectML arm.
+  Joint, "frees both at once", both of: the NPU holds, with K >= 0.90, on W1, W2 and Wcpu; and each rival
+    gives up the resource its decode occupies: the CPU arm on Wcpu (K < 0.90, or K_Wcpu(NPU) >= 1.10 x
+    K_Wcpu(CPU)), and the DirectML arm on W1 and on W2 (K < 0.90, or K_W(NPU) >= 1.10 x K_W(DML)).
+    Written into the rule here, as the per-resource rules have it: a rival that does not hold with that W
+    also gives it up.
+  One-sided results earn that role alone, with the other resource's K's beside it. The per-resource rule
+  fails if both leave the resource equally free, even when the joint score passes. Exactly 1.10x counts
+  (integer-safe comparisons, as (c)).
+  Each arm's tok/s is reported beside the 5.00 floor and beside the reading-rate column (U2,
+  report-only; derived below). The pace sits under that column by design, so each arm's unpaced capacity
+  (1 / its alone work per token) is printed beside it.
+
+Witnesses
+  Memory, a rule (U5). A window is VOID if a measured process (the arm's or the W's, by pid) has its own
+  hard faults above 25/s over the window, or the system's \Memory\Pages Input/sec over the window exceeds
+  1,000. The backstop is there because DirectML's GPU allocations are paged by the kernel's video memory
+  manager, whose faults may be charged to System (pid 4) rather than the reader (INFERRED risk), leaving the
+  per-pid rule blind for D-H4, W1 and W2. 1,000 is 22x below a paging decode's >= 22,000 pages/s at the floor.
+  Disclosed: 1,000 was chosen after seeing (c)'s maximum window of 625, for a new stage. Pages Input/sec is
+  otherwise report-only. Each window logs its top 5 processes by hard faults/s.
+  A window is also VOID if its counters or its fault sampler hold under 50 seconds inside it, if a pinned
+  process's affinities are not read back, or if a process did not run through it (the proxy's schedule must
+  reach past its end); FAILED if a process exits non-zero or never reports. A window that is not OK feeds
+  nothing; there is no re-run of a window and no third pass without the user.
+  Report-only: the 780M's busy per process (its LUIDs from DXGI at the start; the counters start after every
+  READY), the other adapters' busy (the NPU), CPU %, each measured process's CPU time over the window, and
+  xrt-smi idle before every window and after every NPU window.
+  Hygiene: image names on a local, git-ignored list are replaced by <tool> at the source (the host-load lines,
+  the memory start and the fault attribution), and the worktree root by <repo>. The list's length is logged;
+  the sitting refuses to start without it.
+
+Predictions (written before the sitting; plan v4 section 7)
+  Every arm holds alone. The DirectML arm is the risk: at about 1/3 duty the 780M may clock down; (b)'s G50 ran
+    each chain 4.1-4.3x longer (no clock sampled), and 4.1x of D-H4's 63-64 ms/token alone is near 260 ms.
+  The CPU arm's calibrated N is 2 or 4 (INFERRED; 1 thread's decode rate is unmeasured).
+  W1: K(NPU) about 0.93 (scored 0.90-0.96), K(CPU) 0.87-0.94 (DERIVED roughly, from stage 2's 76% beside the NPU
+    and 79% beside the CPU, scaled by each arm's read duty), so freeing the GPU on W1 FAILS on the 1.10 rule;
+    K(DML) 0.60-0.80 (a guess, INFERRED).
+  W2 (INFERRED): K(NPU) >= 0.95, K(CPU) >= 0.90 with the rival on 1-4 odd CPUs, K(DML) < 0.90.
+  Wcpu (INFERRED): K(DML) and K(NPU) >= 0.90, so freeing the CPU FAILS; K(CPU) 0.80-0.95 with N threads on the SMT
+    siblings.
+  The joint score: OPEN, no prediction. With the most-freeing CPU arm its CPU-side condition needs K_Wcpu(CPU) <
+    0.90 or K_Wcpu(NPU) >= 1.10 x K_Wcpu(CPU).
+
+The dry run (pre-prereg, disclosed; plan v4): one run of the proxy alone, 60 s, under a START REQUEST, go/no-go
+only: does the runner's pacing mode hold 190 ms at 238 x 9.17 MB, a size stage 1 never timed? Its log,
+llm_freeing_dryrun_desktop2_20260924.log, is committed with this prereg; re-read below. Its numbers enter no rule.
+
+Logs: llm_freeing_suite_desktop2_<date>.log (scripts/llm-study.sh freeing-suite; a live copy goes to
+scratch/llm/freeing/<stamp>_suite_live.log as it runs) and llm_freeing_verdict_desktop2_<date>.log
+(freeing-verdict). The counter files: scratch/llm/freeing/<stamp>_<n>_<block>_p<pass>_<arm>_<w>.csv.
+
+Unverified going in: whether the spin entry changes C0-H4's paced CPU% (the calibration logs it); C0-H4's decode
+rate at 1, 2 and 4 threads; the 780M's clocks under a paced decode (no clock counter); whether DirectML's paging
+is charged to System (why the backstop exists); W2's and Wcpu's model identity with the 2026-09-17 sitting's
+(INFERRED from the mtime; pinned here by SHA-256).
+
+PROTOCOL_JSON {"period_ms": 190.0, "floor": 5.0, "cal_threads": [1, 2, 4, 8], "cal_min_tokps": 6.58, "cal_runs": 2, "dml_threads": 1, "even": [0, 2, 4, 6, 8, 10, 12, 14], "odd": [1, 3, 5, 7, 9, 11, 13, 15], "arm_model": {"CPU": "C0-H4", "DML": "D-H4", "CPU-c": "C0-H4"}, "order": [[1, "NPU", null], [1, "CPU", null], [1, "DML", null], [1, null, "W1"], [1, null, "W2"], [1, null, "Wcpu"], [1, "NPU", "W1"], [1, "CPU", "W1"], [1, "DML", "W1"], [1, "NPU", "W2"], [1, "CPU", "W2"], [1, "DML", "W2"], [1, "NPU", "Wcpu"], [1, "CPU", "Wcpu"], [1, "DML", "Wcpu"], [2, "DML", "Wcpu"], [2, "CPU", "Wcpu"], [2, "NPU", "Wcpu"], [2, "DML", "W2"], [2, "CPU", "W2"], [2, "NPU", "W2"], [2, "DML", "W1"], [2, "CPU", "W1"], [2, "NPU", "W1"], [2, null, "Wcpu"], [2, null, "W2"], [2, null, "W1"], [2, "DML", null], [2, "CPU", null], [2, "NPU", null]], "worst_order": [[1, null, "Wcpu"], [1, "CPU-c", null], [1, "CPU-c", "Wcpu"], [2, "CPU-c", "Wcpu"], [2, "CPU-c", null], [2, null, "Wcpu"]], "gap_s": 5.0, "tp_lead_s": 2.5, "go_lead_s": 0.5, "settle_s": 10.0, "window_s": 60.0, "tail_s": 3.0, "runner_s": 80.0, "min_rows": 50, "warmup": {"W1": 3, "W2": 50, "Wcpu": 10}, "k_min": 0.9, "k_agree": 0.05, "w_agree": 0.1, "tie": [11, 10], "hf_max": 25.0, "pages_max": 1000.0, "mem_big_gb": 4.0, "reading_tokps": [5.98, 6.21], "proxy": {"name": "proxy_c4x2_w286720", "dispatches": 238, "bytes_per_dispatch": 9175040, "bytes_per_token": 2183659520, "cmd": "kernels/dispatch_floor/dispatch_runner.exe --xclbin build/llm_freeing/proxy_c4x2_w286720/probe.xclbin --insts build/llm_freeing/proxy_c4x2_w286720/insts.bin --paced --per-token 238 --words 2293760 --period-ms 190 --seconds 80 --warmup-tokens 3"}, "pred_k": {"W1/NPU": [0.9, 0.96], "W1/CPU": [0.87, 0.94], "W1/DML": [0.6, 0.8], "W2/NPU": [0.95, null], "W2/CPU": [0.9, null], "W2/DML": [null, 0.9], "Wcpu/DML": [0.9, null], "Wcpu/NPU": [0.9, null], "Wcpu/CPU": [0.8, 0.95]}, "pred_cal_n": [2, 4]}
+  PIN C0-H4/added_tokens.json f8730690481ac3d7ef2249793e7c876ca8d32c14821fe52cfdba1f8521b61c5c
+  PIN C0-H4/chat_template.jinja e0a1e0983c75b0198f1045cbb20c64506a9ffb30925bd44feba0b91acf2d4f43
+  PIN C0-H4/genai_config.json 14102d8ca482efabc04b50dec7ae00ca287187f5e627afba33256fc14281f2bc
+  PIN C0-H4/model.onnx b3f63d47ba1e475d4ca82e3561b883577d50d8a38b7beca2fb3c99715fe776ef
+  PIN C0-H4/model.onnx.data 9cf93b883014655b6b85fa5541787f1297f7f451fb5028e08e395e4606a688c1
+  PIN C0-H4/special_tokens_map.json 88d16a8f41b25d29d30b7865c65404fa9527bbc9c5a652f68a1c25c4b0ae0fd1
+  PIN C0-H4/tokenizer.json 4667f2089529e8e7657cfb6d1c19910ae71ff5f28aa7ab2ff2763330affad795
+  PIN C0-H4/tokenizer.model 1299c11d7cf632ef3b4e11937501358ada021bbdf7c47638d13c0ee982f2e79c
+  PIN C0-H4/tokenizer_config.json 6eac11d7a3e6c40d7e0f19195baf61435c1350c9e5da4fea4c097779c65b2fb6
+  PIN D-H4/added_tokens.json f8730690481ac3d7ef2249793e7c876ca8d32c14821fe52cfdba1f8521b61c5c
+  PIN D-H4/chat_template.jinja e0a1e0983c75b0198f1045cbb20c64506a9ffb30925bd44feba0b91acf2d4f43
+  PIN D-H4/genai_config.json 3ffb436f47461b4fe81d23616d97aa69a1ed24cf0c685ee4ab6c20b5d002583d
+  PIN D-H4/model.onnx 09b9a2d0ed34033113f11f471aa81b3085d4e72b5d410a24ecc52f77e2de76e3
+  PIN D-H4/model.onnx.data 46b5050670f6bcae88233fccb35f5e761436429144e8d28b38e1314cab2a5571
+  PIN D-H4/special_tokens_map.json 88d16a8f41b25d29d30b7865c65404fa9527bbc9c5a652f68a1c25c4b0ae0fd1
+  PIN D-H4/tokenizer.json 4667f2089529e8e7657cfb6d1c19910ae71ff5f28aa7ab2ff2763330affad795
+  PIN D-H4/tokenizer.model 1299c11d7cf632ef3b4e11937501358ada021bbdf7c47638d13c0ee982f2e79c
+  PIN D-H4/tokenizer_config.json 6eac11d7a3e6c40d7e0f19195baf61435c1350c9e5da4fea4c097779c65b2fb6
+  PIN models/yolov8s-worldv2_cut.onnx 7a9c0c0076f52506f843d171c3102d631f85a3828f0fa974cdbe5b46b4bca777
+  PIN models/yolow_text.npz 9738bb5f998f1828bc3a504a087a07d7e8011b73fd306e98d1894d571767a782
+  PIN models/yolow_text_encoder.onnx d2481c13bd50f7333e21eb3d5eef70804bae671b27377bbbb8f0e093bd3ff709
+  PIN assets/bus.jpg c02019c4979c191eb739ddd944445ef408dad5679acab6fd520ef9d434bfbc63
+  PIN scratch/llm/readbw_fp32_65536x4096/model.onnx 1871f393faa54fde25815f47858b1c14455cc844dff5a0251a33f4ce4a4457a1
+  PIN scratch/llm/readbw_fp32_65536x4096/weights.bin b825ea3b48eead2a7ff8185ff5ac1e8f34432ebc75011ec54f338bbdb34b03e4
+  PIN build/llm_freeing/proxy_c4x2_w286720/insts.bin 234670b4ae0d4e0017d5ed9bc47ed83fd3aab65f40c0241df84b02c7af8b0e6a
+  PIN build/llm_freeing/proxy_c4x2_w286720/probe.xclbin bb835441eeaf8f0d90aea816845a416a9fc3fd08da6e412b4d5ddd5c3d0460df
+  PIN build/llm_freeing/proxy_c4x2_w286720/probe.mlir 853486f911ec02b1672d4e742dc31c70b11feb59bf106c399cf544b809e058ab
+  PIN kernels/dispatch_floor/dispatch_runner.cpp 27be3db3328ce7ec3c4188bf37c70aa908b024f796f2b49070e1909f2ee6fdc9
+  PIN kernels/dispatch_floor/dispatch_runner.exe f904c4709aecf40a954ab051ae874a3e38e08c73104d90d942b97e018951aec8
+  LOG llm_freeing_build_desktop2_20260924.log: sha256 8b41056e036e4c3c0e44eae0c7ceef09ef233ef985487be82b6644703fb06eaf (CRLF working copy), 6f904a0399d195a18dadc3541050344302f9dbcc92370e47b44110404ae56f83 (LF blob)
+  LOG llm_freeing_dryrun_desktop2_20260924.log: sha256 845efb16b36f7ce945922ae44fe3cf1d5c28ba9bf075b95ded549f144bdd79fd (CRLF working copy), 845efb16b36f7ce945922ae44fe3cf1d5c28ba9bf075b95ded549f144bdd79fd (LF blob)
+
+PRE-PREREG DRY RUN, re-read (go/no-go only; enters no rule):
+DRYRUN_JSON {"tokens": 316, "work_ms_median": 75.61445, "work_ms_max": 100.5848, "work_ms_min": 73.9635, "over_period": 0, "achieved_tokps": 5.26266224556629, "late_starts": 0}
+work per token: median 75.6 ms, max 100.6 ms against the 190 ms period; achieved 5.263 tok/s against the 5 floor
+DRYRUN GO
+READING_RATE_JSON {"tokens": 1023, "words": 679, "alpha_runs": 653, "tokens_per_word": [1.5066, 1.5666], "reading_tokps": [5.98, 6.21], "ids_sha": "c87fda3e20a29a5fd9af2104661438ff63a3c29cd496cb4d95a9000820dfb15e"}
+NEUTRAL_NAMES 4 (a local, git-ignored list; the names themselves are not logged)
+git HEAD 74d9684b3838034e2768d4dbcf7457365e112622 (plus this log's own commit)
