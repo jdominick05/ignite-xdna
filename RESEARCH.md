@@ -723,6 +723,13 @@ been closed:
         DirectML fp16, which is also more accurate, and NPU int8 is level with the CPU's int8 at
         M = 2048
         ([BENCHMARKS](docs/BENCHMARKS.md#prefill-gemm-at-llama-2-7bs-shapes-incomplete-in-both-sittings-on-its-own-repeat-rule-and-neither-sittings-tables-show-an-npu-arm-beating-both-chips-2026-09-23-desktop-2)).
+      - The noise behind that INCOMPLETE, studied next (pre-registered; a finding about
+        measuring here, not a re-scoring). The CPU's 8-thread bimodality is where ONNX Runtime
+        puts its threads: pinned one per core, it goes away. ORT 1.23.3's default does not pin.
+        DirectML's level is set per session, 1.19× across 20 fresh sessions and 1.011× within
+        one, cause unattributed. Later pre-registrations should pin CPU threads and time DirectML
+        over several sessions
+        ([BENCHMARKS](docs/BENCHMARKS.md#measurement-noise-on-this-apu-pinning-orts-8-threads-to-distinct-cores-removes-the-cpus-bimodality-and-directmls-level-is-set-per-session-2026-09-23-desktop-2)).
 
   Evidence: `results/aie/int4_{isa_gate,engine_bytes_gate,demo_npu}_desktop2_20260923.log`,
   `results/int4/w4a8_accuracy_{prereg,verdict}_desktop2_20260923.log`,

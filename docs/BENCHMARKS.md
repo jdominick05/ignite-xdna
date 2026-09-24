@@ -3074,6 +3074,10 @@ rows broke the rule (3.50–3.85 there).
   steady within each pass and sit at a different level in the other; fp32 S2 at M = 2048 held
   about 141 ms, then about 107. Per-session state (for example, where the weights land in
   memory) and GPU clocks are candidates.
+- Studied since, as a finding about measuring here, not a re-scoring
+  ([noise study](#measurement-noise-on-this-apu-pinning-orts-8-threads-to-distinct-cores-removes-the-cpus-bimodality-and-directmls-level-is-set-per-session-2026-09-23-desktop-2)).
+  The CPU's bimodality is where ONNX Runtime puts its 8 threads: pinned one per core it goes
+  away. DirectML's level is set per session, cause unattributed.
 
 **Predictions scored, on both sittings** (the rule decides, these do not):
 - Q1 holds: CPU fp32 S1 at M = 2048 read 0.76–0.77 TFLOPS.
@@ -3099,6 +3103,129 @@ rows broke the rule (3.50–3.85 there).
 - CPU stacks other than ONNX Runtime.
 - Tiles outside the pre-registered menu.
 - Prefill running beside decode.
+
+### Measurement noise on this APU: pinning ORT's 8 threads to distinct cores removes the CPU's bimodality, and DirectML's level is set per session (2026-09-23, Desktop 2)
+
+The question, the user's decision after stage 3: study the noise. Stage 3 left two noise
+sources unattributed. This is a finding about measuring on this machine, not about the NPU. It
+re-scores nothing, and stage 3 stays INCOMPLETE.
+
+**Setup.** Pre-registered at `67790e8` before the sitting
+([prereg](../results/llm/llm_noise_prereg_desktop2_20260923.log)). The tool is
+`tools/measure_noise.py`; the runner is `scripts/llm-study.sh noise`. There was one sitting, CPU
+then DirectML, with no NPU ([CPU](../results/llm/llm_noise_cpu_desktop2_20260923.log),
+[DirectML](../results/llm/llm_noise_dml_desktop2_20260923.log),
+[verdict](../results/llm/llm_noise_verdict_desktop2_20260923.log)).
+- **(A) The CPU.** ONNX Runtime 1.23.3 on stage 3's inputs and models. int8 S1 at M = 512
+  decides; fp32 S1 at M = 512 is reported.
+  - Six arms, in two mirrored passes. Each arm and pass is several fresh sessions, pooled (A0 and
+    AD 5 × 2 s, the others 3 × 1 s):
+    - A0: 8 threads, unpinned, as stage 3 ran them.
+    - A1: 8 threads pinned one per physical core (logical CPUs 0, 2, …, 14).
+    - A3: 8 threads pinned with one core doubled.
+    - A2: 8 threads on 4 cores × 2 SMT siblings.
+    - A16: 16 threads.
+    - AD: ORT's own default, `intra_op_num_threads` 0.
+  - Recorded: every rep; each second, every logical CPU's busy share and clock; and each
+    session's thread affinities, read back.
+- **(B) DirectML on the 780M.** fp32 S2 at M = 2048 decides; fp16 S1 at M = 2048 is reported.
+  - B1: 20 fresh sessions, one after another. Each gets 3 warmups and 10 reps, plus this
+    process's GPU memory (Dedicated and Shared Usage).
+  - B2: one session, 20 blocks of 10 reps.
+
+**(A) Where ORT puts its own 8 threads makes the bimodality (ATTRIBUTED). Two threads sharing a
+core and threads moving between CPUs are not separated.** MEASURED, int8 S1 at M = 512, pass 1 /
+pass 2. A slow rep is over 1.30× the arm's 10th percentile.
+
+| Arm | Mode | Median (ms) | Slow reps |
+|---|---|---:|---:|
+| A0, 8 threads unpinned | bimodal / bimodal | 5.65 / 4.17 | 53% / 31% |
+| A1, 8 pinned to distinct cores | unimodal / unimodal | 4.11 / 4.13 | 1% / 1% |
+| A3, one core doubled | unimodal / unimodal | 7.18 / 7.21 | 0% / 0% |
+| A2, 4 cores × 2 | unimodal / unimodal | 7.15 / 7.18 | 0% / 0% |
+| A16 | unimodal / unimodal | 4.09 / 4.10 | 4% / 2% |
+| AD, ORT's default | bimodal / bimodal | 4.14 / 4.15 | 35% / 33% |
+
+- **Pinning one thread per core removes the slow level.** A1 is unimodal at 4.11–4.13 ms, A0's
+  fast level (4.08–4.13). This rules out the clock and a thread outside ORT: pinning leaves both in
+  place, and A1's eight free siblings stay open to other threads.
+- **One doubled core is enough for the slow level.** A3 reads 7.18–7.21 ms against A0's slow
+  level of 7.17. Four doubled cores (A2) read the same, 7.15–7.18: the GEMM waits on its slowest
+  core.
+- **The per-second busy map cannot tell which.** A doubled core shows in 17 of A0's 19 seconds,
+  with a slow share of 0.44, against 0.24 in the other 2. The pre-registered association needed a
+  0.30 gap. So two threads sharing a core and threads moving are not separated, as the
+  pre-registration expected.
+- **The level changes both between sessions and within one.** Pass 1's A0 sessions had medians
+  of 7.07, 6.63, 4.36, 6.92 and 4.15 ms. Pass 2's all sat near 4.16, with 31% slow reps inside
+  them.
+- **The clock does not follow it** (reported, not a rule). The arms pinned at the slow level (A3,
+  A2) ran at 112–116%, and A1 at 106–109%.
+- **ORT's default does not pin in this build.** ORT's documentation says `intra_op_num_threads`
+  0 makes one thread per physical core and pins them. Here, read back in every session, it made
+  7 pool threads plus the caller. Every one had all 16 logical CPUs in its affinity mask and no
+  CPU sets, and AD was bimodal like A0. Stage 3's 8-thread rows and Q2's prior (at
+  `intra_op_num_threads` 0) both ran unpinned.
+- **The reported fp32 row agrees.** A1 is unimodal at 17.66 / 17.63 ms. A0 and AD are bimodal,
+  with levels near 17.5 and 26–27. A16 is unimodal but slower, at 23.04 / 22.92. A core doubled for
+  the whole run (A3) reads 41.79 / 41.73, far above A0's slow reps. So in fp32 a slow rep is not
+  a core doubled from start to finish. A doubling for part of a rep would fit, but that is not
+  measured.
+- The pinning controls are clean: no pinned arm was busy outside its logical CPUs.
+
+**(B) DirectML's level is set per session (reproduced); what sets it is unattributed.**
+MEASURED, fp32 S2 at M = 2048:
+- **Across 20 fresh sessions** the levels were 112.09–133.42 ms, 1.190× from end to end. Every
+  one of the 20 was steady within itself (p90 / p10 ≤ 1.10).
+- **One session held** 107.46–108.63 ms over its 20 blocks (1.011×).
+- **The memory witness was identical everywhere:** 5.9 MB Dedicated and 494.9 MB Shared in
+  every session and block. The 780M keeps these weights in shared memory, and the
+  dedicated-versus-shared split is the same every time, so it cannot be what differs. Not
+  observed: where in shared memory the pages land, GPU clocks, and the driver's queue.
+- **Stage 3 fits this.** Sitting 1's long-lived sessions held 152.02 and 150.79 ms. Sitting 2's
+  per-row sessions landed at 141.71, then 107.02. One session holds one level, but the level
+  differs from session to session.
+- The reported fp16 S1 row was unsteady inside 19 of its 20 sessions, so it adds nothing here.
+- **Post hoc, not pre-registered:** in B2, the first two reps after each idle gap of about 1 s
+  (the memory witness) averaged 1.19× (fp32) and 1.28× (fp16) the block's later reps. In B1,
+  where 3 warmups follow the session's opening, the ratio is 1.00. A GPU coming out of idle is a
+  candidate, not measured. It does not explain B1's spread.
+
+**Recommendation for later pre-registrations.** This is not a re-scoring: stage 3 stays
+INCOMPLETE.
+- **CPU arms: pin ONNX Runtime's threads, one per physical core.** For 8 threads, set
+  `session.intra_op_thread_affinities` for the 7 pool threads and pin the calling thread to the
+  eighth core. Here that gave one level, at the fast end, in both rows and both passes:
+  int8 4.11 / 4.13 ms and fp32 17.66 / 17.63.
+  - Do not rely on ORT's default to pin; 1.23.3 does not.
+  - 16 threads also gave one level, as fast as pinned 8 for int8 but 1.30× slower for fp32 at
+    this shape (DERIVED).
+- **DirectML arms: treat a session's level as one draw.** Here one row's draws spread 1.19×
+  across 20 sessions, more than a 10% repeat rule on single-session rows can absorb.
+  - Time each DirectML row over several fresh sessions, and report the median of their levels
+    with the range.
+  - Or keep one session per row for the whole sitting, and say its level is one draw from a
+    spread of this size.
+  - Keep warmups after a session opens and after any idle gap.
+
+**Predictions scored** (the rules decided, these did not):
+- P1 holds: A0 is bimodal in both passes and A16 unimodal. Its "across sessions more than
+  within" is mixed: pass 1 split mostly across sessions, pass 2 within them.
+- P2 mostly holds: A1 is unimodal at 4.11–4.13, A3 reads 7.18–7.21 at A0's slow level, and the
+  association failed as it said was likely. A2 missed: at 7.15–7.18 it is level with A3
+  (0.03 ms faster), not about 8.
+- P3 partly holds: the fp32 row repeats the pattern for A0, A1, A16 and AD, but its A3 reads far
+  above A0's slow reps.
+- P4 holds: 1.190× across sessions, 1.011× within one.
+- P5 misses: the memory witness is identical in every session.
+- P6 holds: AD is bimodal like A0.
+
+**What this does not establish:**
+- Which of the two makes A0's slow reps, two threads sharing a core or threads moving. The
+  per-second map is too coarse.
+- What in a DirectML session's creation sets its level.
+- Other rows, shapes and thread counts, other CPU stacks, and DirectML IO binding.
+- Anything about the NPU. Its rows held throughout stage 3.
 
 ### MobileViT-XXS does not survive per-tensor INT8, and AdaRound cannot save it
 

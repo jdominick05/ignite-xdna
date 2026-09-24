@@ -220,6 +220,22 @@
   0.90–0.98 GiB against a pre-registered ≥ 1 GiB, and the verdict came out INCOMPLETE (`4620b53`).
   The fix (`b909584`) went in before the six rows were re-timed. When a data file has variants of
   different element sizes, size each variant separately.
+- **Pin ONNX Runtime's CPU threads, and time DirectML over several sessions (2026-09-23).** This
+  is a recommendation for later pre-registrations, from the noise study the user asked for after
+  stage 3. It re-scores nothing, and stage 3 stays INCOMPLETE.
+  - The CPU's 8-thread bimodality is where ORT puts its own threads (ATTRIBUTED). Pinned one per
+    physical core, int8 S1 at M = 512 read one level, 4.11 / 4.13 ms, against levels of about 4.1
+    and 7.2 unpinned. One doubled core gives the slow level.
+  - ORT 1.23.3's default (`intra_op_num_threads` 0) does not pin here, whatever its
+    documentation says. Read back, its threads have every logical CPU in their masks, and its
+    rows were bimodal too.
+  - DirectML's level is set per session: 1.19× across 20 fresh sessions of one row, 1.011×
+    within one session. The GPU memory split was identical in all 20, so the cause is
+    unattributed.
+  - So: set `session.intra_op_thread_affinities` and pin the calling thread. For DirectML, take
+    the median over several fresh sessions, or keep one session per row and call its level one
+    draw.
+  - ([BENCHMARKS](BENCHMARKS.md#measurement-noise-on-this-apu-pinning-orts-8-threads-to-distinct-cores-removes-the-cpus-bimodality-and-directmls-level-is-set-per-session-2026-09-23-desktop-2))
 
 - **`AIE_PREPARE_FOR_PIPELINING` and `AIE_LOOP_FLATTEN` do nothing under Peano (2026-09-23).**
   Peano predefines `__AIECC__`, so `aie_kernel_utils.h:33-58` (`kernels/conv_accum/` copy) selects its
