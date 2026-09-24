@@ -2761,7 +2761,8 @@ They are optimistic in three ways:
   N = 64 ([batched submission](#batched-submission-drops-the-dispatch-floor-17-and-reopens-four-closed-verdicts)),
   a batched-throughput number. Even so, 224 of them are 8.1 ms per token (DERIVED). The most a DirectML + NPU split
   could save over DirectML alone, at these floors, is 11.1 ms. A latency-bound sync costs
-  more.
+  more. (Measured since, next section: a dependent join costs 174.5 µs, not 36.3, and 224 of
+  them are 39.09 ms, so the DirectML + NPU split is dead.)
 
 **Who gives way.**
 - The CPU loses most. It keeps 46% of its rate beside DirectML and 20% with both others.
@@ -2790,11 +2791,126 @@ They are optimistic in three ways:
 - Q5 misses, by 0.04%: R5 prints OPEN at 1.1004×.
 
 **What this does not establish:**
-- A split decode itself, its synchronization cost, or an NPU int4 GEMV.
+- A split decode itself, its synchronization cost, or an NPU int4 GEMV. (The synchronization
+  cost is measured since, next section.)
 - Rates through GEMV kernels rather than reductions and a DMA sink.
 - Writes.
 - The cause of sitting 1's 81.11 GB/s DirectML-alone run.
 - DirectML fp16 reads (Phase 1's ReduceSum anomaly).
+
+### A DirectML + NPU split pays 39 ms per token to join its halves, against the 11.1 ms it could save: the split is dead (2026-09-23, Desktop 2)
+
+The question, the user's decision on stage 2's R5 ("measure the sync first"):
+- In a split decode, each GEMV needs the previous GEMV's output. Nothing crosses between
+  DirectML and the NPU without the host, so the two chips join through the host on every GEMV,
+  224 times per token at Llama-2-7B.
+- The most a DirectML + NPU split could save over DirectML alone is 11.1 ms per token (DERIVED,
+  47.5 − 36.4 at the previous section's reduction rates).
+- That figure is itself optimistic: GEMV reads slower than a reduction, and no NPU int4 GEMV
+  exists.
+- This test prices the join before any decode kernel is built.
+
+**Setup.**
+- Pre-registered at `a81f16d` before any sitting
+  ([prereg](../results/llm/split_sync_prereg_desktop2_20260923.log)). The tool is
+  `tools/split_sync_cost.py`; the runner is `scripts/llm-study.sh sync`.
+- Trivial kernels, because the join is the cost, not the math:
+  - **NPU:** a 32 KiB shim → mem tile → shim passthrough through raw pyxrt, one dependent
+    dispatch at a time: write x, sync to the device, start, wait, sync back, read.
+  - **DirectML:** an ONNX Runtime MatMul, x[1, 4096] fp16 by W[4096, 64], with CPU fallback
+    disabled and host input and output.
+- No Python here has both runtimes: pyxrt is built for CPython 3.13 and 3.10, and every
+  environment with DirectML is 3.12. So DirectML runs in a resnet_env17 worker, and the halves
+  meet through shared memory with busy-wait flags.
+- Four chains of 224 dependent steps each. Every step's input is built from the previous step's
+  output.
+  - **a:** the NPU round trip.
+  - **b:** the DirectML round trip, timed inside the worker.
+  - **e:** the handshake alone (the worker echoes x, with no DirectML).
+  - **c:** the join: start DirectML, run the NPU round trip, wait for DirectML, combine both
+    outputs.
+- 3 warmup chains, then 30 timed chains of each; a, e and c are interleaved.
+- **The join cost, named before the sitting:** J* = J − H, where J is chain c's median
+  per-step time and H is chain e's. Subtracting the handshake favours the split.
+- **The kill line (R1), set by the gate:** DEAD iff 224 × J* ≥ 11.1 ms, i.e. J* ≥ 49.55 µs.
+- **R1b checks robustness:** it assumes independent GEMVs share one join, which gives 128 joins
+  per token (32 layers × QKV, O, gate + up, down). Its line is J* ≥ 86.7 µs.
+
+**Witnesses.**
+- Host load 0.7 busy cores; xrt-smi idle at all 4 checks.
+- The passthrough had 0 mismatches over 20 warmup steps and each chain's last step.
+- DirectML was the first provider, and its output was finite (ONNX Runtime
+  1.23.3.dev20260320, Python 3.12.11).
+- VS Code's 3D engine on the 780M read 1.8% before the sitting and 2.6% after (display only).
+- BFP16 and the gate held.
+
+**Per step (MEASURED; medians over 30 chains of 224;
+[suite](../results/llm/split_sync_suite_desktop2_20260923.log),
+[verdict](../results/llm/split_sync_verdict_desktop2_20260923.log)).**
+
+| Chain | µs per step | Fastest / slowest chain |
+|---|---:|---:|
+| a, the NPU round trip | 131.1 | 122.0 / 163.8 |
+| b, the DirectML round trip | 168.8 | 160.0 / 184.7 |
+| e, the handshake | 3.3 | 3.2 / 5.1 |
+| c, the join | 177.8 | 162.4 / 198.9 |
+
+J* = 177.8 − 3.3 = **174.5 µs per join** (MEASURED).
+
+**The pre-registered rules print:**
+- **R1, DEAD.** 224 × J* = **39.09 ms per token** (DERIVED), 3.5× the most the split could save.
+  The DirectML + NPU split is dead for good.
+- **R1b, DEAD.** 128 × J* = 22.34 ms, still 2.0× the saving. So the kill does not depend on
+  joining per GEMV rather than once per dependent step.
+- **R2.** J is 177.8 µs, against 168.8 for max(a, b) and 299.9 for a + b. The halves overlap:
+  the join is 9.0 µs over the slower half and far under the sum.
+
+**What kills it is each chip's own round trip, not the handshake.**
+- The cross-chip part is small: e is 3.3 µs, and J* is only 5.7 µs over max(a, b).
+- Each chip's dependent round trip already exceeds the budget by itself: 224 × a = 29.4 ms and
+  224 × b = 37.8 ms (DERIVED), each over 11.1.
+- **A faster host language does not rescue it.** The repo's C++ XRT host pays about 108 µs for
+  one dispatch (MEASURED; [C++ host](#a-c-xrt-host-reaches-the-device-floor-and-36-µs-is-not-a-python-artifact);
+  not remeasured here). That is above both 49.55 and 86.7 µs, so the NPU half alone kills at 224
+  joins and at 128.
+- **The batched figures do not apply.** `pyxrt.runlist`'s 36.3 µs, and the C++ host's 36.7 µs
+  at N = 64, amortise independent dispatches. A decode chain is dependent: one dispatch at a
+  time. This replaces the previous section's 8.1 ms estimate.
+- **The trivial work inside a step does not change the verdict.** DirectML's 512 KiB weight
+  read takes about 7.5 µs at its 70.29 GB/s, and the NPU's 32 KiB about 4.6 µs at one
+  channel's 7.11 GB/s (DERIVED). A real split counts that work in its 36.4 ms floor. Taking all
+  7.5 µs out still leaves J* at about 167 µs, over both lines.
+
+**Scope: layouts the rules did not cover (not pre-registered).**
+- A tensor-parallel layout (column- then row-split, as in Megatron-LM) joins twice per layer,
+  64 times per token.
+  - 64 × J* = 11.17 ms (DERIVED), 0.6% over the line.
+  - At the fastest and slowest c chains it would be 10.18 and 12.52 ms. The line falls inside
+    this sitting's own range, so the margin decides nothing there.
+  - What stands against that layout is that 11.1 ms is itself optimistic. It would also need
+    attention and a share of the KV cache on the NPU, and neither exists here.
+- A layer split (DirectML runs some layers, the NPU the rest) joins about twice per token.
+  But with one sequence the chips then take turns, their reads do not overlap, and there is
+  nothing to save.
+- Other chip pairs are not tested here. The 11.1 ms line is this split's saving. Stage 2
+  found that adding the NPU to CPU + DirectML gives 1.084× (R3 NO).
+
+**Predictions scored: all five hold.**
+- Q1: a is 131.1 µs, inside 120–220.
+- Q2: b is 168.8 µs, inside 100–600.
+- Q3: e is 3.3 µs, under 10.
+- Q4: J* is 174.5 µs, at least max(a, b) − 20 = 148.8.
+- Q5: R1 DEAD and R1b DEAD.
+
+**What this does not establish** (the prereg's list, unchanged):
+- A C++ host for both halves. The C++ NPU figure above is prior evidence, not remeasured.
+- DirectML IO binding.
+- A device-to-device fence between DirectML and XRT; none is available to this host.
+- Real GEMV halves.
+- Attention and the KV cache.
+
+Next, stage 3: prefill GEMM at Llama-2-7B's shapes on the CPU, DirectML and the NPU. The user
+put it after this test, whatever the result.
 
 ### MobileViT-XXS does not survive per-tensor INT8, and AdaRound cannot save it
 

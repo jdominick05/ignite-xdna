@@ -177,9 +177,27 @@
     - Adding the NPU to CPU + DirectML gives 1.084×, under 1.10 (R3 NO).
     - The best total with the NPU is 1.1004× the best without it: R5 OPEN, not established,
       inside the sitting's run-to-run spread.
-    - A split also pays 224 synchronizations per token, which is not measured.
+    - A split also pays 224 synchronizations per token, which is not measured. (Measured
+      since: the next bullet.)
     - Decode kernels stay out unless the user decides otherwise.
     - ([BENCHMARKS](BENCHMARKS.md#reads-add-across-the-chips-directml-and-the-npu-together-read-918-gbs-and-the-npus-share-of-a-split-lands-on-the-pre-registered-line-2026-09-23-desktop-2))
+  - **The DirectML + NPU split is dead: joining its halves costs 3.5× what it could save.** The
+    user decided to "measure the sync first"; the test was pre-registered at `a81f16d`, with the
+    gate's kill line.
+    - A dependent join of a DirectML half and an NPU half costs J* = 174.5 µs per GEMV
+      (MEASURED, with the two-process handshake subtracted). 224 joins per token are 39.09 ms
+      (DERIVED), against the 11.1 ms at most the split could save, which is itself optimistic:
+      R1 DEAD.
+    - With 128 joins (independent GEMVs sharing one), 22.34 ms: R1b DEAD too.
+    - The halves overlap (R2). What kills the split is each chip's own dependent round trip:
+      NPU 131.1 µs and DirectML 168.8 µs per step, each over the line alone. The repo's C++
+      host still pays about 108 µs for one NPU dispatch at a time, so a faster host language
+      does not rescue it.
+    - Not covered by the rules: a tensor-parallel layout with 64 joins lands on the line
+      (11.17 ms). It would also need attention and a KV-cache share on the NPU, and neither
+      exists here.
+    - Decode kernels stay out. Stage 3, prefill, is next.
+    - ([BENCHMARKS](BENCHMARKS.md#a-directml--npu-split-pays-39-ms-per-token-to-join-its-halves-against-the-111-ms-it-could-save-the-split-is-dead-2026-09-23-desktop-2))
 - **A pre-registered size floor caught a builder defect (2026-09-23).** `tools/llm_gemv_bench.py build`
   first sized the fp16-scale variant's copies from the fp32 variant, so six DirectML rows streamed
   0.90–0.98 GiB against a pre-registered ≥ 1 GiB, and the verdict came out INCOMPLETE (`4620b53`).
