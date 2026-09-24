@@ -3290,18 +3290,38 @@ In these tables, no NPU arm beats both chips at either M (rival time / NPU time)
   it takes 0.72× the NPU's time at M = 512 and 0.92× at M = 2048.
 - **NPU int8** at M = 512 is slower than the CPU's int8 (0.79×) and level with DirectML fp16
   (0.99×).
-- **NPU int8** at M = 2048 beats DirectML (fp16 1.37×). It is level with the CPU's int8, 1.02×,
-  under the 1.10 line; it would have needed at most 197.4 ms against its 212.46 (DERIVED).
+- **NPU int8** at M = 2048 beats DirectML on bare layer time (fp16 1.37×), but not once the keep
+  rule's overheads are added. It is level with the CPU's int8, 1.02×, under the 1.10 line; it
+  would have needed at most 197.4 ms against its 212.46 (DERIVED).
+  - A KEEP also has to survive S2's concatenation and 3 context switches. The rule never ran
+    that check here, because NPU int8 had already lost to the CPU.
+  - Post hoc (DERIVED): with them added, NPU int8 is 212.46 + 2 × 27.71 + 3 × 0.748 = 270.12 ms
+    per layer, taking pass 2's concatenation time as the rule's code does (270.15 with the
+    two-pass mean). Against that, DirectML fp16 is 1.07×, under the 1.10 line.
+  - So the 1.37× is not a win over DirectML.
 
 **Post hoc, not pre-registered:**
 - **The broken row cannot change the outcome.** At either pass's value, DirectML fp32 is
-  628.5–647.7 ms per layer (DERIVED), and every NPU arm beats it by at least 1.99× either way. The
-  rivals that stop the NPU, DirectML fp16 and the CPU's int8, come from rows that held. This does
-  not replace the verdict.
+  628.5–647.7 ms per layer (DERIVED). Every NPU arm beats it either way: by at least 1.99× on bare
+  layer time, and 1.69× with S2's concatenation and the 3 switches added (NPU bf16, 372.4–372.9 ms
+  against 628.50). The rivals that stop the NPU, DirectML fp16 and the CPU's int8, come from rows
+  that held. This does not replace the verdict.
 - **The broken row moved between passes, not between sessions.** Its 5 sessions agreed within
   each pass: 44.65–45.01 ms in pass 1 and 49.38–50.14 in pass 2. Five fresh sessions average out
   a session's level, but not a level that holds for minutes. What moved it is not observed; a GPU
   clock or power state is a candidate.
+- **DirectML's shortest rows were still speeding up inside each session.** The measure is the
+  median of a session's first 3 timed runs over the median of its last 3.
+  - Four rows at M = 512 (fp16 S1, S2 and S3, and fp32 S1) had row medians of 1.12–1.31×, with
+    single sessions up to 1.41×. Every other row's median is 0.96–1.01, and the broken row's is
+    1.004.
+  - The noise study's 1.011× across one session's blocks was measured on fp32 S2 at M = 2048, a
+    long row whose ratio here is 1.000. So that figure covers long rows, not the short M = 512
+    rows that were still ramping.
+  - So 3 warmups were not enough for the short rows. Their values overstate steady-state time,
+    which favours the NPU. Nothing flips: even at these values, no NPU arm beats DirectML fp16
+    at M = 512.
+  - Later DirectML timing should warm up longer, by time rather than by count.
 
 **What pinning did to the CPU arms (MEASURED):**
 - **fp32:** pinned 8 threads took 0.73–0.99× the time of pinned 16 at five of the six shapes.

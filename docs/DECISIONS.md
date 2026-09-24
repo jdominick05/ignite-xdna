@@ -223,8 +223,11 @@
       - Not a verdict: its tables again show no NPU arm beating both chips. NPU bf16 loses to
         DirectML fp16, which takes 0.72–0.92× its time. The CPU's int8 takes 0.79× NPU int8's
         time at M = 512; at M = 2048 NPU int8 is only 1.02× faster, under the 1.10 line.
-      - Post hoc: the broken row cannot change that, since the NPU beats DirectML fp32 by at
-        least 1.99× at either pass's value.
+      - Post hoc: the broken row cannot change that. At either pass's value, the NPU beats
+        DirectML fp32 by at least 1.99× by layer time, and 1.69× with S2's concatenation and
+        the 3 switches added.
+      - Also post hoc: NPU int8's 1.37× over DirectML fp16 at M = 2048 is bare layer time. With
+        the same overheads added, it is 1.07×, under the 1.10 line.
       - As pre-registered, there is no third run without the user. What happens next is the
         user's call.
       - ([BENCHMARKS](BENCHMARKS.md#prefill-gemm-re-run-with-pinned-cpu-threads-and-directml-over-fresh-sessions-stage-3b-incomplete-by-one-directml-row-and-its-tables-again-show-no-npu-arm-beating-both-chips-2026-09-23-desktop-2))
