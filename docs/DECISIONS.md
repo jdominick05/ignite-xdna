@@ -161,6 +161,19 @@
     - **The model.** Gemma 3 4B: `google/gemma-3-4b-it`, `-qat-int4-unquantized` and
       `-qat-q4_0-gguf`. The user accepted Google's Gemma terms. The Llama-2-7B targets do not
       carry over; this model's targets are derived from its own shapes.
+    - **Freeing the CPU counts too (2026-09-23).** Asked "Should leaving the CPU cores free also
+      count, the way freeing the GPU does?", the user answered "Yes, it counts".
+      - CPU decode leaves the GPU free, and DirectML decode leaves most CPU cores free. So the
+        NPU's distinct claim is freeing both at once.
+    - **The floor for freeing a chip is 5 tokens/s, the user's number (2026-09-23).**
+      - The reason is reading speed. Adults read English non-fiction silently at an average of
+        238 words per minute (Brysbaert 2019, *J. Memory and Language* 109, 104047, a
+        meta-analysis of 190 studies).
+      - Tokens per word are measured with Gemma's tokenizer before the freeing test. The floor
+        stays 5 tokens/s unless the user changes it.
+    - **Energy comes from the package counters only (2026-09-23).** Asked about a wall-power
+      meter, the user answered "package counters only". There is no wall meter, and a comparison
+      the counters cannot decide ends UNDECIDED.
 
 ## Rejected approaches and known pitfalls
 
