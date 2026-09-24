@@ -3608,6 +3608,318 @@ NPU INSIDE.**
 - The 780M's clocks under a duty cycle.
 - Other read paths, thread counts and dtypes.
 
+### Gemma 3 4B decode on the CPU and DirectML: INCOMPLETE in both sittings on the page-in witness, and the three complete arms decode at 10.8–17.6 tok/s (2026-09-24, Desktop 2)
+
+The question, (c) of the Gemma plan with its rule (d)
+([locked decision 10](DECISIONS.md#locked-decisions-do-not-reopen)): how fast, at what package
+energy per token and how accurately do the two rivals decode Gemma 3 4B on the release's own
+weights? The rivals are the CPU (ONNX Runtime) and DirectML on the 780M. Then (d), a mechanical
+rule on (b) and (c): is there a speed or an energy route for NPU-only decode at this model's
+bytes? The floor is 5 tok/s.
+
+**The build** (not a sitting: `tools/gemma_decode.py`, `scripts/llm-study.sh decode-build`;
+[build](../results/llm/gemma_decode_build_desktop2_20260924.log),
+[stopped run](../results/llm/gemma_decode_build_stopped_desktop2_20260924.log),
+[recheck](../results/llm/gemma_decode_recheck_desktop2_20260924.log)). All MEASURED by read-back
+unless tagged.
+- onnxruntime-genai 0.11.2's builder (the RyzenAI DirectML wheel, on ONNX Runtime 1.23.3) made
+  five models from the release, `google/gemma-3-4b-it-qat-q4_0-gguf` @ `15f73f5e`.
+  - All 3,208,642,560 dequantized linear weights equal the GGUF's q4_0 values.
+  - The norms are the GGUF's F32 values, bit-exact (N1).
+- The arms:
+  - C0 and C4 run on the CPU, with MatMulNBits accuracy_level 0 (fp32 compute) and 4 (int8
+    compute). D runs on DirectML (fp16).
+  - H16 is the release's tied F16 head. H4 is the builder's round-to-nearest int4 of it (block 32,
+    rel-L2 0.0889), a lossy step the release does not take.
+  - A token reads 2.182 GB (H4) or 3.147 GB (H16) (DERIVED).
+- Corrected in the graphs:
+  - F1: GenAI 0.11.2 ignores rope_scaling (linear, ×8). The global layers' cos/sin caches now carry
+    transformers' values.
+  - F2: GenAI rounds the embedding scale to 50.6; it is set to √2560. On DirectML F2 is moot:
+    fp16(√2560) = 50.59375, the same fp16 value as 50.6. That is the DirectML arms' precision, not
+    a defect.
+  - F3: ORT 1.23.3's GroupQueryAttention CPU kernel keeps local_window_size + 1 keys, so the CPU
+    arms' 29 local layers get 1023.
+- F4, a scope limit: DirectML's GroupQueryAttention reads no local_window_size.
+  - So through ORT's DirectML EP, Gemma 3 past 1024 positions is a different model.
+  - D-H16's max KL is 3.82e-4 within the window and 3.87 past it (position 1025).
+  - No (c) measurement passes 1024 positions.
+- B1_COMMON (POST HOC, INFERRED) is the fraction where bf16 of the GGUF's value equals the
+  unquantized QAT checkpoint's bits.
+  - It supports a common source for the norms (0.99996) and the head (0.952).
+  - The linears (0.0429) fit a checkpoint of latent QAT weights that round to 99.1% of the GGUF's
+    codes.
+- B3', DirectML placement: each D arm has 1,472 nodes on DirectML and 2 on the CPU.
+  - The two are the Gather of Shape(attention_mask)[1] and its Cast to int32. The Cast's only
+    consumers are the 34 GroupQueryAttention nodes' input 6.
+  - DirectML registers that input with `requiredConstantCpuInputs(6)`
+    (`OperatorRegistration.cpp:1179`, ORT main and rel-1.23.0), so this placement is by design.
+  - The two nodes read only the mask's shape, and their cost is inside every timed DirectML window.
+  - Any other CPU node would void the arm. Both D arms pass.
+- The smoke's " is" ×16 on every arm was the harness's missing BOS, not a model fault: GenAI
+  0.11.2's `og.Tokenizer.encode` adds none.
+  - With BOS first, every arm says " Paris."
+  - Every arm and the reference see exactly one BOS, and `IDS_SHA` pins identical ids across the
+    arms.
+- The build's B3 subprocesses failed to start (0xC0000142) after a host memory guard killed their
+  console-owning wrapper (cause INFERRED). So B3, the smoke and all 45 model SHA-256s were rerun on
+  the same files (the recheck).
+
+**The fidelity gate passes.** C0-H16 is checked against transformers' fp32 Gemma 3 with the
+release's weights; max KL per position must be ≤ 1e-4.
+- At 64 tokens: 2.78e-10.
+- At 1100 tokens: 1.77e-9 within the window and 3.73e-9 past it.
+- Top-1 agreement: 1.0000.
+
+Run 3's staged max KL:
+
+| Stage | 64 tokens | 1100 tokens, within the window | 1100 tokens, past it |
+|---|---:|---:|---:|
+| As built | 0.0930 | 1.06 | 6.97 |
+| N1 | 0.0991 | 1.04 | 7.04 |
+| N1 + F1 + F2 | 2.78e-10 | 1.77e-9 | 0.901 |
+| All four | 2.78e-10 | 1.77e-9 | 3.73e-9 |
+
+- F1 + F2 take the error from about 0.09–1 to about 1e-9 within the window, and F3 takes the error
+  past the window from 0.901 to 3.7e-9.
+- Run 1 was stopped on purpose; as built it read 0.101 at 64 tokens and 7.06 at 1100. It differs
+  from run 3 because the reference changed (run 1's used the checkpoint's norms), not the model.
+
+**The protocol** (pre-registered at `68e9cfe` before either sitting,
+[prereg](../results/llm/gemma_decode_prereg_desktop2_20260924.log)). The tool is
+`tools/gemma_decode_suite.py`. Each sitting ran under `tools/silicon_probe_record.py --device`,
+announced to the other sessions, with nothing else running.
+- The text is wikitext-2-raw-v1 test, BOS plus the first 1023 tokens: a 128-token prompt, then 896
+  greedy tokens. The timed window is generated tokens 257–896.
+- Sessions:
+  - CPU arms: one session per arm-pass with 3 sequences, 8 intra-op threads pinned one per
+    physical core.
+  - DirectML arms: 5 fresh sessions per arm-pass, one sequence each.
+- Order: C4-H4, D-H4, C0-H4, D-H16, C0-H16, then mirrored. Each arm-pass follows a 10 s settle
+  and a 60 s idle.
+- J/token is package power in the windows above the arm-pass's own idle, divided by its tok/s
+  ((b)'s method).
+- An arm is complete if both passes are and they agree within 10% in tok/s and J/token. Its value
+  is their mean.
+- The memory witness: a sequence window whose mean `\Memory\Pages Input/sec` exceeds 100 voids its
+  arm-pass. That is 0.4 MB/s; a decode whose weights paged would need ≥ 22,000 pages/s at the
+  floor (DERIVED).
+- The sitting refuses to start if a process holds ≥ 4 GB private or a DXGI hardware adapter is not
+  the 780M. It checks every model file's SHA-256.
+- Accuracy, a separate untimed pass:
+  - Each arm is teacher-forced through GenAI's own decode path: a one-hot `set_logits`, then a
+    greedy `generate_next_token`. This is because GenAI 0.11.2 refuses a second `append_tokens` on
+    DirectML.
+  - The metric is mean KL(reference ‖ arm) over 1023 positions. The reference is transformers'
+    fp32 Gemma 3 with the release's weights and F16 head.
+  - A is at least as accurate as B if KL_A ≤ 1.10 × KL_B, both floored at 1e-6.
+- (d):
+  - The rivals are every finite arm at least as accurate as KL*_H, the lowest measured KL on head H
+    ("generous"), or the highest ("worst").
+  - Speed KILLs if the NPU's ceiling is below 1.10 × the fastest rival. The ceiling is stage 1's
+    47.62 GB/s over the bytes per token: 21.82 tok/s for H4 and 15.13 for H16 (DERIVED).
+  - Energy KILLs if 1.10 × the NPU's floor is above the rivals' lowest J/token. The floor is
+    (b)'s 0.328 J/GB: 0.716 and 1.032 J/token. Stated in advance: this rule cannot KILL here.
+
+**Sitting 2's rule** (committed at `21a666d` after sitting 1 and before sitting 2;
+[rule log](../results/llm/gemma_decode_prereg_rerun_desktop2_20260924.log)).
+- Sitting 2 runs the full matrix again and alone decides. If it is INCOMPLETE, that stands, with
+  no third run without the user.
+- Unchanged: the arms, the order, the lengths, the 100 pages/s void, the 10% agreement, B3', the
+  start refusals, the predictions and (d).
+- Changed only:
+  - (a) the GPU witness reads engine types with a space (report-only);
+  - (b) a page-in attribution witness (report-only): for each window over the threshold, the top 5
+    processes by page faults/s and by IO read bytes/s, each with its hard faults/s;
+  - (c) there is no accuracy pass. Sitting 1's accuracy log stands, pinned by hash, and an arm
+    whose tokens differ from sitting 1's is VOID. None did.
+- The tokenizer also loads quietly (see Hygiene).
+
+**The sittings.** tok/s is MEASURED; J/token is DERIVED from measured power and rate. VOID is a
+window over 100 pages/s, its mean in brackets.
+
+Sitting 1, 07:24–08:20Z ([suite](../results/llm/gemma_decode_suite_desktop2_20260924.log),
+[accuracy](../results/llm/gemma_decode_accuracy_desktop2_20260924.log),
+[verdict](../results/llm/gemma_decode_verdict_desktop2_20260924.log)). Start: 0.35 busy cores,
+22.75 GB available, no process of ≥ 1 GB, and all 45 SHA-256s matched.
+
+| Arm | Pass 1: tok/s, J/token | Pass 2: tok/s, J/token | Arm |
+|---|---|---|---|
+| C4-H4 | VOID (328.1) | 17.03, 3.478 | INCOMPLETE |
+| D-H4 | 15.86, 3.987 | VOID (138.5) | INCOMPLETE |
+| C0-H4 | 17.48, 4.099 | 17.61, 4.058 | **17.54, 4.079** |
+| D-H16 | 13.35, 4.639 | 10.85, 5.263 | INCOMPLETE (passes 20.7% apart in tok/s, 12.6% in J/token) |
+| C0-H16 | 10.90, 5.952 | VOID (219.5) | INCOMPLETE |
+
+Sitting 2, 09:08–10:04Z ([suite](../results/llm/gemma_decode_suite_rerun_desktop2_20260924.log),
+[verdict](../results/llm/gemma_decode_verdict_rerun_desktop2_20260924.log)). Start: 0.38 busy
+cores, 22.24 GB available, no process of ≥ 1 GB, and all 45 SHA-256s matched.
+
+| Arm | Pass 1: tok/s, J/token | Pass 2: tok/s, J/token | Arm |
+|---|---|---|---|
+| C4-H4 | VOID (181.1) | 17.03, 3.478 | INCOMPLETE |
+| D-H4 | VOID (236.3; 111.7) | VOID (625.1) | INCOMPLETE |
+| C0-H4 | 17.37, 4.102 | 17.73, 4.020 | **17.55, 4.061** |
+| D-H16 | 13.38, 4.624 | 12.93, 4.680 | **13.16, 4.652** |
+| C0-H16 | 10.82, 5.922 | 10.81, 5.945 | **10.81, 5.934** |
+
+- In both sittings DXGI listed the 780M twice, then the Basic Render Driver. Adapter 1's LUID
+  differed between the sittings, and each sitting's witness read its own list.
+- C4-H4's pass 2 reads 17.03 tok/s and 3.478 J/token in both sittings by coincidence. Its windows
+  were at 08:18–08:21Z and 10:01–10:04Z, and the rows differ (idles of 14.88 and 14.95 W).
+- Every arm's tokens in sitting 2 equal sitting 1's, so rule (c) voids nothing.
+- Values from different sittings are not compared: no ratio is taken across sittings, and J/token
+  is compared only within a sitting.
+
+**The complete arms** (sitting 2), each beside the 5 tok/s floor and with its predictions scored
+as logged:
+
+| Arm | tok/s | Against the floor | J/token | Speed predicted | Energy predicted |
+|---|---:|---|---:|---|---|
+| C0-H4 | 17.55 | above | 4.061 | 6–15: MISS | 2.5–4.5: HIT |
+| D-H16 | 13.16 | above | 4.652 | 14–22: MISS | 1.6–3.0: MISS |
+| C0-H16 | 10.81 | above | 5.934 | 5–12: HIT | 2.5–7.0: HIT |
+
+C4-H4 (predicted 12–22 tok/s and 2.5–4.5 J/token) and D-H4 (20–30 and 1.6–3.0) are UNSCORED,
+since both are INCOMPLETE.
+
+**Accuracy** (sitting 1's pass, which sitting 2's rule pins; MEASURED). Mean KL is in nats over
+1023 positions. The reference's perplexity is 10.073.
+
+| Arm | KL vs the reference | KL vs its own head | Top-1 | Perplexity |
+|---|---:|---:|---:|---:|
+| C0-H4 | 0.0123 | 1.37e-11 | 0.956 | 10.161 |
+| C4-H4 | 0.0134 | 1.24e-3 | 0.954 | 10.145 |
+| D-H4 | 0.0123 | 8.69e-6 | 0.956 | 10.158 |
+| C0-H16 | 1.41e-11 | (the same) | 1.000 | 10.073 |
+| D-H16 | 8.31e-6 | (the same) | 0.998 | 10.070 |
+
+- The checks hold: every forced sequence equals the pinned ids, and no logit is non-finite. On the
+  three CPU arms, forcing equals appending (max |diff| 0 over 31 positions).
+- The int4 head costs the H4 arms about 0.012 nats per position. C0-H4's KL against its own head
+  is 1.37e-11, so its 0.0123 is the head's.
+- Against their own heads, DirectML's fp16 compute costs 8.3–8.7e-6 and C4-H4's int8 compute
+  1.24e-3.
+- Accuracy predictions 1–3: all HIT.
+
+**Verdict: INCOMPLETE in both sittings.**
+- Sitting 2 alone decides. Its INCOMPLETE stands (C4-H4 and D-H4 were voided), and there is no
+  third run without the user.
+- The committed verdict applies (d) only when nothing is withheld
+  (`tools/gemma_decode_suite.py:1097`), so neither verdict log has a (d) row.
+
+**Post hoc, deciding nothing: (d)'s arithmetic for H16.**
+- H16 is the one head format whose rivals are all complete. By the accuracy table, only C0-H16
+  and D-H16 are at least as accurate as either H16 reference, and both are complete in sitting 2.
+- The figures below come from the committed `rivals` and `rule_d`, not by hand, run on sitting 2's
+  complete arms (DERIVED).
+- **Generous:** KL*_H16 is C0-H16's 1.41e-11, floored to 1e-6. D-H16's 8.31e-6 is above 1.10e-6,
+  so the only rival is C0-H16.
+  - Speed OPEN: the ceiling is 15.13 tok/s, against 1.10 × 10.815 = 11.90.
+- **Worst** (the NPU only as accurate as D-H16): the rivals are C0-H16 and D-H16.
+  - Speed OPEN: 15.13 against 1.10 × 13.157 = 14.47, a 4.5% margin.
+  - An NPU decode would have to run at 95.7% of its measured read ceiling to clear that line. The
+    ceiling is a DMA read with no compute behind it
+    ([stage 1](#the-npu-reads-ddr-at-476-gbs-when-nothing-is-written-back-silicons-2628-gbs-cap-does-not-bind-reads-and-7b-decode-stays-killed-2026-09-23-desktop-2)).
+- Energy is OPEN in both (1.10 × 1.032 = 1.135 J/token, against 5.934 and 4.652). That holds by
+  construction, as stated in advance, so it is not a finding.
+- H4 is undetermined: its rival sets hold C4-H4 and D-H4, which are INCOMPLETE.
+- An OPEN here is what the accuracy assumptions allow, not a role: no NPU decode arm exists.
+
+**The page-in voids.**
+- The threshold stands; it was not moved after seeing data.
+- Free RAM before every arm-pass was ≥ 21.9 GB in sitting 1 and 22.18–22.58 GB in sitting 2.
+- No slowdown shows in any voided pass (POST HOC; medians of sequence tok/s; no rule reads them).
+  - In sitting 2, C4-H4's voided pass 1 is within 0.4% of its valid pass 2, and D-H4's two voided
+    passes are within 2.5% of each other.
+  - In sitting 1, the three voided passes are within 0.1–1.9% of their valid partners.
+- The attribution (sitting 2 only) is INFERRED and partial.
+  - It ranks the top 5 by page faults, which are mostly soft. Their hard faults sum to at most 21/s
+    in D-H4 pass 2's window, against 625 pages/s. A hard fault can read several pages, and cached
+    file reads count in Pages Input/sec too, so the two are not like for like. Still, the lists
+    do not account for the page-ins.
+  - In that 625 pages/s window, Windows servicing was active: TiWorker (152 KB/s read), WmiPrvSE
+    (237 KB/s, 10.7 hard faults/s) and taskhostw (99 KB/s, 10.2 hard faults/s). Defender
+    (MsMpEng) was beside them.
+  - The DirectML readers themselves ran about 4,000 soft faults/s and no hard faults.
+  - pid 87536 is not named in the log: a python.exe at 257.0 faults/s in three windows minutes
+    apart, with 0 hard faults and no reads.
+    - It is INFERRED to be the suite process's own sampler. The sampler allocates a fresh
+      zero-filled 1 MiB buffer each second, which is 256 pages of 4 KiB (DERIVED).
+    - A pid that spans arm-passes is not a reader, since each arm-pass starts its own.
+    - Its faults are soft and add nothing to Pages Input/sec.
+
+**The GPU witness** (report-only).
+- In sitting 1 its pattern dropped engine types with a space ("Compute 0", "Compute 1", "Timer
+  0"), the engines DirectML runs on, so its "780M pid" column read 0. This was fixed for sitting 2.
+- It sees only the first of each DirectML arm-pass's five sessions.
+  - The POST HOC re-read of sitting 1's files
+    ([log](../results/llm/gemma_decode_gpu_posthoc_desktop2_20260924.log)) shows the 780M
+    97.1–98.2% busy in each first session, almost all of it the reader.
+  - The reader reads 0 in sessions 2–5, which decoded at 13–16 tok/s.
+  - The cause is INFERRED: typeperf fixes its counter instances when it starts, and they go stale
+    when a session is released.
+  - Sitting 2's window means for D-H16's reader, 19.7% and 20.1%, are that one session in five, not
+    the 780M's load.
+- D-H16's slow pass 2 in sitting 1 (POST HOC, INFERRED):
+  - in its first window the 780M was 98.2% busy with the reader at 10.47 tok/s, against 97.5% at
+    13.08 tok/s in pass 1's;
+  - other processes on the 780M rose only to 0.25–0.42%;
+  - so the slowdown was inside the 780M, not a competitor on it.
+
+**Hygiene.**
+- Sitting 2's attribution lists named two local AI-tool processes, 5 entries on 4 lines.
+  - They were replaced by `<tool>.exe` in the suite log before the commit and before the verdict
+    read it. The pids and rates are unchanged.
+  - The gate applied the same swap to the raw console capture and diffed it against the committed
+    log. Nothing else differs but the launcher's first and last console lines.
+- Transformers 4.57.6 warns of an "incorrect regex pattern" when it loads this tokenizer, and the
+  warning quotes the local checkout path (profile scrubbed).
+  - It is on 24 lines across five logs: the build, the stopped build, the prereg, sitting 1's suite
+    and the accuracy log. Those logs are not rewritten.
+  - The pinned ids equal SentencePiece's and the raw tokenizer.json's (`TOKENIZER_CHECK_JSON`), so
+    the warning changes no id.
+  - Since `21a666d` the tokenizer loads with transformers' logging at error, and sitting 2's logs
+    carry no path.
+- The raw typeperf files of both sittings, 20 each, are in
+  `results/llm/gemma_decode_counters_desktop2_20260924/`, with stamps 20260924T032400 and
+  20260924T050813.
+
+**Hashes.** The SHA-256s the prereg quotes are of Windows CRLF working copies, while git stores LF
+blobs. Each is given below with the other beside it, so a Linux reader can check them.
+- The build log: CRLF working copy
+  `28e29abc3eb947b45d3cc90263cf37845925c2e0eb03102c07412e15e6056447`, LF blob
+  `5743652ccb5000e7c5a52d19f287b374d3ae7ce938ba873be1a7f7a160960bfe`.
+- The recheck log: CRLF working copy
+  `7ecf58bb4ef61ceb899c5aa3c877f57ada90cc53e5e3d7a1280b0eecdb8ac88c`, LF blob
+  `46a8fedf502d33528ceaa02777fd09baceea99242cf9c89c7e958a20ba52121e`.
+- The prereg: CRLF working copy `f01b455f7736931f518011c52549f4caac8a39cf01a8ac918ffa432a10e237d2`,
+  LF blob `57001d2295c4fad7bea89de6fdb7d1319cb1555242ecbcef8a8c3e4ef3f0b042`.
+- Sitting 2's rule pins sitting 1's logs by their LF blobs:
+  - the accuracy log: LF blob `7a579b84bdb022e77d4a267d0b25690cfb99eb2594bda4071528c7000fe2d5dd`,
+    CRLF working copy `04986de0f78cef2b3b74eceed502c10cb961209fcf92b234a1afeb79e04eb6bb`;
+  - the suite log: `19af6e168d9d164730b490ebabdfd140e56402986fb6c988ac3422da9dc4c7d4`. The suite
+    writes LF, so this working copy and the blob hash alike.
+
+**Labels**
+([b](#the-780m-and-the-npu-both-register-in-the-package-power-counter-and-the-npu-reads-a-gb-for-033-j-against-directmls-075-and-the-cpus-088-2026-09-24-desktop-2)):
+- package counters only, so completeness is never shown;
+- DRAM power is outside the package;
+- shared DRAM pulls ratios toward 1.
+
+**What this does not establish:**
+- C4-H4's and D-H4's speed and energy, and so H4's (d).
+- Any NPU decode. No NPU decode arm exists, and (d)'s OPENs rest on assumed accuracy.
+- What paged in the voided windows: the attribution is partial.
+- The 780M's load in DirectML sessions 2–5.
+- Positions past 1024 (F4), other prompts, batch sizes and sampling, and prefill speed.
+- Freeing the GPU or the CPU, which is (e). That, and whether to run a third sitting, are the
+  user's call.
+- Three tool changes are held for a third sitting only:
+  - the GPU witness's instances refreshed per session;
+  - the attribution ranked by hard faults;
+  - AI-tool image names neutralized at the source.
+
 ### MobileViT-XXS does not survive per-tensor INT8, and AdaRound cannot save it
 
 The accuracy question the attention work deferred, now measured on the full 1000-image

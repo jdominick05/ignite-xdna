@@ -760,6 +760,22 @@ been closed:
         - Package counters only: completeness and DRAM power are not shown. This idle was 20-26
           W lower than the 2026-09-17 sittings', which is not yet attributed
           ([BENCHMARKS](docs/BENCHMARKS.md#the-780m-and-the-npu-both-register-in-the-package-power-counter-and-the-npu-reads-a-gb-for-033-j-against-directmls-075-and-the-cpus-088-2026-09-24-desktop-2)).
+      - Stage (c) timed decode on the CPU and DirectML, on the release's own weights, in two
+        pre-registered sittings. Both were INCOMPLETE on the page-in witness. The second alone
+        decides, and its INCOMPLETE stands: there is no third run without the user.
+        - Complete in sitting 2, all above the 5 tok/s floor:
+          - C0-H4 (CPU, int4 head): 17.55 tok/s at 4.061 J/token;
+          - D-H16 (DirectML, F16 head): 13.16 at 4.652;
+          - C0-H16: 10.81 at 5.934.
+          C4-H4 and D-H4 were voided.
+        - Against the release, the int4 head costs about 0.012 nats per position. DirectML's fp16
+          compute costs 8.3e-6 on the F16 head.
+        - Post hoc, deciding nothing: (d)'s speed rule leaves NPU-only decode OPEN on the F16
+          head.
+          - Under the least generous accuracy assumption the margin is 4.5%, so an NPU would have
+            to decode at 95.7% of its measured read ceiling.
+          - The int4 head is undetermined.
+          ([BENCHMARKS](docs/BENCHMARKS.md#gemma-3-4b-decode-on-the-cpu-and-directml-incomplete-in-both-sittings-on-the-page-in-witness-and-the-three-complete-arms-decode-at-108176-toks-2026-09-24-desktop-2)).
 
   Evidence: `results/aie/int4_{isa_gate,engine_bytes_gate,demo_npu}_desktop2_20260923.log`,
   `results/int4/w4a8_accuracy_{prereg,verdict}_desktop2_20260923.log`,
