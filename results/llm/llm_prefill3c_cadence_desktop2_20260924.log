@@ -1,0 +1,66 @@
+UTC: 2026-09-24T18:53:36.927352+00:00
+MACHINE: DESKTOP-CBL5NUA AMD64 Family 25 Model 117 Stepping 2, AuthenticAMD
+COMMAND: python tools/llm_prefill3c.py cadence
+COMMIT: 1278d96d133af6364ce6c77d47051ca6a2b1b32d
+PRE_DEVICE_WITNESS
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+CADENCE (3c amendment 1), pre-sitting, enters no rule; no T or E is printed, 2026-09-24T18:53:37Z
+PREREG_TEXT_SHA256 f7fa696b608d22b7ad2a5b228b1b93d2e617a40b34385c1e85f361faf5fca6d9
+PROTOCOL_JSON_SHA256 5e533fca3b30902e5e349a29812047d2bc186381b5a4d28d1f2d13663468414a (amendment 1; before it a997580c...)
+VERDICT_CODE_SHA256 6e459e560c838909295e554994c950ad3ce32cf0b15a150123ab5481d17dc549
+PROTOCOL_JSON {"stage": "3c", "plan": "v2", "layer": 16, "linears": [["q", "attn_q", 2560, 2048, "x_attn"], ["k", "attn_k", 2560, 1024, "x_attn"], ["v", "attn_v", 2560, 1024, "x_attn"], ["o", "attn_output", 2048, 2560, "x_o"], ["gate", "ffn_gate", 2560, 10240, "x_ffn"], ["up", "ffn_up", 2560, 10240, "x_ffn"], ["down", "ffn_down", 10240, 2560, "x_down"]], "inputs": {"x_attn": 2560, "x_o": 2048, "x_ffn": 2560, "x_down": 10240}, "layers": 34, "ms": [2048, 8192], "seed": 20260924, "order": ["C-fp32@8", "C-fp32@16", "C-i8@8", "C-i8@16", "C-nb0@8", "C-nb0@16", "C-nb4@8", "C-nb4@16", "D-fp16", "D-fp32", "D-i8", "D-nb16", "N-bf16", "N-i8", "N-w4"], "report_only": ["N-w4"], "npu_arms": ["N-bf16", "N-i8"], "model_of": {"C-fp32": "fp32", "C-i8": "i8_u8", "C-nb0": "nb0", "C-nb4": "nb4", "D-fp16": "fp16", "D-fp32": "fp32", "D-i8": "i8_s8", "D-nb16": "nb16"}, "threads": [8, 16], "zp": 128, "cpu_pin": "8: one logical CPU per physical core; 16: every logical CPU; the caller pinned to the first", "idle_s": 60, "warmup_s": 20, "window_s": 60, "settle_s": 10, "trim_s": 1, "min_rows": 50, "min_iterations": 5, "repeat_max": 0.1, "margin": 1.1, "acc_tie": 1.1, "bf16_acc_max": 0.0001, "hf_max": 25.0, "pages_max": 1000.0, "rerun_void": 1, "npu_tiles": {"bf16": {"P": [32, 64, 128, 1], "F": [64, 64, 64, 1]}, "i8": {"P": [64, 128, 64, 1], "F": [64, 64, 64, 0]}, "w4": {"P": [64, 128, 64, 1]}}, "npu_piece": 2560, "npu_contexts": 4, "insts_fit": [16, 2576], "e_unit": "J per prompt token per layer, above idle (printed in mJ)", "t_unit": "ms per layer iteration, median over the window", "npu_shapes": [[2560, 2048], [2560, 1024], [2048, 2560], [2560, 2560]], "wiring_max": {"fp32": 0.0001, "nb0": 0.0001, "fp16": 0.01, "nb16": 0.01, "nb4": 0.2, "i8_u8": 0.2, "i8_s8": 0.2}, "void_rel_l2_max": {"C-fp32@8": 0.0001, "C-fp32@16": 0.0001, "C-i8@8": 0.2, "C-i8@16": 0.2, "C-nb0@8": 0.0001, "C-nb0@16": 0.0001, "C-nb4@8": 0.2, "C-nb4@16": 0.2, "D-fp16": 0.01, "D-fp32": 0.0001, "D-i8": 0.2, "D-nb16": 0.01, "N-bf16": null, "N-i8": 0.2, "N-w4": null}, "counters": "typeperf and the suite (its FaultSampler) at HIGH_PRIORITY_CLASS in every idle and window; the readers at NORMAL_PRIORITY_CLASS; each read back, else the window is FAILED (amendment 1)"}
+NEUTRAL_NAMES 4 (a local, git-ignored list; the names themselves are not logged)
+HOST_LOAD busy_cores=0.18 logical_cores=16 free_ram_gb=19.1 sample_sec=1
+HOST_LOAD_TOP 0.09 powershell:83116 ws_mb=82
+HOST_LOAD_TOP 0.03 <tool>:51624 ws_mb=535
+HOST_LOAD_TOP 0.02 <tool>:83816 ws_mb=278
+HOST_LOAD_TOP 0.02 Code:18328 ws_mb=52
+HOST_LOAD_TOP 0.02 <tool>:62116 ws_mb=211
+HOST_LOAD_VERDICT CLEAR
+HOST_GATE CLEAR
+MEMORY_START_JSON {"available_gb": 20.62, "processes_over_1gb": [{"pid": 51624, "name": "<tool>.exe", "private_gb": 1.04}], "refuse": []}
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+ADAPTERS_JSON {"adapters": [{"index": 0, "description": "AMD Radeon 780M Graphics", "vendor": 4098, "device": 5567, "flags": 0, "luid": "0x00000000_0x0000badf"}, {"index": 1, "description": "AMD Radeon 780M Graphics", "vendor": 4098, "device": 5567, "flags": 0, "luid": "0x00000000_0xbdaed66e"}, {"index": 2, "description": "Microsoft Basic Render Driver", "vendor": 5140, "device": 140, "flags": 2, "luid": "0x00000000_0x0000d6b0"}], "luids_780m": ["0x00000000_0x0000badf", "0x00000000_0xbdaed66e"]}
+PINS_CHECK_JSON {"mismatches": [], "seconds": 3.8}
+SUITE_PRIORITY_JSON {"priority": "HIGH"}
+
+WINDOW_BEGIN M=2048 position 0 pass 0 C-fp32@16 2026-09-24T18:53:44Z
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+READER_CMD python[resnet_env17] tools/llm_prefill3c.py reader C-fp32@16 2048 --loadcheck
+reader| CHECK_JSON {"arm": "C-fp32@16", "M": 2048, "ok": true, "why": [], "bound": 0.0001, "i8_sha": null, "w4_sha": null}
+reader| PIN_JSON {"before_ready": {"cpus": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15], "pool": [[1], [2], [3], [4], [5], [6], [7], [8], [9], [10], [11], [12], [13], [14], [15]], "main": [0], "cpu_sets": 0, "ok": true}, "ok": true}
+reader| READY {"pid": 84348, "arm": "C-fp32@16", "M": 2048, "load_s": 1.4, "python": "3.12.11", "numpy": "1.26.4", "priority_class": 32, "model": "fp32", "threads": 16, "onnxruntime": "1.23.3.dev20260320"}
+CADENCE_JSON {"arm": "C-fp32@16", "M": 2048, "state": "OK", "why": "", "rows": {"idle_rows": 58, "window_rows": 53}, "memory_rule": {"hard_faults_per_s": 0.0, "fault_seconds": 57, "pages_in_mean": 0.68}, "cadence_idle": {"rows": 58, "gap_median_s": 1.022, "gap_p95_s": 1.027, "gap_max_s": 1.035}, "cadence_window": {"rows": 53, "gap_median_s": 1.069, "gap_p95_s": 1.117, "gap_max_s": 1.148}, "priorities": {"typeperf": "HIGH", "suite": "HIGH", "reader": "NORMAL"}, "cpu_s_in_window": {"typeperf": 0.125, "suite": 1.062}, "pin_read_backs": {"before_ready": true, "after_warmup": true, "after_loop": true}, "limits": {"arm": "C-fp32@16", "M": 2048, "gap_median_max_s": 1.05, "gap_max_s": 1.5}, "note": "enters no rule; T and E are not printed", "pass": false, "fails": ["median row gap"]}
+CADENCE FAIL (median row gap): back to the gate and the user
+
+EXIT_CODE: 2
+POST_DEVICE_WITNESS
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
