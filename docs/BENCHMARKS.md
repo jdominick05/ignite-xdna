@@ -2461,6 +2461,11 @@ bandwidth-bound. So Phase 1 of the LLM study measures the two yardsticks before 
 int4 GEMV through ONNX Runtime's `MatMulNBits` at Llama-2-7B's three linear shapes. Prior art and
 the NPU bound are in [the prior-art note](../results/llm/notes_prior_art_phoenix_llm.md).
 
+Scope, added 2026-09-23: from that date the bar also counts energy per token and freeing the GPU
+([the user's decision](DECISIONS.md#locked-decisions-do-not-reopen), locked decision 10). This
+section's kill is on speed and accuracy. Energy and GPU freeing were not measured, and nothing is
+re-scored.
+
 **Setup.** Pre-registered at `37e7bdb` before any timing
 ([prereg](../results/llm/llm_decode_prereg_desktop2_20260923.log)); runner `scripts/llm-study.sh`.
 - The weights are uint4, round-to-nearest asymmetric, blocks of 32 and 128. Each timed run streams
@@ -2583,6 +2588,10 @@ The question, from the user's re-scope of the LLM study: how fast can the NPU re
 This is decode's reopen condition (≥ 59.7 GB/s, previous section). It also fills the gap in
 [SILICON 1.6](SILICON.md#16-off-chip-bandwidth): none of its three figures was a clean
 single-direction read, and it derived a shared 26–28 GB/s cap from them.
+
+Scope, added 2026-09-23: "stays killed" is on speed. Energy per token and freeing the GPU, which
+count from that date ([locked decision 10](DECISIONS.md#locked-decisions-do-not-reopen)), were not
+measured.
 
 **Setup.**
 - Pre-registered at `c365f9f` before the sitting
@@ -2808,6 +2817,9 @@ The question, the user's decision on stage 2's R5 ("measure the sync first"):
   47.5 − 36.4 at the previous section's reduction rates).
 - That figure is itself optimistic: GEMV reads slower than a reduction, and no NPU int4 GEMV
   exists.
+- Scope, added 2026-09-23: "dead" is on speed. Energy per token and freeing the GPU, which count
+  from that date ([locked decision 10](DECISIONS.md#locked-decisions-do-not-reopen)), were not
+  measured.
 - This test prices the join before any decode kernel is built.
 
 **Setup.**
@@ -2925,7 +2937,10 @@ sittings.)
 
 The question, the user's third item: does the NPU earn a prefill role? The bar is unchanged.
 An NPU arm must be faster than both the CPU (ONNX Runtime) and DirectML on the 780M, or more
-accurate than both.
+accurate than both. (That was the bar for stages 3 and 3b. After them, on 2026-09-23, it grew to
+count energy per token and freeing the GPU too, per
+[locked decision 10](DECISIONS.md#locked-decisions-do-not-reopen). Stages 3 and 3b are not
+re-scored.)
 
 **Setup.** Pre-registered at `d51a427` before any sitting
 ([prereg](../results/llm/llm_prefill_prereg_desktop2_20260923.log)). The tool is

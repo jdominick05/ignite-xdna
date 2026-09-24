@@ -146,11 +146,29 @@
    `<path>`" line. The change is forward-looking: versions already pushed with the Apache header stay
    Apache for whoever took them. The copyright holder string, "The ignite-xdna contributors", is an
    **assumption** pending the owner. Never paste mlir-aie's AMD header onto a new file.
+10. **LLM study: energy per token and freeing the GPU count, and the model is Gemma 3 4B
+    (2026-09-23).** The user decided both.
+    - **The bar.** In the user's words: "energy per token and freeing the gpu both count".
+      - From this date, an NPU arm earns a role if it is faster, more accurate, uses less energy
+        per token, or frees the GPU.
+      - The yardsticks stay the CPU (ONNX Runtime) and DirectML on the Radeon 780M. Combining the
+        chips stays in scope.
+      - The energy method and an operational definition of freeing the GPU come in a
+        pre-registration the user approves before any sitting.
+    - **Earlier stages are not re-scored.** They were judged on speed and accuracy. Their kills
+      are on speed (and on accuracy where stated); energy and GPU freeing were not measured for
+      them.
+    - **The model.** Gemma 3 4B: `google/gemma-3-4b-it`, `-qat-int4-unquantized` and
+      `-qat-q4_0-gguf`. The user accepted Google's Gemma terms. The Llama-2-7B targets do not
+      carry over; this model's targets are derived from its own shapes.
 
 ## Rejected approaches and known pitfalls
 
 - **NPU-only LLM decode on Phoenix, killed on speed at the NPU DRAM rates measured so far
   (2026-09-23).** The rule was pre-registered at `37e7bdb`.
+  - Scope: this kill and every DEAD below are on speed, and on accuracy where stated. Energy per
+    token and freeing the GPU, which count from 2026-09-23 (locked decision 10), were not
+    measured. Nothing here is re-scored.
   - The competitors: int4 GEMV at Llama-2-7B's shapes runs 55.9 ms/token on the 780M through
     DirectML (fp16) and 61.3 ms/token on the CPU through ONNX Runtime (int8 compute). Both are
     DERIVED from MEASURED per-GEMV rows.

@@ -694,6 +694,10 @@ been closed:
         unmeasured when this was written (measured since, below), so this was not a hard cap, and
         the compute side (the on-core int4 → bf16 expansion, and
         M = 1 on a bf16 mmul) is unmeasured too.
+      - Since 2026-09-23 the bar also counts energy per token and freeing the GPU (the user's
+        decision, [DECISIONS](docs/DECISIONS.md#locked-decisions-do-not-reopen) locked decision 10).
+        The kills and DEAD below are on speed and accuracy. Energy and GPU freeing were not
+        measured, and nothing is re-scored.
       - The NPU earns a decode role only if it beats both the CPU and DirectML on the 780M, in
         speed or in accuracy. Measured since, pre-registered: the 780M decodes the 7B linear
         stack in 55.9 ms/token and the CPU in 61.3, against the NPU's 118.8 ms floor. NPU-only
