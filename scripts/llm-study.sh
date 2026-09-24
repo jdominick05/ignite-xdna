@@ -69,6 +69,13 @@
 #   ./scripts/llm-study.sh compress           # fetch the pinned files (HF cache), verify, measure
 #   ./scripts/llm-study.sh compress-verdict   # the mechanical verdict over the run log
 #
+# Gemma 3 4B, pre-registration (b): J/GB of each chip's read stream, and whether the package
+# counters hold the GPU and the NPU. tools/llm_energy.py holds the arms, the rules and the
+# predictions. A timing sitting on the NPU, the CPU and the GPU: announce it first.
+#   ./scripts/llm-study.sh energy-prereg    # its pre-registration log; commit it before the sitting
+#   ./scripts/llm-study.sh energy           # the sitting, recorded by tools/silicon_probe_record.py
+#   ./scripts/llm-study.sh energy-verdict   # the mechanical verdict over the sitting's log
+#
 # Options: --machine TAG names the logs (default: desktop2 on DESKTOP-CBL5NUA, else required).
 # --tag TAG adds _TAG to the verdict log's name, for a second verdict on the same day.
 #
@@ -93,6 +100,7 @@ while [ $# -gt 0 ]; do
         noise-prereg|noise|noise-verdict) STAGE="${1//-/_}" ;;
         prefill3b-prereg|prefill3b|prefill3b-verdict) STAGE="${1//-/_}" ;;
         compress-prereg|compress|compress-verdict) STAGE="${1//-/_}" ;;
+        energy-prereg|energy|energy-verdict) STAGE="${1//-/_}" ;;
         --machine) MACHINE="$2"; shift ;;
         --tag)     TAG="_$2"; shift ;;
         -h|--help) usage "${BASH_SOURCE[0]}"; exit 0 ;;
@@ -555,6 +563,40 @@ stage_compress_verdict() {
     refuse "$log"
     use_env resnet_env17
     logged "$log" python $GC verdict "$run" || die "verdict incomplete, see $log"
+}
+
+EN=tools/llm_energy.py
+
+stage_energy_prereg() {
+    local log="$OUT/llm_energy_prereg_${MACHINE}_${DATE}.log"
+    refuse "$log"
+    use_env resnet_env17
+    logged "$log" python $EN prereg || die "prereg failed or a pin differs, see $log"
+    ok "commit $log (with $EN) before: $0 energy"
+}
+
+stage_energy() {
+    ls "$OUT"/llm_energy_prereg_*.log >/dev/null 2>&1 || die "no (b) pre-registration log: run $0 energy-prereg and commit it"
+    [ -f build/npu_read_bw_probe/c4x2_m1024/insts.bin ] || die "no NPU reader: bash scripts/research-iron.sh $NPUREAD build"
+    [ -f scratch/llm/readbw_fp32_65536x4096/model.onnx ] || die "no readbw model: $0 read builds it (Phase 1)"
+    local log="$OUT/llm_energy_suite_${MACHINE}_${DATE}.log"
+    refuse "$log"
+    # the coordinator runs in resnet_env17: its interpreter starts the CPU, DirectML and C1 readers,
+    # and the NPU readers start through scripts/research-iron.sh
+    use_env resnet_env17
+    python tools/silicon_probe_record.py --log "$log" --device --seconds 3600 -- \
+        python $EN suite || die "the sitting failed, see $log"
+    ok "sitting done; next: $0 energy-verdict"
+}
+
+stage_energy_verdict() {
+    local d
+    d="$(ls "$OUT"/llm_energy_suite_"${MACHINE}"_*.log 2>/dev/null | sed -n 's/.*_\([0-9]\{8\}\)\.log$/\1/p' | sort | tail -1)"
+    [ -n "$d" ] || die "no (b) sitting log"
+    local suite="$OUT/llm_energy_suite_${MACHINE}_${d}.log" log="$OUT/llm_energy_verdict_${MACHINE}_${d}.log"
+    refuse "$log"
+    use_env resnet_env17
+    logged "$log" python $EN verdict "$suite" || die "verdict incomplete, see $log"
 }
 
 "stage_$STAGE"

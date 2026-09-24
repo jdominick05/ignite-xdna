@@ -1,0 +1,119 @@
+J/GB of each chip's read stream, and whether the package counters hold the GPU and the NPU
+(LLM study, Gemma 3 4B pre-registration (b), locked decision 10), pre-registered before any sitting
+
+Question
+  The bar grew (locked decision 10): "energy per token and freeing the gpu both count". Energy
+  comes from the package counters only (the user: "package counters only"; no wall meter, ADLX
+  unplanned). Before any energy figure is compared:
+  Q1 what one GB read costs each chip above idle (J/GB), on its fastest measured read path;
+  Q2 whether \Energy Meter(RAPL_Package0_PKG) holds the 780M's and the NPU's power, since a chip
+     whose power the counter misses would look free.
+
+Method
+  Energy = the integral of (P_pkg - P_idle) over an arm's window. P_pkg is typeperf's
+  \Energy Meter(RAPL_Package0_PKG)\Power (milliwatts, tools/power_probe.py) at 1 Hz, with the
+  eight \Energy Meter(RAPL_Package0_CoreN_CORE)\Power, \Processor(_Total)\% Processor Time and
+  \GPU Engine(*)\Utilization Percentage beside it.
+  Every arm gets its own 60 s idle baseline just before it, with nothing launched. An idle more
+  than 2.0 W from the median of the sitting's earlier idles (3 or more) is flagged, as
+  tools/energy_sitting.py does; every arm is read against its own idle.
+  Above-idle is the repo's convention: idle power is charged to no one. No bare wattage is quoted.
+  Read arms (tools/concurrent_read_bw.py's readers, unchanged, with a 60 s common window
+  instead of 20):
+    R-cpu  ORT ReduceSum over Phase 1's 1 GiB fp32 initializer, 8 threads
+    R-dml  the same graph on DirectML, device_id 0 (the Radeon 780M), CPU fallback disabled
+    R-npu  stage 1's c4x2_m1024 artifact (4x2, 1 GiB per dispatch), insts SHA re-verified
+  J/GB = mean(P_pkg - P_idle) / (GB/s read in the window). dSum(cores) and the residual
+  R = P_pkg - Sum(Core0-7), as dR against the idle, are reported beside it.
+  Controls (new, small):
+    C1     one CPU thread in a cache-resident loop, matching a host submit thread. It gives the
+           non-core rise one busy core causes.
+    G100 / G50 / G25   a DirectML fp16 chain of 32 MatMuls on 256x256 operands, sized to
+           stay in the 780M's 2 MB L2 (DRAM traffic minimal: INFERRED, not measured). Looped at
+           100%, and duty-cycled to 50% and 25% of wall time.
+           Witness: \GPU Engine(pid_*)\Utilization Percentage, summed over the process's
+           engines; G100 needs >= 80% or it is void.
+    N-c    stage 3b's NPU bf16 S1 M = 2048 artifact (S1-P, SHA-pinned), looped. A compute-heavy
+           NPU load; its DRAM traffic is not measured.
+
+Rules (sigma_R = the sample standard deviation of the residual's per-window mean across the
+sitting's idle windows)
+  GPU INSIDE if both passes show dR(G100) - dR(C1) >= max(2.0 W, 3 sigma_R) and
+    dR(G25) < dR(G50) < dR(G100). Otherwise GPU NOT SHOWN.
+  NPU INSIDE if dR(N-c) - dR(C1) >= max(1.0 W, 3 sigma_R) in both passes. Otherwise NOT SHOWN.
+  What each outcome means for later comparisons:
+    GPU NOT SHOWN: DirectML energy is "package-reported, may be low". An NPU energy WIN over
+      DirectML still stands, since DirectML's true figure can only be higher. An NPU LOSS to it
+      is UNDECIDED.
+    NPU NOT SHOWN: the reverse. An NPU WIN is UNDECIDED; a loss stands.
+    Both NOT SHOWN: every NPU-vs-DirectML energy comparison is UNDECIDED, in either direction.
+    The CPU arms' core power is inside the package by construction: the Core0-7 meters are
+      package 0's core sub-domains (RAPL_Package0_CoreN). So NPU-vs-CPU comparisons follow the
+      NPU's label alone.
+    Both INSIDE: the controls show that a component scaling with each chip's work is inside the
+      package. They do NOT show that all of it is. That, and DRAM power (outside the package),
+      are labelled on every figure. DRAM is roughly shared when arms read the same bytes: it
+      pulls ratios toward 1 and undercounts a compaction's saving.
+  Package counters only (the user's decision): no wall meter, and ADLX stays unplanned.
+  Completeness is therefore never shown. Every energy figure carries these labels, and the NOT
+  SHOWN cases end UNDECIDED as above.
+
+Order
+  An idle before each arm, running R-cpu, R-dml, R-npu, C1, G100, G50, G25, N-c,
+  then mirrored. Two passes, about 40 min in all. Every read arm's J/GB must agree within 10% between passes, or that arm
+  is INCOMPLETE. NPU checks: xrt-smi idle before and after every arm, and the device witness
+  (tools/silicon_probe_record.py --device), as in stage 1.
+
+Written predictions (stated expectations; the rules decide)
+  P1 R-cpu 0.45-0.7 J/GB.
+  P2 R-dml 0.12-0.35 J/GB, package-reported.
+  P3 R-npu 0.05-0.2 J/GB.
+  P4 GPU INSIDE.
+  P5 NPU INSIDE, with dR(N-c) - dR(C1) at 1-4 W (the mean of the two passes).
+
+Details v2 left open, fixed here before any run (named to the gate with this commit)
+  D1 G's chain: x (256x256 fp16, seeded) times one seeded orthogonal W, 32 times, so the values
+     stay finite. x and y are bound on the device (IO binding) and DirectML graph capture is on
+     (ep.dml.enable_graph_capture, present in this ORT build), so a loop iteration is one
+     replay and a wait for it (synchronize_outputs), with no host copy. Reason: a DirectML round
+     trip with host input and output costs 168.8 us (MEASURED, the sync stage), which could keep
+     a chain of this size under the 80% witness (INFERRED). The output is checked finite once,
+     after the warm-up; its rel-L2 against float64 is reported, not deciding.
+  D2 G50 and G25: within each 100 ms period the chain loops for the first 50% or 25% of
+     it and the process sleeps for the rest. The measured busy fraction is reported, not ruled.
+  D3 C1: pure Python, 20000 LCG steps per op, one thread, in resnet_env17's interpreter.
+  D4 N-c: 3b's own dispatch step (sync A to the device, run, wait, sync C back), one hardware
+     context for the whole window. After the warm-up, the first 64 output rows are checked
+     against the product of the bf16-rounded inputs (rel-L2 <= 1e-4, stage 3's bound), or the
+     reader fails.
+  D5 Readers: stage 2's protocol. Each arm's reader starts after the idle; typeperf starts
+     after READY (it lists GPU-engine instances when it starts), the common start is 3 s after
+     the counters, and the window is 60 s. Bytes count inside [start + 1 s, stop - 1 s], pro
+     rata (crb.window_stats). A power row stamped t holds the second ending at t, so it counts
+     if [t - 1, t] lies inside that span (energy_sitting's rule), by wall clock (time.time()
+     and perf_counter_ns() read together once per arm). Rows with a blank package or core
+     field are dropped; a blank GPU field counts 0.
+  D6 An idle or a window with fewer than 50 valid power rows voids that arm (INCOMPLETE); a
+     reader that fails voids its arm. A rule that needs a voided arm is INCOMPLETE, unless a
+     completed pass already fails it (then NOT SHOWN).
+  D7 10 s settle after each arm before the next idle. The host-load gate runs once at the start
+     (busy cores < 2, no peer >= 0.5), as in stage 3; each idle's CPU % is reported.
+  Reading of v2, flagged: "every arm's J/GB within 10%" can only apply to the three read arms (the
+  controls read no GB). The controls' pass agreement is the "both passes" clause of the INSIDE
+  rules.
+Addition to v2 (named to the gate before the START REQUEST)
+  A1 A 10 s G100 smoke at the sitting's start, before the first idle: if G100's GPU busy is
+     below 80%, or its reader fails, the sitting stops there and nothing is measured. It
+     changes no arm and no rule; it keeps a void G100 from costing the whole sitting.
+
+Unverified by design: DRAM power (outside the package); that all of any chip's power is inside
+(completeness); the 780M's L2 residency of G's chain; N-c's DRAM traffic; any energy per token
+(that is (c) and (d)); other read paths, thread counts and dtypes.
+
+PINS
+  R-npu c4x2_m1024 insts_sha256 c3aa45a3c6013bbcf1170e0cb9d68cb0a20ecbf063bc6eb2d52621e06314fe3a xclbin_sha256 6139ce6743af03bfbe7431b51705d4e35676bb6eec7c71e7db0d834a6c92247b
+  N-c   bf16_M2048_K4096_N4096_m32k64n128cs1 insts_sha256 e67727d58b83dd9f996a765ef10d9924f56984bc21a655693d1d30f169c3ea86 xclbin_sha256 ccc57d75656b24cafffc1a0e82634cbdc52fa79081816c3ea56ea00074d05688
+  readbw model scratch/llm/readbw_fp32_65536x4096/model.onnx sha256 1871f393faa54fde25815f47858b1c14455cc844dff5a0251a33f4ce4a4457a1
+  prefill inputs manifest sha256 9c5454169184a4b307059fbcbb8519cc31403b48d902918ea66c8023e43dbaf1
+git HEAD 9334312edcbc76bfd8a53446dd6768df25e84a38 (plus this log's own commit)
+PREREG_JSON {"order": [[1, "R-cpu"], [1, "R-dml"], [1, "R-npu"], [1, "C1"], [1, "G100"], [1, "G50"], [1, "G25"], [1, "N-c"], [2, "N-c"], [2, "G25"], [2, "G50"], [2, "G100"], [2, "C1"], [2, "R-npu"], [2, "R-dml"], [2, "R-cpu"]], "idle_s": 60, "window_s": 60.0, "trim_s": 1.0, "lead_s": 3.0, "settle_s": 10.0, "smoke_s": 10.0, "warmup": 3, "duty": {"g100": 1.0, "g50": 0.5, "g25": 0.25}, "duty_period_s": 0.1, "g": [32, 256], "seed": 20260924, "nc_tile": ["bf16", "S1-P", 2048], "min_rows": 50, "gpu_min_w": 2.0, "npu_min_w": 1.0, "sigma_k": 3.0, "pass_agree": 0.1, "g100_busy_min": 80.0, "idle_shift_w": 2.0, "pred_jgb": {"R-cpu": [0.45, 0.7], "R-dml": [0.12, 0.35], "R-npu": [0.05, 0.2]}, "pred_npu_margin": [1.0, 4.0], "pins": {"npu_read_insts": "c3aa45a3c6013bbcf1170e0cb9d68cb0a20ecbf063bc6eb2d52621e06314fe3a", "npu_read_xclbin": "6139ce6743af03bfbe7431b51705d4e35676bb6eec7c71e7db0d834a6c92247b", "nc_insts": "e67727d58b83dd9f996a765ef10d9924f56984bc21a655693d1d30f169c3ea86", "nc_xclbin": "ccc57d75656b24cafffc1a0e82634cbdc52fa79081816c3ea56ea00074d05688", "readbw_model": "1871f393faa54fde25815f47858b1c14455cc844dff5a0251a33f4ce4a4457a1", "prefill_manifest": "9c5454169184a4b307059fbcbb8519cc31403b48d902918ea66c8023e43dbaf1"}, "git_head": "9334312edcbc76bfd8a53446dd6768df25e84a38"}
