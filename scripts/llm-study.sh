@@ -62,6 +62,13 @@
 #   ./scripts/llm-study.sh prefill3b-verdict   # the mechanical verdict over 3b's three logs (the
 #                                              # newest sitting date, so a sitting past midnight works)
 #
+# Gemma 3 4B, pre-registration (a) (locked decision 10): how far the QAT q4_0 weights compress
+# losslessly, offline and CPU-only. tools/gemma_compress.py holds the pins, the kill line and the
+# predictions. Not a timing sitting, but a heavy CPU load: announce it before running.
+#   ./scripts/llm-study.sh compress-prereg    # its pre-registration log; commit it before the run
+#   ./scripts/llm-study.sh compress           # fetch the pinned files (HF cache), verify, measure
+#   ./scripts/llm-study.sh compress-verdict   # the mechanical verdict over the run log
+#
 # Options: --machine TAG names the logs (default: desktop2 on DESKTOP-CBL5NUA, else required).
 # --tag TAG adds _TAG to the verdict log's name, for a second verdict on the same day.
 #
@@ -85,6 +92,7 @@ while [ $# -gt 0 ]; do
         prefill-build|prefill-prereg|prefill|prefill-verdict) STAGE="${1//-/_}" ;;
         noise-prereg|noise|noise-verdict) STAGE="${1//-/_}" ;;
         prefill3b-prereg|prefill3b|prefill3b-verdict) STAGE="${1//-/_}" ;;
+        compress-prereg|compress|compress-verdict) STAGE="${1//-/_}" ;;
         --machine) MACHINE="$2"; shift ;;
         --tag)     TAG="_$2"; shift ;;
         -h|--help) usage "${BASH_SOURCE[0]}"; exit 0 ;;
@@ -518,6 +526,35 @@ stage_prefill3b_verdict() {
     refuse "$log"
     use_env resnet_env17
     logged "$log" python $P3B verdict "$npu" "$cpu" "$dml" || die "verdict incomplete, see $log"
+}
+
+GC=tools/gemma_compress.py
+
+stage_compress_prereg() {
+    local log="$OUT/gemma_compress_prereg_${MACHINE}_${DATE}.log"
+    refuse "$log"
+    use_env resnet_env17
+    logged "$log" python $GC prereg || die "prereg failed, see $log"
+    ok "commit $log (with $GC) before: $0 compress"
+}
+
+stage_compress() {
+    ls "$OUT"/gemma_compress_prereg_*.log >/dev/null 2>&1 || die "no (a) pre-registration log: run $0 compress-prereg and commit it"
+    local log="$OUT/gemma_compress_run_${MACHINE}_${DATE}.log"
+    refuse "$log"
+    use_env resnet_env17
+    logged "$log" python $GC run || die "the run failed, see $log"
+    ok "run done; next: $0 compress-verdict"
+}
+
+stage_compress_verdict() {
+    local d
+    d="$(ls "$OUT"/gemma_compress_run_"${MACHINE}"_*.log 2>/dev/null | sed -n 's/.*_\([0-9]\{8\}\)\.log$/\1/p' | sort | tail -1)"
+    [ -n "$d" ] || die "no (a) run log"
+    local run="$OUT/gemma_compress_run_${MACHINE}_${d}.log" log="$OUT/gemma_compress_verdict_${MACHINE}_${d}.log"
+    refuse "$log"
+    use_env resnet_env17
+    logged "$log" python $GC verdict "$run" || die "verdict incomplete, see $log"
 }
 
 "stage_$STAGE"
