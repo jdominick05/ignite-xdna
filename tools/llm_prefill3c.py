@@ -21,6 +21,7 @@ split-K. The pre-registration is PREREG below; the rules are verdict()'s code.
     python tools/llm_prefill3c.py loadcheck           # step 6: every arm's reader at M = 8192 (the NPU's also at
                                                       #   2048) to READY and one layer
     python tools/llm_prefill3c.py cadence             # amendment 1: one C-fp32@16 check window, counters at HIGH
+                                                      #   (amendment 2: the sitting reads its log by cadence_ok)
     python tools/llm_prefill3c.py sitting M           # step 7: one sitting (M = 2048: A2; 8192: B), two passes
     python tools/llm_prefill3c.py reader ARM M [--share-xattn] [--loadcheck]   # (spawned by the two above)
     python tools/llm_prefill3c.py verdict LOG [LOG]   # the mechanical verdict over the sittings' WINDOW_JSON records
@@ -750,6 +751,34 @@ PRIORITY_NAME = {HIGH: "HIGH", NORMAL: "NORMAL"}
 CADENCE = {"arm": "C-fp32@16", "M": 2048, "gap_median_max_s": 1.05, "gap_max_s": 1.5}
 PARTIAL_LOGS = {"729cb2f85b91c7739289c4e161293f8df5a2fa921c1132959b41da79efe2c6d2":
                 "sitting A, stopped by the gate at window 3 (922f929): not cited; the verdict never reads it"}
+# amendment 2 (the user: "Go with 1"): the sitting reads the committed cadence log (05dc1a2) on the rule itself;
+# the median-gap criterion is dropped as mis-calibrated (not loosened), and the check is not re-run
+CADENCE_LOG_SHA_LF = "a8057eb6056771ce17ba6882e72a5ef7ba1fa188390ff425300117e72f717f39"
+
+
+def cadence_ok(c: dict) -> list:
+    """Amendment 2: the sitting's gate on the cadence log's CADENCE_JSON; returns the failed conditions (empty:
+    it may start). The window's state OK with no other cause; the rows rule; the max gap; the priorities read
+    back; the pinning's three read-backs; U10 within its limits."""
+    bad = []
+    if c.get("state") != "OK" or c.get("why") != "":
+        bad.append("state not OK, or a cause given")
+    rows = c.get("rows") or {}
+    if not ((rows.get("window_rows") or 0) >= MIN_ROWS and (rows.get("idle_rows") or 0) >= MIN_ROWS):
+        bad.append(f"rows under {MIN_ROWS}")
+    gmax = (c.get("cadence_window") or {}).get("gap_max_s")
+    if gmax is None or gmax > CADENCE["gap_max_s"]:
+        bad.append("max row gap")
+    if c.get("priorities") != {"typeperf": "HIGH", "suite": "HIGH", "reader": "NORMAL"}:
+        bad.append("priority classes")
+    pins = c.get("pin_read_backs") or {}
+    if set(pins) != {"before_ready", "after_warmup", "after_loop"} or not all(v is True for v in pins.values()):
+        bad.append("pinning read-backs")
+    mr = c.get("memory_rule") or {}
+    if not (mr.get("hard_faults_per_s") is not None and mr["hard_faults_per_s"] <= HF_MAX
+            and (mr.get("pages_in_mean") or 0.0) <= PAGES_MAX and (mr.get("fault_seconds") or 0) >= MIN_ROWS):
+        bad.append("memory rule (U10)")
+    return bad
 
 
 def arm_parts(arm: str):
@@ -1647,7 +1676,8 @@ def sitting(M: int) -> int:
     """Step 7: one sitting at one M (U7). Pass 1 in ORDER, pass 2 its reverse; each pass's VOID windows (as
     the frozen state_of reads them) re-run once at its end (U12), logged with rerun=true and their position.
     Arms dropped at step 2 or by the load check (N-w4 only) are skipped and named. Amendment 1: the suite at
-    HIGH (read back), and it refuses without the cadence check's PASS."""
+    HIGH (read back). Amendment 2: it reads the committed cadence log (its LF hash pinned) and refuses unless
+    cadence_ok() finds nothing."""
     import llm_freeing as lf
     if M not in MS:
         raise SystemExit(f"M must be one of {MS}")
@@ -1661,11 +1691,16 @@ def sitting(M: int) -> int:
         print("REFUSE the suite did not read back HIGH priority", flush=True)
         return 3
     cp = latest("llm_prefill3c_cadence_*.log")
-    if cp is None or not any(s.startswith("CADENCE PASS") for s in cp.read_text(encoding="utf-8").splitlines()):
-        print(f"REFUSE the cadence check is missing or did not pass ({cp.relative_to(ROOT).as_posix() if cp else 'none'})",
-              flush=True)
+    c = None if cp is None else next((json.loads(s.split(" ", 1)[1]) for s in cp.read_text(encoding="utf-8").splitlines()
+                                      if s.startswith("CADENCE_JSON ")), None)
+    bad = (["no cadence log"] if cp is None else ["the cadence log's LF hash is not the pinned one"]
+           if sha_lf(cp) != CADENCE_LOG_SHA_LF else ["no CADENCE_JSON"] if c is None else cadence_ok(c))
+    say("CADENCE_READ_JSON", {"log": cp.relative_to(ROOT).as_posix() if cp else None,
+                              "sha256_lf": sha_lf(cp) if cp else None, "pinned": CADENCE_LOG_SHA_LF,
+                              "failed_conditions": bad, "rule": "amendment 2: cadence_ok() on CADENCE_JSON"})
+    if bad:
+        print(f"REFUSE the cadence log does not clear amendment 2's gate: {bad}", flush=True)
         return 3
-    say("CADENCE_READ_JSON", {"log": cp.relative_to(ROOT).as_posix(), "sha256_lf": sha_lf(cp)})
     lp, lc = latest_loadcheck()
     if lc is None or not lc.get("go"):
         print(f"REFUSE the load check is missing or NO-GO ({lp.relative_to(ROOT).as_posix() if lp else 'none'})",
@@ -2760,6 +2795,43 @@ The order, with the gate's check after each step:
 """
 
 
+AMENDMENT_2 = """\
+AMENDMENT 2 (the fourth plan commit): the sitting's gate reads the cadence check on the rule itself. The
+user's words: "Go with 1".
+
+Why. The cadence check (05dc1a2; kept as measured) FAILED on one condition only: the window's median row
+gap was 1.069 s, against the 1.05 s limit. Everything else passed:
+- window_record's state was OK, with no other cause;
+- the rows after the trims were 58 in the idle and 53 in the window, against the rule's 50 (sitting A's
+  window 1 had 42);
+- the p95 gap was 1.117 s and the max 1.148 s (limit 1.5 s);
+- the priorities read back HIGH/HIGH/NORMAL;
+- the pinning read back OK before READY, after the warm-up and after the loop;
+- the memory rule held (hard 0.0/s, fault-sampler seconds 57, pages 0.68/s);
+- typeperf used 0.125 CPU s in the window.
+The median criterion was mis-calibrated: typeperf's own idle median is 1.022 s, so the limit sat only 28 ms
+above it. The gate put two options to the user: (1) proceed on the rule itself; (2) a longer window, which
+changes the PREREG text. The user chose (1).
+
+The change (the sitting's start only):
+- sitting() no longer requires "CADENCE PASS". It reads the committed cadence log, which must have the LF
+  hash a8057eb6..., and its CADENCE_JSON. cadence_ok() requires all of:
+  - state == "OK" and why == "";
+  - window_rows >= 50 and idle_rows >= 50;
+  - the window's max row gap <= 1.5 s;
+  - the priorities HIGH/HIGH/NORMAL;
+  - the three pinning read-backs all true;
+  - the memory rule within U10: hard faults <= 25/s, Pages Input/sec <= 1,000, fault-sampler seconds >= 50.
+- The median-gap criterion is dropped, not loosened, and the cadence check is not re-run. Its FAIL stands in
+  its log, and the proxy miss goes into the write-up.
+- Nothing else changes. PREREG_TEXT_SHA256 f7fa696b..., PROTOCOL_JSON_SHA256 5e533fca... (amendment 1's) and
+  VERDICT_CODE_SHA256 6e459e56... are unchanged.
+
+The order, with the gate's check after each step: this commit, then sitting A2 (M = 2048), then sitting B
+(M = 8192), then the verdict over A2, B, the build log and the load check.
+"""
+
+
 def sha_lf(path: Path) -> str:
     return hashlib.sha256(path.read_bytes().replace(b"\r\n", b"\n")).hexdigest()
 
@@ -2775,6 +2847,7 @@ def prereg() -> int:
     print(PREREG, flush=True)
     print(READINGS, flush=True)
     print(AMENDMENT_1, flush=True)
+    print(AMENDMENT_2, flush=True)
     say("PROTOCOL_JSON", protocol())
     say("PREDICTIONS_JSON", [{"id": q, "text": t} for q, t in PREDICTIONS])
     print(f"PREREG_TEXT_SHA256 {hashlib.sha256(PREREG.encode('utf-8')).hexdigest()}", flush=True)
@@ -3133,6 +3206,29 @@ def selftest() -> int:
     part = RESULTS / "llm_prefill3c_sitting_A_desktop2_20260924.log"
     if part.exists():
         expect("the verdict refuses the partial sitting A log (922f929), by its LF hash", verdict([part]), 3)
+    print("Amendment 2 (the sitting's gate on the cadence log; the user: \"Go with 1\"):")
+    expect("the amendment quotes the user's words", '"Go with 1"' in AMENDMENT_2, True)
+    cl = RESULTS / "llm_prefill3c_cadence_desktop2_20260924.log"
+    if cl.exists():
+        cj = next(json.loads(s.split(" ", 1)[1]) for s in cl.read_text(encoding="utf-8").splitlines()
+                  if s.startswith("CADENCE_JSON "))
+        expect("the committed cadence log's LF hash is the pinned one", sha_lf(cl), CADENCE_LOG_SHA_LF)
+        expect("cadence_ok on its CADENCE_JSON: nothing fails (its median miss is not a condition)", cadence_ok(cj), [])
+        for what, key, val, want in (
+                ("a VOID state", "state", "VOID", "state not OK, or a cause given"),
+                ("a cause given", "why", "x", "state not OK, or a cause given"),
+                ("49 window rows", "rows", {"idle_rows": 58, "window_rows": 49}, "rows under 50"),
+                ("a max gap of 1.6 s", "cadence_window", dict(cj["cadence_window"], gap_max_s=1.6), "max row gap"),
+                ("the reader at HIGH", "priorities", {"typeperf": "HIGH", "suite": "HIGH", "reader": "HIGH"},
+                 "priority classes"),
+                ("one pinning read-back false", "pin_read_backs", dict(cj["pin_read_backs"], after_warmup=False),
+                 "pinning read-backs"),
+                ("hard faults 26/s", "memory_rule", dict(cj["memory_rule"], hard_faults_per_s=26.0), "memory rule (U10)"),
+                ("49 fault-sampler seconds", "memory_rule", dict(cj["memory_rule"], fault_seconds=49),
+                 "memory rule (U10)")):
+            expect(f"cadence_ok refuses {what}", cadence_ok(dict(cj, **{key: val})), [want])
+        expect("cadence_ok ignores the median gap (dropped, not loosened)",
+               cadence_ok(dict(cj, cadence_window=dict(cj["cadence_window"], gap_median_s=1.4))), [])
     expect("the plan's hashes: PREREG and VERDICT_CODE the second plan commit's; PROTOCOL_JSON amendment 1's",
            (hashlib.sha256(PREREG.encode("utf-8")).hexdigest()[:8],
             hashlib.sha256(json.dumps(protocol()).encode("utf-8")).hexdigest()[:8], verdict_code_sha()[:8],
