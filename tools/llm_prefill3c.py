@@ -18,18 +18,24 @@ split-K. The pre-registration is PREREG below; the rules are verdict()'s code.
     python tools/llm_prefill3c.py build               # step 4, IRON env: the NPU xclbins, compile only, one row each
     python tools/llm_prefill3c.py inputs              # step 4: X, W, int8 copies, references, exact int32 SHAs
     python tools/llm_prefill3c.py pins                # step 5: every pin (models, builds, w4 rev, inputs) on disk
+    python tools/llm_prefill3c.py loadcheck           # step 6: every arm's reader at M = 8192 to READY and one layer
+    python tools/llm_prefill3c.py sitting M           # step 7: one sitting (M = 2048: A; 8192: B), two passes
+    python tools/llm_prefill3c.py reader ARM M [--share-xattn] [--loadcheck]   # (spawned by the two above)
     python tools/llm_prefill3c.py verdict LOG [LOG]   # the mechanical verdict over the sittings' WINDOW_JSON records
     python tools/llm_prefill3c.py selftest            # tiny models and synthetic verdicts; no chip, no GPU
 
 Code-only commits after the second plan commit (413a562) add the rest: step 4's builds and inputs first,
 then the window-state code, the load check and the sitting. Each keeps PREREG, PROTOCOL_JSON and
-VERDICT_CODE_SHA256 byte-identical, and every later 3c log prints the three hashes.
+VERDICT_CODE_SHA256 byte-identical, and every later 3c log prints the three hashes. The sitting and the load
+check run in resnet_env17; an NPU arm's reader runs through scripts/research-iron.sh (the IRON env).
 """
 import argparse
 import hashlib
 import itertools
 import json
+import os
 import re
+import statistics
 import subprocess
 import sys
 import time
@@ -696,6 +702,854 @@ def pins() -> int:
                       "seconds": round(time.perf_counter() - t0, 1)})
     print("PINS", "OK" if not bad else "MISMATCH", flush=True)
     return 0 if not bad else 2
+
+
+# ---------------------------------------------------------------- steps 6-7: the readers, the window, the sitting
+#
+# The window-state code (after 3e94772; the gate reviews it before the load check). A window, per arm and pass
+# (v2 §4, (b)'s method): a 60 s idle with nothing launched; the reader launches, loads, and runs its layer once
+# as the output check (R4 with A1 and A2) BEFORE READY; the counters start, then the common go; the reader
+# loops its layer from the go and the window is [go + 20 s, go + 80 s]; the reader stops TAIL_S after the
+# window (so the layer in flight at its end completes); the 10 s settle. The states (window_record):
+# - FAILED: the reader exits non-zero, or the window's own code fails (a timeout; a reader that exits 0 with
+#   no READY and no VOID cause; iterations that do not span the window, which only a defect can cause).
+#   Never re-run.
+# - VOID (v2 §6's list): a failed output check; placement not all DirectML; the pinning not read back (CPU:
+#   before READY, after the warm-up and after the loop); under 50 rows (the idle's and the window's, after the
+#   1 s trims); under 5 layers completed in the window; U10, (e)'s memory rule as (e) applied it: the reader's
+#   own hard faults over 25/s, or Pages Input/sec averaging over 1,000 over the window's rows, or under 50
+#   fault-sampler seconds (the rule unread). U12 re-runs a VOID window once, at the end of the same pass.
+# - OK otherwise. WINDOW_JSON carries what the frozen verdict reads: M, arm, pass, position, rerun, state,
+#   T (ms), E (J per prompt token per layer), err ({linear: rel-L2}; None for N-w4) and i8_sha (the int8
+#   arms' seven int32 SHAs whenever the check ran, VOID or not).
+# Times: the reader stamps each iteration with time.perf_counter() plus one wall-clock offset taken at a tick
+# of time.time() (15.6 ms steps on this Python 3.12), so durations are exact and the stamps sit within a few
+# microseconds of the wall clock the window's edges use.
+
+SITTING_TMP = WORK / "sitting"
+READY_TIMEOUT_S = 600
+TP_LEAD_S, GO_LEAD_S, TAIL_S = 2.5, 0.5, 1.0
+TP_SAMPLES = 600                                      # typeperf's cap; it is stopped when the reader exits
+LOADCHECK_GO_S = 2.0
+NPU_DT = {"N-bf16": "bf16", "N-i8": "i8", "N-w4": "w4"}
+INT8_ARMS = ("C-i8@8", "C-i8@16", "D-i8", "N-i8")
+CTX_SHAPE = {"q": (2560, 2048), "kv": (2560, 1024), "o": (2048, 2560), "piece": (NPU_PIECE, NPU_PIECE)}
+CHUNK = 1024
+ORT_CPU_FALLBACK = "fallback to CPU EP has been explicitly disabled"   # ORT's strict-session refusal
+QUIET_READER = ("ITERS_JSON ",)                       # the suite prints it once, with the window's identity
+VERDICT_FIELDS = ("M", "arm", "pass", "position", "rerun", "state", "T", "E", "err", "i8_sha")
+
+
+def arm_parts(arm: str):
+    base, _, th = arm.partition("@")
+    return base, (int(th) if th else None)
+
+
+def nsay(tag: str, obj) -> None:
+    """say() through the neutral names: the repository root becomes <repo> (JSON's doubled backslashes
+    included), each local name <tool>. Every line the suite prints from a reader's record goes through it."""
+    import llm_freeing as lf
+    print(lf.neutralize(f"{tag} " + json.dumps(obj)), flush=True)
+
+
+def load_rows(name: str, M: int = None) -> np.ndarray:
+    """An input file's first M rows (the whole file without M), read through a memory map."""
+    a = np.load(INPUT_DIR / f"{name}.npy", mmap_mode="r")
+    return np.ascontiguousarray(a if M is None else a[:M])
+
+
+def rel_l2(y: np.ndarray, ref, scale=None) -> float:
+    """||y - ref|| / ||ref|| in float64, in row chunks (ref may be a memory map); scale multiplies y's columns."""
+    num = den = 0.0
+    for i in range(0, y.shape[0], CHUNK):
+        r = np.asarray(ref[i:i + CHUNK], dtype=np.float64)
+        v = y[i:i + CHUNK].astype(np.float64)
+        if scale is not None:
+            v = v * scale[None, :]
+        num += float(np.square(v - r).sum())
+        den += float(np.square(r).sum())
+    return (num / den) ** 0.5 if den else float("inf")
+
+
+def output_check(arm: str, M: int, ys: dict, quiet: bool = False) -> dict:
+    """R4 with A1 and A2, before READY. ys: {linear: [M, N] output}. The A1 bound is PROTOCOL_JSON's
+    void_rel_l2_max[arm]; the exact SHAs are the pinned manifest's. Each linear's references are read,
+    checked and released in turn. quiet (the load check): no rel-L2 is returned and no reason carries a
+    number (the accuracy figures stay unseen until the sitting)."""
+    bound = protocol()["void_rel_l2_max"][arm]
+    exact = json.loads((INPUT_DIR / "manifest.json").read_text(encoding="utf-8"))["exact_int32_sha256"]
+    is_i8, is_w4 = arm in INT8_ARMS, arm == "N-w4"
+    err, own, shas, why = {}, {}, [], []
+    for name, _, K, N, x in LINEARS:
+        y = ys[name]
+        if y.dtype.kind == "f" and not np.isfinite(y).all():
+            why.append(f"{name}: non-finite output")
+        if is_i8 or is_w4:
+            h = int32_sha(y)
+            shas.append(h)
+            if h != exact[f"{'w4' if is_w4 else 'i8'}_{name}_M{M}"]:
+                why.append(f"{name}: int32 not the exact {'int8 x (q - 8)' if is_w4 else 'int8'} product")
+        if is_w4:
+            continue                                                   # A2 only: its output is not y
+        ref = np.load(INPUT_DIR / f"ref_{name}.npy", mmap_mode="r")[:M]
+        scale = None
+        if is_i8:
+            scale = float(load_rows(f"s{x}_M{M}")[0]) * load_rows(f"sw_{name}").astype(np.float64)
+        err[name] = rel_l2(y, ref, scale)
+        del ref
+        if arm == "N-bf16":
+            ref = np.load(INPUT_DIR / f"ref_bf16_{name}.npy", mmap_mode="r")[:M]
+            own[name] = rel_l2(y, ref)
+            del ref
+            if own[name] > BF16_ACC_MAX:
+                why.append(f"{name}: over {BF16_ACC_MAX:g} from its own bf16 product"
+                           + ("" if quiet else f" ({own[name]:.3e})"))
+    if err and bound is not None and max(err.values()) > bound:
+        why.append(f"worst rel-L2 over the A1 bound {bound:g}" + ("" if quiet else f" ({max(err.values()):.3e})"))
+    rec = {"arm": arm, "M": M, "ok": not why, "why": why, "bound": bound,
+           "i8_sha": shas if is_i8 else None, "w4_sha": shas if is_w4 else None}
+    if not quiet:
+        rec.update(err=err or None, bf16_own=own or None)
+    return rec
+
+
+# ---- the rival readers (ONNX Runtime; resnet_env17)
+
+def rival_feed(kind: str, M: int) -> dict:
+    """The session feed from the pinned inputs: X's first M rows in the arm's dtype; the int8 arms take the
+    manifest's X_q at this M (u8 = s8 + 128 for C-i8)."""
+    feed = {}
+    for x in INPUTS:
+        if kind.startswith("i8"):
+            q = load_rows(f"{x}_q_M{M}")
+            feed[x] = (q.astype(np.int16) + ZP).astype(np.uint8) if kind == "i8_u8" else q
+        else:
+            a = load_rows(x, M)
+            feed[x] = a.astype(np.float16) if kind in ("fp16", "nb16") else a
+    return feed
+
+
+class RivalLayer:
+    """One ORT session holding the seven MatMuls (B5). CPU: pinned as in 3b (the pool by ORT's affinities,
+    the caller by us), read back before READY, after the warm-up and after the loop. DirectML: the verbose
+    placement read again (step 2's subprocess), then the strict session (no CPU fallback), fresh per window."""
+
+    def __init__(self, arm: str, M: int):
+        import ctypes
+        import llm_prefill_bench as s3
+        from llm_prefill_3b import pinned_cpus, witness_ok
+        from measure_noise import cores, cpu_session, pin_calling_thread, thread_ids, thread_placement
+        self.arm, (base, self.threads) = arm, arm_parts(arm)
+        self.kind = MODEL_OF[base]
+        self.model = str(MODELS / f"{self.kind}.onnx")
+        self.feed = rival_feed(self.kind, M)
+        self.names = [f"y_{n}" for n, *_ in LINEARS]
+        self.placement = self.pin = self.first = None
+        self._tp, self._ok, self._pin_call = thread_placement, witness_ok, pin_calling_thread
+        self._tid = ctypes.windll.kernel32.GetCurrentThreadId
+        if arm.startswith("C-"):
+            self.cpus = pinned_cpus(self.threads, cores())
+            before = thread_ids()
+            self.sess = cpu_session(self.model, self.threads, self.cpus)
+            pin_calling_thread(self.cpus[0])
+            self.first = self.sess.run(self.names, self.feed)          # the output check's run: the pool exists
+            self.pool_tids = thread_ids() - before
+            self.pin = {"before_ready": self.readback()}
+            self.pin["ok"] = self.pin["before_ready"]["ok"]
+            return
+        pl = read_placement(self.kind)
+        self.placement = {"verbose_read": {k: pl[k] for k in ("status", "placed", "cpu_nodes", "exit")}}
+        try:
+            self.sess = s3.make_session(self.model, "dml", 0)
+            self.placement["strict_session"] = "OPENED"
+        except Exception as ex:                                        # noqa: BLE001
+            if ORT_CPU_FALLBACK not in str(ex):
+                raise                                                  # not a placement refusal: FAILED
+            self.placement["strict_session"] = "REFUSED: " + str(ex).strip().splitlines()[0][:200]
+        self.placement["all_dml"] = pl["status"] == "ALL_DML" and self.placement["strict_session"] == "OPENED"
+        if self.placement["all_dml"]:
+            self.first = self.sess.run(self.names, self.feed)
+
+    def readback(self) -> dict:
+        pool = self._tp(self.pool_tids)
+        main = self._tp({self._tid()})
+        return {"cpus": self.cpus, "pool": sorted(t["cpus"] for t in pool), "main": main[0]["cpus"] if main else None,
+                "cpu_sets": sum(1 for t in pool + main if t.get("cpu_sets")), "ok": self._ok(pool, main, self.cpus)}
+
+    def outputs(self) -> dict:
+        out = dict(zip([n for n, *_ in LINEARS], self.first))
+        self.first = None
+        return out
+
+    def layer(self):
+        self.sess.run(None, self.feed)
+
+    def at_window(self):
+        """Called once, between iterations, at the first iteration start at or after the window's start."""
+        if self.pin is not None:
+            self.pin["after_warmup"] = self.readback()
+
+    def after(self) -> dict:
+        """The CPU arms' last read-back; ok needs every read-back taken to match (the load check's 2 s go never
+        reaches the window, so it has none after the warm-up; a sitting window must, window_record checks)."""
+        if self.pin is None:
+            return {"placement": self.placement}
+        self.pin["after_loop"] = self.readback()
+        self.pin["ok"] = all(self.pin[k]["ok"] for k in ("before_ready", "after_warmup", "after_loop") if k in self.pin)
+        self._pin_call(None)
+        return {"pin": self.pin}
+
+    def close(self):
+        self.sess = self.first = None
+
+
+# ---- the NPU layer (raw pyxrt; the IRON env)
+
+class NpuCtx:
+    """One xclbin in its own hardware context with any number of runs, each with its own A, B and C buffers
+    (3's NpuGemm, generalized: the piece context's runs read X_ffn and X_down's four quarters). C is read
+    where it lies (bo.map) after its sync; 3's bracket (sync A, run, wait, sync C) is unchanged."""
+
+    def __init__(self, h, reg: dict, d: Path):
+        xrt = h.pyxrt
+        self.h, self.xrt = h, xrt
+        self.to_dev = xrt.xclBOSyncDirection.XCL_BO_SYNC_BO_TO_DEVICE
+        self.from_dev = xrt.xclBOSyncDirection.XCL_BO_SYNC_BO_FROM_DEVICE
+        self.done = xrt.ert_cmd_state.ERT_CMD_STATE_COMPLETED
+        if d not in reg:                                               # each xclbin registered once per process
+            x = xrt.xclbin(str(d / "final.xclbin"))
+            reg[d] = (x, h.dev.register_xclbin(x))
+        self.xclbin, uuid = reg[d]
+        self.ctx = xrt.hw_context(h.dev, uuid)
+        self.kernel = xrt.kernel(self.ctx, "MLIR_AIE")
+        insts = (d / "insts.bin").read_bytes()
+        self.n_insts = len(insts)
+        self.instr = xrt.bo(h.dev, len(insts), xrt.bo.cacheable, self.kernel.group_id(1))
+        self.instr.write(insts, 0)
+        self.instr.sync(self.to_dev)
+        self.views, self.runs, self.c, self.bos = [], [], [], []
+
+    def a_bo(self, a: np.ndarray):
+        bo = self.xrt.bo(self.h.dev, a.nbytes, self.xrt.bo.host_only, self.kernel.group_id(3))
+        bo.write(a, 0)
+        bo.sync(self.to_dev)
+        self.bos.append(bo)
+        return bo
+
+    def add(self, a_bo, w: np.ndarray, rows: int, cols: int, dtype) -> int:
+        b = self.xrt.bo(self.h.dev, w.nbytes, self.xrt.bo.host_only, self.kernel.group_id(4))
+        b.write(w, 0)
+        b.sync(self.to_dev)
+        c = self.xrt.bo(self.h.dev, rows * cols * 4, self.xrt.bo.host_only, self.kernel.group_id(5))
+        r = self.xrt.run(self.kernel)
+        for i, v in enumerate((3, self.instr, self.n_insts, a_bo, b, c)):
+            r.set_arg(i, v)
+        self.bos.append(b)
+        self.c.append(c)
+        self.runs.append(r)
+        self.views.append(np.frombuffer(c.map(), dtype=dtype).reshape(rows, cols))
+        return len(self.runs) - 1
+
+    def run(self, i: int):
+        self.runs[i].start()
+        if self.runs[i].wait(120000) != self.done:
+            raise RuntimeError("npu dispatch did not complete")
+        self.c[i].sync(self.from_dev)
+
+    def close(self):
+        self.views = self.runs = self.c = self.bos = []                # the views go first
+        self.instr = self.kernel = self.ctx = self.xclbin = None
+
+
+def npu_dir(dt: str, M: int, ctx: str) -> Path:
+    """The pinned build for this context: P, or F where P was refused (none was: all 24 P builds verified)."""
+    K, N = CTX_SHAPE[ctx]
+    for tile in ("P", "F"):
+        if tile in NPU_TILES[dt] and build_dir(dt, M, K, N, tile).name in PINS["builds"]:
+            return build_dir(dt, M, K, N, tile)
+    raise SystemExit(f"no pinned build for {dt} M={M} {ctx}")
+
+
+class NpuLayer:
+    """U3's layout: four hardware contexts (q; k and v; o; the 2560 pieces) and sixteen dispatches in graph
+    order (q, k, v, o, gate 0-3, up 0-3, down 0-3). Each input is synced once per context that reads it
+    (X_attn once for both of its contexts with share_xattn, the load check's test); down's four partials are
+    summed on the host, serially, after the fourth piece (W13). bf16 goes in as its raw 16 bits (3's form);
+    N-w4's B is whole_array_w4a8.pack_int4 of (q - 8)."""
+
+    def __init__(self, h, arm: str, M: int, share_xattn: bool):
+        import ml_dtypes
+        dt = NPU_DT[arm]
+        self.arm, self.M, self.share = arm, M, share_xattn
+        out_dt = np.float32 if dt == "bf16" else np.int32
+        bf16 = ml_dtypes.bfloat16
+        P = NPU_PIECE
+        if dt == "w4":
+            sys.path.insert(0, str(W4_DIR))
+            from whole_array_w4a8 import pack_int4
+
+        def x_in(x):
+            if dt == "bf16":
+                return np.ascontiguousarray(load_rows(x, M).astype(bf16)).view(np.uint16)
+            return load_rows(f"{x}_q_M{M}")
+
+        def w_in(name, cols=None, rows=None):
+            w = load_rows({"bf16": f"w_{name}", "i8": f"w_{name}_q", "w4": f"b4_{name}"}[dt])
+            w = w[:, cols] if cols is not None else w
+            w = np.ascontiguousarray(w[rows, :] if rows is not None else w)
+            if dt == "w4":
+                return np.ascontiguousarray(pack_int4(w))
+            return np.ascontiguousarray(w.astype(bf16)).view(np.uint16) if dt == "bf16" else w
+
+        self.reg = {}
+        self.ctx = {c: NpuCtx(h, self.reg, npu_dir(dt, M, c)) for c in CTX_SHAPE}
+        cq, ckv, co, cp = (self.ctx[c] for c in CTX_SHAPE)
+        xa, xo, xf, xd = (x_in(x) for x in INPUTS)
+        self.a_attn = cq.a_bo(xa)
+        self.a_attn_kv = self.a_attn if share_xattn else ckv.a_bo(xa)
+        self.a_o, self.a_ffn = co.a_bo(xo), cp.a_bo(xf)
+        self.a_down = [cp.a_bo(np.ascontiguousarray(xd[:, i * P:(i + 1) * P])) for i in range(4)]
+        del xa, xo, xf, xd
+        self.r = {"q": cq.add(self.a_attn, w_in("q"), M, 2048, out_dt),
+                  "k": ckv.add(self.a_attn_kv, w_in("k"), M, 1024, out_dt),
+                  "v": ckv.add(self.a_attn_kv, w_in("v"), M, 1024, out_dt),
+                  "o": co.add(self.a_o, w_in("o"), M, 2560, out_dt)}
+        for n in ("gate", "up"):
+            for j in range(4):
+                self.r[f"{n}{j}"] = cp.add(self.a_ffn, w_in(n, cols=slice(j * P, (j + 1) * P)), M, P, out_dt)
+        for i in range(4):
+            self.r[f"down{i}"] = cp.add(self.a_down[i], w_in("down", rows=slice(i * P, (i + 1) * P)), M, 2560, out_dt)
+        self.acc = np.empty((M, 2560), dtype=out_dt)
+        self.to = cq.to_dev
+        self.times = {k: [] for k in list(self.r) + ["down_sum"]}
+        self.timed = False
+
+    def _run(self, c: str, k: str):
+        if self.timed:
+            t0 = time.perf_counter()
+            self.ctx[c].run(self.r[k])
+            self.times[k].append(time.perf_counter() - t0)
+        else:
+            self.ctx[c].run(self.r[k])
+
+    def layer(self):
+        self.a_attn.sync(self.to)
+        self._run("q", "q")
+        if not self.share:
+            self.a_attn_kv.sync(self.to)
+        self._run("kv", "k")
+        self._run("kv", "v")
+        self.a_o.sync(self.to)
+        self._run("o", "o")
+        self.a_ffn.sync(self.to)
+        for n in ("gate", "up"):
+            for j in range(4):
+                self._run("piece", f"{n}{j}")
+        for i in range(4):
+            self.a_down[i].sync(self.to)
+            self._run("piece", f"down{i}")
+        t0 = time.perf_counter()
+        v = [self.view(f"down{i}") for i in range(4)]
+        np.add(v[0], v[1], out=self.acc)
+        np.add(self.acc, v[2], out=self.acc)
+        np.add(self.acc, v[3], out=self.acc)
+        if self.timed:
+            self.times["down_sum"].append(time.perf_counter() - t0)
+
+    def view(self, k: str) -> np.ndarray:
+        return self.ctx[{"q": "q", "k": "kv", "v": "kv", "o": "o"}.get(k, "piece")].views[self.r[k]]
+
+    def outputs(self) -> dict:
+        out = {k: self.view(k).copy() for k in ("q", "k", "v", "o")}
+        for n in ("gate", "up"):
+            out[n] = np.concatenate([self.view(f"{n}{j}") for j in range(4)], axis=1)
+        out["down"] = self.acc.copy()
+        return out
+
+    def after(self) -> dict:
+        """Report-only: each dispatch's median ms and the host sum's; and once, outside the loop, the gate/up
+        concatenation 3b's layout would add (v2 §7)."""
+        med = {k: round(statistics.median(v) * 1e3, 3) for k, v in self.times.items() if v}
+        t0 = time.perf_counter()
+        for n in ("gate", "up"):
+            np.concatenate([self.view(f"{n}{j}") for j in range(4)], axis=1)
+        return {"dispatch_ms_median": med, "concat_3b_ms": round((time.perf_counter() - t0) * 1e3, 2),
+                "contexts": len(self.ctx), "share_xattn": self.share}
+
+    def close(self):
+        self.a_attn = self.a_attn_kv = self.a_o = self.a_ffn = None
+        self.a_down = []
+        for c in self.ctx.values():
+            c.close()
+        self.ctx = {}
+        self.reg.clear()
+
+
+# ---- the reader process
+
+def wall_offset() -> float:
+    """time.time() - time.perf_counter(), taken at a tick of time.time() (it steps 15.6 ms on this Python)."""
+    t = time.time()
+    while True:
+        u, p = time.time(), time.perf_counter()
+        if u != t:
+            return u - p
+
+
+def reader(arm: str, M: int, share_xattn: bool = False, loadcheck: bool = False) -> int:
+    """One window's reader: load, the output check, READY; then, from the go line's start to its stop (epoch
+    seconds), the layer loop, each iteration's start and completion stamped (perf_counter + one wall offset).
+    A VOID cause before READY (placement, the check, the pinning) prints its record and exits 0 with no READY."""
+    import contextlib
+    import gc
+    t_load = time.perf_counter()
+    with contextlib.ExitStack() as stack:
+        if arm in NPU_DT:
+            import ml_dtypes
+            from ignite_xdna.runtime.driver import XrtSiliconHarness
+            h = stack.enter_context(XrtSiliconHarness(0))
+            L = NpuLayer(h, arm, M, share_xattn)
+            stack.callback(gc.collect)
+            stack.callback(L.close)
+            L.layer()                                                  # the output check's run
+            ident = {"contexts": len(L.ctx), "share_xattn": share_xattn, "ml_dtypes": ml_dtypes.__version__,
+                     "builds": {c: npu_dir(NPU_DT[arm], M, c).name for c in CTX_SHAPE}}
+            pin = None
+        else:
+            import onnxruntime as ort
+            L = RivalLayer(arm, M)
+            stack.callback(L.close)
+            if L.placement is not None:
+                say("PLACEMENT_JSON", L.placement)
+                if not L.placement["all_dml"]:
+                    return 0                                           # VOID: placement not all DirectML
+            ident = {"model": L.kind, "threads": L.threads, "onnxruntime": ort.__version__}
+            pin = L.pin
+        chk = output_check(arm, M, L.outputs(), quiet=loadcheck)
+        say("CHECK_JSON", chk)
+        if pin is not None:
+            say("PIN_JSON", pin)
+        if not chk["ok"] or (pin is not None and not pin["ok"]):
+            return 0                                                   # VOID: the check, or the pinning
+        gc.collect()
+        say("READY", {"pid": os.getpid(), "arm": arm, "M": M, "load_s": round(time.perf_counter() - t_load, 1),
+                      "python": sys.version.split()[0], "numpy": np.__version__, **ident})
+        line = sys.stdin.readline().split()
+        start, stop = float(line[1]), float(line[2])
+        off = wall_offset()
+        start_p, stop_p, a_p = start - off, stop - off, start + WARMUP_S - off
+        while time.perf_counter() < start_p - 0.02:
+            time.sleep(0.005)
+        while time.perf_counter() < start_p:
+            pass
+        if arm in NPU_DT:
+            L.timed = True
+        hook = getattr(L, "at_window", None)
+        t0s, t1s = [], []
+        while True:
+            t0 = time.perf_counter()
+            if hook is not None and t0 >= a_p:
+                hook()
+                hook = None
+                t0 = time.perf_counter()
+            if t0 >= stop_p:
+                break
+            L.layer()
+            t1 = time.perf_counter()
+            t0s.append(round(t0 + off, 6))
+            t1s.append(round(t1 + off, 6))
+        extra = L.after()
+        say("ITERS_JSON", {"t0": t0s, "t1": t1s})
+        say("READER_JSON", {"iterations": len(t0s), "wall_offset": round(off, 6), **extra})
+    return 0
+
+
+# ---- the window (the suite's side; resnet_env17)
+
+def layer_stats(t0s, t1s, a: float, b: float) -> dict:
+    """T: the median wall time of the layers completing in (a, b]; layers: each layer's overlap with [a, b]
+    as a fraction of it, summed (E's rate, as (e)'s W rate); covered: the loop ran through the window."""
+    done = sorted((y - x) * 1e3 for x, y in zip(t0s, t1s) if a < y <= b)
+    got = 0.0
+    for x, y in zip(t0s, t1s):
+        lo, hi = max(x, a), min(y, b)
+        if y > x and hi > lo:
+            got += (hi - lo) / (y - x)
+    return {"n_done": len(done), "T": statistics.median(done) if done else None, "layers": got,
+            "T_p95": done[min(len(done) - 1, int(0.95 * len(done)))] if done else None,
+            "covered": bool(t0s) and t0s[0] <= a and t1s[-1] >= b}
+
+
+def window_record(meta: dict, *, exit_code=None, check=None, placement=None, pin=None, ready=None, reader_json=None,
+                  iters=None, idle_rows=(), win_rows=(), hard_per_s=None, fault_seconds=0, a=None, b=None,
+                  failed=None) -> dict:
+    """WINDOW_JSON from what a window gathered (pure: no I/O). idle_rows and win_rows are read_csv rows
+    already trimmed (1 s at each end); pin is READER_JSON's (after the loop) or the reader's PIN_JSON."""
+    rec = dict(meta)
+    rec.update(state=None, why="", T=None, E=None, err=None, i8_sha=None)
+    if check is not None:
+        rec["err"], rec["i8_sha"] = check.get("err"), check.get("i8_sha")
+        rec["check"] = {k: v for k, v in check.items() if k not in ("err", "i8_sha")}
+    if failed or exit_code not in (0, None):
+        rec.update(state="FAILED", why=failed or f"the reader exited {exit_code}")
+        return rec
+    pre = []
+    if placement is not None and not placement.get("all_dml"):
+        pre.append("placement not all DirectML")
+    if check is not None and not check.get("ok"):
+        pre.append("output check: " + "; ".join(check.get("why", [])))
+    if pin is not None and ready is None and not pin.get("ok"):
+        pre.append("the pinning was not read back (before READY)")
+    if pre:
+        rec.update(state="VOID", why="; ".join(pre))
+        return rec
+    if ready is None:
+        rec.update(state="FAILED", why="the reader exited 0 with no READY and no VOID cause")
+        return rec
+    if reader_json is None or iters is None:
+        rec.update(state="FAILED", why="the reader left no READER_JSON or ITERS_JSON")
+        return rec
+    st = layer_stats(iters["t0"], iters["t1"], a, b)
+    rec["window"] = [round(a, 3), round(b, 3)]
+    rec["layers"] = {"total": len(iters["t0"]), "done_in_window": st["n_done"], "fractional": round(st["layers"], 4),
+                     "T_p95_ms": st["T_p95"], "covered": st["covered"]}
+    if not st["covered"]:
+        rec.update(state="FAILED", why="the reader's iterations do not span the window")
+        return rec
+    idle, wr = list(idle_rows), list(win_rows)
+
+    def mean(rows, i):
+        return statistics.fmean(r[i] for r in rows) if rows else None
+    ip, wp = mean(idle, 1), mean(wr, 1)
+    pages = mean(wr, 8) or 0.0
+    rec["power"] = {"idle_rows": len(idle), "window_rows": len(wr),
+                    "idle_pkg_w": None if ip is None else ip / 1e3, "window_pkg_w": None if wp is None else wp / 1e3,
+                    "idle_pkg_sd_w": statistics.pstdev(r[1] for r in idle) / 1e3 if len(idle) > 1 else None,
+                    "idle_cores_w": None if not idle else mean(idle, 2) / 1e3,
+                    "window_cores_w": None if not wr else mean(wr, 2) / 1e3,
+                    "window_cpu_pct": mean(wr, 3), "pages_in_max": max((r[8] for r in wr), default=None)}
+    rec["memory_rule"] = {"hard_faults_per_s": hard_per_s, "fault_seconds": fault_seconds,
+                          "pages_in_mean": round(pages, 2)}
+    why = []
+    if len(idle) < MIN_ROWS:
+        why.append(f"idle rows {len(idle)} < {MIN_ROWS}")
+    if len(wr) < MIN_ROWS:
+        why.append(f"window rows {len(wr)} < {MIN_ROWS}")
+    if meta["arm"].startswith("C-") and not (pin and pin.get("ok") and "after_warmup" in pin):
+        why.append("the pinning was not read back")
+    if st["n_done"] < MIN_ITERATIONS:
+        why.append(f"layers completed in the window {st['n_done']} < {MIN_ITERATIONS}")
+    if fault_seconds < MIN_ROWS:
+        why.append(f"fault-sampler seconds {fault_seconds} < {MIN_ROWS} (the memory rule unread)")
+    if hard_per_s is not None and hard_per_s > HF_MAX:
+        why.append(f"the reader's own hard faults {hard_per_s}/s > {HF_MAX:g}")
+    if pages > PAGES_MAX:
+        why.append(f"Pages Input/sec {pages:.1f} > {PAGES_MAX:g}")
+    rec["T"] = st["T"]
+    if ip is not None and wp is not None and st["layers"] > 0:
+        rec["E"] = (wp - ip) / 1e3 / (meta["M"] * st["layers"] / (b - a))
+    rec.update(state="VOID" if why else "OK", why="; ".join(why))
+    return rec
+
+
+def reader_proc(arm: str, M: int, share: bool = False, loadcheck: bool = False):
+    import shutil
+    import llm_freeing as lf
+    args = ["tools/llm_prefill3c.py", "reader", arm, str(M)] + (["--share-xattn"] if share else []) \
+        + (["--loadcheck"] if loadcheck else [])
+    if arm in NPU_DT:
+        return lf.Proc([shutil.which("bash"), "scripts/research-iron.sh", *args],
+                       "bash scripts/research-iron.sh " + " ".join(args))
+    return lf.Proc([sys.executable, *args], f"python[{os.environ.get('CONDA_DEFAULT_ENV', '?')}] " + " ".join(args))
+
+
+def end_proc(p) -> None:
+    """Our own child and its tree (an NPU reader runs under bash), by the pid we started; nothing else."""
+    if p is not None and p.proc.poll() is None:
+        subprocess.run(["taskkill", "/F", "/T", "/PID", str(p.proc.pid)], capture_output=True)
+        p.proc.wait(timeout=30)
+
+
+def echo(p) -> None:
+    import llm_freeing as lf
+    print(f"READER_CMD {p.shown}", flush=True)
+    for s in p.lines:
+        if not s.startswith(QUIET_READER):
+            print(lf.neutralize(f"reader| {s}"), flush=True)
+
+
+def npu_witness_after(arm: str) -> None:
+    """xrt-smi after every NPU arm (v2 §7); a failure is logged, and the next window's own witness refuses it."""
+    import llm_freeing as lf
+    from silicon_probe_record import witness
+    if arm in NPU_DT:
+        try:
+            witness()
+        except Exception as ex:                                        # noqa: BLE001
+            print(lf.neutralize(f"WITNESS_AFTER_NPU_FAILED {type(ex).__name__}: {ex}"), flush=True)
+
+
+def run_window(M: int, arm: str, pas: int, position: int, rerun: bool, luids, share: bool, stamp: str) -> dict:
+    import gemma_decode_suite as gds
+    import llm_freeing as lf
+    from silicon_probe_record import witness
+    tag = f"{stamp}_M{M}_{position:02d}_p{pas}_{arm.replace('@', 't')}{'_rerun' if rerun else ''}"
+    print(f"\nWINDOW_BEGIN M={M} position {position} pass {pas} {arm}{' (U12 re-run)' if rerun else ''} {lf.utc()}",
+          flush=True)
+    meta = {"M": M, "arm": arm, "pass": pas, "position": position, "rerun": rerun, "utc": lf.utc()}
+    p = tp = fs = None
+    got, extra = {}, {}
+    try:
+        witness()                                                      # xrt-smi: no hardware context
+        ipath = SITTING_TMP / f"{tag}_idle.csv"
+        fs = gds.FaultSampler(counters=lf.neutral_counters).start()   # in the idle too: its cost cancels
+        tp = gds.typeperf(IDLE_S + 1, ipath)
+        gds.stop(tp, IDLE_S + 60)
+        tp = None
+        fs.stop()
+        fs = None
+        idle = gds.read_csv(ipath, None, luids)["rows"]
+        got["idle_rows"] = idle[TRIM_S:len(idle) - TRIM_S]
+        p = reader_proc(arm, M, share=share and arm in NPU_DT)
+        p.ready.wait(READY_TIMEOUT_S)
+        ready = p.json("READY")
+        if ready is None:
+            p.proc.wait(timeout=120)
+            p.pump.join(timeout=30)
+            got["exit_code"] = p.proc.returncode
+        else:
+            got["ready"] = ready
+            pid = ready["pid"]
+            path = SITTING_TMP / f"{tag}_window.csv"
+            tp = gds.typeperf(TP_SAMPLES, path)
+            fs = gds.FaultSampler(counters=lf.neutral_counters).start()
+            time.sleep(TP_LEAD_S)
+            start = time.time() + GO_LEAD_S
+            a, b = start + WARMUP_S, start + WARMUP_S + WINDOW_S
+            p.go(start, b + TAIL_S)
+            lf.wait_until(a)
+            ca = lf.cpu_seconds({"reader": pid})
+            lf.wait_until(b)
+            cb = lf.cpu_seconds({"reader": pid})
+            p.proc.wait(timeout=max(120.0, b + TAIL_S - time.time() + 600))
+            p.pump.join(timeout=30)
+            got["exit_code"] = p.proc.returncode
+            time.sleep(1.5)                                            # the window's last second is sampled
+            gds.stop(tp, 0)
+            tp = None
+            fs.stop()
+            ta, tb = a + TRIM_S, b - TRIM_S
+            got.update(reader_json=p.json("READER_JSON"), iters=p.json("ITERS_JSON"), a=a, b=b,
+                       win_rows=gds.inside(gds.read_csv(path, None, luids)["rows"], ta, tb))
+            f = lf.faults_window(fs.rows, ta, tb, {"reader": pid})
+            got.update(hard_per_s=f["hard_per_s"].get("reader"), fault_seconds=f["seconds"])
+            extra["faults_top_hard"] = f["top_hard"]
+            extra["process_cpu_pct"] = round((cb["reader"] - ca["reader"]) / (b - a) * 100, 1) \
+                if "reader" in ca and "reader" in cb else None
+            g, grows = gds.gpu_frame(path)
+            gw = gds.gpu_window(g, grows, set(luids), pid, ta, tb)
+            extra["gpu"] = {k: gw.get(k) for k in ("rows", "gpu780_all", "reader", "reader_by_engine", "other_adapters")}
+            extra["reader_pid"] = pid
+        got.update(check=p.json("CHECK_JSON"), placement=p.json("PLACEMENT_JSON"))
+        got["pin"] = (got.get("reader_json") or {}).get("pin") or p.json("PIN_JSON")
+    except Exception as ex:                                            # the window's own code: FAILED
+        got["failed"] = f"{type(ex).__name__}: {str(ex)[:300]}"
+    finally:
+        end_proc(p)
+        if tp is not None:
+            gds.stop(tp, 0)
+        if fs is not None:
+            fs.stop()
+        if p is not None:
+            echo(p)
+    rec = window_record(meta, **got)
+    rec.update(extra)
+    if got.get("ready"):
+        rec["ready"] = got["ready"]
+    if got.get("reader_json"):
+        rec["reader"] = got["reader_json"]
+    if got.get("iters"):
+        nsay("ITERS_JSON", {"M": M, "arm": arm, "pass": pas, "position": position, **got["iters"]})
+    nsay("WINDOW_JSON", rec)
+    t = f"T {rec['T']:.2f} ms" if rec["T"] is not None else "T -"
+    e = f"E {rec['E'] * 1e3:.4f} mJ/token/layer" if rec["E"] is not None else "E -"
+    print(lf.neutralize(f"WINDOW_SUMMARY M={M} pos {position} p{pas} {arm}: {rec['state']}; {t}; {e}"
+                        + (f"  ({rec['why']})" if rec["why"] else "")), flush=True)
+    npu_witness_after(arm)
+    time.sleep(SETTLE_S)
+    return rec
+
+
+def latest_loadcheck():
+    p = latest("llm_prefill3c_loadcheck_*.log")
+    if p is None:
+        return None, None
+    s = next((json.loads(x.split(" ", 1)[1]) for x in p.read_text(encoding="utf-8").splitlines()
+              if x.startswith("LOADCHECK_SUMMARY_JSON ")), None)
+    return p, s
+
+
+def start_gate(title: str):
+    """The start (v2 §4): the three hashes and PROTOCOL_JSON; the neutral names; the host-load gate;
+    memory_start (no process at 4 GB or more); xrt-smi (no hardware context); the 780M the only hardware
+    DirectML adapter, and adapter 0; every pin (check_pins, the input files included). Returns the 780M's
+    LUIDs, or None: refused, nothing runs."""
+    import gemma_decode_suite as gds
+    import llm_freeing as lf
+    from silicon_probe_record import witness
+    print(f"{title}, {lf.utc()}", flush=True)
+    plan_hashes()
+    say("PROTOCOL_JSON", protocol())
+    names = lf.neutral_list()
+    lf.set_neutral(names)
+    print(f"NEUTRAL_NAMES {len(names)} (a local, git-ignored list; the names themselves are not logged)", flush=True)
+    if not names:
+        print("REFUSE the local name list is empty or missing", flush=True)
+        return None
+    if not lf.host_gate():
+        return None
+    m = gds.memory_start()
+    for key in ("processes_over_1gb", "refuse"):
+        for e in m[key]:
+            e["name"] = lf.neutralize(e["name"])
+    nsay("MEMORY_START_JSON", m)
+    if m["refuse"]:
+        print("REFUSE a process holds >= 4 GB private at the start", flush=True)
+        return None
+    try:
+        witness()
+    except Exception as ex:                                            # noqa: BLE001
+        print(lf.neutralize(f"REFUSE xrt-smi: {ex}"), flush=True)
+        return None
+    ad = gds.dxgi_adapters()
+    luids = sorted(x["luid"] for x in ad if (x["vendor"], x["device"]) == gds.GPU_780M_ID and not x["flags"] & 2)
+    say("ADAPTERS_JSON", {"adapters": ad, "luids_780m": luids})
+    hw = [x for x in ad if not x["flags"] & 2]
+    if not hw or hw[0] is not ad[0] or any((x["vendor"], x["device"]) != gds.GPU_780M_ID for x in hw):
+        print("REFUSE a hardware adapter other than the 780M, or adapter 0 not the 780M", flush=True)
+        return None
+    t0 = time.perf_counter()
+    bad = check_pins()
+    say("PINS_CHECK_JSON", {"mismatches": bad, "seconds": round(time.perf_counter() - t0, 1)})
+    if bad:
+        print("REFUSE a pin does not hold", flush=True)
+        return None
+    return luids
+
+
+def loadcheck() -> int:
+    """Step 6 (pre-sitting; enters no rule): every arm's reader at M = 8192, by the sitting's own code path,
+    to READY (its output check passed, quiet: pass or fail, no accuracy figure) and a 2 s go (at least one
+    layer), its record parsed and run through window_record (with no window its label means nothing, and no
+    WINDOW_JSON is printed); the NPU arms hold their four contexts and the M = 8192 buffers; then the
+    shared-X_attn test (N-i8, one XRT buffer in two contexts, its outputs exact). LOADCHECK_SUMMARY_JSON is
+    what Q2 reads; the sitting refuses without its go."""
+    import llm_freeing as lf
+    stamp = time.strftime("%Y%m%dT%H%M%S")
+    SITTING_TMP.mkdir(parents=True, exist_ok=True)
+    sys.stdout = lf.Live(SITTING_TMP / f"{stamp}_loadcheck_live.log")
+    if start_gate("LOADCHECK (3c step 6), pre-sitting, enters no rule") is None:
+        return 3
+    M = max(MS)
+    zero_rows = [[0.0] * 9] * MIN_ROWS
+
+    def one(arm, share=False):
+        p = reader_proc(arm, M, share=share, loadcheck=True)
+        r = {"arm": arm, "share_xattn": share}
+        try:
+            p.ready.wait(READY_TIMEOUT_S)
+            ready = p.json("READY")
+            start = None
+            if ready is not None:
+                start = time.time() + GO_LEAD_S
+                p.go(start, start + LOADCHECK_GO_S)
+            p.proc.wait(timeout=600)
+            p.pump.join(timeout=30)
+            it, rj, chk = p.json("ITERS_JSON"), p.json("READER_JSON"), p.json("CHECK_JSON")
+            r.update(ready=ready is not None, exit=p.proc.returncode, check_ok=bool(chk and chk["ok"]),
+                     check_why=chk["why"] if chk else None, placement=p.json("PLACEMENT_JSON"),
+                     pin=(rj or {}).get("pin") or p.json("PIN_JSON"), load_s=(ready or {}).get("load_s"),
+                     contexts=(ready or {}).get("contexts"), layers=len(it["t0"]) if it else 0,
+                     layer_ms=[round((y - x) * 1e3, 1) for x, y in zip(it["t0"], it["t1"])] if it else None,
+                     reader={k: v for k, v in (rj or {}).items() if k != "pin"})
+            try:
+                wr = window_record({"M": M, "arm": arm, "pass": 0, "position": 0, "rerun": False},
+                                   exit_code=p.proc.returncode, check=chk, placement=r["placement"], pin=r["pin"],
+                                   ready=ready, reader_json=rj, iters=it, idle_rows=zero_rows, win_rows=zero_rows,
+                                   hard_per_s=0.0, fault_seconds=MIN_ROWS, a=start,
+                                   b=None if start is None else start + LOADCHECK_GO_S)
+                r["window_code"] = {"ran": True, "verdict_fields": all(k in wr for k in VERDICT_FIELDS)}
+            except Exception as ex:                                    # noqa: BLE001
+                r["window_code"] = {"ran": False, "error": f"{type(ex).__name__}: {str(ex)[:200]}"}
+        except Exception as ex:                                        # noqa: BLE001
+            r["failed"] = f"{type(ex).__name__}: {str(ex)[:300]}"
+        finally:
+            end_proc(p)
+            echo(p)
+        pin_ok = r.get("pin") is None or bool(r["pin"].get("ok"))
+        r["ok"] = bool(r.get("ready") and r.get("exit") == 0 and r.get("check_ok") and r.get("layers", 0) >= 1
+                       and pin_ok and r.get("window_code", {}).get("ran"))
+        nsay("LOADCHECK_ARM_JSON", r)
+        npu_witness_after(arm)
+        return r
+
+    res = {arm: one(arm) for arm in ORDER}
+    share = one("N-i8", share=True)
+    npu = [res[a] for a in NPU_ARMS]
+    summary = {"M": M, "contexts": all(r.get("ready") and r.get("contexts") == NPU_CONTEXTS for r in npu),
+               "buffers_8192": all(r["ok"] for r in npu), "shared_buffer": share["ok"],
+               "arms_ok": {a: r["ok"] for a, r in res.items()},
+               "dropped": [] if res["N-w4"]["ok"] else ["N-w4"]}
+    summary["go"] = summary["contexts"] and summary["buffers_8192"] and all(
+        v for a, v in summary["arms_ok"].items() if a not in REPORT_ONLY)
+    summary["note"] = ("enters no rule; Q2 reads contexts, buffers_8192 and shared_buffer; the sitting refuses "
+                       "without go; N-w4 is dropped and stated if it fails (v2 §3)")
+    say("LOADCHECK_SUMMARY_JSON", summary)
+    print("LOADCHECK", "GO" if summary["go"] else "NO-GO (3c stops and goes back to the gate and the user)", flush=True)
+    return 0 if summary["go"] else 2
+
+
+def sitting(M: int) -> int:
+    """Step 7: one sitting at one M (U7). Pass 1 in ORDER, pass 2 its reverse; each pass's VOID windows (as
+    the frozen state_of reads them) re-run once at its end (U12), logged with rerun=true and their position.
+    Arms dropped at step 2 or by the load check (N-w4 only) are skipped and named."""
+    import llm_freeing as lf
+    if M not in MS:
+        raise SystemExit(f"M must be one of {MS}")
+    stamp = time.strftime("%Y%m%dT%H%M%S")
+    SITTING_TMP.mkdir(parents=True, exist_ok=True)
+    sys.stdout = lf.Live(SITTING_TMP / f"{stamp}_M{M}_live.log")
+    luids = start_gate(f"SITTING (3c step 7), M = {M}")
+    if luids is None:
+        return 3
+    lp, lc = latest_loadcheck()
+    if lc is None or not lc.get("go"):
+        print(f"REFUSE the load check is missing or NO-GO ({lp.relative_to(ROOT).as_posix() if lp else 'none'})",
+              flush=True)
+        return 3
+    mp = latest("llm_prefill3c_models_*.log")
+    dropped = next((json.loads(s.split(" ", 1)[1]) for s in mp.read_text(encoding="utf-8").splitlines()
+                    if s.startswith("DROPPED_ARMS_JSON ")), None) if mp else None
+    if dropped is None:
+        print("REFUSE no DROPPED_ARMS_JSON in the models log", flush=True)
+        return 3
+    drop = sorted(set(dropped) | set(lc.get("dropped", [])))
+    arms = [a for a in ORDER if a not in drop and arm_parts(a)[0] not in drop]
+    share = bool(lc["shared_buffer"])
+    say("SITTING_PLAN_JSON", {"M": M, "arms": arms, "dropped": drop, "share_xattn": share,
+                              "loadcheck_log": lp.relative_to(ROOT).as_posix(), "loadcheck_sha256_lf": sha_lf(lp),
+                              "counter_files": SITTING_TMP.relative_to(ROOT).as_posix() + f"/{stamp}_M{M}_*.csv"})
+    position = 0
+    for pas in (1, 2):
+        recs = []
+        for arm in (arms if pas == 1 else arms[::-1]):
+            recs.append(run_window(M, arm, pas, position, False, luids, share, stamp))
+            position += 1
+        for r in [r for r in recs if state_of(r) == "VOID"]:           # U12: once, at the end of the same pass
+            run_window(M, r["arm"], pas, position, True, luids, share, stamp)
+            position += 1
+    print(f"\nSITTING_DONE M={M}, {position} windows, {lf.utc()}", flush=True)
+    return 0
 
 
 # ---------------------------------------------------------------- the rules (verdict)
@@ -1954,6 +2808,106 @@ def selftest() -> int:
     b4 = np.ascontiguousarray((codes.reshape(32, 64).astype(np.int16) - 8).astype(np.int8).T)
     expect("N-w4's B = (q - 8) as [K, N]: B * d reproduces W", bool(np.array_equal(
         b4[:32, 0].astype(np.float32) * gc.f16_to_f32(lin["q"][1][:1]), dense(*lin["q"])[:32, 0])), True)
+    print("The window (window_record and its inputs, pure; no chip, no counters):")
+    a0, b0 = 1_000_000.0, 1_000_060.0
+
+    def iters_for(ms, first=None):
+        """Back-to-back layers of ms from the go (a0 - 20 s) to past the stop (b0 + 1 s)."""
+        t, t0s, t1s = a0 - WARMUP_S if first is None else first, [], []
+        while t < b0 + TAIL_S:
+            t0s.append(t)
+            t += ms / 1e3
+            t1s.append(t)
+        return {"t0": t0s, "t1": t1s}
+    rows_i = [[0, 20000.0, 5000.0, 1.0, 0, 0, 0, 20000, 0.0]] * 58
+    rows_w = [[0, 60000.0, 40000.0, 90.0, 0, 0, 0, 18000, 10.0]] * 57
+    pin_ok = {"ok": True, "before_ready": {"ok": True}, "after_warmup": {"ok": True}, "after_loop": {"ok": True}}
+    chk_ok = {"ok": True, "why": [], "err": {"q": 1.5e-2}, "i8_sha": ["ab"] * 7}
+
+    def win(arm="C-i8@8", M=2048, pas=1, pos=0, rerun=False, **kw):
+        k = dict(exit_code=0, check=chk_ok, ready={"pid": 1}, reader_json={"iterations": 1}, iters=iters_for(120.0),
+                 idle_rows=rows_i, win_rows=rows_w, hard_per_s=0.5, fault_seconds=57, a=a0, b=b0,
+                 pin=pin_ok if arm.startswith("C-") else None)
+        k.update(kw)
+        return window_record({"M": M, "arm": arm, "pass": pas, "position": pos, "rerun": rerun}, **k)
+    w = win()
+    expect("an OK window: state, T 120 ms, 500 layers in the window", (w["state"], round(w["T"], 6),
+                                                                       round(w["layers"]["fractional"], 3)),
+           ("OK", 120.0, 500.0))
+    expect("E = (60 W - 20 W) / (2048 x 500 layers / 60 s), J per token per layer",
+           round(w["E"] / ((60.0 - 20.0) / (2048 * 500 / 60.0)), 6), 1.0)
+    expect("WINDOW_JSON has every field the frozen verdict reads", all(k in w for k in VERDICT_FIELDS), True)
+    cases = [("idle rows 49", dict(idle_rows=rows_i[:49]), "idle rows 49 < 50"),
+             ("window rows 49", dict(win_rows=rows_w[:49]), "window rows 49 < 50"),
+             ("4 layers completed", dict(iters=iters_for(15000.0)), "layers completed in the window 4 < 5"),
+             ("pinning mismatch after the loop", dict(pin=dict(pin_ok, ok=False)), "the pinning was not read back"),
+             ("no read-back after the warm-up", dict(pin={"ok": True, "before_ready": {"ok": True}}),
+              "the pinning was not read back"),
+             ("hard faults 26/s", dict(hard_per_s=26.0), "hard faults 26.0/s > 25"),
+             ("Pages Input/sec 1001", dict(win_rows=[r[:8] + [1001.0] for r in rows_w]), "Pages Input/sec 1001.0 > 1000"),
+             ("49 fault-sampler seconds", dict(fault_seconds=49), "the memory rule unread"),
+             ("a failed output check (no READY)", dict(ready=None, check=dict(chk_ok, ok=False, why=["q: x"])),
+              "output check: q: x"),
+             ("pinning not read back before READY", dict(ready=None, pin={"ok": False}), "before READY")]
+    for what, kw, want in cases:
+        w = win(**kw)
+        expect(f"VOID: {what}", (w["state"], want in w["why"]), ("VOID", True))
+    w = win(ready=None, check=dict(chk_ok, ok=False, why=["q: int32 not the exact int8 product"]))
+    expect("a VOID check still records the int8 SHAs (the int8 control reads every window)", w["i8_sha"], ["ab"] * 7)
+    expect("VOID: placement not all DirectML", win("D-fp16", ready=None, check=None, placement={"all_dml": False})["state"],
+           "VOID")
+    expect("hard faults 25/s is not over the rule", win(hard_per_s=25.0)["state"], "OK")
+    expect("a DirectML arm needs no pinning", win("D-fp16", check=dict(chk_ok, i8_sha=None))["state"], "OK")
+    for what, kw in (("the reader exits 1", dict(exit_code=1)), ("the window's code raised", dict(failed="TimeoutExpired")),
+                     ("exit 0, no READY, no VOID cause", dict(ready=None)),
+                     ("no ITERS_JSON", dict(iters=None)), ("iterations start after the window", dict(
+                         iters=iters_for(120.0, first=a0 + 5.0)))):
+        expect(f"FAILED: {what}", win(**kw)["state"], "FAILED")
+    st = layer_stats([0.0, 1.0, 2.0], [1.0, 2.0, 3.0], 0.5, 2.5)
+    expect("layer_stats: completions in (a, b], fractional overlap", (st["n_done"], st["layers"], st["T"]),
+           (2, 2.0, 1000.0))
+    y = rng.standard_normal((2500, 3))
+    s = np.array([2.0, 0.5, 1.0])
+    expect("rel_l2 in chunks equals numpy's, with a column scale",
+           round(rel_l2(y, y * s * 1.01, s) / (np.linalg.norm(y * s * 0.01) / np.linalg.norm(y * s * 1.01)), 9), 1.0)
+    import llm_freeing as lf
+    line = lf.neutralize("X " + json.dumps({"p": str(ROOT / "tools" / "x.py")}))
+    expect("nsay's form: the root inside JSON becomes <repo> and the line still parses",
+           (str(ROOT) in line, json.loads(line.split(" ", 1)[1])["p"].startswith("<repo>")), (False, True))
+    expect("wall_offset is the wall clock minus perf_counter", abs(time.time() - time.perf_counter() - wall_offset()) < 0.05,
+           True)
+    print("WINDOW_JSON through the frozen verdict (the round trip):")
+    recs, pos = [], 0
+    for M in MS:
+        for pas in (1, 2):
+            for arm in ORDER:
+                T, _, err = base[arm]
+                recs.append(win(arm, M, pas, pos, iters=iters_for(T), check={
+                    "ok": True, "why": [], "err": None if err is None else {"q": err},
+                    "i8_sha": ["ab"] * 7 if arm in INT8_ARMS else None}))
+                pos += 1
+    ev = evaluate(recs)
+    expect("every arm COMPLETE at both M", all(a["state"] == "COMPLETE" for M in MS for a in ev[M]["arms"].values()), True)
+    expect("T read back: N-i8 115 ms, C-fp32@8 400 ms", (round(ev[2048]["arms"]["N-i8"]["values"]["T"][0], 6),
+                                                         round(ev[2048]["arms"]["C-fp32@8"]["values"]["T"][0], 6)),
+           (115.0, 400.0))
+    e_i8 = ev[2048]["arms"]["N-i8"]["values"]["E"][0]
+    expect("E read back: equal power, so E scales with T (C-fp32@8 / N-i8 = 400 / 115)",
+           round(ev[2048]["arms"]["C-fp32@8"]["values"]["E"][0] / e_i8, 6), round(400 / 115, 6))
+    expect("err read back: D-fp16 3.6e-4", ev[2048]["arms"]["D-fp16"]["err"], 3.6e-4)
+    ctl = int8_control(recs)
+    expect("the int8 control reads i8_sha: 8 int8 windows per M, identical", (ctl[2048]["windows"], ctl[2048]["identical"]),
+           (8, True))
+    rr = [r for r in recs if not (r["M"] == 2048 and r["arm"] == "D-fp16" and r["pass"] == 1)]
+    void = win("D-fp16", 2048, 1, 8, iters=iters_for(130.0), idle_rows=rows_i[:49], check=dict(chk_ok, err={"q": 3.6e-4},
+                                                                                                i8_sha=None))
+    again = win("D-fp16", 2048, 1, 15, rerun=True, iters=iters_for(130.0), check=dict(chk_ok, err={"q": 3.6e-4},
+                                                                                      i8_sha=None))
+    expect("U12: a VOID window and its re-run (rerun=true, a later position): two valid passes",
+           (void["state"], evaluate(rr + [void, again])[2048]["arms"]["D-fp16"]["valid"]), ("VOID", 2))
+    garbage = win("D-fp32", check=dict(chk_ok, err={"q": 0.5}, i8_sha=None))
+    expect("A1 in the sitting's re-run choice: an OK window over its bound is VOID to state_of",
+           (garbage["state"], state_of(garbage)), ("OK", "VOID"))
     expect("the plan's hashes are the second plan commit's (PREREG, PROTOCOL_JSON, VERDICT_CODE)",
            (hashlib.sha256(PREREG.encode("utf-8")).hexdigest()[:8],
             hashlib.sha256(json.dumps(protocol()).encode("utf-8")).hexdigest()[:8], verdict_code_sha()[:8]),
@@ -1978,13 +2932,21 @@ def main() -> int:
     sys.stdout.reconfigure(encoding="utf-8")
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("mode", choices=("models", "placement", "insts-fit", "prereg", "build", "inputs", "pins",
-                                     "verdict", "selftest"))
+                                     "loadcheck", "sitting", "reader", "verdict", "selftest"))
     ap.add_argument("args", nargs="*")
+    ap.add_argument("--share-xattn", action="store_true", help="reader: one X_attn buffer for both contexts")
+    ap.add_argument("--loadcheck", action="store_true", help="reader: the load check's quiet output check")
     a = ap.parse_args()
     if a.mode == "placement":
         return placement(a.args[0])
     if a.mode == "verdict":
         return verdict(a.args)
+    if a.mode == "reader":
+        return reader(a.args[0], int(a.args[1]), a.share_xattn, a.loadcheck)
+    if a.mode == "sitting":
+        return sitting(int(a.args[0]))
+    if a.mode == "loadcheck":
+        return loadcheck()
     return {"models": models, "insts-fit": insts_fit, "prereg": prereg, "build": build, "inputs": inputs,
             "pins": pins, "selftest": selftest}[a.mode]()
 
