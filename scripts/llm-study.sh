@@ -36,6 +36,15 @@
 #   ./scripts/llm-study.sh sync-verdict   # the mechanical verdict
 #   (build first: bash scripts/research-iron.sh tools/split_sync_cost.py build)
 #
+# Stage 3: prefill GEMM at Llama-2-7B's shapes on the CPU, DirectML and the NPU.
+# tools/llm_prefill_bench.py holds the arms, the tiles, the rule and the predictions.
+#   ./scripts/llm-study.sh prefill-build     # the fixed inputs in scratch/llm/prefill/ and the NPU
+#                                            # configs in build/llm_prefill/ (compile only, no chip)
+#   ./scripts/llm-study.sh prefill-prereg    # its pre-registration log; commit it before the sitting
+#   ./scripts/llm-study.sh prefill           # the sitting: NPU, then CPU, then DirectML, one after
+#                                            # another, each recorded by silicon_probe_record.py
+#   ./scripts/llm-study.sh prefill-verdict   # the mechanical verdict over the three logs
+#
 # Options: --machine TAG names the logs (default: desktop2 on DESKTOP-CBL5NUA, else required).
 # --tag TAG adds _TAG to the verdict log's name, for a second verdict on the same day.
 #
@@ -56,6 +65,7 @@ while [ $# -gt 0 ]; do
         npuread-prereg|npuread|npuread-verdict) STAGE="${1//-/_}" ;;
         concurrent-prereg|concurrent|concurrent-verdict) STAGE="${1//-/_}" ;;
         sync-prereg|sync|sync-verdict) STAGE="${1//-/_}" ;;
+        prefill-build|prefill-prereg|prefill|prefill-verdict) STAGE="${1//-/_}" ;;
         --machine) MACHINE="$2"; shift ;;
         --tag)     TAG="_$2"; shift ;;
         -h|--help) usage "${BASH_SOURCE[0]}"; exit 0 ;;
@@ -372,6 +382,49 @@ stage_sync_verdict() {
     refuse "$log"
     use_env resnet_env17
     logged "$log" python $SYNC verdict "$suite" || die "verdict incomplete, see $log"
+}
+
+PRE=tools/llm_prefill_bench.py
+
+stage_prefill_build() {
+    use_env resnet_env17
+    python $PRE inputs || die "the inputs failed"
+    bash scripts/research-iron.sh $PRE build || die "the NPU build failed"
+    ok "inputs and NPU configs built, no chip; next: $0 prefill-prereg"
+}
+
+stage_prefill_prereg() {
+    local log="$OUT/llm_prefill_prereg_${MACHINE}_${DATE}.log"
+    refuse "$log"
+    use_env resnet_env17
+    logged "$log" python $PRE prereg || die "prereg failed"
+    ok "commit $log (with $PRE) before: $0 prefill"
+}
+
+stage_prefill() {
+    ls "$OUT"/llm_prefill_prereg_*.log >/dev/null 2>&1 || die "no pre-registration log: run $0 prefill-prereg and commit it"
+    local npu="$OUT/llm_prefill_npu${TAG}_${MACHINE}_${DATE}.log" cpu="$OUT/llm_prefill_cpu${TAG}_${MACHINE}_${DATE}.log"
+    local dml="$OUT/llm_prefill_dml${TAG}_${MACHINE}_${DATE}.log"
+    refuse "$npu" "$cpu" "$dml"
+    use_env resnet_env17
+    # one chip at a time; the NPU goes first, so a failed smoke stops the sitting before the others run
+    python tools/silicon_probe_record.py --log "$npu" --device --seconds 1800 -- \
+        bash scripts/research-iron.sh $PRE npu || die "the NPU rows failed, see $npu"
+    python tools/silicon_probe_record.py --log "$cpu" --device --seconds 1800 -- \
+        python $PRE ort --ep cpu || die "the CPU rows failed, see $cpu"
+    python tools/silicon_probe_record.py --log "$dml" --device --seconds 1800 -- \
+        python $PRE ort --ep dml || die "the DirectML rows failed, see $dml"
+    ok "sitting done; next: $0 prefill-verdict"
+}
+
+stage_prefill_verdict() {
+    local npu="$OUT/llm_prefill_npu${TAG}_${MACHINE}_${DATE}.log" cpu="$OUT/llm_prefill_cpu${TAG}_${MACHINE}_${DATE}.log"
+    local dml="$OUT/llm_prefill_dml${TAG}_${MACHINE}_${DATE}.log" log="$OUT/llm_prefill_verdict${TAG}_${MACHINE}_${DATE}.log"
+    local f
+    for f in "$npu" "$cpu" "$dml"; do [ -f "$f" ] || die "no sitting log $f"; done
+    refuse "$log"
+    use_env resnet_env17
+    logged "$log" python $PRE verdict "$npu" "$cpu" "$dml" || die "verdict incomplete, see $log"
 }
 
 "stage_$STAGE"
