@@ -1,0 +1,125 @@
+LLM study stage 3b: prefill GEMM at Llama-2-7B's shapes, with the CPU's threads pinned and DirectML
+timed over fresh sessions, pre-registered before any sitting
+
+Why 3b exists
+  The user's decision: "Re-run prefill, pinned". Stage 3b was designed after stage 3's two
+  INCOMPLETE sittings (pre-registered at d51a427, sittings e9efb97 and 8ad8e1e) and after the noise
+  study (67790e8, 535229c). Stage 3 stays INCOMPLETE in the record. Stage 3b is a new experiment:
+  its verdict comes from its own three logs alone, and no stage 3 row enters it.
+
+Unchanged from stage 3 (results/llm/llm_prefill_prereg_desktop2_20260923.log, and its sitting 2
+structure from llm_prefill_prereg_rerun_desktop2_20260923.log)
+  The question and the bar: an NPU arm must be faster than both the CPU (ONNX Runtime) and DirectML
+  on the 780M, or more accurate than both.
+  The workload: S1 (M, 4096) x (4096, 4096) x 4, S2 (M, 4096) x (4096, 11008) x 2, S3 (M, 11008) x
+  (11008, 4096) x 1 per layer, M in (512, 2048); layer time = 4 S1 + 2 S2 + S3.
+  The inputs (the manifest pinned below), the dtypes and the arms: CPU fp32 and int8 (u8 x s8, zero
+  point 128) at 8 and 16 threads, the faster counting per arm; DirectML fp16, fp32 and int8; NPU
+  bf16 and int8 on the same 28 artifacts (re-verified below against stage 3's pins) and tiles, with
+  S2 unsliced and sliced.
+  The NPU sitting: stage 3's own code, run unchanged (tools/llm_prefill_bench.py npu), with its
+  smoke, its correctness checks (bf16 against its own inputs <= 0.0001; int8 exact) and its
+  concatenation timing.
+  Timing: 3 warmups and 10 timed runs per session; two passes, the second in reverse row order; one
+  ORT session per CPU row, opened just before it and released after (as in stage 3's sitting 2); the
+  CPU clock witness, display only (as in sitting 2). The sitting runs NPU, then CPU, then DirectML.
+  Accuracy: rel-L2 against the float64 product of the fp32 inputs; an arm's error is its worst shape.
+  The keep rule, per M: an NPU arm beats a chip if it is at least 1.10x faster by layer time than
+  every arm of that chip whose rel-L2 is <= 1.10x its own; KEEP needs both chips beaten, and still
+  beaten with S2's concatenation and 3 context switches of 0.748 ms per layer added. KILL otherwise.
+  The repeat threshold: 10%.
+
+Changed, and nothing else (each designed from the noise study)
+  (a) CPU: ONNX Runtime's intra-op threads are pinned, and the calling thread too.
+      8 threads: one per physical core; the caller on the first CPU below, the 7 pool threads on
+      the rest (session.intra_op_thread_affinities). Logical CPUs [0, 2, 4, 6, 8, 10, 12, 14].
+      16 threads: one per logical CPU; the caller on the first, the 15 pool threads on the rest.
+      Logical CPUs [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15].
+      After the warmups, every session's threads are read back (GetThreadGroupAffinity and CPU
+      sets). The read-back matches if the pool is exactly threads - 1 threads, each pinned to one
+      logical CPU, together the row's CPUs but the caller's; the caller is pinned to its CPU; and
+      no thread has CPU sets. A row whose read-back does not match is VOID: printed, not timed.
+      The noise study: pinned one per core, int8 S1 at M = 512 read one level (4.11 / 4.13 ms)
+      where unpinned 8 threads flipped between about 4.1 and 7.2. ORT 1.23.3's default does not pin
+      on this machine.
+  (b) DirectML: each row and pass is K = 5 fresh sessions, one after another. Each is opened, run
+      3 warmups and 10 timed runs, and closed. A session's value is the median of its runs. The row's
+      pass value is the median of its 5 session values, and their range (max / min) is reported.
+      The row's rel-L2 is the worst of its sessions' outputs; an int8 row also reports whether its
+      sessions' int32 outputs agree.
+      The noise study: 20 fresh sessions of fp32 S2 at M = 2048 landed at 112.09-133.42 ms (1.19x),
+      while one session held 107.46-108.63.
+
+The repeat rule, for the new structure
+  CPU: a row's two pass medians (pinned rows) must agree within 10% of their mean, as before.
+  DirectML: a row's two pass values (each the median across its 5 sessions) must agree within
+  10% of their mean.
+  NPU: a row's two pass medians, as before.
+  A row's value is the mean of its two pass values, as before. The rule itself is stage 3's code
+  (llm_prefill_bench.evaluate), run on 3b's logs; the last line, "STAGE 3b VERDICT", decides.
+
+INCOMPLETE (no verdict)
+  Everything that made stage 3 INCOMPLETE: a log without EXIT_CODE 0 (an NPU raise or timeout stops
+  the sitting), the smoke failing, a missing row or pass, a row breaking the repeat rule, a
+  non-finite output, DirectML fp16 or fp32 unavailable. Also a VOID CPU row, and a DirectML row
+  without 5 sessions.
+  If 3b is INCOMPLETE, it stands. There is no third run without the user.
+
+Written predictions (stated expectations; the rule decides, these do not)
+  R1 Every CPU row reads back as pinned, and every CPU row holds the 10% rule (the noise study's
+     pinned rows repeated within 0.5%).
+  R2 CPU int8: pinned 8 threads within 5% of pinned 16 at every shape and M (the noise study: 4.11 /
+     4.13 against 4.09 / 4.10 unpinned 16). CPU fp32: pinned 8 faster than pinned 16 at every shape
+     (the noise study: 17.66 against 23.04 at S1, M = 512), so the CPU fp32 arm runs at 8 threads.
+  R3 Every DirectML row holds on its across-session values. The row most likely to break is fp32
+     S2 at M = 2048.
+  R4 At least one DirectML fp32 row shows a session range of 1.10x or more within a pass.
+  R5 The NPU rows land within 10% of both stage 3 sittings' values (all 56 held twice).
+  R6 Accuracy as in stage 3, on the same inputs: NPU bf16 2.35e-3, every int8 arm 1.54e-2 with
+     identical int32 outputs across chips, DirectML fp16 3.61e-4.
+  R7 KILL at both M, as stage 3's rows that held suggest (a prior, not part of 3b's verdict): NPU
+     bf16 loses to DirectML fp16, which is more accurate and took 0.71-0.80x the NPU's time in
+     stage 3's sitting 1; NPU int8 loses to the CPU's int8 at M = 512 (0.80-0.81x) and stays under
+     the 1.10 line at M = 2048 (0.99-1.03x). The least certain call: NPU int8 against the pinned
+     CPU int8 at M = 2048.
+
+Unverified by design: as stage 3 (attention, norms, RoPE and the LM head; the activations between
+GEMMs; DirectML IO binding; other CPU stacks; tiles outside the menu; the NPU's power modes;
+prefill beside decode). Also: a pinned thread's placement is set by its affinity and read back once
+per session, not observed per run; K = 5 is a choice, not derived; what sets a DirectML session's
+level is unattributed (the noise study).
+
+ARTIFACT bf16_M512_K4096_N4096_m32k64n128cs1 insts 5baacc78aeefa2e37593582b431bef9efd0f0f1764c6ee5bc632b44b6cb462ca xclbin 2566e8cc11d2d73ddc603469969340c44270b36717126c3214991e887d35443f
+ARTIFACT bf16_M512_K4096_N4096_m64k64n64cs1 insts c4b0cceb88502ad04852144bb2bdf9301d22aed1f2b51aa14cc9e9284690d502 xclbin d674fb421ec9c1a46b93c37d72c29f20bd4a0905ea76542c42237aea170a1529
+ARTIFACT bf16_M512_K4096_N11008_m16k64n64cs0 insts 64bfb894b90bcc98af46a2b1d9a296cb1a7c4cac4eee9cba0c2eded491afd76b xclbin cdecdffacab4368a2f6f4ba3cbf0e26fd556083e965601dd1d357d6188ac731c
+ARTIFACT bf16_M512_K4096_N2816_m64k64n64cs1 insts fc15164162b566d0c2b324481b13b618940970f88f1b40b061ee0209bac0d2d9 xclbin 00e811d7aa6653174aa7148c2cd8215324fe3080e6f9459a5decd4784a46d3cb
+ARTIFACT bf16_M512_K11008_N4096_m32k64n128cs1 insts 1a8afacb3cf0120ff1bc5f7c24f132bb8698718b292bf940a7ccaf0e1ac93a83 xclbin f3bdb0e4cac06ddd78c39d7149fb31ae97419984f2f6194edd9abea036556c1b
+ARTIFACT bf16_M512_K11008_N4096_m64k64n32cs0 insts 6f06ed0f40b475e948850beaa5dac29fab636d6244abb30adc7e4d0c5488c9d8 xclbin 99b497ca329a9dab09fab215ec53ed7a6129e0e8edf89d2d0a21450c5c10f475
+ARTIFACT i8_M512_K4096_N4096_m64k128n64cs1 insts 6af535ccc56df09ab238a957c2d85d1b43ac998ed9256ed3e24938e8e40c596c xclbin f267bade4cf307ebea9f19950255124c7bdf4b6480ef0b2d7d7635a7a8e4abd5
+ARTIFACT i8_M512_K4096_N4096_m64k64n64cs0 insts 25804b1675fe6e7065d5cac9fc879dcb42c8691f799e06009f6d186230649d68 xclbin 364906750c0c9d408f02a85fa91a70da10c67ca9a476771b1ba4b770c6b36833
+ARTIFACT i8_M512_K4096_N11008_m16k64n64cs0 insts 99839efa966cdc2f01a349d7da68f5de99d3e8f02729aab76a137e29066eb836 xclbin b2672ce4e156d4372b47ebbe1624f32ed0bfa91e1bfe97f6f6b21b7d33c319ee
+ARTIFACT i8_M512_K4096_N2816_m64k128n64cs1 insts ca67570858ef825efd2acad641e8e676cd76f8afa498a7bcd800f2698c142267 xclbin 34830e4e14b3f79997021f0ddca953403ea4c6cf7ae74bd13877287ce9aaec4e
+ARTIFACT i8_M512_K4096_N2816_m64k64n64cs0 insts 9b6a547affd1050d74fc42a418edcfe58a2e54d824ed17b1153b4ef244ebeb74 xclbin 8996ec2336fc558626165b5f4c8113e6a4e20c3db13f1bf567ff250324818b9b
+ARTIFACT i8_M512_K11008_N4096_m64k128n64cs1 insts d99f617f8e2b02f891e9b59ed78ac35bebc408165e4c92c0638bcec57676ff44 xclbin 37f35bbba97f26e27cdb84cfc5709e28d2728e14e6511c1ac76e331bff7e5488
+ARTIFACT i8_M512_K11008_N4096_m64k64n64cs0 insts 3a306eaf72550e8d24de05d7cb3746ef67b34249bc48f4d4671bc80eb5a70c69 xclbin a57a9c6cf7e116e8cca1865d14146e6d5889d28f99d1cb9939764c1704621657
+ARTIFACT bf16_M2048_K4096_N4096_m32k64n128cs1 insts e67727d58b83dd9f996a765ef10d9924f56984bc21a655693d1d30f169c3ea86 xclbin ccc57d75656b24cafffc1a0e82634cbdc52fa79081816c3ea56ea00074d05688
+ARTIFACT bf16_M2048_K4096_N4096_m64k64n64cs1 insts 4eadf965b5605656f0409f70f1e89b0e7ad2ace5750b9fabd63c2eeada2a7f45 xclbin be18797d28a655e852aad870a428be3fcee36c88d6e7cdda05edafbdca3e486d
+ARTIFACT bf16_M2048_K4096_N11008_m16k64n64cs0 insts 48c0f5591297f8c1d3989463add0fb6d4a08b7f8e2b818a4f3af4ccc55d0aaa4 xclbin 0036664b0ae1bf0f75c0753a6ef1a039371c49fe7f8f92c7e776a168fe7e54fa
+ARTIFACT bf16_M2048_K4096_N2816_m64k64n64cs1 insts 710963ee81a933725e539e62ffacba8b6288e9090374da5d282773b6eea40159 xclbin 415e5c8d8d6b4eb0daeefb09acf7ebc074ddc06447c239c3f7c590adfd3bae3b
+ARTIFACT bf16_M2048_K11008_N4096_m32k64n128cs1 insts d470bb5e1de26230a46deb286649632d54e7220750f86d85ea9bfb6f04ad6b4d xclbin cc0b787109297f670b336e04f45daddfeefde1207659c31e25c734466ec8b209
+ARTIFACT bf16_M2048_K11008_N4096_m64k64n32cs0 insts 0693bae1b3d4a67a0c83c4c87deba6a1736502b0ac94a0a5d83aec16b44cef2d xclbin 8e4f7d603dec505111cae9c888fd11d0151e8234fc0b3123e273831ea2743ea9
+ARTIFACT i8_M2048_K4096_N4096_m64k128n64cs1 insts d94fdd6e4f89886bdb0609bf8b68adf517ce9fdfe1378e70fe772646a2203f5d xclbin c7b3c2f5f67b1d057f32bd134490a6e37b7225d6e0781b29c5e6d495f23bb35e
+ARTIFACT i8_M2048_K4096_N4096_m64k64n64cs0 insts 932821fa50f2cca4a733645a189a53ea02e468696bb29159df2a656ae06a67b7 xclbin 6dab363cb94a3b62ada1395d198ca6d61c8366cfc344e878f774b20ac5874b6e
+ARTIFACT i8_M2048_K4096_N11008_m16k64n64cs0 insts aca4f1a9ac4a0640fce2556cfadcf302f55fb487a567a2744906cf608cf44acc xclbin ff4f129e01d16922df8137f021c0941c7f36b8da1fa25fe31708df31c4296e80
+ARTIFACT i8_M2048_K4096_N2816_m64k128n64cs1 insts aafac9feae8d12c04f0c13696bae7bab77e2460209e5dfe21dedfefecf760efd xclbin 48fe274d1680367ceefb0e66cd2c72b73b0f3d17fc3ddbeeb9a71e05fe4c9653
+ARTIFACT i8_M2048_K4096_N2816_m64k64n64cs0 insts 3ef06643271a44a3e71bf3963eacca8d19c087b7ba0dfb7d6116237bbdb82572 xclbin 6a8f78dfb7b8d67045533382f81ce25239c15cda85567ac7131bdd7d3d504fcd
+ARTIFACT i8_M2048_K11008_N4096_m64k128n64cs1 insts 0faad118071d2d35bff782725aba073587700cbb732a839175ec1cca275c870a xclbin 6b8342db5e4353905e973f7c0967a12e3e8faa31a4b8d105b6e4f8793056566b
+ARTIFACT i8_M2048_K11008_N4096_m64k64n64cs0 insts 05aeb1c3bbe61d96e7b3b3384f9b562c12a6cbc8fa8b3e2fb3becf88b7cd2551 xclbin d8b7a8e5e4ef15982fcf08b962c4ed45f43441217538da3ef8c4cfaa87491ca6
+ARTIFACT bf16_M512_K512_N512_m64k64n64cs1 insts 24552d6b26c5c8a19c0a785acb258b459e1bed183531d7a048858135a168f306 xclbin bd68627ede399c475acf78eb3d2b3d197cf1f743d637847688832ab8e4836202
+ARTIFACT i8_M512_K512_N512_m64k64n64cs0 insts ada233edffcd99a3bde5ad62837d40f1e575dfa57fa42958f247ec70806c2165 xclbin f1e78e999a607f3dda3429985e3dfde294473082fd8baaccad67517885c4d5de
+PINS 28 NPU artifacts, the inputs manifest, whole_array.py and mm.cc: identical to stage 3's prereg log
+PINS inputs manifest 9c5454169184a4b307059fbcbb8519cc31403b48d902918ea66c8023e43dbaf1
+PINS whole_array.py 92db1cad98aa2ec0670f0f39a3cd3e93d12ebe0d91ee0bc457adb16dbd51c01e mm.cc 7c7b4638be1c8fe6b5e262ab4916613784b283189c329e8921c536fba1cb2aba
+TOPOLOGY_JSON {"cores": [[0, 1], [2, 3], [4, 5], [6, 7], [8, 9], [10, 11], [12, 13], [14, 15]], "pinned": {"8": [0, 2, 4, 6, 8, 10, 12, 14], "16": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]}}
+git HEAD f430b830a167f1476ffa605b1555f2d10d44abb7 (+2 uncommitted paths, this stage's own files)
+PREREG_JSON {"stage": "3b", "ms": [512, 2048], "shapes": {"S1": [4096, 4096], "S2": [4096, 11008], "S3": [11008, 4096]}, "per_layer": {"S1": 4, "S2": 2, "S3": 1}, "margin": 1.1, "acc_tie": 1.1, "repeat_max": 0.1, "bf16_acc_max": 0.0001, "switch_ms": 0.748, "switches": 3, "warmup": 3, "reps": 10, "cpu_threads": [8, 16], "k_sessions": 5, "pinned": {"8": [0, 2, 4, 6, 8, 10, 12, 14], "16": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]}, "seed": 20260923, "git_head": "f430b830a167f1476ffa605b1555f2d10d44abb7"}

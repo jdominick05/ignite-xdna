@@ -53,6 +53,15 @@
 #                                          # silicon_probe_record.py
 #   ./scripts/llm-study.sh noise-verdict   # the mechanical verdict over the two logs
 #
+# Stage 3b (the user: "Re-run prefill, pinned"): stage 3 again with the CPU's threads pinned and
+# DirectML timed over fresh sessions; nothing else changed. tools/llm_prefill_3b.py holds the
+# changes, the repeat rule and the predictions; the NPU runs stage 3's own code.
+#   ./scripts/llm-study.sh prefill3b-prereg    # its pre-registration log (re-verifies the NPU pins);
+#                                              # commit it before the sitting
+#   ./scripts/llm-study.sh prefill3b           # the sitting: NPU, then CPU, then DirectML
+#   ./scripts/llm-study.sh prefill3b-verdict   # the mechanical verdict over 3b's three logs (the
+#                                              # newest sitting date, so a sitting past midnight works)
+#
 # Options: --machine TAG names the logs (default: desktop2 on DESKTOP-CBL5NUA, else required).
 # --tag TAG adds _TAG to the verdict log's name, for a second verdict on the same day.
 #
@@ -75,6 +84,7 @@ while [ $# -gt 0 ]; do
         sync-prereg|sync|sync-verdict) STAGE="${1//-/_}" ;;
         prefill-build|prefill-prereg|prefill|prefill-verdict) STAGE="${1//-/_}" ;;
         noise-prereg|noise|noise-verdict) STAGE="${1//-/_}" ;;
+        prefill3b-prereg|prefill3b|prefill3b-verdict) STAGE="${1//-/_}" ;;
         --machine) MACHINE="$2"; shift ;;
         --tag)     TAG="_$2"; shift ;;
         -h|--help) usage "${BASH_SOURCE[0]}"; exit 0 ;;
@@ -470,6 +480,44 @@ stage_noise_verdict() {
     refuse "$log"
     use_env resnet_env17
     logged "$log" python $NOISE verdict "$cpu" "$dml" || die "verdict incomplete, see $log"
+}
+
+P3B=tools/llm_prefill_3b.py
+
+stage_prefill3b_prereg() {
+    local log="$OUT/llm_prefill3b_prereg_${MACHINE}_${DATE}.log"
+    refuse "$log"
+    use_env resnet_env17
+    logged "$log" python $P3B prereg || die "prereg failed or the NPU pins differ from stage 3's, see $log"
+    ok "commit $log (with $P3B) before: $0 prefill3b"
+}
+
+stage_prefill3b() {
+    ls "$OUT"/llm_prefill3b_prereg_*.log >/dev/null 2>&1 || die "no 3b pre-registration log: run $0 prefill3b-prereg and commit it"
+    local npu="$OUT/llm_prefill3b_npu_${MACHINE}_${DATE}.log" cpu="$OUT/llm_prefill3b_cpu_${MACHINE}_${DATE}.log"
+    local dml="$OUT/llm_prefill3b_dml_${MACHINE}_${DATE}.log"
+    refuse "$npu" "$cpu" "$dml"
+    use_env resnet_env17
+    # one chip at a time, as in stage 3; the NPU rows are stage 3's own code, unchanged
+    python tools/silicon_probe_record.py --log "$npu" --device --seconds 1800 -- \
+        bash scripts/research-iron.sh $PRE npu || die "the NPU rows failed, see $npu"
+    python tools/silicon_probe_record.py --log "$cpu" --device --seconds 1800 -- \
+        python $P3B ort --ep cpu || die "the CPU rows failed, see $cpu"
+    python tools/silicon_probe_record.py --log "$dml" --device --seconds 2400 -- \
+        python $P3B ort --ep dml || die "the DirectML rows failed, see $dml"
+    ok "sitting done; next: $0 prefill3b-verdict"
+}
+
+stage_prefill3b_verdict() {
+    local d
+    d="$(ls "$OUT"/llm_prefill3b_npu_"${MACHINE}"_*.log 2>/dev/null | sed -n 's/.*_\([0-9]\{8\}\)\.log$/\1/p' | sort | tail -1)"
+    [ -n "$d" ] || die "no 3b sitting logs"
+    local npu="$OUT/llm_prefill3b_npu_${MACHINE}_${d}.log" cpu="$OUT/llm_prefill3b_cpu_${MACHINE}_${d}.log"
+    local dml="$OUT/llm_prefill3b_dml_${MACHINE}_${d}.log" log="$OUT/llm_prefill3b_verdict_${MACHINE}_${d}.log" f
+    for f in "$npu" "$cpu" "$dml"; do [ -f "$f" ] || die "no sitting log $f"; done
+    refuse "$log"
+    use_env resnet_env17
+    logged "$log" python $P3B verdict "$npu" "$cpu" "$dml" || die "verdict incomplete, see $log"
 }
 
 "stage_$STAGE"
