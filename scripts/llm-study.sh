@@ -108,7 +108,7 @@
 #   ./scripts/llm-study.sh prefill3c-build        # 3c step 4: the NPU xclbins, compile only (heavy CPU)
 #   ./scripts/llm-study.sh prefill3c-inputs       # 3c step 4: inputs, references, exact SHAs (heavy CPU)
 #   ./scripts/llm-study.sh prefill3c-pins         # 3c step 5: every pin checked on disk (commit with the pins)
-#   ./scripts/llm-study.sh prefill3c-loadcheck    # 3c step 6: every reader at M = 8192 to READY and one layer
+#   ./scripts/llm-study.sh prefill3c-loadcheck    # 3c step 6: every reader at M = 8192 (NPU also 2048), one layer
 #   ./scripts/llm-study.sh prefill3c-sitting-a    # 3c step 7: sitting A, M = 2048 (BFP16 holds the machine)
 #   ./scripts/llm-study.sh prefill3c-sitting-b    # 3c step 7: sitting B, M = 8192 (BFP16 holds the machine)
 #   ./scripts/llm-study.sh prefill3c-verdict      # 3c: the frozen verdict over A, B, the build and the load check
@@ -877,8 +877,9 @@ stage_prefill3c_pins() {
 
 stage_prefill3c_loadcheck() {
     # step 6 (NPU, iGPU and CPU, under its own START REQUEST): every arm's reader at M = 8192 to READY (its
-    # output check, quiet) and a 2 s go; the NPU's four contexts and M = 8192 buffers; the shared X_attn test.
-    # Enters no rule; Q2 reads its summary, and the sittings refuse without its go
+    # output check, quiet) and a 2 s go, and the three NPU readers again at M = 2048 (their own builds); the
+    # NPU's four contexts and M = 8192 buffers; the shared X_attn test. Enters no rule; Q2 reads its summary,
+    # and the sittings refuse without its go. Its layer ms are not T and never cited
     ls "$OUT"/llm_prefill3c_pins_*.log >/dev/null 2>&1 || die "no pins log: run $0 prefill3c-pins and commit it"
     local log="$OUT/llm_prefill3c_loadcheck_${MACHINE}_${DATE}.log"
     refuse "$log"

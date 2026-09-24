@@ -18,7 +18,8 @@ split-K. The pre-registration is PREREG below; the rules are verdict()'s code.
     python tools/llm_prefill3c.py build               # step 4, IRON env: the NPU xclbins, compile only, one row each
     python tools/llm_prefill3c.py inputs              # step 4: X, W, int8 copies, references, exact int32 SHAs
     python tools/llm_prefill3c.py pins                # step 5: every pin (models, builds, w4 rev, inputs) on disk
-    python tools/llm_prefill3c.py loadcheck           # step 6: every arm's reader at M = 8192 to READY and one layer
+    python tools/llm_prefill3c.py loadcheck           # step 6: every arm's reader at M = 8192 (the NPU's also at
+                                                      #   2048) to READY and one layer
     python tools/llm_prefill3c.py sitting M           # step 7: one sitting (M = 2048: A; 8192: B), two passes
     python tools/llm_prefill3c.py reader ARM M [--share-xattn] [--loadcheck]   # (spawned by the two above)
     python tools/llm_prefill3c.py verdict LOG [LOG]   # the mechanical verdict over the sittings' WINDOW_JSON records
@@ -1437,25 +1438,30 @@ def start_gate(title: str):
     return luids
 
 
+LAYER_MS_LABEL = "load check, 2 s go, not T and not a 3c result; never cited as one"   # the gate's label
+
+
 def loadcheck() -> int:
     """Step 6 (pre-sitting; enters no rule): every arm's reader at M = 8192, by the sitting's own code path,
     to READY (its output check passed, quiet: pass or fail, no accuracy figure) and a 2 s go (at least one
     layer), its record parsed and run through window_record (with no window its label means nothing, and no
-    WINDOW_JSON is printed); the NPU arms hold their four contexts and the M = 8192 buffers; then the
-    shared-X_attn test (N-i8, one XRT buffer in two contexts, its outputs exact). LOADCHECK_SUMMARY_JSON is
-    what Q2 reads; the sitting refuses without its go."""
+    WINDOW_JSON is printed); the NPU arms hold their four contexts and the M = 8192 buffers; the three NPU
+    readers again at M = 2048 (the gate's addition after c0ea07a: its xclbins are other builds, whose first
+    run would otherwise be inside sitting A); then the shared-X_attn test (N-i8 at 8192, one XRT buffer in
+    two contexts, its outputs exact). LOADCHECK_SUMMARY_JSON is what Q2 reads (its fields are the 8192
+    ones); the sitting refuses without its go. The per-layer ms it logs carry LAYER_MS_LABEL."""
     import llm_freeing as lf
     stamp = time.strftime("%Y%m%dT%H%M%S")
     SITTING_TMP.mkdir(parents=True, exist_ok=True)
     sys.stdout = lf.Live(SITTING_TMP / f"{stamp}_loadcheck_live.log")
     if start_gate("LOADCHECK (3c step 6), pre-sitting, enters no rule") is None:
         return 3
-    M = max(MS)
+    print(f"LAYER_MS_LABEL every layer_ms below: {LAYER_MS_LABEL}", flush=True)
     zero_rows = [[0.0] * 9] * MIN_ROWS
 
-    def one(arm, share=False):
+    def one(arm, M, share=False):
         p = reader_proc(arm, M, share=share, loadcheck=True)
-        r = {"arm": arm, "share_xattn": share}
+        r = {"arm": arm, "M": M, "share_xattn": share}
         try:
             p.ready.wait(READY_TIMEOUT_S)
             ready = p.json("READY")
@@ -1471,7 +1477,9 @@ def loadcheck() -> int:
                      pin=(rj or {}).get("pin") or p.json("PIN_JSON"), load_s=(ready or {}).get("load_s"),
                      contexts=(ready or {}).get("contexts"), layers=len(it["t0"]) if it else 0,
                      layer_ms=[round((y - x) * 1e3, 1) for x, y in zip(it["t0"], it["t1"])] if it else None,
-                     reader={k: v for k, v in (rj or {}).items() if k != "pin"})
+                     layer_ms_label=LAYER_MS_LABEL, reader={k: v for k, v in (rj or {}).items() if k != "pin"})
+            if "dispatch_ms_median" in r["reader"]:
+                r["reader"]["dispatch_ms_label"] = LAYER_MS_LABEL
             try:
                 wr = window_record({"M": M, "arm": arm, "pass": 0, "position": 0, "rerun": False},
                                    exit_code=p.proc.returncode, check=chk, placement=r["placement"], pin=r["pin"],
@@ -1493,17 +1501,23 @@ def loadcheck() -> int:
         npu_witness_after(arm)
         return r
 
-    res = {arm: one(arm) for arm in ORDER}
-    share = one("N-i8", share=True)
+    M8, M2 = max(MS), min(MS)
+    res = {arm: one(arm, M8) for arm in ORDER}
+    res2 = {arm: one(arm, M2) for arm in NPU_DT}                      # the NPU's M = 2048 builds (the gate)
+    share = one("N-i8", M8, share=True)
     npu = [res[a] for a in NPU_ARMS]
-    summary = {"M": M, "contexts": all(r.get("ready") and r.get("contexts") == NPU_CONTEXTS for r in npu),
+    w4_ok = res["N-w4"]["ok"] and res2["N-w4"]["ok"]
+    summary = {"M": M8, "contexts": all(r.get("ready") and r.get("contexts") == NPU_CONTEXTS for r in npu),
                "buffers_8192": all(r["ok"] for r in npu), "shared_buffer": share["ok"],
                "arms_ok": {a: r["ok"] for a, r in res.items()},
-               "dropped": [] if res["N-w4"]["ok"] else ["N-w4"]}
+               "npu_2048_ok": {a: r["ok"] for a, r in res2.items()},
+               "dropped": [] if w4_ok else ["N-w4"]}
     summary["go"] = summary["contexts"] and summary["buffers_8192"] and all(
-        v for a, v in summary["arms_ok"].items() if a not in REPORT_ONLY)
-    summary["note"] = ("enters no rule; Q2 reads contexts, buffers_8192 and shared_buffer; the sitting refuses "
-                       "without go; N-w4 is dropped and stated if it fails (v2 §3)")
+        v for a, v in list(summary["arms_ok"].items()) + list(summary["npu_2048_ok"].items()) if a not in REPORT_ONLY)
+    summary["note"] = ("enters no rule; Q2 reads contexts, buffers_8192 and shared_buffer (M = 8192); the NPU "
+                       "readers also ran at M = 2048, and a failure there is NO-GO too; the sitting refuses without "
+                       "go; N-w4 is dropped from both sittings and stated if it fails at either M (v2 §3); "
+                       f"layer_ms: {LAYER_MS_LABEL}")
     say("LOADCHECK_SUMMARY_JSON", summary)
     print("LOADCHECK", "GO" if summary["go"] else "NO-GO (3c stops and goes back to the gate and the user)", flush=True)
     return 0 if summary["go"] else 2
@@ -2874,6 +2888,8 @@ def selftest() -> int:
     line = lf.neutralize("X " + json.dumps({"p": str(ROOT / "tools" / "x.py")}))
     expect("nsay's form: the root inside JSON becomes <repo> and the line still parses",
            (str(ROOT) in line, json.loads(line.split(" ", 1)[1])["p"].startswith("<repo>")), (False, True))
+    expect("the load check's layer_ms label (the gate's words)", LAYER_MS_LABEL,
+           "load check, 2 s go, not T and not a 3c result; never cited as one")
     expect("wall_offset is the wall clock minus perf_counter", abs(time.time() - time.perf_counter() - wall_offset()) < 0.05,
            True)
     print("WINDOW_JSON through the frozen verdict (the round trip):")
