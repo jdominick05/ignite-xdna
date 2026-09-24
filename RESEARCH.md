@@ -713,9 +713,9 @@ been closed:
         ([BENCHMARKS](docs/BENCHMARKS.md#reads-add-across-the-chips-directml-and-the-npu-together-read-918-gbs-and-the-npus-share-of-a-split-lands-on-the-pre-registered-line-2026-09-23-desktop-2)).
       - The synchronization, measured next (pre-registered): joining a DirectML half and an NPU
         half through the host costs 174.5 µs per GEMV. That is 39.09 ms per token against the
-        11.1 ms at most the split could save, so the DirectML + NPU split is dead. The halves
-        overlap; each chip's own dependent round trip (131.1 and 168.8 µs) is already over the
-        line
+        11.1 ms at most the split could save, so the DirectML + NPU split is dead at these round
+        trips. The halves overlap; each chip's own dependent round trip (131.1 and 168.8 µs) is
+        already over the line. It reopens only if a join falls under 49.55 µs
         ([BENCHMARKS](docs/BENCHMARKS.md#a-directml--npu-split-pays-39-ms-per-token-to-join-its-halves-against-the-111-ms-it-could-save-the-split-is-dead-2026-09-23-desktop-2)).
 
   Evidence: `results/aie/int4_{isa_gate,engine_bytes_gate,demo_npu}_desktop2_20260923.log`,

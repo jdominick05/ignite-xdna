@@ -181,7 +181,8 @@
       since: the next bullet.)
     - Decode kernels stay out unless the user decides otherwise.
     - ([BENCHMARKS](BENCHMARKS.md#reads-add-across-the-chips-directml-and-the-npu-together-read-918-gbs-and-the-npus-share-of-a-split-lands-on-the-pre-registered-line-2026-09-23-desktop-2))
-  - **The DirectML + NPU split is dead: joining its halves costs 3.5× what it could save.** The
+  - **The DirectML + NPU split is dead at the round trips measured here: joining its halves
+    costs 3.5× what it could save.** The
     user decided to "measure the sync first"; the test was pre-registered at `a81f16d`, with the
     gate's kill line.
     - A dependent join of a DirectML half and an NPU half costs J* = 174.5 µs per GEMV
@@ -194,8 +195,11 @@
       host still pays about 108 µs for one NPU dispatch at a time, so a faster host language
       does not rescue it.
     - Not covered by the rules: a tensor-parallel layout with 64 joins lands on the line
-      (11.17 ms). It would also need attention and a KV-cache share on the NPU, and neither
-      exists here.
+      (11.17 ms), and that is before each chip's own dispatches between joins, which come on
+      top. It would also need attention and a KV-cache share on the NPU, and neither exists
+      here.
+    - **Reopen only if** a DirectML + NPU join falls under 49.55 µs per step, for example
+      through a device-side DirectML–XRT fence, which does not exist today.
     - Decode kernels stay out. Stage 3, prefill, is next.
     - ([BENCHMARKS](BENCHMARKS.md#a-directml--npu-split-pays-39-ms-per-token-to-join-its-halves-against-the-111-ms-it-could-save-the-split-is-dead-2026-09-23-desktop-2))
 - **A pre-registered size floor caught a builder defect (2026-09-23).** `tools/llm_gemv_bench.py build`

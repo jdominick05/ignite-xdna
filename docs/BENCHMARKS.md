@@ -2859,7 +2859,11 @@ J* = 177.8 − 3.3 = **174.5 µs per join** (MEASURED).
 
 **The pre-registered rules print:**
 - **R1, DEAD.** 224 × J* = **39.09 ms per token** (DERIVED), 3.5× the most the split could save.
-  The DirectML + NPU split is dead for good.
+  The DirectML + NPU split is dead at the dependent round trips measured here: NPU 131.1 µs
+  through raw pyxrt, about 108 µs from the C++ host, and DirectML 168.8 µs through ONNX
+  Runtime. **It reopens only if** a DirectML + NPU join falls under 49.55 µs per step. One way
+  would be a device-side DirectML–XRT fence, which does not exist today. (The verdict log
+  prints "dead for good", as written before this scoping.)
 - **R1b, DEAD.** 128 × J* = 22.34 ms, still 2.0× the saving. So the kill does not depend on
   joining per GEMV rather than once per dependent step.
 - **R2.** J is 177.8 µs, against 168.8 for max(a, b) and 299.9 for a + b. The halves overlap:
@@ -2887,7 +2891,11 @@ J* = 177.8 − 3.3 = **174.5 µs per join** (MEASURED).
   - 64 × J* = 11.17 ms (DERIVED), 0.6% over the line.
   - At the fastest and slowest c chains it would be 10.18 and 12.52 ms. The line falls inside
     this sitting's own range, so the margin decides nothing there.
-  - What stands against that layout is that 11.1 ms is itself optimistic. It would also need
+  - 64 × J* counts only the cross-chip joins. Each chip's dependent dispatches between joins
+    come on top: a column-then-row segment has at least two per chip unless the two are fused
+    into one. So the NPU alone pays at least 128 × a = 16.8 ms per token (DERIVED, post hoc),
+    over the line.
+  - Also against that layout: 11.1 ms is itself optimistic. It would also need
     attention and a share of the KV cache on the NPU, and neither exists here.
 - A layer split (DirectML runs some layers, the NPU the rest) joins about twice per token.
   But with one sequence the chips then take turns, their reads do not overlap, and there is
