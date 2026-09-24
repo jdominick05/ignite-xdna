@@ -17,6 +17,7 @@ split-K. The pre-registration is PREREG below; the rules are verdict()'s code.
                                                       #   and insts-fit logs' hashes and the dropped-arm list
     python tools/llm_prefill3c.py build               # step 4, IRON env: the NPU xclbins, compile only, one row each
     python tools/llm_prefill3c.py inputs              # step 4: X, W, int8 copies, references, exact int32 SHAs
+    python tools/llm_prefill3c.py pins                # step 5: every pin (models, builds, w4 rev, inputs) on disk
     python tools/llm_prefill3c.py verdict LOG [LOG]   # the mechanical verdict over the sittings' WINDOW_JSON records
     python tools/llm_prefill3c.py selftest            # tiny models and synthetic verdicts; no chip, no GPU
 
@@ -598,6 +599,103 @@ def inputs() -> int:
     say("EXACT_INT32_SHA256_JSON", exact)
     print(f"INPUTS_MANIFEST_SHA256 {sha(mp)} ({len(files)} files)", flush=True)
     return 0
+
+
+# ---------------------------------------------------------------- step 5: the pins
+
+# From the committed logs: the models (step 2's MODEL_JSON), the 24 builds (step 4's BUILD_ROW_JSON: xclbin,
+# insts.bin), N-w4's source rev (whole_array_w4a8.source_rev(): raw bytes of three files, this CRLF working
+# copy), and the inputs manifest (step 4's INPUTS_MANIFEST_SHA256; it pins every input file and the exact int32
+# SHAs). The load check and the sitting refuse to start unless check_pins() is empty.
+PINS = {
+    "models": {
+        "fp16": "cacd13e05587bb9045b9fc5d9952f2b8dcaca99cc65a668776391175faa3e73c",
+        "fp32": "57ceee004ab471597b72e82f2ba2f64b3e8bf0543d2594fedf57cf6d85970258",
+        "i8_s8": "072be6e51fb0f6437aac27233dceec0a8130bfb23fcc7e33c5ff59466a2675b9",
+        "i8_u8": "343223937be00c54b9d2e657ca7d3a41e8098d262a4dc341ab3cfb45c7679d7e",
+        "nb0": "c1ebc7d8204b4544b35220091635772bbf74c483ed14adb5c54da42bb121c227",
+        "nb16": "75ff71f938c17f55631927592528950ca98d67d431b0c25f0c8229d3ee4a4083",
+        "nb4": "83393758184cbfb02cd42bb5787af196e7835909f6d9128c0a8f4a6bf641a486",
+    },
+    "builds": {
+        "bf16_M2048_K2560_N2048_m32k64n128cs1": ("e534e5e2c283b94d2aa5dc28792dcbe0e04f57e0f9c36be41b0776e01f6cd2dd", "e33db1c054c65139167c4ec098859eae4c053569abd9525e327baa2b4a8dd666"),
+        "bf16_M2048_K2560_N1024_m32k64n128cs1": ("2bbb3579f79852e7da51539efe5194f228cfe5513ca993e9b7eb1c2e2c9b5f87", "16ba7cbaa6aa51032f485341fdc9987ff7a515719d412377189cc18fb0cc7125"),
+        "bf16_M2048_K2048_N2560_m32k64n128cs1": ("3cd2defb7540fe484a9196bc04232c60d3126104b7ba64a0e8d36263637afd40", "a824ded3324d3d9c0032429c0c970b3ac4b32ee8105fb9767981861649b4a87c"),
+        "bf16_M2048_K2560_N2560_m32k64n128cs1": ("45675f487fac24a1ff0f8dfd28370f3534db9eb43a0aefc3d50bbf75d9aa683b", "d33008f54382464cc90f5482d55b67b23ae8b8c6e21c2a70ea7ee8231c260d61"),
+        "bf16_M8192_K2560_N2048_m32k64n128cs1": ("4bc7200b2e1373879d5e6fc831df8918bcdb024b1e5c42d8b9ea0fb5b5f926b5", "e72b10c53471dfad644243d8bff2a502b095b2020f4d0ba44621927fe1e00793"),
+        "bf16_M8192_K2560_N1024_m32k64n128cs1": ("dfcc9b001d574977785df23175e5a57781886369a76364e16b9bcd1b6da95a4f", "be3c34cdbaeb7565932e26101c507ce7d8d1159510e823d4f313d08c43ea36f1"),
+        "bf16_M8192_K2048_N2560_m32k64n128cs1": ("4f4ab5be5ed9e39972e4f07f17952ab13d3892d51f7f896bd432b89876d7a92e", "6d47652a59eb64863ca81b2c7e4eff2177c7e2e7fb050188c9852ff8d8bce5f1"),
+        "bf16_M8192_K2560_N2560_m32k64n128cs1": ("487f3ad2e2ec6eee6a4db720e22d22b4bf79e36287fd9460eb76c9edc2ad8fa2", "cb2af1ff4cf5e7d6581f77f1083eb6b608b78aec6082a3d277d1ed2e4e02e8ab"),
+        "i8_M2048_K2560_N2048_m64k128n64cs1": ("fb9e3f84a58fdc807ef7ccb0c684a9b181baa87c4c49071dd44eb5a611351784", "941a1f62d357cece5d3092975b968df3a468ee1b647648a77dd5dfd1c54181b4"),
+        "i8_M2048_K2560_N1024_m64k128n64cs1": ("97de5e2cc126f5d2994efadd9ed732968469cce110740517320920b8714415e9", "52a6f0e3f96a2c4a3ad3177d40c66d98dadf37ad9c25243deb08b5d56a34be31"),
+        "i8_M2048_K2048_N2560_m64k128n64cs1": ("f66d774f2bd7941fd9300840c3702a723698b5e43a3ca966e40ab1787d87348f", "9305122ceb1fc8021c1b18488168a94b1dfc508d026c7fd0736f013e74c76f2a"),
+        "i8_M2048_K2560_N2560_m64k128n64cs1": ("879263a39e2412171191e2d95096010aa56ad45e399219b2864ed2def17edd8d", "d3543e156fa0ed67d645e45aaba548c052871ef471a2585268ab54dca5e7c847"),
+        "i8_M8192_K2560_N2048_m64k128n64cs1": ("fb9da4442174986d224ac54e68383274612cc1b957c1514a22c4e04f7f1740ac", "9b3a8d6dbe37b7de7a2b398591aea0606824d2c98fe7ee224dca7e008fdc7848"),
+        "i8_M8192_K2560_N1024_m64k128n64cs1": ("e29cfa74bcf6d455fc371e9268e7cd9676ae014e5106d751494b39684e01069e", "25c5f833d0add9e12a74f410355cddc5b66b2e4df23eab3a4e1faf11e4943e69"),
+        "i8_M8192_K2048_N2560_m64k128n64cs1": ("5760d3faad60cf0f43ccc4fb8972e0a25f5d3ecba74e829b0f72f77123c78a40", "d75663f1f056073bd5168bc3372e0a9f0d8c245d93cdb74d2984173dbdb2ae5d"),
+        "i8_M8192_K2560_N2560_m64k128n64cs1": ("ce6918cf77e9553c169e1c20afcdc907868702be198b18d78af5feb1ac55c81d", "7b44d7c417a4dcb4dd8cab5becfcc814d01515a1ab01e7715500c3769bb56476"),
+        "w4_M2048_K2560_N2048_m64k128n64cs1_native_unroll2": ("a2f41f7be1e75b0dc4f7c242d41b56b354e489b74a5e16fff36c0087ddb0b553", "71711f23ce42c837bd4f74a1aa5224ba35ea0b7e010d71b404ab1d222f79bee4"),
+        "w4_M2048_K2560_N1024_m64k128n64cs1_native_unroll2": ("ff99d5da7d402bb10539499a7ad0a3bf6a76e75edb04467faaa0a2f4e5e8422e", "2cde77c60d4801e8f6952215882854f4640b546480725f2d7b76dcd19cad5d15"),
+        "w4_M2048_K2048_N2560_m64k128n64cs1_native_unroll2": ("e0e1f45ccc95e916c5ffa85d2981ffe88c7e95ab72d70fbdac421a1c0dccfde3", "df94dd5b44a0ee986ed5a695b1c1b748458621cf5dc623de32907bba2f527050"),
+        "w4_M2048_K2560_N2560_m64k128n64cs1_native_unroll2": ("203d3454cd6f6967ed09bf6c04559d4e1b1fb7252eeb650acb22376833e49560", "ce17106e953353183b89d6bbb6f1516f8f37d02faa579b1810dbe79128e6d86b"),
+        "w4_M8192_K2560_N2048_m64k128n64cs1_native_unroll2": ("cbf8b8bbd7238b2f590cb90887b4d4a66aed63737c3a94c573f9160c4bd767e7", "2c5bc3c193ad27fb08a686c245953b7d7ce1a168f899f47ff2306ac4a9b7b16e"),
+        "w4_M8192_K2560_N1024_m64k128n64cs1_native_unroll2": ("618e7e2f0b6e4980282fa4803601acd7ac511b64890ad9fb9bc00ffc26f69bad", "4ca7580658f0db2f3c65b974c82e5eb1333486c932a373a1112136535ad5ab59"),
+        "w4_M8192_K2048_N2560_m64k128n64cs1_native_unroll2": ("767d976a10a080930b1a5aed84f11ca4d4b7d562a69f92878e6ed3bed11fcf39", "ab77edf507bfde66068ba4ff9c853dd117acfe5c8b39d60cb1c93ecd43888a1d"),
+        "w4_M8192_K2560_N2560_m64k128n64cs1_native_unroll2": ("47fa9b6f436f38dcf131ae3c42996b891efbead57d97115f44be04a23ea09c19", "b1ff5e4e8e268809e1d1549ed3db63c67092227e32e2eb1482e225595a081d1a"),
+    },
+    "w4_rev": "cd12ed8a1208de95",
+    "inputs_manifest": "d462ee7b0cb03f4ad12b0430586fe3842f4589c858c2c2a7ca5316633ad16e90",
+}
+
+
+def w4_rev() -> str:
+    here = ROOT / "kernels/w4a8_array"
+    h = hashlib.sha256()
+    for p in (here / "whole_array_w4a8.py", here / "w4a8_array_kernels.cc", ROOT / "kernels/w4a8_probe/w4a8_kernels.cc"):
+        h.update(p.read_bytes())
+    return h.hexdigest()[:16]
+
+
+def check_pins(inputs_too: bool = True) -> list:
+    """Every pin against the files on disk; returns the mismatches (empty: all pins hold). With inputs_too,
+    every input file is also checked against the manifest."""
+    bad = []
+    for kind, h in PINS["models"].items():
+        p = MODELS / f"{kind}.onnx"
+        if not p.exists() or sha(p) != h:
+            bad.append(f"model {kind}")
+    for d, (hx, hi) in PINS["builds"].items():
+        for f, h in (("final.xclbin", hx), ("insts.bin", hi)):
+            p = BUILD / d / f
+            if not p.exists() or sha(p) != h:
+                bad.append(f"build {d}/{f}")
+    if w4_rev() != PINS["w4_rev"]:
+        bad.append("w4 source rev")
+    mp = INPUT_DIR / "manifest.json"
+    if not mp.exists() or sha(mp) != PINS["inputs_manifest"]:
+        bad.append("inputs manifest")
+    elif inputs_too:
+        man = json.loads(mp.read_text(encoding="utf-8"))
+        for name, h in man["files"].items():
+            p = INPUT_DIR / f"{name}.npy"
+            if not p.exists() or sha(p) != h:
+                bad.append(f"input {name}")
+    return bad
+
+
+def pins() -> int:
+    """Step 5 (no chip): every pin checked on disk, the input files against the manifest."""
+    print(f"PINS (3c step 5), no chip. {time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}", flush=True)
+    plan_hashes()
+    t0 = time.perf_counter()
+    bad = check_pins()
+    man = json.loads((INPUT_DIR / "manifest.json").read_text(encoding="utf-8"))
+    say("PINS_JSON", {"models": len(PINS["models"]), "builds": len(PINS["builds"]), "w4_rev": PINS["w4_rev"],
+                      "inputs_manifest": PINS["inputs_manifest"], "input_files": len(man["files"]),
+                      "exact_int32_sha256": len(man["exact_int32_sha256"]), "mismatches": bad,
+                      "seconds": round(time.perf_counter() - t0, 1)})
+    print("PINS", "OK" if not bad else "MISMATCH", flush=True)
+    return 0 if not bad else 2
 
 
 # ---------------------------------------------------------------- the rules (verdict)
@@ -1879,8 +1977,8 @@ def selftest() -> int:
 def main() -> int:
     sys.stdout.reconfigure(encoding="utf-8")
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("mode", choices=("models", "placement", "insts-fit", "prereg", "build", "inputs", "verdict",
-                                     "selftest"))
+    ap.add_argument("mode", choices=("models", "placement", "insts-fit", "prereg", "build", "inputs", "pins",
+                                     "verdict", "selftest"))
     ap.add_argument("args", nargs="*")
     a = ap.parse_args()
     if a.mode == "placement":
@@ -1888,7 +1986,7 @@ def main() -> int:
     if a.mode == "verdict":
         return verdict(a.args)
     return {"models": models, "insts-fit": insts_fit, "prereg": prereg, "build": build, "inputs": inputs,
-            "selftest": selftest}[a.mode]()
+            "pins": pins, "selftest": selftest}[a.mode]()
 
 
 if __name__ == "__main__":

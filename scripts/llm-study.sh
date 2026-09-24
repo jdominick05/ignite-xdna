@@ -107,6 +107,7 @@
 #   ./scripts/llm-study.sh prefill3c-prereg       # 3c step 3: the plan's log (commit it with the two above)
 #   ./scripts/llm-study.sh prefill3c-build        # 3c step 4: the NPU xclbins, compile only (heavy CPU)
 #   ./scripts/llm-study.sh prefill3c-inputs       # 3c step 4: inputs, references, exact SHAs (heavy CPU)
+#   ./scripts/llm-study.sh prefill3c-pins         # 3c step 5: every pin checked on disk (commit with the pins)
 #
 # Options: --machine TAG names the logs (default: desktop2 on DESKTOP-CBL5NUA, else required).
 # --tag TAG adds _TAG to the verdict log's name, for a second verdict on the same day.
@@ -137,7 +138,7 @@ while [ $# -gt 0 ]; do
         decode-prereg|decode|decode-accuracy|decode-verdict) STAGE="${1//-/_}" ;;
         decode-gpu-posthoc|decode-rerun-prereg|decode-rerun|decode-rerun-verdict) STAGE="${1//-/_}" ;;
         freeing-build|freeing-dryrun|freeing-prereg|freeing-loadcheck|freeing-suite|freeing-verdict) STAGE="${1//-/_}" ;;
-        prefill3c-models|prefill3c-insts|prefill3c-prereg|prefill3c-build|prefill3c-inputs) STAGE="${1//-/_}" ;;
+        prefill3c-models|prefill3c-insts|prefill3c-prereg|prefill3c-build|prefill3c-inputs|prefill3c-pins) STAGE="${1//-/_}" ;;
         --machine) MACHINE="$2"; shift ;;
         --tag)     TAG="_$2"; shift ;;
         -h|--help) usage "${BASH_SOURCE[0]}"; exit 0 ;;
@@ -858,6 +859,15 @@ stage_prefill3c_inputs() {
     check_host_load refuse
     logged "$log" python $P3C inputs || die "the inputs step failed, see $log"
     ok "inputs written; next: FINISHED to BFP16, then the pins-only commit"
+}
+
+stage_prefill3c_pins() {
+    # step 5, no chip: the models, the 24 builds, N-w4's source rev and every input file against their pins
+    local log="$OUT/llm_prefill3c_pins_${MACHINE}_${DATE}.log"
+    refuse "$log"
+    use_env resnet_env17
+    logged "$log" python $P3C pins || die "a pin does not hold, see $log"
+    ok "pins hold; commit them (step 5), then report to the gate"
 }
 
 "stage_$STAGE"
