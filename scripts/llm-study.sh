@@ -109,9 +109,10 @@
 #   ./scripts/llm-study.sh prefill3c-inputs       # 3c step 4: inputs, references, exact SHAs (heavy CPU)
 #   ./scripts/llm-study.sh prefill3c-pins         # 3c step 5: every pin checked on disk (commit with the pins)
 #   ./scripts/llm-study.sh prefill3c-loadcheck    # 3c step 6: every reader at M = 8192 (NPU also 2048), one layer
-#   ./scripts/llm-study.sh prefill3c-sitting-a    # 3c step 7: sitting A, M = 2048 (BFP16 holds the machine)
+#   ./scripts/llm-study.sh prefill3c-cadence      # 3c amendment 1: one C-fp32@16 check window, counters at HIGH
+#   ./scripts/llm-study.sh prefill3c-sitting-a2   # 3c step 7: sitting A2, M = 2048 (A was stopped; BFP16 holds)
 #   ./scripts/llm-study.sh prefill3c-sitting-b    # 3c step 7: sitting B, M = 8192 (BFP16 holds the machine)
-#   ./scripts/llm-study.sh prefill3c-verdict      # 3c: the frozen verdict over A, B, the build and the load check
+#   ./scripts/llm-study.sh prefill3c-verdict      # 3c: the frozen verdict over A2, B, the build and the load check
 #
 # Options: --machine TAG names the logs (default: desktop2 on DESKTOP-CBL5NUA, else required).
 # --tag TAG adds _TAG to the verdict log's name, for a second verdict on the same day.
@@ -143,7 +144,7 @@ while [ $# -gt 0 ]; do
         decode-gpu-posthoc|decode-rerun-prereg|decode-rerun|decode-rerun-verdict) STAGE="${1//-/_}" ;;
         freeing-build|freeing-dryrun|freeing-prereg|freeing-loadcheck|freeing-suite|freeing-verdict) STAGE="${1//-/_}" ;;
         prefill3c-models|prefill3c-insts|prefill3c-prereg|prefill3c-build|prefill3c-inputs|prefill3c-pins) STAGE="${1//-/_}" ;;
-        prefill3c-loadcheck|prefill3c-sitting-a|prefill3c-sitting-b|prefill3c-verdict) STAGE="${1//-/_}" ;;
+        prefill3c-loadcheck|prefill3c-cadence|prefill3c-sitting-a2|prefill3c-sitting-b|prefill3c-verdict) STAGE="${1//-/_}" ;;
         --machine) MACHINE="$2"; shift ;;
         --tag)     TAG="_$2"; shift ;;
         -h|--help) usage "${BASH_SOURCE[0]}"; exit 0 ;;
@@ -886,13 +887,26 @@ stage_prefill3c_loadcheck() {
     use_env resnet_env17
     python tools/silicon_probe_record.py --log "$log" --device --seconds 3600 -- \
         python $P3C loadcheck || die "the load check is NO-GO or failed, see $log"
-    ok "load check GO; next: FINISHED to BFP16, commit its log, then a START REQUEST and $0 prefill3c-sitting-a"
+    ok "load check GO; next: FINISHED to BFP16, commit its log, then a START REQUEST and $0 prefill3c-cadence"
+}
+
+stage_prefill3c_cadence() {
+    # amendment 1 (under its own START REQUEST; enters no rule): one C-fp32@16 window at M = 2048 with the
+    # counters at HIGH; CADENCE PASS needs OK with no other cause, the row cadence and HIGH/HIGH/NORMAL
+    ls "$OUT"/llm_prefill3c_prereg_amended2_*.log >/dev/null 2>&1 || die "no amendment 1 log: run $0 prefill3c-prereg --tag amended2 and commit it"
+    local log="$OUT/llm_prefill3c_cadence_${MACHINE}_${DATE}.log"
+    refuse "$log"
+    use_env resnet_env17
+    python tools/silicon_probe_record.py --log "$log" --device --seconds 1800 -- \
+        python $P3C cadence || die "the cadence check failed or refused, see $log"
+    ok "cadence PASS; next: FINISHED to BFP16, commit its log, the gate, then $0 prefill3c-sitting-a2"
 }
 
 prefill3c_sitting() {
     # step 7, one sitting (U7; under its own START REQUEST): about 90 min, plus about 3 min per U12 re-run
     local s="$1" M="$2"
     ls "$OUT"/llm_prefill3c_loadcheck_*.log >/dev/null 2>&1 || die "no load check log: run $0 prefill3c-loadcheck and commit it"
+    ls "$OUT"/llm_prefill3c_cadence_*.log >/dev/null 2>&1 || die "no cadence log: run $0 prefill3c-cadence and commit it"
     local log="$OUT/llm_prefill3c_sitting_${s}_${MACHINE}_${DATE}.log"
     refuse "$log"
     use_env resnet_env17
@@ -901,13 +915,14 @@ prefill3c_sitting() {
     ok "sitting $s done; next: FINISHED to BFP16 and commit its log as measured"
 }
 
-stage_prefill3c_sitting_a() { prefill3c_sitting A 2048; }
+stage_prefill3c_sitting_a2() { prefill3c_sitting A2 2048; }   # amendment 1: A's re-run (A, 922f929, is partial)
 stage_prefill3c_sitting_b() { prefill3c_sitting B 8192; }
 
 stage_prefill3c_verdict() {
-    # no chip: the frozen verdict over both sittings, the build log (Q1) and the load check (Q2)
+    # no chip: the frozen verdict over sittings A2 and B, the build log (Q1) and the load check (Q2); never
+    # the partial sitting A log (the tool refuses it by its hash)
     local a b build load
-    a="$(ls "$OUT"/llm_prefill3c_sitting_A_"${MACHINE}"_*.log 2>/dev/null | sort | tail -1)"
+    a="$(ls "$OUT"/llm_prefill3c_sitting_A2_"${MACHINE}"_*.log 2>/dev/null | sort | tail -1)"
     b="$(ls "$OUT"/llm_prefill3c_sitting_B_"${MACHINE}"_*.log 2>/dev/null | sort | tail -1)"
     build="$(ls "$OUT"/llm_prefill3c_build_"${MACHINE}"_*.log 2>/dev/null | sort | tail -1)"
     load="$(ls "$OUT"/llm_prefill3c_loadcheck_"${MACHINE}"_*.log 2>/dev/null | sort | tail -1)"

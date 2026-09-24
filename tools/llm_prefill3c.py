@@ -20,7 +20,8 @@ split-K. The pre-registration is PREREG below; the rules are verdict()'s code.
     python tools/llm_prefill3c.py pins                # step 5: every pin (models, builds, w4 rev, inputs) on disk
     python tools/llm_prefill3c.py loadcheck           # step 6: every arm's reader at M = 8192 (the NPU's also at
                                                       #   2048) to READY and one layer
-    python tools/llm_prefill3c.py sitting M           # step 7: one sitting (M = 2048: A; 8192: B), two passes
+    python tools/llm_prefill3c.py cadence             # amendment 1: one C-fp32@16 check window, counters at HIGH
+    python tools/llm_prefill3c.py sitting M           # step 7: one sitting (M = 2048: A2; 8192: B), two passes
     python tools/llm_prefill3c.py reader ARM M [--share-xattn] [--loadcheck]   # (spawned by the two above)
     python tools/llm_prefill3c.py verdict LOG [LOG]   # the mechanical verdict over the sittings' WINDOW_JSON records
     python tools/llm_prefill3c.py selftest            # tiny models and synthetic verdicts; no chip, no GPU
@@ -89,6 +90,8 @@ NPU_PIECE = 2560                                      # gate/up column slices an
 NPU_CONTEXTS = 4                                      # q; k and v; o; the 2560 pieces
 NPU_SHAPES = ((2560, 2048), (2560, 1024), (2048, 2560), (2560, 2560))   # K x N: q; k and v; o; the pieces
 INSTS_FIT = (16, 2576)                                # insts.bin = 16 + 2576 * M / (8 m) B (stage 3's 28 builds)
+COUNTERS = ("typeperf and the suite (its FaultSampler) at HIGH_PRIORITY_CLASS in every idle and window; the "
+            "readers at NORMAL_PRIORITY_CLASS; each read back, else the window is FAILED (amendment 1)")
 
 
 def protocol() -> dict:
@@ -102,7 +105,8 @@ def protocol() -> dict:
             "rerun_void": RERUN_VOID, "npu_tiles": NPU_TILES, "npu_piece": NPU_PIECE, "npu_contexts": NPU_CONTEXTS,
             "insts_fit": INSTS_FIT, "e_unit": "J per prompt token per layer, above idle (printed in mJ)",
             "t_unit": "ms per layer iteration, median over the window", "npu_shapes": NPU_SHAPES,
-            "wiring_max": WIRING_MAX, "void_rel_l2_max": {arm: void_bound(arm) for arm in ORDER}}
+            "wiring_max": WIRING_MAX, "void_rel_l2_max": {arm: void_bound(arm) for arm in ORDER},
+            "counters": COUNTERS}                         # amendment 1 (the user: "Go with A")
 
 
 def sha(path: Path) -> str:
@@ -486,7 +490,8 @@ def build_one(dt: str, M: int, K: int, N: int, tile: str, wa, w4) -> dict:
 def plan_hashes() -> None:
     """Every 3c log after the second plan commit prints these (the gate diffs them)."""
     print(f"PREREG_TEXT_SHA256 {hashlib.sha256(PREREG.encode('utf-8')).hexdigest()}", flush=True)
-    print(f"PROTOCOL_JSON_SHA256 {hashlib.sha256(json.dumps(protocol()).encode('utf-8')).hexdigest()}", flush=True)
+    print(f"PROTOCOL_JSON_SHA256 {hashlib.sha256(json.dumps(protocol()).encode('utf-8')).hexdigest()} "
+          f"(amendment 1; before it {PROTOCOL_SHA_BEFORE_A1[:8]}...)", flush=True)
     print(f"VERDICT_CODE_SHA256 {verdict_code_sha()}", flush=True)
 
 
@@ -739,6 +744,12 @@ CHUNK = 1024
 ORT_CPU_FALLBACK = "fallback to CPU EP has been explicitly disabled"   # ORT's strict-session refusal
 QUIET_READER = ("ITERS_JSON ",)                       # the suite prints it once, with the window's identity
 VERDICT_FIELDS = ("M", "arm", "pass", "position", "rerun", "state", "T", "E", "err", "i8_sha")
+# amendment 1 (the user: "Go with A"): the counters at HIGH priority, the cadence check, sitting A2
+HIGH, NORMAL = 0x80, 0x20                             # Windows priority classes (subprocess.HIGH_PRIORITY_CLASS)
+PRIORITY_NAME = {HIGH: "HIGH", NORMAL: "NORMAL"}
+CADENCE = {"arm": "C-fp32@16", "M": 2048, "gap_median_max_s": 1.05, "gap_max_s": 1.5}
+PARTIAL_LOGS = {"729cb2f85b91c7739289c4e161293f8df5a2fa921c1132959b41da79efe2c6d2":
+                "sitting A, stopped by the gate at window 3 (922f929): not cited; the verdict never reads it"}
 
 
 def arm_parts(arm: str):
@@ -751,6 +762,53 @@ def nsay(tag: str, obj) -> None:
     included), each local name <tool>. Every line the suite prints from a reader's record goes through it."""
     import llm_freeing as lf
     print(lf.neutralize(f"{tag} " + json.dumps(obj)), flush=True)
+
+
+def own_priority() -> int:
+    """This process's priority class, by ctypes (both envs)."""
+    import ctypes
+    from ctypes import wintypes
+    k32 = ctypes.windll.kernel32
+    k32.GetCurrentProcess.restype = wintypes.HANDLE
+    k32.GetPriorityClass.argtypes = [wintypes.HANDLE]
+    k32.GetPriorityClass.restype = wintypes.DWORD
+    return int(k32.GetPriorityClass(k32.GetCurrentProcess()))
+
+
+def suite_high() -> bool:
+    """Amendment 1: the suite (its FaultSampler thread, the go timing, the CPU-time reads) at HIGH, read back.
+    Its children start at NORMAL: Windows gives a child NORMAL unless the parent is IDLE or BELOW_NORMAL."""
+    import psutil
+    psutil.Process().nice(psutil.HIGH_PRIORITY_CLASS)
+    got = own_priority()
+    say("SUITE_PRIORITY_JSON", {"priority": PRIORITY_NAME.get(got, hex(got))})
+    return got == HIGH
+
+
+def typeperf_high(samples: int, path: Path) -> subprocess.Popen:
+    """Amendment 1: gemma_decode_suite.typeperf's command exactly (the same counters, -si 1), started at
+    HIGH_PRIORITY_CLASS and read back; anything else raises, and the window is FAILED."""
+    import psutil
+    import gemma_decode_suite as gds
+    from power_probe import CORES, PKG
+    p = subprocess.Popen(["typeperf", PKG, *CORES, gds.CPU, gds.AVAIL, gds.PAGES_IN, gds.GPU, "-si", "1", "-sc",
+                          str(samples), "-y", "-o", str(path)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                         creationflags=subprocess.HIGH_PRIORITY_CLASS)
+    got = int(psutil.Process(p.pid).nice())
+    if got != HIGH:
+        gds.stop(p, 0)
+        raise RuntimeError(f"typeperf's priority class read back {got:#x}, not HIGH")
+    return p
+
+
+def row_cadence(rows) -> dict:
+    """Report-only (amendment 1): the gaps between consecutive typeperf rows, in seconds."""
+    ts = [r[0] for r in rows]
+    gaps = sorted(y - x for x, y in zip(ts, ts[1:]))
+    if not gaps:
+        return {"rows": len(rows), "gap_median_s": None, "gap_p95_s": None, "gap_max_s": None}
+    return {"rows": len(rows), "gap_median_s": round(statistics.median(gaps), 3),
+            "gap_p95_s": round(gaps[min(len(gaps) - 1, int(0.95 * len(gaps)))], 3), "gap_max_s": round(gaps[-1], 3)}
 
 
 def load_rows(name: str, M: int = None) -> np.ndarray:
@@ -1134,7 +1192,8 @@ def reader(arm: str, M: int, share_xattn: bool = False, loadcheck: bool = False)
             return 0                                                   # VOID: the check, or the pinning
         gc.collect()
         say("READY", {"pid": os.getpid(), "arm": arm, "M": M, "load_s": round(time.perf_counter() - t_load, 1),
-                      "python": sys.version.split()[0], "numpy": np.__version__, **ident})
+                      "python": sys.version.split()[0], "numpy": np.__version__, "priority_class": own_priority(),
+                      **ident})
         line = sys.stdin.readline().split()
         start, stop = float(line[1]), float(line[2])
         off = wall_offset()
@@ -1271,11 +1330,11 @@ def end_proc(p) -> None:
         p.proc.wait(timeout=30)
 
 
-def echo(p) -> None:
+def echo(p, hide=()) -> None:
     import llm_freeing as lf
     print(f"READER_CMD {p.shown}", flush=True)
     for s in p.lines:
-        if not s.startswith(QUIET_READER):
+        if not s.startswith(QUIET_READER + tuple(hide)):
             print(lf.neutralize(f"reader| {s}"), flush=True)
 
 
@@ -1290,7 +1349,13 @@ def npu_witness_after(arm: str) -> None:
             print(lf.neutralize(f"WITNESS_AFTER_NPU_FAILED {type(ex).__name__}: {ex}"), flush=True)
 
 
-def run_window(M: int, arm: str, pas: int, position: int, rerun: bool, luids, share: bool, stamp: str) -> dict:
+def run_window(M: int, arm: str, pas: int, position: int, rerun: bool, luids, share: bool, stamp: str,
+               emit: bool = True, quiet: bool = False) -> dict:
+    """One window (the header's steps). Amendment 1: typeperf at HIGH in the idle and the window, the suite
+    already at HIGH (suite_high), the reader at NORMAL, each read back (else FAILED); typeperf's and the
+    suite's CPU seconds and the row cadence are report-only witnesses. emit=False (the cadence check): no
+    WINDOW_JSON, ITERS_JSON or summary, and the reader's READER_JSON is not echoed; quiet: the reader's
+    quiet output check."""
     import gemma_decode_suite as gds
     import llm_freeing as lf
     from silicon_probe_record import witness
@@ -1302,16 +1367,19 @@ def run_window(M: int, arm: str, pas: int, position: int, rerun: bool, luids, sh
     got, extra = {}, {}
     try:
         witness()                                                      # xrt-smi: no hardware context
+        if own_priority() != HIGH:
+            raise RuntimeError("the suite is not at HIGH priority")
         ipath = SITTING_TMP / f"{tag}_idle.csv"
         fs = gds.FaultSampler(counters=lf.neutral_counters).start()   # in the idle too: its cost cancels
-        tp = gds.typeperf(IDLE_S + 1, ipath)
+        tp = typeperf_high(IDLE_S + 1, ipath)
         gds.stop(tp, IDLE_S + 60)
         tp = None
         fs.stop()
         fs = None
         idle = gds.read_csv(ipath, None, luids)["rows"]
         got["idle_rows"] = idle[TRIM_S:len(idle) - TRIM_S]
-        p = reader_proc(arm, M, share=share and arm in NPU_DT)
+        extra["cadence_idle"] = row_cadence(got["idle_rows"])
+        p = reader_proc(arm, M, share=share and arm in NPU_DT, loadcheck=quiet)
         p.ready.wait(READY_TIMEOUT_S)
         ready = p.json("READY")
         if ready is None:
@@ -1321,17 +1389,22 @@ def run_window(M: int, arm: str, pas: int, position: int, rerun: bool, luids, sh
         else:
             got["ready"] = ready
             pid = ready["pid"]
+            if ready.get("priority_class") != NORMAL:
+                raise RuntimeError(f"the reader's priority class is {ready.get('priority_class')}, not NORMAL")
             path = SITTING_TMP / f"{tag}_window.csv"
-            tp = gds.typeperf(TP_SAMPLES, path)
+            tp = typeperf_high(TP_SAMPLES, path)
             fs = gds.FaultSampler(counters=lf.neutral_counters).start()
+            extra["counters"] = {"typeperf": "HIGH", "suite": PRIORITY_NAME.get(own_priority()), "reader": "NORMAL"}
+            roles = {"reader": pid, "typeperf": tp.pid, "suite": os.getpid()}
             time.sleep(TP_LEAD_S)
             start = time.time() + GO_LEAD_S
             a, b = start + WARMUP_S, start + WARMUP_S + WINDOW_S
             p.go(start, b + TAIL_S)
             lf.wait_until(a)
-            ca = lf.cpu_seconds({"reader": pid})
+            ca = lf.cpu_seconds(roles)
             lf.wait_until(b)
-            cb = lf.cpu_seconds({"reader": pid})
+            cb = lf.cpu_seconds(roles)
+            extra["cpu_s_in_window"] = {k: round(cb[k] - ca[k], 3) for k in ("typeperf", "suite") if k in ca and k in cb}
             p.proc.wait(timeout=max(120.0, b + TAIL_S - time.time() + 600))
             p.pump.join(timeout=30)
             got["exit_code"] = p.proc.returncode
@@ -1342,6 +1415,7 @@ def run_window(M: int, arm: str, pas: int, position: int, rerun: bool, luids, sh
             ta, tb = a + TRIM_S, b - TRIM_S
             got.update(reader_json=p.json("READER_JSON"), iters=p.json("ITERS_JSON"), a=a, b=b,
                        win_rows=gds.inside(gds.read_csv(path, None, luids)["rows"], ta, tb))
+            extra["cadence_window"] = row_cadence(got["win_rows"])
             f = lf.faults_window(fs.rows, ta, tb, {"reader": pid})
             got.update(hard_per_s=f["hard_per_s"].get("reader"), fault_seconds=f["seconds"])
             extra["faults_top_hard"] = f["top_hard"]
@@ -1362,13 +1436,17 @@ def run_window(M: int, arm: str, pas: int, position: int, rerun: bool, luids, sh
         if fs is not None:
             fs.stop()
         if p is not None:
-            echo(p)
+            echo(p, hide=() if emit else ("READER_JSON ",))
     rec = window_record(meta, **got)
     rec.update(extra)
     if got.get("ready"):
         rec["ready"] = got["ready"]
     if got.get("reader_json"):
         rec["reader"] = got["reader_json"]
+    if not emit:
+        npu_witness_after(arm)
+        time.sleep(SETTLE_S)
+        return rec
     if got.get("iters"):
         nsay("ITERS_JSON", {"M": M, "arm": arm, "pass": pas, "position": position, **got["iters"]})
     nsay("WINDOW_JSON", rec)
@@ -1523,10 +1601,53 @@ def loadcheck() -> int:
     return 0 if summary["go"] else 2
 
 
+def cadence() -> int:
+    """Amendment 1's check (pre-sitting; enters no rule; under its own START REQUEST): one C-fp32@16 window at
+    M = 2048 by run_window's own path, the counters at HIGH, the reader's output check quiet. It prints
+    CADENCE_JSON: the window's state and reasons (window_record, the sitting's own code), the row counts,
+    the fault-sampler seconds, the memory rule, the cadence, the three priority classes read back, the
+    pinning's three read-backs, and typeperf's and the suite's CPU seconds. It never prints T or E. It passes
+    only on OK with no other cause, a median row gap <= 1.05 s, a max gap <= 1.5 s, and HIGH / HIGH / NORMAL."""
+    import llm_freeing as lf
+    stamp = time.strftime("%Y%m%dT%H%M%S")
+    SITTING_TMP.mkdir(parents=True, exist_ok=True)
+    sys.stdout = lf.Live(SITTING_TMP / f"{stamp}_cadence_live.log")
+    luids = start_gate("CADENCE (3c amendment 1), pre-sitting, enters no rule; no T or E is printed")
+    if luids is None:
+        return 3
+    if not suite_high():
+        print("REFUSE the suite did not read back HIGH priority", flush=True)
+        return 3
+    rec = run_window(CADENCE["M"], CADENCE["arm"], 0, 0, False, luids, False, f"{stamp}_cadence", emit=False,
+                     quiet=True)
+    cw, pr = rec.get("cadence_window") or {}, rec.get("counters") or {}
+    pin = (rec.get("reader") or {}).get("pin") or {}
+    out = {"arm": CADENCE["arm"], "M": CADENCE["M"], "state": rec["state"], "why": rec["why"],
+           "rows": {k: (rec.get("power") or {}).get(k) for k in ("idle_rows", "window_rows")},
+           "memory_rule": rec.get("memory_rule"), "cadence_idle": rec.get("cadence_idle"), "cadence_window": cw,
+           "priorities": pr, "cpu_s_in_window": rec.get("cpu_s_in_window"),
+           "pin_read_backs": {k: (pin.get(k) or {}).get("ok") for k in ("before_ready", "after_warmup", "after_loop")},
+           "limits": CADENCE, "note": "enters no rule; T and E are not printed"}
+    bad = []
+    if rec["state"] != "OK":
+        bad.append(f"state {rec['state']}")
+    if cw.get("gap_median_s") is None or cw["gap_median_s"] > CADENCE["gap_median_max_s"]:
+        bad.append("median row gap")
+    if cw.get("gap_max_s") is None or cw["gap_max_s"] > CADENCE["gap_max_s"]:
+        bad.append("max row gap")
+    if pr != {"typeperf": "HIGH", "suite": "HIGH", "reader": "NORMAL"}:
+        bad.append("priority classes")
+    out["pass"], out["fails"] = not bad, bad
+    nsay("CADENCE_JSON", out)
+    print("CADENCE", "PASS" if not bad else f"FAIL ({'; '.join(bad)}): back to the gate and the user", flush=True)
+    return 0 if not bad else 2
+
+
 def sitting(M: int) -> int:
     """Step 7: one sitting at one M (U7). Pass 1 in ORDER, pass 2 its reverse; each pass's VOID windows (as
     the frozen state_of reads them) re-run once at its end (U12), logged with rerun=true and their position.
-    Arms dropped at step 2 or by the load check (N-w4 only) are skipped and named."""
+    Arms dropped at step 2 or by the load check (N-w4 only) are skipped and named. Amendment 1: the suite at
+    HIGH (read back), and it refuses without the cadence check's PASS."""
     import llm_freeing as lf
     if M not in MS:
         raise SystemExit(f"M must be one of {MS}")
@@ -1536,6 +1657,15 @@ def sitting(M: int) -> int:
     luids = start_gate(f"SITTING (3c step 7), M = {M}")
     if luids is None:
         return 3
+    if not suite_high():
+        print("REFUSE the suite did not read back HIGH priority", flush=True)
+        return 3
+    cp = latest("llm_prefill3c_cadence_*.log")
+    if cp is None or not any(s.startswith("CADENCE PASS") for s in cp.read_text(encoding="utf-8").splitlines()):
+        print(f"REFUSE the cadence check is missing or did not pass ({cp.relative_to(ROOT).as_posix() if cp else 'none'})",
+              flush=True)
+        return 3
+    say("CADENCE_READ_JSON", {"log": cp.relative_to(ROOT).as_posix(), "sha256_lf": sha_lf(cp)})
     lp, lc = latest_loadcheck()
     if lc is None or not lc.get("go"):
         print(f"REFUSE the load check is missing or NO-GO ({lp.relative_to(ROOT).as_posix() if lp else 'none'})",
@@ -1921,6 +2051,10 @@ LABELS = ("Energy labels, (b)'s: above idle, with idle charged to no one; packag
 
 def verdict(paths) -> int:
     print(f"VERDICT_CODE_SHA256 {verdict_code_sha()}", flush=True)
+    for p in paths:                                                    # amendment 1: never the partial sitting A
+        if sha_lf(Path(p)) in PARTIAL_LOGS:
+            print(f"REFUSE {Path(p).name}: {PARTIAL_LOGS[sha_lf(Path(p))]}", flush=True)
+            return 3
     recs, build, load = parse(paths)
     ev = evaluate(recs)
     ctl = int8_control(recs)
@@ -2566,6 +2700,66 @@ is unchanged.
 """
 
 
+PROTOCOL_SHA_BEFORE_A1 = "a997580c4e04dbe8e1506d7033031bb098e696ef3d8e788a1251fa9b8292868c"
+
+AMENDMENT_1 = """\
+AMENDMENT 1 (the third plan commit): the counters at HIGH priority. The user's words: "Go with A".
+
+Why. Sitting A was stopped by the gate at window 3 (922f929; the partial log is kept as measured, is not
+cited, and the verdict refuses it). With 16 threads pinned to all 16 logical CPUs, typeperf at normal
+priority is starved. Its 1 s samples stretched to 1.25-1.56 s, so the trimmed 57 s window held 42 rows,
+against the 50-row rule. The @8 windows sampled about every 1.03 s. Under the frozen rules, all four @16
+rivals would have been MISSING at both M, and under R2 they could block any KEEP. No T or E had been read
+when the sitting stopped, so this amendment is not outcome-driven. The gate put three options to the user:
+(A) the counters at HIGH, (B) a seconds-covered row rule, (C) dropping the @16 arms. The user chose (A).
+
+The change (the instrument only):
+1. typeperf runs at HIGH_PRIORITY_CLASS in every window's idle and its window. The command is
+   gemma_decode_suite.typeperf's exactly (the same counters, -si 1), started by a 3c-local launcher; the
+   shared helper is not edited. Its priority class is read back, and anything else makes the window FAILED.
+2. The suite process raises itself to HIGH at the sitting's start (read back; otherwise it refuses). Its
+   FaultSampler thread, the go timing and the CPU-time reads therefore run at HIGH.
+3. The readers stay at NORMAL: Windows gives a child NORMAL unless the parent is IDLE or BELOW_NORMAL. Each
+   READY reports the reader's own class, and anything but NORMAL makes the window FAILED.
+4. The 50-row rule is unchanged, and so is every other rule: U10, U12, the VOID and FAILED lists, T, E,
+   the trims, the predictions and the verdict code.
+5. New report-only witnesses in WINDOW_JSON, read by no rule:
+   - the row cadence over the idle and the trimmed window (median, p95 and max gap);
+   - typeperf's and the suite's CPU seconds in the window;
+   - the three priority classes.
+6. protocol() gains one field, "counters". PROTOCOL_JSON_SHA256 changes from a997580c... (before amendment
+   1) to the new hash printed below. PREREG_TEXT_SHA256 f7fa696b... and VERDICT_CODE_SHA256 6e459e56... are
+   unchanged.
+
+The disclosed cost:
+- A HIGH typeperf preempts one pinned thread for its sample each second, in every arm's idle and window
+  alike. Its package power is in both the idle and the window, so it cancels in E.
+- Its time cost falls only where every logical CPU is busy: the four @16 CPU rivals, slightly, in the NPU's
+  favour. Each window logs typeperf's CPU seconds, so the preemption's size can be read.
+- The @8 arms, DirectML and the NPU leave CPUs free (INFERRED unaffected).
+
+The cadence check (pre-sitting, enters no rule, under its own START REQUEST): one C-fp32@16 window at
+M = 2048, by the sitting's own run_window path, with the counters at HIGH and the reader's check quiet.
+- It prints CADENCE_JSON and never T or E.
+- It passes only if:
+  - window_record's state is OK, with no other VOID or FAILED cause (the gate's addition). This covers the
+    rows (≥ 50 in the idle and the window), the fault-sampler seconds (≥ 50), U10, at least 5 layers, and
+    the CPU pinning read back OK before READY, after the warm-up and after the loop, with the suite at HIGH;
+  - the median row gap is ≤ 1.05 s and the max gap ≤ 1.5 s;
+  - the priority classes read back HIGH (typeperf), HIGH (the suite) and NORMAL (the reader).
+- A failure goes back to the gate and the user, and nothing re-runs.
+
+The order, with the gate's check after each step:
+1. this commit;
+2. the cadence check (results/llm/llm_prefill3c_cadence_desktop2_<date>.log);
+3. sitting A2 (M = 2048), under a new log name (results/llm/llm_prefill3c_sitting_A2_desktop2_<date>.log;
+   the sitting refuses without the cadence check's PASS);
+4. sitting B (M = 8192);
+5. the verdict over A2, B, the build log and the load check. It refuses the partial sitting A log by its
+   LF hash. The load check stands: it enters no rule, and its go does not depend on the counters.
+"""
+
+
 def sha_lf(path: Path) -> str:
     return hashlib.sha256(path.read_bytes().replace(b"\r\n", b"\n")).hexdigest()
 
@@ -2580,10 +2774,12 @@ def prereg() -> int:
     predictions, and step 2's and the insts-fit's logs by hash, with the dropped arms. No chip."""
     print(PREREG, flush=True)
     print(READINGS, flush=True)
+    print(AMENDMENT_1, flush=True)
     say("PROTOCOL_JSON", protocol())
     say("PREDICTIONS_JSON", [{"id": q, "text": t} for q, t in PREDICTIONS])
     print(f"PREREG_TEXT_SHA256 {hashlib.sha256(PREREG.encode('utf-8')).hexdigest()}", flush=True)
     print(f"PROTOCOL_JSON_SHA256 {hashlib.sha256(json.dumps(protocol()).encode('utf-8')).hexdigest()}", flush=True)
+    print(f"PROTOCOL_JSON_SHA256_BEFORE_AMENDMENT_1 {PROTOCOL_SHA_BEFORE_A1}", flush=True)
     print(f"VERDICT_CODE_SHA256 {verdict_code_sha()}", flush=True)
     ok = True
     for tag, pat in (("MODELS_LOG", "llm_prefill3c_models_*.log"), ("INSTS_FIT_LOG", "llm_prefill3c_insts_fit_*.log")):
@@ -2924,10 +3120,24 @@ def selftest() -> int:
     garbage = win("D-fp32", check=dict(chk_ok, err={"q": 0.5}, i8_sha=None))
     expect("A1 in the sitting's re-run choice: an OK window over its bound is VOID to state_of",
            (garbage["state"], state_of(garbage)), ("OK", "VOID"))
-    expect("the plan's hashes are the second plan commit's (PREREG, PROTOCOL_JSON, VERDICT_CODE)",
+    print("Amendment 1 (the counters at HIGH; the user: \"Go with A\"):")
+    rows = [[1000.0 + 1.02 * i] + [0.0] * 8 for i in range(58)]
+    rows[30][0] += 0.4
+    c = row_cadence(rows)
+    expect("row_cadence: median 1.02 s, max 1.42 s (one late row)", (c["rows"], c["gap_median_s"], c["gap_max_s"]),
+           (58, 1.02, 1.42))
+    expect("row_cadence of one row: no gaps", row_cadence(rows[:1])["gap_median_s"], None)
+    expect("the selftest runs at NORMAL priority (own_priority reads it)", own_priority(), NORMAL)
+    expect("protocol() carries the counters field", protocol()["counters"], COUNTERS)
+    expect("the amendment quotes the user's words", '"Go with A"' in AMENDMENT_1, True)
+    part = RESULTS / "llm_prefill3c_sitting_A_desktop2_20260924.log"
+    if part.exists():
+        expect("the verdict refuses the partial sitting A log (922f929), by its LF hash", verdict([part]), 3)
+    expect("the plan's hashes: PREREG and VERDICT_CODE the second plan commit's; PROTOCOL_JSON amendment 1's",
            (hashlib.sha256(PREREG.encode("utf-8")).hexdigest()[:8],
-            hashlib.sha256(json.dumps(protocol()).encode("utf-8")).hexdigest()[:8], verdict_code_sha()[:8]),
-           ("f7fa696b", "a997580c", "6e459e56"))
+            hashlib.sha256(json.dumps(protocol()).encode("utf-8")).hexdigest()[:8], verdict_code_sha()[:8],
+            PROTOCOL_SHA_BEFORE_A1[:8]),
+           ("f7fa696b", "5e533fca", "6e459e56", "a997580c"))
 
     print("The plan text:")
     expect("the scoped route (i) text is in", "Operand-aware epilogues would cost" in PREREG, True)
@@ -2948,7 +3158,7 @@ def main() -> int:
     sys.stdout.reconfigure(encoding="utf-8")
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("mode", choices=("models", "placement", "insts-fit", "prereg", "build", "inputs", "pins",
-                                     "loadcheck", "sitting", "reader", "verdict", "selftest"))
+                                     "loadcheck", "cadence", "sitting", "reader", "verdict", "selftest"))
     ap.add_argument("args", nargs="*")
     ap.add_argument("--share-xattn", action="store_true", help="reader: one X_attn buffer for both contexts")
     ap.add_argument("--loadcheck", action="store_true", help="reader: the load check's quiet output check")
@@ -2963,6 +3173,8 @@ def main() -> int:
         return sitting(int(a.args[0]))
     if a.mode == "loadcheck":
         return loadcheck()
+    if a.mode == "cadence":
+        return cadence()
     return {"models": models, "insts-fit": insts_fit, "prereg": prereg, "build": build, "inputs": inputs,
             "pins": pins, "selftest": selftest}[a.mode]()
 
