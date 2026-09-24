@@ -1,0 +1,48 @@
+SITTING 2 (the re-run rule): this sitting alone decides; the accuracy is sitting 1's, gemma_decode_accuracy_desktop2_20260924.log (LF sha256 7a579b84bdb022e7...)
+PAGEIN_ATTRIBUTION {"arm": "C4-H4", "pass": 1, "seq": 1, "pages_in_mean": 181.1, "seconds": 37, "top_page_faults": [["Code.exe", 57420, 506.7, 0.0, 17351], ["python.exe", 87536, 257.0, 0.0, 0], ["Code.exe", 19508, 172.1, 0.0, 6796], ["MsMpEng.exe", 44648, 148.8, 0.0, 0], ["Registry", 280, 81.2, 0.2, 0]], "top_io_read": [["Code.exe", 57420, 506.7, 0.0, 17351], ["svchost.exe", 5036, 38.6, 0.0, 16889], ["Code.exe", 31316, 16.5, 0.0, 8726], ["Code.exe", 19508, 172.1, 0.0, 6796], ["Code.exe", 78608, 38.6, 0.0, 3997]]}
+PAGEIN_ATTRIBUTION {"arm": "D-H4", "pass": 1, "seq": 0, "pages_in_mean": 236.3, "seconds": 39, "top_page_faults": [["python.exe", 84128, 4141.6, 0.0, 0], ["Code.exe", 57420, 476.3, 0.0, 18408], ["python.exe", 87536, 257.0, 0.0, 0], ["MsMpEng.exe", 44648, 201.7, 0.0, 0], ["Code.exe", 31316, 193.8, 0.0, 9314]], "top_io_read": [["Code.exe", 57420, 476.3, 0.0, 18408], ["Code.exe", 31316, 193.8, 0.0, 9314], ["Code.exe", 19508, 169.3, 0.0, 7625], ["Code.exe", 78608, 38.0, 0.0, 5478], ["Code.exe", 59788, 9.3, 0.0, 2157]]}
+PAGEIN_ATTRIBUTION {"arm": "D-H4", "pass": 1, "seq": 2, "pages_in_mean": 111.7, "seconds": 40, "top_page_faults": [["python.exe", 84128, 4105.6, 0.0, 0], ["Code.exe", 57420, 484.6, 0.0, 16280], ["Code.exe", 19508, 426.9, 0.1, 6791], ["svchost.exe", 4740, 352.8, 2.6, 10138], ["python.exe", 87536, 257.0, 0.0, 0]], "top_io_read": [["Code.exe", 57420, 484.6, 0.0, 16280], ["svchost.exe", 4740, 352.8, 2.6, 10138], ["Code.exe", 31316, 186.8, 0.0, 8089], ["Code.exe", 19508, 426.9, 0.1, 6791], ["Code.exe", 78608, 43.4, 0.0, 4673]]}
+PAGEIN_ATTRIBUTION {"arm": "D-H4", "pass": 2, "seq": 0, "pages_in_mean": 625.1, "seconds": 40, "top_page_faults": [["python.exe", 39596, 3938.5, 0.0, 0], ["taskhostw.exe", 53888, 986.0, 10.2, 99124], ["TiWorker.exe", 86828, 561.4, 0.1, 151624], ["Code.exe", 57420, 533.2, 0.0, 18638], ["WmiPrvSE.exe", 85072, 382.1, 10.7, 237337]], "top_io_read": [["WmiPrvSE.exe", 85072, 382.1, 10.7, 237337], ["TiWorker.exe", 86828, 561.4, 0.1, 151624], ["taskhostw.exe", 53888, 986.0, 10.2, 99124], ["Code.exe", 57420, 533.2, 0.0, 18638], ["MsMpEng.exe", 44648, 224.3, 0.1, 16357]]}
+pass arm       tok/s     agg  idle W  dPKG W  dCores   J/tok  CPU% 780M pid  rows
+   1 C4-H4   INCOMPLETE: paging: window pages input/s [87.5, 181.1, 9.6] > 100
+   1 D-H4    INCOMPLETE: paging: window pages input/s [236.3, 15.0, 111.7, 15.5, 15.3] > 100
+   1 C0-H4     17.37   17.37   15.07   71.23   55.72   4.102  45.7      0.0   105  seqs 17.36 / 17.37 / 17.37
+   1 D-H16     13.38   13.37   15.44   61.80    1.73   4.624   8.0     19.7   232  seqs 13.38 / 13.62 / 13.45 / 13.18 / 13.21
+   1 C0-H16    10.82   10.82   15.42   64.07   46.17   5.922  49.3      0.0   169  seqs 10.80 / 10.83 / 10.82
+   2 C0-H16    10.81   10.80   15.12   64.23   46.37   5.945  49.3      0.0   171  seqs 10.80 / 10.81 / 10.81
+   2 D-H16     12.93   12.97   15.27   60.68    1.43   4.680   7.7     20.1   238  seqs 12.73 / 12.93 / 12.81 / 13.27 / 13.10
+   2 C0-H4     17.73   17.74   14.99   71.31   55.42   4.020  45.3      0.0   105  seqs 17.76 / 17.73 / 17.73
+   2 D-H4    INCOMPLETE: paging: window pages input/s [625.1, 4.0, 13.4, 3.7, 3.4] > 100
+   2 C4-H4     17.03   17.00   14.95   59.15   38.58   3.478  47.8      0.0   107  seqs 16.96 / 17.03 / 17.03
+
+arm     state        tok/s  J/token    KL mean     KL sec  top-1     ppl
+C4-H4   INCOMPLETE       -        -     0.0134    0.00124  0.954  10.145  (pass 1: paging: window pages input/s [87.5, 181.1, 9.6] > 100)
+D-H4    INCOMPLETE       -        -     0.0123   8.69e-06  0.956  10.158  (pass 1: paging: window pages input/s [236.3, 15.0, 111.7, 15.5, 15.3] > 100; pass 2: paging: window pages input/s [625.1, 4.0, 13.4, 3.7, 3.4] > 100)
+C0-H4   OK           17.55    4.061     0.0123   1.37e-11  0.956  10.161
+D-H16   OK           13.16    4.652   8.31e-06   8.31e-06  0.998  10.070
+C0-H16  OK           10.81    5.934   1.41e-11   1.41e-11  1.000  10.073
+reference perplexity over 1023 positions: 10.073
+
+(d): NPU-only decode, per head format; the NPU's ceiling at 47.62 GB/s and its floor at 0.328 J/GB
+
+Labels
+  (b): GPU INSIDE and NPU INSIDE (1e546f0): NPU-vs-DirectML and NPU-vs-CPU energy compare, labelled. A component scaling with each chip's work is inside the package, not shown to be all of it.
+  Package counters only: completeness is never shown, and DRAM power is outside the package; shared DRAM pulls ratios toward 1.
+
+Predictions
+  speed C4-H4: 12-22 tok/s: UNSCORED (INCOMPLETE)
+  speed D-H4: 20-30 tok/s: UNSCORED (INCOMPLETE)
+  speed C0-H4: 6-15 tok/s: MISS (17.55)
+  speed D-H16: 14-22 tok/s: MISS (13.16)
+  speed C0-H16: 5-12 tok/s: HIT (10.81)
+  energy C4-H4: 2.5-4.5 J/token: UNSCORED (INCOMPLETE)
+  energy D-H4: 1.6-3.0 J/token: UNSCORED (INCOMPLETE)
+  energy C0-H4: 2.5-4.5 J/token: HIT (4.061)
+  energy D-H16: 1.6-3.0 J/token: MISS (4.652)
+  energy C0-H16: 2.5-7.0 J/token: HIT (5.934)
+  accuracy 1: C0-H16 has the lowest primary KL: HIT
+  accuracy 2: D-H4's KL >= 1.10 x D-H16's: HIT (0.0123 vs 8.31e-06)
+  accuracy 3: C0-H4's primary KL > every arm's secondary KL: HIT (0.0123 vs max secondary 0.00124)
+PROBLEM C4-H4: pass 1: paging: window pages input/s [87.5, 181.1, 9.6] > 100
+PROBLEM D-H4: pass 1: paging: window pages input/s [236.3, 15.0, 111.7, 15.5, 15.3] > 100; pass 2: paging: window pages input/s [625.1, 4.0, 13.4, 3.7, 3.4] > 100
+VERDICT INCOMPLETE
