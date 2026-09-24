@@ -1,0 +1,94 @@
+UTC: 2026-09-24T12:31:54.309279+00:00
+MACHINE: DESKTOP-CBL5NUA AMD64 Family 25 Model 117 Stepping 2, AuthenticAMD
+COMMAND: python tools/llm_freeing.py loadcheck
+COMMIT: bf6643baea3db0ce40dea099401ec6b3a573e041
+PRE_DEVICE_WITNESS
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+LOADCHECK (e), pre-sitting, go/no-go only; enters no rule. 2026-09-24T12:31:54Z
+  Each child: READY, then the go line with its stop 2 s after its start, then its record; the proxy runs a 3 s schedule. No window, no counters, no fault sampler.
+NEUTRAL_NAMES 4 (a local, git-ignored list; the names themselves are not logged)
+HOST_LOAD busy_cores=0.32 logical_cores=16 free_ram_gb=21 sample_sec=1
+HOST_LOAD_TOP 0.15 Code:57420 ws_mb=271
+HOST_LOAD_TOP 0.03 powershell:87204 ws_mb=81
+HOST_LOAD_TOP 0.03 <tool>:83816 ws_mb=292
+HOST_LOAD_TOP 0.03 <tool>:51624 ws_mb=526
+HOST_LOAD_TOP 0.02 AMDInstallManager:4412 ws_mb=12
+HOST_LOAD_VERDICT CLEAR
+HOST_GATE CLEAR
+MEMORY_START_JSON {"available_gb": 22.7, "processes_over_1gb": [], "refuse": []}
+ADAPTERS_JSON {"adapters": [{"index": 0, "description": "AMD Radeon 780M Graphics", "vendor": 4098, "device": 5567, "flags": 0, "luid": "0x00000000_0x0000badf"}, {"index": 1, "description": "AMD Radeon 780M Graphics", "vendor": 4098, "device": 5567, "flags": 0, "luid": "0x00000000_0xbab9a3be"}, {"index": 2, "description": "Microsoft Basic Render Driver", "vendor": 5140, "device": 140, "flags": 2, "luid": "0x00000000_0x0000d6b0"}], "luids_780m": ["0x00000000_0x0000badf", "0x00000000_0xbab9a3be"]}
+NEUTRAL_COUNTERS {"processes": 229, "self": "python.exe"}
+PROC_CMD arm python[resnet_env17] tools/llm_freeing.py reader --arm CPU --threads 1 --unpaced
+arm| DEPRECATED session option was used (config_entries): use 'session_options' directly instead.
+arm| READY {"pid": 51004, "arm": "CPU", "model": "C0-H4", "threads": 1, "paced": false, "session_options": {"intra_op_num_threads": 1, "inter_op_num_threads": 1, "config_entries": {"session.intra_op.allow_spinning": "0"}}, "caller_cpu": 1, "pool_cpus": [], "single_cpu_threads": [], "pin_ok": true, "load_s": 2.22, "check_tokens": [992, 9177, 528, 506, 4103, 669, 172253, 529], "available_gb": 19.97, "onnxruntime_dll": "C:\\Users\\<user>\\miniforge3\\envs\\resnet_env17\\Lib\\site-packages\\onnxruntime\\capi\\onnxruntime.dll", "directml_dll": "C:\\Users\\<user>\\miniforge3\\envs\\resnet_env17\\Lib\\site-packages\\onnxruntime\\capi\\DirectML.dll"}
+LOADCHECK_JSON {"case": "CPU N=1 unpaced", "ready": true, "cpu_seconds_read": true, "exit": 0, "record": {"tokens": 0, "rate": 0.0, "work_ms_median": null, "work_ms_p95": null, "work_ms_max": null, "exit": 0, "tokens_total": 1, "generators": 1, "late_starts": 0, "first_tokens": [992], "pin_ok": true, "single_cpu_threads": [], "load_s": 2.22, "covered": false}, "window_state_code_ran": true}
+PROC_CMD arm python[resnet_env17] tools/llm_freeing.py reader --arm CPU --threads 4
+arm| DEPRECATED session option was used (config_entries): use 'session_options' directly instead.
+arm| READY {"pid": 85904, "arm": "CPU", "model": "C0-H4", "threads": 4, "paced": true, "session_options": {"intra_op_num_threads": 4, "inter_op_num_threads": 1, "config_entries": {"session.intra_op.allow_spinning": "0", "session.intra_op_thread_affinities": "4;6;8"}}, "caller_cpu": 1, "pool_cpus": [3, 5, 7], "single_cpu_threads": [3, 5, 7], "pin_ok": true, "load_s": 2.24, "check_tokens": [992, 9177, 528, 506, 4103, 669, 172253, 529], "available_gb": 19.98, "onnxruntime_dll": "C:\\Users\\<user>\\miniforge3\\envs\\resnet_env17\\Lib\\site-packages\\onnxruntime\\capi\\onnxruntime.dll", "directml_dll": "C:\\Users\\<user>\\miniforge3\\envs\\resnet_env17\\Lib\\site-packages\\onnxruntime\\capi\\DirectML.dll"}
+LOADCHECK_JSON {"case": "CPU N=4 paced", "ready": true, "cpu_seconds_read": true, "exit": 0, "record": {"tokens": 0, "rate": 0.0, "work_ms_median": null, "work_ms_p95": null, "work_ms_max": null, "exit": 0, "tokens_total": 11, "generators": 1, "late_starts": 10, "first_tokens": [992, 9177, 528, 506, 4103, 669, 172253, 529, 72484, 783, 236743], "pin_ok": true, "single_cpu_threads": [3, 5, 7], "load_s": 2.24, "covered": false}, "window_state_code_ran": true}
+PROC_CMD arm python[resnet_env17] tools/llm_freeing.py reader --arm DML --threads 1
+arm| DEPRECATED session option was used (config_entries): use 'session_options' directly instead.
+arm| READY {"pid": 85192, "arm": "DML", "model": "D-H4", "threads": 1, "paced": true, "session_options": {"intra_op_num_threads": 1, "inter_op_num_threads": 1, "config_entries": {"session.intra_op.allow_spinning": "0"}}, "caller_cpu": null, "pool_cpus": [], "single_cpu_threads": [], "pin_ok": true, "load_s": 4.4, "check_tokens": [992, 9177, 528, 506, 4103, 669, 8136, 8586], "available_gb": 18.1, "onnxruntime_dll": "C:\\Users\\<user>\\miniforge3\\envs\\resnet_env17\\Lib\\site-packages\\onnxruntime\\capi\\onnxruntime.dll", "directml_dll": "C:\\Users\\<user>\\miniforge3\\envs\\resnet_env17\\Lib\\site-packages\\onnxruntime\\capi\\DirectML.dll"}
+LOADCHECK_JSON {"case": "DML", "ready": true, "cpu_seconds_read": true, "exit": 0, "record": {"tokens": 10, "rate": 5.0, "work_ms_median": 68.65, "work_ms_p95": 767.6, "work_ms_max": 767.6, "exit": 0, "tokens_total": 11, "generators": 1, "late_starts": 8, "first_tokens": [992, 9177, 528, 506, 4103, 669, 172253, 529, 72484, 783, 236743], "pin_ok": true, "single_cpu_threads": [], "load_s": 4.4, "covered": false}, "window_state_code_ran": true}
+PROC_CMD arm python[resnet_env17] tools/llm_freeing.py reader --arm CPU-c --threads 8
+arm| DEPRECATED session option was used (config_entries): use 'session_options' directly instead.
+arm| READY {"pid": 84960, "arm": "CPU-c", "model": "C0-H4", "threads": 8, "paced": true, "session_options": {"intra_op_num_threads": 8, "inter_op_num_threads": 1, "config_entries": {"session.intra_op_thread_affinities": "3;5;7;9;11;13;15"}}, "caller_cpu": 0, "pool_cpus": [2, 4, 6, 8, 10, 12, 14], "single_cpu_threads": [2, 4, 6, 8, 10, 12, 14], "pin_ok": true, "load_s": 2.18, "check_tokens": [992, 9177, 528, 506, 4103, 669, 172253, 529], "available_gb": 19.95, "onnxruntime_dll": "C:\\Users\\<user>\\miniforge3\\envs\\resnet_env17\\Lib\\site-packages\\onnxruntime\\capi\\onnxruntime.dll", "directml_dll": "C:\\Users\\<user>\\miniforge3\\envs\\resnet_env17\\Lib\\site-packages\\onnxruntime\\capi\\DirectML.dll"}
+LOADCHECK_JSON {"case": "CPU-c", "ready": true, "cpu_seconds_read": true, "exit": 0, "record": {"tokens": 11, "rate": 5.5, "work_ms_median": 52.6, "work_ms_p95": 1220.4, "work_ms_max": 1220.4, "exit": 0, "tokens_total": 11, "generators": 1, "late_starts": 8, "first_tokens": [992, 9177, 528, 506, 4103, 669, 172253, 529, 72484, 783, 236743], "pin_ok": true, "single_cpu_threads": [2, 4, 6, 8, 10, 12, 14], "load_s": 2.18, "covered": false}, "window_state_code_ran": true}
+PROC_CMD w python[resnet_env17] tools/llm_freeing.py wload --kind W1
+w| READY {"kind": "W1", "pid": 85856, "warmup": 3, "providers": ["DmlExecutionProvider", "CPUExecutionProvider"], "available_gb": 20.49}
+LOADCHECK_JSON {"case": "W1", "ready": true, "cpu_seconds_read": true, "exit": 0, "record": {"rate": 77.63323584523854, "units": 144.603, "unit_ms_median": 13.7, "covered": false, "exit": 0, "unit": "GB/s", "units_total": 145, "pin_ok": null}, "window_state_code_ran": true}
+PROC_CMD w python[resnet_env17] tools/llm_freeing.py wload --kind W2
+w| onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+w| READY {"kind": "W2", "pid": 87356, "warmup": 50, "providers": ["DmlExecutionProvider", "CPUExecutionProvider"], "classes": 80, "detections_last_warmup": 5, "available_gb": 21.75}
+LOADCHECK_JSON {"case": "W2", "ready": true, "cpu_seconds_read": true, "exit": 0, "record": {"rate": 19.95392642057623, "units": 39.908, "unit_ms_median": 49.1, "covered": false, "exit": 0, "unit": "frames/s", "units_total": 40, "pin_ok": null}, "window_state_code_ran": true}
+PROC_CMD w python[resnet_env17] tools/llm_freeing.py wload --kind Wcpu
+w| READY {"kind": "Wcpu", "pid": 52368, "warmup": 10, "providers": ["CPUExecutionProvider"], "threads": 8, "caller_cpu": 0, "pool_cpus": [2, 4, 6, 8, 10, 12, 14], "single_cpu_threads": [2, 4, 6, 8, 10, 12, 14], "pin_ok": true, "available_gb": 22.44}
+LOADCHECK_JSON {"case": "Wcpu", "ready": true, "cpu_seconds_read": true, "exit": 0, "record": {"rate": 22.314513233627665, "units": 44.629, "unit_ms_median": 43.7, "covered": false, "exit": 0, "unit": "inferences/s", "units_total": 45, "pin_ok": true}, "window_state_code_ran": true}
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+PROC_CMD arm kernels/dispatch_floor/dispatch_runner.exe --xclbin build/llm_freeing/proxy_c4x2_w286720/probe.xclbin --insts build/llm_freeing/proxy_c4x2_w286720/insts.bin --paced --per-token 238 --words 2293760 --period-ms 190 --seconds 3 --warmup-tokens 3
+arm| == dispatch_runner (C++ XRT host)
+arm|    xclbin: build/llm_freeing/proxy_c4x2_w286720/probe.xclbin
+arm|    insts:  build/llm_freeing/proxy_c4x2_w286720/insts.bin
+arm|    cache entry: (given on the command line)
+arm|    payload: 4096 int32 (16384 B) per buffer
+arm|    iters: 100   warmup: 5
+arm| 
+arm|    kernel: MLIR_AIE   instruction words: 332
+arm| PACED_SETUP_JSON {"per_token": 238, "bytes_per_dispatch": 9175040, "bytes_per_token": 2183659520, "period_ms": 190, "seconds": 3, "warmup_tokens": 3, "alloc_s": 0.117}
+arm| READY
+arm| PACED_DONE_JSON {"tokens": 16, "late_starts": 0, "work_max_us": 85952.7}
+LOADCHECK_JSON {"case": "NPU proxy", "ready": true, "exit": 0, "record": {"tokens": 16, "rate": 5.333333333333333, "work_ms_median": 75.26, "work_ms_p95": 85.95, "work_ms_max": 85.95, "exit": 0, "tokens_total": 16, "late_starts": 0, "ready_wall": 1790253191.84, "covered": false}, "window_state_code_ran": true, "tokens": 16, "done": {"tokens": 16, "late_starts": 0, "work_max_us": 85952.7}}
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+LOADCHECK GO
+
+EXIT_CODE: 0
+POST_DEVICE_WITNESS
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
