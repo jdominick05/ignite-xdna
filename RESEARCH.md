@@ -717,6 +717,12 @@ been closed:
         trips. The halves overlap; each chip's own dependent round trip (131.1 and 168.8 µs) is
         already over the line. It reopens only if a join falls under 49.55 µs
         ([BENCHMARKS](docs/BENCHMARKS.md#a-directml--npu-split-pays-39-ms-per-token-to-join-its-halves-against-the-111-ms-it-could-save-the-split-is-dead-2026-09-23-desktop-2)).
+      - Prefill, measured next (pre-registered, two sittings): INCOMPLETE both times on its own
+        repeat rule. The CPU's 8-thread rows broke 10%, and in sitting 2 some DirectML rows did
+        too. Not a verdict: in neither sitting does an NPU arm beat both chips. NPU bf16 loses to
+        DirectML fp16, which is also more accurate, and NPU int8 is level with the CPU's int8 at
+        M = 2048
+        ([BENCHMARKS](docs/BENCHMARKS.md#prefill-gemm-at-llama-2-7bs-shapes-incomplete-in-both-sittings-on-its-own-repeat-rule-and-neither-sittings-tables-show-an-npu-arm-beating-both-chips-2026-09-23-desktop-2)).
 
   Evidence: `results/aie/int4_{isa_gate,engine_bytes_gate,demo_npu}_desktop2_20260923.log`,
   `results/int4/w4a8_accuracy_{prereg,verdict}_desktop2_20260923.log`,

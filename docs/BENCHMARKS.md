@@ -2895,8 +2895,8 @@ J* = 177.8 − 3.3 = **174.5 µs per join** (MEASURED).
     come on top: a column-then-row segment has at least two per chip unless the two are fused
     into one. So the NPU alone pays at least 128 × a = 16.8 ms per token (DERIVED, post hoc),
     over the line.
-  - Also against that layout: 11.1 ms is itself optimistic. It would also need
-    attention and a share of the KV cache on the NPU, and neither exists here.
+  - Also against that layout: 11.1 ms is itself optimistic. It would need attention and a
+    share of the KV cache on the NPU, and neither exists here.
 - A layer split (DirectML runs some layers, the NPU the rest) joins about twice per token.
   But with one sequence the chips then take turns, their reads do not overlap, and there is
   nothing to save.
@@ -2918,7 +2918,179 @@ J* = 177.8 − 3.3 = **174.5 µs per join** (MEASURED).
 - Attention and the KV cache.
 
 Next, stage 3: prefill GEMM at Llama-2-7B's shapes on the CPU, DirectML and the NPU. The user
-put it after this test, whatever the result.
+put it after this test, whatever the result. (Run since, next section: INCOMPLETE in both
+sittings.)
+
+### Prefill GEMM at Llama-2-7B's shapes: INCOMPLETE in both sittings on its own repeat rule, and neither sitting's tables show an NPU arm beating both chips (2026-09-23, Desktop 2)
+
+The question, the user's third item: does the NPU earn a prefill role? The bar is unchanged.
+An NPU arm must be faster than both the CPU (ONNX Runtime) and DirectML on the 780M, or more
+accurate than both.
+
+**Setup.** Pre-registered at `d51a427` before any sitting
+([prereg](../results/llm/llm_prefill_prereg_desktop2_20260923.log)). The tool is
+`tools/llm_prefill_bench.py`; the runner is `scripts/llm-study.sh prefill`.
+- **Workload:** one Llama-2-7B layer's weight GEMMs at M = 512 and 2048 prompt tokens.
+  - S1 (M, 4096) × (4096, 4096), four per layer.
+  - S2 (M, 4096) × (4096, 11008), two per layer.
+  - S3 (M, 11008) × (11008, 4096), one per layer.
+  - Layer time = 4 S1 + 2 S2 + S3 (DERIVED). Attention, norms and the LM head are outside.
+- **Inputs:** fixed X ~ N(0, 1) and W ~ N(0, 0.02), pinned by SHA-256. Every arm rounds the same
+  fp32 inputs to its own dtype. All int8 arms share one quantization (X per tensor, W per
+  column), so exact int8 arms return the same int32 output.
+- **Arms,** each with native dtypes, resident weights, and input and output in host memory:
+  - **CPU** (ONNX Runtime 1.23.3), at 8 and 16 threads; the faster counts, per arm:
+    - fp32 MatMul;
+    - int8 MatMulInteger (u8 × s8, zero point 128).
+  - **DirectML:**
+    - fp16 MatMul;
+    - fp32 MatMul;
+    - int8 MatMulInteger (placed as s8 × s8).
+  - **NPU:** mlir-aie's `whole_array`, bf16 → f32 and int8 → int32.
+    - 28 configs, compiled here through IRON's compile-only path and dispatched through raw
+      pyxrt.
+    - Per shape, the best tile on record (P) and the tile that already ran (F); the faster
+      passing config counts.
+    - S2 also runs as host-side column slices, 4096 + 4096 + 2816, because the 2²⁰-word
+      C step ([SILICON 2.6](SILICON.md#26-the-three-ffn-dma-limits-are-field-widths-not-compiler-bugs))
+      forces the unsliced S2 to m = 16.
+- **Timing:**
+  - CPU and DirectML: one `session.run` per GEMM.
+  - NPU: sync in, run, wait, sync out.
+  - 3 warmup runs and 10 timed, in two mirrored passes. A row's pass medians must agree within
+    10%.
+- **Accuracy:** rel-L2 against the float64 product of the fp32 inputs; an arm's error is its
+  worst shape.
+- **Rule, per M:** an NPU arm beats a chip if it is at least 1.10× faster than every arm of that
+  chip whose rel-L2 is at most 1.10× its own. KEEP needs both chips beaten; otherwise KILL.
+
+**Two sittings, both INCOMPLETE.**
+- **Sitting 1** ([NPU](../results/llm/llm_prefill_npu_desktop2_20260923.log),
+  [CPU](../results/llm/llm_prefill_cpu_desktop2_20260923.log),
+  [DirectML](../results/llm/llm_prefill_dml_desktop2_20260923.log),
+  [verdict](../results/llm/llm_prefill_verdict_desktop2_20260923.log)): six CPU rows at 8
+  threads broke the 10% rule (pass 1 / pass 2, ms).
+  - fp32 S1, M = 512: 24.34 / 21.65 (11.7%).
+  - fp32 S3, M = 512: 66.31 / 44.96 (38.4%).
+  - int8 S1, M = 512: 5.10 / 6.65 (26.4%).
+  - int8 S2, M = 512: 13.45 / 16.61 (21.1%).
+  - int8 S3, M = 512: 12.67 / 16.31 (25.2%).
+  - int8 S1, M = 2048: 25.93 / 20.66 (22.6%).
+  - These rows are noisy within each pass too; int8 S1 at M = 512 flips between about 4.2 and
+    7.2 ms.
+  - Every 16-thread row, every DirectML row and all 56 NPU rows held.
+- **The re-run rule** ([rule](../results/llm/llm_prefill_prereg_rerun_desktop2_20260923.log))
+  is the gate's ruling, committed at `c6c37e3` before sitting 2.
+  - The whole matrix runs again, and sitting 2 alone decides. If it breaks the 10% rule
+    anywhere, INCOMPLETE stands and both sittings are reported side by side.
+  - Two changes:
+    - every ORT row opens its session just before it and releases it after;
+    - a CPU clock witness that never gates a row.
+- **Sitting 2** ([NPU](../results/llm/llm_prefill_npu_rerun_desktop2_20260923.log),
+  [CPU](../results/llm/llm_prefill_cpu_rerun_desktop2_20260923.log),
+  [DirectML](../results/llm/llm_prefill_dml_rerun_desktop2_20260923.log),
+  [verdict](../results/llm/llm_prefill_verdict_rerun_desktop2_20260923.log)) broke the rule on
+  eight rows (pass 1 / pass 2, ms).
+  - CPU 8 threads:
+    - fp32 S1, M = 512: 17.48 / 25.62 (37.8%);
+    - int8 S2, M = 2048: 59.84 / 68.71 (13.8%).
+  - DirectML:
+    - fp16 S1, M = 2048: 12.3%;
+    - fp16 S2, M = 2048: 12.1%;
+    - fp16 S3, M = 512: 12.8%;
+    - fp32 S2, M = 2048: 141.71 / 107.02 (27.9%);
+    - fp32 S3, M = 512: 11.1%;
+    - int8 S3, M = 512: 21.4%.
+  - All 56 NPU rows and every 16-thread row held again.
+- **So stage 3 is INCOMPLETE:** no KEEP and no KILL.
+
+**Both sittings side by side (MEASURED; layer ms, with its average TFLOPS or TOPS).** These are
+not a verdict. † marks a figure computed from a row that broke the 10% rule in that sitting.
+
+| Arm | M = 512, sitting 1 | M = 512, sitting 2 | M = 2048, sitting 1 | M = 2048, sitting 2 | rel-L2 |
+|---|---:|---:|---:|---:|---:|
+| CPU int8 (16 threads) | 50.26 (4.12) | 50.82 (4.08) | 218.10 (3.80) | 219.34 (3.78) | 1.54e-2 |
+| DirectML fp16 | 61.31 (3.38) | 53.88 (3.85) † | 251.36 (3.30) | 236.96 (3.50) † | 3.61e-4 |
+| NPU int8 | 61.73 (3.36) | 63.66 (3.26) | 211.58 (3.92) | 220.71 (3.76) | 1.54e-2 |
+| NPU bf16 | 86.64 (2.39) | 89.37 (2.32) | 312.67 (2.65) | 323.45 (2.56) | 2.35e-3 |
+| DirectML fp32 | 157.55 (1.32) | 140.61 (1.47) † | 620.64 (1.34) | 574.24 (1.44) † | 1.33e-6 |
+| CPU fp32 (faster of 8 and 16) | 254.89 (0.81) | 245.30 (0.84) † | 1028.72 (0.81) | 1041.24 (0.80) | 3.12e-7 |
+| DirectML int8 | 372.48 (0.56) | 343.23 (0.60) † | 1435.86 (0.58) | 1342.37 (0.62) | 1.54e-2 |
+
+In both sittings' tables, no NPU arm beats both chips at either M:
+- **NPU bf16** beats the CPU's fp32 by 2.7–3.3×. DirectML fp16 is more accurate and faster: it
+  takes 0.60–0.80× the NPU's time.
+- **NPU int8** at M = 512 is slower than the CPU's int8 (which takes 0.80–0.81× the NPU's time)
+  and than DirectML fp16 (0.85–0.99×).
+- **NPU int8** at M = 2048 is level with the CPU's int8 (0.99–1.03×), under the 1.10 line.
+
+**Post hoc, not pre-registered: the broken rows could not have produced a KEEP in either
+sitting.**
+- Every NPU row and every CPU 16-thread row held in both sittings. Each CPU arm takes the faster
+  of 8 and 16 threads, so the 16-thread rows cap the CPU's times from above.
+- Against rows that held, or a broken row's slower pass, every NPU arm fails at both M in both
+  sittings:
+  - bf16 to DirectML fp16;
+  - int8 at M = 512 to the 16-thread CPU int8;
+  - int8 at M = 2048 would have needed at most 198.3 ms (sitting 1) and 199.4 ms (sitting 2),
+    against measured 211.58 and 220.71.
+- This does not replace the verdict.
+
+**What held in both sittings (MEASURED).**
+- **Accuracy is identical in both sittings, and the NPU cannot win on it.** Its best arm, bf16
+  at 2.35e-3, is less accurate than the CPU's fp32, DirectML's fp32 and DirectML's fp16. All
+  int8 arms tie at 1.54e-2, and their int32 outputs were identical across all three chips.
+- **The NPU's bf16 accumulates in fp32 through this design.** Against the float64 product of
+  its own bf16-rounded inputs it reads 6.1e-7 (K = 4096) and 1.2e-6 (K = 11008).
+- **The best tiles on record worked at these shapes and won everywhere.**
+  - bf16 S1 at M = 2048 read 2.64–2.69 TFLOPS with the syncs inside the bracket.
+  - bf16 S3 at M = 2048 read 2.58–2.78, against 1.49–1.80 at the F tile.
+  - int8 S3 at M = 2048 read 3.93–4.28 TOPS.
+- **Host-side slicing lifts S2 past the C-step limit.**
+  - At M = 2048, bf16 goes from 0.86–0.98 TFLOPS unsliced to 2.50–2.56 sliced, and int8 from
+    1.13–1.22 to 3.72–3.80 TOPS.
+  - The three outputs stay in separate buffers. Concatenating them on the host costs 26–27 ms
+    at M = 2048, 0.37–0.54 of the sliced GEMM's own time (72–74 ms bf16, 49–50 ms int8), so a
+    pipeline would have to consume the slices where they are.
+- **DirectML fp16 GEMM ran on the 780M for the first time here:** 3.30–3.85 TFLOPS averaged
+  over a layer, with rel-L2 3.61e-4.
+- **The CPU's int8 read far above Q2's prior:** 3.78–4.12 TOPS at 16 threads. The prior was ORT
+  MatMulInteger's 1.70 at 2048 × 4096 × 4096 in an earlier sweep, a different harness whose
+  thread count is not recorded.
+
+**What broke, post hoc, cause unattributed.**
+- The CPU's 8-thread rows are bimodal within a pass in both sittings. Sitting 2's clock witness
+  read 103–114% on every CPU row. The worst row (fp32 S1 at M = 512) read 103–114% in its fast
+  pass and 110% in its slow one. Clock changes do not explain it. The OS placing two of the 8 threads on one core's
+  SMT siblings remains a candidate.
+- DirectML broke only in sitting 2, where each row opened a fresh session. Its broken rows are
+  steady within each pass and sit at a different level in the other; fp32 S2 at M = 2048 held
+  about 141 ms, then about 107. Per-session state (for example, where the weights land in
+  memory) and GPU clocks are candidates.
+
+**Predictions scored, on both sittings** (the rule decides, these do not):
+- Q1 holds: CPU fp32 S1 at M = 2048 read 0.76–0.77 TFLOPS.
+- Q2 misses high: CPU int8 read 3.82–3.86 TOPS against 1.4–2.4.
+- Q3 holds: DirectML fp16 read 3.03–3.42 TFLOPS.
+- Q4 misses low: DirectML fp32 read 1.37–1.40 against 1.5–5.
+- Q5 holds, except bf16 S3 in sitting 1 at 2.78, over 2.7.
+- Q6 holds: NPU int8 S1 read 3.69–3.86 TOPS.
+- Q7 holds, except DirectML fp32 at 1.33e-6, over 1e-6.
+- Q8 is not decided. The tables side with it, but the rival that stops NPU int8 at M = 2048 is
+  the CPU's int8, not DirectML fp16.
+- Q9 misses: DirectML fp16 and the CPU's int8 ran faster per FLOP at M = 512 than at 2048, in
+  both sittings.
+
+**What this does not establish:**
+- A prefill verdict: stage 3 is INCOMPLETE.
+- The cause of either sitting's spreads.
+- Attention, norms, RoPE and the LM head.
+- The activations between GEMMs. The f32-to-bf16 conversion and int8 quantization are outside
+  every bracket, for every arm.
+- DirectML IO binding.
+- CPU stacks other than ONNX Runtime.
+- Tiles outside the pre-registered menu.
+- Prefill running beside decode.
 
 ### MobileViT-XXS does not survive per-tensor INT8, and AdaRound cannot save it
 

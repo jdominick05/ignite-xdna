@@ -504,6 +504,13 @@ L1 wall at a worse operating point (`results/aie/bf16_matmul_ffn_shape_variants_
 Mistral's `d_ff=14336` showed that the surviving `n`-tile size, not "real-shape-ness",
 decides the verdict (1.10× CPU at 11008, 1.13× NPU at 14336).
 
+Measured since (2026-09-23, LLM study stage 3, MEASURED in two sittings): decomposing on the
+host works around the C step. Slicing N = 11008 into 4096 + 4096 + 2816, each at m = 64, runs
+the 2048 × 4096 × 11008 GEMM at 2.50–2.56 TFLOPS in bf16 and 3.72–3.80 TOPS in int8. Unsliced,
+at the forced m = 16, the same GEMM reads 0.86–0.98 and 1.13–1.22. The three outputs land in
+separate buffers, and concatenating them on the host costs 26–27 ms
+([BENCHMARKS](BENCHMARKS.md#prefill-gemm-at-llama-2-7bs-shapes-incomplete-in-both-sittings-on-its-own-repeat-rule-and-neither-sittings-tables-show-an-npu-arm-beating-both-chips-2026-09-23-desktop-2)).
+
 ### 2.7 Master closed-form roofline formulation
 
 Synthesized from the micro-architectural parameters of Sections 1 and 2 (fully documented in [`results/aie/notes_master_xdna1_roofline_synthesis.md`](../results/aie/notes_master_xdna1_roofline_synthesis.md)), the theoretical latency ceiling for an end-to-end workload on Phoenix AIE2 is bounded by the maximum execution time across the compute, off-chip DRAM, and on-chip interconnect streaming bottlenecks, plus an additive host dispatch floor:
