@@ -8,6 +8,7 @@ DirectML decodes of Gemma 3 4B do not? (locked decision 10; plan v4, approved 20
     python tools/llm_freeing.py dryrun                         # the one disclosed proxy dry run (pre-prereg)
     python tools/llm_freeing.py dryrun-verdict <log>           # the dry run's go/no-go, re-read
     python tools/llm_freeing.py prereg                         # the pre-registration and its pins
+    python tools/llm_freeing.py loadcheck                      # every child to READY and a 2 s go (pre-sitting)
     python tools/llm_freeing.py suite                          # the sitting (resnet_env17)
     python tools/llm_freeing.py verdict <suite log>            # the mechanical verdict
     python tools/llm_freeing.py selftest                       # synthetic rules; no model, no chip
@@ -975,6 +976,9 @@ class Live:
         self.out.flush()
         self.f.flush()
 
+    def __getattr__(self, name):                         # anything else (encoding, isatty, ...) is the stream's
+        return getattr(self.out, name)
+
 
 def suite() -> int:
     import gemma_decode_suite as gds
@@ -1039,6 +1043,100 @@ def suite() -> int:
         n += 1
     print(f"\nSUITE_DONE {n} windows {utc()}", flush=True)
     return 0
+
+
+LOADCHECK_CASES = (("CPU N=1 unpaced", ["reader", "--arm", "CPU", "--threads", "1", "--unpaced"]),
+                   ("CPU N=4 paced", ["reader", "--arm", "CPU", "--threads", "4"]),
+                   ("DML", ["reader", "--arm", "DML", "--threads", str(DML_THREADS)]),
+                   ("CPU-c", ["reader", "--arm", "CPU-c", "--threads", str(len(EVEN))]),
+                   ("W1", ["wload", "--kind", "W1"]), ("W2", ["wload", "--kind", "W2"]), ("Wcpu", ["wload", "--kind", "Wcpu"]))
+LOADCHECK_GO_S = 2.0
+LOADCHECK_PROXY_S = 3.0
+
+
+def loadcheck() -> int:
+    """The load check (pre-sitting, disclosed, enters no rule; the gate's approval of 2026-09-24): every
+    child the sitting spawns, started to READY by the sitting's own code path, sent the sitting's go line
+    with its stop 2 s after its start (so its loop and its final record run once), and parsed by the
+    sitting's record code. No window, no counters, no fault sampler."""
+    import gemma_decode_suite as gds
+    from silicon_probe_record import witness
+    global LUIDS_780M
+    TMP.mkdir(parents=True, exist_ok=True)
+    stamp = time.strftime("%Y%m%dT%H%M%S")
+    sys.stdout = Live(TMP / f"{stamp}_loadcheck_live.log")
+    names = neutral_list()
+    set_neutral(names)
+    print(f"LOADCHECK (e), pre-sitting, go/no-go only; enters no rule. {utc()}", flush=True)
+    print(f"  Each child: READY, then the go line with its stop {LOADCHECK_GO_S:g} s after its start, then its record; "
+          f"the proxy runs a {LOADCHECK_PROXY_S:g} s schedule. No window, no counters, no fault sampler.", flush=True)
+    print(f"NEUTRAL_NAMES {len(names)} (a local, git-ignored list; the names themselves are not logged)", flush=True)
+    bad = [] if names else ["the local name list is empty or missing"]
+    if not host_gate():
+        bad.append("the host-load gate")
+    m = gds.memory_start()
+    for key in ("processes_over_1gb", "refuse"):
+        for e in m[key]:
+            e["name"] = neutralize(e["name"])
+    say("MEMORY_START_JSON", m)
+    ad = gds.dxgi_adapters()
+    LUIDS_780M = sorted(x["luid"] for x in ad if (x["vendor"], x["device"]) == gds.GPU_780M_ID and not x["flags"] & 2)
+    say("ADAPTERS_JSON", {"adapters": ad, "luids_780m": LUIDS_780M})
+    nc = neutral_counters()                              # the fault sampler's source, called once (no sampling)
+    print("NEUTRAL_COUNTERS", json.dumps({"processes": len(nc), "self": (nc.get(os.getpid()) or ["?"])[0]}), flush=True)
+
+    def finish(p, key, kind, start, stop) -> dict:
+        try:
+            p.proc.wait(timeout=180)
+        except subprocess.TimeoutExpired:
+            p.proc.kill()                                # our own child, by its pid
+            p.proc.wait(timeout=30)
+        p.pump.join(timeout=30)
+        print(f"PROC_CMD {key} {p.shown}", flush=True)
+        for s in p.lines:
+            if not s.startswith(QUIET):
+                print(neutralize(f"{key}| {s}"), flush=True)
+        if start is None:
+            return {"exit": p.proc.returncode, "record": None}
+        st = (arm_record(p, kind, start, stop) if kind in ARM_MODEL or kind == "NPU" else w_record(p, kind, start, stop))
+        rec = {"arm_stats" if kind in ARM_MODEL or kind == "NPU" else "w_stats": st, "counters": {"rows": MIN_ROWS},
+               "faults": {"seconds": MIN_ROWS, "hard_per_s": {}}}
+        window_state(rec)                                # its code path runs; with no window its label means nothing
+        return {"exit": p.proc.returncode, "record": {k: v for k, v in st.items() if k not in ("per_second", "setup")},
+                "window_state_code_ran": True}
+
+    for name, args in LOADCHECK_CASES:
+        kind = args[2]                                   # --arm CPU/DML/CPU-c or --kind W1/W2/Wcpu
+        p = py_proc(args)
+        ready = p.ready.wait(READY_TIMEOUT_S) and p.json("READY") is not None
+        start = stop = None
+        cpu = {}
+        if ready:
+            cpu = cpu_seconds({"child": p.proc.pid})
+            start = time.time() + GO_LEAD_S
+            stop = start + LOADCHECK_GO_S
+            p.go(start, stop)
+        res = finish(p, "arm" if args[0] == "reader" else "w", kind, start, stop)
+        rec = {"case": name, "ready": ready, "cpu_seconds_read": ready and "child" in cpu, **res}
+        say("LOADCHECK_JSON", rec)
+        st = res.get("record") or {}
+        if not ready or res["exit"] != 0 or not st or st.get("missing") or st.get("pin_ok") is False:
+            bad.append(name)
+    witness()
+    p = Proc([str(RUNNER_EXE)] + proxy_cmd(LOADCHECK_PROXY_S)[1:], " ".join(proxy_cmd(LOADCHECK_PROXY_S)))
+    ready = p.ready.wait(RUNNER_READY_S) and p.ready_wall is not None
+    a = p.ready_wall
+    res = finish(p, "arm", "NPU", a, (a + LOADCHECK_PROXY_S) if a else None)
+    rec = {"case": "NPU proxy", "ready": ready, **res,
+           "tokens": len(paced_tokens(p.lines)), "done": p.json("PACED_DONE_JSON")}
+    say("LOADCHECK_JSON", rec)
+    if not ready or res["exit"] != 0 or rec["done"] is None or not rec["tokens"]:
+        bad.append("NPU proxy")
+    witness()
+    for b in bad:
+        print("LOADCHECK_PROBLEM", b, flush=True)
+    print("LOADCHECK", "GO" if not bad else "NO-GO", flush=True)
+    return 0 if not bad else 2
 
 
 def protocol() -> dict:
@@ -1523,8 +1621,8 @@ def selftest() -> int:
 def main():
     sys.stdout.reconfigure(encoding="utf-8")
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("mode", choices=("build", "runner", "dryrun", "dryrun-verdict", "prereg", "suite", "verdict",
-                                     "selftest", "reader", "wload"))
+    ap.add_argument("mode", choices=("build", "runner", "dryrun", "dryrun-verdict", "prereg", "loadcheck", "suite",
+                                     "verdict", "selftest", "reader", "wload"))
     ap.add_argument("log", nargs="?")
     ap.add_argument("--arm", choices=tuple(ARM_MODEL))
     ap.add_argument("--threads", type=int)
@@ -1546,7 +1644,7 @@ def main():
     elif a.mode == "wload":
         sys.exit(wload(a.kind))
     else:
-        sys.exit({"prereg": prereg, "suite": suite, "selftest": selftest}[a.mode]())
+        sys.exit({"prereg": prereg, "loadcheck": loadcheck, "suite": suite, "selftest": selftest}[a.mode]())
 
 
 if __name__ == "__main__":

@@ -99,6 +99,7 @@
 #   ./scripts/llm-study.sh freeing-build          # (e): the C++ host and the NPU proxy, compile only
 #   ./scripts/llm-study.sh freeing-dryrun         # (e): the one disclosed proxy dry run (go/no-go)
 #   ./scripts/llm-study.sh freeing-prereg         # (e): the pre-registration and pins (commit it)
+#   ./scripts/llm-study.sh freeing-loadcheck      # (e): every child to READY and a 2 s go (pre-sitting)
 #   ./scripts/llm-study.sh freeing-suite          # (e): the sitting (BFP16 holds the machine)
 #   ./scripts/llm-study.sh freeing-verdict        # (e): the mechanical verdict over the sitting's log
 #
@@ -130,7 +131,7 @@ while [ $# -gt 0 ]; do
         decode-build|decode-recheck) STAGE="${1//-/_}" ;;
         decode-prereg|decode|decode-accuracy|decode-verdict) STAGE="${1//-/_}" ;;
         decode-gpu-posthoc|decode-rerun-prereg|decode-rerun|decode-rerun-verdict) STAGE="${1//-/_}" ;;
-        freeing-build|freeing-dryrun|freeing-prereg|freeing-suite|freeing-verdict) STAGE="${1//-/_}" ;;
+        freeing-build|freeing-dryrun|freeing-prereg|freeing-loadcheck|freeing-suite|freeing-verdict) STAGE="${1//-/_}" ;;
         --machine) MACHINE="$2"; shift ;;
         --tag)     TAG="_$2"; shift ;;
         -h|--help) usage "${BASH_SOURCE[0]}"; exit 0 ;;
@@ -767,6 +768,17 @@ stage_freeing_prereg() {
     use_env resnet_env17
     logged "$log" python $FREE prereg || die "the prereg found a mismatch, see $log"
     ok "prereg written; commit it, then report HEAD to the gate before any sitting"
+}
+
+stage_freeing_loadcheck() {
+    # pre-sitting, disclosed, enters no rule: every child to READY, a 2 s go, its record parsed; no window
+    ls "$OUT"/llm_freeing_prereg_*.log >/dev/null 2>&1 || die "no (e) pre-registration log: run $0 freeing-prereg and commit it"
+    local log="$OUT/llm_freeing_loadcheck_${MACHINE}_${DATE}.log"
+    refuse "$log"
+    use_env resnet_env17
+    python tools/silicon_probe_record.py --log "$log" --device --seconds 1800 -- \
+        python $FREE loadcheck || die "the load check is NO-GO or failed, see $log"
+    ok "load check GO; next: commit its log, then a START REQUEST and $0 freeing-suite"
 }
 
 stage_freeing_suite() {
