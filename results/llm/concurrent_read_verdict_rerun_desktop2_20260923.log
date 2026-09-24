@@ -1,0 +1,17 @@
+configuration     run totals GB/s    mean  per chip (mean GB/s, share of its solo)
+cpu                 60.30 / 61.71   61.01  cpu 61.01 (100%)
+dml                 70.61 / 69.97   70.29  dml 70.29 (100%)
+npu                 47.33 / 46.27   46.80  npu 46.80 (100%)
+cpu+dml             83.62 / 83.16   83.39  cpu 27.97 (46%)  dml 55.42 (79%)
+cpu+npu             83.91 / 84.11   84.01  cpu 40.52 (66%)  npu 43.49 (93%)
+dml+npu             91.70 / 91.82   91.76  dml 53.11 (76%)  npu 38.65 (83%)
+cpu+dml+npu         90.41 / 90.45   90.43  cpu 11.96 (20%)  dml 48.89 (70%)  npu 29.58 (63%)
+pre-run witness: 1 GPU engine(s) over 1%
+  GPU_ENGINE pid_31316_luid_0x00000000_0x0000badf_phys_0_eng_0_engtype_3d 2.1
+
+R1 cpu+dml 83.39 vs 1.1 x max(61.01, 70.29): ADD (1.186x)
+R2 dml+npu 91.76 vs 1.1 x 70.29: ADD (1.305x)
+R2 cpu+npu 84.01 vs 1.1 x 61.01: ADD (1.377x)
+R3 all three 90.43 vs 1.1 x cpu+dml 83.39: NO (1.084x)
+R4 ceiling 91.76 GB/s at dml+npu: 95.6% of 96 (DERIVED), 1.50x cpu alone, 1.31x dml alone, 1.96x npu alone
+R5 best with the NPU 91.76 (dml+npu) vs best without 83.39 (cpu+dml) = 1.100x -> OPEN, not established: the NPU adds read bandwidth a split could use
