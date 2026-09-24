@@ -4095,10 +4095,14 @@ The co-runs, pass 1 / pass 2. Tok/s and the W's rate are MEASURED; K is DERIVED.
 Every K's two passes lie within 0.022 of each other. Nothing is INCOMPLETE.
 
 **What the holds rest on.**
-- An arm's tok/s is the reader's own count of token completions inside the window. The log keeps it
-  per window, with the work time's median, p95 and max and the count of late starts.
-- The per-token completion times were not retained, neither in the logs nor in scratch. So no hold
-  can be re-derived from raw times.
+- An arm's tok/s counts the token completions it reported inside the window. Every arm printed each
+  token's start and completion time. The sitting parsed them into the window record, which keeps the
+  count, the work time's median, p95 and max, and the late starts.
+- By design, the sitting did not write those raw lines to its log (`QUIET` in
+  `tools/llm_freeing.py`), and its scratch live copy has none either. So no hold can be re-derived
+  from raw times. A W's rate is kept per second.
+- The proxy's per-token times survive only in the dry run's log: 316 lines, pre-prereg, entering no
+  rule.
 - The gate checked every arm's count against its logged work time and lateness: they agree within
   6%.
 - Logging per-token times in any future sitting is the user's call.
@@ -4160,11 +4164,13 @@ them).
   - the CPU arm 156–158% alone, and 196–198% in every co-run, where every slot started late;
   - Wcpu about 797% alone and in the matrix co-runs.
 - The 780M's busy:
-  - The figure sums every GPU Engine counter instance (per process, per engine) on the 780M's two
-    LUIDs; DXGI lists the 780M twice. So it can exceed 100%.
+  - The window record sums every GPU Engine counter instance (per process, per engine) on the 780M's
+    two LUIDs; DXGI lists the 780M twice. So the sum can exceed 100%. The per-instance columns are
+    in the committed CSVs.
   - The DirectML arm alone reads 49%, W1 99% and W2 68%.
-  - The DirectML arm with W1 reads 199%: W1's process 99.1% and the arm's 99.3%.
-  - The log keeps no per-engine split, so which engines or LUIDs those were is not known.
+  - The DirectML arm with W1 reads 199%. Read back from the CSVs (POST HOC), that is two engines on
+    one LUID: W1's process at 99.1% on the 3D engine, and the arm's at 99.3% on Compute 0.
+  - Every GPU process in (e) ran on that LUID: W1 and W2 on 3D, the DirectML arm on Compute 0.
 - The counters on adapters other than the 780M read 38.9–41.4% in the NPU windows and 0 in every
   other window, so they are the NPU's (INFERRED). That matches the proxy's median 75.7–81.0 ms of
   work per 190 ms.
