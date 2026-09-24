@@ -773,7 +773,7 @@ been closed:
         - Post hoc, deciding nothing: (d)'s speed rule leaves NPU-only decode OPEN on the F16
           head.
           - Under the least generous accuracy assumption the margin is 4.5%, so an NPU would have
-            to decode at 95.7% of its measured read ceiling.
+            to decode at 95.6% of its measured read ceiling.
           - The int4 head is undetermined.
           ([BENCHMARKS](docs/BENCHMARKS.md#gemma-3-4b-decode-on-the-cpu-and-directml-incomplete-in-both-sittings-on-the-page-in-witness-and-the-three-complete-arms-decode-at-108176-toks-2026-09-24-desktop-2)).
 

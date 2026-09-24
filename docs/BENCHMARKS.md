@@ -3687,8 +3687,9 @@ Run 3's staged max KL:
 
 **The protocol** (pre-registered at `68e9cfe` before either sitting,
 [prereg](../results/llm/gemma_decode_prereg_desktop2_20260924.log)). The tool is
-`tools/gemma_decode_suite.py`. Each sitting ran under `tools/silicon_probe_record.py --device`,
-announced to the other sessions, with nothing else running.
+`tools/gemma_decode_suite.py`. Each sitting ran under `tools/silicon_probe_record.py --device` and
+was announced to the other sessions. No other load was launched, and the host-load gate read 0.35
+and 0.38 busy cores with no peer.
 - The text is wikitext-2-raw-v1 test, BOS plus the first 1023 tokens: a 128-token prompt, then 896
   greedy tokens. The timed window is generated tokens 257–896.
 - Sessions:
@@ -3697,8 +3698,8 @@ announced to the other sessions, with nothing else running.
   - DirectML arms: 5 fresh sessions per arm-pass, one sequence each.
 - Order: C4-H4, D-H4, C0-H4, D-H16, C0-H16, then mirrored. Each arm-pass follows a 10 s settle
   and a 60 s idle.
-- J/token is package power in the windows above the arm-pass's own idle, divided by its tok/s
-  ((b)'s method).
+- J/token is package power in the windows above the arm-pass's own idle, divided by its aggregate
+  tok/s over the windows ((b)'s method). The tables' tok/s is the median of its sequences.
 - An arm is complete if both passes are and they agree within 10% in tok/s and J/token. Its value
   is their mean.
 - The memory witness: a sequence window whose mean `\Memory\Pages Input/sec` exceeds 100 voids its
@@ -3818,7 +3819,7 @@ since both are INCOMPLETE.
   - Speed OPEN: the ceiling is 15.13 tok/s, against 1.10 × 10.815 = 11.90.
 - **Worst** (the NPU only as accurate as D-H16): the rivals are C0-H16 and D-H16.
   - Speed OPEN: 15.13 against 1.10 × 13.157 = 14.47, a 4.5% margin.
-  - An NPU decode would have to run at 95.7% of its measured read ceiling to clear that line. The
+  - An NPU decode would have to run at 95.6% of its measured read ceiling to clear that line. The
     ceiling is a DMA read with no compute behind it
     ([stage 1](#the-npu-reads-ddr-at-476-gbs-when-nothing-is-written-back-silicons-2628-gbs-cap-does-not-bind-reads-and-7b-decode-stays-killed-2026-09-23-desktop-2)).
 - Energy is OPEN in both (1.10 × 1.032 = 1.135 J/token, against 5.934 and 4.652). That holds by
