@@ -1,0 +1,50 @@
+LLM study stage 3: the re-run rule, written after sitting 1 and before sitting 2
+
+Sitting 1 was committed as measured at e9efb97 and is INCOMPLETE on its own repeat rule. Six CPU
+rows at 8 threads had pass medians more than 10% apart (pass 1 / pass 2, ms):
+  fp32 S1 M=512   24.34 / 21.65  (11.7%)
+  fp32 S3 M=512   66.31 / 44.96  (38.4%)
+  int8 S1 M=512    5.10 /  6.65  (26.4%)
+  int8 S2 M=512   13.45 / 16.61  (21.1%)
+  int8 S3 M=512   12.67 / 16.31  (25.2%)
+  int8 S1 M=2048  25.93 / 20.66  (22.6%)
+Every 16-thread CPU row, every DirectML row and all 56 NPU rows repeated within 10%.
+
+Sitting 2 (the gate's ruling)
+  The whole matrix again (NPU, CPU, DirectML: every row), as pre-registered at d51a427
+  (llm_prefill_prereg_desktop2_20260923.log): the same arms, threads, ops, inputs, artifacts,
+  thresholds, 10% repeat rule, and "the faster of 8 and 16 threads". Its logs carry the tag _rerun.
+
+Which sitting decides
+  Sitting 2 alone decides; its verdict runs on its own three logs only.
+  If sitting 2 breaks the 10% repeat rule anywhere, stage 3 stays INCOMPLETE and both sittings
+  are reported side by side. There is no averaging across sittings and no new rule after sitting
+  2's data.
+  Sitting 1 stays in the record as measured. Wherever stage 3 is reported, its six broken rows and
+  their spreads sit beside the verdict. If sitting 2 decides, only sitting 2's figures are quoted
+  in the verdict.
+
+Changes made after sitting 1 (the gate's ruling; nothing else)
+  (a) Every ONNX Runtime row (the CPU at both thread counts, and DirectML for symmetry) opens its
+      session just before the row and releases it after, so only one ORT thread pool is alive at a
+      time. Sitting 1 kept all of a process's sessions alive for the whole run. Session creation
+      stays outside the timed runs, as before. Arms, threads, ops, inputs, artifacts and
+      thresholds are unchanged.
+  (b) Non-deciding: a CPU clock witness, \Processor Information(_Total)\% Processor Performance,
+      sampled once a second by one Get-Counter process for the whole CPU run. Each CPU row records
+      the samples covering its timed runs (clock_pct). It tests the "clock changes" candidate and
+      never gates a row; the verdict prints it for display only.
+  Not changed: no thread pinning or affinity, which would change the arm.
+
+Post hoc from sitting 1, labelled as such (not pre-registered; the cause is unattributed)
+  The broken rows are noisy within each pass too: int8 S1 at M = 512 flips between about 4.2 and
+  7.2 ms from rep to rep. Candidates: the OS placing two of the 8 threads on one core's SMT
+  siblings, which (a) does not remove; other sessions' idle ORT pools, which (a) removes; clock
+  changes, which (b) witnesses. Sitting 2's 8-thread rows may break again; then INCOMPLETE stands.
+  Each CPU arm takes the faster of 8 and 16 threads, and every 16-thread row was stable, so the
+  16-thread rows cap the CPU's times from above. Against stable rows alone, every NPU arm failed
+  at both M. NPU int8 at M = 2048 would have needed <= 198.3 ms per layer against the 16-thread
+  CPU int8's 218.10, and measured 211.58.
+
+PINS 28 NPU artifacts and the inputs manifest 9c5454169184a4b3: identical to the prereg log
+git HEAD e9efb97abb7ca19c740913ad9959c0b3c5aa0f36

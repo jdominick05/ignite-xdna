@@ -297,16 +297,61 @@ def ort_weights(kind: str, s: str, data: dict, form: str) -> np.ndarray:
     return data[f"w_{s}"].astype(np.float16 if kind == "fp16" else np.float32)
 
 
+class ClockWitness:
+    """Non-deciding, added after sitting 1: the CPU clock, % Processor Performance, sampled once a
+    second by one Get-Counter process for the whole CPU run. A sample stamped T covers [T - 1 s, T]."""
+
+    PS = ("Get-Counter '\\Processor Information(_Total)\\% Processor Performance' -SampleInterval 1 -Continuous"
+          " | ForEach-Object { [DateTimeOffset]::Now.ToUnixTimeMilliseconds().ToString() + ' ' +"
+          " [math]::Round($_.CounterSamples[0].CookedValue, 1) }")
+
+    def __init__(self):
+        import threading
+        self.samples = []
+        self.proc = subprocess.Popen(["powershell", "-NoProfile", "-Command", self.PS], stdout=subprocess.PIPE,
+                                     stderr=subprocess.DEVNULL, text=True)
+        self.pump = threading.Thread(target=self._pump, daemon=True)
+        self.pump.start()
+
+    def _pump(self):
+        for line in self.proc.stdout:
+            parts = line.split()
+            if len(parts) == 2:
+                try:
+                    self.samples.append((int(parts[0]), float(parts[1])))
+                except ValueError:
+                    pass
+
+    def wait_first(self, timeout_s: float = 20.0):
+        t0 = time.time()
+        while not self.samples and time.time() - t0 < timeout_s:
+            time.sleep(0.1)
+
+    def covering(self, t0_ms: int, t1_ms: int) -> list:
+        """The samples whose second overlaps [t0_ms, t1_ms]; waits (outside any timing) for the last."""
+        deadline = time.time() + 3.0
+        while time.time() < deadline and not any(t >= t1_ms for t, _ in list(self.samples)):
+            time.sleep(0.05)
+        return [v for t, v in list(self.samples) if t0_ms < t <= t1_ms + 1000]
+
+    def close(self):
+        if self.proc.poll() is None:
+            self.proc.kill()
+
+
 def ort_rows(ep: str, ms=MS, shapes=None, reps=REPS, warmup=WARMUP, threads_set=CPU_THREADS) -> int:
+    import gc
     import onnx
     import onnxruntime as ort
     from concurrent_read_bw import gpu_engines
     shapes = shapes or SHAPES
     print("HEADER " + json.dumps({"python": platform.python_version(), "onnxruntime": ort.__version__,
                                   "numpy": np.__version__, "onnx": onnx.__version__, "ep": ep,
-                                  "env": os.environ.get("CONDA_DEFAULT_ENV", "?"), "host": platform.node()},
+                                  "env": os.environ.get("CONDA_DEFAULT_ENV", "?"), "host": platform.node(),
+                                  "sessions": "one per row, opened before and released after it"},
                                  sort_keys=True), flush=True)
     host_gate()
+    clock = ClockWitness() if ep == "cpu" else None
     if ep == "dml":
         gpu_engines()
     names = ["x4", "x11", "x4_q", "x11_q", "sx_x4", "sx_x11"] + [f"w_{s}{t}" for s in SHAPES for t in ("", "_q")] \
@@ -320,44 +365,67 @@ def ort_rows(ep: str, ms=MS, shapes=None, reps=REPS, warmup=WARMUP, threads_set=
         feeds[("int8", "s8", x)] = data[f"{x}_q"]
         feeds[("int8", "u8zp", x)] = (data[f"{x}_q"].astype(np.int16) + ZP).astype(np.uint8)
     arms = [(a, th) for a in ARMS["cpu"] for th in threads_set] if ep == "cpu" else [(a, 0) for a in ARMS["dml"]]
-    sessions = {}
+    models, forms_of = {}, {}
+
+    def model(arm, s, form):
+        if (arm, s, form) not in models:
+            models[(arm, s, form)] = ort_model(arm, ort_weights(arm, s, data, form), form)
+        return models[(arm, s, form)]
+
+    # which form each arm places: probed once, and the session released at once (added after sitting 1:
+    # only one ORT thread pool is alive at a time)
     for arm, th in arms:
         for s in shapes:
             forms = [""] if arm != "int8" else (["u8zp"] if ep == "cpu" else ["s8", "u8zp"])
             for form in forms:
                 try:
-                    sess = make_session(ort_model(arm, ort_weights(arm, s, data, form), form), ep, th)
+                    sess = make_session(model(arm, s, form), ep, th)
                 except Exception as e:                            # DirectML may refuse an int8 form
                     print("SESSION_REFUSED " + json.dumps({"ep": ep, "arm": arm, "shape": s, "form": form,
                                                            "error": str(e)[:300]}), flush=True)
                     continue
-                sessions[(arm, th, s)] = (sess, form)
+                forms_of[(arm, th, s)] = form
                 print("SESSION " + json.dumps({"ep": ep, "arm": arm, "threads": th, "shape": s, "form": form,
                                                "providers": sess.get_providers()}), flush=True)
+                del sess
+                gc.collect()
                 break
             else:
                 print("ARM_UNAVAILABLE " + json.dumps({"ep": ep, "arm": arm, "shape": s}), flush=True)
-    rows = [(arm, th, s, M) for (arm, th, s) in sessions for M in ms]
-    for p, order in ((1, rows), (2, rows[::-1])):
-        for arm, th, s, M in order:
-            sess, form = sessions[(arm, th, s)]
-            feed = {"x": feeds[(arm, form, X_OF[s])][:M]}
-            for _ in range(warmup):
-                sess.run(None, feed)
-            ts = []
-            for _ in range(reps):
-                t0 = time.perf_counter()
-                y = sess.run(None, feed)[0]
-                ts.append(time.perf_counter() - t0)
-            K, N = SHAPES[s]
-            row = {"chip": ep, "arm": arm, "threads": th, "form": form, "config": "", "shape": s, "M": M, "K": K,
-                   "N": N, "pass": p, **stats(ts)}
-            if arm == "int8":
-                row["int32_sha"] = hashlib.sha256(np.ascontiguousarray(y, dtype=np.int32).tobytes()).hexdigest()
-                y = dequant(y, float(data[f"sx_{X_OF[s]}"][0]), data[f"sw_{s}"])
-            row.update(errors(y, refs[s][:M]))
-            print("ROW_JSON " + json.dumps(row), flush=True)
-            time.sleep(0.5)                                       # let the previous pool's spinning threads park
+    rows = [(arm, th, s, M) for (arm, th, s) in forms_of for M in ms]
+    if clock:
+        clock.wait_first()
+    try:
+        for p, order in ((1, rows), (2, rows[::-1])):
+            for arm, th, s, M in order:
+                form = forms_of[(arm, th, s)]
+                sess = make_session(model(arm, s, form), ep, th)  # opened just before its row
+                feed = {"x": feeds[(arm, form, X_OF[s])][:M]}
+                for _ in range(warmup):
+                    sess.run(None, feed)
+                ts = []
+                w0 = int(time.time() * 1000)
+                for _ in range(reps):
+                    t0 = time.perf_counter()
+                    y = sess.run(None, feed)[0]
+                    ts.append(time.perf_counter() - t0)
+                w1 = int(time.time() * 1000)
+                del sess                                          # released just after
+                gc.collect()
+                K, N = SHAPES[s]
+                row = {"chip": ep, "arm": arm, "threads": th, "form": form, "config": "", "shape": s, "M": M,
+                       "K": K, "N": N, "pass": p, **stats(ts)}
+                if arm == "int8":
+                    row["int32_sha"] = hashlib.sha256(np.ascontiguousarray(y, dtype=np.int32).tobytes()).hexdigest()
+                    y = dequant(y, float(data[f"sx_{X_OF[s]}"][0]), data[f"sw_{s}"])
+                row.update(errors(y, refs[s][:M]))
+                if clock:
+                    row["clock_pct"] = clock.covering(w0, w1)
+                print("ROW_JSON " + json.dumps(row), flush=True)
+                time.sleep(0.5)
+    finally:
+        if clock:
+            clock.close()
     if ep == "dml":
         gpu_engines()
     return 0
@@ -604,6 +672,15 @@ def evaluate(paths):
             agree = len(set(shas.values())) == 1
             print(f"INT8_CONTROL {s} M={M}: {len(shas)} int8 rows, int32 outputs "
                   + ("identical" if agree else "DIFFER: " + ", ".join(f"{k[0]}/{k[2] or k[3]}" for k in shas)))
+    # display only (added after sitting 1): the CPU clock during each CPU row's timed runs
+    clocked = [(k, ps) for k, ps in sorted(rows.items(), key=str) if k[0] == "cpu" and "clock_pct" in ps.get(1, {})]
+    if clocked:
+        span = lambda v: f"{min(v):.0f}-{max(v):.0f}%" if v else "no sample"
+        print("CLOCK_WITNESS (display only): % Processor Performance during each CPU row's timed runs")
+        for k, ps in clocked:
+            print(f"  {k[1]:4s} {k[2]:2d} threads {k[4]} M={k[5]:<4d} "
+                  + " | ".join(f"pass {p} {ps[p]['median_ms']:8.2f} ms, clock {span(ps[p].get('clock_pct', []))}"
+                               for p in sorted(ps)))
 
     print(f"per layer = {' + '.join(f'{PER_LAYER[s]} x {s}' for s in SHAPES)}; ms are the mean of two pass medians")
     verdicts = {}
@@ -787,6 +864,71 @@ the menu above; the NPU's power modes; running prefill beside decode.
 """
 
 
+RERUN = """\
+LLM study stage 3: the re-run rule, written after sitting 1 and before sitting 2
+
+Sitting 1 was committed as measured at e9efb97 and is INCOMPLETE on its own repeat rule. Six CPU
+rows at 8 threads had pass medians more than 10% apart (pass 1 / pass 2, ms):
+  fp32 S1 M=512   24.34 / 21.65  (11.7%)
+  fp32 S3 M=512   66.31 / 44.96  (38.4%)
+  int8 S1 M=512    5.10 /  6.65  (26.4%)
+  int8 S2 M=512   13.45 / 16.61  (21.1%)
+  int8 S3 M=512   12.67 / 16.31  (25.2%)
+  int8 S1 M=2048  25.93 / 20.66  (22.6%)
+Every 16-thread CPU row, every DirectML row and all 56 NPU rows repeated within 10%.
+
+Sitting 2 (the gate's ruling)
+  The whole matrix again (NPU, CPU, DirectML: every row), as pre-registered at d51a427
+  (llm_prefill_prereg_desktop2_20260923.log): the same arms, threads, ops, inputs, artifacts,
+  thresholds, 10% repeat rule, and "the faster of 8 and 16 threads". Its logs carry the tag _rerun.
+
+Which sitting decides
+  Sitting 2 alone decides; its verdict runs on its own three logs only.
+  If sitting 2 breaks the 10% repeat rule anywhere, stage 3 stays INCOMPLETE and both sittings
+  are reported side by side. There is no averaging across sittings and no new rule after sitting
+  2's data.
+  Sitting 1 stays in the record as measured. Wherever stage 3 is reported, its six broken rows and
+  their spreads sit beside the verdict. If sitting 2 decides, only sitting 2's figures are quoted
+  in the verdict.
+
+Changes made after sitting 1 (the gate's ruling; nothing else)
+  (a) Every ONNX Runtime row (the CPU at both thread counts, and DirectML for symmetry) opens its
+      session just before the row and releases it after, so only one ORT thread pool is alive at a
+      time. Sitting 1 kept all of a process's sessions alive for the whole run. Session creation
+      stays outside the timed runs, as before. Arms, threads, ops, inputs, artifacts and
+      thresholds are unchanged.
+  (b) Non-deciding: a CPU clock witness, \\Processor Information(_Total)\\% Processor Performance,
+      sampled once a second by one Get-Counter process for the whole CPU run. Each CPU row records
+      the samples covering its timed runs (clock_pct). It tests the "clock changes" candidate and
+      never gates a row; the verdict prints it for display only.
+  Not changed: no thread pinning or affinity, which would change the arm.
+
+Post hoc from sitting 1, labelled as such (not pre-registered; the cause is unattributed)
+  The broken rows are noisy within each pass too: int8 S1 at M = 512 flips between about 4.2 and
+  7.2 ms from rep to rep. Candidates: the OS placing two of the 8 threads on one core's SMT
+  siblings, which (a) does not remove; other sessions' idle ORT pools, which (a) removes; clock
+  changes, which (b) witnesses. Sitting 2's 8-thread rows may break again; then INCOMPLETE stands.
+  Each CPU arm takes the faster of 8 and 16 threads, and every 16-thread row was stable, so the
+  16-thread rows cap the CPU's times from above. Against stable rows alone, every NPU arm failed
+  at both M. NPU int8 at M = 2048 would have needed <= 198.3 ms per layer against the 16-thread
+  CPU int8's 218.10, and measured 211.58.
+"""
+
+
+def prereg_rerun() -> int:
+    print(RERUN)
+    original = (ROOT / "results/llm/llm_prefill_prereg_desktop2_20260923.log").read_text(encoding="utf-8")
+    pinned = re.findall(r"insts ([0-9a-f]{16})  xclbin ([0-9a-f]{16})", original)
+    now = [(sha(tdir(t) / "insts.bin")[:16], sha(tdir(t) / "final.xclbin")[:16]) for t in tiles()]
+    manifest = sha(INPUTS / "manifest.json")
+    same = pinned == now and f"PINS inputs manifest {manifest}" in original
+    print(f"PINS {len(now)} NPU artifacts and the inputs manifest {manifest[:16]}: "
+          + ("identical to the prereg log" if same else "DIFFER from the prereg log"))
+    head = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True, cwd=ROOT).stdout.strip()
+    print(f"git HEAD {head}")
+    return 0 if same else 1
+
+
 def prereg() -> int:
     lines = []
     for t in tiles():
@@ -870,8 +1012,10 @@ def selftest() -> int:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
-    for c in ("inputs", "build", "prereg", "npu", "selftest"):
+    for c in ("inputs", "build", "npu", "selftest"):
         sub.add_parser(c)
+    pr = sub.add_parser("prereg")
+    pr.add_argument("--rerun", action="store_true", help="the re-run rule written after sitting 1")
     o = sub.add_parser("ort")
     o.add_argument("--ep", choices=("cpu", "dml"), required=True)
     v = sub.add_parser("verdict")
@@ -881,6 +1025,8 @@ def main() -> int:
         return ort_rows(a.ep)
     if a.cmd == "verdict":
         return verdict(a.logs)
+    if a.cmd == "prereg" and a.rerun:
+        return prereg_rerun()
     return {"inputs": inputs, "build": build, "prereg": prereg, "npu": npu, "selftest": selftest}[a.cmd]()
 
 

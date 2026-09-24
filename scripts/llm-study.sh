@@ -394,15 +394,20 @@ stage_prefill_build() {
 }
 
 stage_prefill_prereg() {
-    local log="$OUT/llm_prefill_prereg_${MACHINE}_${DATE}.log"
+    # --tag rerun writes the re-run rule (written after sitting 1) instead of the original prereg
+    local log="$OUT/llm_prefill_prereg${TAG}_${MACHINE}_${DATE}.log" extra=()
+    [ "$TAG" = "_rerun" ] && extra=(--rerun)
     refuse "$log"
     use_env resnet_env17
-    logged "$log" python $PRE prereg || die "prereg failed"
-    ok "commit $log (with $PRE) before: $0 prefill"
+    logged "$log" python $PRE prereg "${extra[@]}" || die "prereg failed"
+    ok "commit $log (with $PRE) before: $0 prefill${TAG:+ --tag ${TAG#_}}"
 }
 
 stage_prefill() {
     ls "$OUT"/llm_prefill_prereg_*.log >/dev/null 2>&1 || die "no pre-registration log: run $0 prefill-prereg and commit it"
+    if [ "$TAG" = "_rerun" ]; then
+        ls "$OUT"/llm_prefill_prereg_rerun_*.log >/dev/null 2>&1 || die "no re-run rule: run $0 prefill-prereg --tag rerun and commit it"
+    fi
     local npu="$OUT/llm_prefill_npu${TAG}_${MACHINE}_${DATE}.log" cpu="$OUT/llm_prefill_cpu${TAG}_${MACHINE}_${DATE}.log"
     local dml="$OUT/llm_prefill_dml${TAG}_${MACHINE}_${DATE}.log"
     refuse "$npu" "$cpu" "$dml"
