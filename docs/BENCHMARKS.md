@@ -3818,7 +3818,7 @@ since both are INCOMPLETE.
   so the only rival is C0-H16.
   - Speed OPEN: the ceiling is 15.13 tok/s, against 1.10 × 10.815 = 11.90.
 - **Worst** (the NPU only as accurate as D-H16): the rivals are C0-H16 and D-H16.
-  - Speed OPEN: 15.13 against 1.10 × 13.157 = 14.47, a 4.5% margin.
+  - Speed OPEN: 15.13 against 1.10 × 13.157 = 14.47, a 4.55% margin.
   - An NPU decode would have to run at 95.6% of its measured read ceiling to clear that line. The
     ceiling is a DMA read with no compute behind it
     ([stage 1](#the-npu-reads-ddr-at-476-gbs-when-nothing-is-written-back-silicons-2628-gbs-cap-does-not-bind-reads-and-7b-decode-stays-killed-2026-09-23-desktop-2)).
@@ -3829,7 +3829,7 @@ since both are INCOMPLETE.
 
 **The page-in voids.**
 - The threshold stands; it was not moved after seeing data.
-- Free RAM before every arm-pass was ≥ 21.9 GB in sitting 1 and 22.18–22.58 GB in sitting 2.
+- Free RAM before every arm-pass was 22.66–22.83 GB in sitting 1 and 22.18–22.58 GB in sitting 2.
 - No slowdown shows in any voided pass (POST HOC; medians of sequence tok/s; no rule reads them).
   - In sitting 2, C4-H4's voided pass 1 is within 0.4% of its valid pass 2, and D-H4's two voided
     passes are within 2.5% of each other.
