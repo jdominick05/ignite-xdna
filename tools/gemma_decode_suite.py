@@ -19,6 +19,9 @@ B3's unread-placement check).
     python tools/gemma_decode_suite.py suite                         # the sitting (resnet_env17)
     python tools/gemma_decode_suite.py accuracy                      # the accuracy pass (not timed)
     python tools/gemma_decode_suite.py verdict <suite log> <accuracy log>
+    python tools/gemma_decode_suite.py prereg-rerun                  # sitting 2's rule and its pins
+    python tools/gemma_decode_suite.py verdict --rerun <sitting-2 suite log> <sitting 1's accuracy log>
+    python tools/gemma_decode_suite.py posthoc-gpu <suite log> <counter dir> <stamp>   # POST HOC re-read
     python tools/gemma_decode_suite.py reader --arm ARM --pass N     # spawned by suite
     python tools/gemma_decode_suite.py selftest                      # synthetic rules; no model, no chip
 """
@@ -56,6 +59,20 @@ ORDER = [(1, a) for a in ARM_ORDER] + [(2, a) for a in ARM_ORDER[::-1]]
 SEQS = {"cpu": 3, "dml": 5}  # CPU: 3 sequences in one session; DirectML: 5 fresh sessions, one each
 CHECK_TOKENS = 8             # the reader's untimed check run before READY
 FORCE_CHECK_N = 32           # the accuracy pass's forced-vs-appended check on each CPU arm (positions + 1)
+# ---------------------------------------------------------------- sitting 2 (the gate's re-run rule, 2026-09-24)
+# Sitting 1 (99a7eec) is INCOMPLETE and stays so; sitting 2 alone decides, with sitting 1's accuracy log
+# (untimed, deterministic). Each sitting-2 arm's greedy tokens must equal sitting 1's, or the arm is VOID.
+TOKENS_SHA_S1 = {            # from gemma_decode_suite_desktop2_20260924.log: every sequence, both passes
+    "C4-H4": "c78d37dd4ef54142973d8add8104686158f8bacf708ba89c9c729a9ca1c55467",
+    "C0-H4": "43eb1ccaa3d0d6a8ce0a28efdff5e2cb6e1e5a8ef4073a04abe1d08bedf6b8d4",
+    "D-H4": "43eb1ccaa3d0d6a8ce0a28efdff5e2cb6e1e5a8ef4073a04abe1d08bedf6b8d4",
+    "C0-H16": "38bf3d11228efcdb88840169a358cdff04dd3850cd7d69b036dc0a76b1cc2e0b",
+    "D-H16": "38bf3d11228efcdb88840169a358cdff04dd3850cd7d69b036dc0a76b1cc2e0b",
+}
+S1_LOGS_LF = {               # sha256 of sitting 1's logs with CRLF read as LF (the committed blobs, 99a7eec)
+    "gemma_decode_suite_desktop2_20260924.log": "19af6e168d9d164730b490ebabdfd140e56402986fb6c988ac3422da9dc4c7d4",
+    "gemma_decode_accuracy_desktop2_20260924.log": "7a579b84bdb022e77d4a267d0b25690cfb99eb2594bda4071528c7000fe2d5dd",
+}
 GPU_780M_ID = (0x1002, 0x15BF)   # the Radeon 780M's DXGI vendor and device id; its LUIDs are the GPU witness
 LUIDS_780M = None                # set by suite() from DXGI at the start (DXGI lists the 780M twice here)
 B3_CPU_ALLOWED = ("/model/attn_mask_reformat/attn_mask_subgraph/Gather",        # B3': GQA's total_sequence_length
@@ -174,17 +191,30 @@ def say(tag: str, obj) -> None:
 
 # ---------------------------------------------------------------- the text
 
+def quiet_tokenizer():
+    """The text-only copy's tokenizer, loaded with transformers' logging at error: 4.57.6's "incorrect
+    regex pattern" warning (logger.warning in tokenization_utils_base) quotes the local path, which
+    sitting 1's logs carried; the prereg's TOKENIZER_CHECK_JSON shows the warning changes no id."""
+    from transformers import AutoTokenizer
+    from transformers.utils import logging as tlog
+    v = tlog.get_verbosity()
+    tlog.set_verbosity_error()
+    try:
+        return AutoTokenizer.from_pretrained(str(gd.TEXT))
+    finally:
+        tlog.set_verbosity(v)
+
+
 def text_ids() -> list:
     """BOS + the first 1023 tokens of wikitext-2-raw-v1's test split, joined as the HF perplexity
     guide joins it, by the text-only copy's tokenizer (Gemma 3's)."""
     import pyarrow.parquet as pq
     from huggingface_hub import hf_hub_download
-    from transformers import AutoTokenizer
     p = Path(hf_hub_download(TEXT_PIN["repo"], TEXT_PIN["file"], revision=TEXT_PIN["revision"], repo_type="dataset"))
     if p.stat().st_size != TEXT_PIN["size"] or sha256(p) != TEXT_PIN["sha256"]:
         sys.exit("the text differs from its pin")
     text = "\n\n".join(pq.read_table(p).column("text").to_pylist())
-    tok = AutoTokenizer.from_pretrained(str(gd.TEXT))
+    tok = quiet_tokenizer()
     ids = [2] + tok(text[:20000], add_special_tokens=False)["input_ids"][:POSITIONS - 1]
     assert len(ids) == POSITIONS
     return ids
@@ -329,7 +359,110 @@ def stop(proc: subprocess.Popen, timeout: float = 60) -> None:
         proc.wait(timeout=15)
 
 
-LUID_RE = re.compile(r"gpu engine\(pid_(\d+)_luid_(0x[0-9a-f]+_0x[0-9a-f]+)_phys_\d+_eng_\d+_engtype_(\w+)\)")
+# ---------------------------------------------------------------- the page-in attribution witness (re-run (b))
+
+def proc_counters() -> dict:
+    """{pid: (image name, page faults, hard faults, IO read bytes)}, cumulative, for every process, from
+    one NtQuerySystemInformation(SystemProcessInformation) call: the kernel counts behind
+    \\Process(*)\\Page Faults/sec and \\Process(*)\\IO Read Bytes/sec. typeperf fixes a wildcard's
+    instances when it starts, so it cannot see a process launched inside a window; this can. About
+    11 ms of one core per call on this desktop (a psutil sweep took 2.5 s)."""
+    import ctypes
+    from ctypes import wintypes
+
+    class USTR(ctypes.Structure):
+        _fields_ = [("Length", ctypes.c_ushort), ("MaximumLength", ctypes.c_ushort), ("Buffer", ctypes.c_void_p)]
+
+    class SPI(ctypes.Structure):                   # SYSTEM_PROCESS_INFORMATION (x64), up to its IO counters
+        _fields_ = [("NextEntryOffset", ctypes.c_ulong), ("NumberOfThreads", ctypes.c_ulong),
+                    ("WorkingSetPrivateSize", ctypes.c_longlong), ("HardFaultCount", ctypes.c_ulong),
+                    ("NumberOfThreadsHighWatermark", ctypes.c_ulong), ("CycleTime", ctypes.c_ulonglong),
+                    ("CreateTime", ctypes.c_longlong), ("UserTime", ctypes.c_longlong), ("KernelTime", ctypes.c_longlong),
+                    ("ImageName", USTR), ("BasePriority", ctypes.c_long), ("UniqueProcessId", ctypes.c_void_p),
+                    ("InheritedFromUniqueProcessId", ctypes.c_void_p), ("HandleCount", ctypes.c_ulong),
+                    ("SessionId", ctypes.c_ulong), ("UniqueProcessKey", ctypes.c_void_p),
+                    ("PeakVirtualSize", ctypes.c_size_t), ("VirtualSize", ctypes.c_size_t),
+                    ("PageFaultCount", ctypes.c_ulong), ("PeakWorkingSetSize", ctypes.c_size_t),
+                    ("WorkingSetSize", ctypes.c_size_t), ("QuotaPeakPagedPoolUsage", ctypes.c_size_t),
+                    ("QuotaPagedPoolUsage", ctypes.c_size_t), ("QuotaPeakNonPagedPoolUsage", ctypes.c_size_t),
+                    ("QuotaNonPagedPoolUsage", ctypes.c_size_t), ("PagefileUsage", ctypes.c_size_t),
+                    ("PeakPagefileUsage", ctypes.c_size_t), ("PrivatePageCount", ctypes.c_size_t),
+                    ("ReadOperationCount", ctypes.c_longlong), ("WriteOperationCount", ctypes.c_longlong),
+                    ("OtherOperationCount", ctypes.c_longlong), ("ReadTransferCount", ctypes.c_longlong),
+                    ("WriteTransferCount", ctypes.c_longlong), ("OtherTransferCount", ctypes.c_longlong)]
+
+    nt = ctypes.WinDLL("ntdll")
+    nt.NtQuerySystemInformation.restype = ctypes.c_long
+    size = 1 << 20
+    while True:
+        buf, need = ctypes.create_string_buffer(size), wintypes.ULONG(0)
+        st = nt.NtQuerySystemInformation(5, buf, size, ctypes.byref(need)) & 0xFFFFFFFF
+        if st == 0:
+            break
+        if st != 0xC0000004:                         # STATUS_INFO_LENGTH_MISMATCH: grow and retry
+            raise OSError(f"NtQuerySystemInformation 0x{st:08x}")
+        size = max(need.value, size) * 2
+    out, off, base = {}, 0, ctypes.addressof(buf)
+    while True:
+        e = SPI.from_address(base + off)
+        name = ctypes.wstring_at(e.ImageName.Buffer, e.ImageName.Length // 2) if e.ImageName.Buffer else "Idle"
+        out[e.UniqueProcessId or 0] = (name, e.PageFaultCount, e.HardFaultCount, e.ReadTransferCount)
+        if not e.NextEntryOffset:
+            return out
+        off += e.NextEntryOffset
+
+
+class FaultSampler:
+    """Every process's page faults, hard faults and IO read bytes once a second (proc_counters), kept as
+    per-second deltas; run in every idle and every arm-pass alike, so its own cost cancels in dP.
+    Report-only: no rule reads it."""
+
+    def __init__(self, counters=proc_counters):
+        self.counters, self.rows, self.halt = counters, [], threading.Event()
+        self.thread = threading.Thread(target=self._run, daemon=True)
+
+    def start(self):
+        self.thread.start()
+        return self
+
+    def _run(self):
+        prev = self.counters()
+        while not self.halt.wait(1.0 - time.time() % 1.0):
+            now, cur = time.time(), self.counters()
+            d = {}
+            for pid, (name, pf, hf, rb) in cur.items():
+                p = prev.get(pid)
+                if p is None or p[0] != name:            # a process new since the last second: all its counts
+                    p = (name, 0, 0, 0)
+                dd = (pf - p[1], hf - p[2], rb - p[3])
+                if any(dd):
+                    d[pid] = (name, *dd)
+            self.rows.append((round(now, 3), d))
+            prev = cur
+
+    def stop(self):
+        self.halt.set()
+        self.thread.join(5)
+
+    def window(self, a: float, b: float, top: int = 5) -> dict:
+        """The top processes by page faults/s and by IO read bytes/s over the seconds whose whole second
+        lies in [a, b] (inside()'s rule), each entry [name, pid, faults/s, hard faults/s, read bytes/s]."""
+        agg, n = {}, 0
+        for t, d in self.rows:
+            if a + 1.0 <= t <= b:
+                n += 1
+                for pid, (name, pf, hf, rb) in d.items():
+                    x = agg.setdefault(pid, [name, 0, 0, 0])
+                    x[1], x[2], x[3] = x[1] + pf, x[2] + hf, x[3] + rb
+        s = max(n, 1)
+        ent = [[nm, pid, round(pf / s, 1), round(hf / s, 1), round(rb / s)] for pid, (nm, pf, hf, rb) in agg.items()]
+        return {"seconds": n, "top_page_faults": sorted(ent, key=lambda e: -e[2])[:top],
+                "top_io_read": sorted(ent, key=lambda e: -e[4])[:top]}
+
+
+# the engine type may hold a space ("Compute 0", "Timer 0": the 780M's DirectML engines); sitting 1's
+# (\w+) dropped those columns, so its "780M pid" read 0 (the re-run rule's change (a))
+LUID_RE = re.compile(r"gpu engine\(pid_(\d+)_luid_(0x[0-9a-f]+_0x[0-9a-f]+)_phys_\d+_eng_\d+_engtype_([^)]+)\)")
 
 
 def gpu_columns(head: list) -> dict:
@@ -428,21 +561,24 @@ def utc() -> str:
 
 def idle(tag: str) -> dict:
     path = TMP / f"{tag}_idle.csv"
+    fs = FaultSampler().start()                        # run in the idle too, so its cost cancels in dP
     p = typeperf(IDLE_S + 1, path)
     stop(p, IDLE_S + 60)
+    fs.stop()
     return read_csv(path, None, LUIDS_780M)
 
 
 def arm_pass(tag: str, arm: str, pas: int) -> dict:
     r = Reader(arm, pas)
     rec = {"cmd": " ".join(r.shown)}
-    tp = None
+    tp = fs = None
     try:
         if not r.ready.wait(READY_TIMEOUT_S) or not r.json_lines("READY"):
             raise RuntimeError(f"{arm} not READY")
         rec["ready"] = r.json_lines("READY")[0]
         path = TMP / f"{tag}_window.csv"
         tp = typeperf(TP_MAX_S, path)
+        fs = FaultSampler().start()
         time.sleep(TP_LEAD_S)
         r.proc.stdin.write("go\n")
         r.proc.stdin.flush()
@@ -451,21 +587,43 @@ def arm_pass(tag: str, arm: str, pas: int) -> dict:
         time.sleep(2.0)                                  # the last window's closing second is sampled
         stop(tp, 0)
         tp = None
+        fs.stop()
         rec["counters"] = read_csv(path, rec["ready"]["pid"], LUIDS_780M)
     finally:
         if r.proc.poll() is None:
             r.proc.kill()
         if tp is not None:
             stop(tp, 0)
+        if fs is not None:
+            fs.stop()
         print(f"READER_CMD {arm} pass {pas} {rec['cmd']}", flush=True)
         for s in r.lines:
             if not s.startswith(("SEQ_JSON ", "READY ", "READER_JSON ")):
                 print(f"{arm}| {s}", flush=True)
     rec["seqs"] = r.json_lines("SEQ_JSON")
     rec["releases"] = r.json_lines("SESSION_RELEASED")
+    if fs is not None:                                   # the attribution witness, one entry per sequence window
+        rec["pagein_attr"] = [{"seq": s["seq"], **fs.window(*s["win_wall"])} for s in rec["seqs"] if "win_wall" in s]
     if r.proc.returncode or not r.json_lines("READER_JSON"):
         rec["failed"] = f"exit {r.proc.returncode}"
     return rec
+
+
+def attributions(rec: dict) -> list:
+    """The attribution witness for each of an arm-pass's windows whose mean pages input/s is over
+    PAGE_MAX (the windows arm_stats voids), with that mean."""
+    rows = rec.get("counters", {}).get("rows", [])
+    attr = {a["seq"]: a for a in rec.get("pagein_attr", [])}
+    out = []
+    for s in rec.get("seqs", []):
+        if "win_wall" not in s:
+            continue
+        rs = inside(rows, *s["win_wall"])
+        m = statistics.fmean(r[8] for r in rs) if rs else 0.0
+        if m > PAGE_MAX:
+            out.append({"arm": rec["arm"], "pass": rec["pass"], "seq": s["seq"], "pages_in_mean": round(m, 1),
+                        **attr.get(s["seq"], {"missing": True})})
+    return out
 
 
 def check_pins() -> dict:
@@ -529,6 +687,8 @@ def suite() -> int:
     say("TEXT_JSON", {"ids_sha": ids_sha(ids), "prompt": ids[:PROMPT_TOKENS]})
     print("PROTOCOL", json.dumps({"prompt": PROMPT_TOKENS, "positions": POSITIONS, "generated": GEN_TOKENS,
                                   "window": [WIN_FROM + 1, WIN_TO], "seqs": SEQS, "order": ORDER, "pin": PIN}), flush=True)
+    say("COUNTER_FILES_JSON", {"dir": TMP.relative_to(ROOT).as_posix(), "stamp": stamp,
+                               "names": "<stamp>_<n>_<arm>_{idle,window}.csv"})
     for n, (pas, arm) in enumerate(ORDER):
         print(f"\nARM_BEGIN {n} pass {pas} {arm} {utc()}", flush=True)
         witness()
@@ -545,6 +705,8 @@ def suite() -> int:
         st = arm_stats(rec)
         print("ARM_SUMMARY", n, pas, arm, " ".join(f"{k}={v:.4g}" if isinstance(v, float) else f"{k}={v}"
                                                      for k, v in st.items() if k != "seq_tokps"), flush=True)
+        for a in attributions(rec):
+            say("PAGEIN_ATTRIBUTION", a)
     witness()
     return 0
 
@@ -849,16 +1011,43 @@ def predictions(res: dict, acc: dict) -> list:
     return out
 
 
-def verdict(suite_log: Path, acc_log: Path) -> int:
+def sha256_lf(path: Path) -> str:
+    """sha256 of a text file with CRLF read as LF: git's blob of a log the runner wrote with CRLF."""
+    return hashlib.sha256(path.read_bytes().replace(b"\r\n", b"\n")).hexdigest()
+
+
+def tokens_void(recs: list) -> dict:
+    """Sitting 2's rule (c): {arm: why} for every arm whose sequences' tokens differ from sitting 1's."""
+    out = {}
+    for arm in gd.ARMS:
+        got = sorted({s.get("tokens_sha") for r in recs if r["arm"] == arm for s in r.get("seqs", [])})
+        if got and got != [TOKENS_SHA_S1[arm]]:
+            out[arm] = f"tokens_sha {[g[:16] for g in got]} differs from sitting 1's {TOKENS_SHA_S1[arm][:16]}"
+    return out
+
+
+def verdict(suite_log: Path, acc_log: Path, rerun: bool = False) -> int:
     s_lines = suite_log.read_text(encoding="utf-8").splitlines()
     a_lines = acc_log.read_text(encoding="utf-8").splitlines()
     problems = []
+    if rerun:
+        print(f"SITTING 2 (the re-run rule): this sitting alone decides; the accuracy is sitting 1's, "
+              f"{acc_log.name} (LF sha256 {sha256_lf(acc_log)[:16]}...)")
+        if sha256_lf(acc_log) != S1_LOGS_LF.get(acc_log.name):
+            problems.append(f"the accuracy log is not sitting 1's pinned one ({acc_log.name})")
     pins = next((json.loads(s.split(" ", 1)[1]) for s in s_lines if s.startswith("PINS_JSON ")), None)
     if pins is None or pins["mismatch"]:
         problems.append(f"pins: {pins and pins['mismatch']}")
     recs = [json.loads(s.split(" ", 1)[1]) for s in s_lines if s.startswith("ARM_JSON ")]
     stats = {(r["pass"], r["arm"]): arm_stats(r) for r in recs}
     res = combine(stats)
+    if rerun:
+        for arm, why in tokens_void(recs).items():
+            res[arm] = {"state": "VOID", "why": why}
+    for r in recs:
+        for a in attributions(r):
+            if "missing" not in a:
+                print("PAGEIN_ATTRIBUTION", json.dumps(a))
     acc = {r["arm"]: r for r in (json.loads(s.split(" ", 1)[1]) for s in a_lines if s.startswith("ACC_JSON "))}
     ref = next((json.loads(s.split(" ", 1)[1]) for s in a_lines if s.startswith("REFERENCE_JSON ")), None)
     fc = {r["arm"]: r for r in (json.loads(s.split(" ", 1)[1]) for s in a_lines if s.startswith("FORCE_CHECK_JSON "))}
@@ -925,6 +1114,83 @@ def verdict(suite_log: Path, acc_log: Path) -> int:
         print("PROBLEM", p)
     print("VERDICT", "INCOMPLETE" if problems else "COMPLETE")
     return 2 if problems else 0
+
+
+# ---------------------------------------------------------------- sitting 1's GPU witness, re-read (POST HOC)
+
+def gpu_frame(path: Path) -> tuple:
+    """A counter file's GPU-engine columns ({index: (pid, luid, engtype)}, the fixed regex) and its rows
+    [(epoch s, {index: busy %})]."""
+    with path.open(newline="", encoding="utf-8", errors="replace") as f:
+        rows = list(csv.reader(f))
+    g = gpu_columns([h.lower() for h in rows[0]])
+    out = []
+    for r in rows[1:]:
+        try:
+            t = datetime.strptime(r[0], "%m/%d/%Y %H:%M:%S.%f").timestamp()
+        except (ValueError, IndexError):
+            continue
+        vals = {}
+        for i in g:
+            try:
+                vals[i] = float(r[i]) if i < len(r) else 0.0
+            except ValueError:
+                vals[i] = 0.0
+        out.append((t, vals))
+    return g, out
+
+
+def gpu_window(g: dict, rows: list, luids: set, pid, a=None, b=None) -> dict:
+    """Mean busy % over the rows (those inside [a, b] by inside()'s rule, if given): the 780M's engines
+    summed, the reader's own (and per engine type), every other pid on the 780M (top 3), and the
+    other adapters."""
+    rs = [v for t, v in rows if a is None or a + 1.0 <= t <= b]
+    if not rs:
+        return {"rows": 0}
+    m = {i: statistics.fmean(v.get(i, 0.0) for v in rs) for i in g}
+    on780 = [i for i in g if g[i][1] in luids]
+    own = [i for i in on780 if g[i][0] == pid]
+    others = {}
+    for i in on780:
+        if g[i][0] != pid:
+            others[g[i][0]] = others.get(g[i][0], 0.0) + m[i]
+    by_eng = {}
+    for i in own:
+        by_eng[g[i][2]] = round(by_eng.get(g[i][2], 0.0) + m[i], 2)
+    return {"rows": len(rs), "gpu780_all": round(sum(m[i] for i in on780), 2), "reader": round(sum(m[i] for i in own), 2),
+            "reader_by_engine": {k: v for k, v in by_eng.items() if v}, "other_pids_top": [
+                [p, round(x, 2)] for p, x in sorted(others.items(), key=lambda kv: -kv[1])[:3]],
+            "other_adapters": round(sum(m[i] for i in g if g[i][1] not in luids), 2)}
+
+
+def posthoc_gpu(suite_log: Path, csv_dir: Path, stamp: str) -> int:
+    """POST HOC, decides nothing (the gate, 2026-09-24): sitting 1's counter files re-read with the
+    fixed GPU regex, per arm-pass idle and per sequence window."""
+    lines = suite_log.read_text(encoding="utf-8").splitlines()
+    ad = next(json.loads(s.split(" ", 1)[1]) for s in lines if s.startswith("ADAPTERS_JSON "))
+    luids = set(ad["luids_780m"])
+    print(f"POST HOC, decides nothing: {suite_log.name} (LF sha256 {sha256_lf(suite_log)}), its counter files "
+          f"{csv_dir.as_posix()}/{stamp}_*.csv, re-read with the fixed regex (engine types with a space, "
+          f"\"Compute 0\"). The 780M: {sorted(luids)}. Busy % is summed over engines, a mean over the rows "
+          f"inside each window (inside()'s rule). The pids of other processes are all the counters name.")
+    for f in sorted(csv_dir.glob(f"{stamp}_*.csv")):
+        say("CSV_SHA_JSON", {"file": f.name, "bytes": f.stat().st_size, "sha256_crlf_working_copy": sha256(f),
+                             "sha256_lf_blob": sha256_lf(f)})
+    for s in lines:
+        if not s.startswith("ARM_JSON "):
+            continue
+        rec = json.loads(s.split(" ", 1)[1])
+        n, arm, pas, pid = rec["n"], rec["arm"], rec["pass"], rec.get("ready", {}).get("pid")
+        gi, ri = gpu_frame(csv_dir / f"{stamp}_{n:02d}_{arm}_idle.csv")
+        gw, rw = gpu_frame(csv_dir / f"{stamp}_{n:02d}_{arm}_window.csv")
+        out = {"n": n, "pass": pas, "arm": arm, "reader_pid": pid, "idle": gpu_window(gi, ri, luids, None),
+               "windows": [{"seq": q["seq"], "tokps": round(q["tokps"], 2), **gpu_window(gw, rw, luids, pid, *q["win_wall"])}
+                           for q in rec.get("seqs", []) if "win_wall" in q]}
+        say("POSTHOC_GPU_JSON", out)
+        print(f"  {n} pass {pas} {arm:7} idle 780M {out['idle'].get('gpu780_all', 0):6.2f}  windows: " + " | ".join(
+            f"{w['tokps']:.2f} tok/s: 780M {w['gpu780_all']:.1f}, reader {w['reader']:.1f}, others "
+            f"{sum(x for _, x in w['other_pids_top']):.2f}" for w in out["windows"] if w.get("rows")))
+    return 0
 
 
 # ---------------------------------------------------------------- prereg and selftest
@@ -1301,6 +1567,87 @@ def prereg(build_log: Path, recheck_log: Path) -> int:
     return 3 if bad else 0
 
 
+RERUN = f"""Gemma 3 4B decode, pre-registration (c): the rule for sitting 2, committed before it (the gate's
+decision of 2026-09-24, after sitting 1 at 99a7eec)
+
+Sitting 1 (gemma_decode_suite, _accuracy and _verdict_desktop2_20260924.log) is INCOMPLETE and stays
+so in the record: three arm-passes void on the memory witness (C4-H4 pass 1, D-H4 pass 2, C0-H16 pass 2),
+and D-H16's passes disagree (13.35 against 10.85 tok/s). C0-H4 alone completed there; its values are
+recomputed from that log below. Sitting 2 runs the full matrix again and ALONE decides: no sitting-1
+arm-pass enters its verdict. If sitting 2 is INCOMPLETE, it stands, and there is no third run without the
+user.
+
+Unchanged from the prereg at 68e9cfe (gemma_decode_prereg_desktop2_20260924.log):
+  - the arms, the order and the lengths (a {PROMPT_TOKENS}-token prompt, {GEN_TOKENS} generated, window
+    {WIN_FROM + 1}-{WIN_TO});
+  - the {PAGE_MAX:g} pages/s void, not moved after seeing data;
+  - the {PASS_AGREE:.0%} pass agreement, B3', and the start refusals (a process of >= {MEM_BIG_GB:g} GB; the
+    780M's adapters);
+  - the energy method, the predictions and (d).
+
+Changes, and nothing else:
+  (a) The GPU witness regex accepts engine types with a space ("Compute 0", "Compute 1", "Timer 0", the
+      780M's DirectML engines). Sitting 1's (\\w+) dropped those columns, so its "780M pid" read 0. A
+      selftest case has a spaced name. Report-only, as before.
+  (b) A page-in attribution witness, report-only.
+      - What: every process's page faults, hard faults and IO read bytes, once a second, from one
+        NtQuerySystemInformation(SystemProcessInformation) call. These are the kernel counts behind
+        \\Process(*)\\Page Faults/sec and \\Process(*)\\IO Read Bytes/sec.
+      - Why not the PDH counters: typeperf fixes a wildcard's instances when it starts, so it would miss
+        a process launched inside a window. A psutil sweep cost 2.5 s of CPU; this call costs about 11 ms.
+      - When: in every idle and every arm-pass alike, so its cost cancels in dP.
+      - Logged: for every window over {PAGE_MAX:g} pages/s, the top 5 processes by page faults/s and by IO
+        read bytes/s (PAGEIN_ATTRIBUTION). Each entry also carries that process's hard faults/s. The
+        verdict prints them beside the voids.
+  (c) No accuracy pass. Sitting 1's accuracy log stands (untimed and deterministic), pinned below by its
+      sha256. Each sitting-2 arm's greedy tokens (the tokens_sha of every sequence, both passes) must
+      equal sitting 1's for that arm, or the arm is VOID (TOKENS_SHA_S1 below). This ties the two sittings
+      without a cross-sitting timing ratio.
+  Hygiene (the gate's addendum, report-only): the tokenizer loads with transformers' logging at error.
+  4.57.6's "incorrect regex pattern" warning, which quoted the local path on 24 lines of sitting 1's and
+  the build's logs, therefore no longer reaches a log. The prereg's TOKENIZER_CHECK_JSON showed that the
+  warning changes no id.
+
+The logs: gemma_decode_suite_rerun_desktop2_<date>.log (scripts/llm-study.sh decode-rerun) and
+gemma_decode_verdict_rerun_desktop2_<date>.log (decode-rerun-verdict, over it and sitting 1's accuracy
+log). As in sitting 1: BFP16 holds the machine, and nothing else runs.
+"""
+
+
+def prereg_rerun() -> int:
+    print(RERUN)
+    out = ROOT / "results" / "llm"
+    bad = []
+    for name, want in S1_LOGS_LF.items():
+        got = sha256_lf(out / name)
+        print(f"  {name}: sha256 {sha256(out / name)} (CRLF working copy), {got} (LF blob)")
+        if got != want:
+            bad.append(f"{name} differs from its pin")
+    s1 = [json.loads(s.split(" ", 1)[1]) for s in (out / "gemma_decode_suite_desktop2_20260924.log")
+          .read_text(encoding="utf-8").splitlines() if s.startswith("ARM_JSON ")]
+    for arm in gd.ARMS:
+        got = sorted({q["tokens_sha"] for r in s1 if r["arm"] == arm for q in r["seqs"]})
+        print(f"  TOKENS_SHA_S1 {arm}: {TOKENS_SHA_S1[arm]}; sitting 1 had {len(got)} distinct value(s)"
+              + (", equal" if got == [TOKENS_SHA_S1[arm]] else f", DIFFERENT {got}"))
+        if got != [TOKENS_SHA_S1[arm]]:
+            bad.append(f"TOKENS_SHA_S1 {arm} is not sitting 1's single value")
+    c0 = combine({(r["pass"], r["arm"]): arm_stats(r) for r in s1})["C0-H4"]
+    say("SITTING1_C0_H4_JSON", {k: c0[k] for k in ("state", "tokps", "jtok", "tokps_agree", "jtok_agree") if k in c0})
+    ids = pinned_ids()
+    print(f"  IDS_SHA {ids_sha(ids)} ({'equal to the pin' if ids_sha(ids) == IDS_SHA else 'DIFFERENT'})")
+    if ids_sha(ids) != IDS_SHA:
+        bad.append("IDS_SHA")
+    p = out / "gemma_decode_prereg_desktop2_20260924.log"
+    print(f"  the prereg: {p.name}, sha256 {sha256(p)} (CRLF working copy), {sha256_lf(p)} (LF blob)")
+    head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True).stdout.strip()
+    say("RERUN_CONSTANTS_JSON", {"tokens_sha_s1": TOKENS_SHA_S1, "s1_logs_lf": S1_LOGS_LF, "page_max": PAGE_MAX,
+                                 "pass_agree": PASS_AGREE, "order": ORDER, "seqs": SEQS, "git_head": head})
+    print("git HEAD", head, "(plus this log's own commit)")
+    for b in bad:
+        print("PIN_MISMATCH", b)
+    return 3 if bad else 0
+
+
 def selftest() -> int:
     fails = []
 
@@ -1353,6 +1700,35 @@ def selftest() -> int:
     g = gpu_columns([h.lower() for h in head])
     expect("GPU columns by LUID (the 3D LUID is the 780M)", sorted({v[1] for v in g.values() if v[2] == "3d"}),
            ["0x00000000_0x0000badf"])
+    # (a): an engine type with a space, as the 780M names its DirectML engines, is a 780M column
+    spaced = r"\\H\GPU Engine(pid_42_luid_0x00000000_0x0000BADF_phys_0_eng_2_engtype_Compute 0)\Utilization Percentage"
+    expect("(a) a spaced engine type parses (pid, luid, 'compute 0')", list(gpu_columns([spaced.lower()]).values()),
+           [(42, "0x00000000_0x0000badf", "compute 0")])
+    import tempfile
+    from power_probe import CORES, PKG
+    with tempfile.TemporaryDirectory() as td:
+        p = Path(td) / "c.csv"
+        cols = ["(PDH-CSV 4.0)", "\\\\H" + PKG, *("\\\\H" + c for c in CORES), "\\\\H" + CPU, "\\\\H" + AVAIL,
+                "\\\\H" + PAGES_IN, spaced, head[2]]
+        vals = ["09/24/2026 07:00:01.000", "20000", *(["100"] * len(CORES)), "10", "20000", "3", "80", "5"]
+        p.write_text(",".join(f'"{c}"' for c in cols) + "\n" + ",".join(f'"{v}"' for v in vals) + "\n", encoding="utf-8")
+        r = read_csv(p, 42, ["0x00000000_0x0000badf"])
+        expect("(a) read_csv: a 'Compute 0' column counts in 780M all and pid, the NPU's in other",
+               r["rows"][0][4:7], [80.0, 80.0, 5.0])
+    # (b): the attribution witness, aggregated over a window by inside()'s rule
+    fs = FaultSampler(counters=lambda: {})
+    fs.rows = [(100.0 + i, {9: ("svc.exe", 50, 40, 4096), 5: ("reader.exe", 1, 0, 0)}) for i in range(10)]
+    fs.rows[3][1][11] = ("scan.exe", 900, 800, 1 << 20)
+    w = fs.window(101.0, 105.0)
+    expect("(b) window: 4 seconds, top faults scan.exe (225/s) then svc.exe", (w["seconds"], [e[0] for e in w["top_page_faults"][:2]],
+           w["top_page_faults"][0][2]), (4, ["scan.exe", "svc.exe"], 225.0))
+    me = proc_counters().get(os.getpid())
+    expect("(b) proc_counters sees this process by name", bool(me) and me[0].lower().startswith("python"), True)
+    # (c): sitting 2's tokens must equal sitting 1's, arm by arm
+    recs2 = [{"arm": a, "seqs": [{"tokens_sha": TOKENS_SHA_S1[a]}]} for a in gd.ARMS]
+    expect("(c) equal tokens: no arm VOID", tokens_void(recs2), {})
+    recs2[1]["seqs"].append({"tokens_sha": "0" * 64})
+    expect("(c) one differing sequence VOIDs its arm only", sorted(tokens_void(recs2)), [recs2[1]["arm"]])
     # arm_stats and combine on synthetic records
     def rec(pas, arm, tokps, dpw):
         ep = gd.ARMS[arm][0]
@@ -1429,15 +1805,21 @@ def selftest() -> int:
 def main() -> int:
     sys.stdout.reconfigure(encoding="utf-8")
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("mode", choices=("prereg", "suite", "accuracy", "verdict", "reader", "selftest"))
+    ap.add_argument("mode", choices=("prereg", "prereg-rerun", "suite", "accuracy", "verdict", "posthoc-gpu", "reader",
+                                     "selftest"))
     ap.add_argument("logs", nargs="*")
     ap.add_argument("--arm", choices=tuple(gd.ARMS))
     ap.add_argument("--pass", dest="pas", type=int, choices=(1, 2))
+    ap.add_argument("--rerun", action="store_true", help="verdict: sitting 2's rule (tokens_sha against sitting 1's)")
     a = ap.parse_args()
     if a.mode == "reader":
         return reader(a.arm, a.pas)
     if a.mode == "verdict":
-        return verdict(Path(a.logs[0]), Path(a.logs[1]))
+        return verdict(Path(a.logs[0]), Path(a.logs[1]), a.rerun)
+    if a.mode == "prereg-rerun":
+        return prereg_rerun()
+    if a.mode == "posthoc-gpu":
+        return posthoc_gpu(Path(a.logs[0]), Path(a.logs[1]), a.logs[2])
     if a.mode == "prereg":
         return prereg(Path(a.logs[0]), Path(a.logs[1]))
     return {"suite": suite, "accuracy": accuracy, "selftest": selftest}[a.mode]()

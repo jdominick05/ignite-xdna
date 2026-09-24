@@ -91,6 +91,11 @@
 #   ./scripts/llm-study.sh decode            # the sitting, recorded by tools/silicon_probe_record.py
 #   ./scripts/llm-study.sh decode-accuracy   # the untimed teacher-forced accuracy pass (heavy on RAM)
 #   ./scripts/llm-study.sh decode-verdict    # the mechanical verdict over the sitting and accuracy logs
+# Sitting 2 (the gate's re-run rule after sitting 1 was INCOMPLETE; it alone decides):
+#   ./scripts/llm-study.sh decode-gpu-posthoc     # POST HOC: sitting 1's kept GPU counters, re-read
+#   ./scripts/llm-study.sh decode-rerun-prereg    # the re-run rule's log; commit it before sitting 2
+#   ./scripts/llm-study.sh decode-rerun           # sitting 2, recorded by tools/silicon_probe_record.py
+#   ./scripts/llm-study.sh decode-rerun-verdict   # its verdict, with sitting 1's accuracy log
 #
 # Options: --machine TAG names the logs (default: desktop2 on DESKTOP-CBL5NUA, else required).
 # --tag TAG adds _TAG to the verdict log's name, for a second verdict on the same day.
@@ -119,6 +124,7 @@ while [ $# -gt 0 ]; do
         energy-prereg|energy|energy-verdict) STAGE="${1//-/_}" ;;
         decode-build|decode-recheck) STAGE="${1//-/_}" ;;
         decode-prereg|decode|decode-accuracy|decode-verdict) STAGE="${1//-/_}" ;;
+        decode-gpu-posthoc|decode-rerun-prereg|decode-rerun|decode-rerun-verdict) STAGE="${1//-/_}" ;;
         --machine) MACHINE="$2"; shift ;;
         --tag)     TAG="_$2"; shift ;;
         -h|--help) usage "${BASH_SOURCE[0]}"; exit 0 ;;
@@ -681,6 +687,48 @@ stage_decode_verdict() {
     refuse "$log"
     use_env resnet_env17
     logged "$log" python $GDS verdict "$suite" "$a" || die "verdict incomplete, see $log"
+}
+
+# sitting 1's counter files, committed beside the POST HOC log that re-reads them
+S1_COUNTERS=results/llm/gemma_decode_counters_desktop2_20260924
+S1_STAMP=20260924T032400
+
+stage_decode_gpu_posthoc() {
+    [ -d "$S1_COUNTERS" ] || die "no $S1_COUNTERS: copy sitting 1's scratch/llm/decode/${S1_STAMP}_*.csv there"
+    local log="$OUT/gemma_decode_gpu_posthoc_${MACHINE}_${DATE}.log"
+    refuse "$log"
+    use_env resnet_env17
+    logged "$log" python $GDS posthoc-gpu "$OUT/gemma_decode_suite_${MACHINE}_20260924.log" "$S1_COUNTERS" "$S1_STAMP" \
+        || die "the re-read failed, see $log"
+}
+
+stage_decode_rerun_prereg() {
+    local log="$OUT/gemma_decode_prereg_rerun_${MACHINE}_${DATE}.log"
+    refuse "$log"
+    use_env resnet_env17
+    logged "$log" python $GDS prereg-rerun || die "the re-run rule failed or a pin differs, see $log"
+    ok "commit $log (with $GDS) before: $0 decode-rerun"
+}
+
+stage_decode_rerun() {
+    ls "$OUT"/gemma_decode_prereg_rerun_*.log >/dev/null 2>&1 || die "no re-run rule: run $0 decode-rerun-prereg and commit it"
+    local log="$OUT/gemma_decode_suite_rerun_${MACHINE}_${DATE}.log"
+    refuse "$log"
+    use_env resnet_env17
+    python tools/silicon_probe_record.py --log "$log" --device --seconds 10800 -- \
+        python $GDS suite || die "sitting 2 failed, see $log"
+    ok "sitting 2 done; next: $0 decode-rerun-verdict"
+}
+
+stage_decode_rerun_verdict() {
+    local d a
+    d="$(ls "$OUT"/gemma_decode_suite_rerun_"${MACHINE}"_*.log 2>/dev/null | sed -n 's/.*_\([0-9]\{8\}\)\.log$/\1/p' | sort | tail -1)"
+    [ -n "$d" ] || die "no sitting-2 log"
+    a="$OUT/gemma_decode_accuracy_${MACHINE}_20260924.log"      # sitting 1's, pinned by the re-run rule
+    local suite="$OUT/gemma_decode_suite_rerun_${MACHINE}_${d}.log" log="$OUT/gemma_decode_verdict_rerun${TAG}_${MACHINE}_${d}.log"
+    refuse "$log"
+    use_env resnet_env17
+    logged "$log" python $GDS verdict --rerun "$suite" "$a" || die "verdict incomplete, see $log"
 }
 
 "stage_$STAGE"
