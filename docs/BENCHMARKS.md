@@ -3018,10 +3018,13 @@ not a verdict. † marks a figure computed from a row that broke the 10% rule in
 | DirectML int8 | 372.48 (0.56) | 343.23 (0.60) † | 1435.86 (0.58) | 1342.37 (0.62) | 1.54e-2 |
 
 In both sittings' tables, no NPU arm beats both chips at either M:
-- **NPU bf16** beats the CPU's fp32 by 2.7–3.3×. DirectML fp16 is more accurate and faster: it
-  takes 0.60–0.80× the NPU's time.
-- **NPU int8** at M = 512 is slower than the CPU's int8 (which takes 0.80–0.81× the NPU's time)
-  and than DirectML fp16 (0.85–0.99×).
+- **NPU bf16** beats the CPU's fp32 by 2.9–3.3× where the CPU's rows held. (It is 2.7× in
+  sitting 2 at M = 512, a figure from a row that broke.) DirectML fp16 is more accurate and
+  faster: it takes 0.71–0.80× the NPU's time in sitting 1, where its rows held. (It is 0.60–0.73×
+  in sitting 2, from rows that broke.)
+- **NPU int8** at M = 512 is slower than the CPU's int8, which takes 0.80–0.81× the NPU's time.
+  It is also slower than DirectML fp16: 0.99× in sitting 1 (0.85× in sitting 2, from a row that
+  broke).
 - **NPU int8** at M = 2048 is level with the CPU's int8 (0.99–1.03×), under the 1.10 line.
 
 **Post hoc, not pre-registered: the broken rows could not have produced a KEEP in either
@@ -3049,14 +3052,18 @@ sitting.**
 - **Host-side slicing lifts S2 past the C-step limit.**
   - At M = 2048, bf16 goes from 0.86–0.98 TFLOPS unsliced to 2.50–2.56 sliced, and int8 from
     1.13–1.22 to 3.72–3.80 TOPS.
-  - The three outputs stay in separate buffers. Concatenating them on the host costs 26–27 ms
-    at M = 2048, 0.37–0.54 of the sliced GEMM's own time (72–74 ms bf16, 49–50 ms int8), so a
-    pipeline would have to consume the slices where they are.
-- **DirectML fp16 GEMM ran on the 780M for the first time here:** 3.30–3.85 TFLOPS averaged
-  over a layer, with rel-L2 3.61e-4.
-- **The CPU's int8 read far above Q2's prior:** 3.78–4.12 TOPS at 16 threads. The prior was ORT
-  MatMulInteger's 1.70 at 2048 × 4096 × 4096 in an earlier sweep, a different harness whose
-  thread count is not recorded.
+  - The three outputs stay in separate buffers. Concatenating them on the host costs 26–29 ms
+    at M = 2048 (6.4–7.6 at M = 512), 0.35–0.56 of the sliced GEMM's own time at M = 2048.
+    So a pipeline would have to consume the slices where they are.
+- **The CPU's int8 read above Q2's prior:** 3.78–4.12 TOPS at 16 threads. The prior was ORT
+  MatMulInteger's 1.70 at 2048 × 4096 × 4096 in an earlier sweep, a different harness running at
+  ORT's default thread count (`intra_op_num_threads` 0,
+  [log](../results/aie/int8_matmul_sweep_npu.log)). Part of the gap may be 16 threads against
+  that default.
+
+**DirectML fp16 GEMM ran on the 780M for the first time here.** It read 3.30–3.38 TFLOPS,
+averaged over a layer, in sitting 1, where its rows held, with rel-L2 3.61e-4. In sitting 2 its
+rows broke the rule (3.50–3.85 there).
 
 **What broke, post hoc, cause unattributed.**
 - The CPU's 8-thread rows are bimodal within a pass in both sittings. Sitting 2's clock witness
@@ -3071,15 +3078,16 @@ sitting.**
 **Predictions scored, on both sittings** (the rule decides, these do not):
 - Q1 holds: CPU fp32 S1 at M = 2048 read 0.76–0.77 TFLOPS.
 - Q2 misses high: CPU int8 read 3.82–3.86 TOPS against 1.4–2.4.
-- Q3 holds: DirectML fp16 read 3.03–3.42 TFLOPS.
+- Q3 holds: DirectML fp16 S1 at M = 2048 read 3.03 TFLOPS in sitting 1. (It read 3.42 in
+  sitting 2, from a row that broke.)
 - Q4 misses low: DirectML fp32 read 1.37–1.40 against 1.5–5.
 - Q5 holds, except bf16 S3 in sitting 1 at 2.78, over 2.7.
 - Q6 holds: NPU int8 S1 read 3.69–3.86 TOPS.
 - Q7 holds, except DirectML fp32 at 1.33e-6, over 1e-6.
 - Q8 is not decided. The tables side with it, but the rival that stops NPU int8 at M = 2048 is
   the CPU's int8, not DirectML fp16.
-- Q9 misses: DirectML fp16 and the CPU's int8 ran faster per FLOP at M = 512 than at 2048, in
-  both sittings.
+- Q9 misses: the CPU's int8 ran faster per FLOP at M = 512 than at 2048 in both sittings, and
+  DirectML fp16 did in sitting 1 (its sitting 2 rows broke).
 
 **What this does not establish:**
 - A prefill verdict: stage 3 is INCOMPLETE.

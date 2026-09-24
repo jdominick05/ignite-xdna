@@ -508,7 +508,7 @@ Measured since (2026-09-23, LLM study stage 3, MEASURED in two sittings): decomp
 host works around the C step. Slicing N = 11008 into 4096 + 4096 + 2816, each at m = 64, runs
 the 2048 × 4096 × 11008 GEMM at 2.50–2.56 TFLOPS in bf16 and 3.72–3.80 TOPS in int8. Unsliced,
 at the forced m = 16, the same GEMM reads 0.86–0.98 and 1.13–1.22. The three outputs land in
-separate buffers, and concatenating them on the host costs 26–27 ms
+separate buffers, and concatenating them on the host costs 26–29 ms
 ([BENCHMARKS](BENCHMARKS.md#prefill-gemm-at-llama-2-7bs-shapes-incomplete-in-both-sittings-on-its-own-repeat-rule-and-neither-sittings-tables-show-an-npu-arm-beating-both-chips-2026-09-23-desktop-2)).
 
 ### 2.7 Master closed-form roofline formulation

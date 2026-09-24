@@ -207,7 +207,8 @@
     - Sitting 1 broke the 10% rule on six CPU 8-thread rows (11.7–38.4%). Sitting 2 broke it on
       two CPU 8-thread rows and six DirectML rows (11.1–37.8%).
     - Not a verdict: in neither sitting's tables does an NPU arm beat both chips.
-      - NPU bf16 loses to DirectML fp16, which is more accurate and 1.25–1.67× faster.
+      - NPU bf16 loses to DirectML fp16, which is more accurate and 1.24–1.41× faster in
+        sitting 1, where its rows held. Sitting 2's DirectML rows broke the rule.
       - NPU int8 is level with the CPU's int8 at M = 2048 (0.99–1.03×) and slower at M = 512.
     - Post hoc, not pre-registered: the rows that held already rule out a KEEP in both sittings.
     - Accuracy is the same in both sittings. The NPU's best arm, bf16 at 2.35e-3, is less
