@@ -1,0 +1,73 @@
+INT8_CONTROL S1 M=512: 5 int8 rows, int32 outputs identical
+INT8_CONTROL S1 M=2048: 5 int8 rows, int32 outputs identical
+INT8_CONTROL S2 M=512: 6 int8 rows, int32 outputs identical
+INT8_CONTROL S2 M=2048: 6 int8 rows, int32 outputs identical
+INT8_CONTROL S3 M=512: 5 int8 rows, int32 outputs identical
+INT8_CONTROL S3 M=2048: 5 int8 rows, int32 outputs identical
+CLOCK_WITNESS (display only): % Processor Performance during each CPU row's timed runs
+  fp32 16 threads S1 M=2048 pass 1   107.28 ms, clock 108-108% | pass 2   100.87 ms, clock 108-108%
+  fp32 16 threads S1 M=512  pass 1    22.84 ms, clock 108-108% | pass 2    23.27 ms, clock 107-107%
+  fp32 16 threads S2 M=2048 pass 1   257.09 ms, clock 106-106% | pass 2   255.73 ms, clock 106-106%
+  fp32 16 threads S2 M=512  pass 1    60.99 ms, clock 106-108% | pass 2    60.94 ms, clock 107-107%
+  fp32 16 threads S3 M=2048 pass 1   176.94 ms, clock 104-105% | pass 2   182.96 ms, clock 105-105%
+  fp32 16 threads S3 M=512  pass 1    42.64 ms, clock 104-106% | pass 2    42.73 ms, clock 104-106%
+  fp32  8 threads S1 M=2048 pass 1    87.86 ms, clock 108-108% | pass 2    89.61 ms, clock 108-108%
+  fp32  8 threads S1 M=512  pass 1    17.48 ms, clock 103-114% | pass 2    25.62 ms, clock 110-110%
+  fp32  8 threads S2 M=2048 pass 1   230.20 ms, clock 108-108% | pass 2   243.53 ms, clock 108-108%
+  fp32  8 threads S2 M=512  pass 1    53.13 ms, clock 107-110% | pass 2    55.64 ms, clock 107-109%
+  fp32  8 threads S3 M=2048 pass 1   213.90 ms, clock 106-109% | pass 2   211.24 ms, clock 108-108%
+  fp32  8 threads S3 M=512  pass 1    50.78 ms, clock 106-110% | pass 2    49.88 ms, clock 107-110%
+  int8 16 threads S1 M=2048 pass 1    17.69 ms, clock 106-106% | pass 2    18.27 ms, clock 106-106%
+  int8 16 threads S1 M=512  pass 1     4.27 ms, clock 105-105% | pass 2     4.10 ms, clock 104-104%
+  int8 16 threads S2 M=2048 pass 1    50.22 ms, clock 105-106% | pass 2    49.73 ms, clock 105-106%
+  int8 16 threads S2 M=512  pass 1    12.10 ms, clock 106-106% | pass 2    11.14 ms, clock 106-106%
+  int8 16 threads S3 M=2048 pass 1    47.77 ms, clock 104-106% | pass 2    47.16 ms, clock 104-106%
+  int8 16 threads S3 M=512  pass 1    10.84 ms, clock 106-106% | pass 2    10.83 ms, clock 106-106%
+  int8  8 threads S1 M=2048 pass 1    30.45 ms, clock 113-113% | pass 2    31.21 ms, clock 114-114%
+  int8  8 threads S1 M=512  pass 1     7.19 ms, clock 109-109% | pass 2     7.69 ms, clock 108-108%
+  int8  8 threads S2 M=2048 pass 1    59.84 ms, clock 110-111% | pass 2    68.71 ms, clock 110-111%
+  int8  8 threads S2 M=512  pass 1    15.97 ms, clock 110-110% | pass 2    16.08 ms, clock 110-110%
+  int8  8 threads S3 M=2048 pass 1    58.21 ms, clock 110-110% | pass 2    58.62 ms, clock 109-110%
+  int8  8 threads S3 M=512  pass 1    14.83 ms, clock 110-110% | pass 2    14.22 ms, clock 109-109%
+per layer = 4 x S1 + 2 x S2 + 1 x S3; ms are the mean of two pass medians
+
+M = 512
+  chip arm             S1 ms     S2 ms     S3 ms   layer ms  32 layers s  TFLOPS    rel-L2  config
+  cpu int8              4.19     11.62     10.84      50.82        1.626    4.08  1.54e-02  16 threads
+  dml fp16              5.70     10.01     11.06      53.88        1.724    3.85  3.61e-04  
+  npu int8              5.06     15.62     12.19      63.66        2.037    3.26  1.54e-02  S1:S1-P S2:S2s-P S3:S3-P
+  npu bf16              6.90     21.69     18.42      89.37        2.860    2.32  2.35e-03  S1:S1-P S2:S2s-P S3:S3-P
+  dml fp32             13.60     26.69     32.84     140.61        4.500    1.47  1.33e-06  
+  cpu fp32             21.55     54.38     50.33     245.30        7.850    0.84  3.12e-07  8 threads
+  dml int8             29.99     70.88     81.52     343.23       10.983    0.60  1.54e-02  
+  npu bf16 vs cpu: BEATS -- fp32 2.74x (rival time / NPU time)
+  npu bf16 vs dml: does not beat -- fp16 0.60x, fp32 1.57x (rival time / NPU time)
+  npu int8 vs cpu: does not beat -- fp32 3.85x, int8 0.80x (rival time / NPU time)
+  npu int8 vs dml: does not beat -- fp16 0.85x, fp32 2.21x, int8 5.39x (rival time / NPU time)
+  M = 512: no NPU arm beats both chips
+
+M = 2048
+  chip arm             S1 ms     S2 ms     S3 ms   layer ms  32 layers s  TFLOPS    rel-L2  config
+  cpu int8             17.98     49.98     47.46     219.34        7.019    3.78  1.54e-02  16 threads
+  npu int8             18.61     49.63     47.02     220.71        7.063    3.76  1.54e-02  S1:S1-P S2:S2s-P S3:S3-P
+  dml fp16             20.10     42.53     71.51     236.96        7.583    3.50  3.61e-04  
+  npu bf16             26.00     73.91     71.64     323.45       10.350    2.56  2.35e-03  S1:S1-P S2:S2s-P S3:S3-P
+  dml fp32             50.24    124.37    124.52     574.24       18.376    1.44  1.33e-06  
+  cpu fp32             88.73    236.87    212.57    1041.24       33.320    0.80  3.12e-07  8 threads
+  dml int8            126.65    263.30    309.17    1342.37       42.956    0.62  1.54e-02  
+  npu bf16 vs cpu: BEATS -- fp32 3.22x (rival time / NPU time)
+  npu bf16 vs dml: does not beat -- fp16 0.73x, fp32 1.78x (rival time / NPU time)
+  npu int8 vs cpu: does not beat -- fp32 4.72x, int8 0.99x (rival time / NPU time)
+  npu int8 vs dml: does not beat -- fp16 1.07x, fp32 2.60x, int8 6.08x (rival time / NPU time)
+  M = 2048: no NPU arm beats both chips
+
+PROBLEMS
+  ('cpu', 'fp32', 8, '', 'S1', 512): passes 17.4806 / 25.624 ms, 37.8% apart
+  ('cpu', 'int8', 8, '', 'S2', 2048): passes 59.8411 / 68.7142 ms, 13.8% apart
+  ('dml', 'fp16', 0, '', 'S1', 2048): passes 18.8593 / 21.331 ms, 12.3% apart
+  ('dml', 'fp16', 0, '', 'S2', 2048): passes 39.9634 / 45.1021 ms, 12.1% apart
+  ('dml', 'fp16', 0, '', 'S3', 512): passes 10.3548 / 11.7667 ms, 12.8% apart
+  ('dml', 'fp32', 0, '', 'S2', 2048): passes 141.7109 / 107.0247 ms, 27.9% apart
+  ('dml', 'fp32', 0, '', 'S3', 512): passes 31.0259 / 34.6611 ms, 11.1% apart
+  ('dml', 'int8', 0, '', 'S3', 512): passes 90.2338 / 72.7985 ms, 21.4% apart
+VERDICT INCOMPLETE
