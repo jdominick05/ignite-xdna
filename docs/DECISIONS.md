@@ -241,18 +241,22 @@
       through a device-side DirectML–XRT fence, which does not exist today.
     - Decode kernels stay out. Stage 3, prefill, is next.
     - ([BENCHMARKS](BENCHMARKS.md#a-directml--npu-split-pays-39-ms-per-token-to-join-its-halves-against-the-111-ms-it-could-save-the-split-is-dead-2026-09-23-desktop-2))
-  - **Prefill GEMM: no decision; INCOMPLETE in both sittings on its own repeat rule.** Stage 3
-    was pre-registered at `d51a427`. Sitting 2 ran under the gate's re-run rule (`c6c37e3`).
-    - Sitting 1 broke the 10% rule on six CPU 8-thread rows (11.7–38.4%). Sitting 2 broke it on
-      two CPU 8-thread rows and six DirectML rows (11.1–37.8%).
-    - Not a verdict: in neither sitting's tables does an NPU arm beat both chips.
-      - NPU bf16 loses to DirectML fp16, which is more accurate and 1.24–1.41× faster in
-        sitting 1, where its rows held. Sitting 2's DirectML rows broke the rule.
-      - NPU int8 is level with the CPU's int8 at M = 2048 (0.99–1.03×) and slower at M = 512.
-    - Post hoc, not pre-registered: the rows that held already rule out a KEEP in both sittings.
-    - Accuracy is the same in both sittings. The NPU's best arm, bf16 at 2.35e-3, is less
-      accurate than CPU fp32, DirectML fp32 and DirectML fp16.
-    - ([BENCHMARKS](BENCHMARKS.md#prefill-gemm-at-llama-2-7bs-shapes-incomplete-in-both-sittings-on-its-own-repeat-rule-and-neither-sittings-tables-show-an-npu-arm-beating-both-chips-2026-09-23-desktop-2))
+  - **Prefill GEMM, stages 3, 3b and 3c: no stage gives the NPU a speed role. Stages 3 and 3b
+    are INCOMPLETE on their own repeat rules; stage 3c gives it an energy role at M = 2048, for
+    isolated weight GEMMs at Gemma 3 4B's shapes, and is INCOMPLETE at M = 8192.**
+    - **Stage 3, at Llama-2-7B's shapes: no decision; INCOMPLETE in both sittings on its own
+      repeat rule.** It was pre-registered at `d51a427`. Sitting 2 ran under the gate's re-run
+      rule (`c6c37e3`).
+      - Sitting 1 broke the 10% rule on six CPU 8-thread rows (11.7–38.4%). Sitting 2 broke it on
+        two CPU 8-thread rows and six DirectML rows (11.1–37.8%).
+      - Not a verdict: in neither sitting's tables does an NPU arm beat both chips.
+        - NPU bf16 loses to DirectML fp16, which is more accurate and 1.24–1.41× faster in
+          sitting 1, where its rows held. Sitting 2's DirectML rows broke the rule.
+        - NPU int8 is level with the CPU's int8 at M = 2048 (0.99–1.03×) and slower at M = 512.
+      - Post hoc, not pre-registered: the rows that held already rule out a KEEP in both sittings.
+      - Accuracy is the same in both sittings. The NPU's best arm, bf16 at 2.35e-3, is less
+        accurate than CPU fp32, DirectML fp32 and DirectML fp16.
+      - ([BENCHMARKS](BENCHMARKS.md#prefill-gemm-at-llama-2-7bs-shapes-incomplete-in-both-sittings-on-its-own-repeat-rule-and-neither-sittings-tables-show-an-npu-arm-beating-both-chips-2026-09-23-desktop-2))
     - **Stage 3b, the user's "re-run prefill, pinned": INCOMPLETE too, by one row.** It was
       pre-registered at `c2b439c` after the noise study as a new experiment. The CPU was pinned
       and read back every session, and DirectML ran 5 fresh sessions per row; nothing else
@@ -271,7 +275,7 @@
         user's call.
       - ([BENCHMARKS](BENCHMARKS.md#prefill-gemm-re-run-with-pinned-cpu-threads-and-directml-over-fresh-sessions-stage-3b-incomplete-by-one-directml-row-and-its-tables-again-show-no-npu-arm-beating-both-chips-2026-09-23-desktop-2))
     - **Stage 3c, at Gemma 3 4B's shapes with energy counting (locked decision 10): speed KILL for
-      both NPU arms at both M; a role at M = 2048 on energy above idle alone; M = 8192 INCOMPLETE
+      both NPU arms at both M; a role at M = 2048 on energy alone; M = 8192 INCOMPLETE
       (2026-09-24).** Pre-registered at `2c29296`. It was amended at `1278d96` (the counters at HIGH
       priority) and `9ebb7c0` (the cadence gate on the rule itself); the rules and the verdict code did
       not change.
@@ -288,7 +292,7 @@
       - **Pitfall: a 1 Hz typeperf beside 16 pinned threads loses samples.** At normal priority a
         window held 42 rows; at HIGH, six windows at M = 8192 still held 44–49, against a 50-row rule.
         A later row-count rule should leave headroom for the busiest arm.
-      - ([BENCHMARKS](BENCHMARKS.md#prefill-weight-gemms-at-gemma-3-4bs-shapes-stage-3c-at-m--2048-the-npu-earns-a-role-on-energy-above-idle-alone-loses-on-speed-at-both-m-and-m--8192-is-incomplete-on-three-missing-cpu-rivals-2026-09-24-desktop-2))
+      - ([BENCHMARKS](BENCHMARKS.md#prefill-weight-gemms-at-gemma-3-4bs-shapes-stage-3c-at-m--2048-the-npu-earns-a-role-on-energy-alone-speed-is-kill-at-both-m-and-m--8192-is-incomplete-on-three-missing-cpu-rivals-2026-09-24-desktop-2))
 - **A pre-registered size floor caught a builder defect (2026-09-23).** `tools/llm_gemv_bench.py build`
   first sized the fp16-scale variant's copies from the fp32 variant, so six DirectML rows streamed
   0.90–0.98 GiB against a pre-registered ≥ 1 GiB, and the verdict came out INCOMPLETE (`4620b53`).

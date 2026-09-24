@@ -4240,7 +4240,7 @@ them).
 - The 780M's clocks under a paced decode.
 - Whether to build the GEMV is the user's call.
 
-### Prefill weight GEMMs at Gemma 3 4B's shapes, stage 3c: at M = 2048 the NPU earns a role on energy above idle alone, loses on speed at both M, and M = 8192 is INCOMPLETE on three missing CPU rivals (2026-09-24, Desktop 2)
+### Prefill weight GEMMs at Gemma 3 4B's shapes, stage 3c: at M = 2048 the NPU earns a role on energy alone, speed is KILL at both M, and M = 8192 is INCOMPLETE on three missing CPU rivals (2026-09-24, Desktop 2)
 
 **The result, with its qualifiers.**
 - **M = 2048: THE ROLE is KEEP, on energy alone.** Both NPU arms KEEP on energy and are KILL on speed
@@ -4351,9 +4351,10 @@ accurate, or using less energy per prompt token than both the CPU (ONNX Runtime)
   - **MISSING (R2):** an arm with fewer than two valid passes is unknown. A rule the other arms already
     KILL stays KILL; one they would KEEP is INCOMPLETE.
   - **VOID**, per window: under 50 counter rows after a 1 s trim at each end; pinning not read back;
-    placement not all DirectML; a failed output check; under 5 layers; or the memory rule (a measured
-    process's own hard faults over 25/s, or Pages Input/sec over 1,000). A VOID window gets one re-run
-    at the end of its pass (U12); a second VOID stands.
+    placement not all DirectML; a failed output check; under 5 layers; or the memory rule (U10): a
+    measured process's own hard faults over 25/s, Pages Input/sec over 1,000, or under 50
+    fault-sampler seconds, which leaves the rule unread. A VOID window gets one re-run at the end of
+    its pass (U12); a second VOID stands.
 
 **Before the sittings, in order.**
 - `2c29296`, the plan, as the user approved it ("Go with U1-U12"): every rival model places wholly on
@@ -4537,7 +4538,7 @@ recommendation; U6 stays the user's call).
     1.209× (D-nb16), but C-fp32@16 and C-nb4@16 are MISSING.
   - N-w4 has no float accuracy: its check is the exact int8 × (q − 8) product, and its set uses
     C-nb4's error. It is not a q4_0 kernel.
-- **Route (ii), W4A16, the AWQ path.** N-bf16 is its proxy on speed and accuracy class (INFERRED):
+- **Route (ii), W4A16, the form AMD's 2024 Phoenix overlay took (bf16 × uint4).** N-bf16 is its proxy on speed and accuracy class (INFERRED):
   speed KILL at both M (D-nb16 takes 0.48× and 0.57× its time), energy KEEP at M = 2048 (1.40× above
   idle, 1.04× with it) and INCOMPLETE at 8192.
 
@@ -4586,8 +4587,11 @@ That is 4 HIT, 5 MISS and 3 NOT SCORED.
   (N-i8 3.99 to 4.59 TOPS, +15%; N-bf16 +8.5%; N-w4 +17%). The fastest rivals' fell (D-nb16 4.86 to
   4.46, −8%; D-fp16 −15%; C-i8@8 −8%). At M = 8192, N-i8 is faster than every COMPLETE rival, by
   1.029× over D-nb16, under the 1.10 line.
-- **The counter files:** each window's typeperf CSVs are in the git-ignored
-  `scratch/llm/prefill3c/sitting/`, not committed. Each window's record keeps their summaries.
+- **The counter files:** each window's idle and window typeperf CSVs, 135 files
+  ([counters](../results/llm/llm_prefill3c_counters_desktop2_20260924/), `2f55f48`): the partial
+  sitting A's 7 (not cited), the cadence check's 2, A2's 60 and B's 66, VOID windows and re-runs
+  included. B's six VOIDs, and with them M = 8192's INCOMPLETE, rest on the row counts these files
+  carry. No local AI-tool name appeared in them, so nothing was replaced.
 
 **Hashes** (every committed 3c log; LF blobs checked against the index).
 - Written LF, so the working copy and the blob hash alike:
@@ -4619,6 +4623,7 @@ That is 4 HIT, 5 MISS and 3 NOT SCORED.
     `b1599ad92f426b2bef0672c3be588a33c5bc537a2162d93880234ff31993d2be`;
   - the post-hoc read `dd70c46e648c5123d7c85283082197a797f87faceb57ac3677e8593e1f91e329`,
     `b17660e2d76e6eeb0ba6a083019bef0ec4538342f7c2ae8e2e86fcd4b3132830`.
+- The 135 counter CSVs' CRLF and LF hashes are in `2f55f48`'s message.
 
 **What this does not establish:**
 - A prefill role at M = 8192: it is INCOMPLETE, and the user ruled no third sitting.

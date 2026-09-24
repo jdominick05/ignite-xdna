@@ -796,7 +796,7 @@ been closed:
         block's seven linears, M = 2048 and 8192 prompt tokens) on speed, accuracy or energy per prompt
         token. Pre-registered, in two sittings, after two amendments: the counters at HIGH priority, then
         the sitting's start reading the cadence check on the rule itself. The rules did not change.
-        - **M = 2048: the role is KEEP, on energy above idle alone.** NPU int8 uses 2.32× fewer joules
+        - **M = 2048: the role is KEEP, on energy alone.** NPU int8 uses 2.32× fewer joules
           above idle than DirectML's MatMulNBits, the binding rival, and NPU bf16 1.40×.
         - Both lose on speed there: MatMulNBits is 1.22× faster than NPU int8, and the CPU's int8 only
           1.056× slower. Accuracy cannot be won by construction.
@@ -807,9 +807,12 @@ been closed:
           ≥ 2.50×, bf16 by ≥ 1.435×). Speed is KILL: MatMulNBits is 1.029× slower than NPU int8, under
           the 1.10 line. The user ruled no third sitting.
         - Scope: one block's seven GEMMs in isolation, not per token of the model; kernel-level rel-L2;
-          one machine, one day. A q4_0 NPU kernel stays the user's call; its scale-free int8 × int4
-          bound already fails on speed at M = 2048
-          ([BENCHMARKS](docs/BENCHMARKS.md#prefill-weight-gemms-at-gemma-3-4bs-shapes-stage-3c-at-m--2048-the-npu-earns-a-role-on-energy-above-idle-alone-loses-on-speed-at-both-m-and-m--8192-is-incomplete-on-three-missing-cpu-rivals-2026-09-24-desktop-2)).
+          one machine, one day.
+        - A q4_0 NPU kernel stays the user's call. Its bound for the W4A8 route, a scale-free
+          int8 × int4 kernel, fails on speed at M = 2048 (MatMulNBits takes 0.947× its time). At
+          M = 8192 its speed reading is INCOMPLETE: it beats every complete rival by at least 1.209×,
+          with two CPU rivals missing
+          ([BENCHMARKS](docs/BENCHMARKS.md#prefill-weight-gemms-at-gemma-3-4bs-shapes-stage-3c-at-m--2048-the-npu-earns-a-role-on-energy-alone-speed-is-kill-at-both-m-and-m--8192-is-incomplete-on-three-missing-cpu-rivals-2026-09-24-desktop-2)).
 
   Evidence: `results/aie/int4_{isa_gate,engine_bytes_gate,demo_npu}_desktop2_20260923.log`,
   `results/int4/w4a8_accuracy_{prereg,verdict}_desktop2_20260923.log`,
