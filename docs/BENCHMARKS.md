@@ -4248,8 +4248,9 @@ them).
   - Energy, in mJ per prompt token per layer above idle (DERIVED): N-i8 1.0040 against DirectML's
     MatMulNBits (D-nb16) at 2.3280, **2.32×**, and the CPU's C-i8@16 at 3.65×. N-bf16 1.6601 against
     D-nb16, **1.40×**, and the CPU's C-fp32@8 at 8.04×. The line is 1.10×.
-  - Speed (T MEASURED, ratios DERIVED): N-i8 takes 96.92 ms per layer against D-nb16's 79.49 (0.82×)
-    and C-i8@16's 102.31 (1.056×, under the 1.10 line). N-bf16 takes 166.00, 0.48× D-nb16.
+  - Speed (T MEASURED, ratios DERIVED): N-i8 takes 96.92 ms per layer. D-nb16 takes 79.49, 0.82× its
+    time, and C-i8@16 takes 102.31, 1.056× its time, under the 1.10 line. N-bf16 takes 166.00; D-nb16
+    takes 0.48× its time.
   - Accuracy is KILL by construction, not a test that could have passed: C-fp32 and D-fp32 are in the
     set, W's d·(q − 8) is exact in fp32, and the NPU arms round X and W to bf16 or int8.
 - **M = 8192: THE ROLE is INCOMPLETE.** The rule's reason: three 16-thread CPU rivals, C-fp32@16,
@@ -4260,8 +4261,8 @@ them).
     N-bf16 and outside its set. For N-i8 all three are members.
   - Every COMPLETE member was beaten on energy: N-i8 by at least 2.50× and N-bf16 by at least 1.435×,
     both against D-nb16 (DERIVED). The energy rule is INCOMPLETE all the same, as pre-registered.
-  - Speed is KILL for both: N-i8 takes 336.85 ms against D-nb16's 346.56, so D-nb16 is 1.029× slower,
-    under the 1.10 line. N-bf16 is 0.57× D-nb16.
+  - Speed is KILL for both: N-i8 takes 336.85 ms against D-nb16's 346.56, so D-nb16 takes 1.029× its
+    time, under the 1.10 line. D-nb16 takes 0.57× N-bf16's time.
   - The user ruled "no third sitting, go to the write-up", so M = 8192 stays INCOMPLETE.
 - **DirectML's MatMulNBits (D-nb16) is the rival that binds almost everywhere.** It is the binding
   DirectML member in every comparison, and the fastest arm at M = 2048.
@@ -4368,7 +4369,8 @@ accurate, or using less energy per prompt token than both the CPU (ONNX Runtime)
   - Every insts.bin is on the fit 16 + 2576·M/(8m) B. The largest is 82,448 B, bf16 at M = 8192,
     larger than any that had run before.
   - The inputs manifest holds 62 files, 28 of them exact int32 SHAs.
-- `c0ea07a` and `ced2b19` add the window code. Then the load check
+- `c0ea07a` adds the window code, and `ced2b19` the load check's NPU readers at M = 2048 and the label
+  on its layer times. Then the load check
   ([log](../results/llm/llm_prefill3c_loadcheck_desktop2_20260924.log), `54e8d54`): every reader at
   M = 8192, and the NPU's also at 2048, reached READY with its check passed and ran one layer. The four
   contexts held, the M = 8192 buffers were allocated, and one buffer served two contexts exactly.
@@ -4522,21 +4524,22 @@ the package counter; E and E_gross in mJ per prompt token per layer.
   except in B's pass 1, where D-nb16's idle read 14.77 W (SD 4.51) and theirs were 1.22–1.75 W below
   it. A higher rival idle lowers the rival's net E, so the pre-registered E is, if anything,
   conservative for the NPU. The 18.44 and 19.35 W idles are each sitting's first window (C-fp32@8,
-  which never binds).
+  which never binds), and the highest, 19.70 W, is the idle before a VOID window (C-i8@16, B's pass 2).
 - The check: the net E recomputed from the logged powers equals the logged E to 1.7e-6.
 
 **What 3c gives the user for U6, an NPU kernel on the release's q4_0 codes** (report-only; no
 recommendation; U6 stays the user's call).
 - **Route (i), W4A8 with a per-block epilogue.** Its bound is N-w4, which does the int8 × int4 work
   with no scales and no epilogue.
-  - At M = 2048: speed FAIL (0.947× D-nb16) and energy OPEN (2.93× D-nb16).
+  - At M = 2048: speed FAIL (D-nb16 takes 0.947× N-w4's time) and energy OPEN (D-nb16 uses 2.93× its
+    joules above idle).
   - At M = 8192: the speed reading is INCOMPLETE. N-w4 beats every COMPLETE member by at least
     1.209× (D-nb16), but C-fp32@16 and C-nb4@16 are MISSING.
   - N-w4 has no float accuracy: its check is the exact int8 × (q − 8) product, and its set uses
     C-nb4's error. It is not a q4_0 kernel.
 - **Route (ii), W4A16, the AWQ path.** N-bf16 is its proxy on speed and accuracy class (INFERRED):
-  speed KILL at both M (0.48× and 0.57× D-nb16), energy KEEP at M = 2048 (1.40× above idle, 1.04×
-  with it) and INCOMPLETE at 8192.
+  speed KILL at both M (D-nb16 takes 0.48× and 0.57× its time), energy KEEP at M = 2048 (1.40× above
+  idle, 1.04× with it) and INCOMPLETE at 8192.
 
 **Predictions** (the prereg's Q1–Q12, scored by the frozen code; they decide nothing):
 

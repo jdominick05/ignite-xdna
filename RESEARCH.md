@@ -794,8 +794,8 @@ been closed:
           ([BENCHMARKS](docs/BENCHMARKS.md#freeing-the-gpu-or-the-cpu-during-gemma-3-4b-decode-stage-e-complete-on-a-read-only-npu-proxy-frees-both-at-once-pass-only-because-directml-collapses-beside-w1-frees-the-gpu-fail-w1-passing-only-because-the-cpu-arm-cannot-hold-there-frees-the-cpu-fail-2026-09-24-desktop-2)).
       - Stage 3c asked whether an NPU arm earns a prefill role at Gemma 3 4B's weight-GEMM shapes (one
         block's seven linears, M = 2048 and 8192 prompt tokens) on speed, accuracy or energy per prompt
-        token. Pre-registered, in two sittings, after two amendments to how the counters sample beside
-        16 pinned CPU threads; the rules did not change.
+        token. Pre-registered, in two sittings, after two amendments: the counters at HIGH priority, then
+        the sitting's start reading the cadence check on the rule itself. The rules did not change.
         - **M = 2048: the role is KEEP, on energy above idle alone.** NPU int8 uses 2.32× fewer joules
           above idle than DirectML's MatMulNBits, the binding rival, and NPU bf16 1.40×.
         - Both lose on speed there: MatMulNBits is 1.22× faster than NPU int8, and the CPU's int8 only
