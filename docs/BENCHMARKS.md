@@ -3367,6 +3367,104 @@ In these tables, no NPU arm beats both chips at either M (rival time / NPU time)
   GEMMs; DirectML IO binding; CPU stacks other than ONNX Runtime; tiles outside the menu; prefill
   beside decode.
 
+### Gemma 3 4B's shipped weights compress losslessly 1.13× per token, mostly in the F16 head: compaction survives as a byte cut, necessary but not sufficient (2026-09-23, Desktop 2)
+
+The question, (a) of the Gemma plan ([locked decision 10](DECISIONS.md#locked-decisions-do-not-reopen)):
+decode reads every weight byte once per token. Can a lossless coder cut those bytes by at least
+1.10×?
+
+**Setup.**
+- Pre-registered at `c1c6ad9`, before any file was fetched
+  ([prereg](../results/llm/gemma_compress_prereg_desktop2_20260923.log)). The tool is
+  `tools/gemma_compress.py`; the runner is `scripts/llm-study.sh compress`. It ran offline and on
+  the CPU only.
+- The input is the shipped q4_0 GGUF, `google/gemma-3-4b-it-qat-q4_0-gguf` at `15f73f5e`, pinned
+  by SHA-256 and verified after download.
+- What decode reads per token as shipped (SPEC, from the GGUF header):
+  - the 238 q4_0 linears, 1,804,861,440 B at 4.5 bits;
+  - the tied F16 head, 1,342,177,280 B;
+  - 3,147,038,720 B in total.
+- **The coders.** Every one round-tripped to the exact input.
+  - The table-driven class, the simplest class a core might decode (one table lookup per
+    symbol):
+    - C3: a static per-tensor Huffman code on the 4-bit codes, with the scales raw.
+    - C4: C3, with the scales' high byte Huffman-coded too.
+    - C5: for the head, a static Huffman code on the F16 high byte, with the low byte raw.
+  - zstd level 19, which is reported but cannot pass.
+- **The kill line.** A table-driven coder must give at least 1.10× fewer bytes on either:
+  - K1, the linears;
+  - K2, the whole stream.
+
+**Result** (sizes MEASURED, ratios DERIVED;
+[run](../results/llm/gemma_compress_run_desktop2_20260923.log),
+[verdict](../results/llm/gemma_compress_verdict_desktop2_20260923.log)): **SURVIVES, through K2.**
+
+| Stream | Shipped | Best table-driven coder | Bits per weight | Fewer bytes |
+|---|---:|---:|---:|---:|
+| Linears (K1) | 1,804,861,440 B | C4: 1,657,838,197 B | 4.1334 (shipped 4.5) | 1.0887×, **FAIL** |
+| Head (reported) | 1,342,177,280 B | C5: 1,134,188,642 B | 13.5206 (shipped 16) | 1.1834× |
+| Whole stream (K2) | 3,147,038,720 B | 2,792,026,839 B | 5.7572 | 1.1272×, **PASS** |
+
+- **Where the margin comes from.** The coders save 355,011,881 B per token. Of that, 207,988,638 B
+  (59%) comes from the F16 head and 147,023,243 B from the linears.
+  - The linears alone fall short of the line.
+  - The head's low byte is nearly incompressible (7.9672 bits of order-0 entropy); its high byte
+    is at 5.4900.
+- **The other coders, in bits per weight:**
+  - on the linears: C1 (zstd on the raw blocks) 4.2645, C2 (zstd on split streams) 4.1891, C3
+    4.2717;
+  - on the head: zstd 14.6808, byte-split zstd 13.5134.
+- **On paper (order-0 entropy):**
+  - the codes: 3.7435 bits pooled (3.5786–3.7688 per tensor);
+  - the scales: 0.3455 bits per weight;
+  - every one of the 100,270,080 blocks holds a code at q = 0, the block's extreme mapped to −8.
+- **The comparison a reader needs:** a lossy 4-bit (q4_0) head would cut the stream to
+  2,182,348,800 B, 1.44× fewer bytes (DERIVED). That compares with 1.13× lossless, but comes at an
+  accuracy cost that stage (c) measures.
+
+**Necessary, not sufficient.**
+- The CPU and the 780M could read the same coded stream, so a byte cut can help every chip.
+- Whether the NPU gains relative to them is (d)'s question, plus a decode-rate test.
+- The budget such a test must meet (DERIVED): 16 reachable compute cores × the MEASURED 1.7972 GHz
+  is 28.755 G core-cycles/s. Fed at the NPU's 47.62 GB/s, a decode must produce:
+  - 2.94 codes per cycle per core at 4.5 bits;
+  - 3.24 codes per cycle per core at K1's 4.0909 bits;
+  - 0.83 head high-byte symbols per cycle per core at 16 bits.
+
+**Predictions scored:** 10 of 13 parts hit.
+- **Hits:**
+  - P2: every block holds a q = 0 code.
+  - P3: code entropy 3.7435.
+  - P4: scales 0.3455 bits per weight.
+  - P5: the linears at 4.1334, and K1 fails (both parts).
+  - P6: the head at 13.5206.
+  - P7: K2 saves 11.28% and passes (both parts).
+  - P9: the checkpoint's embedding is 4.49% on an int4 grid.
+- **Misses:**
+  - P1: 1.45% of the linears on the grid.
+  - P8: zstd on the raw blocks came in at 4.2645, against at least 4.3.
+  - P10: 7.64%.
+
+**Post hoc, not pre-registered: why P1, P10 and Q1c missed.**
+- The prereg compared the GGUF with `google/gemma-3-4b-it-qat-int4-unquantized`. That checkpoint
+  was named in error when the plan was drafted. It is a QAT run for int4 quantizers; its card says
+  to "quantize with int4".
+- The q4_0 GGUF's matching source is `google/gemma-3-4b-it-qat-q4_0-unquantized` at `7c0881d8`,
+  whose card says to "quantize with Q4_0".
+- So the 1.45% grid match (P1) and the 7.64% head match (P10, Q1c) compare the q4_0 GGUF with a
+  different QAT run. They say nothing about whether the GGUF sits on its own checkpoint's grid.
+  - They stay MISS as scored.
+  - P9's hit read the same int4-QAT checkpoint's embedding, so it says nothing about the q4_0
+    source either.
+  - The grid question is asked again in stage (c)'s build, against the q4_0 checkpoint.
+- The verdict does not depend on them: K1 and K2 come from the GGUF alone.
+
+**What this does not establish:**
+- The decode rate of any coder on any chip.
+- Whether the NPU gains relative to the CPU and the 780M.
+- Coders beyond static order-0 Huffman codes (context modelling, arithmetic coding).
+- Whether the q4_0 GGUF sits on its own checkpoint's grid.
+
 ### MobileViT-XXS does not survive per-tensor INT8, and AdaRound cannot save it
 
 The accuracy question the attention work deferred, now measured on the full 1000-image

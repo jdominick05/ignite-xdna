@@ -741,6 +741,16 @@ been closed:
         NPU bf16 loses to DirectML fp16, and NPU int8 is level with the CPU's int8 at M = 2048
         (1.02×). No third run without the user
         ([BENCHMARKS](docs/BENCHMARKS.md#prefill-gemm-re-run-with-pinned-cpu-threads-and-directml-over-fresh-sessions-stage-3b-incomplete-by-one-directml-row-and-its-tables-again-show-no-npu-arm-beating-both-chips-2026-09-23-desktop-2)).
+      - The study then moved to Gemma 3 4B, where energy per token and freeing the GPU or the
+        CPU count too (locked decision 10). Its first pre-registered stage, (a), asks whether a
+        lossless coder cuts decode's bytes.
+        - As shipped, one token reads 3.147 GB, 43% of it the tied F16 head.
+        - Table-driven Huffman coders make that stream 1.13× smaller, mostly in the head. The
+          q4_0 linears alone reach 1.089×, under the 1.10 line.
+        - Compaction survives as a byte cut. That is necessary, not sufficient, because every
+          chip could read the coded stream. A lossy 4-bit head would give 1.44× (DERIVED), at an
+          accuracy cost not yet measured
+          ([BENCHMARKS](docs/BENCHMARKS.md#gemma-3-4bs-shipped-weights-compress-losslessly-113-per-token-mostly-in-the-f16-head-compaction-survives-as-a-byte-cut-necessary-but-not-sufficient-2026-09-23-desktop-2)).
 
   Evidence: `results/aie/int4_{isa_gate,engine_bytes_gate,demo_npu}_desktop2_20260923.log`,
   `results/int4/w4a8_accuracy_{prereg,verdict}_desktop2_20260923.log`,

@@ -158,9 +158,16 @@
     - **Earlier stages are not re-scored.** They were judged on speed and accuracy. Their kills
       are on speed (and on accuracy where stated); energy and GPU freeing were not measured for
       them.
-    - **The model.** Gemma 3 4B: `google/gemma-3-4b-it`, `-qat-int4-unquantized` and
-      `-qat-q4_0-gguf`. The user accepted Google's Gemma terms. The Llama-2-7B targets do not
-      carry over; this model's targets are derived from its own shapes.
+    - **The model.** Gemma 3 4B. The user accepted Google's Gemma terms. The Llama-2-7B targets
+      do not carry over; this model's targets are derived from its own shapes. The checkpoints
+      (repo list amended 2026-09-24):
+      - `google/gemma-3-4b-it`, the instruction-tuned release;
+      - `-qat-q4_0-gguf`, the shipped q4_0 file;
+      - `-qat-q4_0-unquantized` (revision `7c0881d8`), its unquantized QAT source, whose card says
+        to quantize with Q4_0.
+      - `-qat-int4-unquantized` is a different QAT run, for int4 quantizers. It was named here in
+        error at first, and stage (a)'s prereg compared the GGUF with it
+        ([BENCHMARKS](BENCHMARKS.md#gemma-3-4bs-shipped-weights-compress-losslessly-113-per-token-mostly-in-the-f16-head-compaction-survives-as-a-byte-cut-necessary-but-not-sufficient-2026-09-23-desktop-2)).
     - **Freeing the CPU counts too (2026-09-23).** Asked "Should leaving the CPU cores free also
       count, the way freeing the GPU does?", the user answered "Yes, it counts".
       - CPU decode leaves the GPU free, and DirectML decode leaves most CPU cores free. So the
