@@ -45,6 +45,14 @@
 #                                            # another, each recorded by silicon_probe_record.py
 #   ./scripts/llm-study.sh prefill-verdict   # the mechanical verdict over the three logs
 #
+# The noise study (the user: "study the noise"): stage 3's two unattributed noise sources, the CPU's
+# 8-thread bimodality and DirectML's level shifts. tools/measure_noise.py holds the arms, the rules
+# and the predictions. A finding about measuring on this APU; it re-scores nothing.
+#   ./scripts/llm-study.sh noise-prereg    # its pre-registration log; commit it before the sitting
+#   ./scripts/llm-study.sh noise           # the sitting: CPU, then DirectML, each recorded by
+#                                          # silicon_probe_record.py
+#   ./scripts/llm-study.sh noise-verdict   # the mechanical verdict over the two logs
+#
 # Options: --machine TAG names the logs (default: desktop2 on DESKTOP-CBL5NUA, else required).
 # --tag TAG adds _TAG to the verdict log's name, for a second verdict on the same day.
 #
@@ -66,6 +74,7 @@ while [ $# -gt 0 ]; do
         concurrent-prereg|concurrent|concurrent-verdict) STAGE="${1//-/_}" ;;
         sync-prereg|sync|sync-verdict) STAGE="${1//-/_}" ;;
         prefill-build|prefill-prereg|prefill|prefill-verdict) STAGE="${1//-/_}" ;;
+        noise-prereg|noise|noise-verdict) STAGE="${1//-/_}" ;;
         --machine) MACHINE="$2"; shift ;;
         --tag)     TAG="_$2"; shift ;;
         -h|--help) usage "${BASH_SOURCE[0]}"; exit 0 ;;
@@ -430,6 +439,37 @@ stage_prefill_verdict() {
     refuse "$log"
     use_env resnet_env17
     logged "$log" python $PRE verdict "$npu" "$cpu" "$dml" || die "verdict incomplete, see $log"
+}
+
+NOISE=tools/measure_noise.py
+
+stage_noise_prereg() {
+    local log="$OUT/llm_noise_prereg_${MACHINE}_${DATE}.log"
+    refuse "$log"
+    use_env resnet_env17
+    logged "$log" python $NOISE prereg || die "prereg failed"
+    ok "commit $log (with $NOISE) before: $0 noise"
+}
+
+stage_noise() {
+    ls "$OUT"/llm_noise_prereg_*.log >/dev/null 2>&1 || die "no pre-registration log: run $0 noise-prereg and commit it"
+    local cpu="$OUT/llm_noise_cpu_${MACHINE}_${DATE}.log" dml="$OUT/llm_noise_dml_${MACHINE}_${DATE}.log"
+    refuse "$cpu" "$dml"
+    use_env resnet_env17
+    python tools/silicon_probe_record.py --log "$cpu" --device --seconds 1200 -- \
+        python $NOISE cpu || die "the CPU arms failed, see $cpu"
+    python tools/silicon_probe_record.py --log "$dml" --device --seconds 1200 -- \
+        python $NOISE dml || die "the DirectML sessions failed, see $dml"
+    ok "sitting done; next: $0 noise-verdict"
+}
+
+stage_noise_verdict() {
+    local cpu="$OUT/llm_noise_cpu_${MACHINE}_${DATE}.log" dml="$OUT/llm_noise_dml_${MACHINE}_${DATE}.log"
+    local log="$OUT/llm_noise_verdict_${MACHINE}_${DATE}.log" f
+    for f in "$cpu" "$dml"; do [ -f "$f" ] || die "no sitting log $f"; done
+    refuse "$log"
+    use_env resnet_env17
+    logged "$log" python $NOISE verdict "$cpu" "$dml" || die "verdict incomplete, see $log"
 }
 
 "stage_$STAGE"
