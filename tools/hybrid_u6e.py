@@ -75,8 +75,35 @@ C2_LOGGED = {"q": 3.4442778290698247e-07, "k": 3.1888439057385116e-07, "v": 5.64
              "o": 3.0176442337857616e-07, "gate": 3.33442604459366e-07, "up": 5.047437104722956e-07,
              "down": 7.572597852043961e-07}              # S1's C2_JSON nb4_vs_ort_form (hybrid_s1_check log)
 C2_REL_TOL = 1e-6                                        # the anchor: |ours - logged| <= 1e-6 x logged
-X16_SHA = {}                                             # filled from `pins` before the frozen commit
-W_SHA = {}                                               # "L.gguf_name": sha256 of the tensor's raw Q4_0 bytes
+X16_SHA = {                                              # filled from `pins` before the frozen commit
+    "x_attn": "c1df965e212d7068d3d82a794675cea5cabcbe27d1abfbe6b53664763a4ba641",
+    "x_o": "aef5c238e7f6360c8b75eff98fe07b9408ec543023c6b4782afc80f3259e3b40",
+    "x_ffn": "109a46a93823b8463f51d2298e1905c05cfa668b2ed3e1d6df38a9a575f24576",
+    "x_down": "22bbdec4364217455c2f1ee4474dfe9653e310353ce0e28ad828e3718f0ade7a",
+}
+W_SHA = {                                                # "L.gguf_name": sha256 of the tensor's raw Q4_0 bytes
+    "0.attn_q": "65f012b86576bbfa26ac99755b08a15790425c7c2fffc8e7000373cba3c85f68",
+    "0.attn_k": "6f76fe57e1299500d2590bc1375238e2b08fff4f4b6672dfb37e4fcbae53009a",
+    "0.attn_v": "56f8e5aa682107b3582ff4c103ca7f5a4e54f01b6ecdb27f1756239cc0897638",
+    "0.attn_output": "a42100ac05085e64ac9fbf8e6f7619ba764f5905d06c57157313339fd9e9caa3",
+    "0.ffn_gate": "1588bfb42c05da87f14e0019cb6f5ebb37c1a5981afdc86ee918a1e0370577d8",
+    "0.ffn_up": "c05d0bff133a75c399d377288c42d009e3a625989221a3b9b987e185a6f1dd90",
+    "0.ffn_down": "dfd070b547524bc85ad95d177eb59db1856c849292091847ca35f2b826caf25c",
+    "16.attn_q": "d2196beb22bdab9fb242182334fc084018af1600b43157921a477665778b62f9",
+    "16.attn_k": "3186d88e6c9158edb7a7bfc05f0734f4d944ef283928979b4ccde86432a5d033",
+    "16.attn_v": "4fb32d8058a15ddc96bdc625f4d5bb92882b266e869cee495273b2ed0bc84fbc",
+    "16.attn_output": "8fee94450f999492cd44834b64028f118314c318a46c9b9ee412ff4fc92a74dc",
+    "16.ffn_gate": "5cbf13fdceaec60ec4b97e90564d64b78e3bcac6c90ec03dde068c877667d383",
+    "16.ffn_up": "be687125cf56e8c6670486b8b8149a80a1e51168b599dce5ff2a5fb2dc4783e8",
+    "16.ffn_down": "1522a271dc702b92509ed2602973c4f801de7bd8560d462962df99653d47f699",
+    "33.attn_q": "c142e3cef82a1bee298ccff76b6aae971c444875b85e2f031e98fad505486cba",
+    "33.attn_k": "31ee50751dd2142f842d17d60ef5f7250941f21b11ca2d26e387c02591e23a50",
+    "33.attn_v": "51ea0c2781ed16b14c7446219ff27007c006b4d2b48c63e12ce5be828c82c4f2",
+    "33.attn_output": "d70d6c3331e85cee74d744e9674110dee1737cb7c900d5d12f2a4be80a04cb90",
+    "33.ffn_gate": "84018a5471f583ca3f3e392b0f33e1df4d4853f4d30d746825d20f86c9ce20ce",
+    "33.ffn_up": "6a3783cd8a059cbc07eaa1cf8670c9d648e5886e2462d8ff495b097d4fd4bf79",
+    "33.ffn_down": "2dc549479df8a9c9264a8dfef654b506671f600cb53236ab86f45230087b6b18",
+}
 
 # The fixed fp32 add order. Pieces are numbered from 1 (the largest). A term (j, k) is piece j times piece k; its
 # order is j + k - 2, and a split of T pieces keeps the terms of order <= T - 1. Terms are added smallest first.
