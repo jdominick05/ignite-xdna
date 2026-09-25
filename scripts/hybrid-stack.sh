@@ -26,6 +26,11 @@
 #                                                  # assets log hybrid_s0_assets_..._TAG; nothing is downloaded, and
 #                                                  # its rows are fetched only after the gate has pinned the log
 #
+# U6-E (tools/hybrid_u6e.py): the precision of U6's planned epilogue, CPU only (the U6 plan, section 4).
+#   ./scripts/hybrid-stack.sh u6e-selftest   # synthetic only: bf16 RNE (ties), the splits, the fp32 add order
+#   ./scripts/hybrid-stack.sh u6e-pins       # the input pins: hashes and sizes only, nothing computed
+#   ./scripts/hybrid-stack.sh u6e-run        # C2's anchor, the emulation, then the split and A2's threshold
+#
 # Before s1-build, copy (c)'s C0-H16 model.onnx and model.onnx.data to scratch/llm/hybrid_s1/models/ as
 # c0h16.onnx and base.onnx.data, and text_only's config.json and tokenizer files to scratch/llm/gemma/text_only/;
 # s1-build checks every copy against (c)'s pins. build, check and states are RAM-heavy: announce them
@@ -46,6 +51,7 @@ while [ $# -gt 0 ]; do
         s1-selftest|s1-prereg|s1-build|s1-check|s1-states|s1-verdict) STAGE="${1//-/_}" ;;
         s1b-selftest|s1b-prereg|s1b-check|s1b-states|s1b-verdict) STAGE="${1//-/_}" ;;
         s0-baseline|s0-assets|s0-contents) STAGE="${1//-/_}" ;;
+        u6e-selftest|u6e-pins|u6e-run) STAGE="${1//-/_}" ;;
         s0-fetch)  STAGE=s0_fetch; COMP="${2:-}"; shift ;;
         s0-addendum) STAGE=s0_addendum; SPEC="${2:-}"; shift ;;
         --machine) MACHINE="$2"; shift ;;
@@ -145,5 +151,14 @@ stage_s0_addendum() {
     [ -n "$TAG" ] || die "s0-addendum needs --tag TAG: an addendum log never takes the approved assets log's name"
     stage_for "$T0" hybrid_s0_assets addendum "$SPEC"
 }
+
+need6e() {
+    ls "$OUT"/hybrid_u6e_"$1"_*.log >/dev/null 2>&1 || die "no U6-E $1 log: run $0 u6e-$1 first"
+}
+
+T6E=tools/hybrid_u6e.py
+stage_u6e_selftest() { stage_for "$T6E" hybrid_u6e_selftest selftest; }
+stage_u6e_pins()     { stage_for "$T6E" hybrid_u6e_pins pins; }
+stage_u6e_run()      { need6e selftest; need6e pins; need1b verdict; stage_for "$T6E" hybrid_u6e_run run; }
 
 "stage_$STAGE"
