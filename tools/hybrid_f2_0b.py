@@ -142,6 +142,11 @@ def allowed_s(flush, t: str) -> list:
     return ["ROW"] + [name for name, s in S_SMALL if E_CORE + flush / s <= PASS_LINE]
 
 
+def printed_tier(acc: str, t: str) -> str:
+    """What a form's tier prints as: under ACC64 VOID a PASS or MARGINAL is REPORT-ONLY (the gate's ruling 2)."""
+    return t if acc == "CONFIRMED" or t == "FAIL" else "REPORT-ONLY"
+
+
 def verdict(acc: str, tiers: dict) -> list:
     """The headline readings, in order. acc is CONFIRMED or VOID (a STOP never reaches here)."""
     out = []
@@ -536,6 +541,10 @@ def selftest() -> bool:
           and verdict("VOID", {"B3": "FAIL", "B2": "FAIL"}) == ["ACC64 VOID", "KILL"]
           and verdict("CONFIRMED", {"B3": "MARGINAL", "B2": "PASS"}) == ["PASS"]
           and verdict("CONFIRMED", {"B3": "MARGINAL", "B2": "FAIL"}) == ["MARGINAL"])
+    check("the printed tier: under ACC64 VOID a PASS or MARGINAL prints REPORT-ONLY and a FAIL stays FAIL; "
+          "under CONFIRMED each prints as it is",
+          [printed_tier("VOID", x) for x in ("PASS", "MARGINAL", "FAIL")] == ["REPORT-ONLY", "REPORT-ONLY", "FAIL"]
+          and [printed_tier("CONFIRMED", x) for x in ("PASS", "MARGINAL", "FAIL")] == ["PASS", "MARGINAL", "FAIL"])
 
     # The conversion (the addendum, section 1), bit for bit against RNE(I).
     vals = conv_values()
@@ -703,7 +712,7 @@ def case_record(case, source, defines, fn, role, rule, ok, err, fr, obj) -> dict
                 "int_macs_in_loop": lp.get("int_macs"), "float_macs_in_loop": lp.get("float_macs"),
                 "vector_ops_in_loop": lp.get("vector_ops"), "stack_refs_in_loop": lp.get("stack_refs"),
                 "loads_stores_in_loop": f20.ldst(fr) if i is not None else None,
-                "vsrs_in_loop": sum(n for h, n in mn.items() if h.startswith("vsrs")),
+                "vsrs_in_loop": sum(n for h, n in mn.items() if h.startswith("vsrs")) if i is not None else None,
                 "function_stack_refs": fr.get("function_stack_refs"), "frame_bytes": fr.get("frame_bytes"),
                 "pipelined": fr.get("pipelined"), "outside": fr.get("outside"), "cr_writes": fr.get("cr_writes"),
                 "slot_census": fr.get("slot_census"), "text_bytes": u60.text_bytes(obj), "void": fr["void"]})
@@ -809,7 +818,7 @@ def run() -> int:
         flush = None if r["void"] else r["loop_bundles"]
         t, e = form_tier(flush)
         forms[f] = {"FLUSH": flush, "E_F2": None if e is None else round(e, 4), "tier": t,
-                    "allowed_s": allowed_s(flush, t), "void": r["void"]}
+                    "printed": printed_tier(reading, t), "allowed_s": allowed_s(flush, t), "void": r["void"]}
     heads = verdict(reading, {f: v["tier"] for f, v in forms.items()})
     say("OUTPUT_JSON", {"E_core": E_CORE, "acc64": reading, "config": acc["config"]["value"],
                         "forms": forms, "readings": heads, "row_blocks": ROW_BLOCKS,
@@ -827,7 +836,7 @@ def run() -> int:
     b3, b2 = forms["FLUSH_B3"]["FLUSH"], forms["FLUSH_B2"]["FLUSH"]
     say("PRED_JSON", {
         "F2b-P1": score(all(recs[f]["compiled"] and recs[f]["void"] is None for f in FORMS)),
-        "F2b-P2": score(None if any(not recs[f]["compiled"] for f in FORMS)
+        "F2b-P2": score(None if any(recs[f].get("vsrs_in_loop") is None for f in FORMS)
                         else all(recs[f]["vsrs_in_loop"] == 0 for f in FORMS)),
         "F2b-P3": score(None if b3 is None or b2 is None else b2 < b3),
         "F2b-P4": score(True),
@@ -841,7 +850,7 @@ def run() -> int:
     for f, v in forms.items():
         shown = f"{v['FLUSH']}" if v["FLUSH"] is not None else f"VOID ({v['void']})"
         e = "%.2f" % v["E_F2"] if v["E_F2"] is not None else "UNKNOWN"
-        t = v["tier"] if reading == "CONFIRMED" or v["tier"] == "FAIL" else "REPORT-ONLY"
+        t = v["printed"]
         print(f"F2-0b {f}: FLUSH {shown} cycles per tile and superblock; E_F2 {e} (22 + FLUSH / {ROW_BLOCKS}); "
               f"{t}; allowed S {v['allowed_s'] if t != 'FAIL' else []}", flush=True)
         if v["E_F2"] is not None:
