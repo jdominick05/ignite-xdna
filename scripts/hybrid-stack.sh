@@ -49,6 +49,15 @@
 #   ./scripts/hybrid-stack.sh f2e-pins       # the pins: hashes and sizes only, nothing computed
 #   ./scripts/hybrid-stack.sh f2e-run        # the pins, E_F2, the order, the anchors, the 12 arms and the pick
 #
+# F2-A (tools/hybrid_f2a.py): F2-E's pick in all 238 linears at model level, CPU only, two verdicts (KV on set C,
+# FULL on bands L and H). The S1b pattern; f2a-prereg is the one stage that reaches the Hub (the validation text).
+#   ./scripts/hybrid-stack.sh f2a-selftest   # synthetic only: no model, no text, no x16
+#   ./scripts/hybrid-stack.sh f2a-prereg     # the plan, the validation text's 16 windows, the frozen hashes (commit it)
+#   ./scripts/hybrid-stack.sh f2a-build      # the F2 graph and the probe on S1's sequence 0 (RAM-heavy)
+#   ./scripts/hybrid-stack.sh f2a-check      # the anchors K1-K8 (RAM-heavy)
+#   ./scripts/hybrid-stack.sh f2a-states     # F2, R and N2 prompts, R0's continuations, in batches (RAM-heavy)
+#   ./scripts/hybrid-stack.sh f2a-verdict    # the metrics and the two frozen verdicts
+#
 # Before s1-build, copy (c)'s C0-H16 model.onnx and model.onnx.data to scratch/llm/hybrid_s1/models/ as
 # c0h16.onnx and base.onnx.data, and text_only's config.json and tokenizer files to scratch/llm/gemma/text_only/;
 # s1-build checks every copy against (c)'s pins. build, check and states are RAM-heavy: announce them
@@ -74,6 +83,7 @@ while [ $# -gt 0 ]; do
         f2-0)      STAGE=f2_0 ;;
         f2-0b)     STAGE=f2_0b ;;
         f2e-selftest|f2e-pins|f2e-run) STAGE="${1//-/_}" ;;
+        f2a-selftest|f2a-prereg|f2a-build|f2a-check|f2a-states|f2a-verdict) STAGE="${1//-/_}" ;;
         s0-fetch)  STAGE=s0_fetch; COMP="${2:-}"; shift ;;
         s0-addendum) STAGE=s0_addendum; SPEC="${2:-}"; shift ;;
         --machine) MACHINE="$2"; shift ;;
@@ -210,5 +220,21 @@ stage_f2e_run() {
     ls "$OUT"/hybrid_f2_0b_*.log >/dev/null 2>&1 || die "no F2-0b log: run $0 f2-0b first"
     stage_for "$T2E" hybrid_f2e_run run
 }
+
+need2a() {
+    ls "$OUT"/hybrid_f2a_"$1"_*.log >/dev/null 2>&1 || die "no F2-A $1 log: run $0 f2a-$1 first"
+}
+
+T2A=tools/hybrid_f2a.py
+stage_f2a_selftest() { stage_for "$T2A" hybrid_f2a_selftest selftest; }
+stage_f2a_prereg() {
+    need2a selftest
+    unset HF_HUB_OFFLINE         # the validation text is fetched here, without a token, at its pinned revision
+    stage_for "$T2A" hybrid_f2a_prereg prereg
+}
+stage_f2a_build()    { need2a prereg; stage_for "$T2A" hybrid_f2a_build build; }
+stage_f2a_check()    { need2a build; stage_for "$T2A" hybrid_f2a_check check; }
+stage_f2a_states()   { need2a check; stage_for "$T2A" hybrid_f2a_states states; }
+stage_f2a_verdict()  { need2a states; stage_for "$T2A" hybrid_f2a_verdict verdict; }
 
 "stage_$STAGE"
