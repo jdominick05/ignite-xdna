@@ -22,6 +22,9 @@
 #   ./scripts/hybrid-stack.sh s0-assets
 #   ./scripts/hybrid-stack.sh s0-fetch COMPONENT   # the gate-approved rows only; its log is hybrid_s0_fetch-COMPONENT_...
 #   ./scripts/hybrid-stack.sh s0-contents          # the fetched archives' member lists (a read)
+#   ./scripts/hybrid-stack.sh s0-addendum PKG==VER --tag TAG   # PyPI's record for one package, as an addendum
+#                                                  # assets log hybrid_s0_assets_..._TAG; nothing is downloaded, and
+#                                                  # its rows are fetched only after the gate has pinned the log
 #
 # Before s1-build, copy (c)'s C0-H16 model.onnx and model.onnx.data to scratch/llm/hybrid_s1/models/ as
 # c0h16.onnx and base.onnx.data, and text_only's config.json and tokenizer files to scratch/llm/gemma/text_only/;
@@ -44,6 +47,7 @@ while [ $# -gt 0 ]; do
         s1b-selftest|s1b-prereg|s1b-check|s1b-states|s1b-verdict) STAGE="${1//-/_}" ;;
         s0-baseline|s0-assets|s0-contents) STAGE="${1//-/_}" ;;
         s0-fetch)  STAGE=s0_fetch; COMP="${2:-}"; shift ;;
+        s0-addendum) STAGE=s0_addendum; SPEC="${2:-}"; shift ;;
         --machine) MACHINE="$2"; shift ;;
         --tag)     TAG="_$2"; shift ;;
         -h|--help) usage "${BASH_SOURCE[0]}"; exit 0 ;;
@@ -135,6 +139,11 @@ stage_s0_contents() { stage_for "$T0" hybrid_s0_contents contents; }
 stage_s0_fetch() {
     [[ "${COMP:-}" =~ ^[a-z0-9][a-z0-9.-]*$ ]] || die "s0-fetch needs a COMPONENT name"
     stage_for "$T0" "hybrid_s0_fetch-$COMP" fetch "$COMP"
+}
+stage_s0_addendum() {
+    [[ "${SPEC:-}" =~ ^[a-z0-9][a-z0-9._-]*==[0-9][0-9A-Za-z.+-]*$ ]] || die "s0-addendum needs PKG==VERSION"
+    [ -n "$TAG" ] || die "s0-addendum needs --tag TAG: an addendum log never takes the approved assets log's name"
+    stage_for "$T0" hybrid_s0_assets addendum "$SPEC"
 }
 
 "stage_$STAGE"

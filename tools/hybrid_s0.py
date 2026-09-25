@@ -10,9 +10,14 @@ here installs, runs a downloaded binary or computes on a chip.
                                                 # checksum (or "pinned only"), the source and the read time
     python tools/hybrid_s0.py fetch COMPONENT   # download one component's APPROVED_ROWS into scratch/rt/, verified,
                                                 # from the approved assets log only (pinned by its LF sha256)
-    python tools/hybrid_s0.py contents          # list the fetched archives' members (a read: nothing extracted)
+    python tools/hybrid_s0.py contents          # list the fetched archives' members, a nested .tar's too, the
+                                                # HIP DLLs' PE versions and Smart App Control's state (reads only:
+                                                # nothing extracted, loaded or changed)
+    python tools/hybrid_s0.py addendum PKG==VER # a tagged addendum assets log: PyPI's record for one package;
+                                                # its rows are fetched only once the gate has pinned it (PINS)
 
-Standard library only. Sizes are printed in bytes and in GB = 1e9 bytes. The plan is
+Standard library only, except that contents reads PE versions with pefile and its own memory with psutil (both
+already in resnet_env17). Sizes are printed in bytes and in GB = 1e9 bytes. The plan is
 scratch/llm/hybrid_s0_plan_draft.md (v2, approved 2026-09-24).
 """
 import argparse
@@ -21,6 +26,7 @@ import glob
 import hashlib
 import json
 import os
+import posixpath
 import re
 import shutil
 import subprocess
@@ -578,7 +584,17 @@ APPROVED_ROWS = {
              "rocm_sdk_libraries-10.0.0-py3-none-win_amd64.whl", "rocm_sdk_devel-10.0.0-py3-none-win_amd64.whl",
              "rocm_sdk_device_gfx1103-10.0.0-py3-none-win_amd64.whl"),
 }
-RT_DIR = {"llamacpp": "llamacpp-b11146", "zluda": "zluda-v6", "genai": "genai-0.16.0", "rocm": "rocm-10.0.0"}
+# G-GA/dml (the user's decision, 2026-09-25) has two rows: this log's onnxruntime_directml-1.24.4 wheel and the
+# 0.13.1 wheel from the dml013 addendum. Both join together, the first here as "genai-dml" and the second as PINS'
+# next entry, once the gate has matched the addendum. Until then neither is fetched, and contents reads the 16 rows.
+# Every (log, LF sha256, rows) the gate has approved, in order. A tagged addendum joins only after the gate has matched
+# its log against its own read of the publisher's record; until then nothing of it is fetched.
+PINS = [
+    {"log": APPROVED_ASSETS_LOG, "lf": APPROVED_ASSETS_LF, "rows": APPROVED_ROWS},
+]
+RT_DIR = {"llamacpp": "llamacpp-b11146", "zluda": "zluda-v6", "genai": "genai-0.16.0", "rocm": "rocm-10.0.0",
+          "genai-dml": "genai-dml-0.13.1"}
+ADDENDUM_COMPONENT = {"onnxruntime-genai-directml": "genai-dml"}
 FETCH_NOTES = {
     "llamacpp": "b11146 (commit 7fe450e19305b828c199d602c23a8337aaa1f03b) is the build releases/latest (v0.5.0) names "
                 "in its nightly-tag.txt; v0.5.0 is the same commit ('bump version to 0.5.0'). b11175 "
@@ -589,32 +605,48 @@ FETCH_NOTES = {
              "G-GA/dml and G-GA/amdgpu are NOT RUN at 0.16, and hip-ep is not fetched. The gate's rulings 5 and 6.",
     "rocm": "TheRock 10.0.0 wheels: no checksum is published anywhere, so each is hashed at download and its size "
             "checked ('pinned only'); S3's prereg pins the hash. The gate's ruling 2.",
+    "genai-dml": "G-GA/dml, the user's decision (2026-09-25): onnxruntime-genai-directml 0.13.1 on "
+                 "onnxruntime-directml 1.24.4, the newest pair PyPI can satisfy, for its own env genai013. The 1.24.4 "
+                 "wheel is in the approved assets log; the 0.13.1 wheel comes from a tagged addendum, fetched only "
+                 "once the gate has matched it.",
 }
 
 
-def fetch(component: str) -> int:
-    p = RESULTS / APPROVED_ASSETS_LOG
-    lf = hashlib.sha256(p.read_bytes().replace(b"\r\n", b"\n")).hexdigest() if p.exists() else None
-    want = APPROVED_ROWS.get(component, ())
-    say("FETCH_PLAN_JSON", {"assets_log": APPROVED_ASSETS_LOG, "assets_log_lf_sha256": lf,
-                            "approved_assets_lf": APPROVED_ASSETS_LF, "approved_rows": list(want),
-                            "component": component, "dir": f"{rel(RT)}/{RT_DIR.get(component)}",
-                            "note": FETCH_NOTES.get(component), "utc": utc_now()})
-    if lf != APPROVED_ASSETS_LF:
-        print("FETCH REFUSED: the assets log is missing or its LF sha256 differs from the approved pin", flush=True)
-        return 2
-    lines = p.read_text(encoding="utf-8").splitlines()
-    logged = {}
-    for s in lines:
-        if s.startswith("ASSET_JSON "):
-            r = json.loads(s.split(" ", 1)[1])
-            if r["component"] == component:
+def lf_sha(p: Path):
+    return hashlib.sha256(p.read_bytes().replace(b"\r\n", b"\n")).hexdigest() if p.exists() else None
+
+
+def pinned_rows(component: str) -> tuple:
+    """The approved rows for a component, each read by name from its pinned log. (rows, plan, refusal)"""
+    rows, plan = [], []
+    for pin in PINS:
+        want = pin["rows"].get(component, ())
+        if not want:
+            continue
+        p = RESULTS / pin["log"]
+        lf = lf_sha(p)
+        plan.append({"log": pin["log"], "log_lf_sha256": lf, "pinned_lf": pin["lf"], "rows": list(want)})
+        if lf != pin["lf"]:
+            return rows, plan, f"{pin['log']} is missing or its LF sha256 differs from the pin"
+        logged = {}
+        for s in p.read_text(encoding="utf-8").splitlines():
+            if s.startswith("ASSET_JSON "):
+                r = json.loads(s.split(" ", 1)[1])
                 logged[r["name"]] = r
-    missing = [n for n in want if n not in logged]
-    if not want or missing:
-        print(f"FETCH REFUSED: {component} has no approved rows, or the approved log lacks {missing}", flush=True)
+        missing = [n for n in want if n not in logged]
+        if missing:
+            return rows, plan, f"{pin['log']} lacks {missing}"
+        rows += [logged[n] for n in want]
+    return rows, plan, None if rows else f"{component} has no approved rows"
+
+
+def fetch(component: str) -> int:
+    rows, plan, refusal = pinned_rows(component)
+    say("FETCH_PLAN_JSON", {"pins": plan, "component": component, "dir": f"{rel(RT)}/{RT_DIR.get(component)}",
+                            "note": FETCH_NOTES.get(component), "utc": utc_now()})
+    if refusal:
+        print(f"FETCH REFUSED: {refusal}", flush=True)
         return 2
-    rows = [logged[n] for n in want]
     rc = 0
     for r in rows:
         dest = RT / RT_DIR[component]
@@ -691,38 +723,174 @@ def members(path: Path) -> tuple:
         return [(m.name, m.size) for m in t.getmembers() if m.isfile()], None
 
 
+PE_NAMES = re.compile(r"(?i)(^|/)(amdhip64_7|rocblas|hipblas)\.dll$")     # amendment 4 (c): read their PE version
+
+
+def pe_info(data: bytes) -> dict:
+    """A DLL's PE version resource and whether it embeds an Authenticode blob, parsed from bytes in memory with
+    pefile (already in the env): nothing is written to disk and nothing is loaded or executed."""
+    import pefile
+    out = {"bytes": len(data), "sha256": hashlib.sha256(data).hexdigest()}
+    try:
+        pe = pefile.PE(data=data, fast_load=True)
+        pe.parse_data_directories(directories=[pefile.DIRECTORY_ENTRY["IMAGE_DIRECTORY_ENTRY_RESOURCE"]])
+    except pefile.PEFormatError as e:
+        return {**out, "error": f"not a PE: {e}"}
+    ver = lambda ms, ls: f"{ms >> 16}.{ms & 0xFFFF}.{ls >> 16}.{ls & 0xFFFF}"  # noqa: E731
+    ff = getattr(pe, "VS_FIXEDFILEINFO", None)
+    if ff:
+        out["file_version"] = ver(ff[0].FileVersionMS, ff[0].FileVersionLS)
+        out["product_version"] = ver(ff[0].ProductVersionMS, ff[0].ProductVersionLS)
+    strings = {}
+    for fi in getattr(pe, "FileInfo", None) or []:
+        for entry in fi:
+            for st in getattr(entry, "StringTable", None) or []:
+                for k, v in st.entries.items():
+                    strings[k.decode("utf-8", "replace")] = v.decode("utf-8", "replace")
+    out["strings"] = {k: strings[k] for k in ("FileVersion", "ProductVersion", "CompanyName", "FileDescription")
+                      if k in strings}
+    sec = pe.OPTIONAL_HEADER.DATA_DIRECTORY[pefile.DIRECTORY_ENTRY["IMAGE_DIRECTORY_ENTRY_SECURITY"]]
+    out["authenticode_embedded"] = sec.Size > 0             # present, not verified
+    pe.close()
+    return out
+
+
+def own_memory() -> dict:
+    """This process's working set and private bytes, now and at peak (GB), in S1's form (psutil, in the env)."""
+    import psutil
+    m = psutil.Process().memory_info()
+    return {"wset_gb": round(m.rss / 1e9, 3), "peak_wset_gb": round(getattr(m, "peak_wset", 0) / 1e9, 3),
+            "private_gb": round(getattr(m, "private", 0) / 1e9, 3),
+            "peak_private_gb": round(getattr(m, "peak_pagefile", 0) / 1e9, 3)}
+
+
+def sac_state() -> dict:
+    """Smart App Control, read-only: VerifiedAndReputablePolicyState (0 off, 1 on, 2 evaluation). Never written."""
+    key = r"SYSTEM\CurrentControlSet\Control\CI\Policy"
+    try:
+        with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, key, 0, winreg.KEY_READ) as k:
+            v, _ = winreg.QueryValueEx(k, "VerifiedAndReputablePolicyState")
+    except OSError as e:
+        return {"key": "HKLM\\" + key, "value": None, "error": str(e)}
+    return {"key": "HKLM\\" + key, "value": v, "state": {0: "off", 1: "on", 2: "evaluation"}.get(v, "unknown")}
+
+
+def norm_member(p: str) -> str:
+    """An archive path in one form: '/' separators, no leading './', '..' and '.' resolved (posixpath.normpath)."""
+    p = p.replace("\\", "/")
+    while p.startswith("./"):
+        p = p[2:]
+    return posixpath.normpath(p) if p else p
+
+
+def nested_tar(z, info) -> dict:
+    """A .tar inside a wheel (rocm_sdk_devel's _devel.tar), streamed from the zip: its member list, the PE reads,
+    and its links with their targets (the dangling ones named: amendment 4 (e), TheRock #7807). Nothing extracted.
+    Memory stays bounded: the zip member is read as a stream and the tar in stream mode ("r|*"), one member's data
+    at a time; only a matching DLL's own bytes are held, for its PE read. tarfile keeps each member's header (a
+    TarInfo, well under 1 kB), about 7,000 for _devel.tar; contents() logs the peak working set."""
+    import tarfile
+    files, links, pes, longest = [], [], [], (0, "")
+    with z.open(info) as raw, tarfile.open(fileobj=raw, mode="r|*") as t:
+        for m in t:
+            if len(m.name) > longest[0]:
+                longest = (len(m.name), m.name)
+            if m.issym() or m.islnk():
+                links.append((norm_member(m.name), m.linkname, "sym" if m.issym() else "hard"))
+            elif m.isfile():
+                files.append((norm_member(m.name), m.size))
+                if PE_NAMES.search(m.name):
+                    pes.append({"member": m.name, **pe_info(t.extractfile(m).read())})
+    names = {n for n, _ in files} | {n for n, _, _ in links}
+
+    def target(name, link, kind):
+        """A hard link's target is archive-relative; a symlink's is relative to its own directory. Both are put in
+        norm_member's form before the comparison; an absolute symlink target can never be inside the tar."""
+        link = link.replace("\\", "/")
+        if kind == "sym" and (link.startswith("/") or re.match(r"^[A-Za-z]:/", link)):
+            return None
+        return norm_member(link if kind == "hard" else posixpath.join(posixpath.dirname(name), link))
+    dangling = [{"link": n, "target": l, "kind": k, "resolved": target(n, l, k)} for n, l, k in links
+                if target(n, l, k) not in names]
+    flags = {k: sorted(n for n, _ in files if rx.search(n)) for k, rx in FLAGS.items()}
+    return {"tar": info.filename, "files": len(files), "uncompressed_bytes": sum(s for _, s in files),
+            "links": len(links), "dangling": dangling, "flags": {k: v for k, v in flags.items() if v},
+            "longest_member": {"chars": longest[0], "name": longest[1]}, "pe": pes}
+
+
 def contents() -> int:
-    """List every approved, fetched archive's members: a read, nothing is extracted or executed."""
+    """List every approved, fetched archive's members: a read, nothing is extracted or executed. Amendment 4 (c):
+    the PE version of amdhip64_7, rocblas and hipblas, read in memory; a .tar inside a wheel is streamed and listed;
+    Smart App Control's state is read (read-only)."""
+    import zipfile
     print("S0 CONTENTS (a read of the fetched archives; nothing extracted or run). GB = 1e9 bytes.", flush=True)
     say("TIME_JSON", {"utc": utc_now()})
+    say("SAC_JSON", sac_state())
     missing = []
-    for comp, names in APPROVED_ROWS.items():
-        for name in names:
-            path = RT / RT_DIR[comp] / name
-            if not path.exists():
-                missing.append(name)
-                continue
-            mem, requires = members(path)
-            flags = {k: sorted(n for n, _ in mem if rx.search(n)) for k, rx in FLAGS.items()}
-            say("CONTENTS_JSON", {"component": comp, "name": name, "sha256": sha256_file(path),
-                                  "members": len(mem), "uncompressed_bytes": sum(s for _, s in mem),
-                                  "requires_dist": requires, "flags": {k: v for k, v in flags.items() if v},
-                                  "list": sorted(n for n, _ in mem) if len(mem) <= FULL_LIST_MAX
-                                  else f"{len(mem)} members (over {FULL_LIST_MAX}: flags only)"})
+    for comp, name in [(c, n) for pin in PINS for c, names in pin["rows"].items() for n in names]:
+        path = RT / RT_DIR[comp] / name
+        if not path.exists():
+            missing.append(name)
+            continue
+        mem, requires = members(path)
+        flags = {k: sorted(n for n, _ in mem if rx.search(n)) for k, rx in FLAGS.items()}
+        longest = max(mem, key=lambda m: len(m[0]))[0] if mem else ""
+        say("CONTENTS_JSON", {"component": comp, "name": name, "sha256": sha256_file(path),
+                              "members": len(mem), "uncompressed_bytes": sum(s for _, s in mem),
+                              "requires_dist": requires, "flags": {k: v for k, v in flags.items() if v},
+                              "longest_member": {"chars": len(longest), "name": longest},
+                              "list": sorted(n for n, _ in mem) if len(mem) <= FULL_LIST_MAX
+                              else f"{len(mem)} members (over {FULL_LIST_MAX}: flags only)"})
+        if path.suffix in (".zip", ".whl"):
+            with zipfile.ZipFile(path) as z:
+                for info in z.infolist():
+                    if PE_NAMES.search(info.filename):
+                        say("PE_JSON", {"component": comp, "archive": name, "member": info.filename,
+                                        **pe_info(z.read(info))})
+                    elif info.filename.endswith(".tar"):
+                        say("NESTED_TAR_JSON", {"component": comp, "archive": name, **nested_tar(z, info)})
+    say("MEM_JSON", own_memory())
     print(f"CONTENTS {'OK' if not missing else 'INCOMPLETE: not fetched ' + ', '.join(missing)}", flush=True)
     return 0 if not missing else 2
+
+
+def addendum(spec: str) -> int:
+    """A tagged addendum assets log: PyPI's own record for one package==version (cp312 win_amd64). Its rows are
+    fetched only after the gate has matched this log and its LF sha256 joins PINS."""
+    pkg, _, ver = spec.partition("==")
+    comp = ADDENDUM_COMPONENT.get(pkg)
+    if comp is None or not ver:
+        print(f"ADDENDUM REFUSED: {spec!r} is not PKG==VERSION for one of {sorted(ADDENDUM_COMPONENT)}", flush=True)
+        return 2
+    print(f"S0 ASSETS ADDENDUM (light: PyPI's record for {spec} only; nothing is downloaded). GB = 1e9 bytes.",
+          flush=True)
+    say("TIME_JSON", {"utc": utc_now()})
+    meta, rows = pypi_rows(comp, pkg, ver, False, "an addendum row: fetched only once the gate has pinned this log")
+    say("RELEASE_JSON", {"component": comp, "addendum": spec, **meta})
+    for r in rows:
+        say("ASSET_JSON", r)
+    say("ASSETS_DONE_JSON", {"rows": len(rows), "addendum": spec, "component": comp,
+                             "bytes": sum(r["bytes"] for r in rows if isinstance(r["bytes"], int))})
+    ok = bool(rows) and all(r["url"] and r["sha256"] for r in rows)
+    print(f"ADDENDUM {'OK' if ok else 'INCOMPLETE'}: {len(rows)} row(s) for {spec}", flush=True)
+    return 0 if ok else 2
 
 
 def main() -> int:
     sys.stdout.reconfigure(encoding="utf-8")
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("mode", choices=("baseline", "assets", "fetch", "contents"))
+    ap.add_argument("mode", choices=("baseline", "assets", "fetch", "contents", "addendum"))
     ap.add_argument("args", nargs="*")
     a = ap.parse_args()
+    comps = sorted({c for pin in PINS for c in pin["rows"]})
     if a.mode == "fetch":
-        if len(a.args) != 1 or a.args[0] not in APPROVED_ROWS:
-            ap.error(f"fetch takes one COMPONENT: {', '.join(APPROVED_ROWS)}")
+        if len(a.args) != 1 or a.args[0] not in comps:
+            ap.error(f"fetch takes one COMPONENT: {', '.join(comps)}")
         return fetch(a.args[0])
+    if a.mode == "addendum":
+        if len(a.args) != 1:
+            ap.error("addendum takes one PKG==VERSION")
+        return addendum(a.args[0])
     return {"baseline": baseline, "assets": assets, "contents": contents}[a.mode]()
 
 
