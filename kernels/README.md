@@ -53,6 +53,7 @@ array program) into `~/.npu/cache/<hash>/`; later runs of the same shape hit the
 | `w4a8_probe/` | Nothing yet — int4 weights on one core, two ways: native `mmul<int8,int4>`, and int4 widened to int8 on load | **int8×int4 is a native `vmac` on AIE2**, as AMD's AIE-API documents for AIE-ML, confirmed bit-exact on Phoenix: 512 MACs per `vmac` by its shape (SPEC); the best k loop sustains 372.4 MAC/cycle (0.73 `vmac`/cycle, MEASURED), 1.82× the int8 control (upstream's kernel, re-typed) and 1.64× the best int8 schedule. Widening on load is free and buys only bytes. One core, not the array |
 | `w4a8_array/` | Nothing yet — `whole_array`'s int8 GEMM with B packed int4 and the probe's kernels in every core | **int4 weights pay at the array, and not through the core**: 1.23–1.26× at the int8 best tile 64/128/64 (**6,195 GOPS**, bit-exact) with the unpack kernel as much as the native one; 1.06–1.13× at 64/64/64, nothing at 128/64/64. Mechanism unexplained |
 | `int4_study/` | Nothing — the INT4 gates: can this chip run int4 at all, and is it worth anything to the graph engine | **The demo runs; on paper, the engine's current packets leave int4 little to save.** uint8 × int4 (the engine's operand pair) is bit-exact on silicon at int8 × int4's exact cycles; the toolchain's only dense int4 is W4A8 (compile-only); under today's fixed weight packets int4 is worth under 5% of any container's dispatch even at best (DERIVED, transport-bound, no accuracy data), and the engine core has 224 B of program memory left. **Accuracy kills it on its own** (gate D, pre-registered, CPU emulation): 4-bit weights at round-to-nearest take YOLOv8n from 27.10 to 0.06 mAP@50-95 and YOLOv8s from 37.21 to 2.76. [Evidence](../docs/BENCHMARKS.md#int4-on-phoenix-gates-first-the-chip-runs-the-engines-uint8--int4-and-on-paper-the-current-weight-packets-leave-int4-little-to-save-2026-09-23-desktop-2) |
+| `u6_epilogue/` | Nothing — prices the fp32 per-block epilogue a Q4_0 × int8 NPU GEMM would need (the hybrid stack's U6-0) | **97 cycles per 32-lane block-tile** for three bf16 pieces with a round-trip (DERIVED from bundles, static), against a break-even of 24 by the U6 plan's model. Compile only, no NPU. [Below](#u6_epilogue) |
 
 ## `aie2/dfl/`
 
@@ -601,3 +602,39 @@ Written up in
 
 Gate B lives at `tools/int4_bytes_gate.py`: it prices int4 against the graph engine's own
 weight stream and needs no kernel.
+
+## `u6_epilogue/`
+
+The hybrid stack's U6-0, compile only: nothing here has run on a core. U6 is the plan for a
+Q4_0 weight × int8-per-block activation GEMM on the NPU in R's arithmetic. The exact int32 dot
+i of each 32-block becomes y += float(i) · s_x · d_w in fp32. AIE2 has no vector fp32 multiply,
+so the products are built from bf16 pieces, in the form and add order U6-E fixed
+(`tools/hybrid_u6e.py`). This directory asks what that epilogue costs in the core.
+Written up in
+[`docs/BENCHMARKS.md`](../docs/BENCHMARKS.md#hybrid-stack-u6-e-and-u6-0-the-epilogue-of-a-q4_0-npu-kernel-fp32-grade-products-take-three-bf16-pieces-and-that-epilogue-costs-97-cycles-per-32-lane-block-tile-so-route-i-as-built-misses-the-users-bar-on-time-and-energy-by-the-u6-plans-own-model-2026-09-25-desktop-2).
+
+- `u6_epilogue.cc` — one source, five cases, one compile each:
+  - `u6_block`, one hardware loop over 4 × 8 output tiles, one 32-block per iteration: the A and
+    B loads, `mmul<4,16,8,int8,int4>` mul then mac, then the epilogue.
+  - y is loaded and stored every iteration, an L1 round-trip. s_x and d_w are split per tile,
+    which is conservative.
+  - The cases are CONTROL (i stored as int32, the baseline), the 3- and 2-piece epilogues,
+    3 pieces with float(i) through int16, and `u6_tofloat`, the int32-to-fp32 conversion alone.
+- `u6_0_disasm_fixture.txt` — the tool's selftest input: two cached IRON objects'
+  disassembly (`clock_probe` and `w4a8_probe`) and a synthetic part, with each part's source
+  and licence noted at the top.
+
+The tool is `tools/hybrid_u6_0.py`, run as `scripts/hybrid-stack.sh u6-0`. It compiles each case
+with Peano's clang and IRON's flags on a pinned toolchain. It reads each loop's bundles with
+the repo's
+[bundle-count method](../docs/BENCHMARKS.md#aie2-machine-code-the-bundle-count-of-a-loop-is-its-cycle-count)
+and prints E = FULL3's loop bundles − CONTROL's. `results/llm/hybrid_u6_0_desktop2_20260925.log`:
+
+- **E = 97 cycles per 32-lane block-tile** for three pieces (DERIVED, static). Two pieces read 68
+  and the int16 path 93, report-only.
+- The loop is issue-bound (INFERRED): 101 vector ops in 104 bundles. The text shows CONTROL's loop
+  software-pipelined and does not show FULL3's.
+- `aie::to_float` has no single int32-to-fp32 instruction on AIE2. Its loop takes 6.0 vector ops
+  per 16 lanes.
+- By the U6 plan's model the break-even against DirectML's MatMulNBits is 24 cycles, so this form
+  misses the user's bar (DERIVED, compute only).

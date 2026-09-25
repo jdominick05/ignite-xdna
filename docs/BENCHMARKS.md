@@ -4876,7 +4876,7 @@ That is 3 HIT and 1 MISS.
 
 **The result, with its qualifiers.**
 - **N2 ON SET C: PASS, not NARROW.** Against R0 one-shot, over 84 new WikiText-2 windows, scored by the frozen
-  verdict code `3059986a` at `e5b320e`
+  verdict code `3059986a` (frozen at `b777070`, log at `e5b320e`)
   ([log](../results/llm/hybrid_s1b_verdict_desktop2_20260925.log), LF blob `50fe4d9f`; MEASURED).
   - Set C is R0 running positions 2,048–3,070 teacher-forced on N2's full 2,048-position prompt KV. The pooled
     mean over 84 × 1,023 = 85,932 positions reads mean KL 0.0101 [0.0096, 0.0107] against ≤ 0.0123, and top-1
@@ -5036,6 +5036,242 @@ totals are DERIVED from the states log's per-window seconds; GB = 1e9 bytes).
 - That N2 stays within the bar at every position. The first 512 continuation positions read above the KL line
   (report-only).
 - A change to the pick. S1's pick, N3, stands. Any change to the hybrid's NPU numerics is the user's decision.
+
+### Hybrid stack U6-E and U6-0, the epilogue of a q4_0 NPU kernel: fp32-grade products take three bf16 pieces, and that epilogue costs 97 cycles per 32-lane block-tile, so route (i) as built misses the user's bar on time and energy by the U6 plan's own model (2026-09-25, Desktop 2)
+
+**The result, with its qualifiers.**
+- **U6-E SPLIT: 3-term; A2 THRESHOLD: 2.3e-06**, by the frozen rule, in a numpy emulation against MatMulNBits
+  accuracy level 4 (L4) on the CPU ([run log](../results/llm/hybrid_u6e_run_desktop2_20260925.log); MEASURED).
+  - The rule asks for "fp32-grade": every case within 2.0× L4's own departure from float64.
+  - Three bf16 pieces pass at 1.08–1.22×; two read 5.05–12.40×.
+  - So the 3-term outcome follows from the rule's strictness. Whether two pieces would hold at model level is
+    unmeasured, and this claims neither way.
+- **U6-0: E = 97 cycles per 32-lane block-tile (3-term, round-trip; DERIVED from bundles, static).**
+  - Compile only; the NPU did not run ([log](../results/llm/hybrid_u6_0_desktop2_20260925.log)).
+  - The 2-term kernel reads 68 and the int16 conversion 93, both REPORT-ONLY.
+  - U0-P2 FAILS: the plan's 12–16 was INFERRED in operations from SPEC rates, and FULL2's 68 is 4.3–5.7× it
+    (FULL3's 97 is 6.1–8.1×). U0-P1, P3 and P4 HOLD.
+- **Through the U6 plan's own model, route (i)'s fp32-grade per-block epilogue, in this form, does not meet the
+  user's bar on time or on energy** (DERIVED from U6-0's counted E; compute only; not a silicon measurement).
+  - Compute per layer: 681 ms (635 of it the epilogue alone), 8.6× D-nb16's 79.49.
+  - With idle: 10.90 mJ per prompt token per layer, 3.8× D-nb16's 2.8569.
+  - The break-even against D-nb16, the binding with-idle rival, is E ≤ 24 cycles per block-tile.
+- **Which split U6 uses is moot for route (i) as built.** The split rule is the gate's ruling, and the user may
+  override it before U6's prereg.
+  - Both splits sit far over the break-even: 3-term's 97 is 4.0× it, 2-term's 68 is 2.8×.
+  - The choice would matter only for a hypothetical fully optimised 2-term kernel near the census floor (below).
+    The split rule already excludes 2-term.
+- **What remains.**
+  - F2, integerized 8-bit scales. The user's rule of 2026-09-25 triggers it on either reading: E ≥ 12, or a
+    required 3-term split. Both hold.
+  - F3, IRON's dequant to bf16 and then a bf16 GEMM, is bounded by N-bf16's 166.00 ms.
+  - Two U6-0b candidates are untested: 2 × 2 blocking, and s_x and d_w split once per row and column. Whether
+    either could close a 2.8–4.0× gap in E is unestimated.
+
+**What U6 asks.** The source is the U6 plan (v2 + E1/E2, approved by the user on 2026-09-25). It is a git-ignored
+draft, LF `830eb8b9`, pinned by both tools.
+- Route (i): Q4_0 weights (c − 8 as signed int4) times int8 activations per 32-block.
+  - First the exact int32 dot i per block.
+  - Then y = Σ_b float(i) · s_x · d_w, in fp32.
+  - That is R's arithmetic (MatMulNBits accuracy level 4), the only int8-class form that read within S1's bar,
+    report-only ([S1](#hybrid-stack-s1-the-npu-numerics-gate-on-real-2048-token-prompts-bf16-n3-keeps-gemma-3-4bs-next-token-distribution-within-the-bar-and-both-int8-arms-fail-in-a-cpu-emulation-2026-09-24-desktop-2)).
+- AIE2 has no vector fp32 multiply; fp32 accumulation (accfloat) is native. So the products are built from bf16
+  pieces:
+  - float(i) is exact in two pieces, since |i| ≤ 32 × 127 × 8 = 32,512;
+  - s_x, d_w and P = s_x · d_w take T pieces each.
+- The two steps: U6-E fixes T and A2's threshold; U6-0 prices the epilogue in cycles. Both are no-chip steps under
+  the plan. Everything after them in U6 needs the user's go.
+
+**U6-E: how many bf16 pieces fp32-grade needs.** The logs are the
+[selftest](../results/llm/hybrid_u6e_selftest_desktop2_20260925.log),
+[pins](../results/llm/hybrid_u6e_pins_desktop2_20260925.log) and [run](../results/llm/hybrid_u6e_run_desktop2_20260925.log).
+The tool is `tools/hybrid_u6e.py`, frozen at `2505530`; the runner stages are `scripts/hybrid-stack.sh u6e-*`.
+MEASURED, on the CPU.
+- **The emulation:** numpy, bf16 by round-to-nearest-even, and every fp32 add rounded once, in a fixed order with
+  the smallest products first, for T = 2 and 3.
+- **The reference, L4:** MatMulNBits at accuracy level 4, built as S1's C2 (ONNX Runtime 1.23.3, ORT_DISABLE_ALL,
+  PRIORITY_BASED, 8 intra-op threads). ANCHOR OK: L4 equals S1's C2 output bit for bit on layer 16's seven
+  linears.
+- **The cases:** the seven linears of layers 0, 16 and 33 (21 cases), on rows 0, 8, …, 2,040 (256 rows) of layer
+  16's captured inputs. Layers 0 and 33 take layer 16's inputs, which is an assumption.
+- **The rule** (SPLIT_FACTOR 2.0, the gate's ruling; the user may override it before U6's prereg):
+  - T is enough iff every case's rel-L2(emulation, L4) ≤ 2.0 × rel-L2(L4, float64).
+  - A2's threshold is 2.0 × the worst case's rel-L2 for the chosen T, rounded up at two significant figures.
+- **The selftest** passed 13 of 13, synthetic only. It ran on the tool before its input hashes were filled (LF
+  `afab3b3c`); freezing changed only those pins.
+  - bf16 rounding: known ties, and ml_dtypes' RNE on 1,065,284 values.
+  - float(i) = h1 + h2 exactly, on 65,025 values; the split residuals.
+  - The emulation against an independent scalar walk of the order, bit for bit. A reversed order changes some
+    bits, so the check has teeth.
+
+  | Over the 21 cases | T = 2 | T = 3 |
+  |---|---:|---:|
+  | rel-L2 against L4 | 3.29e-6 – 6.44e-6 | 3.93e-7 – 1.12e-6 |
+  | rel-L2 against float64 | 3.28e-6 – 6.42e-6 | 2.12e-7 – 4.99e-7 |
+  | Ratio to L4's own floor | 5.05 – 12.40 | 1.08 – 1.22 |
+  | max_rel against L4 (max abs diff / max abs L4) | 3.06e-6 – 1.56e-5 | 8.74e-8 – 2.52e-6 |
+
+  L4's own floor, rel-L2(L4, float64), reads 3.23e-7 – 1.00e-6.
+- **The split** is 3-term, the smallest T with every ratio ≤ 2. The worst ratio is 1.22, on layer 16's q.
+- **A2's threshold** is up2(2 × 1.1180e-6) = 2.3e-6. The worst case is layer 0's down.
+- **T = 3 against float64** reads 2.12e-7 – 4.99e-7, below L4's own floor in every case.
+- **T = 2 in scale** (report-only):
+  - Its worst rel-L2 against L4, 6.44e-6, is about 20× below llama.cpp's fp16-scale form's departure from L4 in
+    S1's C2: 1.28e-4 – 1.85e-4 ([S1 check log](../results/llm/hybrid_s1_check_desktop2_20260924.log)).
+  - L4 against accuracy level 0 on the same rows reads 5.37e-3 – 1.32e-2.
+  - So two pieces fail "fp32-grade", not closeness to llama.cpp's own form. Whether they would hold at model level
+    is unmeasured.
+- **Scope:**
+  - layer 16's inputs for all three layers;
+  - 256 rows of 2,048;
+  - the emulation assumes accfloat rounds each MAC to fp32 by RNE, which docs/SILICON.md does not record.
+
+  Peak private memory was 1.58 GB.
+
+**U6-0: what that epilogue costs in the core.** The log is
+[hybrid_u6_0](../results/llm/hybrid_u6_0_desktop2_20260925.log).
+- **The pieces:**
+  - the tool, `tools/hybrid_u6_0.py` at `a513ac0`;
+  - the kernel, `kernels/u6_epilogue/u6_epilogue.cc`;
+  - the runner stage, `scripts/hybrid-stack.sh u6-0`;
+  - the plan, U6-0 v2, a git-ignored draft (LF `352a30d8`).
+
+  Compile only: the NPU did not run.
+- **The method:** [a zero-overhead hardware loop's bundle count is its cycle count](#aie2-machine-code-the-bundle-count-of-a-loop-is-its-cycle-count).
+  - It is calibrated on silicon: clock_probe's loops of 2 and 9 bundles, and the W4A8 static counts against
+    measured ones, above.
+  - The compile is Peano's clang with IRON's flags. The toolchain is pinned: llvm_aie 22.0.0.2026090201+a36c62b9,
+    mlir_aie 1.4.2.
+- **The kernel,** `u6_block`, is one hardware loop over 4 × 8 output tiles, one 32-block per iteration:
+  - the A and B loads, and `mmul<4,16,8,int8,int4>`, mul then mac;
+  - then the epilogue in U6-E's form and order, read back from the source and checked against U6-E's frozen ORDER;
+  - y loaded and stored every iteration, an L1 round-trip.
+
+  s_x and d_w are loaded, broadcast and split per tile. That is conservative: a real kernel can split them once
+  per row and column.
+- **The cases.** CONTROL (the loads, the two MACs, and i stored as int32) and FULL3 decide. FULL2, FULL3_I16 (i
+  converted through int16) and TOFLOAT (the int32-to-fp32 conversion alone) are report-only. E = FULL3's loop
+  bundles − CONTROL's.
+- **The checks held:**
+  - every case found its one hardware loop, with exactly 2 integer MACs in each u6_block case;
+  - no loop holds a stack reference;
+  - the rounding-mode write, `mov crRnd, #0xc`, sits before the loop in every u6_block case;
+  - the fixture selftest passed 21 of 21 inside the run.
+
+  | Case | Role | Loop bundles | Integer MACs | bf16 MACs | Vector ops | .text B | Pipelined, read off the text |
+  |---|---|---:|---:|---:|---:|---:|---|
+  | CONTROL | baseline | 7 | 2 | 0 | 2 | 272 | SHOWN |
+  | FULL3 | DECIDING | 104 | 2 | 22 | 101 | 640 | NOT SHOWN |
+  | FULL2 | report-only | 75 | 2 | 12 | 71 | 512 | NOT SHOWN |
+  | FULL3_I16 | report-only | 100 | 2 | 22 | 90 | 576 | NOT SHOWN |
+  | TOFLOAT | report-only | 12 | 0 | 0 | 12 | 448 | SHOWN |
+
+  So E = 104 − 7 = 97 for 3-term, 68 for 2-term, and 93 through int16. .text is a lower bound on a core ELF,
+  against 16,384 B.
+- **The loop is issue-bound, not latency-bound** (INFERRED from the census).
+  - FULL3's 104 bundles hold 101 vector ops: vmac.f 20, vmul.f 2, vconv 31, vsub.f 16, vmov 18, vbcst 4,
+    vshuffle 2, and 8 others.
+  - 102 of the 104 bundles are compressed, so the text does not show which slot each op issued in.
+- **Pipelining.** The log's NOTE:
+  - CONTROL reads PIPELINED: SHOWN, with two integer MACs before its loop and two after. So its 7 is an
+    initiation interval (INFERRED).
+  - FULL3 reads NOT SHOWN, so its 104 is a body length. E subtracts an initiation interval from a body length.
+  - Pipelining FULL3 could reclaim at most its 24 move, broadcast and shuffle ops by co-issue. That leaves 77
+    vector ops. If they share one issue slot (the assumption below), E stays far above 12.
+- **A floor from the census** (DERIVED, under an assumption).
+  - The assumption, INFERRED and not shown: the fp MACs and the conversion share one vector issue slot.
+  - Each 32-lane accfloat MAC is two instructions, so 3-term's 11 P and Y terms are 22, and 2-term's 6 are 12.
+  - The int32-to-fp32 conversion is 12 vector ops per 32 lanes (TOFLOAT). The int16 path saves about 4
+    (FULL3_I16's E is 93).
+  - So 3-term needs at least 22 + 12 = 34 cycles per block-tile before any split. That is above the 24-cycle
+    break-even even with the s_x and d_w splits amortised and every move co-issued.
+  - 2-term needs at least 12 + 8 to 12 before the P and h splits, at or above the break-even.
+- **aie::to_float on AIE2** has no single int32-to-fp32 instruction. TOFLOAT's loop holds vshuffle 2, vups 2,
+  vadd 2, vsub.f 4 and vadd.f 2: 6.0 vector ops per 16 lanes. Read with aie_api's source (INFERRED):
+  - it splits i into 16-bit halves by shuffle and widens them (vups);
+  - it adds a magic constant in acc32, subtracts it in accfloat, and adds the halves.
+- **Predictions** (ESTIMATE, scored by the tool; they decide nothing):
+
+  | | Predicted | Printed |
+  |---|---|---|
+  | U0-P1 | The four v1 cases compile | HOLDS |
+  | U0-P2 | FULL2's E is within the U6 plan's 12–16 | FAILS (68) |
+  | U0-P3 | FULL3's E exceeds FULL2's | HOLDS |
+  | U0-P4 | TOFLOAT's loop holds at least 4 vector ops per 16 lanes | HOLDS (6.0) |
+
+- **Disclosed before the run** (the commit bodies of `a513ac0` and `55ab0dd`):
+  - U6's objects were compiled in a dry run and deleted unread.
+  - llvm-objdump ran on two cached IRON objects (the fixture) and one set_rounding probe.
+  - run()'s plumbing ran on a non-U6 dummy.
+
+  No U6 bundle count was seen before the logged run.
+
+**The consequence, through the U6 plan's own model** (DERIVED; compute only; not a silicon measurement).
+- **The model.** Per layer at M = 2,048 there are 2,048 × 94,371,840 / 32 = 6.04e9 block-lanes. At 32 lanes per
+  block-tile, over 16 cores at 1.80 GHz, one cycle of E costs 6.55 ms.
+  - U6-0 counts E in cycles, so 6.55 ms × E follows directly. The plan's "one operation per cycle" assumption
+    drops out.
+  - The MACs, in the plan's model, take about 18 ms (2,048 × 94,371,840 MACs over 16 cores at 372.4 MAC per cycle,
+    the best measured k loop, two-point).
+  - FULL3's whole loop, 104 cycles, holds the loads and the two integer MACs as well as the epilogue. So
+    6.55 × 104 = 681 ms is this form's compute total, in place of the plan's epilogue plus 18 ms.
+  - The break-even below keeps the plan's form, 18 ms + 6.55 ms × E.
+- **Energy** is at N-w4's power, the plan's assumption E2: 32.78 W with idle, 19.41 W above idle
+  ([post-hoc log](../results/llm/llm_prefill3c_posthoc_desktop2_20260924.log)). A kernel kept busy by vector ops
+  may draw more.
+- **Excluded:** the scale bytes (+25% W, +12.5% X), bank conflicts, lock and DMA waits, and code outside the loop.
+
+  | Form | E | Epilogue alone, ms per layer | Whole loop, cycles | Compute per layer, ms | With idle, mJ per token per layer | Above idle |
+  |---|---:|---:|---:|---:|---:|---:|
+  | 3-term (deciding) | 97 | 635 | 104 | 681 | 10.90 | 6.46 |
+  | 3-term through int16 (report-only) | 93 | 609 | 100 | 655 | 10.48 | 6.21 |
+  | 2-term (report-only) | 68 | 445 | 75 | 491 | 7.86 | 4.66 |
+
+  The epilogue alone, with idle, reads 10.17, 9.75 and 7.13 mJ.
+
+  The rivals, MEASURED in 3c at M = 2,048 (the post-hoc log's lines 19, 24, 25 and 27):
+
+  | Rival | ms per layer | With idle, mJ | Above idle, mJ |
+  |---|---:|---:|---:|
+  | D-nb16 | 79.49 | 2.8569 | 2.3280 |
+  | C-nb4@8 | 385.68 | 16.3063 | 13.6114 |
+  | N-bf16 | 166.00 | 2.7417 | 1.6601 |
+  | N-w4 | 83.91 | 1.3425 | 0.7949 |
+
+- **So route (i) as built:**
+  - is slower than every rival, the CPU included: 681 ms against C-nb4@8's 385.68, 1.77×;
+  - uses 3.8× D-nb16's energy with idle.
+  - Its with-idle energy sits below the CPU's (10.90 against 16.31). The user's bar needs strictly below both, so
+    that does not earn a role.
+- **The break-even is against D-nb16, the binding with-idle rival.**
+  - Compute must stay under 2.8569 × 2,048 / 32.78 = 178.5 ms.
+  - With the plan's 18 ms of MACs, that is E ≤ (178.5 − 18) / 6.55 = 24.5, so 24 cycles per block-tile.
+  - C-nb4@8's with-idle 16.31 is far above D-nb16's, so the CPU does not bind.
+  - The plan's CPU floor, 13.37 W × 385.68 ms / 2,048 = 2.52 mJ, is an idle power times the CPU's time. It bounds
+    the CPU's with-idle energy from below; it is not the CPU's energy, which is 16.31.
+
+**Hashes** (CRLF working copy, then LF blob).
+- The U6-E selftest (`2505530`): `034b7d9845e04c627085af0e2004f1888d322c4b1abca02d47645592ac4200cb`,
+  `66796a01a6881f769a01ef3957fc71e69bdaaa512c575479bec5ba79b3fb6516`.
+- The U6-E pins (`2505530`): `2037c150a41d7502c6c2f790e73179fe42fe5576a0feaae3ef868c0e4ff5b59c`,
+  `3d8608f781bd0ac0e1be4778c6102cae20b55feea73e78b89d06b0e50b6d28d2`.
+- The U6-E run (`8faa9db`): `97c7e2a44299fe8e079e018eb81983dcb48e4a536f3b4b196dbe43f90d60c560`,
+  `adaa8fa8a1f4db89a85c30f49b3b48487a3fed28e494313efe4cecf5bbd07e4e`.
+- The U6-0 run (`3a2ac2b`): `470c0de9bbcac7fa9524daee1c6c8c59f4a8a92546a5e0060ac16273450cec2a`,
+  `a08fd4fcd15df4fe9dc1a0a5c1e8a535e2e156e411bd474bf8f2017fc5124417`.
+- The tools: `tools/hybrid_u6e.py` LF `b88d23d3…` and `tools/hybrid_u6_0.py` LF `6f47d861…`. The kernel source's LF
+  is `7130b078…`.
+
+**What this does not establish.**
+- A silicon time. E is the static count of a loop, a lower bound: bank conflicts and waits are excluded. No U6
+  kernel has run on the NPU.
+- The cost of any other U6 form: 2 × 2 blocking, or s_x and d_w split once per row and column. These are the U6-0b
+  candidates, untested.
+- The cost of the scale bytes, or what limits the w4a8 array (UNEXPLAINED).
+- Model-level accuracy for any split. U6-A has not run, and whether two pieces would hold at model level is
+  unmeasured.
+- F2 or F3: neither is designed or measured here.
+- The energy at the epilogue's own power. The table uses N-w4's.
 
 ### MobileViT-XXS does not survive per-tensor INT8, and AdaRound cannot save it
 

@@ -341,6 +341,35 @@
       is not modelled; N2's tie to the NPU is DERIVED.
     - **The pick stays N3.** Moving the prompt-KV arm to N2 is the user's decision, with the interval in hand.
     - ([BENCHMARKS](BENCHMARKS.md#hybrid-stack-s1b-n2-serving-the-prompts-kv-r0s-continuation-on-n2s-kv-passes-on-the-pooled-set-c-not-narrow-the-last-prompt-position-fails-report-only-and-the-pick-stays-n3-in-a-cpu-emulation-2026-09-25-desktop-2))
+  - **Hybrid stack U6-E and U6-0, route (i)'s per-block epilogue: fp32-grade needs three bf16 pieces, the
+    epilogue costs 97 cycles per 32-lane block-tile, and route (i) as built misses the user's bar on time and
+    energy by the U6 plan's own model (2026-09-25).**
+    - U6 is the plan, approved by the user, for a Q4_0 × int8-per-block GEMM on the NPU in R's arithmetic.
+      AIE2 has no vector fp32 multiply, so the fp32 scale products are built from bf16 pieces.
+    - U6-E (the tool frozen at `2505530`, the log at `8faa9db`; numpy against MatMulNBits level 4 on the CPU):
+      - SPLIT: 3-term. Three pieces sit at 1.08–1.22× L4's own departure from float64, and two at
+        5.05–12.40×, against the gate's rule of ≤ 2.0×.
+      - A2's threshold is 2.3e-06.
+      - The 3-term outcome follows from the rule's strictness ("fp32-grade"). Two pieces sit about 20× below
+        llama.cpp's own form's departure from L4. Whether they would hold at model level is unmeasured.
+    - U6-0 (the tool at `a513ac0`, the log at `3a2ac2b`; compile only, the NPU did not run):
+      - E = 97 cycles per 32-lane block-tile, for 3-term with a round-trip, DERIVED from bundles (static).
+      - 2-term reads 68 and the int16 conversion 93, both report-only.
+      - U0-P2 FAILS: the plan's 12–16 was INFERRED from SPEC rates.
+      - The loop is issue-bound (INFERRED): 101 vector ops in 104 bundles. The text shows CONTROL's loop
+        pipelined and does not show FULL3's.
+    - **Through the plan's model** (DERIVED; compute only; energy at N-w4's power):
+      - 681 ms per layer for the whole loop (635 of it the epilogue), 8.6× D-nb16's 79.49;
+      - 10.90 mJ per prompt token per layer with idle, against D-nb16's 2.8569.
+      - The break-even against D-nb16 is E ≤ 24. Under a one-issue-slot assumption, the census's floor for
+        3-term is 34.
+    - Which split U6 uses is moot for route (i) as built: 3-term's E is 4.0× the break-even and 2-term's 2.8×.
+    - What remains:
+      - F2 (integerized 8-bit scales), which the user's rule triggers on both readings;
+      - F3 (dequant, then bf16), bounded by N-bf16's 166.00 ms;
+      - the untested U6-0b forms, 2 × 2 blocking and per-row and per-column splits, whose gain is
+        unestimated.
+    - ([BENCHMARKS](BENCHMARKS.md#hybrid-stack-u6-e-and-u6-0-the-epilogue-of-a-q4_0-npu-kernel-fp32-grade-products-take-three-bf16-pieces-and-that-epilogue-costs-97-cycles-per-32-lane-block-tile-so-route-i-as-built-misses-the-users-bar-on-time-and-energy-by-the-u6-plans-own-model-2026-09-25-desktop-2))
 - **A pre-registered size floor caught a builder defect (2026-09-23).** `tools/llm_gemv_bench.py build`
   first sized the fp16-scale variant's copies from the fp32 variant, so six DirectML rows streamed
   0.90–0.98 GiB against a pre-registered ≥ 1 GiB, and the verdict came out INCOMPLETE (`4620b53`).
