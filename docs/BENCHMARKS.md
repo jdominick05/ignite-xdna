@@ -5304,7 +5304,7 @@ MEASURED, on the CPU.
   - They come from aie_api's `to_float` on an acc64. The loop holds 8 srs from the accumulator per 32 lanes, and
     each one passes its rounding and saturation modes per call (the `_conf` intrinsics,
     `aie_api/detail/aie2/elementary.hpp:491-499, 513-518`). So it is a rule artefact, not a malformed flush.
-  - Its 142 bundles are not carried as a count anywhere.
+  - Its 142 bundles appear as read, VOID, in the case table below; they are not used as FLUSH or in any E_F2.
   - The gate ruled the flush onto the core, and a host flush was not proposed.
 - **F2-0b: acc64 CONFIRMED, and both flush forms pass the line at S = ROW** (DERIVED from bundles, static; compile
   only; [log](../results/llm/hybrid_f2_0b_desktop2_20260925.log)).

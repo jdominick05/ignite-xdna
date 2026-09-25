@@ -379,6 +379,15 @@
     - It was taken with S1b's interval in hand. S1b's verdict kept the pick at N3 and left this move to the user;
       its prereg's consequence was that N2 can serve the prompt's KV only if the GPU computes the last prompt
       position.
+    - The basis the user was given: N2 runs 3c's int8 kernel with the same weight codes, with the activation scale
+      per token (BENCHMARKS, S1's arms). In 3c's post-hoc reading (report-only), that kernel, N-i8, used 1.75×
+      fewer joules than D-nb16 with idle, against N-bf16's 1.04× (2.8569 against 1.6334 and 2.7417 mJ; the
+      post-hoc log, lines 24–26). The per-token scale's cost is not in that figure.
+    - The caveats, report-only in S1b (`hybrid_s1b_verdict_desktop2_20260925.log`):
+      - the first 512 continuation positions, 2,048–2,559, read mean KL 0.01265, above the line of 0.0123
+        (line 111);
+      - the hybrid's first generated token, P-R0 (the GPU computing id 2,047 on N2's KV), reads FAIL NARROW:
+        mean KL 0.02342 and top-1 0.9405, 79 of 84 windows (line 101).
     - ([BENCHMARKS](BENCHMARKS.md#hybrid-stack-s1b-n2-serving-the-prompts-kv-r0s-continuation-on-n2s-kv-passes-on-the-pooled-set-c-not-narrow-the-last-prompt-position-fails-report-only-and-the-pick-stays-n3-in-a-cpu-emulation-2026-09-25-desktop-2))
   - **Hybrid stack F2-0 and F2-0b, integerized 8-bit scales for route (i): both flush forms pass E ≤ 24 at
     S = ROW, compute only, and F2 cannot beat the chosen N2 arm on energy (2026-09-25).**
