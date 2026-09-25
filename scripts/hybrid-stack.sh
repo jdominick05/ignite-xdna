@@ -43,6 +43,12 @@
 # only, the same way.
 #   ./scripts/hybrid-stack.sh f2-0b          # the pins, the selftest, F2_CORE re-read and decoded, two flush forms
 #
+# F2-E (tools/hybrid_f2e.py): F2's precision at S = ROW, CPU only (the F2 plan's section 3, with sections 1 and 3
+# as the F2-E addendum amends them). The same pattern as U6-E.
+#   ./scripts/hybrid-stack.sh f2e-selftest   # synthetic only: the grid, the round-up, the flush's order and floor
+#   ./scripts/hybrid-stack.sh f2e-pins       # the pins: hashes and sizes only, nothing computed
+#   ./scripts/hybrid-stack.sh f2e-run        # the pins, E_F2, the order, the anchors, the 12 arms and the pick
+#
 # Before s1-build, copy (c)'s C0-H16 model.onnx and model.onnx.data to scratch/llm/hybrid_s1/models/ as
 # c0h16.onnx and base.onnx.data, and text_only's config.json and tokenizer files to scratch/llm/gemma/text_only/;
 # s1-build checks every copy against (c)'s pins. build, check and states are RAM-heavy: announce them
@@ -67,6 +73,7 @@ while [ $# -gt 0 ]; do
         u6-0)      STAGE=u6_0 ;;
         f2-0)      STAGE=f2_0 ;;
         f2-0b)     STAGE=f2_0b ;;
+        f2e-selftest|f2e-pins|f2e-run) STAGE="${1//-/_}" ;;
         s0-fetch)  STAGE=s0_fetch; COMP="${2:-}"; shift ;;
         s0-addendum) STAGE=s0_addendum; SPEC="${2:-}"; shift ;;
         --machine) MACHINE="$2"; shift ;;
@@ -189,6 +196,19 @@ T20B=tools/hybrid_f2_0b.py
 stage_f2_0b() {
     ls "$OUT"/hybrid_f2_0_*.log >/dev/null 2>&1 || die "no F2-0 log: run $0 f2-0 first"
     stage_for "$T20B" hybrid_f2_0b run
+}
+
+need2e() {
+    ls "$OUT"/hybrid_f2e_"$1"_*.log >/dev/null 2>&1 || die "no F2-E $1 log: run $0 f2e-$1 first"
+}
+
+T2E=tools/hybrid_f2e.py
+stage_f2e_selftest() { stage_for "$T2E" hybrid_f2e_selftest selftest; }
+stage_f2e_pins()     { stage_for "$T2E" hybrid_f2e_pins pins; }
+stage_f2e_run() {
+    need2e selftest; need2e pins
+    ls "$OUT"/hybrid_f2_0b_*.log >/dev/null 2>&1 || die "no F2-0b log: run $0 f2-0b first"
+    stage_for "$T2E" hybrid_f2e_run run
 }
 
 "stage_$STAGE"
