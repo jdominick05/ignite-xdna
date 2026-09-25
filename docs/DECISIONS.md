@@ -880,10 +880,13 @@
   natively on AIE. Executes in **13.12 ms (76.2 fps)** on Phoenix XDNA1 — **4.43× faster than Zen 4 CPU** (58.07 ms)
   and **1.09× faster than Radeon 780M iGPU DirectML FP32** (14.25 ms). Stock bilinear upsampling at the head
   ejects 1 Resize node to CPU (399/404 on NPU in `results/diag_bisenetv2_bilinear_xint8.log`), adding 0.26 ms of host dispatch.
-  However, physical DPU fixed-point execution reveals a dynamic range limitation: while CPU QDQ simulation
-  maintains 59.47% pixel accuracy and 25.72% mIoU, on-device fixed-point elementwise multiplication across disparate
-  inter-branch activation scales attenuates minority classes (15.33% pixel accuracy, 2.44% mIoU), confirming that
-  multi-branch bilateral gating requires fine-tuning or AdaRound to balance inter-branch scale multipliers on physical systolic hardware.
+  However, the NPU's output diverges from the CPU's on the same XINT8 file. Scored against a CPU FP32 reference on
+  50 out-of-domain COCO scenes, pixel accuracy / mIoU read 59.47% / 25.72% on the CPU and 15.33% / 2.44% on the NPU,
+  and the NPU's softmax error is 4.13x the CPU's. These measure disagreement, not segmentation accuracy, which needs
+  Cityscapes. Measured later the same day (2026-09-09), the Mul and both its inputs are clean and no scale choice
+  fixes it. The error appears only in compiled context and points at a 512 KB activation held live across ~280
+  nodes of the other branch (the exact mechanism is not established), so calibration, scales and AdaRound have
+  nothing to act on ([BENCHMARKS](BENCHMARKS.md#the-mul-is-not-the-fault-a-long-lived-activation-is-2026-09-09-desktop-2)).
 - **`device.yaml`'s MAC table is a cost model, not an ISA listing — a missing row is not a
   missing instruction (2026-09-10).** int8×int4 has no row in its AIE2 `macs_per_cycle` table
   and was recorded here and in `docs/SILICON.md` as AIE2p only, which is why the W4A8 plan
