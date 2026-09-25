@@ -20,16 +20,19 @@ The five models share (c)'s built C0-H16 graph (tools/gemma_decode.py), head cut
     python tools/hybrid_s1.py check      # C1, C2 (the form), C4, C5, C6 (children)
     python tools/hybrid_s1.py states     # the five models' hidden states, then band C (children)
     python tools/hybrid_s1.py verdict    # the metrics and the frozen verdict
-Every heavy child holds one session (or the torch reference) and refuses below MIN_AVAIL_GB available.
+Every heavy child holds one session (or the torch reference), refuses below MIN_AVAIL_GB available, and
+ends itself (rc 4) if the available memory falls below WATCH_MIN_GB while it runs (amendment 1).
 """
 import argparse
 import hashlib
 import io
 import json
+import os
 import re
 import shutil
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -68,8 +71,11 @@ C4_KL_MAX, C6_KL_MAX = gd.FID_KL_MAX, 1e-5
 BF16_ACC_MAX = p3c.BF16_ACC_MAX
 SEED, BOOT_N, CHUNK = 20260924, 10_000, 256
 MIN_AVAIL_GB = 15.0
+WATCH_MIN_GB = 5.0                                      # amendment 1: the watchdog's floor while a child runs
+BASE_VERDICT_CODE = "d78b0f48d978b52d773caf11cd228cddc2a46f3c5c8575651c5efeda61df50b7"   # e4c5caa's; amendment 1 keeps it
 THREADS = 8
 SESSION = {"graph_optimization_level": "ORT_DISABLE_ALL", "intra_op_num_threads": THREADS,
+           "execution_order": "PRIORITY_BASED",
            "providers": ["CPUExecutionProvider"], "prepacking": "on (ORT's default)"}
 FUSED_FORBIDDEN = ("MatMulIntegerToFloat", "DynamicQuantizeMatMul", "FusedMatMul", "DynamicQuantizeLinear")
 HIDDEN_NAME = "/model/layers.34/final_norm_layernorm/output_0"
@@ -96,7 +102,8 @@ def protocol() -> dict:
             "reference": "R0", "n_seq": N_SEQ, "seq_len": SEQ_LEN, "stride": STRIDE, "bos": BOS,
             "c_seq": C_SEQ, "c_len": C_LEN, "bands": BANDS, "band_c": BAND_C, "t_kl": T_KL, "t_top1": T_TOP1,
             "anchor": ANCHOR, "c4_kl_max": C4_KL_MAX, "c6_kl_max": C6_KL_MAX, "bf16_acc_max": BF16_ACC_MAX,
-            "seed": SEED, "boot_n": BOOT_N, "chunk": CHUNK, "min_avail_gb": MIN_AVAIL_GB, "session": SESSION,
+            "seed": SEED, "boot_n": BOOT_N, "chunk": CHUNK, "min_avail_gb": MIN_AVAIL_GB,
+            "watch_min_gb": WATCH_MIN_GB, "session": SESSION,
             "fused_forbidden": FUSED_FORBIDDEN, "text_pin": gds.TEXT_PIN, "c_ids_sha": gds.IDS_SHA,
             "gguf_pin": {k: gc.GGUF_PIN[k] for k in ("repo", "file", "revision", "size", "sha256")},
             "src_pin": SRC_PIN, "quantize": "float64: s = float64(max|X|) / 127.0; q = Clip(Round(X / s), -127, 127); "
@@ -156,6 +163,31 @@ def start_gate(tag: str) -> None:
         print(f"MEMORY_REFUSE {tag}: {a:.1f} GB available, below {MIN_AVAIL_GB} GB; not a verdict, re-run later",
               flush=True)
         sys.exit(4)
+    watchdog(tag)
+
+
+def watchdog(tag: str, min_gb: float = WATCH_MIN_GB, every: float = 0.5) -> None:
+    """Amendment 1: a daemon thread reads the available memory every `every` s and, below min_gb, ends the
+    whole process with rc 4 (the memory gate's code), before the host's own memory guard acts. os._exit,
+    because sys.exit in a thread ends only that thread."""
+    def watch():
+        while True:
+            a = avail_gb()
+            if a < min_gb:
+                say("MEMORY_ABORT_JSON", {"child": tag, "available_gb": round(a, 2), "watch_min_gb": min_gb,
+                                          "memory": own_memory()})
+                sys.stdout.flush()
+                os._exit(4)
+            time.sleep(every)
+    threading.Thread(target=watch, name="memory-watchdog", daemon=True).start()
+
+
+def watchdog_child(min_gb: str) -> int:
+    """The selftest's watchdog check: the main thread sleeps 3 s, so only the watchdog can end the process early."""
+    watchdog("selftest", float(min_gb), every=0.1)
+    time.sleep(3)
+    print("WATCHDOG_MAIN_DONE", flush=True)
+    return 0
 
 
 # ---------------------------------------------------------------- the text
@@ -470,11 +502,22 @@ def c3_compare(base, arm, kind: str) -> dict:
 
 # ---------------------------------------------------------------- sessions
 
-def session(path: Path, profile: Path = None):
+def session_options(threads=THREADS):
+    """Every ORT session in S1 (amendment 1): ORT_DISABLE_ALL and PRIORITY_BASED. PRIORITY_BASED keeps the
+    graph's node order among ready nodes, so N3's W casts run just before their MatMuls, not all at the start
+    (the default order); it changes when a node runs, not what it computes. threads None keeps ORT's default."""
     import onnxruntime as ort
     so = ort.SessionOptions()
     so.graph_optimization_level = ort.GraphOptimizationLevel.ORT_DISABLE_ALL
-    so.intra_op_num_threads = THREADS
+    so.execution_order = ort.ExecutionOrder.PRIORITY_BASED
+    if threads is not None:
+        so.intra_op_num_threads = threads
+    return so
+
+
+def session(path: Path, profile: Path = None):
+    import onnxruntime as ort
+    so = session_options()
     so.log_severity_level = 3
     if profile is not None:
         so.enable_profiling = True
@@ -1062,7 +1105,90 @@ All three are printed in the prereg log and in every later S1 log, and the verdi
 - C4: PASS or FAIL only in the check log, the value in the verdict log.
 - The copy of C0-H16 and text_only's config and tokenizer: accepted, with C3 and C4 re-proving it.
 - ORT_DISABLE_ALL: accepted; C4 re-proves R0 under it.
-- The design corrections: accepted, and applied by the gate."""
+- The design corrections: accepted, and applied by the gate.
+
+## 11. Amendment 1 (2026-09-24): the session's execution order and a memory watchdog
+
+Units in this section: GB = 1e9 bytes, the tool's unit. Times are local (UTC-4).
+
+**Why: the first s1-build stopped in N3's probe.** Its log, results/llm/hybrid_s1_build_desktop2_20260924.log,
+is kept as the record. It ends at N3's MEMORY_START_JSON and has no stop line, so the stop is stated here:
+- 20:05:41: N3's probe child passed the start gate at 17.2 GB available. 20:05:44: its session started.
+- 20:05:46: the session host's memory guard stopped the background command running `scripts/hybrid-stack.sh
+  s1-build`, the system being "critically low on memory". Its notice gives no figure.
+- 20:05:57, read by WMI:
+  - N3's child (pid 38780): 14.48 GB working set, 10.61 GB private;
+  - the build parent (pid 35244): 2.36 GB working set, 0.65 GB private;
+  - the system: 3.5 GB free of 33.4 GB.
+- 20:06:11-15: the run's own two pids were killed as a tree, by pid. The runner then wrote the scrubbed log.
+
+**What had been seen before this change** (MEASURED, from that log):
+
+| Arm | session s | sequence 0 s | peak private GB | peak working set GB |
+|---|---|---|---|---|
+| R0 | 1.7 | 21.1 | 4.45 | 3.59 |
+| R | 3.3 | 18.6 | 5.26 | 4.40 |
+| N1 | 2.8 | 13.8 | 6.07 | 5.36 |
+| N2 | 2.3 | 14.1 | 6.07 | 5.36 |
+
+- All four were finite on sequence 0, and their executed op counts equalled the static ones.
+- FROZEN was equal, the sources and the copies were OK, and C3 was OK (238 linears mapped, none mismatched,
+  the head equal).
+- No KL, top-1 or agreement figure existed or was computed. No states were written.
+
+**The cause.**
+- N3's 238 Cast(W, bf16 to fp32) nodes read initializers only, and ORT_DISABLE_ALL folds nothing.
+- ORT 1.23.3's default execution order runs ready nodes early:
+  - on the selftest's synthetic graph with N3's surgery (4 layers, 12 linears), 8 of the 12 W casts ran
+    before the first MatMul;
+  - on the gate's own 12-layer chain, all 12 did.
+- Each fp32 W then lives until its MatMul: up to 12.83 GB for all 238 (DERIVED, twice the 6.42 GB of bf16),
+  on top of N3's 9.37 GB of initializers. Section 8's ESTIMATE for N3 (9.5-10.5 GB) did not foresee this.
+- In the real N3 graph, each W cast feeds one MatMul, the next node.
+- Under PRIORITY_BASED, the synthetic graph runs in file order (1 of the 12 casts before the first MatMul),
+  and its output is bit-identical to the default order's.
+
+**The change.** The user chose "PRIORITY_BASED with the watchdog" on 2026-09-24.
+1. **One options helper, session_options(), builds every ORT session in this tool:**
+   - ORT_DISABLE_ALL and execution_order PRIORITY_BASED;
+   - 8 intra-op threads for every model and check session; the selftest keeps 2 threads (sess_of) or ORT's
+     default (the profiled surgery test);
+   - PROTOCOL_JSON's session gains "execution_order": "PRIORITY_BASED".
+
+   The order changes when a node runs, not what it computes, so the numerics are unchanged.
+2. **A memory watchdog:**
+   - Every child that passes the start gate, and the verdict, starts a thread that reads the available memory
+     every 0.5 s.
+   - Below WATCH_MIN_GB = 5.0 GB (in PROTOCOL_JSON), it prints MEMORY_ABORT_JSON (the child, the available GB,
+     its own memory), flushes, and ends the process with os._exit(4). An overshoot then stops itself before
+     the host's guard acts.
+   - rc 4 is the memory gate's code. child() does not retry it, and build, check and states stop with "memory
+     gate; not a verdict".
+   - One case differs, as before: _cont (band C's continuations) on rc 4 leaves BAND C INCOMPLETE, and STATES
+     stands. That is right for a report-only band.
+   - The selftest runs the watchdog in a child twice. A 1e6 GB floor must give rc 4 and the line before the
+     sleeping main thread finishes; a floor of 0 must give rc 0.
+3. **Nothing else changes.** The arms, the graphs, the text, the thresholds, the rules, the pick and the
+   predictions are v2's.
+   - VERDICT_CODE_SHA256 stays d78b0f48d978b52d773caf11cd228cddc2a46f3c5c8575651c5efeda61df50b7, and this
+     prereg log asserts it.
+   - PROTOCOL_JSON and this text's sha256 change. v2's were 17bfbefa85caf6eb75e33d2d7fe838a298fe15c7fe4ab0322d7ec3ecac5aa044
+     and 59ed095aa950328e6cfb968426e52e25a8fabff50f01ea3aa7d452ffe5037bb7 (e4c5caa).
+
+**The re-run.**
+- This prereg, and the selftest, are logged under the tag "amended". This prereg's TEXT_JSON must equal v2's
+  byte for byte, or everything stops. The tool reads the latest log of each kind by name.
+- s1-build runs again under a tag (or a new date), after the gate's review and a fresh START REQUEST. All five
+  probes re-run under the amended session.
+- ESTIMATE under the amended order:
+  - N3's peak private is in R0/N1/N2's class, about 4.5-7 GB;
+  - its peak working set is 11-13 GB, the 6.42 GB of bf16 weights being file-mapped pages. A synthetic check
+    showed ORT maps an external bf16 initializer: +2 MiB private after load.
+- The gate's mechanism checks, pre-registered before the re-run. They are report-only, and the numerics do not
+  depend on them:
+  - in the newest N3 profile, sorted by time, at most 1 W-cast output is alive at once (2 tolerated);
+  - N3's peak_private is at most 8 GB and its peak_wset at most 14 GB;
+  - the build log ends BUILD OK, with all five probes rc 0 and no MEMORY_ABORT_JSON or MEMORY_REFUSE."""
 
 
 def prereg() -> int:
@@ -1078,6 +1204,11 @@ def prereg() -> int:
     for p in (P3C_INPUTS_LOG, C_BUILD_LOG):
         print(f"SOURCE_LOG {rel(p)}: LF sha256 {sha_lf(p)}", flush=True)
     print_hashes()
+    same = hashes()["VERDICT_CODE_SHA256"] == BASE_VERDICT_CODE
+    print(f"VERDICT_CODE_UNCHANGED {same} (e4c5caa's {BASE_VERDICT_CODE}; amendment 1 changes no rule)", flush=True)
+    if not same:
+        print("PREREG STOP: the verdict code differs from e4c5caa's", flush=True)
+        return 1
     print("PREREG OK", flush=True)
     return 0
 
@@ -1355,9 +1486,7 @@ def c1_child() -> int:
                                   outs, inits)
             m = helper.make_model(g, opset_imports=[helper.make_opsetid("", 21)], ir_version=10)
             import onnxruntime as ort
-            so = ort.SessionOptions()
-            so.graph_optimization_level = ort.GraphOptimizationLevel.ORT_DISABLE_ALL
-            so.intra_op_num_threads = THREADS
+            so = session_options()
             sess = ort.InferenceSession(m.SerializeToString(), so, providers=["CPUExecutionProvider"])
             out = sess.run(None, {"x": a})
             if kind == "N1":
@@ -1477,9 +1606,7 @@ def compare_child() -> int:
                                helper.make_tensor("s", P.FLOAT, [N * (K // 32)], gc.f16_to_f32(d).astype(np.float32).tobytes(), raw=True)])
         m = helper.make_model(g, opset_imports=[helper.make_opsetid("", 21), helper.make_opsetid("com.microsoft", 1)],
                               ir_version=10)
-        so = ort.SessionOptions()
-        so.graph_optimization_level = ort.GraphOptimizationLevel.ORT_DISABLE_ALL
-        so.intra_op_num_threads = THREADS
+        so = session_options()
         y = ort.InferenceSession(m.SerializeToString(), so, providers=["CPUExecutionProvider"]).run(None, {"x": X})[0]
         np.save(CHECK / f"c2_nb4_{name}.npy", y)
         qa, sa = q8_ort(X)
@@ -1783,9 +1910,7 @@ def selftest() -> int:
             fails.append(what)
 
     def sess_of(m):
-        so = ort.SessionOptions()
-        so.graph_optimization_level = ort.GraphOptimizationLevel.ORT_DISABLE_ALL
-        so.intra_op_num_threads = 2
+        so = session_options(2)
         return ort.InferenceSession(m.SerializeToString(), so, providers=["CPUExecutionProvider"])
 
     rng = np.random.default_rng(1)
@@ -1898,8 +2023,7 @@ def selftest() -> int:
                 onnx.save(m, str(td / f"{k}.onnx"))
                 c3 = c3_compare(base, m, k)
                 expect(f"C3 {k}", c3["ok"])
-                so = ort.SessionOptions()
-                so.graph_optimization_level = ort.GraphOptimizationLevel.ORT_DISABLE_ALL
+                so = session_options(None)
                 so.enable_profiling = True
                 so.profile_file_prefix = str(td / f"prof_{k}")
                 ss = ort.InferenceSession(str(td / f"{k}.onnx"), so, providers=["CPUExecutionProvider"])
@@ -1996,6 +2120,14 @@ def selftest() -> int:
     expect("q4_dot equals a brute-force loop", bool(np.allclose(y, brute, rtol=1e-12, atol=0)))
     ql, sl = q8_llama(xx)
     expect("llama form differs only in the fp16 scale", bool(np.array_equal(ql, qa)) and not np.array_equal(sl, sa))
+    print("The memory watchdog (amendment 1), in a child whose main thread sleeps 3 s:")
+    for min_gb, want_rc in ((1e6, 4), (0.0, 0)):
+        r = subprocess.run([sys.executable, str(Path(__file__).resolve()), "_watchdog", repr(min_gb)],
+                           capture_output=True, text=True, encoding="utf-8", timeout=300)
+        expect(f"threshold {min_gb:g} GB: rc", r.returncode, want_rc)
+        expect(f"threshold {min_gb:g} GB: MEMORY_ABORT_JSON printed", "MEMORY_ABORT_JSON" in r.stdout, want_rc == 4)
+        expect(f"threshold {min_gb:g} GB: the sleeping main thread finished", "WATCHDOG_MAIN_DONE" in r.stdout,
+               want_rc == 0)
     print("Frozen hashes:")
     for kk, v in hashes().items():
         print(f"  {kk} {v}")
@@ -2010,11 +2142,13 @@ def main() -> int:
     sys.stdout.reconfigure(encoding="utf-8")
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("mode", choices=("selftest", "prereg", "build", "check", "states", "verdict", "_probe", "_c1", "_r0",
-                                     "_probe16", "_torch", "_compare", "_states", "_cont"))
+                                     "_probe16", "_torch", "_compare", "_states", "_cont", "_watchdog"))
     ap.add_argument("args", nargs="*")
     a = ap.parse_args()
     if a.mode == "_probe":
         return probe_child(a.args[0])
+    if a.mode == "_watchdog":
+        return watchdog_child(a.args[0])
     if a.mode == "_states":
         return states_child(a.args[0])
     return {"selftest": selftest, "prereg": prereg, "build": build, "check": check, "states": states, "verdict": verdict,
