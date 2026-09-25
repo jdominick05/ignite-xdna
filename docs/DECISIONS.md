@@ -414,7 +414,8 @@
         chosen N2 arm on energy.
       - The bases differ: F2's figure is compute only at an assumed power, and N-i8's is measured.
       - F2's remaining case is memory: sharing the GPU's Q4_0 4-bit codes (with F2's own int8 qw per block and fp32
-        Dw per column) instead of holding an int8 copy. It is unmeasured.
+        Dw per column) instead of holding an int8 copy. It is unmeasured. The bar as written does not score memory,
+        and the user stopped F2 after F2-A (2026-09-25).
     - Not established: a silicon time; F2's own power; accuracy (F2-E's question); the lane order on silicon (it
       rests on IR semantics); the RNE add (INFERRED).
     - ([BENCHMARKS](BENCHMARKS.md#hybrid-stack-f2-0-and-f2-0b-route-i-with-integerized-8-bit-scales-the-core-adds-22-cycles-per-32-lane-block-tile-and-a-flush-with-no-srs-on-an-acc64-costs-116-or-82-cycles-per-superblock-so-both-flush-forms-pass-e--24-at-s--row-compute-only-yet-f2s-best-modelled-energy-is-167-the-measured-energy-of-n-i8-the-kernel-n2-runs-2026-09-25-desktop-2))
@@ -423,7 +424,7 @@
       anything is coded.
     - F2-E's answer cannot change the N2 pick. By the dominance fact, F2 cannot beat N2 on energy.
     - F2 continues as the int4-weight alternative (the user's decision, 2026-09-25), and its remaining case is
-      memory.
+      memory (stopped after F2-A, 2026-09-25).
   - **Hybrid stack F2-E, integerized 8-bit scales at S = ROW: form B with FLUSH_B2 is the pick, in a CPU
     emulation, and it cannot change the N2 pick (2026-09-25).**
     - F2-E (the tool frozen at `f88fe73`, its selftest and pins logs at `3c258b0`, the run log at `96f83a8`;
@@ -468,10 +469,18 @@
       block and fp32 Dw per column, instead of holding an int8 copy) is unmeasured.
     - Ruling 1 (the two verdicts) was the user's to override until the freeze at `c60692c`. The user was away and
       had asked for autonomy, so F2-A ran on the gate's ruling.
-    - What comes next is the user's decision: a silicon F2 kernel at model level, measuring the memory case, or
-      stopping F2 here. "Any move is the user's." (the prereg's section 5, the KV PASS / FULL FAIL combination's
-      text, line 239).
+    - The user stopped F2 here (2026-09-25; the entry below). "Any move is the user's." (the prereg's section 5,
+      the KV PASS / FULL FAIL combination's text, line 239).
     - ([BENCHMARKS](BENCHMARKS.md#hybrid-stack-f2-a-f2-es-pick-in-all-238-linears-at-model-level-f2-akv-and-f2-afull-both-pass-not-narrow-so-f2-qualifies-for-the-kv-serving-role-and-also-holds-at-prompt-positions-in-a-cpu-emulation-and-the-n2-pick-is-unchanged-2026-09-25-desktop-2))
+  - **The user stopped F2 after F2-A (2026-09-25).**
+    - The user first chose to measure F2's memory case. Its plan draft (F2-M v1, LF `a95748b7`, git-ignored;
+      nothing ran) showed that the bar as written scores no memory saving.
+    - Locked decision 10's clauses are faster, more accurate, less energy per token, or frees the GPU (and the
+      CPU). "Frees" is stage (e)'s K_W work rate, and memory enters (e) only as its VOID rule.
+    - F2 cannot beat N2 on energy: 1.67× (DERIVED, compute only).
+    - The bytes (DERIVED): F2's own copy 1,708,630,016 B, and sharing the codes 104,308,736 B, against N2's
+      3,216,719,872 B (MEASURED file bytes).
+    - F2-A's accuracy result stands. N2 stays the pick.
 - **A pre-registered size floor caught a builder defect (2026-09-23).** `tools/llm_gemv_bench.py build`
   first sized the fp16-scale variant's copies from the fp32 variant, so six DirectML rows streamed
   0.90–0.98 GiB against a pre-registered ≥ 1 GiB, and the verdict came out INCOMPLETE (`4620b53`).

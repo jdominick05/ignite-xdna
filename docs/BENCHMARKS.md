@@ -5335,7 +5335,8 @@ MEASURED, on the CPU.
   - F2's best form, in its optimistic compute-only model, reads 2.7292: 1.67× that.
   - The bases differ: F2's figure is compute only at an assumed power; N-i8's is measured.
   - F2's remaining case is memory: sharing the GPU's Q4_0 4-bit codes (with F2's own int8 qw per block and fp32 Dw
-    per column) instead of holding an int8 copy. It is unmeasured.
+    per column) instead of holding an int8 copy. It is unmeasured. The bar as written does not score memory, and
+    the user stopped F2 after F2-A (2026-09-25).
 - **What follows:** F2-E, the accuracy question at S = ROW (the user's decision, 2026-09-25). Its answer cannot
   change the N2 pick.
 
@@ -5743,11 +5744,10 @@ MEASURED, on the CPU: 201.2 s of per-case time over the 21 cases, at a peak of 2
     6,417,285,120 B at 2 B per weight).
   - The memory case itself (sharing the GPU's Q4_0 4-bit codes, with F2's own int8 qw per block and fp32 Dw per
     column, instead of holding an int8 copy) is unmeasured.
-- What comes next is the user's decision. The options on record, none picked:
-  - a silicon F2 kernel at model level, on route (i) with F2's scales (F2-E's A2-F2 threshold, 1.4e-5, is written
-    for its kernel test);
-  - measuring F2's memory case before any kernel;
-  - stopping F2 here, with N2 as picked.
+- The user stopped F2 here (2026-09-25), with N2 as picked. Its memory case, the remaining edge, is not scored by
+  the bar as written (locked decision 10; stage (e)'s K_W), and the F2-M plan found no outcome that would give F2 a
+  role. Nothing ran ([DECISIONS](DECISIONS.md#rejected-approaches-and-known-pitfalls), "The user stopped F2 after
+  F2-A (2026-09-25)").
 - F2-E's P4, held vacuously, stays as documented there. Nothing in F2-A revisits it.
 
 **What F2-A asks.** The source is the F2-A prereg, a git-ignored draft (v2, LF `e2408569`), accepted by the gate and
