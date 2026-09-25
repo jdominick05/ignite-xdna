@@ -445,6 +445,30 @@
     - F2-A is being planned on the user's go (2026-09-25). It cannot change the N2 pick, and F2's case is weight
       memory.
     - Its pre-registration text goes to the gate before anything is coded or run.
+  - **Hybrid stack F2-A, F2-E's pick in all 238 linears at model level: F2-A/KV PASS and F2-A/FULL PASS, neither
+    NARROW, in a CPU emulation, and the N2 pick is unchanged (2026-09-25).**
+    - F2-A (the tool frozen at `bd2c7e9`; the selftest at `b358865`; the prereg at `c60692c`, the freeze; the build
+      at `87f39b0`, the check at `852b051`, the states at `419de8d` and the verdict at `ef297b3`). Against R0
+      one-shot on 16 new WikiText-2 validation windows:
+      - F2-A/KV (set C, S1b's rule): PASS, mean KL 0.00012 [0.00011, 0.00014], top-1 0.9954 [0.9941, 0.9965].
+      - F2-A/FULL (bands L and H, S1's rule): PASS, band L 0.00140 / 0.9844 and band H 0.00128 / 0.9857.
+      - "F2 qualifies for the KV-serving role, and also holds at prompt positions."
+      - K1–K8 PASS; the guard 0 in all 40 F2 runs; all nine predictions HIT.
+    - Report-only, on the same windows: F2's mean KL is 1.26–1.39× R's (DERIVED). N2 reads set C 0.00961 / 0.9593,
+      would-be PASS NARROW, and FAIL on bands L and H, S1b's basis again.
+    - Scope: a CPU emulation. No NPU kernel ran, and F2's tie to the NPU is DERIVED from F2-0b's flush. R0 stands in
+      for the 780M's numerics; the continuation is teacher-forced; 16 windows, one tokenizer, 2,048-token prompts.
+    - It does not change the N2 pick. Energy is not measured: F2's modelled 2.7292 mJ with idle, compute only at an
+      assumed power, against N-i8's MEASURED 1.6334, stands.
+    - F2's weight-memory case now has model-level accuracy support, in a CPU emulation: about 4.25 bits per weight
+      (DERIVED: 4-bit codes and an int8 qw per 32-block), against 8.02 for N2's int8 copy (DERIVED from its
+      3,216,719,872 B). The memory case itself (sharing the GPU's Q4_0 4-bit codes, with F2's own int8 qw per
+      block and fp32 Dw per column, instead of holding an int8 copy) is unmeasured.
+    - Ruling 1 (the two verdicts) was the user's to override until the freeze at `c60692c`. The user was away and
+      had asked for autonomy, so F2-A ran on the gate's ruling.
+    - What comes next is the user's decision: a silicon F2 kernel at model level, measuring the memory case, or
+      stopping F2 here. Any move is the user's.
+    - ([BENCHMARKS](BENCHMARKS.md#hybrid-stack-f2-a-f2-es-pick-in-all-238-linears-at-model-level-f2-akv-and-f2-afull-both-pass-not-narrow-so-f2-qualifies-for-the-kv-serving-role-and-also-holds-at-prompt-positions-in-a-cpu-emulation-and-the-n2-pick-is-unchanged-2026-09-25-desktop-2))
 - **A pre-registered size floor caught a builder defect (2026-09-23).** `tools/llm_gemv_bench.py build`
   first sized the fp16-scale variant's copies from the fp32 variant, so six DirectML rows streamed
   0.90–0.98 GiB against a pre-registered ≥ 1 GiB, and the verdict came out INCOMPLETE (`4620b53`).

@@ -5648,6 +5648,207 @@ MEASURED, on the CPU: 201.2 s of per-case time over the 21 cases, at a peak of 2
   host must reproduce them. A host that rounds Sx to nearest is not modelled.
 - The scale bytes' cost, or F2's memory case, which is unmeasured.
 
+### Hybrid stack F2-A, F2-E's pick in all 238 linears at model level: F2-A/KV and F2-A/FULL both PASS, not NARROW, so F2 qualifies for the KV-serving role and also holds at prompt positions, in a CPU emulation, and the N2 pick is unchanged (2026-09-25, Desktop 2)
+
+**The result, with its qualifiers.**
+- **The headline, verbatim** ([verdict log](../results/llm/hybrid_f2a_verdict_desktop2_20260925.log), lines 56–59,
+  at `ef297b3`; MEASURED):
+
+  ```text
+  F2-A/KV (set C, S1b's rule): PASS
+  F2-A/FULL (bands L and H, S1's rule): PASS
+  F2 qualifies for the KV-serving role, and also holds at prompt positions.
+  The verdict does not change the N2 pick. Neither verdict is ever re-scored, and a NARROW changes neither.
+  ```
+
+  - The four stage logs: the build at `87f39b0`, the check at `852b051`, the states at `419de8d` and the verdict at
+    `ef297b3`. The tool was frozen at `bd2c7e9`, and the prereg log at `c60692c` froze the triple.
+  - The arm is F2-E's pick (form B, FLUSH_B2, S = ROW) in all 238 MatMulNBits of S1's base graph, the seven linears
+    of all 34 layers. Everything else is R0's.
+  - Both rules are against R0 one-shot: mean KL ≤ 0.0123 and top-1 ≥ 0.956, pooled over 16 windows, with a 95%
+    bootstrap over windows. F2-A/KV reads set C with S1b's rule; F2-A/FULL reads bands L and H with S1's rule.
+
+  | Arm | Set | Positions | Mean KL (R0 ‖ arm) | 95% CI | p99 | Max | Top-1 | 95% CI | Outcome |
+  |---|---|---:|---:|---|---:|---:|---:|---|---|
+  | F2 | C | 16,368 | 0.00012 | 0.00011–0.00014 | 0.0018 | 0.024 | 0.9954 | 0.9941–0.9965 | PASS (deciding F2-A/KV) |
+  | F2 | L | 16,384 | 0.00140 | 0.00125–0.00156 | 0.0167 | 0.998 | 0.9844 | 0.9821–0.9868 | PASS (deciding F2-A/FULL) |
+  | F2 | H | 16,368 | 0.00128 | 0.00114–0.00141 | 0.0153 | 0.281 | 0.9857 | 0.9836–0.9878 | PASS (deciding F2-A/FULL) |
+
+  - No interval holds a threshold, so neither verdict is NARROW. The rows are the log's lines 64–66, and the
+    position counts are METRICS_JSON's (line 95).
+  - The rules read the pooled mean. A single position in band L reads KL 0.998, and one in band H 0.281.
+- **Scope** (the prereg's section 12):
+  - A CPU emulation of F2's arithmetic in all 238 linears. No NPU kernel ran. F2's tie to the NPU is DERIVED: F2-0b's
+    compiled flush, emulated in its order by `tools/hybrid_f2e.py`, which K4 matches bit for bit on 21 of 21 cases.
+    The lane order and the RNE add are not tested on a core.
+  - Energy is not measured. F2's modelled 2.7292 mJ with idle per prompt token per layer (compute only, at an
+    assumed power; DERIVED) against N-i8's MEASURED 1.6334 stands. So does F2's modelled 170.51 ms per layer at
+    M = 2,048 (compute only; DERIVED) against N-i8's MEASURED 96.92
+    ([F2-0 and F2-0b](#hybrid-stack-f2-0-and-f2-0b-route-i-with-integerized-8-bit-scales-the-core-adds-22-cycles-per-32-lane-block-tile-and-a-flush-with-no-srs-on-an-acc64-costs-116-or-82-cycles-per-superblock-so-both-flush-forms-pass-e--24-at-s--row-compute-only-yet-f2s-best-modelled-energy-is-167-the-measured-energy-of-n-i8-the-kernel-n2-runs-2026-09-25-desktop-2)).
+  - R0 stands in for the 780M's numerics: every op outside the 238 linears, the continuation and the last-position
+    step. The 780M's attention precision is not modelled. The head is fp32.
+  - The continuation is teacher-forced.
+  - 16 windows of WikiText-2 raw's validation split, S1's tokenizer, 2,048-token prompts and 1,023 continuation
+    positions.
+- **The N2 pick is unchanged.** The prereg (section 5): "The verdict does not change the N2 pick." For a qualifying
+  F2, its words are "Any move is the user's." ([prereg log](../results/llm/hybrid_f2a_prereg_desktop2_20260925.log),
+  line 239). This write-up recommends nothing.
+
+**Report-only comparisons.** The same 16 windows, the same sitting and the same R0 reference. They decide nothing.
+- **F2 against R** (accuracy level 4, the arithmetic F2 approximates): F2's mean KL is 1.37× R's on set C, 1.39× on
+  band L and 1.26× on band H (DERIVED from METRICS_JSON, line 95, at full precision; FA-P2's limit was 2.0×).
+- **F2 against N2 on set C:** F2 reads mean KL 0.00012 and top-1 0.9954; N2 reads 0.00961 and 0.9593 (line 60).
+  - This is a numerics reading on these windows, in a CPU emulation. It says nothing about energy, where N-i8's
+    measured figure stands below F2's modelled one, or about silicon.
+- **N2's would-be outcomes** (line 80): "under S1b's rule on set C PASS NARROW; under S1's rule on bands L and H
+  FAIL".
+  - N2's top-1 interval on set C, 0.9545–0.9643, holds the 0.956 line. Its KL interval, 0.00844–0.01080, does not
+    hold 0.0123.
+  - This matches S1b's basis on its 84 test-split windows (set C PASS, bands L and H FAIL), with a NARROW on these
+    16. S1b's verdict stands, and is not re-scored.
+- **R's would-be outcomes** (line 79): PASS under both rules.
+- **F2's set C in two halves** (line 83): mean KL 0.00017 over 2,048–2,559 and 0.00008 over 2,560–3,070, both under
+  the line. In S1b, N2's first half read 0.01265, above it.
+- **Perplexity.** R0's own, printed this time (line 81): set C 9.7891, band L 14.3640, band H 11.9818.
+  - F2 reads 9.7920, 14.3903 and 11.9951, and R 9.7906, 14.3747 and 11.9758, within 0.03 of R0's.
+  - N2's set C reads 9.5497, below R0's: a departure from the reference, not an improvement on it, as in S1b.
+
+  | Arm | Set | Mean KL | 95% CI | p99 | Max | Top-1 | 95% CI | Perplexity | Would-be outcome |
+  |---|---|---:|---|---:|---:|---:|---|---:|---|
+  | F2 | P-arm | 0.00155 | 0.00051–0.00295 | 0.0090 | 0.010 | 1.0000 | 1.0000–1.0000 | 12.3880 | PASS |
+  | F2 | P-R0 | 0.00080 | 0.00033–0.00140 | 0.0039 | 0.004 | 1.0000 | 1.0000–1.0000 | 12.4471 | PASS |
+  | R | C | 0.00009 | 0.00007–0.00011 | 0.0012 | 0.031 | 0.9962 | 0.9950–0.9972 | 9.7906 | PASS |
+  | R | L | 0.00100 | 0.00093–0.00108 | 0.0131 | 0.109 | 0.9865 | 0.9843–0.9885 | 14.3747 | PASS |
+  | R | H | 0.00102 | 0.00090–0.00114 | 0.0123 | 0.289 | 0.9864 | 0.9839–0.9885 | 11.9758 | PASS |
+  | R | P-arm | 0.00200 | 0.00037–0.00490 | 0.0196 | 0.023 | 1.0000 | 1.0000–1.0000 | 12.8451 | PASS |
+  | R | P-R0 | 0.00046 | 0.00021–0.00078 | 0.0022 | 0.002 | 1.0000 | 1.0000–1.0000 | 12.7054 | PASS |
+  | N2 | C | 0.00961 | 0.00844–0.01080 | 0.1195 | 2.440 | 0.9593 | 0.9545–0.9643 | 9.5497 | PASS NARROW |
+  | N2 | L | 0.06117 | 0.05605–0.06625 | 0.7232 | 4.639 | 0.9022 | 0.8970–0.9078 | 13.9518 | FAIL |
+  | N2 | H | 0.05354 | 0.04829–0.05912 | 0.7056 | 4.239 | 0.9111 | 0.9057–0.9167 | 11.7115 | FAIL |
+  | N2 | P-arm | 0.10012 | 0.02714–0.19635 | 0.5920 | 0.609 | 0.8750 | 0.6875–1.0000 | 12.0016 | FAIL NARROW |
+  | N2 | P-R0 | 0.04330 | 0.01501–0.07989 | 0.2179 | 0.220 | 0.9375 | 0.8125–1.0000 | 13.2412 | FAIL NARROW |
+
+  The rows are the log's lines 67–78. Set P is one position per window, 16 in all, so its top-1 moves in steps of
+  1/16.
+
+**What it changes.**
+- F2's case is weight memory (the user's decision, 2026-09-25). F2-A gives that case model-level accuracy support,
+  in a CPU emulation, and nothing more.
+  - F2's weights on the NPU would be the Q4_0 codes and one int8 qw per 32-block: 4 + 8 / 32 = 4.25 bits per weight,
+    plus one fp32 Dw per column, under 0.02 bits per weight at K ≥ 2,048 (DERIVED).
+  - N2's int8 copy, `int8.onnx.data`, is 3,216,719,872 B (MEASURED bytes; the prereg log's MODEL_PIN_JSON). Over the
+    238 linears' 3,208,642,560 weights, that is 8.02 bits per weight (DERIVED; the count is the build's f2.onnx.data,
+    6,417,285,120 B at 2 B per weight).
+  - The memory case itself (sharing the GPU's Q4_0 4-bit codes, with F2's own int8 qw per block and fp32 Dw per
+    column, instead of holding an int8 copy) is unmeasured.
+- What comes next is the user's decision. The options on record, none picked:
+  - a silicon F2 kernel at model level, on route (i) with F2's scales (F2-E's A2-F2 threshold, 1.4e-5, is written
+    for its kernel test);
+  - measuring F2's memory case before any kernel;
+  - stopping F2 here, with N2 as picked.
+- F2-E's P4, held vacuously, stays as documented there. Nothing in F2-A revisits it.
+
+**What F2-A asks.** The source is the F2-A prereg, a git-ignored draft (v2, LF `e2408569`), accepted by the gate and
+frozen inside the tool. It amends the F2 plan's section 4 (`b98787f4`), which stays unedited.
+- **Two questions, two verdicts** (the gate's ruling 1). The ruling was the user's to override until the freeze. The
+  user was away and had asked for autonomy, so F2-A ran on the gate's ruling (the `c60692c` commit body).
+  - **F2-A/KV:** when F2's arithmetic builds the prompt's KV in every linear the NPU would run, does R0's
+    continuation stay within S1b's rule on set C? That is the role N2 fills in the user's hybrid.
+  - **F2-A/FULL:** does F2 also keep the model within S1's bar at every prompt position, in bands L and H?
+- **The positions** (i is the logits after ids[0..i], predicting ids[i + 1]):
+  - set C: i = 2,048–3,070, R0 teacher-forced on the arm's full 2,048-position prompt KV;
+  - band L: i = 0–1,023, and band H: i = 1,024–2,046, on the arm's own logits;
+  - set P: i = 2,047 both ways, report-only (P-arm, the arm's own logits; P-R0, R0 on the arm's KV sliced to
+    0–2,046, one decode step).
+- **The text:** WikiText-2 raw's validation split, new to this study (S1 and S1b read the test split). The parquet
+  is pinned at 657,209 B, sha256 `204929b7…`, and was fetched without a token.
+  - 257,290 tokens with S1's tokenizer ([prereg log](../results/llm/hybrid_f2a_prereg_desktop2_20260925.log), line
+    509).
+  - Window w is [BOS] + T[3,071 · w : 3,071 · (w + 1)], w = 0..15, from 0 to 49,136, with 208,154 tokens left.
+  - Every assert is True: the windows are pairwise disjoint and inside the text, and no 2,048-id prompt hashes to one
+    of S1's 16 or S1b's 84.
+- **F2 as an ONNX graph** (DERIVED from F2-E's arithmetic; the emulation's form, not the silicon's storage):
+  - the activation side once per input, 136 of them for 238 linears: s_x per 32-block, Sx rounded up per row by a
+    one-ulp step, the exact ceiling qx and form B's codes;
+  - W′ = qw · (c − 8) as int16 in `f2.onnx.data`, 6,417,285,120 B, with Dw per column;
+  - the integer sum by MatMul(double), exact below 2^53, then B2's flush from ONNX ops;
+  - an in-graph guard counting code clips, c > 255 and a failed Sx round-up, summed over the 238 linears.
+- **The combinations** (prereg section 5): KV PASS with FULL FAIL is N2's position; KV FAIL means F2 does not
+  qualify for the role N2 fills; both PASS, as here, means F2 qualifies for the KV-serving role and also holds at
+  prompt positions.
+
+**The run.** The tool is `tools/hybrid_f2a.py` (LF `3af92e50…`), committed with the runner's `f2a-*` stages at
+`bd2c7e9`. Every stage ran once on the CPU, through `scripts/hybrid-stack.sh`, with no re-run and no STOP.
+- **The selftest** ([log](../results/llm/hybrid_f2a_selftest_desktop2_20260925.log), `b358865`): SELFTEST OK,
+  synthetic only. The F2 subgraph equals hybrid_f2e's emulation bit for bit at K = 2,048, 2,560 and 10,240; the
+  one-ulp step equals nextafter on 1,000,508 values; and each planted fault trips its check.
+- **The prereg** ([log](../results/llm/hybrid_f2a_prereg_desktop2_20260925.log), `c60692c`): PREREG OK, with the
+  validation file equal to its pin and the tokenizer pins ok.
+  - Its lines 503–506 hold the download library's own stderr: a notice that `hf_xet` is not installed, and a
+    warning that the cache cannot use symlinks, naming the cache directory (profile-scrubbed). Nothing reads them.
+- **The build** ([log](../results/llm/hybrid_f2a_build_desktop2_20260925.log), `87f39b0`; 2 min 33 s):
+  - the weight grid over 238 linears, with 0 round-up steps, 0 scale faults and 0 qw clips;
+  - `f2.onnx.data` 6,417,285,120 B (sha256 `e583b981…`) and `F2.onnx` 7,518,065 B (`ddbb93de…`);
+  - the graph equal to R0's outside the 238 linears, and K3's census: 238 MatMul, all double, no MatMulNBits and
+    no fused op;
+  - the probe on S1's test sequence 0: 81.1 s for one 2,048-id prompt, under the gate's 420 s line; the guard 0; a
+    peak of 4.17 GB private. That is about 162 GFLOPS (DERIVED: 3,208,642,560 × 2,048 × 2 = 13.14 TFLOP of float64
+    MatMul, over the whole prompt's 81.1 s).
+- **The check** ([log](../results/llm/hybrid_f2a_check_desktop2_20260925.log), `852b051`; 18 min 2 s): K1–K8 all
+  PASS.
+  - K2: F2 equals R0 outside the 238 linears, and W′ and Dw equal their re-derivation from the GGUF by sha.
+  - K4: 21 one-linear probes, bit for bit equal to hybrid_f2e's B/B2/ROW on F2-E's 256 rows, 21 of 21. They
+    reproduce F2-E's CASE_JSON `arms["B/B2/ROW"]["vs_l0"]`, keyed by (layer, name), 21 of 21, with a worst relative
+    difference of 0.
+  - K5: R0 reproduces S1's C5 sha `a5597e1f`. K6: F2 on window 0's prompt, twice, gives equal shas.
+  - K7, R0 against R0 on windows 0, 2, …, 14: max KL 0 on paths a and c (sha-equal), and 1.3e-12 – 4.45e-11 on
+    path b, the one-row step from the sliced KV, against 1e-5.
+- **The states** ([log](../results/llm/hybrid_f2a_states_desktop2_20260925.log), `419de8d`; 44 min 52 s): eight
+  children, each rc 0; 16 records per arm and set; the KV deleted after each batch.
+  - F2's prompt took 67.3–78.4 s (median 69.8), against R's 18.0 and N2's 13.2 (medians). That is the float64
+    emulation's cost on the CPU, not a silicon time.
+  - The F2 child peaked at 6.25 GB private, 0.25 GB above the prereg's ESTIMATE of 3–6 GB, and 11.79 GB working set.
+  - The states printed no F2 finiteness, KL, top-1 or agreement (the gate's fix A; the prereg's section 9).
+- **The verdict** ([log](../results/llm/hybrid_f2a_verdict_desktop2_20260925.log), `ef297b3`; 18 min 33 s): all 16
+  windows scored, none missing. The guard read 0 in every one of 40 F2 runs: the build's probe, K4's 21, K6's 2 and
+  the states' 16 (line 54).
+- **Predictions** (ESTIMATE; they decide nothing; lines 86–94), all nine HIT:
+  - FA-P1a and FA-P1b: FULL and KV PASS, not NARROW;
+  - FA-P2: F2's mean KL at most 2.0× R's in both bands and on set C (a KL ratio);
+  - FA-P3: F2's top-1 ≥ 0.98 in both bands;
+  - FA-P4: F2's set C mean KL below N2's;
+  - FA-P5: R PASSES under both rules;
+  - FA-P6: N2 FAILS bands L and H and PASSES set C (its NARROW was not predicted);
+  - FA-P7: F2 within both thresholds on P-R0;
+  - FA-P8: the guard 0 in every F2 run.
+
+**Hashes** (CRLF working copy, then LF blob).
+- The selftest (`b358865`): `b6f10d3c1978f642b7b4187692a0e95112a50a9a5b8e78392938d780bf1f2245`,
+  `34bf80e407062a360333b26d6687c842857d7e5abcd0f2b914f0e833c07366a1`.
+- The prereg (`c60692c`): `788ee3e51e00353227c0c03a429c6c6bed1f693ac78f984d99ffa5ddeb1ee097`,
+  `9543a9a7262611e3b57ebb92ad8c0076354d744d9c687ea0e88026270e637d6d`.
+- The build (`87f39b0`): `a36792f66274f27d3bf3e1e1ed89faa17075aa7ad4ddfda80ccd580300e1c68c`,
+  `a684d361402a1793fd2c31fd717187ad84f515c39ceff4385a5582bc86278af3`.
+- The check (`852b051`): `eeb2d1adca89ef583f7732c6fb78d1f80bec5e63964d956c3819fd761e361473`,
+  `cfb65708ea7f0d1d5589d007ed9c58f0bd2c23260c484bbbf4e17f1743f0cfc5`.
+- The states (`419de8d`): `26704b3cf46b2389032ab7a63e48f41d238d666923694fe03c46d3cebc44a368`,
+  `418692853b75751ae8735114ae806e6543b78578b273c5d696eb27cd6d6499b1`.
+- The verdict (`ef297b3`): `dd581fe25312d350075d7d1e1f50eb6510e028905a8d05dec4835cf37d641332`,
+  `75759b9dec71c148bcbebf56442dca7f04997ab379b603c6adbb0edb5a79c408`.
+- The tool: `tools/hybrid_f2a.py` LF `3af92e50…`. The prereg: LF `e2408569…`. The frozen triple: PREREG_TEXT_SHA256
+  `e2408569…`, PROTOCOL_JSON_SHA256 `db9b80a7…`, VERDICT_CODE_SHA256 `c375a45e…`.
+
+**What this does not establish** (the prereg's section 12).
+- Silicon. No F2 kernel has run on the NPU. The lane order and the RNE add are not tested on a core.
+- Energy. Nothing is measured, and F2's modelled 2.7292 mJ against N-i8's measured 1.6334 stands.
+- The N2 pick. F2-A cannot change it.
+- F2's memory case. F2-A measures accuracy, not bytes.
+- The 780M's own numerics. R0 stands in for its last-position step and its continuation, and its attention
+  precision is not modelled.
+- The host quantizer's cost and fp32 form. The codes are computed in float64, with Sx rounded up (F2-E's choices).
+- Free-running generation. The continuation is teacher-forced.
+- Other text, tokenizers or prompt lengths, including 8,192-token prompts and continuations beyond 1,023 positions.
+
 ### MobileViT-XXS does not survive per-tensor INT8, and AdaRound cannot save it
 
 The accuracy question the attention work deferred, now measured on the full 1000-image
