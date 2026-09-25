@@ -322,6 +322,25 @@
       - S0 approved, with the INCORRECT flag as proposed (report-only);
       - U6 as a plan for a q4_0 NPU kernel only, with no kernel code.
     - ([BENCHMARKS](BENCHMARKS.md#hybrid-stack-s1-the-npu-numerics-gate-on-real-2048-token-prompts-bf16-n3-keeps-gemma-3-4bs-next-token-distribution-within-the-bar-and-both-int8-arms-fail-in-a-cpu-emulation-2026-09-24-desktop-2))
+  - **Hybrid stack S1b, N2 serving the prompt's KV: set C passes, not NARROW, the last prompt position fails
+    (report-only), and the pick stays N3; a CPU emulation (2026-09-25).**
+    - Pre-registered at `b777070`; the verdict is at `e5b320e` (verdict code `3059986a`). The question: with N2
+      building only the prompt's KV and R0 generating, does the generation stay within S1's bar?
+    - Set C (deciding) is R0 teacher-forced over positions 2,048–3,070 on N2's 2,048-position prompt KV,
+      against R0 one-shot, on 84 new WikiText-2 windows: mean KL 0.0101 [0.0096, 0.0107] and top-1 0.9602
+      [0.9584, 0.9619], against ≤ 0.0123 and ≥ 0.956. N2 ON SET C: PASS, not NARROW.
+    - The PASS is the pooled mean. The first 512 continuation positions read mean KL 0.01265, above the line,
+      and the rest 0.00758 (report-only).
+    - Position 2,047 fails, report-only both ways: P-arm (N2's own logits) FAIL NARROW at 77/84, mean KL 0.0370;
+      P-R0 (the GPU computing id 2,047 on N2's KV for 0–2,046) FAIL NARROW at 79/84, mean KL 0.0234. The
+      prereg's consequence: N2 can serve the prompt's KV only if the GPU computes the last prompt position.
+    - The L/H replication fails again (report-only): mean KL 0.0623 and 0.0498, top-1 0.8992 and 0.9100.
+    - N2's lower set C perplexity (10.95 against N3's 11.21) is a departure from the reference, not a gain.
+    - The prediction Q1 is a MISS: its NARROW-on-top-1 part missed. Q2–Q8 are HIT.
+    - Scope: CPU emulation; R0 stands in for the 780M's generation; fp32 head; the 780M's attention precision
+      is not modelled; N2's tie to the NPU is DERIVED.
+    - **The pick stays N3.** Moving the prompt-KV arm to N2 is the user's decision, with the interval in hand.
+    - ([BENCHMARKS](BENCHMARKS.md#hybrid-stack-s1b-n2-serving-the-prompts-kv-r0s-continuation-on-n2s-kv-passes-on-the-pooled-set-c-not-narrow-the-last-prompt-position-fails-report-only-and-the-pick-stays-n3-in-a-cpu-emulation-2026-09-25-desktop-2))
 - **A pre-registered size floor caught a builder defect (2026-09-23).** `tools/llm_gemv_bench.py build`
   first sized the fp16-scale variant's copies from the fp32 variant, so six DirectML rows streamed
   0.90–0.98 GiB against a pre-registered ≥ 1 GiB, and the verdict came out INCOMPLETE (`4620b53`).

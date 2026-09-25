@@ -4872,6 +4872,171 @@ That is 3 HIT and 1 MISS.
 2. S0, the GPU-runtime comparison: approved, with the INCORRECT flag as proposed (report-only).
 3. U6, an NPU kernel on the release's q4_0 codes: a plan only, with no kernel code.
 
+### Hybrid stack S1b, N2 serving the prompt's KV: R0's continuation on N2's KV passes on the pooled set C, not NARROW, the last prompt position fails (report-only), and the pick stays N3, in a CPU emulation (2026-09-25, Desktop 2)
+
+**The result, with its qualifiers.**
+- **N2 ON SET C: PASS, not NARROW.** Against R0 one-shot, over 84 new WikiText-2 windows, scored by the frozen
+  verdict code `3059986a` at `e5b320e`
+  ([log](../results/llm/hybrid_s1b_verdict_desktop2_20260925.log), LF blob `50fe4d9f`; MEASURED).
+  - Set C is R0 running positions 2,048–3,070 teacher-forced on N2's full 2,048-position prompt KV. The pooled
+    mean over 84 × 1,023 = 85,932 positions reads mean KL 0.0101 [0.0096, 0.0107] against ≤ 0.0123, and top-1
+    0.9602 [0.9584, 0.9619] against ≥ 0.956.
+  - Neither interval holds its threshold, so the reading is not NARROW. The point estimate decides.
+
+  | Arm | Set | Mean KL (R0 ‖ arm) | 95% CI | p99 | Max | Top-1 | 95% CI | Outcome |
+  |---|---|---:|---|---:|---:|---:|---|---|
+  | N2 | C | 0.01012 | 0.00959–0.01068 | 0.1160 | 3.511 | 0.9602 | 0.9584–0.9619 | PASS (deciding) |
+  | N3 | C | 0.00001 | 0.00001–0.00001 | 0.0002 | 0.013 | 0.9988 | 0.9986–0.9990 | PASS (report-only) |
+  | R | C | 0.00012 | 0.00011–0.00013 | 0.0015 | 0.087 | 0.9955 | 0.9950–0.9960 | PASS (report-only) |
+
+- **The PASS is the pooled mean, not "within the bar at every position".** Split at position 2,560 (Q2,
+  report-only), N2's set C mean KL is 0.01265 over the first 512 continuation positions (2,048–2,559), above the
+  0.0123 line, and 0.00758 over 2,560–3,070.
+- **The prereg names this outcome's consequence** (section 1): "a set C PASS with a P-arm FAIL means N2 can serve
+  the prompt's KV only if the GPU computes the last prompt position (the NPU prefills 0-2,046, and the GPU runs id
+  2,047 as its first decode step). P-R0 is that hybrid's first token, report-only here; that reading goes to the
+  user as the gate's design note."
+  - Set C passed and P-arm failed, so that is the case here.
+  - Set P is one position per window, 84 in all. Its top-1 moves in steps of 1/84: 81/84 passes and 80/84 fails.
+
+  | Arm | Set P, report-only | Mean KL | 95% CI | Top-1 | 95% CI | Outcome |
+  |---|---|---:|---|---:|---|---|
+  | N2 | P-arm: N2's own logits at 2,047 | 0.03703 | 0.02050–0.06336 | 77/84 = 0.9167 | 0.8571–0.9762 | FAIL NARROW (report-only) |
+  | N2 | P-R0: R0 on N2's KV sliced to 0–2,046, one decode step for id 2,047 | 0.02342 | 0.01032–0.04629 | 79/84 = 0.9405 | 0.8810–0.9881 | FAIL NARROW (report-only) |
+  | N3 | P-arm | 0.00006 | 0.00003–0.00008 | 84/84 | 1.0000–1.0000 | PASS (report-only) |
+  | N3 | P-R0 | 0.00003 | 0.00002–0.00005 | 84/84 | 1.0000–1.0000 | PASS (report-only) |
+  | R | P-arm | 0.00080 | 0.00044–0.00131 | 84/84 | 1.0000–1.0000 | PASS (report-only) |
+  | R | P-R0 | 0.00040 | 0.00021–0.00072 | 84/84 | 1.0000–1.0000 | PASS (report-only) |
+
+  P-R0 is that hybrid's first generated token. It reads FAIL NARROW, report-only.
+- **The L/H replication fails again** (report-only; Q8 HIT). On the new windows' prompt positions, N2 reads:
+  - band L: mean KL 0.0623 [0.0597, 0.0650], top-1 0.8992 [0.8962, 0.9021];
+  - band H: mean KL 0.0498 [0.0477, 0.0520], top-1 0.9100 [0.9073, 0.9126].
+
+  S1 read 0.06077 / 0.8949 and 0.05204 / 0.9107 on its own 16 prompts.
+- **Perplexity is not a gain.** N2's set C perplexity, 10.9491, is below N3's 11.2143 and R's 11.2163. The verdict
+  does not print the reference's own perplexity; N3, at mean KL 1e-5, stands in for it. So N2's lower perplexity
+  is a departure from the reference, not an improvement on it. KL and top-1 are the measures.
+- **Q1 is a MISS, as scored.**
+  - Its KL part held (0.0101 ≤ 0.0123), and so did its top-1 part (0.9602, within 0.956 ± 0.01).
+  - The NARROW-on-top-1 part missed: the top-1 interval, 0.9584–0.9619, cleared the line.
+- **Scope** (prereg section 3):
+  - a CPU emulation, with no NPU and no GPU run;
+  - R0 stands in for the 780M's generation numerics (the 780M's runtime is S0's subject);
+  - the arm's KV is the hybrid's KV in form (k and v projected in N2's numerics, attention in the reference
+    graph), and the 780M's own attention precision is not modelled;
+  - the head is fp32;
+  - N2's tie to the NPU is DERIVED, as in S1: its int32 is exact, and 3c's NPU gave the exact product on
+    per-tensor codes;
+  - the continuation is teacher-forced.
+- **The pick stays N3.** The verdict does not change it (prereg section 5). Moving the prompt-KV arm to N2 is the
+  user's decision, made with the interval in hand. This write-up recommends nothing.
+
+**The question** (pre-registered at `b777070`,
+[prereg](../results/llm/hybrid_s1b_prereg_desktop2_20260924.log); the tool is `tools/hybrid_s1b.py`, which imports
+`tools/hybrid_s1.py` read-only; the runner is `scripts/hybrid-stack.sh s1b-*`).
+- The configuration the user approved: the NPU builds only the prompt's KV, and the GPU generates exactly.
+  - N2's arithmetic serves the prompt: the NPU runs the seven weight GEMMs per layer.
+  - The 780M runs attention (building the KV from N2's k and v projections) and the generation (design v3).
+- Does the generation then stay within S1's bar?
+- Why S1b (the prereg's section 0, disclosed): S1's band C read N2 at mean KL 0.00962 and top-1 0.9580 on 4
+  sequences, with no interval and report-only. S1b asks that question properly, on new text.
+
+**The workload.**
+- **Text.** The same WikiText-2 pin, tokenizer and joined split as S1 (292,282 tokens).
+  - The windows start after S1's span, T[0 : 32,752]: window w (w = 0..83) is BOS + T[32,752 + 3,071w : 32,752 +
+    3,071(w + 1)], 3,072 ids.
+  - 84 whole windows end at 290,716 and leave 1,566 tokens.
+  - The prereg's asserts held: every window starts at or after 32,752, the windows are pairwise disjoint, and no
+    prompt's 2,048 ids hash to any of S1's.
+- **The arms.**
+  - N2 decides, on set C.
+  - N3 is the control, report-only: S1's PASS arm through the same prompt-then-R0 path.
+  - R is report-only.
+  - N1 is dropped: no branch of the pick uses it.
+- **The sets.**
+  - Set C: positions 2,048–3,070, 1,023 per window, with R0 teacher-forced on the arm's full prompt KV.
+  - Set P (report-only): position 2,047, both ways (P-arm and P-R0).
+  - Bands L (0–1,023) and H (1,024–2,046) (report-only): N2's replication of S1.
+  - The reference is R0 one-shot over the window's 3,072 ids.
+- **The metrics** are S1's frozen kernels, imported: KL(R0 ‖ arm) in float64 over all 262,144 entries, top-1
+  agreement, and the arm's perplexity, with the fp32 head applied in the verdict. The 95% intervals come from a
+  bootstrap over the per-window means (10,000 resamples, seed 20260924).
+- **The rule.** S1's thresholds (mean KL ≤ 0.0123, top-1 ≥ 0.956), anchored on prompt positions, are carried to
+  set C unchanged. NARROW names a threshold inside the interval; it is reported and changes nothing.
+- **The sessions** are S1's: ONNX Runtime 1.23.3's CPU EP, ORT_DISABLE_ALL, PRIORITY_BASED, 8 threads, one model
+  per child process. S1's R0, R, N2 and N3 models and their three data files are reused, not rebuilt, each
+  pinned by size and sha256 (MODEL_PIN).
+
+**The checks** ([check log](../results/llm/hybrid_s1b_check_desktop2_20260924.log); MEASURED).
+- **Pins:** FROZEN equal against the prereg log; S1's tool blob at `c67d6d2` equal to the current one; every model
+  file equal to MODEL_PIN.
+- **C5', determinism:** PASS. N2 ran window 0 twice, with one sha256 (`f49759f9…`).
+- **The R0 control, on windows 0, 12, 24, 36, 48, 60, 72 and 83:** PASS on all three paths, against ≤ 1e-5 each.
+  - Paths (a) (R0's own prompt KV, then its continuation) and (c) (R0's prompt states): max KL 0.0, sha-equal to
+    the one-shot on every window.
+  - Path (b) (the sliced KV plus one decode step): not sha-equal, worst max KL 8.88e-11 (window 24).
+- **Cross-log:** states' N2 window 0 equals C5' (`f49759f9…`), and the control's one-shots equal states' one-shots
+  on all 8 windows ([states log](../results/llm/hybrid_s1b_states_desktop2_20260924.log)).
+
+**Predictions** (the prereg's Q1–Q8, scored by the frozen code; they decide nothing):
+
+| | Predicted | Printed |
+|---|---|---|
+| Q1 | Set C (deciding): N2's mean KL ≤ 0.0123, its top-1 within 0.956 ± 0.01, and set C NARROW on top-1; the side of the line is not predicted | MISS |
+| Q2 | Set C: N2's mean KL over positions 2,048–2,559 exceeds its mean over 2,560–3,070 | HIT |
+| Q3 | P-arm (report-only): N2 FAILS | HIT |
+| Q4 | N2's mean KL orders as set C < P-R0 < P-arm | HIT |
+| Q5 | N3 PASSES set C, and reads within both thresholds on P-arm and P-R0 | HIT |
+| Q6 | R PASSES set C | HIT |
+| Q7 | The R0 control passes all three paths on all 8 windows, with paths (a) and (c) sha-equal on every window; path (b)'s sha-equality is not predicted | HIT |
+| Q8 | The replication FAILS N2 again in bands L and H, with mean KL in 0.04–0.08 and top-1 in 0.88–0.93 in each | HIT |
+
+That is 7 HIT and 1 MISS.
+
+**Memory and time** (the check and states logs; the peaks and timestamps are MEASURED, and the medians and 84-window
+totals are DERIVED from the states log's per-window seconds; GB = 1e9 bytes).
+
+| Child | Per window s (median) | 84 windows s | Peak private GB | Peak working set GB |
+|---|---:|---:|---:|---:|
+| Prompt, N2 | 13.1 | 1,128.7 | 6.07 | 5.70 |
+| Prompt, N3 | 24.35 | 2,050.9 | 2.85 | 9.01 |
+| Prompt, R | 17.6 | 1,527.1 | 5.27 | 4.53 |
+| R0: one-shot | 32.0 | 2,881.1 | 5.59 | 5.77 |
+| R0: continuation on N2's KV | 10.5 | 943.3 | | |
+| R0: continuation on N3's KV | 10.2 | 912.4 | | |
+| R0: continuation on R's KV | 10.15 | 905.9 | | |
+
+- The R0 child's peaks cover its one-shots and continuations together. In the check, N2's C5' child peaked at
+  6.07 GB private and 5.66 GB working set, and the R0 control's at 6.13 and 6.30.
+- The states ran in 11 batches of 8 windows (the last holding 4), starting at 03:30:06Z; the last batch started
+  at 06:19:49Z. All 44 children gave rc 0 on attempt 1, and the KV was deleted after every batch.
+- Every child started at 20.5 GB available or more, against the 15 GB gate. There was no MEMORY_ABORT or
+  MEMORY_REFUSE. The verdict started at 06:32:02Z with 21.5 GB available.
+
+**Hashes** (every committed S1b log; CRLF working copy, then LF blob).
+- The prereg (`b777070`): `c9c573a5a22bec1dfaf22f6d647b87168d07019f3cf6e19cc6cf1322bb0399cc`,
+  `2255ef813ab2e458bd84ec779240dcda13aedad6b5de4299d667bc742888c7bd`.
+- The selftest (`b777070`): `2ac8947396a734d9d84c244aadf54f14e5f2dd212ca9109e49475390acaec0ab`,
+  `18dd0575cc78b5d3de08bbd4046e776521870bd9f4456866816c014ba01a7636`.
+- The check (`694a85a`): `feeeabf5b543d6447f4ec149a500375c97777a46e950e00594a6146c3fde8254`,
+  `1d71dd8e7b77031a9ff880d59da856249ba67b7d8baa2ecd68ccb87683c86f2b`.
+- The states (`694a85a`): `4c98c7533ebfe6603d56bcf45e524ae5765194fd2ad6fb0b8463e77e4a06cb6c`,
+  `6ecc547837fbd0e2779c11346457c816fbc4c0a1aabb81cd14e7312ff8900f3a`.
+- The verdict (`e5b320e`): `9b8cacf59d569e8d679eb5425b6a09b8c81bf8d6af98a6845b36846cda76f58b`,
+  `50fe4d9f8a3135c031436ac68fd4cd77ab01e38ee10568e65c471d0002170c30`.
+- The frozen hashes: PREREG_TEXT `7fdc89d9…`, PROTOCOL_JSON `de717533…`, VERDICT_CODE `3059986a…`.
+
+**What this does not establish** (the prereg's section 10, and its scope):
+- The 780M's generation numerics (S0's subject), or its attention precision.
+- An NPU run. It is a CPU emulation, and N2's NPU tie is DERIVED.
+- Speed or energy.
+- Other text or tokenizers, prompts other than 2,048 ids, or continuations beyond 1,023 positions.
+- Free-running generation: the continuation is teacher-forced.
+- That N2 stays within the bar at every position. The first 512 continuation positions read above the KL line
+  (report-only).
+- A change to the pick. S1's pick, N3, stands. Any change to the hybrid's NPU numerics is the user's decision.
+
 ### MobileViT-XXS does not survive per-tensor INT8, and AdaRound cannot save it
 
 The accuracy question the attention work deferred, now measured on the full 1000-image
