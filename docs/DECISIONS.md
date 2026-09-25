@@ -413,7 +413,8 @@
       - F2's best form, in its optimistic compute-only model, reads 2.7292, 1.67× that. So F2 cannot beat the
         chosen N2 arm on energy.
       - The bases differ: F2's figure is compute only at an assumed power, and N-i8's is measured.
-      - F2's remaining case is memory: sharing the GPU's Q4_0 weights instead of an int8 copy. It is unmeasured.
+      - F2's remaining case is memory: sharing the GPU's Q4_0 4-bit codes (with F2's own int8 qw per block and fp32
+        Dw per column) instead of holding an int8 copy. It is unmeasured.
     - Not established: a silicon time; F2's own power; accuracy (F2-E's question); the lane order on silicon (it
       rests on IR semantics); the RNE add (INFERRED).
     - ([BENCHMARKS](BENCHMARKS.md#hybrid-stack-f2-0-and-f2-0b-route-i-with-integerized-8-bit-scales-the-core-adds-22-cycles-per-32-lane-block-tile-and-a-flush-with-no-srs-on-an-acc64-costs-116-or-82-cycles-per-superblock-so-both-flush-forms-pass-e--24-at-s--row-compute-only-yet-f2s-best-modelled-energy-is-167-the-measured-energy-of-n-i8-the-kernel-n2-runs-2026-09-25-desktop-2))
@@ -455,7 +456,8 @@
       - "F2 qualifies for the KV-serving role, and also holds at prompt positions."
       - K1–K8 PASS; the guard 0 in all 40 F2 runs; all nine predictions HIT.
     - Report-only, on the same windows: F2's mean KL is 1.26–1.39× R's (DERIVED). N2 reads set C 0.00961 / 0.9593,
-      would-be PASS NARROW, and FAIL on bands L and H, S1b's basis again.
+      would-be PASS NARROW, and FAIL on bands L and H, S1b's basis, with a NARROW on set C over these 16 windows
+      (report-only).
     - Scope: a CPU emulation. No NPU kernel ran, and F2's tie to the NPU is DERIVED from F2-0b's flush. R0 stands in
       for the 780M's numerics; the continuation is teacher-forced; 16 windows, one tokenizer, 2,048-token prompts.
     - It does not change the N2 pick. Energy is not measured: F2's modelled 2.7292 mJ with idle, compute only at an
@@ -467,7 +469,8 @@
     - Ruling 1 (the two verdicts) was the user's to override until the freeze at `c60692c`. The user was away and
       had asked for autonomy, so F2-A ran on the gate's ruling.
     - What comes next is the user's decision: a silicon F2 kernel at model level, measuring the memory case, or
-      stopping F2 here. Any move is the user's.
+      stopping F2 here. "Any move is the user's." (the prereg's section 5, the KV PASS / FULL FAIL combination's
+      text, line 239).
     - ([BENCHMARKS](BENCHMARKS.md#hybrid-stack-f2-a-f2-es-pick-in-all-238-linears-at-model-level-f2-akv-and-f2-afull-both-pass-not-narrow-so-f2-qualifies-for-the-kv-serving-role-and-also-holds-at-prompt-positions-in-a-cpu-emulation-and-the-n2-pick-is-unchanged-2026-09-25-desktop-2))
 - **A pre-registered size floor caught a builder defect (2026-09-23).** `tools/llm_gemv_bench.py build`
   first sized the fp16-scale variant's copies from the fp32 variant, so six DirectML rows streamed

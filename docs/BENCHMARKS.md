@@ -5334,7 +5334,8 @@ MEASURED, on the CPU.
     ([post-hoc log](../results/llm/llm_prefill3c_posthoc_desktop2_20260924.log), line 26).
   - F2's best form, in its optimistic compute-only model, reads 2.7292: 1.67× that.
   - The bases differ: F2's figure is compute only at an assumed power; N-i8's is measured.
-  - F2's remaining case is memory: sharing the GPU's Q4_0 weights instead of holding an int8 copy. It is unmeasured.
+  - F2's remaining case is memory: sharing the GPU's Q4_0 4-bit codes (with F2's own int8 qw per block and fp32 Dw
+    per column) instead of holding an int8 copy. It is unmeasured.
 - **What follows:** F2-E, the accuracy question at S = ROW (the user's decision, 2026-09-25). Its answer cannot
   change the N2 pick.
 
@@ -5486,7 +5487,8 @@ The comparison, MEASURED in 3c at M = 2,048 (the post-hoc log's lines 24, 25 and
   F2-A's.
 - The lane order on silicon. It rests on the compiler's IR semantics, and no run on a core checked it.
 - That the fp32 add rounds to nearest even. It is INFERRED, as in U6-E.
-- The cost of the scale bytes, or F2's memory case (sharing the GPU's Q4_0 weights), which is unmeasured.
+- The cost of the scale bytes, or F2's memory case (sharing the GPU's Q4_0 4-bit codes, with F2's own scales),
+  which is unmeasured.
 
 ### Hybrid stack F2-E, integerized 8-bit scales at S = ROW in a CPU emulation: form B with FLUSH_B2 is the pick, every case within 1.19× L4's own departure from level 0, form A fails on all three down_proj cases, and F2-E cannot change the N2 pick (2026-09-25, Desktop 2)
 
@@ -5690,9 +5692,9 @@ MEASURED, on the CPU: 201.2 s of per-case time over the 21 cases, at a peak of 2
   - The continuation is teacher-forced.
   - 16 windows of WikiText-2 raw's validation split, S1's tokenizer, 2,048-token prompts and 1,023 continuation
     positions.
-- **The N2 pick is unchanged.** The prereg (section 5): "The verdict does not change the N2 pick." For a qualifying
-  F2, its words are "Any move is the user's." ([prereg log](../results/llm/hybrid_f2a_prereg_desktop2_20260925.log),
-  line 239). This write-up recommends nothing.
+- **The N2 pick is unchanged.** The prereg (section 5): "The verdict does not change the N2 pick." The
+  [prereg log](../results/llm/hybrid_f2a_prereg_desktop2_20260925.log) also reads "Any move is the user's."
+  (section 5, the KV PASS / FULL FAIL combination's text, line 239). This write-up recommends nothing.
 
 **Report-only comparisons.** The same 16 windows, the same sitting and the same R0 reference. They decide nothing.
 - **F2 against R** (accuracy level 4, the arithmetic F2 approximates): F2's mean KL is 1.37× R's on set C, 1.39× on
