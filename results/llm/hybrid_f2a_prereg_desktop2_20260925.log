@@ -1,0 +1,516 @@
+# F2-A, pre-registration text, draft v2: F2's arithmetic at model level, two verdicts on new text (2026-09-25)
+
+Status: TEXT ONLY. Nothing is coded, built or run, and no new text is downloaded or tokenized. The user's decision
+(2026-09-25, relayed by the gate): "Plan F2-A". v2 applies the gate's rulings and fixes on v1 (LF a0cbad8c, ACCEPTED
+WITH RULINGS AND FIXES). Section 14 holds the rulings as applied, and section 15 the changes. The gate re-reads the
+changed lines; then the tool and its stages go as a diff for the gate's go, and each run needs the gate's go. Push
+is the gate's.
+
+**This text amends the F2 plan's section 4** (plan lines 266–272: an S1-pattern run with S1's bar, on U6-A's
+pattern, which is bands L and H alone). By the gate's ruling 1, F2-A's deciding set is two pre-registered verdicts:
+F2-A/KV on set C with S1b's rule, and F2-A/FULL on bands L and H with S1's rule, in place of S1's bar alone. The
+plan file stays unedited at b98787f4, as the F2-E addendum amended sections 1 and 3.
+
+Sources:
+- the F2 plan (v2 final, git-ignored, LF b98787f4): section 4's outline, and section 3's rule;
+- the F2-E addendum (LF 1ad61601) and F2-E's run log (96f83a8, LF da97478e);
+- the S1 plan and prereg (tools/hybrid_s1.py's PREREG, frozen at c67d6d2), and the S1b plan and prereg
+  (tools/hybrid_s1b.py, frozen at b777070);
+- the U6 plan (LF 830eb8b9), section 4's U6-A;
+- docs/BENCHMARKS.md and docs/DECISIONS.md at 120bf29.
+
+Tags: MEASURED (a committed log), DERIVED (arithmetic on measured or SPEC figures), SPEC (a vendor source or the
+repo's code, read on the date given), INFERRED, ESTIMATE. GB = 1e9 bytes.
+
+## 0. What F2-A asks, and what it cannot change
+
+- **Two questions, two pre-registered verdicts** (the gate's ruling 1, 2026-09-25; the user's to override before
+  the tool is frozen, as F2_FACTOR was):
+  - **F2-A/KV:** when F2's arithmetic builds the prompt's KV in every linear the NPU would run, does the
+    continuation stay within S1b's rule on set C? That is the role F2 would play in the user's hybrid: the NPU builds
+    the prompt's KV, and the GPU does the rest. It is the basis the user's N2 move rests on (S1b: set C PASS while L
+    and H FAIL).
+  - **F2-A/FULL:** does F2's arithmetic also keep the model within S1's bar at every prompt position (bands L and
+    H)? That is the stricter question: could F2 also produce the prompt's own logits?
+  - Neither is a sub-case of the other, and neither is ever re-scored. The headline prints KV first.
+- **The arm is F2-E's pick:** form B, FLUSH_B2, S = ROW, E_F2 23.28125 (F2-E's log, line 133; MEASURED pick,
+  DERIVED E_F2). F2-E screened it per linear: 1.047–1.189 × r_R over 21 cases, on layer 16's inputs only (MEASURED).
+  F2-A is the model-level test that screen could not be.
+- **F2-A cannot change the N2 pick.** F2's best modelled energy, 2.7292 mJ with idle per prompt token per layer
+  (compute only, at an assumed power; DERIVED), is 1.67× N-i8's MEASURED 1.6334 (DECISIONS at 120bf29).
+  - F2's case is weight memory (the user's decision, 2026-09-25). F2-A answers only whether F2's arithmetic holds
+    at model level, a precondition of that case. It measures no bytes.
+- **The F2 plan's factor** (F2_FACTOR 2.0, "the user may override it before F2-A's prereg") has done its job: F2-E's
+  pick stands at 2.0 and at 1.41. F2-A decides on S1b's and S1's rules, not on that factor.
+
+## 1. The arm, its linears, and what stays the reference's
+
+- **The linears: all 238 MatMulNBits nodes, the seven linears (q, k, v, o, gate, up, down) of all 34 layers.**
+  - These are the hybrid's NPU GEMMs: the NPU runs the seven weight GEMMs per layer, and the 780M runs attention
+    (the U6 plan, section 0; S1b's plan, section 1). This is S1's replace scope (S1 plan, section 4).
+  - The head is not among them. It is applied in the verdict, in fp32, identically for every model (S1's C3).
+- **What stays the reference's (R0's; the gate's ruling 2):** everything outside the 238 linears, in fp32 on the
+  CPU EP, node for node as in S1's graphs: the embedding, the norms, QK-norm, RoPE, GQA, GELU and the residuals.
+  - R0 also runs the continuation (set C) and the last prompt position (P-R0), standing in for the 780M, as in S1b
+    (its scope (a)). N2's move rests on that basis.
+  - No continuation runs R's arithmetic (accuracy level 4). That would break comparability with S1b's basis. Only
+    the report-only R arm runs level 4, in its own prompt.
+- **F2's arithmetic, per linear** (F2-E's, at S = ROW; the activation side is per row, so the arm is
+  batch-invariant, and the KV slice of section 4 is exact, as S1b's argument for N2; DERIVED):
+  1. **s_x, MLAS's block scale:** per 32-block of the row, amax / 127 in fp32 (S1's q8_ort).
+  2. **Sx, rounded up:** the smallest fp32 with 255 · Sx ≥ the row's max s_x (section 2.2).
+  3. **qx = max(1, c),** with c the exact ceiling of s_x / Sx (section 2.2).
+  4. **The codes:** RNE(x / (qx · Sx)), in float64, clipped to ±127 as a guard.
+  5. **The weights, offline in the build:** Dw rounded up (127 · Dw ≥ max |d_w| over the row of K), qw = RNE(d_w /
+     Dw), by hybrid_f2e's own functions (frozen at f88fe73). The 4-bit codes are the release's.
+  6. **I = Σ_k X′[m,k] · W′[k,n],** with X′ = qx · code and W′ = qw · (c − 8), exact (section 2.1). It is F2-E's I,
+     since Σ_b qx_b · qw_b · i_b regroups to this sum.
+  7. **The flush:** fp32(I) = RNE(I), then f2_flush_b.cc's B2, in ORDER[2]'s term order, once per output (S = ROW).
+- **This subgraph is the host quantizer F2-E said a host must reproduce** (BENCHMARKS at 120bf29, F2-E's "What this
+  does not establish"): its codes are computed in float64, and Sx is rounded up.
+
+## 2. The arm's graph
+
+The graph is S1's base (S1's base_cut of (c)'s C0-H16, reused), with each MatMulNBits replaced by the F2 subgraph.
+S1's code is imported read-only; the replace step is new code in tools/hybrid_f2a.py.
+
+### 2.1 The exact integer sum: a float64 MatMul (the gate's ruling 4)
+
+- **Neither factor fits int8,** so MatMulInteger cannot carry I: |X′| ≤ 127 × 255 = 32,385 and |W′| ≤ 8 × 127 =
+  1,016 (DERIVED).
+- **X′ and W′ as float64, and one MatMul(double) per linear.**
+  - ORT's CPU EP registers MatMul for tensor(double), and for int32, int64, uint32 and uint64 (SPEC:
+    docs/OperatorKernels.md at rel-1.23.2, read 2026-09-25; this build is 1.23.3.dev20260320, and the selftest
+    confirms it).
+  - **Exact in any order** (DERIVED): each product is an integer with |X′ · W′| ≤ 32,903,160 < 2^25, and each
+    partial sum an integer of magnitude at most 10,240 × 32,903,160, about 3.4e11 < 2^39 (the F2 plan, section 1:
+    320 blocks × 1,052,901,120). Every value is an integer below 2^53, so float64 holds it exactly, whatever the
+    summation order, blocking or FMA.
+  - The selftest checks I against Python integers, as F2-E's did, and keeps MatMul(int64)'s result on record.
+- **W′ is stored as int16** (|W′| ≤ 1,016) and cast to float64 at run time, as N3 casts its bf16 W.
+  - 3,208,642,560 weights (94,371,840 per layer × 34; DERIVED) at 2 B is 6,417,285,120 B. That is the byte count
+    of S1's bf16.onnx.data (MEASURED, the r2 build log's BUILD_JSON), the same element count at 2 B.
+  - Dw is one fp32 per output column per linear, about 4 MB in all (DERIVED).
+- **X′** is qx · code in float64, from the codes of 1.4.
+
+### 2.2 The round-up and the exact ceiling in ONNX (the gate's ruling 5)
+
+ONNX has no nextafter, and Cast(double → float) rounds to nearest (SPEC). F2-E's Sx is the smallest fp32 at or
+above the quotient.
+- **Sx:**
+  - q = double(max s_x) / 255 in float64, and f = Cast_f32(q);
+  - if 255 · double(f) ≥ double(max s_x), then Sx = f. The product is exact: 8 bits × 24 bits;
+  - else Sx = Cast_f32(double(f) · (1 + 3 · 2^-25)), one fp32 ulp above f.
+- **Why that steps exactly one ulp** (DERIVED, for a positive normal f with ulp u; re-derived by the gate):
+  - f · 3 · 2^-25 lies in [0.75 u, 1.5 u), and the float64 product is exact (24 + 26 bits);
+  - so f + that offset sits within 0.5 u of f + u, never at a tie, and RNE takes f + u. At a binade's top, f + u
+    is the power of two, and the same holds;
+  - Cast-then-step equals F2-E's round-up (DERIVED). Let t be the true quotient, so q = RN64(t) and f = RN32(q).
+    Both roundings are monotone and every fp32 is a float64, so no fp32 lies strictly between f and t. If the check
+    passes, f ≥ t and f is the smallest fp32 ≥ t. If it fails, f < t, and the step lands on the smallest fp32 ≥ t;
+  - a subnormal f is not stepped by this. It would fail the guard (2.3) and STOP. A subnormal Sx needs a row's max
+    s_x below 255 × 2^-126, about 3.0e-36 (DERIVED); a row of exact zeros is handled below.
+- **The exact ceiling:** c0 = Ceil(double(s_x) / double(Sx)); then c = c0 + [c0 · Sx < s_x] − [(c0 − 1) · Sx ≥ s_x].
+  Each product is exact in float64 (9 bits × 24). The correction terms are hybrid_f2e's ceil_exact.
+- **A zero row** (every s_x zero, so Sx = 0) takes qx = 1 and codes 0, with the divisor guarded as S1's N2 guards a
+  zero scale. Its outputs are 0.
+- The selftest must show the in-graph Sx, c and qx equal to hybrid_f2e's fp32_up, scale_up and ceil_exact, bit for
+  bit, before the tool is frozen.
+
+### 2.3 The guard (the gate's ruling 6)
+
+F2-E made any clip or scale fault on real data a STOP (the gate's fix F3). F2-A carries it into the graph:
+- **Each F2 subgraph counts, per run:**
+  - the codes whose rounded value exceeds ±127 before the clip;
+  - the blocks with c > 255;
+  - the rows whose Sx fails 255 · Sx ≥ max s_x.
+- **The 238 counts are summed into one extra graph output, int64, and every run must read 0.** A nonzero reading
+  is a STOP. It is DERIVED never to fire (F2-E's addendum, section 2.2).
+- **The count is a pipeline fact, not an accuracy figure,** so the states print it (blind-safe; ruling 6).
+- **The weight side is checked in the build, offline,** by hybrid_f2e's scale_faults and its qw-clip STOP, on all
+  238 linears. Any fault is a STOP.
+
+### 2.4 The flush
+
+- fp32(I) = Cast_f32(I), RNE (SPEC; the selftest checks ties).
+- B2 as f2_flush_b.cc (LF caa62ce0) and hybrid_f2e's flush:
+  - the split is Cast(float → bfloat16 → float) with an exact fp32 Sub;
+  - products of bf16 pieces are exact in fp32;
+  - the adds are fp32 Adds, one node each, in ORDER[2]'s order.
+- ORT_DISABLE_ALL (S1's session options) means no node is fused, so no add is contracted.
+- The Cast to bfloat16 rounds to nearest even on this build (MEASURED: S1's C1 checked N3's cast X against
+  ml_dtypes' RNE).
+
+## 3. The reference, and its anchors (the check stage; all before any states)
+
+**The reference is R0,** S1's R0.onnx (MatMulNBits at accuracy level 0: exact d · (q − 8) against fp32
+activations), reused and not rebuilt.
+- It is refused unless its sha equals the r2 BUILD_JSON: R0.onnx a0a7d785…, with the base data per S1's SRC_PIN.
+- The scored reference is R0 one-shot over each window's 3,072 ids (S1b's form). Its first 2,048 positions are the
+  reference for bands L and H, and its positions 2,047–3,070 for set P and set C.
+
+**The anchors.** Each prints PASS or FAIL in the check log, and its values go into the verdict log, with two
+exceptions printed in the check log: K4's worst difference, which concerns only F2-E's published cases, and K7's max
+KL, R0 against R0. Any FAIL is a STOP.
+- **K1, the pins** (section 8), and the frozen triple.
+- **K2, graph identity (S1's C3):**
+  - the F2 graph equals R0 node for node outside the 238 replaced linears;
+  - its shared initializers point at the same bytes of the same data file;
+  - each linear's W′ and Dw equal their re-derivation from the GGUF tensor the node names, by sha.
+- **K3, the census (S1's SURVIVE):** the build's profiled pass on S1's test sequence 0 executes 238 MatMul(double)
+  and no MatMulNBits, and no fused op (S1's FUSED_FORBIDDEN). Every op outside the F2 subgraphs has R0's count.
+- **K4, the link to F2-E, bit for bit:**
+  - For each of the 21 cases F2-E read (layers 0, 16 and 33 × the seven linears), a one-linear probe is built by
+    the same F2 builder. It runs on layer 16's captured x16_* (S1's sequence 0, U6-E's X16_SHA pins).
+  - Its output on F2-E's 256 rows must equal hybrid_f2e's B/B2/ROW emulation bit for bit.
+  - Its rel-L2 against L0 on those rows must reproduce F2-E's logged r_F2 (the run log's CASE_JSON, 96f83a8)
+    within 1e-6 relative. The worst relative difference is printed.
+  - This ties F2-A's arm to the arm F2-E screened. It covers the grid, the integer sum, the conversion and the
+    bf16 casts on real inputs.
+- **K5, R0's tie to S1:** R0 on S1's test sequence 0 reproduces S1's C5 hidden-state sha, a5597e1f… (MEASURED, S1's
+  check log, line 18). That re-proves R0 in this sitting's environment. S1's own states made the same tie to its C5
+  (BENCHMARKS, S1's checks).
+- **K6, determinism (S1's C5'):** the F2 arm runs window 0 twice, and the two hidden-state shas must be equal.
+- **K7, the R0 control (S1b's), which guards F2-A/KV's path:**
+  - on windows 0, 2, 4, 6, 8, 10, 12 and 14, paths (a), (b) and (c): (a) R0's prompt KV then R0's continuation,
+    (b) the KV sliced to 0–2,046 plus one decode step, (c) R0's 2,048-id prompt against the one-shot's first
+    2,048;
+  - each against R0 one-shot, at max per-position KL ≤ 1e-5, with sha-equality reported. Each path's max KL is
+    printed, as S1b's check printed it: R0 against R0, with no arm figure in it.
+  - No R control (ruling 2).
+- **K8, the guard,** in every F2 run of the check and the states: 0.
+
+## 4. Text, sample, positions and windows
+
+- **Corpus: WikiText-2 raw, validation split, new to this study** (U6-A's proposal). S1 and S1b read the test split.
+  - Salesforce/wikitext @ b08601e04326c79dfdd32d625aee71d232d685c3;
+  - wikitext-2-raw-v1/validation-00000-of-00001.parquet;
+  - 657,209 B, sha256 204929b7ff9d6184953f867dedb860e40aa69c078fc1e54b3baaa8fb28511c4c (SPEC: the Hub's API
+    listing at that revision, read 2026-09-25). The same listing gives the test file's size and sha exactly as S1
+    pinned them (732,610 B, 5f1bea06…).
+  - It is not in the local cache. The prereg downloads it at the pinned revision (ruling 10), refuses a size or sha
+    mismatch, and prints both. The dataset is public: if the Hub asks for a token, the prereg STOPs and comes to the
+    gate. No token is ever printed.
+- **Tokenizer and joining:** S1's exactly. The text column is joined with "\n\n" and tokenized with
+  add_special_tokens=False. The tokenizer files are S1's pins. The prereg prints the token count; it is not known
+  now (ESTIMATE, scaling the test split's 292,282 tokens by file size: about 262,000).
+- **The windows (S1b's form):** window w is [BOS] + T[3,071 · w : 3,071 · (w + 1)], 3,072 ids. The prompt is ids
+  0–2,047, and the continuation is ids 2,048–3,071.
+  - **N = 16, w = 0..15** (S1's N; ruling 3). That uses 49,136 tokens.
+  - A NARROW stands as the verdict. A larger sample later is a new pre-registered experiment on the user's go,
+    never a re-run (ruling 3).
+  - The prereg asserts that the windows are pairwise disjoint, and that no window's 2,048-id prompt hashes to any
+    of S1's seq_sha or S1b's window prompt shas. TEXT_JSON pins the token count, the offsets and every window's
+    sha.
+- **The positions** (i is the logits after ids[0..i], predicting ids[i + 1]):
+  - **Set C:** i = 2,048–3,070, R0 run teacher-forced on the arm's full 2,048-position prompt KV. It decides
+    **F2-A/KV**.
+  - **Band L:** i = 0–1,023. **Band H:** i = 1,024–2,046. These are S1's bands, on the F2 arm's own logits. They
+    decide **F2-A/FULL**.
+  - **Set P:** i = 2,047, both ways, report-only as in S1b. P-arm is the arm's own logits. P-R0 is R0 on the arm's
+    KV sliced to 0–2,046, one decode step for id 2,047: the hybrid's first token under the user's N2 design. At N =
+    16, set P's top-1 moves in steps of 1/16.
+
+## 5. The two rules, and what each outcome means
+
+Both rules are the gate's ruling 1, pre-registered here and frozen in the tool (section 8). The bootstrap for each
+is over windows: 10,000 resamples, seed 20260924, a 95% interval.
+- **F2-A/KV, on set C: S1b's rule, verbatim.** PASS if both hold on set C: mean KL ≤ 0.0123 and top-1 agreement ≥
+  0.956. FAIL otherwise, and FAIL on a non-finite value.
+  - NARROW names a threshold that lies inside the 95% bootstrap interval. It is reported and changes nothing, as in
+    S1. The point estimate decides.
+  - INCOMPLETE: a window's set C states for the F2 arm are missing when the gate rules that the verdict runs.
+- **F2-A/FULL, on bands L and H: S1's rule, verbatim.** Against R0, in both bands L and H, pooled over the 16
+  windows:
+  - PASS if mean KL ≤ 0.0123 and top-1 agreement ≥ 0.956;
+  - FAIL otherwise, or on any non-finite hidden state or logit;
+  - NARROW if a threshold lies inside the bootstrap interval; the verdict stands on the point estimate;
+  - INCOMPLETE: a window's F2 prompt states are missing when the gate rules that the verdict runs.
+- **Each verdict reads PASS, PASS NARROW, FAIL, FAIL NARROW or INCOMPLETE.** The headline prints F2-A/KV's line
+  first, then F2-A/FULL's.
+- **STOP** (a pipeline defect, not a verdict; it goes to the gate as it stands):
+  - a failed anchor (K1–K8);
+  - a scale fault or a clip in the build's weight grid;
+  - a frozen hash, model sha or text pin that differs;
+  - a child that exits nonzero;
+  - the Hub asking for a token.
+- **What each combination means:**
+  - **KV PASS, FULL FAIL:** N2's position. F2 qualifies for the KV-serving role on the same pre-registered basis as
+    N2. Any move is the user's.
+  - **KV FAIL** (whatever FULL reads): F2 does not qualify for the role N2 fills.
+  - **Both PASS:** F2 qualifies for the KV-serving role, and also holds at prompt positions.
+  - Neither verdict is ever re-scored, and a NARROW does not change either.
+- **The verdict does not change the N2 pick.**
+
+## 6. Report-only
+
+- **N2's set C on the new windows, printed beside F2-A/KV** (ruling 7). It is the user's pick, on the same text:
+  the like-for-like reading.
+- **The R arm** (S1's R.onnx, accuracy level 4, reused by sha): bands L and H, set C and set P, with its would-be
+  outcomes under both rules. It is the arithmetic F2 approximates. S1 read it at mean KL 0.00108 / 0.00098 and
+  top-1 0.9868 / 0.9862 on the test split (MEASURED, report-only).
+- **The N2 arm** (S1's N2.onnx, reused by sha): bands L and H and set P too, with its would-be outcomes. N3 stays
+  out.
+- **F2's set P,** both ways, each with its mean, top-1 and interval, and the would-be PASS or FAIL marked
+  report-only.
+- **F2's set C in two halves,** 2,048–2,559 and 2,560–3,070, as S1b reported N2's. The deciding figure is the
+  whole set.
+- **Perplexity** per arm, R0's too; per-window means; the bootstrap intervals.
+- **K4's worst relative difference,** and the guard's counts.
+
+## 7. Predictions (ESTIMATE; scored HIT or MISS; they decide nothing)
+
+- **FA-P1a (F2-A/FULL):** PASS in both bands, not NARROW.
+- **FA-P1b (F2-A/KV):** PASS on set C, not NARROW.
+- **FA-P2, the square law the F2 plan's factor rested on** (plan section 3, INFERRED): F2's mean KL is at most
+  2.0 × R's on the same windows, in both bands and on set C.
+  - This 2.0 is a KL ratio. The plan's F2_FACTOR 2.0 is a departure ratio, which under the square law would allow
+    about 4× in KL.
+  - F2-E's worst per-linear departure ratio, 1.1891, squares to 1.41. The gap to 2.0 leaves room for compounding
+    across 238 linears, which the per-linear screen does not bound.
+- **FA-P3:** F2's top-1 is ≥ 0.98 in both bands.
+- **FA-P4:** F2's set C mean KL is below N2's on the same windows (both report their figures; F2's deciding, N2's
+  report-only).
+- **FA-P5:** R PASSES under both rules (report-only arm).
+- **FA-P6:** N2 FAILS bands L and H again (S1's and S1b's replication read FAIL), and PASSES set C (S1b read PASS
+  on the test split); its NARROW is not predicted (report-only arm).
+- **FA-P7:** F2 reads within both thresholds on P-R0 (report-only).
+- **FA-P8:** the guard reads 0 in every F2 run.
+
+The side of the line is predicted for FA-P1a, FA-P1b, FA-P5 and FA-P6. The figures behind them are the ones cited,
+not new readings.
+
+## 8. Pins (checked in the prereg and in every later stage; a mismatch is a STOP)
+
+- **The texts:** this text (its LF, filled when the gate accepts it), the F2 plan (b98787f4) and the F2-E
+  addendum (1ad61601).
+- **F2-E's run log** (96f83a8, LF da97478e): its PICK line must read "form B, FLUSH_B2, S = ROW", and its CASE_JSON
+  feeds K4.
+- **The tools, imported read-only:**
+  - hybrid_f2e.py (LF dac40cdf), hybrid_u6e.py (LF b88d23d3) and hybrid_f2_0b.py (LF 7a953146);
+  - hybrid_s1.py, asserted equal to its blob at c67d6d2;
+  - hybrid_s1b.py, asserted equal to its blob at b777070;
+  - f2_flush_b.cc (LF caa62ce0), the orders' source.
+- **The model:**
+  - the GGUF (3,155,051,328 B, sha256 76aed0a8…);
+  - U6-E's X16_SHA and W_SHA, for K4;
+  - S1's models by the r2 BUILD_JSON: R0.onnx a0a7d785…, R.onnx b960a919…, N2.onnx with int8.onnx.data ceef81a2…,
+    and the base data per S1's SRC_PIN.
+- **The text:** the validation parquet (section 4); S1's test parquet, for K3 and K5; S1's tokenizer pins.
+- **The runtime:** ORT 1.23.3.dev20260320.
+- **The F2 graph's own files** (F2.onnx and f2.onnx.data) are hashed as the build writes them, and pinned in its
+  BUILD_JSON. Every later stage refuses others.
+- **The frozen triple, as S1 and S1b:** PREREG_TEXT_SHA256 (this text inside the tool), PROTOCOL_JSON_SHA256 and
+  VERDICT_CODE_SHA256.
+  - **The two-verdict rule is in both** (fix F2): PROTOCOL_JSON carries each verdict's set, rule, thresholds,
+    bootstrap and the headline order (KV first); VERDICT_CODE hashes both rule functions and the combination
+    wording.
+  - VERDICT_CODE hashes the sources of every verdict function used, the imported S1 and S1b ones included
+    (inspect.getsource), as S1b's does.
+  - All three are printed in every F2-A log, and the verdict refuses a mismatch.
+
+## 9. Blind-safety
+
+- The two rules, the thresholds, the windows, the arm, the report-only list, the predictions and every print are
+  fixed in the tool, and hashed into the frozen triple, before any real input is read.
+- **The selftest is synthetic only:** no model, no text, no x16.
+- **The prereg reads only the text,** to pin it. It prints the token count, the offsets and the shas; no model
+  runs.
+- **The build and the check print pipeline facts only:**
+  - shas, op counts, the guard, memory and times;
+  - K2–K8 as PASS or FAIL. K4's worst difference concerns F2-E's published cases on S1's sequence 0 only, and K7's
+    max KL is R0 against R0.
+- **The states write the hidden states and KV to disk, unread.** They print rc, memory, times and the guard only.
+  The guard's count is a pipeline fact (ruling 6).
+- **No KL, top-1, agreement or perplexity figure on the new text exists before the verdict.** No interim reading is
+  taken or reported.
+- **No re-runs** (ruling 8):
+  - a child that exits nonzero stops its stage, and the stage comes to the gate as it stands;
+  - rc 4, the memory gate or the watchdog, reads "memory gate; not a verdict", and the stage stops. A memory-gate
+    stop that produced no output may be restarted only on the gate's ruling;
+  - no logged stage is repeated otherwise.
+- The verdict runs once, on the gate's go.
+
+## 10. The selftest (synthetic only)
+
+1. **The F2 subgraph against hybrid_f2e's emulation (frozen), bit for bit,** through ORT's CPU EP on one-linear
+   probes:
+   - on synthetic X and Q4_0 weights at K = 2,048, 2,560 and 10,240, with a small N;
+   - with plants: a zero block, a zero row, blocks at qx = 1, codes at ±127, an Sx that needs the step, and large
+     and small magnitudes.
+2. **The one-ulp step** equals hybrid_f2e's step_up (nextafter) on 10^6 random positive normal fp32. It is also
+   checked on every binade's first and last value across the normal range.
+3. **The in-graph Sx, c and qx** equal hybrid_f2e's fp32_up, scale_up and ceil_exact on planted quotients: integer
+   quotients, and quotients a hair above an integer.
+4. **The integer sum:** MatMul(double) equals Python-int I at the bounds: |X′| = 32,385, |W′| = 1,016, K = 10,240,
+   and |I| near its maximum. MatMul(int64)'s result is checked and kept on record (ruling 4).
+5. **The casts:** Cast(double → float) and Cast(float → bfloat16) round to nearest even on planted ties, against
+   numpy and ml_dtypes.
+6. **The guard:** it reads 0 on clean inputs, and counts each planted violation, one per kind, fed through a probe
+   with a doctored scale input.
+7. **The windows:** the offsets and the disjointness asserts on a synthetic token list, fed a deliberately
+   overlapping case.
+8. **The verdict code:**
+   - each rule on synthetic metrics: PASS, FAIL, both NARROWs, a non-finite value, and INCOMPLETE;
+   - the headline order (KV first) and each combination's wording;
+   - set L, H, C and P slicing on synthetic logits, and the KV slice to 0–2,046;
+   - the bootstrap;
+   - the imported kernels, hashed by source.
+9. **K2's and K3's comparators** on a small synthetic graph with a planted extra node, and a planted fused op.
+10. **The watchdog and the start gate** (S1's), and determinism.
+
+## 11. Cost, and the START REQUESTs to BFP16
+
+The F2 child's cost is an ESTIMATE until the build measures it. The build's probe measures the F2 arm's session
+memory and one 2,048-id prompt on S1's test sequence 0, as S1's PROBE_JSON did. START REQUEST 2 is sized from that
+probe, and the probe goes to the gate first.
+- **The double GEMM path** (SPEC, ORT's source at rel-1.23.2, read 2026-09-25): the MatMul kernel's generic
+  Compute calls math::MatMul<T> (core/providers/cpu/math/matmul.cc:124). math::MatMul<double> calls MlasGemm when
+  MLAS_SUPPORTS_GEMM_DOUBLE is defined, and Eigen otherwise (core/util/math_cpu.cc:188-195). mlas.h defines it for
+  MLAS_TARGET_AMD64 (core/mlas/inc/mlas.h:83-85). So on this machine MatMul(double) is MLAS's double GEMM. Its speed
+  here is unmeasured.
+- **The probe's stop line** (the gate's note, 2026-09-25): if the probe reads one 2,048-id F2 prompt slower than
+  about 7 min (under about 31 GFLOPS: 13.1 TFLOP / 420 s; DERIVED), it STOPs and comes to the gate before START
+  REQUEST 2. N, or the int64 route, is revisited then, not now.
+- **The build** writes f2.onnx.data, 6,417,285,120 B (DERIVED, section 2.1), to scratch/llm/hybrid_f2a/models.
+  - It runs hybrid_f2e's weight grid over the 238 linears.
+  - It profiles one pass per new model.
+  - ESTIMATE: 20–40 min, and the RAM of the probes below.
+- **The F2 prompt child:**
+  - **RAM (ESTIMATE):** about 9–12 GB peak working set and 3–6 GB private. N3, with a data file of the same size
+    cast at run time, read 9.01 GB working set and 2.85 GB private (MEASURED, S1b). F2 adds float64 transients: the
+    largest W′ is 26,214,400 × 8 B = 210 MB, and X′ at 2,048 × 10,240 × 8 B is 168 MB (DERIVED).
+  - **Time (ESTIMATE):** about 45–150 s per 2,048-id prompt.
+    - The float64 MatMuls are 6.57e12 multiply-adds, 13.1 TFLOP per prompt (DERIVED: 3,208,642,560 × 2,048 × 2).
+    - The rate is an assumed 90–300 GFLOPS (ESTIMATE), plus the casts.
+    - N3's fp32 prompt took 24.35 s (MEASURED, S1b's median).
+- **The reused children, per window** (MEASURED medians, S1b's states log):
+  - R0 one-shot 32.0 s; each continuation about 10.2–10.5 s;
+  - R's prompt 17.6 s, and N2's 13.1 s;
+  - the P-R0 steps, under 1 s each (ESTIMATE).
+- **Per window,** with F2, R and N2: about 140–250 s (ESTIMATE). **16 windows: about 40–70 min.**
+- **The check:**
+  - K4's 21 probes are light;
+  - K5 and K6 are three prompt runs;
+  - K7 is 8 windows at about 85–93 s each (MEASURED: S1b's control, 85.2–93.3 s per window, its check log).
+  - About 25–40 min (ESTIMATE).
+- **Disk:**
+  - the F2 data, 6.42 GB;
+  - the KV at 570 MB per arm and window (MEASURED, S1): 13.7 GB per batch of 8 windows × 3 arms, deleted after each
+    batch;
+  - the hidden states, about 2.0 GB (DERIVED: 16 × 12,288 positions × 10,240 B).
+- **The verdict:** about 147,000 scored positions, against S1's 184,000 (DERIVED):
+  - L and H, 3 × 16 × 2,047;
+  - set C, 3 × 16 × 1,023;
+  - set P, 96.
+
+  About 15–25 min at about 5 GB (ESTIMATE, from S1's plan).
+- **Memory rules, S1's:** one model per child; a 15 GB start gate; a 5 GB watchdog; PRIORITY_BASED sessions,
+  ORT_DISABLE_ALL, 8 intra-op threads.
+- **BFP16:**
+  - an FYI for the selftest and the prereg (light);
+  - START REQUEST 1 for the build and the check;
+  - START REQUEST 2 for the states, sized from the build's probe;
+  - START REQUEST 3 for the verdict;
+  - FINISHED after each.
+
+## 12. What F2-A cannot establish
+
+- **Silicon.** No F2 kernel runs on the NPU. F2's NPU tie is DERIVED: F2-0b's compiled flush, emulated in its order.
+  The lane order and the RNE add are not tested on a core.
+- **Energy.** Nothing is measured. F2's modelled 2.7292 mJ against N-i8's measured 1.6334 stands.
+- **The N2 pick.** F2-A cannot change it.
+- **F2's memory case.** F2-A measures accuracy, not bytes.
+- **The 780M's own numerics.** R0 stands in for its last-position step and its continuation. Its attention
+  precision is not modelled.
+- **The host quantizer's cost and fp32 form.** The codes are computed in float64 here.
+- **Free-running generation.** The continuation is teacher-forced.
+- **Other text, tokenizers or prompt lengths.** That includes 8,192-token prompts, and continuations beyond 1,023
+  positions.
+
+## 13. Files and order
+
+- **New:** tools/hybrid_f2a.py (AGPL-3.0-or-later, written fresh), with modes selftest, prereg, build, check,
+  states and verdict, and their child modes. It imports hybrid_s1, hybrid_s1b, hybrid_f2e and hybrid_u6e
+  read-only.
+- **The runner:** stages f2a-selftest, f2a-prereg, f2a-build, f2a-check, f2a-states and f2a-verdict in
+  scripts/hybrid-stack.sh, edited only between runs. S1's and S1b's stages stay byte-identical.
+- **Scratch** (git-ignored): scratch/llm/hybrid_f2a/{models,check,states,kv}.
+- **Logs:** results/llm/hybrid_f2a_{selftest,prereg,build,check,states,verdict}_desktop2_YYYYMMDD.log. UTF-8, the
+  profile path scrubbed, never overwritten, each committed alone.
+- **The order:**
+  1. this text to the gate; its rulings; the revision; the gate's acceptance (LF);
+  2. the diff (the tool and the stages), with the selftest's output, for the gate's go;
+  3. the frozen tool, committed with its selftest log. Then the prereg run (the text pins), committed before
+     anything heavy;
+  4. START REQUEST 1, then the build and the check, then FINISHED; the logs committed; a pipeline-facts report,
+     with the probe's measured cost;
+  5. the gate's go, then START REQUEST 2, the states, and FINISHED; the log committed; a pipeline-facts report;
+  6. the gate's go, then START REQUEST 3, the verdict (once), and FINISHED; the log committed; the report.
+
+## 14. The gate's rulings on v1's open points (2026-09-25), as applied
+
+1. **The deciding set:** two pre-registered verdicts, not one and not a conjunction. F2-A/KV on set C with S1b's
+   rule, and F2-A/FULL on bands L and H with S1's rule. KV prints first. P-R0 stays report-only. The user may
+   override this before the tool is frozen. Applied in the header and sections 0, 4, 5, 7 and 8.
+2. **"What stays R's":** R0, the reference path. No R-continuation variant, and no R control in K7. Sections 1
+   and 3.
+3. **N = 16:** accepted. A NARROW stands as the verdict; a larger sample is a new pre-registered experiment on the
+   user's go, never a re-run. Section 4.
+4. **MatMul(double):** accepted, on the exactness argument. The selftest keeps MatMul(int64)'s record. Sections
+   2.1 and 10.
+5. **The one-ulp step:** accepted as DERIVED. It must pass the selftest bit for bit against hybrid_f2e before the
+   tool is frozen. Section 2.2.
+6. **The in-graph guard,** with F3's STOP semantics: accepted. Its count is a pipeline fact, printed in the states.
+   Sections 2.3 and 9.
+7. **R and N2 as report-only arms:** accepted. N2's set C is printed beside F2-A/KV. N3 stays out. Section 6.
+8. **No re-runs:** accepted. A memory-gate stop (rc 4) that produced no output may be restarted only on the gate's
+   ruling. Section 9.
+9. **No C4:** K5 is the tie. Section 3.
+10. **The download in the prereg stage:** accepted. If the Hub asks for a token, STOP and come to the gate; never
+    print a token. Section 4.
+
+## 15. Changes after the gate's read of LF a0cbad8c (ACCEPTED WITH RULINGS AND FIXES)
+
+- **Header, fix F1b:** the amendment of the F2 plan's section 4 (lines 266–272), with the plan file unedited.
+- **Section 0, fix F1:** two questions and two verdicts, KV first.
+- **Section 1:** ruling 2's reading; no R continuation; the note that the regrouped sum is F2-E's I.
+- **Section 2.1:** the partial-sum bound written as 10,240 × 32,903,160; the int64 record.
+- **Section 2.2:** the equivalence of cast-then-step with F2-E's round-up.
+- **Section 2.3:** the guard's count is printed in the states.
+- **Section 3:** the reference positions for set P and set C; K7 guards F2-A/KV's path; no R control.
+- **Section 4:** set C decides F2-A/KV and L and H decide F2-A/FULL; set P's steps of 1/16; ruling 3's NARROW and
+  larger-sample wording; ruling 10's token STOP.
+- **Section 5, fix F1:** the two rules, verbatim from S1b and S1, with their NARROW, INCOMPLETE, the headline order
+  and each combination's meaning. "The verdict does not change the N2 pick" is kept.
+- **Section 6:** N2's set C beside F2-A/KV; F2's set C moved from report-only to deciding.
+- **Section 7, fix F1:** FA-P1 split into FA-P1a (FULL) and FA-P1b (KV); FA-P4 (F2 against N2 on set C) added; the
+  report-only predictions renumbered.
+- **Section 8, fix F2:** the two-verdict rule in PROTOCOL_JSON and VERDICT_CODE.
+- **Section 9:** ruling 8's restart wording; ruling 6's guard print.
+- **Section 10:** each rule, the headline order and the combinations in the verdict code's selftest; the int64
+  record.
+- **Section 11:** the double GEMM path read from ORT's source (MLAS on AMD64, not Eigen), and the gate's 7-minute
+  stop line for the probe.
+- **Section 13:** unchanged. Section 14 replaces v1's open points with the rulings.
+
+PROTOCOL_JSON {"stage": "hybrid F2-A", "prereg_lf_sha256": "e240856939dd21e966a8bdd96776ba1f0a11017f354bb634c568ea7fa20d8242", "arm": {"name": "F2", "pick": "B/B2/ROW", "text": "F2-E's pick, form B, FLUSH_B2, S = ROW, in all 238 MatMulNBits (q, k, v, o, gate, up, down x 34 layers). Per input row: s_x = fp32(amax / 127) per 32-block (S1's q8_ort); Sx = the smallest fp32 with 255 x Sx >= the row's max s_x: q = double(max s_x) / 255, f = Cast_f32(q), Sx = f if 255 x double(f) >= max s_x, else Cast_f32(double(f) x (1 + 3 x 2^-25)); c = the exact ceiling of s_x / Sx (Ceil, then hybrid_f2e's ceil_exact corrections, in order), c = 0 on a zero row; qx = Clip(c, 1, 255); codes = Clip(RNE(x64 / (qx x Sx)), -127, 127), 0 where qx x Sx is 0; X' = qx x code (double). Offline: Dw and qw by hybrid_f2e's w_grid at ROW; W' = qw x (c - 8), int16 [K, N], external (f2.onnx.data); Dw fp32 [N], inline. I = MatMul(double) of X' and Cast_double(W'), exact; fp32(I) = Cast_f32(I), RNE; then FLUSH_B2: bf16 pieces by Cast(float -> bfloat16 -> float) with an exact fp32 Sub, P by ORDER[2]['P'], y from an fp32 0 by ORDER[2]['Y'], one fp32 Add each. The activation side is built once per input and read by every linear on it (q, k, v; gate, up), as S1's N1 and N2 shared their quantization", "linears": 238}, "flush_order": {"t": 2, "P": [[2, 1], [1, 2], [1, 1]], "Y": [[2, 1], [1, 2], [1, 1]]}, "step": 1.0000000894069672, "guard": "each input's count = the codes whose rounded value exceeds 127 in magnitude before the clip + the blocks with c > 255 + the rows with 255 x Sx < max s_x (int64); each of the 238 linears contributes its input's count, and the 238 are summed (Concat, ReduceSum) into the graph output f2/guard. Every run must read 0: a nonzero reading is a STOP. The weight side is checked in the build, offline, by hybrid_f2e's w_stops on all 238 linears", "reference": "R0 (S1's R0.onnx): one-shot over each window's 3,072 ids", "arms": ["F2", "R", "N2"], "deciding": ["F2"], "report_only": ["R", "N2"], "text": {"val_pin": {"repo": "Salesforce/wikitext", "revision": "b08601e04326c79dfdd32d625aee71d232d685c3", "file": "wikitext-2-raw-v1/validation-00000-of-00001.parquet", "size": 657209, "sha256": "204929b7ff9d6184953f867dedb860e40aa69c078fc1e54b3baaa8fb28511c4c"}, "joining": "the text column joined with two newlines, tokenized with add_special_tokens=False by S1's tokenizer"}, "windows": {"n": 16, "len": 3072, "stride": 3071, "bos": 2, "prompt": 2048, "form": "window w = [BOS] + T[3,071 w : 3,071 (w + 1)]"}, "sets": {"C": [2048, 3070], "L": [0, 1023], "H": [1024, 2046], "P": 2047, "q2_split": 2560}, "verdicts": [{"name": "F2-A/KV", "set": "C", "positions": [2048, 3070], "rule": "F2-A/KV, on set C (positions 2,048-3,070, R0 teacher-forced on the arm's full 2,048-position prompt KV): S1b's rule, verbatim. PASS iff mean KL <= 0.0123 and top-1 agreement >= 0.956 on set C; FAIL otherwise, and FAIL on a non-finite value. NARROW names a threshold inside the 95% bootstrap interval: it is reported and changes nothing; the point estimate decides. INCOMPLETE: a window's set C states for the F2 arm are missing when the gate rules that the verdict runs"}, {"name": "F2-A/FULL", "sets": ["L", "H"], "positions": [[0, 1023], [1024, 2046]], "rule": "F2-A/FULL, on bands L (0-1,023) and H (1,024-2,046), the F2 arm's own logits: S1's rule, verbatim. PASS iff in both bands, pooled over the 16 windows, mean KL <= 0.0123 and top-1 agreement >= 0.956; FAIL otherwise, or on any non-finite hidden state or logit. NARROW names each band whose bootstrap interval holds a threshold; the verdict stands on the point estimate. INCOMPLETE: a window's F2 prompt states are missing when the gate rules that the verdict runs"}], "headline_order": ["F2-A/KV", "F2-A/FULL"], "combinations": {"KV PASS, FULL FAIL": "N2's position: F2 qualifies for the KV-serving role on the same pre-registered basis as N2. Any move is the user's.", "KV FAIL": "F2 does not qualify for the role N2 fills.", "BOTH PASS": "F2 qualifies for the KV-serving role, and also holds at prompt positions.", "KV INCOMPLETE": "F2-A/KV is INCOMPLETE: no combination is read.", "FULL INCOMPLETE": "F2-A/KV reads PASS and F2-A/FULL is INCOMPLETE: no combination is read."}, "no_pick_change": "The verdict does not change the N2 pick. Neither verdict is ever re-scored, and a NARROW changes neither.", "thresholds": {"t_kl": 0.0123, "t_top1": 0.956}, "bootstrap": {"over": "windows", "resamples": 10000, "seed": 20260924, "interval": 0.95}, "report_only_list": ["N2's set C beside F2-A/KV", "the R arm: bands L and H, set C and set P, both rules' would-be outcomes", "the N2 arm: bands L and H and set P, both rules' would-be outcomes", "F2's set P both ways", "F2's set C in two halves (2,048-2,559, 2,560-3,070)", "perplexity per arm, R0's too", "per-window means", "the bootstrap intervals", "K4's values and worst relative difference", "the guard's counts"], "anchors": {"K1": "the pins (texts, tools, blobs, the F2-E log, the GGUF, x16 and W, S1's models, the F2 files by the build log, the validation text, the tokenizer, ORT) and the frozen triple", "K2": "graph identity: F2 equals R0.onnx node for node outside the 238 linears, inputs equal, outputs equal but for f2/guard, shared initializers on the same bytes of the same data file; each W' and Dw equal their re-derivation from the GGUF tensor the node names, by sha", "K3": "the census: the build's profiled pass on S1's test sequence 0 executes 238 MatMul with double inputs and no MatMulNBits, no fused op (S1's FUSED_FORBIDDEN), every op as the graph holds it, every op outside the F2 subgraphs at R0's count", "K4": "21 one-linear probes by the same builder on x16 (layers 0, 16, 33 x the seven linears) equal hybrid_f2e's B/B2/ROW emulation bit for bit on F2-E's 256 rows, and their rel-L2 against L0 reproduces the F2-E run log's CASE_JSON arms[\"B/B2/ROW\"][\"vs_l0\"], keyed by (layer, name), within 1e-06 relative", "K5": "R0 on S1's test sequence 0 reproduces S1's C5 hidden-state sha a5597e1ffad816ad48a7dfb911883e3ec99bc454018890701fdca1e7a359ae83", "K6": "the F2 arm runs window 0's prompt twice: the two hidden-state shas are equal", "K7": "the R0 control on windows 0, 2, ..., 14, paths (a), (b) and (c), each against R0 one-shot at max per-position KL <= 1e-5, sha-equality reported", "K8": "the guard reads 0 in every F2 run of the build, the check and the states"}, "k4": {"path": "arms[\"B/B2/ROW\"][\"vs_l0\"]", "tol": 1e-06, "rows": "hybrid_f2e.ROWS (256)", "layers": [0, 16, 33]}, "control": {"windows": [0, 2, 4, 6, 8, 10, 12, 14], "paths": ["a", "b", "c"], "kl_max": 1e-05}, "predictions": [{"id": "FA-P1a", "text": "F2-A/FULL: PASS in both bands, not NARROW"}, {"id": "FA-P1b", "text": "F2-A/KV: PASS on set C, not NARROW"}, {"id": "FA-P2", "text": "F2's mean KL is at most 2.0 x R's on the same windows, in both bands and on set C (a KL ratio)"}, {"id": "FA-P3", "text": "F2's top-1 is >= 0.98 in both bands"}, {"id": "FA-P4", "text": "F2's set C mean KL is below N2's on the same windows"}, {"id": "FA-P5", "text": "R PASSES under both rules (report-only arm)"}, {"id": "FA-P6", "text": "N2 FAILS bands L and H, and PASSES set C; its NARROW is not predicted (report-only arm)"}, {"id": "FA-P7", "text": "F2 reads within both thresholds on P-R0 (report-only)"}, {"id": "FA-P8", "text": "the guard reads 0 in every F2 run"}], "pins": {"the F2 plan": {"file": "scratch/llm/hybrid_f2_plan_draft.md", "lf_sha256": "b98787f451c11fbc9e847a4cb973b8f12b4988e3dce7729435d1fd34334a07c5"}, "the F2-E addendum": {"file": "scratch/llm/hybrid_f2e_addendum.md", "lf_sha256": "1ad61601f743525b6c08c2de38a86bad6f32f742e756a25333d5b257f2f165ec"}, "F2-E's run log": {"file": "results/llm/hybrid_f2e_run_desktop2_20260925.log", "lf_sha256": "da97478e6894a6c7904616cf12038cc031c38d493282bba76dd07e1ceca73291"}, "the F2-E tool": {"file": "tools/hybrid_f2e.py", "lf_sha256": "dac40cdffa052169e0a1a6a8c9de112a3883066e7da158f210640e5e43c83f78"}, "the U6-E tool": {"file": "tools/hybrid_u6e.py", "lf_sha256": "b88d23d30c6c2ec3ffa55407dd4969957acf98e788fca47f1a703feec146e892"}, "the F2-0b tool": {"file": "tools/hybrid_f2_0b.py", "lf_sha256": "7a953146eaccc4b143bb4cf3072a84f10cad10f4f54bab1ec956d3588fcda354"}, "f2_flush_b.cc": {"file": "kernels/f2_epilogue/f2_flush_b.cc", "lf_sha256": "caa62ce055f6e1a3e8de350349ac76bef3f8d9dd521416c9fb8db0c64a2e18d4"}}, "blobs": {"tools/hybrid_s1.py": "c67d6d2", "tools/hybrid_s1b.py": "b777070"}, "model_pin": {"R0.onnx": [432992, "a0a7d785e8dafb387189d76e2e3aedcd4425a26a130ec0142b1e13e0049b1904"], "R.onnx": [432992, "b960a9193a9ab3e19fe1d823bf828ae52523eb60a3349da27011bc6e7ee1b94e"], "N2.onnx": [903332, "7ac950ad4978205e3afcdde62674b09b8efc0787374c4c456810b9b8b626d1ac"], "int8.onnx.data": [3216719872, "ceef81a2b70f4651b83bae28e04d18edcddebb26bc409492653cf477de338a5b"], "base.onnx.data": [7644053504, "11edd445f01760ab1d44d8197fd75e40ae805b968522848d101373c804fb8380"]}, "s1_build_log": "hybrid_s1_build_desktop2_20260924_r2.log", "c5_sha": "a5597e1ffad816ad48a7dfb911883e3ec99bc454018890701fdca1e7a359ae83", "gguf_pin": {"repo": "google/gemma-3-4b-it-qat-q4_0-gguf", "file": "gemma-3-4b-it-q4_0.gguf", "revision": "15f73f5eee9c28f53afefef5723e29680c2fc78a", "size": 3155051328, "sha256": "76aed0a8285b83102f18b5d60e53c70d09eb4e9917a20ce8956bd546452b56e2"}, "x16_sha": {"x_attn": "c1df965e212d7068d3d82a794675cea5cabcbe27d1abfbe6b53664763a4ba641", "x_o": "aef5c238e7f6360c8b75eff98fe07b9408ec543023c6b4782afc80f3259e3b40", "x_ffn": "109a46a93823b8463f51d2298e1905c05cfa668b2ed3e1d6df38a9a575f24576", "x_down": "22bbdec4364217455c2f1ee4474dfe9653e310353ce0e28ad828e3718f0ade7a"}, "w_sha": {"0.attn_q": "65f012b86576bbfa26ac99755b08a15790425c7c2fffc8e7000373cba3c85f68", "0.attn_k": "6f76fe57e1299500d2590bc1375238e2b08fff4f4b6672dfb37e4fcbae53009a", "0.attn_v": "56f8e5aa682107b3582ff4c103ca7f5a4e54f01b6ecdb27f1756239cc0897638", "0.attn_output": "a42100ac05085e64ac9fbf8e6f7619ba764f5905d06c57157313339fd9e9caa3", "0.ffn_gate": "1588bfb42c05da87f14e0019cb6f5ebb37c1a5981afdc86ee918a1e0370577d8", "0.ffn_up": "c05d0bff133a75c399d377288c42d009e3a625989221a3b9b987e185a6f1dd90", "0.ffn_down": "dfd070b547524bc85ad95d177eb59db1856c849292091847ca35f2b826caf25c", "16.attn_q": "d2196beb22bdab9fb242182334fc084018af1600b43157921a477665778b62f9", "16.attn_k": "3186d88e6c9158edb7a7bfc05f0734f4d944ef283928979b4ccde86432a5d033", "16.attn_v": "4fb32d8058a15ddc96bdc625f4d5bb92882b266e869cee495273b2ed0bc84fbc", "16.attn_output": "8fee94450f999492cd44834b64028f118314c318a46c9b9ee412ff4fc92a74dc", "16.ffn_gate": "5cbf13fdceaec60ec4b97e90564d64b78e3bcac6c90ec03dde068c877667d383", "16.ffn_up": "be687125cf56e8c6670486b8b8149a80a1e51168b599dce5ff2a5fb2dc4783e8", "16.ffn_down": "1522a271dc702b92509ed2602973c4f801de7bd8560d462962df99653d47f699", "33.attn_q": "c142e3cef82a1bee298ccff76b6aae971c444875b85e2f031e98fad505486cba", "33.attn_k": "31ee50751dd2142f842d17d60ef5f7250941f21b11ca2d26e387c02591e23a50", "33.attn_v": "51ea0c2781ed16b14c7446219ff27007c006b4d2b48c63e12ce5be828c82c4f2", "33.attn_output": "d70d6c3331e85cee74d744e9674110dee1737cb7c900d5d12f2a4be80a04cb90", "33.ffn_gate": "84018a5471f583ca3f3e392b0f33e1df4d4853f4d30d746825d20f86c9ce20ce", "33.ffn_up": "6a3783cd8a059cbc07eaa1cf8670c9d648e5886e2462d8ff495b097d4fd4bf79", "33.ffn_down": "2dc549479df8a9c9264a8dfef654b506671f600cb53236ab86f45230087b6b18"}, "ort_version": "1.23.3.dev20260320", "session": {"graph_optimization_level": "ORT_DISABLE_ALL", "intra_op_num_threads": 8, "execution_order": "PRIORITY_BASED", "providers": ["CPUExecutionProvider"], "prepacking": "on (ORT's default)"}, "memory": {"min_avail_gb": 15.0, "watch_min_gb": 5.0, "min_disk_gb": 25.0, "one_model_per_child": true}, "probe_line_s": 420.0, "probe_ceiling_s": 1800.0, "batch": 8, "w_bytes": 6417285120, "no_reruns": "a child that exits nonzero stops its stage, which comes to the gate as it stands; rc 4 (the memory gate or the watchdog) reads 'memory gate; not a verdict', and a memory-gate stop that produced no output may be restarted only on the gate's ruling; no logged stage is repeated otherwise; the verdict runs once"}
+PREDICTIONS_JSON [{"id": "FA-P1a", "text": "F2-A/FULL: PASS in both bands, not NARROW"}, {"id": "FA-P1b", "text": "F2-A/KV: PASS on set C, not NARROW"}, {"id": "FA-P2", "text": "F2's mean KL is at most 2.0 x R's on the same windows, in both bands and on set C (a KL ratio)"}, {"id": "FA-P3", "text": "F2's top-1 is >= 0.98 in both bands"}, {"id": "FA-P4", "text": "F2's set C mean KL is below N2's on the same windows"}, {"id": "FA-P5", "text": "R PASSES under both rules (report-only arm)"}, {"id": "FA-P6", "text": "N2 FAILS bands L and H, and PASSES set C; its NARROW is not predicted (report-only arm)"}, {"id": "FA-P7", "text": "F2 reads within both thresholds on P-R0 (report-only)"}, {"id": "FA-P8", "text": "the guard reads 0 in every F2 run"}]
+PIN_JSON [{"what": "the F2 plan", "file": "scratch/llm/hybrid_f2_plan_draft.md", "pinned": "b98787f451c11fbc9e847a4cb973b8f12b4988e3dce7729435d1fd34334a07c5", "lf_sha256": "b98787f451c11fbc9e847a4cb973b8f12b4988e3dce7729435d1fd34334a07c5", "equal": true}, {"what": "the F2-E addendum", "file": "scratch/llm/hybrid_f2e_addendum.md", "pinned": "1ad61601f743525b6c08c2de38a86bad6f32f742e756a25333d5b257f2f165ec", "lf_sha256": "1ad61601f743525b6c08c2de38a86bad6f32f742e756a25333d5b257f2f165ec", "equal": true}, {"what": "F2-E's run log", "file": "results/llm/hybrid_f2e_run_desktop2_20260925.log", "pinned": "da97478e6894a6c7904616cf12038cc031c38d493282bba76dd07e1ceca73291", "lf_sha256": "da97478e6894a6c7904616cf12038cc031c38d493282bba76dd07e1ceca73291", "equal": true}, {"what": "the F2-E tool", "file": "tools/hybrid_f2e.py", "pinned": "dac40cdffa052169e0a1a6a8c9de112a3883066e7da158f210640e5e43c83f78", "lf_sha256": "dac40cdffa052169e0a1a6a8c9de112a3883066e7da158f210640e5e43c83f78", "equal": true}, {"what": "the U6-E tool", "file": "tools/hybrid_u6e.py", "pinned": "b88d23d30c6c2ec3ffa55407dd4969957acf98e788fca47f1a703feec146e892", "lf_sha256": "b88d23d30c6c2ec3ffa55407dd4969957acf98e788fca47f1a703feec146e892", "equal": true}, {"what": "the F2-0b tool", "file": "tools/hybrid_f2_0b.py", "pinned": "7a953146eaccc4b143bb4cf3072a84f10cad10f4f54bab1ec956d3588fcda354", "lf_sha256": "7a953146eaccc4b143bb4cf3072a84f10cad10f4f54bab1ec956d3588fcda354", "equal": true}, {"what": "f2_flush_b.cc", "file": "kernels/f2_epilogue/f2_flush_b.cc", "pinned": "caa62ce055f6e1a3e8de350349ac76bef3f8d9dd521416c9fb8db0c64a2e18d4", "lf_sha256": "caa62ce055f6e1a3e8de350349ac76bef3f8d9dd521416c9fb8db0c64a2e18d4", "equal": true}]
+BLOB_JSON [{"file": "tools/hybrid_s1.py", "commit": "c67d6d2", "blob_at_commit": "51fd6829fee90a338599da20e8f273d0c1bfabf7", "blob_now": "51fd6829fee90a338599da20e8f273d0c1bfabf7", "equal": true}, {"file": "tools/hybrid_s1b.py", "commit": "b777070", "blob_at_commit": "277c70591b6756576bc1c013c71d7ee471495dc7", "blob_now": "277c70591b6756576bc1c013c71d7ee471495dc7", "equal": true}]
+F2E_PICK_JSON {"pick_line": "F2-E PICK: form B, FLUSH_B2, S = ROW, E_F2 23.28125 (every case's r_F2 <= 2 x r_R)", "output_pick": "B/B2/ROW", "ok": true}
+TOKENIZER_JSON {"files": {"tokenizer.json": true, "tokenizer.model": true, "generation_config.json": true, "added_tokens.json": true, "special_tokens_map.json": true, "tokenizer_config.json": true, "chat_template.json": true, "config.json": true}, "ok": true}
+Xet Storage is enabled for this repo, but the 'hf_xet' package is not installed. Falling back to regular HTTP download. For better performance, install the package with: `pip install huggingface_hub[hf_xet]` or `pip install hf_xet`
+C:\Users\<user>\miniforge3\envs\resnet_env17\Lib\site-packages\huggingface_hub\file_download.py:143: UserWarning: `huggingface_hub` cache-system uses symlinks by default to efficiently store duplicated files but your machine does not support them in C:\Users\<user>\.cache\huggingface\hub\datasets--Salesforce--wikitext. Caching files will still work but in a degraded version that might require more space on your disk. This warning can be disabled by setting the `HF_HUB_DISABLE_SYMLINKS_WARNING` environment variable. For more details, see https://huggingface.co/docs/huggingface_hub/how-to-cache#limitations.
+To support symlinks on Windows, you either need to activate Developer Mode or to run Python as an administrator. In order to activate developer mode, see this article: https://docs.microsoft.com/en-us/windows/apps/get-started/enable-your-device-for-development
+  warnings.warn(message)
+VAL_FILE_JSON {"file": "wikitext-2-raw-v1/validation-00000-of-00001.parquet", "revision": "b08601e04326c79dfdd32d625aee71d232d685c3", "bytes": 657209, "sha256": "204929b7ff9d6184953f867dedb860e40aa69c078fc1e54b3baaa8fb28511c4c", "bytes_pinned": 657209, "sha256_pinned": "204929b7ff9d6184953f867dedb860e40aa69c078fc1e54b3baaa8fb28511c4c", "equal": true}
+TEXT_JSON {"text_tokens": 257290, "offsets": [[0, 3071], [3071, 6142], [6142, 9213], [9213, 12284], [12284, 15355], [15355, 18426], [18426, 21497], [21497, 24568], [24568, 27639], [27639, 30710], [30710, 33781], [33781, 36852], [36852, 39923], [39923, 42994], [42994, 46065], [46065, 49136]], "window_sha": ["ef1538801e6a7637c4e0cb3d302b465619cd17ce142344a6eb4930bbeb2eeb10", "4778ac4b4b281a269a5a11985401c3d9262bdf63b81a874e01ba5066866f010e", "c4a46120843feb00fdbaa9be7cdf7e2a30e40bb4f4b66c9a3e1a6746758d6700", "d7f98724a932566c3e33744d0d6dc949223366eb4c72fcc8c776929f989bcf72", "8d3f46f5db2c13cb1b3e5d43abbb8a2b94e961ab3df00093a1650c3a2704d62b", "89af0f73deab3caa071d42094b1e540badfae700ba46262ffe61d96cf0258ecd", "920aa944ef0583df1a433b6a93a63c34ed0c492d0bb8687dd78af381c72aff54", "0a330e4d0429fdf61c23a60c2a819bd8eaa914b3f8af65598e7778513498e336", "0667dc356a5406502595729d33b1e58d9ddb4371c645d2174247ad99422eec65", "edcc3e67a69bde35064b9559c76eedbbc3e6f24ebf0386afba87020f7a6c0cb2", "a24baa970a9be493767fbfeeb167597571910e9722a24932edb5295c9678b2e5", "feba98c66a5ea7bf228702e1b4864d4c154e96df3919e1d5ff1be7ab80727615", "223a32867830263af6a4155465c881a61d77465c60051541745769c726bb208e", "556ae4b2ca22dd8e8b7fdf2884a32b42d33cec098ec3083bc1e5bc3300486fb7", "3e3f3185236b6216204a6b94573478687fa34944b95b807139a0dc6530bc1c1f", "2141379223475b36b3f73abd984b4c1d494685707c6ac6a34d2a74765fc56bc5"], "prompt_sha": ["e364e9adee49541f36a303ef129f9fb505df9c263079da15f4948ee63a6fe411", "08df6108d89e90b16c862f36b19ff7cb51d325b28781f2544f9d8cc4968dbb56", "e2a3f1961051acabcf91afe90fa322f824d7a1efd81adbc3c1af2e0a4f0d498d", "fd0b6efd225e536c2fb84b986d6ff2084dce1b734d0049c87114f8d3893e1863", "42836e6253c60002867cb95bbea974c569360b285cec0aac7c8d81a1cd97129b", "e5c3aeb9909ed3e0ba8d9e6d5a5a29158199a9fc58338a4fc9dee4f84d96c76a", "412db483924820e3fd7f4c3934cb50a1c3131cba6e98dc6e43c360b8f0f25594", "12fc884eaae178009a6727b6e292040ea7184253476bd85f597b7b064205f05e", "0f3623f157762468b6bce97c0a2a7e18372897d9ff46dc9f595c31aa71b776f6", "01b10487566a96ee8c6e4913e0414bab9616e7b46ee240ad33bd9678037a5020", "e96cd15ed4d2c609276a56754d62604dae5d6b9349f7312ac45dcf8dc640f999", "a52f5aa4e67385b5106a6f0816f47c6c0347bd318c9ebbe55735d0a591ee6e5a", "8f729781ab28c51735172f78085b001dfd6a6eb885c296bfa92cd09b06e1e875", "533cf61a380e4ecbd77346a4f85b460d5ba670182b3b91a803f160065a75cb81", "e0eec24e32f8e60f595b30481548b5b5465c282444b06b6b5fb9a8e4eeddb784", "f525924f4679bd4675803ea4e264a15bd804ce0975a3f34636cfd1710bc5b918"], "all_sha": "4d027aafcc63df4a99b2047d6071270ebc4004ebba2a1b6a4b42ef71a0636f95", "first": 0, "end": 49136, "left": 208154, "asserts": {"start_after_s1": true, "pairwise_disjoint": true, "inside_text": true, "no_s1_prompt_sha": true, "ok": true, "windows_full": true}, "prior": {"s1_seq_sha": 16, "s1b_prompt_sha": 84}}
+TEXT: 257290 tokens in the joined validation split; 16 windows of 3072 ids from 0 to 49136, 208154 tokens left; asserts: pairwise disjoint True, inside the text True, every window whole True, no prompt sha among S1's 16 and S1b's 84 True
+MODEL_PIN_JSON {"source": "hybrid_s1_build_desktop2_20260924_r2.log BUILD_JSON (base.onnx.data: hybrid_s1 SRC_PIN)", "source_lf_sha256": "cf02c7915dc8c4397d71bf2a2951eb3a32c92a5b7995580ebd332eda0de4738f", "equal": true, "files": {"R0.onnx": {"pin": [432992, "a0a7d785e8dafb387189d76e2e3aedcd4425a26a130ec0142b1e13e0049b1904"], "logged": [432992, "a0a7d785e8dafb387189d76e2e3aedcd4425a26a130ec0142b1e13e0049b1904"]}, "R.onnx": {"pin": [432992, "b960a9193a9ab3e19fe1d823bf828ae52523eb60a3349da27011bc6e7ee1b94e"], "logged": [432992, "b960a9193a9ab3e19fe1d823bf828ae52523eb60a3349da27011bc6e7ee1b94e"]}, "N2.onnx": {"pin": [903332, "7ac950ad4978205e3afcdde62674b09b8efc0787374c4c456810b9b8b626d1ac"], "logged": [903332, "7ac950ad4978205e3afcdde62674b09b8efc0787374c4c456810b9b8b626d1ac"]}, "int8.onnx.data": {"pin": [3216719872, "ceef81a2b70f4651b83bae28e04d18edcddebb26bc409492653cf477de338a5b"], "logged": [3216719872, "ceef81a2b70f4651b83bae28e04d18edcddebb26bc409492653cf477de338a5b"]}, "base.onnx.data": {"pin": [7644053504, "11edd445f01760ab1d44d8197fd75e40ae805b968522848d101373c804fb8380"], "logged": [7644053504, "11edd445f01760ab1d44d8197fd75e40ae805b968522848d101373c804fb8380"]}}}
+VERDICT_SOURCES_JSON [{"name": "control_outcome", "sha256": "1234573c5bbd6f3f3b59a0abee101ed8c8e806910486918892034159de542ae3"}, {"name": "outcome_kv", "sha256": "5b99193309e9b53d727b6184a9acabe9628f50e449bf289ba82fd0b09aff7372"}, {"name": "outcome_full", "sha256": "29e86b3a7e9919d68f222335998d78a8985a7b7bf249fde5345a5edfa409d754"}, {"name": "combination", "sha256": "3d6f33a4c1ca2f061136c5ad03dee0490d2b60656b92b29640e276fd44e4f9cb"}, {"name": "headline", "sha256": "a82eb0d9de5c8120ab8d94cda01079356a7761f75ae9aade7755f2a73276e111"}, {"name": "score_predictions", "sha256": "a7f9da5f1930893153d10fec7f87de0902a8e2c9648b0c3b44f953e2b011adab"}, {"name": "hybrid_s1b.offsets", "sha256": "cdc0a477a1dc60e2bb9d96311fda37d1a5d66d34c805b0257139667b9b17b299"}, {"name": "hybrid_s1b.window_asserts", "sha256": "ebe40a25ce6d78be5d12c79fcf1b82a66648e8fc39033905d765a7426bc9e9c2"}, {"name": "hybrid_s1b.slice_kv", "sha256": "c7432c4d201d9c1b73019e20a094e13a81db4349d41e8052b8e732cdf9d82dba"}, {"name": "hybrid_s1b.window_metrics", "sha256": "e6ee43c88db7b8add1852a2130f5b305e8ce83b53e9cf8396c3652dbcd16af72"}, {"name": "hybrid_s1b.set_aggregate", "sha256": "6828704173321db261cfbd9d8398ade56ed8b2e6e26fb145dbaf3a46dab25b24"}, {"name": "hybrid_s1b.halves", "sha256": "236af8cceb6e1d40557b3e3cba8f6eecfb9d892ec2871bc1b0a114f59f524a72"}, {"name": "hybrid_s1b.rule_set", "sha256": "7376df0c399c174baec0a2097b1d4a9d355a43862c70047c3ae530f6e3c93286"}, {"name": "hybrid_s1.log_softmax_rows", "sha256": "b36b24ba49bad66aeea1c5f0eb1545bc6734e2ba451f7381c19447f05949d805"}, {"name": "hybrid_s1.logits_chunk", "sha256": "c2af2f923d6682771819cc04ccd0b1af93be667c091961bbebfc526fe5211497"}, {"name": "hybrid_s1.kl_top1_chunk", "sha256": "b7d57aee6db2f5f5889a6a4a1ded8bf5b73a037a0c4ace23b47775806e017bbc"}, {"name": "hybrid_s1.band_rows", "sha256": "6e13864331c5b3c152e7b3a9693c5cf63f35ea0504bdb1c877790a834d5c7f10"}, {"name": "hybrid_s1.bootstrap", "sha256": "bcc8a04df2c22cfe54ae55347aafff72b16ac7c9a8d492b93018a4469372ff73"}, {"name": "hybrid_s1.aggregate", "sha256": "cccb3a6f9cb95fb1ce557887c8288f1ee144fd7f380113a7dfb15c5ca0c2ae76"}, {"name": "hybrid_s1.rule", "sha256": "b19335bdc91e4a182812d29f1a854968f3c9b860dd60f647446b3319a8100016"}, {"name": "hybrid_s1.max_kl", "sha256": "35d7845e463f1a99f701dcbd059305e26f425ca0d0ca234e01f739f935d8012f"}]
+PREREG_TEXT_SHA256 e240856939dd21e966a8bdd96776ba1f0a11017f354bb634c568ea7fa20d8242
+PROTOCOL_JSON_SHA256 db9b80a7feefe19a45916f78c51c3066bc2b6757b8257c0d80736a94e58f51aa
+VERDICT_CODE_SHA256 c375a45e396377d844a97e87b3757be387507f2421d393f7e0ca338e6bdeb749
+PREREG_TEXT_EQUALS_ACCEPTED True (the accepted text's LF sha256 e240856939dd21e966a8bdd96776ba1f0a11017f354bb634c568ea7fa20d8242)
+PREREG OK
