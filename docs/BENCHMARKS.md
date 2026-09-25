@@ -4707,13 +4707,14 @@ That is 4 HIT, 5 MISS and 3 NOT SCORED.
 [prereg](../results/llm/hybrid_s1_prereg_desktop2_20260924.log); amended at `71493f8`,
 [amended prereg](../results/llm/hybrid_s1_prereg_desktop2_20260924_amended.log); the tool is
 `tools/hybrid_s1.py`, the runner `scripts/hybrid-stack.sh s1-*`).
-- S1 is the numerics gate of the hybrid Gemma 3 4B stack, in which the NPU would take the prompt and the 780M
-  the generation.
+- S1 is the numerics gate of the hybrid Gemma 3 4B stack. In design v3 the NPU runs the prompt's seven weight
+  GEMMs per layer, and the 780M runs attention (building its own KV) and the generation.
 - Its question: do 3c's int8 and bf16 arithmetics on the seven linears of all 34 layers keep the model's
   next-token distribution on real text, with everything else as the reference?
-- It runs on the CPU. C1 ties the arms to 3c's NPU:
-  - N1 and N2 reproduce the NPU's int32 bit for bit (3c's NPU int8 output equalled the exact product in every
-    window);
+- It runs on the CPU. The arms stand for 3c's NPU as follows:
+  - N1's int32 equals 3c's NPU int32 (C1, MEASURED).
+  - N2's int32 is the exact product (C1, MEASURED). 3c's NPU int8 kernel produced the exact product in every
+    window, but on per-tensor codes, so N2 reproducing the NPU is DERIVED, not measured.
   - N3 reproduces N-bf16 up to accumulation order.
 
 **The workload.**
@@ -4772,8 +4773,10 @@ That is 4 HIT, 5 MISS and 3 NOT SCORED.
   - each heavy child ends itself (rc 4) below 5.0 GB available.
 - The rules and the verdict code did not change, and the prereg's TEXT_JSON is byte-identical.
 - The gate's three mechanism reads, pre-registered before the re-run, were all MET:
-  1. In N3's profile, 1 cast ran before the first weight MatMul, and at most 1 cast output was alive at once.
-     The profile is not committed: 1,136,643 B, sha256 `7bb59daa…`.
+  1. The gate's reading of the committed profile
+     ([N3 profile](../results/llm/hybrid_s1_n3_profile_desktop2_20260924.json), ORT's profile of the re-run's
+     N3 probe, the raw record behind this read): all 238 weight casts and their MatMuls are in it, 1 cast ran
+     before the first weight MatMul, and at most 1 cast output was alive at once.
   2. N3's peak private was 2.84 GB and its peak working set 8.3 GB, against limits of 8 and 14.
   3. BUILD OK: five probes rc 0, with no abort or refusal.
 - R0's sequence 0 took 50.4 s in the re-run's probe, against 21.1 s in the stopped build and 18.5 s in
@@ -4830,7 +4833,7 @@ That is 3 HIT and 1 MISS.
   peaked at 6.31 GB private and 7.5 GB working set.
 - Every child started at 17.3 GB available or more, against the 15 GB gate.
 
-**Hashes** (every committed S1 log; CRLF working copy, then LF blob).
+**Hashes** (every committed S1 log and the N3 profile; CRLF working copy, then LF blob).
 - The prereg (`e4c5caa`): `079a28b522b28cbfab4bcd8e189a9903a99629a6bd045f1d7ba155a77a5cddba`,
   `a9cbb2b8d261756566d6fbdc2b73aa00e8c5c0269a617461cc3e647597f18dbf`.
 - The selftest (`e4c5caa`): `d0871891a67756e52a73e2ffe258866fcfc5c08e63afb1c6cf9b18bbd80bb611`,
@@ -4849,9 +4852,13 @@ That is 3 HIT and 1 MISS.
   `1a4f8528ed2eeb745f0e2a88609092c3295c49ff74790b939bccccd8b7c59eee`.
 - The verdict (`4552ea0`): `99ccb4c66f6a9ea8c1ca87285007a435031eb3c2041279232f449eb6df56f8c7`,
   `bd73a149ea948a7f98bbf11f674fc0939bf921f1014b43e5e0bf4c45dce53e10`.
+- The N3 profile, a byte copy of ORT's file, which ORT wrote with CRLF line endings (1,136,643 B; 1,203 events):
+  `7bb59daa6ed823086ed5c71f2e982e9696f11483aa6b0d59da6f81837f088705`,
+  `281bf031d993310cde8d45cc3dbf7ed78920aa622ca5959e2fd34efcaa7007a1`.
 
 **What this does not establish:**
-- An NPU run. S1 is CPU only; C1 ties N1 and N2 to 3c's NPU int32, and N3 to N-bf16 up to accumulation order.
+- An NPU run. S1 is CPU only. C1 ties N1 to 3c's NPU int32 (MEASURED). N2's tie is DERIVED: its int32 is
+  exact, and 3c's NPU gave the exact product on per-tensor codes. N3 matches N-bf16 up to accumulation order.
 - The hybrid's speed or energy. The pick label's 3c figures are isolated weight GEMMs.
 - Why N2 fails: the weights' requantization and the per-token activations are not separated.
 - A decision from band C, which is report-only.
@@ -4860,9 +4867,10 @@ That is 3 HIT and 1 MISS.
 - Decode: S1 scores prompt positions, and band C is R0 continuing on the arm's KV.
 - Other machines, ONNX Runtime versions or days.
 
-**Next: the user's decision.** Nothing here designs what follows. U6, an NPU kernel on the release's q4_0
-codes, was set by the user to "Decide after S1". The hybrid stack's next step is open, and S0, the
-GPU-runtime comparison, is not approved.
+**Next: the user's decision (2026-09-24).** Nothing here designs it. The user chose:
+1. S1b: int8 for the prompt only.
+2. S0, the GPU-runtime comparison: approved, with the INCORRECT flag as proposed (report-only).
+3. U6, an NPU kernel on the release's q4_0 codes: a plan only, with no kernel code.
 
 ### MobileViT-XXS does not survive per-tensor INT8, and AdaRound cannot save it
 

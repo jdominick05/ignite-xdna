@@ -315,9 +315,12 @@
     - **Pitfall: under ORT_DISABLE_ALL, ORT 1.23.3's default execution order can run constant-input nodes
       early.** The initial build stopped on memory in N3's probe; the cause, N3's 238 weight casts running
       ahead of their MatMuls, is INFERRED from synthetic checks that are not logged. PRIORITY_BASED keeps the
-      graph's order, and N3's profile then showed at most one cast output alive at once.
-    - What comes next is the user's decision: U6 ("Decide after S1") and the hybrid's next step. S0 is not
-      approved.
+      graph's order. The gate's reading of the committed N3 profile then showed at most one cast output alive
+      at once.
+    - **The user's decision on what follows (2026-09-24):**
+      - S1b, int8 for the prompt only;
+      - S0 approved, with the INCORRECT flag as proposed (report-only);
+      - U6 as a plan for a q4_0 NPU kernel only, with no kernel code.
     - ([BENCHMARKS](BENCHMARKS.md#hybrid-stack-s1-the-npu-numerics-gate-on-real-2048-token-prompts-bf16-n3-keeps-gemma-3-4bs-next-token-distribution-within-the-bar-and-both-int8-arms-fail-in-a-cpu-emulation-2026-09-24-desktop-2))
 - **A pre-registered size floor caught a builder defect (2026-09-23).** `tools/llm_gemv_bench.py build`
   first sized the fp16-scale variant's copies from the fp32 variant, so six DirectML rows streamed
