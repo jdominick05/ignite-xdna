@@ -31,6 +31,10 @@
 #   ./scripts/hybrid-stack.sh u6e-pins       # the input pins: hashes and sizes only, nothing computed
 #   ./scripts/hybrid-stack.sh u6e-run        # C2's anchor, the emulation, then the split and A2's threshold
 #
+# U6-0 (tools/hybrid_u6_0.py): the epilogue's cost in cycles, read off Peano's machine code. Compile only: no NPU,
+# no hardware context. Peano is called by absolute path, so no ironenv activation.
+#   ./scripts/hybrid-stack.sh u6-0           # the pins, the fixture selftest, five compiles, E (after u6e-run)
+#
 # Before s1-build, copy (c)'s C0-H16 model.onnx and model.onnx.data to scratch/llm/hybrid_s1/models/ as
 # c0h16.onnx and base.onnx.data, and text_only's config.json and tokenizer files to scratch/llm/gemma/text_only/;
 # s1-build checks every copy against (c)'s pins. build, check and states are RAM-heavy: announce them
@@ -52,6 +56,7 @@ while [ $# -gt 0 ]; do
         s1b-selftest|s1b-prereg|s1b-check|s1b-states|s1b-verdict) STAGE="${1//-/_}" ;;
         s0-baseline|s0-assets|s0-contents) STAGE="${1//-/_}" ;;
         u6e-selftest|u6e-pins|u6e-run) STAGE="${1//-/_}" ;;
+        u6-0)      STAGE=u6_0 ;;
         s0-fetch)  STAGE=s0_fetch; COMP="${2:-}"; shift ;;
         s0-addendum) STAGE=s0_addendum; SPEC="${2:-}"; shift ;;
         --machine) MACHINE="$2"; shift ;;
@@ -160,5 +165,8 @@ T6E=tools/hybrid_u6e.py
 stage_u6e_selftest() { stage_for "$T6E" hybrid_u6e_selftest selftest; }
 stage_u6e_pins()     { stage_for "$T6E" hybrid_u6e_pins pins; }
 stage_u6e_run()      { need6e selftest; need6e pins; need1b verdict; stage_for "$T6E" hybrid_u6e_run run; }
+
+T60=tools/hybrid_u6_0.py
+stage_u6_0()         { need6e run; stage_for "$T60" hybrid_u6_0 run; }
 
 "stage_$STAGE"

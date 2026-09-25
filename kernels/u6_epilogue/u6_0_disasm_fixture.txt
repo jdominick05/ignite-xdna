@@ -1,0 +1,386 @@
+# U6-0 selftest fixture, read by tools/hybrid_u6_0.py selftest (the U6-0 plan v2, section 7). Parts open with a
+# "#=== PART" line. The two OBJECT parts are the output of tools/aie_disasm.py's disassemble() (llvm-objdump -d
+# --no-show-raw-insn, Peano's own, from the pinned toolchain) on IRON-built objects from the local IRON cache, as
+# printed, with the profile path scrubbed and only the named sections kept. The SYNTHETIC part is hand-written in
+# the same format; it comes from no object and tests only the counting rules. Its crRnd write, "mov crRnd, #0xc",
+# is the form Peano printed for aie::set_rounding(conv_even) in a throwaway probe compiled for that purpose alone.
+#=== PART clock object=clock_kernels.o sha256=1561cb5fe3fb390c7385184a0dd9bc3f65cf442213675aab6dd020dcacc58aff sections=.text.clock_probe
+
+C:\Users\<user>\.npu\cache\1a0df11de1bfd54080e1a5ef\clock_kernels.o:	file format elf32-aie
+
+Disassembly of section .text.clock_probe:
+
+00000000 <clock_probe>:
+       0:      	lda	r1, [p0, #0];		nopb	;		nopxm	
+       c:      	nop	
+       e:      	nop	
+      10:      	nop	
+      12:      	nop	
+      14:      	nop	
+      16:      	lda	r0, [p0, #4]
+      1a:      	jz	r1, #0x0
+      20:      	nop	
+      22:      	nop	
+      24:      	nop	
+      26:      	or	r11, r16, r16;		mov	r12, r17
+      2e:      	paddb	[sp], #0x20;		movx	r5, #0x40;		mov	r16, #0x0
+      38:      	jz	r0, #0x0
+      3e:      	nop	
+      40:      	nop	
+      42:      	event	#0x0
+      46:      	mova	r2, #0x9;		movx	r3, #0xb
+      4c:      	mova	r4, #0x5;		movx	r6, #0x7;		vbcst.32	x4, r16
+      56:      	add.nc	lc, r0, #0x0
+      5a:      	movxm	ls, #0x0
+      60:      	nopb	;		nopa	;		nops	;		movxm	le, #0x0;		nopv	
+      70:      	nopb	;		nopa	;		nops	;		nopxm	;		nopv	
+      80:      	nopb	;		nopa	;		nops	;		nopxm	;		nopv	
+      90:      	nopb	;		nopa	;		nops	;		nopxm	;		nopv	
+      a0:      	nopb	;		nopa	;		nops	;		nopxm	;		nopv	
+      b0:      	nopb	;		mova	r17, #0x0;		nops	;		nopxm	;		nopv	
+
+000000c0 <.LBB0_3>:
+      c0:      	nopb	;		nopa	;		nops	;		nopx	;		vbcst.32	x0, r17;		nopv	
+
+000000d0 <.L_LEnd3>:
+      d0:      	nopb	;		nopa	;		nops	;		add	r17, r17, #0x1;		vadd.32	x4, x0, x4;		nopv	
+
+000000e0 <.LBB0_4>:
+      e0:      	nopa	;		vshuffle	x2, x4, x4, r3
+      e6:      	vadd.32	x0, x2, x4
+      ea:      	vshuffle	x2, x0, x0, r2
+      ee:      	vadd.32	x0, x2, x0
+      f2:      	vshuffle	x2, x0, x0, r6
+      f6:      	j	#0x0
+      fc:      	vadd.32	x0, x2, x0
+     100:      	vshuffle	x2, x0, x0, r4
+     104:      	vadd.32	x0, x2, x0
+     108:      	vextract.s32	r2, x0, r16
+     10c:      	event	#0x1
+
+00000110 <.LBB0_5>:
+     110:      	nopb	;		nopa	;		nops	;		jz	r0, #0x0;		nopv	
+     120:      	nopa	;		nopx	
+     126:      	nop	
+     128:      	mov	p0, sp
+     12c:      	paddb	[p0], #-32
+     130:      	st	r16, [p0, #0];		event	#0x0
+     136:      	add.nc	lc, r0, #0x0
+     13a:      	movxm	ls, #0x0
+     140:      	nopb	;		mova	r17, #0x0;		nops	;		movxm	le, #0x0;		nopv	
+
+00000150 <.LBB0_7>:
+     150:      	nopb	;		lda	r2, [p0, #0];		nops	;		nopxm	;		nopv	
+     160:      	nopb	;		nopa	;		nops	;		nopxm	;		nopv	
+     170:      	nopb	;		nopa	;		nops	;		nopxm	;		nopv	
+     180:      	nopb	;		nopa	;		nops	;		nopxm	;		nopv	
+     190:      	nopb	;		nopa	;		nops	;		nopxm	;		nopv	
+     1a0:      	nopa	;		nopxm	
+     1aa:      	nop	
+     1ac:      	add	r2, r17, r2
+
+000001b0 <.L_LEnd2>:
+     1b0:      	nopb	;		nopa	;		st	r2, [p0, #0];		add	r17, r17, #0x1;		nopm	;		nopv	
+
+000001c0 <.LBB0_8>:
+     1c0:      	nopb	;		lda	r2, [p0, #0];		nops	;		event	#0x1;		nopm	;		nopv	
+     1d0:      	nopa	;		nopx	
+     1d6:      	nop	
+     1d8:      	nop	
+     1da:      	nop	
+     1dc:      	nop	
+     1de:      	nop	
+
+000001e0 <.LBB0_9>:
+     1e0:      	mova	r6, #0x10;		add.nc	lc, r5, #0x0
+     1e6:      	mova	r3, #0x7f;		movxm	ls, #0x0
+     1f0:      	nopb	;		mova	r4, #0x1f;		nops	;		movxm	le, #0x0;		nopv	
+
+00000200 <.LBB0_10>:
+     200:      	nopb	;		nopa	;		nops	;		event	#0x0;		nopm	;		nopv	
+     210:      	nopb	;		nopa	;		nops	;		event	#0x1;		nopm	;		nopv	
+     220:      	nopb	;		nopa	;		nops	;		event	#0x0;		nopm	;		nopv	
+     230:      	nopb	;		nopa	;		nops	;		event	#0x1;		nopm	;		nopv	
+     240:      	nopb	;		nopa	;		nops	;		event	#0x0;		nopm	;		nopv	
+     250:      	nopa	;		nopb	;		event	#0x1;		nopm	
+     25c:      	event	#0x0
+
+00000260 <.L_LEnd1>:
+     260:      	nopb	;		nopa	;		nops	;		event	#0x1;		nopm	;		nopv	
+     270:      	movxm	ls, #0x0
+     276:      	mova	r5, #0x2;		movxm	le, #0x0
+     280:      	nopb	;		nopa	;		nops	;		lshl	r6, r16, r5;		add.nc	lc, r6, #-0x1;		nopv	
+     290:      	nopb	;		nopa	;		nops	;		nopx	;		mov	dj0, r6;		nopv	
+     2a0:      	nopb	;		nopa	;		st	r16, [p1, dj0];		add	r8, r6, #0x8;		nopm	;		nopv	
+     2b0:      	nopa	;		nopb	;		add	r9, r6, #0xc;		mov	dj0, r8
+     2bc:      	mov	dj1, r9
+     2c0:      	st	r16, [p1, dj0];		add	r7, r6, #0x4
+     2c6:      	mov	dj0, r7
+     2ca:      	st	r16, [p1, dj1];		add	r6, r16, #0x4
+
+000002d0 <.LBB0_12>:
+     2d0:      	nopb	;		nopa	;		st	r16, [p1, dj0];		lshl	r7, r6, r5;		nopm	;		nopv	
+     2e0:      	mov	dj0, r7
+     2e4:      	st	r16, [p1, dj0];		add	r8, r7, #0xc
+     2ea:      	add	r9, r7, #0x8;		mov	dj0, r8
+     2f2:      	mov	dj1, r9
+     2f6:      	st	r16, [p1, dj0];		add	r10, r7, #0x4
+     2fc:      	mov	dj0, r10
+
+00000300 <.L_LEnd0>:
+     300:      	nopb	;		nopa	;		st	r16, [p1, dj1];		add	r6, r6, #0x4;		nopm	;		nopv	
+     310:      	mova	r5, #-0x10;		mov	r6, CORE_ID
+     316:      	st	r16, [p1, dj0];		lshl	r5, r6, r5
+     31c:      	st	r1, [p1], #4;		ret lr	
+     322:      	st	r0, [p1], #4;		and	r1, r6, r4
+     328:      	st	r1, [p1], #4;		and	r0, r5, r3
+     32e:      	st	r0, [p1, #0]
+     332:      	st	r2, [p1, #4]
+     336:      	paddb	[sp], #-0x20;		or	r17, r12, r12;		mov	r16, r11
+#=== PART w4a8 object=w4a8_native_default_64x256x64.o sha256=36bef06711afb8e8b339eb146ad4778ddcec09bcb03b65f23250e5dd34054fa4 sections=.text.mm_i8i4_native
+
+C:\Users\<user>\.npu\cache\19aae8d8d5e4da692c626ddd\w4a8_native_default_64x256x64.o:	file format elf32-aie
+
+Disassembly of section .text.mm_i8i4_native:
+
+00000000 <mm_i8i4_native>:
+       0:      	nopa	;		nopb	;		nopx	;		mov	r28, p0;		nops	
+       e:      	paddb	[sp], #0x40;		mov	r29, p1
+      14:      	st	r22, [sp, #-40]
+      18:      	mov	r22, p2
+      1c:      	st	r16, [sp, #-64]
+      20:      	st	r17, [sp, #-60]
+      24:      	st	r18, [sp, #-56]
+      28:      	mova	r6, #0x80;		st	r19, [sp, #-52];		movx	r4, #0x10;		mov	r3, #0x0
+      34:      	mova	r7, #0x6;		st	r20, [sp, #-48];		movxm	r0, #0x400
+      40:      	mova	r9, #0xc;		st	r21, [sp, #-44];		movxm	r8, #0x1000
+      4c:      	mova	r11, #-0x4;		st	r23, [sp, #-36];		movxm	r10, #-0xc00
+      58:      	mova	r5, #0x300;		st	p6, [sp, #-32];		movxm	r12, #-0x800
+      64:      	mova	r15, #0x300;		st	p7, [sp, #-28];		movx	r14, #-0x400;		mov	r13, #0x2
+
+00000070 <.LBB4_1>:
+      70:      	mov	p1, r22
+      74:      	mov	p3, r22
+      78:      	mov	p4, r22
+      7c:      	mov	p5, r22
+      80:      	lshl	r24, r15, r13;		mov	p0, r28
+      88:      	movxm	r1, #0x800
+      8e:      	add	r25, r24, r10;		mov	p6, r28
+      96:      	add	r27, r3, r1;		mov	p7, r28
+      9e:      	movxm	r1, #0xc00
+      a4:      	add	r26, r24, r12;		mov	m0, r25
+      ac:      	add	r25, r24, r14;		mov	m1, r26
+      b4:      	mov	m2, r25
+      b8:      	paddb	[p1], m0;		mov	m0, r24
+      be:      	paddb	[p4], m1;		add	r24, r3, r0;		mov	m1, r27
+      c8:      	paddb	[p5], m0;		mov	m0, r24
+      ce:      	padds	[p3], m2;		paddb	[p6], m1;		mov	m2, r3
+      d8:      	paddb	[p7], m2;		mov	r17, p6
+      de:      	mov	r18, p7
+      e2:      	add	r24, r3, r1;		mov	p7, r28
+      ea:      	paddb	[p7], m0;		mov	m0, r24
+      f0:      	paddb	[p0], m0;		mov	r19, p7
+      f6:      	mova	r24, #0x40;		movx	r25, #-0x2;		mov	r20, p0
+
+00000100 <.LBB4_2>:
+     100:      	vlda	amlh1, [p1, #0x20];		nopb	;		nopx	
+     108:      	vlda	amlh2, [p4, #0x20]
+     10c:      	vlda	amlh4, [p3, #0x20]
+     110:      	vlda	amlh6, [p5, #0x20];		mov	p0, p1
+     116:      	vlda	amll1, [p0], #0x40
+     11a:      	vlda	amhh1, [p0, #0x20]
+     11e:      	vlda	amhl1, [p0], #0x40
+     122:      	vlda	amlh0, [p0, #0x20];		add	r26, r24, #-0x40;		mov	p7, r29
+     12c:      	vlda	amll0, [p0, #0x0];		mov	m0, r26
+     132:      	vlda	amhh0, [p0, #0x60];		paddb	[p7], m0
+     138:      	vlda	amhl0, [p0, #0x40];		vldb	wh2, [p7, #0x20];		mov	r16, p5
+     142:      	vlda	wl2, [p7], #0x200;		mov	p0, p4
+     148:      	vlda	amll2, [p0], #0x40;		add.nc	lc, r4, #-0x1
+     14e:      	vlda	amhh2, [p0, #0x20];		movxm	ls, #0x0
+     158:      	vlda	amhl2, [p0], #0x40;		movxm	le, #0x0
+     162:      	vlda	amlh3, [p0, #0x20];		mov	r27, p1
+     168:      	vlda	amll3, [p0, #0x0];		mov	r31, p4
+     16e:      	vlda	amhh3, [p0, #0x60];		mov	r30, p3
+     174:      	vlda	amhl3, [p0, #0x40];		mov	p0, p3
+     17a:      	vlda	amll4, [p0], #0x40;		mov	p2, r17
+     180:      	vlda	amhh4, [p0, #0x20];		mov	p6, r20
+     186:      	vlda	amhl4, [p0], #0x40;		mov	p1, r20
+     18c:      	vlda	amlh5, [p0, #0x20];		mov	p4, r18
+     192:      	vlda	amll5, [p0, #0x0];		vldb	wh10, [p4, #0x20];		mov	m0, r24
+     19c:      	vlda	amhh5, [p0, #0x60];		vldb	wl10, [p4], #0x40;		mov	p3, r19
+     1a6:      	vlda	amhl5, [p0, #0x40];		vldb	wh8, [p3, #0x20];		mov	p0, p5
+     1b0:      	vlda	amll6, [p0], #0x40;		vldb	wl8, [p3], #0x40;		mov	p5, r29
+     1ba:      	vlda	amhh6, [p0, #0x20];		paddb	[p5], m0;		mov	r21, p7
+     1c4:      	vlda	amhl6, [p0], #0x40;		vldb	wh0, [p5, #0x20];		mov	r1, p4
+     1ce:      	vlda	wl0, [p5], #0x200;		mov	r23, p3
+     1d4:      	vlda	amlh7, [p0, #0x20];		vldb	wh5, [p2, #0x20];		mov	r26, p5
+     1de:      	vlda	amll7, [p0, #0x0];		vldb	wh7, [p6, #0x20];		mov	p6, p5
+     1e8:      	vlda	amhh7, [p0, #0x60];		vldb	wl7, [p1], #0x40;		mov	p5, p7
+     1f2:      	vlda	amhl7, [p0, #0x40];		vldb	wl5, [p2], #0x40;		mov	p0, p1
+     1fc:      	mov	p7, p2
+
+00000200 <.LBB4_3>:
+     200:      	nopb	;		nopa	;		nops	;		nopx	;		mov	r2, p1;		nopv	
+     210:      	nopa	;		mov	p1, r21
+     216:      	vmov	x1, x0
+     21a:      	vlda	wl2, [p5], #0x200;		vmov	x3, x2
+     220:      	vldb	wh2, [p1, #0x20];		mov	p1, r1
+     226:      	vldb	wl10, [p4], #0x40;		mov	r21, p5
+     22c:      	vlda	wl0, [p6], #0x200;		mov	r1, p4
+     232:      	vlda	wh6, [p7], #0x40;		vldb	wh10, [p1, #0x20];		mov	p1, r26
+     23c:      	vldb	wh4, [p0], #0x40;		mov	r26, p6;		vmac	cm1, cm1, x10, x2, r5
+     246:      	vldb	wh5, [p2, #0x20];		mov	p2, p7;		vmac	cm2, cm2, x8, x2, r5
+     250:      	vlda	wl8, [p3], #0x40;		vldb	wh0, [p1, #0x20];		mov	p1, r23;		vmac	cm0, cm0, x10, x0, r5
+     25c:      	mov	r23, p3;		vmac	cm4, cm4, x5, x3, r5
+     264:      	vldb	wh8, [p1, #0x20];		mov	p1, r2;		vmac	cm5, cm5, x5, x1, r5
+     26e:      	vldb	wh7, [p1, #0x20];		mov	p1, p0;		vmac	cm3, cm3, x8, x1, r5
+     278:      	vmov	wl5, wh6;		vmac	cm6, cm6, x7, x3, r5
+
+00000280 <.L_LEnd4>:
+     280:      	nopb	;		nopa	;		nops	;		nopx	;		vmov	wl7, wh4;		vmac	cm7, cm7, x7, x1, r5
+     290:      	vmac	cm8, cm1, x10, x2, r5
+     294:      	nop	
+     296:      	nop	
+     298:      	nop	
+     29a:      	mov	p1, r27;		vmac	cm1, cm0, x10, x0, r5
+     2a2:      	vst	amlh8, [p1, #0x20]
+     2a6:      	vst	amll8, [p1], #0x40
+     2aa:      	vst	amhh8, [p1, #0x20]
+     2ae:      	vst	amhl8, [p1], #0x40;		vmac	cm0, cm2, x8, x2, r5
+     2b6:      	vst	amlh1, [p1, #0x20]
+     2ba:      	vst	amll1, [p1], #0x40
+     2be:      	vst	amhh1, [p1, #0x20]
+     2c2:      	vst	amhl1, [p1], #0x40;		mov	p4, r31;		vmac	cm2, cm3, x8, x0, r5
+     2cc:      	vst	amlh0, [p4, #0x20]
+     2d0:      	vst	amll0, [p4], #0x40
+     2d4:      	vst	amhh0, [p4, #0x20]
+     2d8:      	vst	amhl0, [p4], #0x40;		vmac	cm3, cm4, x5, x2, r5
+     2e0:      	vst	amlh2, [p4, #0x20]
+     2e4:      	vst	amll2, [p4], #0x40
+     2e8:      	vst	amhh2, [p4, #0x20]
+     2ec:      	vst	amhl2, [p4], #0x40;		mov	p3, r30;		vmac	cm4, cm5, x5, x0, r5
+     2f6:      	vst	amlh3, [p3, #0x20]
+     2fa:      	vst	amll3, [p3], #0x40
+     2fe:      	vst	amhh3, [p3, #0x20]
+     302:      	vst	amhl3, [p3], #0x40;		vmac	cm5, cm6, x7, x2, r5
+     30a:      	vst	amlh4, [p3, #0x20]
+     30e:      	vst	amll4, [p3], #0x40
+     312:      	vst	amhh4, [p3, #0x20]
+     316:      	vst	amhl4, [p3], #0x40;		mov	p5, r16;		vmac	cm6, cm7, x7, x0, r5
+     320:      	vst	amlh5, [p5, #0x20];		add	r25, r25, #0x2
+     326:      	vst	amll5, [p5], #0x40;		ltu	r26, r25, r7
+     32c:      	vst	amhh5, [p5, #0x20];		jnz	r26, #0x0
+     336:      	vst	amhl5, [p5], #0x40
+     33a:      	vst	amlh6, [p5, #0x20]
+     33e:      	vst	amll6, [p5], #0x40
+     342:      	vst	amhh6, [p5, #0x20]
+     346:      	vst	amhl6, [p5], #0x40;		add	r24, r24, r6
+     34c:      	add	r11, r11, #0x4
+     350:      	ltu	r24, r11, r9
+     354:      	jnz	r24, #0x0
+     35a:      	nop	
+     35c:      	nop	
+     35e:      	nop	
+     360:      	add	r3, r3, r8
+     364:      	add	r15, r15, r0
+     368:      	lda	p7, [sp, #-28]
+     36c:      	lda	p6, [sp, #-32]
+     370:      	lda	r23, [sp, #-36]
+     374:      	lda	r22, [sp, #-40]
+     378:      	lda	r21, [sp, #-44]
+     37c:      	lda	r20, [sp, #-48]
+     380:      	lda	r19, [sp, #-52]
+     384:      	lda	r18, [sp, #-56]
+     388:      	lda	r17, [sp, #-60]
+     38c:      	lda	r16, [sp, #-64]
+     390:      	ret lr	
+     394:      	nop	
+     396:      	nop	
+     398:      	nop	
+     39a:      	nop	
+     39c:      	paddb	[sp], #-0x40
+
+#=== PART synthetic hand-written, from no object
+
+Disassembly of section .text.syn_full:
+
+00000000 <syn_full>:
+       0:      	mov	crRnd, #0xc
+       4:      	vmul	cm0, x0, x2, r5
+       8:      	add.nc	lc, r0, #0x0
+       c:      	movxm	ls, #0x0
+      12:      	movxm	le, #0x0
+
+00000020 <.LBB90_1>:
+      20:      	vlda	wl0, [p0], #0x40;		vmul	cm0, x0, x2, r5
+      26:      	vmac	cm0, cm0, x1, x3, r5
+      2a:      	vmul.f	bml0, x4, x5, r1
+      2e:      	vmac.f	bml0, bml0, x6, x7, r1
+      32:      	vst	wl1, [sp, #-32]
+
+00000040 <.L_LEnd90>:
+      40:      	vst	wl0, [p1], #0x40;		vmac.f	bml1, bml1, x8, x9, r1
+      46:      	ret	lr
+
+Disassembly of section .text.syn_ctrl:
+
+00000000 <syn_ctrl>:
+       0:      	add.nc	lc, r0, #0x0
+       4:      	movxm	ls, #0x0
+       a:      	movxm	le, #0x0
+
+00000010 <.LBB91_1>:
+      10:      	vlda	wl0, [p0], #0x40;		vmul	cm0, x0, x2, r5
+      16:      	vmac	cm0, cm0, x1, x3, r5
+
+00000020 <.L_LEnd91>:
+      20:      	vst	wl0, [p1], #0x40
+      24:      	ret	lr
+
+Disassembly of section .text.syn_split:
+
+00000000 <syn_split>:
+       0:      	add.nc	lc, r0, #0x0
+
+00000010 <.LBB92_1>:
+      10:      	vmul	cm0, x0, x2, r5
+
+00000020 <.L_LEnd92>:
+      20:      	nop
+      22:      	add.nc	lc, r0, #0x0
+
+00000030 <.LBB92_2>:
+      30:      	vmac	cm0, cm0, x1, x3, r5
+
+00000040 <.L_LEnd93>:
+      40:      	nop
+      42:      	ret	lr
+
+Disassembly of section .text.syn_crin:
+
+00000000 <syn_crin>:
+       0:      	add.nc	lc, r0, #0x0
+
+00000010 <.LBB94_1>:
+      10:      	mov	crRnd, r2;		vmul	cm0, x0, x2, r5
+
+00000020 <.L_LEnd94>:
+      20:      	vmac	cm0, cm0, x1, x3, r5
+      24:      	ret	lr
+
+Disassembly of section .text.syn_tofloat:
+
+00000000 <syn_tofloat>:
+       0:      	add.nc	lc, r0, #0x0
+
+00000010 <.LBB95_1>:
+      10:      	vlda	wl0, [p0], #0x40;		vldb	wh0, [p0, #0x20]
+      16:      	vshuffle	x2, x0, x0, r3
+      1a:      	vadd	cm0, cm0, cm1, r0
+      1e:      	vsub.f	bml0, bml0, bml1, r0
+      22:      	vadd.f	bml0, bml0, bml2, r0
+      26:      	mov	r1, r2
+
+00000030 <.L_LEnd95>:
+      30:      	vst	wl2, [p1], #0x40;		vmov	x3, x2
+      36:      	ret	lr
