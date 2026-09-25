@@ -788,9 +788,13 @@ def nested_tar(z, info) -> dict:
     and its links with their targets (the dangling ones named: amendment 4 (e), TheRock #7807). Nothing extracted.
     Memory stays bounded: the zip member is read as a stream and the tar in stream mode ("r|*"), one member's data
     at a time; only a matching DLL's own bytes are held, for its PE read. tarfile keeps each member's header (a
-    TarInfo, well under 1 kB), about 7,000 for _devel.tar; contents() logs the peak working set."""
+    TarInfo, well under 1 kB), about 7,000 for _devel.tar; contents() logs the peak working set.
+    A link resolves if its target is a file, a link, an explicit directory, an ancestor directory of any of those,
+    or the archive's root. The limit: links are not followed, so a target reached THROUGH another symlinked
+    directory (lib64 -> lib, then lib64/x) is not resolved, and the dangling list is an upper bound
+    ("links_followed": false in the record)."""
     import tarfile
-    files, links, pes, longest = [], [], [], (0, "")
+    files, links, dirs, pes, longest = [], [], set(), [], (0, "")
     with z.open(info) as raw, tarfile.open(fileobj=raw, mode="r|*") as t:
         for m in t:
             if len(m.name) > longest[0]:
@@ -801,7 +805,17 @@ def nested_tar(z, info) -> dict:
                 files.append((norm_member(m.name), m.size))
                 if PE_NAMES.search(m.name):
                     pes.append({"member": m.name, **pe_info(t.extractfile(m).read())})
-    names = {n for n, _ in files} | {n for n, _, _ in links}
+            elif m.isdir():
+                dirs.add(norm_member(m.name))
+    names = {n for n, _ in files} | {n for n, _, _ in links} | dirs
+
+    def ancestors(n):
+        """Every parent directory of a member name, nearest first; stops at '' (relative) or '/' (absolute)."""
+        d = posixpath.dirname(n)
+        while d and d != "/":
+            yield d
+            d = posixpath.dirname(d)
+    names |= {a for n in names for a in ancestors(n)} | {"."}
 
     def target(name, link, kind):
         """A hard link's target is archive-relative; a symlink's is relative to its own directory. Both are put in
@@ -814,7 +828,8 @@ def nested_tar(z, info) -> dict:
                 if target(n, l, k) not in names]
     flags = {k: sorted(n for n, _ in files if rx.search(n)) for k, rx in FLAGS.items()}
     return {"tar": info.filename, "files": len(files), "uncompressed_bytes": sum(s for _, s in files),
-            "links": len(links), "dangling": dangling, "flags": {k: v for k, v in flags.items() if v},
+            "dirs": len(dirs), "links": len(links), "links_followed": False, "dangling": dangling,
+            "flags": {k: v for k, v in flags.items() if v},
             "longest_member": {"chars": longest[0], "name": longest[1]}, "pe": pes}
 
 
