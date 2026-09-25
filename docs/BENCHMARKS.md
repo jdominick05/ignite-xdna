@@ -5053,9 +5053,11 @@ totals are DERIVED from the states log's per-window seconds; GB = 1e9 bytes).
     (FULL3's 97 is 6.1–8.1×). U0-P1, P3 and P4 HOLD.
 - **Through the U6 plan's own model, route (i)'s fp32-grade per-block epilogue, in this form, does not meet the
   user's bar on time or on energy** (DERIVED from U6-0's counted E; compute only; not a silicon measurement).
-  - Compute per layer: 681 ms (635 of it the epilogue alone), 8.6× D-nb16's 79.49.
-  - With idle: 10.90 mJ per prompt token per layer, 3.8× D-nb16's 2.8569.
+  - In the plan's form, 18 ms of MACs + 6.55 ms × E: 653 ms per layer (635 of it the epilogue), 8.2× D-nb16's
+    79.49 and 1.69× C-nb4@8's 385.68.
+  - With idle: 10.46 mJ per prompt token per layer, 3.7× D-nb16's 2.8569.
   - The break-even against D-nb16, the binding with-idle rival, is E ≤ 24 cycles per block-tile.
+  - The whole loop as compiled reads 681 ms and 10.90 mJ (below).
 - **Which split U6 uses is moot for route (i) as built.** The split rule is the gate's ruling, and the user may
   override it before U6's prereg.
   - Both splits sit far over the break-even: 3-term's 97 is 4.0× it, 2-term's 68 is 2.8×.
@@ -5213,19 +5215,30 @@ MEASURED, on the CPU.
     drops out.
   - The MACs, in the plan's model, take about 18 ms (2,048 × 94,371,840 MACs over 16 cores at 372.4 MAC per cycle,
     the best measured k loop, two-point).
-  - FULL3's whole loop, 104 cycles, holds the loads and the two integer MACs as well as the epilogue. So
-    6.55 × 104 = 681 ms is this form's compute total, in place of the plan's epilogue plus 18 ms.
-  - The break-even below keeps the plan's form, 18 ms + 6.55 ms × E.
+  - **The plan's form decides:** 18 ms + 6.55 ms × E, which the break-even below also uses.
+  - FULL3's whole loop as compiled, 104 cycles, gives 6.55 × 104 = 681 ms, reported beside it. It is larger
+    because CONTROL's 7 cycles carry 1,024 MACs, 146 MAC per cycle: the test reloads A and B every tile. The
+    plan's 18 ms assumes 372.4.
 - **Energy** is at N-w4's power, the plan's assumption E2: 32.78 W with idle, 19.41 W above idle
   ([post-hoc log](../results/llm/llm_prefill3c_posthoc_desktop2_20260924.log)). A kernel kept busy by vector ops
   may draw more.
 - **Excluded:** the scale bytes (+25% W, +12.5% X), bank conflicts, lock and DMA waits, and code outside the loop.
 
-  | Form | E | Epilogue alone, ms per layer | Whole loop, cycles | Compute per layer, ms | With idle, mJ per token per layer | Above idle |
-  |---|---:|---:|---:|---:|---:|---:|
-  | 3-term (deciding) | 97 | 635 | 104 | 681 | 10.90 | 6.46 |
-  | 3-term through int16 (report-only) | 93 | 609 | 100 | 655 | 10.48 | 6.21 |
-  | 2-term (report-only) | 68 | 445 | 75 | 491 | 7.86 | 4.66 |
+  In the plan's form (deciding), per layer, and per prompt token per layer for energy:
+
+  | Form | E | Epilogue alone, ms | Compute, 18 + 6.55 × E, ms | With idle, mJ | Above idle, mJ |
+  |---|---:|---:|---:|---:|---:|
+  | 3-term (deciding) | 97 | 635 | 653 | 10.46 | 6.19 |
+  | 3-term through int16 (report-only) | 93 | 609 | 627 | 10.04 | 5.94 |
+  | 2-term (report-only) | 68 | 445 | 463 | 7.42 | 4.39 |
+
+  The whole loop as compiled (reported, not deciding):
+
+  | Form | Loop, cycles | Compute, 6.55 × loop, ms | With idle, mJ | Above idle, mJ |
+  |---|---:|---:|---:|---:|
+  | 3-term | 104 | 681 | 10.90 | 6.46 |
+  | 3-term through int16 | 100 | 655 | 10.48 | 6.21 |
+  | 2-term | 75 | 491 | 7.86 | 4.66 |
 
   The epilogue alone, with idle, reads 10.17, 9.75 and 7.13 mJ.
 
@@ -5238,14 +5251,17 @@ MEASURED, on the CPU.
   | N-bf16 | 166.00 | 2.7417 | 1.6601 |
   | N-w4 | 83.91 | 1.3425 | 0.7949 |
 
-- **So route (i) as built:**
-  - is slower than every rival, the CPU included: 681 ms against C-nb4@8's 385.68, 1.77×;
-  - uses 3.8× D-nb16's energy with idle.
-  - Its with-idle energy sits below the CPU's (10.90 against 16.31). The user's bar needs strictly below both, so
+- **So route (i) as built, in the plan's form:**
+  - is slower than every rival, the CPU included: 653 ms against C-nb4@8's 385.68, 1.69×;
+  - uses 3.7× D-nb16's energy with idle.
+  - Its with-idle energy sits below the CPU's (10.46 against 16.31). The user's bar needs strictly below both, so
     that does not earn a role.
+  - The whole loop as compiled reads 1.77× and 3.8× on the same comparisons.
 - **The break-even is against D-nb16, the binding with-idle rival.**
   - Compute must stay under 2.8569 × 2,048 / 32.78 = 178.5 ms.
   - With the plan's 18 ms of MACs, that is E ≤ (178.5 − 18) / 6.55 = 24.5, so 24 cycles per block-tile.
+  - Sensitivity, not deciding: with CONTROL's 7 cycles in place of the 18 ms, 6.55 × (7 + E) < 178.5 gives
+    E ≤ 20.
   - C-nb4@8's with-idle 16.31 is far above D-nb16's, so the CPU does not bind.
   - The plan's CPU floor, 13.37 W × 385.68 ms / 2,048 = 2.52 mJ, is an idle power times the CPU's time. It bounds
     the CPU's with-idle energy from below; it is not the CPU's energy, which is 16.31.

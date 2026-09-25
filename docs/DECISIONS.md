@@ -358,11 +358,14 @@
       - U0-P2 FAILS: the plan's 12–16 was INFERRED from SPEC rates.
       - The loop is issue-bound (INFERRED): 101 vector ops in 104 bundles. The text shows CONTROL's loop
         pipelined and does not show FULL3's.
-    - **Through the plan's model** (DERIVED; compute only; energy at N-w4's power):
-      - 681 ms per layer for the whole loop (635 of it the epilogue), 8.6× D-nb16's 79.49;
-      - 10.90 mJ per prompt token per layer with idle, against D-nb16's 2.8569.
-      - The break-even against D-nb16 is E ≤ 24. Under a one-issue-slot assumption, the census's floor for
-        3-term is 34.
+    - **Through the plan's model** (DERIVED; compute only; energy at N-w4's power), in its form, 18 ms of MACs +
+      6.55 ms × E:
+      - 653 ms per layer (635 of it the epilogue), 8.2× D-nb16's 79.49;
+      - 10.46 mJ per prompt token per layer with idle, 3.7× D-nb16's 2.8569.
+      - The whole loop as compiled reads 681 ms and 10.90 mJ; its CONTROL runs 146 MAC per cycle against the
+        plan's 372.4.
+      - The break-even against D-nb16 is E ≤ 24 (E ≤ 20 in the loop's form, a sensitivity). Under a
+        one-issue-slot assumption, the census's floor for 3-term is 34.
     - Which split U6 uses is moot for route (i) as built: 3-term's E is 4.0× the break-even and 2-term's 2.8×.
     - What remains:
       - F2 (integerized 8-bit scales), which the user's rule triggers on both readings;
