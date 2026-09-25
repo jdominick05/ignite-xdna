@@ -293,6 +293,32 @@
         window held 42 rows; at HIGH, six windows at M = 8192 still held 44–49, against a 50-row rule.
         A later row-count rule should leave headroom for the busiest arm.
       - ([BENCHMARKS](BENCHMARKS.md#prefill-weight-gemms-at-gemma-3-4bs-shapes-stage-3c-at-m--2048-the-npu-earns-a-role-on-energy-alone-speed-is-kill-at-both-m-and-m--8192-is-incomplete-on-three-missing-cpu-rivals-2026-09-24-desktop-2))
+  - **Hybrid stack S1, the NPU numerics gate: bf16 (N3) keeps Gemma 3 4B's next-token distribution
+    within the bar, both int8 arms (N1, N2) fail, and the pick is N3; a CPU emulation (2026-09-24).**
+    - Pre-registered at `e4c5caa`. Amendment 1 (`71493f8`, the user's choice) changed the sessions'
+      execution order and added a memory watchdog. The rules and the verdict code (`d78b0f48`) did not change.
+    - Results against R0 on 16 WikiText-2 prompts of 2,048 tokens:
+      - N3: mean KL 0.00008 and top-1 0.995 in both bands;
+      - N2: 0.061 / 0.052 and 0.895 / 0.911;
+      - N1: 3.51 / 3.54 and 0.287 / 0.291.
+
+      The bar is ≤ 0.0123 and ≥ 0.956 in both bands. No arm is NARROW.
+    - N3 is bf16 X and W with an fp32 MatMul on the CPU, equal to the NPU's N-bf16 up to accumulation order.
+      The NPU did not run.
+    - P2 is a MISS: the plan's preference for N2 is superseded.
+    - N2's cause is not split. N1 and N2 requantize the Q4_0 weights to int8 per column *and* quantize X,
+      while R, which keeps Q4_0 weights with int8 X per 32-block, passes (report-only).
+    - The pick label's 3c figures have 3c's scope: one block's seven weight GEMMs in isolation, per prompt
+      token, at M = 2048. They are 1.40× on energy above idle, 1.04× with the idle (post hoc,
+      report-only), and 2.09× DirectML's time.
+    - Band C is report-only and upgrades nothing.
+    - **Pitfall: under ORT_DISABLE_ALL, ORT 1.23.3's default execution order can run constant-input nodes
+      early.** The initial build stopped on memory in N3's probe; the cause, N3's 238 weight casts running
+      ahead of their MatMuls, is INFERRED from synthetic checks that are not logged. PRIORITY_BASED keeps the
+      graph's order, and N3's profile then showed at most one cast output alive at once.
+    - What comes next is the user's decision: U6 ("Decide after S1") and the hybrid's next step. S0 is not
+      approved.
+    - ([BENCHMARKS](BENCHMARKS.md#hybrid-stack-s1-the-npu-numerics-gate-on-real-2048-token-prompts-bf16-n3-keeps-gemma-3-4bs-next-token-distribution-within-the-bar-and-both-int8-arms-fail-in-a-cpu-emulation-2026-09-24-desktop-2))
 - **A pre-registered size floor caught a builder defect (2026-09-23).** `tools/llm_gemv_bench.py build`
   first sized the fp16-scale variant's copies from the fp32 variant, so six DirectML rows streamed
   0.90–0.98 GiB against a pre-registered ≥ 1 GiB, and the verdict came out INCOMPLETE (`4620b53`).

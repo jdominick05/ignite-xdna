@@ -4638,6 +4638,232 @@ That is 4 HIT, 5 MISS and 3 NOT SCORED.
 - DRAM energy: package counters only.
 - Why typeperf lost rows beside 16 pinned threads at M = 8192 and not at 2048.
 
+### Hybrid stack S1, the NPU numerics gate: on real 2,048-token prompts, bf16 (N3) keeps Gemma 3 4B's next-token distribution within the bar and both int8 arms fail, in a CPU emulation (2026-09-24, Desktop 2)
+
+**The result, with its qualifiers.**
+- **N3 (bf16) PASSES; N1 and N2 (int8) FAIL; the pick is N3.** Against R0, over 16 WikiText-2 prompts of
+  2,048 tokens, scored by the frozen verdict code `d78b0f48`
+  ([log](../results/llm/hybrid_s1_verdict_desktop2_20260924.log); MEASURED). The rule: mean KL ≤ 0.0123
+  and top-1 ≥ 0.956 in both bands. No arm is NARROW: no interval holds a threshold.
+
+  | Arm | Band | Mean KL (R0 ‖ arm) | 95% CI | Top-1 | 95% CI | Perplexity | Outcome |
+  |---|---|---:|---|---:|---|---:|---|
+  | N1 | L | 3.51274 | 3.18921–3.77869 | 0.2866 | 0.2515–0.3308 | 198.4292 | FAIL |
+  | N1 | H | 3.54095 | 3.11125–3.86334 | 0.2913 | 0.2504–0.3506 | 171.8748 | |
+  | N2 | L | 0.06077 | 0.05588–0.06582 | 0.8949 | 0.8889–0.9015 | 15.2771 | FAIL |
+  | N2 | H | 0.05204 | 0.04768–0.05649 | 0.9107 | 0.9048–0.9163 | 11.6216 | |
+  | N3 | L | 0.00008 | 0.00008–0.00009 | 0.9952 | 0.9940–0.9961 | 15.8071 | PASS |
+  | N3 | H | 0.00008 | 0.00007–0.00010 | 0.9954 | 0.9946–0.9963 | 11.8071 | |
+  | R (report-only) | L | 0.00108 | 0.00099–0.00118 | 0.9868 | 0.9849–0.9885 | 15.8021 | PASS |
+  | R (report-only) | H | 0.00098 | 0.00086–0.00114 | 0.9862 | 0.9844–0.9882 | 11.8183 | |
+
+  R0's own perplexity is 15.8020 (L) and 11.8125 (H). Perplexity is report-only; the rule reads KL and
+  top-1 against R0, not perplexity.
+- **N3's PASS is a CPU emulation of N-bf16's arithmetic, not an NPU run.** The NPU did not run in S1.
+  - N3 rounds X and W to bf16 (round to nearest even) and multiplies in fp32 (MLAS SGEMM).
+  - It equals the NPU's N-bf16 up to fp32 accumulation order, with rel-L2 per linear against the float64
+    product of the same bf16-rounded X and W:
+    - C1 measured S1's N3 at 9.4e-8 to 1.7e-7;
+    - 3c measured the NPU at 3.03e-7 to 3.44e-7 (`bf16_own` in
+      [A2](../results/llm/llm_prefill3c_sitting_A2_desktop2_20260924.log) and
+      [B](../results/llm/llm_prefill3c_sitting_B_desktop2_20260924.log)).
+  - Together that is under 1e-6 (DERIVED), against bf16 rounding's own 2.38e-3 in 3c.
+  - So the claim is scoped to bf16 arithmetic on these seven linears. It keeps Gemma 3 4B's next-token
+    distribution within the bar, on this text, against R0.
+- **The pick is N3 because neither int8 arm passes.** The pre-registered order is N2, then N1 (which requires
+  2,048-row prompt tiles), then N3, then none.
+  - The pick label carries 3c's figures for N-bf16: 1.40× fewer joules above idle than DirectML's
+    MatMulNBits, 1.04× with the idle (post hoc, report-only), and 2.09× its time.
+  - Their scope is 3c's: one block's seven weight GEMMs in isolation, per prompt token, at M = 2048
+    ([3c](#prefill-weight-gemms-at-gemma-3-4bs-shapes-stage-3c-at-m--2048-the-npu-earns-a-role-on-energy-alone-speed-is-kill-at-both-m-and-m--8192-is-incomplete-on-three-missing-cpu-rivals-2026-09-24-desktop-2),
+    [DECISIONS](DECISIONS.md#rejected-approaches-and-known-pitfalls)). They are not per token of the model.
+- **N2 FAILS on both limits in both bands, and P2 is a MISS.**
+  - The plan preferred N2: it was first in the pick, since it is batch-invariant and would let the hybrid keep
+    llama.cpp's default ubatch of 512, and P2 predicted it would pass. The verdict supersedes that preference.
+  - N2's mean KL is 4.9× (L) and 4.2× (H) the 0.0123 line, and its top-1 falls 0.061 and 0.045 short of
+    0.956 (DERIVED).
+- **N2's cause is not split.** N1 and N2 both requantize the Q4_0 weights to int8 per output column *and*
+  quantize X to int8.
+  - R keeps the Q4_0 weights with int8 X per 32-block, and passes (report-only).
+  - No S1 arm changes one of the two alone. So N2's FAIL cannot be put on per-token activations alone, or on
+    the weights' requantization alone.
+- **N1 FAILS by far** (mean KL about 3.5, top-1 about 0.29). P1 predicted it: real activations' BOS row and
+  outlier channels set a 2,048-row tile's amax. That mechanism is INFERRED, not tested.
+  - Layer 16's report-only reads fit it: the per-tensor amax is 26.2× to 44.8× the median per-token amax
+    at its four inputs.
+- **R is report-only and passes (P4 HIT).** It is ORT's MatMulNBits at accuracy level 4, the closest form ORT
+  has to llama.cpp's Q4_0 × Q8_0. It decides nothing.
+- **Band C is report-only, here and everywhere.** It is 4 sequences × 1,023 positions, with no interval.
+  N2's band-C reading (mean KL 0.00962, top-1 0.9580) is not a pass for N2 or for any hybrid. The prereg
+  says a band-C reading upgrades nothing.
+- **Scope.**
+  - One text: WikiText-2 raw test, 16 prompts of 2,048 tokens, Gemma 3's tokenizer.
+  - One reference: R0, ONNX Runtime's MatMulNBits at accuracy level 0 on the release's Q4_0 weights, where
+    d·(q − 8) is exact in fp32.
+  - One machine (Desktop 2), CPU only.
+  - KL and top-1 are against R0, not against the unquantized model or llama.cpp.
+
+**The question** (pre-registered at `e4c5caa`,
+[prereg](../results/llm/hybrid_s1_prereg_desktop2_20260924.log); amended at `71493f8`,
+[amended prereg](../results/llm/hybrid_s1_prereg_desktop2_20260924_amended.log); the tool is
+`tools/hybrid_s1.py`, the runner `scripts/hybrid-stack.sh s1-*`).
+- S1 is the numerics gate of the hybrid Gemma 3 4B stack, in which the NPU would take the prompt and the 780M
+  the generation.
+- Its question: do 3c's int8 and bf16 arithmetics on the seven linears of all 34 layers keep the model's
+  next-token distribution on real text, with everything else as the reference?
+- It runs on the CPU. C1 ties the arms to 3c's NPU:
+  - N1 and N2 reproduce the NPU's int32 bit for bit (3c's NPU int8 output equalled the exact product in every
+    window);
+  - N3 reproduces N-bf16 up to accumulation order.
+
+**The workload.**
+- **Text.** WikiText-2 raw test (`Salesforce/wikitext` at `b08601e0`, parquet sha256 `5f1bea06…`, as in (c)).
+  - Tokenized with (c)'s tokenizer, the joined split is 292,282 tokens.
+  - 16 non-overlapping sequences of BOS + 2,047 tokens.
+  - Band C uses 4 sequences of 3,072 tokens, whose first 2,048 ids are sequences 0–3.
+- **The models.** (c)'s C0-H16 graph
+  ([(c)](#gemma-3-4b-decode-on-the-cpu-and-directml-incomplete-in-both-sittings-on-the-page-in-witness-and-the-three-complete-arms-decode-at-108176-toks-2026-09-24-desktop-2)):
+  the release's Q4_0 linears as MatMulNBits, with the head cut and the hidden states out. The verdict
+  applies one fp32 head (the release's F16 head, upcast).
+- **The arms.**
+  - R0: MatMulNBits at accuracy level 0 (exact d·(q − 8), fp32 activations). The reference.
+  - R: accuracy level 4 (int8 activations per 32-block). Report-only.
+  - N1: 3c's N-i8. X per tensor over the 2,048-row tile, W per output column; MatMulInteger (u8 × s8);
+    the quantize and epilogue in float64.
+  - N2: X per token, with the same kernel and the same W codes.
+  - N3: bf16 X and W, fp32 MatMul.
+- **The metrics.**
+  - KL(R0 ‖ arm) in float64 over all 262,144 vocabulary entries, and top-1 agreement (the arm's argmax
+    equals R0's), at each position i (the logits after ids 0..i).
+  - Band L is positions 0–1,023 (16,384 per arm); band H is 1,024–2,046 (16,368).
+  - The 95% intervals come from a bootstrap over the 16 per-sequence means (10,000 resamples, seed
+    20260924).
+- **The thresholds** are (c)'s C0-H4, the int4 head's cost: KL 0.012269 and top-1 0.95601, frozen as
+  0.0123 and 0.956.
+- **The sessions.** ONNX Runtime 1.23.3's CPU EP, ORT_DISABLE_ALL, 8 threads, one model per child process.
+  From Amendment 1, also the PRIORITY_BASED execution order.
+
+**The checks** ([check log](../results/llm/hybrid_s1_check_desktop2_20260924.log); MEASURED).
+- **C1, true on all seven linears:**
+  - the X and W pins held;
+  - N1's int32 equals 3c's;
+  - N2's int32 is exact;
+  - N3's bits are RNE, with rel-L2 9.4e-8 to 1.7e-7.
+- **C2**, R's form: 7 rows, report-only. Against ORT's int8 emulation, rel-L2 3.0e-7 to 7.6e-7; against
+  llama.cpp's form, 1.28e-4 to 1.85e-4, the fp16 scale.
+- **C3**, graph identity: OK for all five graphs, 238 linears mapped and the head equal
+  ([build log](../results/llm/hybrid_s1_build_desktop2_20260924_r2.log)).
+- **C4**, R0 against torch on 2,048 real tokens: PASS. The verdict log prints the value, a max per-position
+  KL of 1.56e-9 against ≤ 1e-4.
+- **C5**, determinism: PASS, two runs with one sha256.
+- **C6**, chunked against one-shot: PASS, max KL 0 against ≤ 1e-5.
+- **Cross-log:** states' R0 sequence 0 equals C5's run
+  ([states log](../results/llm/hybrid_s1_states_desktop2_20260924.log)).
+
+**Amendment 1** (`71493f8`).
+- The initial build ([log](../results/llm/hybrid_s1_build_desktop2_20260924.log), kept as the record)
+  stopped in N3's probe. The host's memory guard stopped it with the system critically low on memory.
+  Just after the stop, N3's child read 14.48 GB working set and 10.61 GB private (the stop's facts are in
+  the amended prereg's section 11).
+- The cause, INFERRED from synthetic checks that are not logged: under ORT_DISABLE_ALL, ORT 1.23.3's default
+  order ran N3's 238 bf16-to-fp32 weight casts ahead of their MatMuls.
+- On 2026-09-24 the user chose "PRIORITY_BASED with the watchdog":
+  - every session keeps the graph's node order;
+  - each heavy child ends itself (rc 4) below 5.0 GB available.
+- The rules and the verdict code did not change, and the prereg's TEXT_JSON is byte-identical.
+- The gate's three mechanism reads, pre-registered before the re-run, were all MET:
+  1. In N3's profile, 1 cast ran before the first weight MatMul, and at most 1 cast output was alive at once.
+     The profile is not committed: 1,136,643 B, sha256 `7bb59daa…`.
+  2. N3's peak private was 2.84 GB and its peak working set 8.3 GB, against limits of 8 and 14.
+  3. BUILD OK: five probes rc 0, with no abort or refusal.
+- R0's sequence 0 took 50.4 s in the re-run's probe, against 21.1 s in the stopped build and 18.5 s in
+  states. A cold file cache after the build rewrote the model files is INFERRED. S1 times nothing that
+  decides.
+
+**Band C** (REPORT-ONLY; the arm's prompt KV, then R0 over positions 2,048–3,070, against R0 one-shot;
+4 sequences × 1,023 positions; no interval; it upgrades nothing):
+
+| Arm | Mean KL | p99 | Top-1 |
+|---|---:|---:|---:|
+| R0 (control) | 0.00000 | 0.0000 | 1.0000 |
+| R | 0.00009 | 0.0013 | 0.9954 |
+| N1 | 0.57019 | 6.1679 | 0.7251 |
+| N2 | 0.00962 | 0.1030 | 0.9580 |
+| N3 | 0.00001 | 0.0001 | 0.9973 |
+
+**Layer 16, sequence 0** (REPORT-ONLY; rel-L2 against the exact product on R0's real inputs):
+
+| Linear | R | N1 | N2 | N3 |
+|---|---:|---:|---:|---:|
+| q | 7.555e-3 | 5.543e-1 | 4.682e-2 | 1.494e-3 |
+| k | 7.010e-3 | 5.070e-1 | 5.569e-2 | 1.516e-3 |
+| v | 1.262e-2 | 7.526e-1 | 7.485e-2 | 2.084e-3 |
+| o | 4.615e-3 | 2.529e-1 | 1.326e-2 | 1.599e-3 |
+| gate | 6.148e-3 | 5.098e-1 | 3.381e-2 | 1.591e-3 |
+| up | 9.407e-3 | 7.686e-1 | 5.167e-2 | 2.122e-3 |
+| down | 8.428e-3 | 5.876e-1 | 1.043e-1 | 1.787e-3 |
+
+The per-tensor amax over the median per-token amax: x_attn 39.1, x_o 26.2, x_ffn 26.4, x_down 44.8.
+
+**Predictions** (the prereg's P1–P4, scored by the frozen code; they decide nothing):
+
+| | Predicted | Printed |
+|---|---|---|
+| P1 | N1 FAILS: per-tensor int8 over real activations, whose BOS row and outlier channels set the tile's amax | HIT |
+| P2 | N2 PASSES, against R0 | MISS |
+| P3 | N3 PASSES, against R0, with mean KL below 0.1 × 0.0123 in both bands | HIT |
+| P4 | KL(R0 ‖ R) is below 0.0123 in both bands | HIT |
+
+That is 3 HIT and 1 MISS.
+
+**Memory and time** (MEASURED; the re-run's probes and the states run; GB = 1e9 bytes).
+
+| Arm | Session s | Sequence 0 s (probe) | 16 sequences s (states) | Peak private GB (states) | Peak working set GB (states) |
+|---|---:|---:|---:|---:|---:|
+| R0 | 1.8 | 50.4 | 298.3 | 4.46 | 3.74 |
+| R | 3.3 | 17.5 | 280.8 | 5.25 | 4.53 |
+| N1 | 2.5 | 13.7 | 207.3 | 6.07 | 5.71 |
+| N2 | 2.4 | 14.3 | 205.8 | 6.07 | 5.71 |
+| N3 | 0.1 | 25.5 | 350.9 | 2.85 | 9.03 |
+
+- Band C's child peaked at 5.02 GB private and 5.16 GB working set. C4's torch reference took 39.8 s and
+  peaked at 6.31 GB private and 7.5 GB working set.
+- Every child started at 17.3 GB available or more, against the 15 GB gate.
+
+**Hashes** (every committed S1 log; CRLF working copy, then LF blob).
+- The prereg (`e4c5caa`): `079a28b522b28cbfab4bcd8e189a9903a99629a6bd045f1d7ba155a77a5cddba`,
+  `a9cbb2b8d261756566d6fbdc2b73aa00e8c5c0269a617461cc3e647597f18dbf`.
+- The selftest (`e4c5caa`): `d0871891a67756e52a73e2ffe258866fcfc5c08e63afb1c6cf9b18bbd80bb611`,
+  `9410c10165c8e47a8a0b71b2c59fb3d0873a67d9c1c32db7fb3629887a62c37f`.
+- The stopped build (`71493f8`): `45add919268957fa2f1a14cffd204d464df1501cb7e367ba736082fa184fce1e`,
+  `5c277aee7bad8c8aea050b11fa29b30bc77e2e18ee519dbb3e98afd98937aef9`.
+- The amended selftest (`71493f8`): `667cd26a60ea2fd75f3c0846f62bd86cd889c8825a4298fbab1184d8a0c25582`,
+  `e073ab345e6b539a8e754b0c642e0cb66c31343e24ae1c8ce35a984309c2b3c0`.
+- The amended prereg (`71493f8`): `1f53d015232f9c2b30b5827d1097d0854e9bc924056b2d75dfda3e1c0e1068bc`,
+  `ab62403e4837e5dfb046bd56b2e2ae96be08d82ef621c8c2c676a313f56eb7d3`.
+- The build re-run (`ac8ea78`): `4fc5b36e984a94a5e53bc621bf86b6e723a809d05cb3a8f4fb1b764995e02946`,
+  `cf02c7915dc8c4397d71bf2a2951eb3a32c92a5b7995580ebd332eda0de4738f`.
+- The check (`ac8ea78`): `b1be3424dbad21a8d1ede1bd2c59c4a86118c2b4018efb5009baeff8a48a02b9`,
+  `bde5c9f416b0b91b0a9b8b019f2dc0d3763dd0112874a6e85990aa1bc888e030`.
+- The states (`ac8ea78`): `a3d387310ad6c54bca95896e8e02ad368af576219afebe95af62a827fe7ea622`,
+  `1a4f8528ed2eeb745f0e2a88609092c3295c49ff74790b939bccccd8b7c59eee`.
+- The verdict (`4552ea0`): `99ccb4c66f6a9ea8c1ca87285007a435031eb3c2041279232f449eb6df56f8c7`,
+  `bd73a149ea948a7f98bbf11f674fc0939bf921f1014b43e5e0bf4c45dce53e10`.
+
+**What this does not establish:**
+- An NPU run. S1 is CPU only; C1 ties N1 and N2 to 3c's NPU int32, and N3 to N-bf16 up to accumulation order.
+- The hybrid's speed or energy. The pick label's 3c figures are isolated weight GEMMs.
+- Why N2 fails: the weights' requantization and the per-token activations are not separated.
+- A decision from band C, which is report-only.
+- Other text, languages or tokenizers; prompts longer than 3,072 tokens; other references, such as llama.cpp's
+  own numerics or the unquantized model.
+- Decode: S1 scores prompt positions, and band C is R0 continuing on the arm's KV.
+- Other machines, ONNX Runtime versions or days.
+
+**Next: the user's decision.** Nothing here designs what follows. U6, an NPU kernel on the release's q4_0
+codes, was set by the user to "Decide after S1". The hybrid stack's next step is open, and S0, the
+GPU-runtime comparison, is not approved.
+
 ### MobileViT-XXS does not survive per-tensor INT8, and AdaRound cannot save it
 
 The accuracy question the attention work deferred, now measured on the full 1000-image
