@@ -3630,6 +3630,13 @@ pattern that AdaRound has less room to recover as width increases.
 > plain-XINT8 row — the exact "a model can arrive with no log explaining it" risk this
 > repo's own machine notes warn about.
 
+> **In-sample check (2026-09-25).** Every calibration image here is a val2017 image, so each
+> is also among the 5000 scored ([pitfall](DECISIONS.md#rejected-approaches-and-known-pitfalls)).
+> Rescored from the saved detections on the other 4,700: yolov8s AdaRound 39.95; yolov8m
+> AdaRound 45.38 against plain XINT8's 43.58 (+1.80, against +1.83 on all 5000); and
+> yolov8n-pose's recovery (next section) +1.71 against +1.68
+> (`results/bench/coco_heldout_rescore_desktop2_20260925.log`).
+
 ### yolov8n-pose end to end on the NPU
 
 Head-cut partitions 1015/1025 (99.0%), ~9.1–9.4 ms/frame, same clean pattern as detect:
@@ -3746,6 +3753,11 @@ Three findings:
    distributions would degrade INT8 PTQ "beyond the recovery capacity of AdaRound" —
    measured, they don't: the same AdaRound recipe used elsewhere in this repo, with no
    yolov6n-specific tuning, recovers the large majority of the plain-XINT8 loss.
+
+Checked 2026-09-25: the 300 calibration images are among the 5000 scored
+([pitfall](DECISIONS.md#rejected-approaches-and-known-pitfalls)). On the 4,700 others the
+recovery is +10.68 points (33.55 against 22.87; FP32 36.88), so finding 3 does not rest on them
+(`results/bench/coco_heldout_rescore_desktop2_20260925.log`).
 
 ### Category C, second candidate: YOLOv11n (C2PSA Attention Block & Decoupled DWConv Head)
 
@@ -9440,6 +9452,10 @@ recover the accuracy. GPTQ rounding with an int32 bias does, and needs no core p
 with its command. Code: `ca5b6cd` (HardSwish after the residual add, `pipelines/yolow/3a_split_attn_conv.py`) and
 `80ca69e` (int32 biases, `pipelines/yolow/3c_gptq_cv2.py`). Accuracy is COCO val2017 mAP@50-95 on the **first 300
 images**, the subset of variant D's rows above.
+Not held out: GPTQ's 64 statistics images are the first 64 of `data/coco_calib`, which are val2017 images,
+and 19 of them are among these 300. Their effect here is unmeasured, since the detections were not kept;
+where it was measured, on AdaRound and plain XINT8 files, it stayed within 0.07 points
+([pitfall](DECISIONS.md#rejected-approaches-and-known-pitfalls)).
 
 **Accuracy** (MEASURED; ONNX Runtime CPU unless the row says otherwise):
 

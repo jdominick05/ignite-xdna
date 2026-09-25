@@ -54,7 +54,7 @@ Detection width sweep, head-cut plain XINT8, full 5000-image val2017 mAP
 > (~1–1.5 GB activations/image at 640²), so l (32) and x (24) are calibrated thinner than
 > n/s/m (200). Width dominates accuracy: yolov8m shifted mAP by only -0.11 (43.49 → 43.38)
 > vs calib 64. l's full eval is flaky (two of three attempts hit hardware `DPU timeout`).
-> Working: [Model size: n vs s](docs/BENCHMARKS.md#model-size-n-vs-s-measured-together).
+> Calibration images are val2017's own, so they are among the 5000 scored; rescored on the other 4,700, no quantized file checked moved more than 0.07 points beyond the float model's own shift ([pitfall](docs/DECISIONS.md#rejected-approaches-and-known-pitfalls)). Working: [Model size: n vs s](docs/BENCHMARKS.md#model-size-n-vs-s-measured-together).
 
 ## Headline findings
 

@@ -335,6 +335,30 @@
   comparison (see `README.md`'s "iGPU vs NPU" section) — a DML full-graph model would
   have been compared against an NPU cut model's inflated number, understating the NPU
   specifically because it needed the head-cut workaround DirectML doesn't.
+- **`data/coco_calib` is inside COCO val2017, so every quantized COCO mAP here also scores its own
+  calibration images (found 2026-09-25; measured at 0.07 points or less where checked).**
+  `pipelines/yolov8n/2_fetch_coco.py:65-70` copies every 16th val2017 file, the first 300, into
+  `data/coco_calib`, and every quantized COCO model here calibrates from that folder by default:
+  Quark's plain XINT8 and AdaRound (`3b_quantize_cut.py:74-79` in the yolov8n, yolov8n-pose, yolov6n,
+  yolov11 and yolow pipelines), `quant/` (`quant/cli.py:257`) and YOLO-World's GPTQ
+  (`pipelines/yolow/3c_gptq_cv2.py:80-81`, the first 64). Up to 300 of the 5,000 scored images (6%)
+  are calibration images, and 19 of GPTQ's 64 are among the first 300 YOLO-World is scored on.
+  ResNet50 is not affected: its calibration and evaluation images are disjoint
+  (`pipelines/resnet50/2_fetch_imagenet.py:86-107`).
+  - Measured on the CPU from the saved detections (`tools/coco_heldout_rescore.py`,
+    `results/bench/coco_heldout_rescore_desktop2_20260925.log`). Each of 14 files (yolov6n,
+    yolov8n-pose and yolov8m as FP32, plain XINT8 and AdaRound; yolov8n and yolov8s as FP32 and
+    AdaRound) first reproduced its published 5,000-image mAP@50-95 and mAP@50 exactly, then was
+    scored on H, the 4,700 val2017 images outside `data/coco_calib`. Beyond the float model's own
+    shift between the two sets, no quantized file moved more than 0.07 points of mAP@50-95 (OKS for
+    pose). The stated AdaRound recoveries hold on H: yolov6n +10.68 (+10.65 on all 5,000),
+    yolov8n-pose +1.71 (+1.68), yolov8m +1.80 (+1.83).
+  - Not measured: every other quantized COCO figure, including YOLO-World's GPTQ (its detections
+    were not kept) and the yolov8n and yolov8s plain-XINT8 files, whose held-out scores belong to a
+    pending pre-registered int4 verdict.
+  - For a new claim, score H beside the 5,000 from the same detections. The risk is largest for a
+    *recovery* (AdaRound, GPTQ, anything fit to the calibration images), which a fit to in-sample
+    images would flatter (INFERRED).
 - **NPU single-instance latency drifts session to session on this shared dev machine
   independent of any code or model change** — 12.7ms measured for
   `yolov8n_cut_xint8_c200.onnx` in isolation, 6.8-6.9ms measured minutes later
