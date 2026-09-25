@@ -39,6 +39,10 @@
 # only, the same way as U6-0.
 #   ./scripts/hybrid-stack.sh f2-0           # the pins, the selftest, four compiles, E_core, FLUSH, E_F2 (after u6-0)
 #
+# F2-0b (tools/hybrid_f2_0b.py): the flush with no srs on an acc64 (two forms), and the acc64 confirmation. Compile
+# only, the same way.
+#   ./scripts/hybrid-stack.sh f2-0b          # the pins, the selftest, F2_CORE re-read and decoded, two flush forms
+#
 # Before s1-build, copy (c)'s C0-H16 model.onnx and model.onnx.data to scratch/llm/hybrid_s1/models/ as
 # c0h16.onnx and base.onnx.data, and text_only's config.json and tokenizer files to scratch/llm/gemma/text_only/;
 # s1-build checks every copy against (c)'s pins. build, check and states are RAM-heavy: announce them
@@ -62,6 +66,7 @@ while [ $# -gt 0 ]; do
         u6e-selftest|u6e-pins|u6e-run) STAGE="${1//-/_}" ;;
         u6-0)      STAGE=u6_0 ;;
         f2-0)      STAGE=f2_0 ;;
+        f2-0b)     STAGE=f2_0b ;;
         s0-fetch)  STAGE=s0_fetch; COMP="${2:-}"; shift ;;
         s0-addendum) STAGE=s0_addendum; SPEC="${2:-}"; shift ;;
         --machine) MACHINE="$2"; shift ;;
@@ -178,6 +183,12 @@ T20=tools/hybrid_f2_0.py
 stage_f2_0() {
     ls "$OUT"/hybrid_u6_0_*.log >/dev/null 2>&1 || die "no U6-0 log: run $0 u6-0 first"
     stage_for "$T20" hybrid_f2_0 run
+}
+
+T20B=tools/hybrid_f2_0b.py
+stage_f2_0b() {
+    ls "$OUT"/hybrid_f2_0_*.log >/dev/null 2>&1 || die "no F2-0 log: run $0 f2-0 first"
+    stage_for "$T20B" hybrid_f2_0b run
 }
 
 "stage_$STAGE"
