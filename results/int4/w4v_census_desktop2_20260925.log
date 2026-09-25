@@ -1,0 +1,265 @@
+W4V step 1: the int4 byte census of the vision models (report-only under criterion (b); it decides nothing)
+UTC: 2026-09-25T20:05:20Z
+MACHINE: DESKTOP-CBL5NUA
+COMMIT: eb66153 (worktree-int4-vision)
+COMMAND: python tools/int4_census.py --assets C:/Users/<user>/PycharmProjects/ignite-xdna --log results/int4/w4v_census_desktop2_20260925.log
+PYTHON: 3.12.11, numpy 1.26.4, onnx 1.18.0
+COMPILER: src/ignite_xdna/compiler/engine_schedule.py (this checkout's src/, asserted)
+ASSETS: C:/Users/<user>/PycharmProjects/ignite-xdna -- build/, models/ and scratch/ are git-ignored there; every file
+  read from them is listed below with its sha256. No container records its source model's sha256
+  (none carries source_model_sha256), so each pairing rests on the manifest checks per row.
+
+SCOPE: no device, no hardware context. Default schedule (activation ring off) unless a line says ring.
+  Tags: every figure below is DERIVED (computed here from the files listed) except each row's dispatch,
+  tagged MEASURED with its cite, and what is tagged UNMEASURED.
+TRANSPORT (item 3): every ms below is DERIVED at 26.8 GB/s (engine_stream_report.py:37), as if
+  the frame were bound by that transport. The rate is MEASURED by a no-compute transport probe: 78.7 MB
+  of fills in 2.94 ms as 52 or 772 tasks, fills and drains in parallel (docs/BENCHMARKS.md:8343-8344).
+  The engine's weight-fill rate inside its own schedule is UNMEASURED: no log isolates it.
+  Task issue is priced at 4 ops x 145 ns (engine_sequence.py:229; engine_stream_report.py:38).
+DENOMINATORS: gate B's five keep gate B's dispatch, so those rows reproduce gate B; each new row takes
+  the smallest NPU dispatch found for its container. Host segments are excluded, as the walk excludes them.
+TRIM: 'trim' sends each weight packet as its declared layout instead of a fixed 9,472 B object. It is UNBUILT.
+RESIDENCY: the reachable array is 3,145,728 B (DERIVED, 16 x 64 KiB + 4 x 512 KiB; docs/SILICON.md:182,
+  :186), shared with the workspace; that sharing is not priced here. ONNX weight counts cover the whole
+  file, including layers a container carves to the host; engine packet counts cover its NPU layers only.
+RING (item 2): 6 slots, the width built on silicon, where it MEASURED slower: YOLOv8n 7.392 -> 10.052 ms,
+  YOLOv8s 16.828 -> 20.228 ms (results/aie/notes_memtile_activation_ring.md:1134-1135); the default stays 0
+  (engine_compile.py:339). Its bytes below price no time, and it cannot be combined with host regions
+  (engine_compile.py:369-375), so only the single-dispatch rows carry it.
+
+FILES READ (relative to ASSETS):
+  models/yolov8n_cut_xint8.onnx                           3,486,300 B  sha256 f02e86ba1bf61ff3fdc159e29b15259567e279df06f68c6d9adeb966fe56c885
+  build/yolov8n_full.ignite                               8,839,552 B  sha256 be07e7367e4a2cdcdca784def4603995933f45d2203e537d777b67ece9b3c7ff
+  models/yolov8s_cut_xint8.onnx                          11,491,426 B  sha256 065f62523000b806e47e227f0b9d71a689f10d8c5368a7c5b6d0ff3b9f733fcc
+  build/yolov8s.ignite                                   30,759,616 B  sha256 e6b66b182c3ae9975a1d1ffd82ca31fefdeaf6d6956c2035987be7d6e83e944f
+  models/yolov8n-pose_cut_xint8.onnx                      3,662,512 B  sha256 b69b2d87fe3518fdb767e351194cb9632b0b9d222e7c62f10b0751ab18d4557b
+  build/yolov8n_pose.ignite                               8,861,120 B  sha256 c9ca50e0a02083f818f3de73426a4a7423d82e63534e1350902486e05f79333c
+  models/sesr_m7_xint8.onnx                                  38,567 B  sha256 bfafba18e93940f84b53f28fc1d4770caeec2e91dc00e8c95f11c2d2cf5b7d00
+  build/sesr_m7.ignite                                      614,976 B  sha256 074ab627f66a65f9fe3da1a0226eb43aca6a5a86b1f78a673466369ac8e87930
+  build/test_resnet50_head.onnx                           2,052,316 B  sha256 6cb8fcae6b575ebefcbf551213875324811705125a2039b2b99f98e17337464b
+  build/resnet50_head.ignite                              9,915,840 B  sha256 97cd1a527e2e16f2c1ce89e4c941c52af014f212c6bf67337cef0900a6aea0ee
+  models/yolo11n_cut_xint8.onnx                           3,106,889 B  sha256 6dd5a29014ba8549f84cca009fae23c5b7ef0dd7bfb3c1e8ef52f26fe04a1ae1
+  build/yolo11n.ignite                                   10,259,008 B  sha256 3bcc0cc67bab42e66dfd239afacc6caa8537050a5c7538af05418439e62e2b38
+  build/yolo11n_core.ignite                              11,555,008 B  sha256 a43894c31cf82f23a4dd319663be6b7cfc7cbc02f751b83fccb8da4790301f57
+  scratch/yolo26/yolo26n_cut_xint8.onnx                   3,023,409 B  sha256 202c1f8b5d2fdcac20bbdb241da5729968e99cab914c0492ba641d0bb1d67b5b
+  build/yolo26n_r2.ignite                                12,273,728 B  sha256 e86e152cb37c254b15386a89da2dd67163f43bac6424c3efb083e5572d7b580e
+  build/yolo26n.ignite                                   12,270,976 B  sha256 bdbad9e5374c0248f17c72994a9e17a23a3d4b4c78ed2d0f64ac2b59dc36ee0c
+  models/yolov8s-worldv2_cut_xint8_gptqcv2.onnx          13,020,223 B  sha256 5ec0850885be34fdc5e8354b13e2eed3752e85b73b7707ea6cec83b31e2e31b6
+  build/yolow.ignite                                     33,725,760 B  sha256 f3f1ac1fbc461dcbea59d145157c822508678b049c942f6993e1d0e7f44e69e3
+
+YOLOv8n  (models/yolov8n_cut_xint8.onnx -> build/yolov8n_full.ignite; single dispatch; 2,777 weight packets sent per frame, 2,637 conv; 862 unique)
+  dispatch 7.161 ms MEASURED, docs/MODEL_ZOO_BENCHMARKS.md:297 (live_ignition dispatch; gate B's denominator)
+  check: walk's packet bytes == its item bytes (26,303,744 B): True
+  check: == engine_stream_report (weight, activation, drain tasks and bytes): True
+  check: == 5162671's 26,303,744 B: True
+  check: int4 bytes == gate B's (5,385,216 B, results/aie/int4_engine_bytes_gate_desktop2_20260923.log): True
+  check: build/yolov8n_full.ignite: wpackets_bytes 8,164,864 vs 8,164,864, weight_fills 303 vs 303, host regions same (match)
+  check: unaligned runs 0, overrunning packets 0, unknown item kinds []
+  6. weight bytes / frame              26,303,744 B    0.981 ms  (303 tasks)
+  6. activation fill bytes / frame     83,072,000 B    3.100 ms  (2,070 tasks)
+  6. drain bytes / frame               18,112,000 B    0.676 ms  (523 tasks)
+  6. weight share of the frame's DDR bytes   20.6%
+     trim to declared layout (UNBUILT)    14,822,400 B    0.553 ms
+     int4, conv layout halved             5,385,216 B    0.201 ms    2.8% of dispatch
+  1. int4 over the trimmed frame: 0.201 / (7.161 - 0.553) =   3.0%
+  4. residency ceiling: (0.981 - 0.553 + 303 fills x 4 x 145 ns = 0.176) / (7.161 - 0.553) =   9.1%
+  4. ONNX weights: Conv 63 tensors of 63 Conv (0 unresolved) 3,146,160 B; ConvTranspose / Gemm / MatMul 0 tensors 0 B; ['int8']
+     int8 3,146,160 B, int4 1,573,080 B; reachable minus int4 +1,572,648 B
+  4. engine packets: 862 unique (849 conv) of 862 stored; header+bias+declared layout int8 3,476,224 B, int4 1,848,448 B; reachable minus int4 +1,297,280 B
+  2. ring (6 slots): weight 30,736,640 B, activation 57,472,000 B, drain 18,112,000 B; weight share  28.9%; int4 6,114,816 B =   5.8% of the frame's DDR bytes (== engine_stream_report at 6: True; no dispatch priced)
+
+YOLOv8s  (models/yolov8s_cut_xint8.onnx -> build/yolov8s.ignite; single dispatch; 8,828 weight packets sent per frame, 8,612 conv; 3,114 unique)
+  dispatch 16.609 ms MEASURED, docs/MODEL_ZOO_BENCHMARKS.md:298 (live_ignition dispatch; gate B's denominator)
+  check: walk's packet bytes == its item bytes (83,618,816 B): True
+  check: == engine_stream_report (weight, activation, drain tasks and bytes): True
+  check: == 5162671's 83,618,816 B: True
+  check: int4 bytes == gate B's (17,367,552 B, results/aie/int4_engine_bytes_gate_desktop2_20260923.log): True
+  check: build/yolov8s.ignite: wpackets_bytes 29,495,808 vs 29,495,808, weight_fills 389 vs 389, host regions same (match)
+  check: unaligned runs 0, overrunning packets 0, unknown item kinds []
+  6. weight bytes / frame              83,618,816 B    3.120 ms  (389 tasks)
+  6. activation fill bytes / frame    237,670,400 B    8.868 ms  (5,509 tasks)
+  6. drain bytes / frame               27,814,400 B    1.038 ms  (897 tasks)
+  6. weight share of the frame's DDR bytes   24.0%
+     trim to declared layout (UNBUILT)    46,623,744 B    1.740 ms
+     int4, conv layout halved            17,367,552 B    0.648 ms    3.9% of dispatch
+  1. int4 over the trimmed frame: 0.648 / (16.609 - 1.740) =   4.4%
+  4. residency ceiling: (3.120 - 1.740 + 389 fills x 4 x 145 ns = 0.226) / (16.609 - 1.740) =  10.8%
+  4. ONNX weights: Conv 63 tensors of 63 Conv (0 unresolved) 11,146,080 B; ConvTranspose / Gemm / MatMul 0 tensors 0 B; ['int8']
+     int8 11,146,080 B, int4 5,573,040 B; reachable minus int4 -2,427,312 B
+  4. engine packets: 3,114 unique (3,089 conv) of 3,114 stored; header+bias+declared layout int8 11,950,848 B, int4 6,374,016 B; reachable minus int4 -3,228,288 B
+  2. ring (6 slots): weight 87,938,048 B, activation 165,068,800 B, drain 27,814,400 B; weight share  31.3%; int4 18,081,792 B =   6.4% of the frame's DDR bytes (== engine_stream_report at 6: True; no dispatch priced)
+
+YOLOv8n-pose  (models/yolov8n-pose_cut_xint8.onnx -> build/yolov8n_pose.ignite; single dispatch; 2,713 weight packets sent per frame, 2,573 conv; 864 unique)
+  dispatch 7.548 ms MEASURED, docs/MODEL_ZOO_BENCHMARKS.md:388 (NPU dispatch; gate B's denominator)
+  check: walk's packet bytes == its item bytes (25,697,536 B): True
+  check: == engine_stream_report (weight, activation, drain tasks and bytes): True
+  check: int4 bytes == gate B's (5,587,968 B, results/aie/int4_engine_bytes_gate_desktop2_20260923.log): True
+  check: build/yolov8n_pose.ignite: wpackets_bytes 8,183,808 vs 8,183,808, weight_fills 321 vs 321, host regions same (match)
+  check: unaligned runs 0, overrunning packets 0, unknown item kinds []
+  6. weight bytes / frame              25,697,536 B    0.959 ms  (321 tasks)
+  6. activation fill bytes / frame     82,355,200 B    3.073 ms  (2,069 tasks)
+  6. drain bytes / frame               18,649,600 B    0.696 ms  (541 tasks)
+  6. weight share of the frame's DDR bytes   20.3%
+     trim to declared layout (UNBUILT)    13,827,072 B    0.516 ms
+     int4, conv layout halved             5,587,968 B    0.209 ms    2.8% of dispatch
+  1. int4 over the trimmed frame: 0.209 / (7.548 - 0.516) =   3.0%
+  4. residency ceiling: (0.959 - 0.516 + 321 fills x 4 x 145 ns = 0.186) / (7.548 - 0.516) =   8.9%
+  4. ONNX weights: Conv 72 tensors of 72 Conv (0 unresolved) 3,284,094 B; ConvTranspose / Gemm / MatMul 0 tensors 0 B; ['int8']
+     int8 3,284,094 B, int4 1,642,050 B; reachable minus int4 +1,503,678 B
+  4. engine packets: 864 unique (851 conv) of 864 stored; header+bias+declared layout int8 3,599,616 B, int4 1,910,400 B; reachable minus int4 +1,235,328 B
+  2. ring (6 slots): weight 30,471,424 B, activation 59,315,200 B, drain 18,649,600 B; weight share  28.1%; int4 6,351,360 B =   5.9% of the frame's DDR bytes (== engine_stream_report at 6: True; no dispatch priced)
+
+SESR-M7  (models/sesr_m7_xint8.onnx -> build/sesr_m7.ignite; single dispatch; 704 weight packets sent per frame, 535 conv; 18 unique)
+  dispatch 4.208 ms MEASURED, docs/MODEL_ZOO_BENCHMARKS.md:186 (dispatch; gate B's denominator)
+  check: walk's packet bytes == its item bytes (6,668,288 B): True
+  check: == engine_stream_report (weight, activation, drain tasks and bytes): True
+  check: int4 bytes == gate B's (1,539,072 B, results/aie/int4_engine_bytes_gate_desktop2_20260923.log): True
+  check: build/sesr_m7.ignite: wpackets_bytes 170,496 vs 170,496, weight_fills 36 vs 36, host regions same (match)
+  check: unaligned runs 0, overrunning packets 0, unknown item kinds []
+  6. weight bytes / frame               6,668,288 B    0.249 ms  (36 tasks)
+  6. activation fill bytes / frame     47,590,400 B    1.776 ms  (710 tasks)
+  6. drain bytes / frame               19,468,800 B    0.726 ms  (261 tasks)
+  6. weight share of the frame's DDR bytes    9.0%
+     trim to declared layout (UNBUILT)     3,409,920 B    0.127 ms
+     int4, conv layout halved             1,539,072 B    0.057 ms    1.4% of dispatch
+  1. int4 over the trimmed frame: 0.057 / (4.208 - 0.127) =   1.4%
+  4. residency ceiling: (0.249 - 0.127 + 36 fills x 4 x 145 ns = 0.021) / (4.208 - 0.127) =   3.5%
+  4. ONNX weights: Conv 9 tensors of 9 Conv (0 unresolved) 22,128 B; ConvTranspose / Gemm / MatMul 0 tensors 0 B; ['int8']
+     int8 22,128 B, int4 11,064 B; reachable minus int4 +3,134,664 B
+  4. engine packets: 18 unique (17 conv) of 18 stored; header+bias+declared layout int8 90,112 B, int4 47,360 B; reachable minus int4 +3,098,368 B
+  2. ring (6 slots): weight 17,608,448 B, activation 47,590,400 B, drain 19,468,800 B; weight share  20.8%; int4 4,348,032 B =   5.1% of the frame's DDR bytes (== engine_stream_report at 6: True; no dispatch priced)
+
+resnet50_head  (build/test_resnet50_head.onnx -> build/resnet50_head.ignite; single dispatch; 1,024 weight packets sent per frame, 1,024 conv; 1,024 unique)
+  dispatch 1.142 ms MEASURED, docs/BENCHMARKS.md:10394 (NPU dispatch; gate B's denominator, which it cited at :10125 on its commit)
+  check: walk's packet bytes == its item bytes (9,699,328 B): True
+  check: == engine_stream_report (weight, activation, drain tasks and bytes): True
+  check: int4 bytes == gate B's (1,048,576 B, results/aie/int4_engine_bytes_gate_desktop2_20260923.log): True
+  check: build/resnet50_head.ignite: wpackets_bytes 9,699,328 vs 9,699,328, weight_fills 4 vs 4, host regions same (match)
+  check: unaligned runs 0, overrunning packets 0, unknown item kinds []
+  6. weight bytes / frame               9,699,328 B    0.362 ms  (4 tasks)
+  6. activation fill bytes / frame     26,214,400 B    0.978 ms  (32 tasks)
+  6. drain bytes / frame                  409,600 B    0.015 ms  (32 tasks)
+  6. weight share of the frame's DDR bytes   26.7%
+     trim to declared layout (UNBUILT)     7,340,032 B    0.274 ms
+     int4, conv layout halved             1,048,576 B    0.039 ms    3.4% of dispatch
+  1. int4 over the trimmed frame: 0.039 / (1.142 - 0.274) =   4.5%
+  4. residency ceiling: (0.362 - 0.274 + 4 fills x 4 x 145 ns = 0.002) / (1.142 - 0.274) =  10.4%
+  4. ONNX weights: Conv 0 tensors of 0 Conv (0 unresolved) 0 B; ConvTranspose / Gemm / MatMul 1 tensors 2,048,000 B; ['int8']
+     int8 2,048,000 B, int4 1,024,000 B; reachable minus int4 +2,121,728 B
+  4. engine packets: 1,024 unique (1,024 conv) of 1,024 stored; header+bias+declared layout int8 2,359,296 B, int4 1,310,720 B; reachable minus int4 +1,835,008 B
+  2. ring (6 slots): weight 9,699,328 B, activation 26,214,400 B, drain 409,600 B; weight share  26.7%; int4 1,048,576 B =   2.9% of the frame's DDR bytes (== engine_stream_report at 6: True; no dispatch priced)
+
+YOLO11n  (models/yolo11n_cut_xint8.onnx -> build/yolo11n.ignite; 1 host segment(s); 3,355 weight packets sent per frame, 3,203 conv; 975 unique)
+  dispatch 8.362 ms MEASURED, docs/BENCHMARKS.md:9013 (Ignition dispatch, the smallest found for this container: 8.380 at :9016, 8.372 at :8657, 8.452 / 8.442 at docs/MODEL_ZOO_BENCHMARKS.md:327-328; host segment excluded)
+  check: walk's packet bytes == its item bytes (31,778,560 B): True
+  check: host regions from build/yolo11n.ignite's manifest: ['/model.10/'] (engine_stream_report cannot take host regions, so the manifest checks carry this row)
+  check: build/yolo11n.ignite: wpackets_bytes 9,235,200 vs 9,235,200, weight_fills 362 vs 362, host regions same (match)
+  check: unaligned runs 0, overrunning packets 0, unknown item kinds []
+  6. weight bytes / frame              31,778,560 B    1.186 ms  (362 tasks)
+  6. activation fill bytes / frame     98,176,000 B    3.663 ms  (2,236 tasks)
+  6. drain bytes / frame               20,556,800 B    0.767 ms  (598 tasks)
+  6. weight share of the frame's DDR bytes   21.1%
+     trim to declared layout (UNBUILT)    20,184,576 B    0.753 ms
+     int4, conv layout halved             5,367,552 B    0.200 ms    2.4% of dispatch
+  1. int4 over the trimmed frame: 0.200 / (8.362 - 0.753) =   2.6%
+  4. residency ceiling: (1.186 - 0.753 + 362 fills x 4 x 145 ns = 0.210) / (8.362 - 0.753) =   8.4%
+  4. ONNX weights: Conv 87 tensors of 87 Conv (0 unresolved) 2,607,968 B; ConvTranspose / Gemm / MatMul 0 tensors 0 B; ['int8']
+     int8 2,607,968 B, int4 1,303,984 B; reachable minus int4 +1,841,744 B
+  4. engine packets: 975 unique (956 conv) of 975 stored; header+bias+declared layout int8 3,616,512 B, int4 1,933,056 B; reachable minus int4 +1,212,672 B
+  2. ring: not built for a container with host segments (engine_compile.py:369-375)
+
+YOLO11n-core  (models/yolo11n_cut_xint8.onnx -> build/yolo11n_core.ignite; 1 host segment(s); 3,503 weight packets sent per frame, 3,339 conv; 1,123 unique)
+  dispatch 8.692 ms MEASURED, docs/BENCHMARKS.md:9017 (Ignition dispatch, the smallest found for this container: 8.748 at :9014, 8.784 / 8.708 at docs/MODEL_ZOO_BENCHMARKS.md:334; host segment excluded)
+  check: walk's packet bytes == its item bytes (33,180,416 B): True
+  check: host regions from build/yolo11n_core.ignite's manifest: ['/model.10/m/m.0/attn/qkv/conv/Conv=/model.10/m/m.0/attn/Reshape_1'] (engine_stream_report cannot take host regions, so the manifest checks carry this row)
+  check: build/yolo11n_core.ignite: wpackets_bytes 10,637,056 vs 10,637,056, weight_fills 390 vs 390, host regions same (match)
+  check: unaligned runs 0, overrunning packets 0, unknown item kinds []
+  6. weight bytes / frame              33,180,416 B    1.238 ms  (390 tasks)
+  6. activation fill bytes / frame    101,964,800 B    3.805 ms  (2,312 tasks)
+  6. drain bytes / frame               21,120,000 B    0.788 ms  (642 tasks)
+  6. weight share of the frame's DDR bytes   21.2%
+     trim to declared layout (UNBUILT)    21,155,328 B    0.789 ms
+     int4, conv layout halved             5,564,160 B    0.208 ms    2.4% of dispatch
+  1. int4 over the trimmed frame: 0.208 / (8.692 - 0.789) =   2.6%
+  4. residency ceiling: (1.238 - 0.789 + 390 fills x 4 x 145 ns = 0.226) / (8.692 - 0.789) =   8.5%
+  4. ONNX weights: Conv 87 tensors of 87 Conv (0 unresolved) 2,607,968 B; ConvTranspose / Gemm / MatMul 0 tensors 0 B; ['int8']
+     int8 2,607,968 B, int4 1,303,984 B; reachable minus int4 +1,841,744 B
+  4. engine packets: 1,123 unique (1,092 conv) of 1,123 stored; header+bias+declared layout int8 4,047,616 B, int4 2,167,552 B; reachable minus int4 +978,176 B
+  2. ring: not built for a container with host segments (engine_compile.py:369-375)
+
+YOLO26n  (scratch/yolo26/yolo26n_cut_xint8.onnx -> build/yolo26n_r2.ignite; 2 host segment(s); 3,563 weight packets sent per frame, 3,363 conv; 1,192 unique)
+  dispatch 8.831 ms MEASURED, results/aie/yolo26n_ignition_sitting_20260921.log:92 (control arm, yolo26n_r2.ignite; the smaller of 8.831 / 8.833 at :92, :132; host segments excluded)
+  note: build/yolo26n.ignite's source ONNX was lost with a removed worktree; scratch/yolo26/yolo26n_cut_xint8.onnx
+  note: is the 2026-09-21 re-derivation, compiled as build/yolo26n_r2.ignite with an identical lowering
+  note: (results/aie/yolo26n_requant_vs_amd_20260921.log:11-13, :17-28). The walk is checked against both.
+  check: walk's packet bytes == its item bytes (33,748,736 B): True
+  check: host regions from build/yolo26n_r2.ignite's manifest: ['/model.10/m/m.0/attn/qkv/conv/Conv=/model.10/m/m.0/attn/Reshape_1', '/model.22/m.0/m.0.1/attn/qkv/conv/Conv=/model.22/m.0/m.0.1/attn/Reshape_1'] (engine_stream_report cannot take host regions, so the manifest checks carry this row)
+  check: build/yolo26n_r2.ignite: wpackets_bytes 11,290,624 vs 11,290,624, weight_fills 449 vs 449, host regions same (match)
+  check: build/yolo26n.ignite: wpackets_bytes 11,290,624 vs 11,290,624, weight_fills 449 vs 449, host regions same (match)
+  check: unaligned runs 0, overrunning packets 0, unknown item kinds []
+  6. weight bytes / frame              33,748,736 B    1.259 ms  (449 tasks)
+  6. activation fill bytes / frame    104,422,400 B    3.896 ms  (2,336 tasks)
+  6. drain bytes / frame               22,080,000 B    0.824 ms  (693 tasks)
+  6. weight share of the frame's DDR bytes   21.1%
+     trim to declared layout (UNBUILT)    22,596,096 B    0.843 ms
+     int4, conv layout halved             5,120,256 B    0.191 ms    2.2% of dispatch
+  1. int4 over the trimmed frame: 0.191 / (8.831 - 0.843) =   2.4%
+  4. residency ceiling: (1.259 - 0.843 + 449 fills x 4 x 145 ns = 0.260) / (8.831 - 0.843) =   8.5%
+  4. ONNX weights: Conv 102 tensors of 102 Conv (0 unresolved) 2,400,160 B; ConvTranspose / Gemm / MatMul 0 tensors 0 B; ['int8']
+     int8 2,400,160 B, int4 1,200,080 B; reachable minus int4 +1,945,648 B
+  4. engine packets: 1,192 unique (1,140 conv) of 1,192 stored; header+bias+declared layout int8 4,082,176 B, int4 2,193,664 B; reachable minus int4 +952,064 B
+  2. ring: not built for a container with host segments (engine_compile.py:369-375)
+
+YOLO-World v2  (models/yolov8s-worldv2_cut_xint8_gptqcv2.onnx -> build/yolow.ignite; 4 host segment(s); 9,630 weight packets sent per frame, 9,414 conv; 3,292 unique)
+  dispatch 18.720 ms MEASURED, results/aie/yolow_gptq/verify_gptqcv2.log:73 (dispatch mean over 20 of yolow_gptqcv2.ignite, compiled from the same ONNX with the same four host regions, docs/MODEL_ZOO_BENCHMARKS.md:457; host excluded, :74)
+  check: walk's packet bytes == its item bytes (91,215,360 B): True
+  check: host regions from build/yolow.ignite's manifest: ['/model.12/attn/', '/model.15/attn/', '/model.18/attn/', '/model.21/attn/'] (engine_stream_report cannot take host regions, so the manifest checks carry this row)
+  check: build/yolow.ignite: wpackets_bytes 31,181,824 vs 31,181,824, weight_fills 442 vs 442, host regions same (match)
+  check: unaligned runs 0, overrunning packets 0, unknown item kinds []
+  6. weight bytes / frame              91,215,360 B    3.404 ms  (442 tasks)
+  6. activation fill bytes / frame    258,201,600 B    9.634 ms  (6,054 tasks)
+  6. drain bytes / frame               31,308,800 B    1.168 ms  (1,014 tasks)
+  6. weight share of the frame's DDR bytes   24.0%
+     trim to declared layout (UNBUILT)    52,372,480 B    1.954 ms
+     int4, conv layout halved            18,188,800 B    0.679 ms    3.6% of dispatch
+  1. int4 over the trimmed frame: 0.679 / (18.720 - 1.954) =   4.0%
+  4. residency ceiling: (3.404 - 1.954 + 442 fills x 4 x 145 ns = 0.256) / (18.720 - 1.954) =  10.2%
+  4. ONNX weights: Conv 67 tensors of 67 Conv (0 unresolved) 12,438,368 B; ConvTranspose / Gemm / MatMul 0 tensors 0 B; ['int8']
+     int8 12,438,368 B, int4 6,219,184 B; reachable minus int4 -3,073,456 B
+  4. engine packets: 3,292 unique (3,267 conv) of 3,292 stored; header+bias+declared layout int8 12,360,960 B, int4 6,601,856 B; reachable minus int4 -3,456,128 B
+  2. ring: not built for a container with host segments (engine_compile.py:369-375)
+
+RESIDENCY K-CHECK (docs/SILICON.md:186):
+  YOLOv8n Conv weights 3,146,160 B == 3,146,160 B: True; file sha256 == the probe log's: True
+
+7. AMD-STACK MODELS: weight against activation elements from the ONNX shapes (DERIVED proxy; int8 = 1 B each)
+  ops counted: Conv, ConvTranspose, Gemm, MatMul; every layer's inputs and output counted once, as if each went to DDR
+  ResNet50               models/resnet50_fp32.onnx (pipelines/resnet50); input input [1, 3, 224, 224]
+                         54 layers, weight 25,502,912, activation 21,779,432 (0 unresolved); weight share  53.9%; int4 saves 12,751,456 =  27.0% of the proxy's bytes
+  YOLOv6n                models/yolov6n_cut_xint8.onnx (pipelines/yolov6n); input images [1, 3, 640, 640]
+                         71 layers, weight 4,641,072, activation 32,424,000 (0 unresolved); weight share  12.5%; int4 saves 2,320,536 =   6.3% of the proxy's bytes
+  MiDaS small            models/midas_small_cut.onnx (pipelines/midas); input image [1, 3, 256, 256]
+                         97 layers, weight 16,523,424, activation 47,097,856 (0 unresolved); weight share  26.0%; int4 saves 8,261,712 =  13.0% of the proxy's bytes
+  FastDepth              models/fastdepth_fp32.onnx (pipelines/fastdepth); input image [1, 3, 256, 256]
+                         38 layers, weight 1,343,664, activation 16,571,904 (0 unresolved); weight share   7.5%; int4 saves 671,832 =   3.7% of the proxy's bytes
+  Real-ESRGAN compact    models/realesrgan_compact_r64_fp32.onnx (pipelines/realesrgan); input input [1, 3, 64, 64]
+                         34 layers, weight 1,209,024, activation 17,510,400 (0 unresolved); weight share   6.5%; int4 saves 604,512 =   3.2% of the proxy's bytes
+  BiSeNetV2              models/bisenetv2_fp32.onnx (pipelines/bisenetv2); input image [1, 3, 512, 512]
+                         56 layers, weight 3,341,280, activation 54,505,728 (0 unresolved); weight share   5.8%; int4 saves 1,670,640 =   2.9% of the proxy's bytes
+  YOLOv8n (calibration)  models/yolov8n_cut_xint8.onnx (engine row above); input images [1, 3, 640, 640]
+                         63 layers, weight 3,146,160, activation 35,078,400 (0 unresolved); weight share   8.2%; int4 saves 1,573,080 =   4.1% of the proxy's bytes
+  YOLOv8s (calibration)  models/yolov8s_cut_xint8.onnx (engine row above); input images [1, 3, 640, 640]
+                         63 layers, weight 11,146,080, activation 64,492,800 (0 unresolved); weight share  14.7%; int4 saves 5,573,040 =   7.4% of the proxy's bytes
+
+FILES READ FOR ITEM 7 (relative to ASSETS; the calibration rows' files are listed above):
+  models/resnet50_fp32.onnx                             102,146,240 B  sha256 d999c960ea12f9481e6fb43aab28ea3e2741c712fc4c30997b07d9b725cb87e6
+  models/yolov6n_cut_xint8.onnx                           4,902,011 B  sha256 241d0aa68e4281a93c081cada059bbf505ad99724696bc70cb8a4c09197448e6
+  models/midas_small_cut.onnx                            66,323,019 B  sha256 e92e6e7f17cd0790aa5e813320d3b4e7d755c1ec3356f8f885630cda230dc557
+  models/fastdepth_fp32.onnx                              5,423,141 B  sha256 d99a91d47b9450d34a1784f4fae4ae32883016c21829626dab08e24b1bc3b29a
+  models/realesrgan_compact_r64_fp32.onnx                 4,866,391 B  sha256 bdb9d503b8ade7b70e9e4de1b48e0b77e73d5e76f0cd3710557e92ecbb87e516
+  models/bisenetv2_fp32.onnx                             13,443,876 B  sha256 ad98b9053fab1788cc7876563f44ab97fca268d386df2ffe0c320c97f7321a05
+
+NOT ESTABLISHED: any accuracy (step 2's screen is the gate under (b)); any dispatch with the ring or
+the trim built; the engine's own weight-fill rate; whether the workspace leaves room for resident
+weights. Every percentage above is a number, not a verdict: this census decides nothing.
