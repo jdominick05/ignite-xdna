@@ -583,14 +583,18 @@ APPROVED_ROWS = {
     "rocm": ("rocm-10.0.0.tar.gz", "rocm_sdk_core-10.0.0-py3-none-win_amd64.whl",
              "rocm_sdk_libraries-10.0.0-py3-none-win_amd64.whl", "rocm_sdk_devel-10.0.0-py3-none-win_amd64.whl",
              "rocm_sdk_device_gfx1103-10.0.0-py3-none-win_amd64.whl"),
+    "genai-dml": ("onnxruntime_directml-1.24.4-cp312-cp312-win_amd64.whl",),
 }
-# G-GA/dml (the user's decision, 2026-09-25) has two rows: this log's onnxruntime_directml-1.24.4 wheel and the
-# 0.13.1 wheel from the dml013 addendum. Both join together, the first here as "genai-dml" and the second as PINS'
-# next entry, once the gate has matched the addendum. Until then neither is fetched, and contents reads the 16 rows.
+# G-GA/dml (the user's decision, 2026-09-25) has two rows, joined together once the gate had matched the dml013
+# addendum (2026-09-25): this log's onnxruntime_directml-1.24.4 wheel, as "genai-dml" above, and the addendum's
+# 0.13.1 wheel, as PINS' second entry. contents walks all 18 rows, so it reads INCOMPLETE until fetch genai-dml.
 # Every (log, LF sha256, rows) the gate has approved, in order. A tagged addendum joins only after the gate has matched
 # its log against its own read of the publisher's record; until then nothing of it is fetched.
 PINS = [
     {"log": APPROVED_ASSETS_LOG, "lf": APPROVED_ASSETS_LF, "rows": APPROVED_ROWS},
+    {"log": "hybrid_s0_assets_desktop2_20260925_dml013.log",
+     "lf": "585d3f2050bd164b0ba0332d3d1d8dce1bb12beb13ebe164f58faf7d3b0abbed",
+     "rows": {"genai-dml": ("onnxruntime_genai_directml-0.13.1-cp312-cp312-win_amd64.whl",)}},
 ]
 RT_DIR = {"llamacpp": "llamacpp-b11146", "zluda": "zluda-v6", "genai": "genai-0.16.0", "rocm": "rocm-10.0.0",
           "genai-dml": "genai-dml-0.13.1"}
