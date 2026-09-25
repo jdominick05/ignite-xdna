@@ -1,9 +1,22 @@
+# Copyright (C) 2026 The ignite-xdna contributors
+# SPDX-License-Identifier: AGPL-3.0-or-later AND Apache-2.0 WITH LLVM-exception
+#
 # U6-0 selftest fixture, read by tools/hybrid_u6_0.py selftest (the U6-0 plan v2, section 7). Parts open with a
 # "#=== PART" line. The two OBJECT parts are the output of tools/aie_disasm.py's disassemble() (llvm-objdump -d
 # --no-show-raw-insn, Peano's own, from the pinned toolchain) on IRON-built objects from the local IRON cache, as
 # printed, with the profile path scrubbed and only the named sections kept. The SYNTHETIC part is hand-written in
 # the same format; it comes from no object and tests only the counting rules. Its crRnd write, "mov crRnd, #0xc",
 # is the form Peano printed for aie::set_rounding(conv_even) in a throwaway probe compiled for that purpose alone.
+#
+# Each part's source and licence:
+# - clock: machine output of kernels/clock_probe/clock_kernels.cc (this repo; the cached copy the IRON build
+#   compiled is byte-identical to it), under the repo's AGPL-3.0-or-later.
+# - w4a8: machine output of kernels/w4a8_probe/w4a8_kernels.cc (this repo), under AGPL-3.0-or-later AND Apache-2.0
+#   WITH LLVM-exception. Its portions adapted from mlir-aie v1.4.2 aie_kernels/aie2/mm.cc are
+#   Copyright (C) 2025 Advanced Micro Devices, Inc., Apache-2.0 WITH LLVM-exception.
+#   The cached copy the IRON build compiled is an earlier revision of that file with the same code; it differs only
+#   in comments (the licence header, added in 74e2436 and revised in 25eaa8f, and one comment reworded in e91887c).
+# - synthetic: hand-written here, AGPL-3.0-or-later.
 #=== PART clock object=clock_kernels.o sha256=1561cb5fe3fb390c7385184a0dd9bc3f65cf442213675aab6dd020dcacc58aff sections=.text.clock_probe
 
 C:\Users\<user>\.npu\cache\1a0df11de1bfd54080e1a5ef\clock_kernels.o:	file format elf32-aie
