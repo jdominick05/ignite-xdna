@@ -8,7 +8,9 @@ here installs, runs a downloaded binary or computes on a chip.
                                                 # the toolchains and the disk, against the plan's v1 read
     python tools/hybrid_s0.py assets            # the asset list, read from the publishers' APIs: URL, size,
                                                 # checksum (or "pinned only"), the source and the read time
-    python tools/hybrid_s0.py fetch COMPONENT   # download one component's assets into scratch/rt/, verified
+    python tools/hybrid_s0.py fetch COMPONENT   # download one component's APPROVED_ROWS into scratch/rt/, verified,
+                                                # from the approved assets log only (pinned by its LF sha256)
+    python tools/hybrid_s0.py contents          # list the fetched archives' members (a read: nothing extracted)
 
 Standard library only. Sizes are printed in bytes and in GB = 1e9 bytes. The plan is
 scratch/llm/hybrid_s0_plan_draft.md (v2, approved 2026-09-24).
@@ -560,23 +562,62 @@ def assets() -> int:
 
 # ---------------------------------------------------------------- fetch (verified downloads into scratch/rt)
 
+# The gate's approval (2026-09-24, F1): fetch reads only this assets log, checked by its LF sha256, and fetches only
+# these rows, taking each URL, size and sha256 from that log. The log's own fetch flags decide nothing.
+APPROVED_ASSETS_LOG = "hybrid_s0_assets_desktop2_20260924.log"
+APPROVED_ASSETS_LF = "28e112bf3047b57665af14c74d8111560d3f318defd59f23d2a6ea04cba4780b"
+APPROVED_ROWS = {
+    "llamacpp": ("llama-b11146-bin-win-cpu-x64.zip", "llama-b11146-bin-win-vulkan-x64.zip",
+                 "llama-b11146-bin-win-rocm-10.0-x64.zip", "llama-b11146-bin-win-cuda-12.4-x64.zip",
+                 "cudart-llama-bin-win-cuda-12.4-x64.zip", "llama-b11146-bin-win-cuda-13.4-x64.zip",
+                 "cudart-llama-bin-win-cuda-13.4-x64.zip"),
+    "zluda": ("zluda-windows-3fe1206.zip",),
+    "genai": ("onnxruntime_genai-0.16.0-cp312-cp312-win_amd64.whl", "onnxruntime-1.30.0-cp312-cp312-win_amd64.whl",
+              "onnxruntime_genai_winml-0.16.0-cp312-cp312-win_amd64.whl"),
+    "rocm": ("rocm-10.0.0.tar.gz", "rocm_sdk_core-10.0.0-py3-none-win_amd64.whl",
+             "rocm_sdk_libraries-10.0.0-py3-none-win_amd64.whl", "rocm_sdk_devel-10.0.0-py3-none-win_amd64.whl",
+             "rocm_sdk_device_gfx1103-10.0.0-py3-none-win_amd64.whl"),
+}
+RT_DIR = {"llamacpp": "llamacpp-b11146", "zluda": "zluda-v6", "genai": "genai-0.16.0", "rocm": "rocm-10.0.0"}
+FETCH_NOTES = {
+    "llamacpp": "b11146 (commit 7fe450e19305b828c199d602c23a8337aaa1f03b) is the build releases/latest (v0.5.0) names "
+                "in its nightly-tag.txt; v0.5.0 is the same commit ('bump version to 0.5.0'). b11175 "
+                "(2026-09-25T03:04Z) is a later prerelease and is not taken. Both CUDA builds (12.4, 13.4) are fetched "
+                "for G-ZL; the source archive is not (a source build clones 7fe450e). The gate's rulings 1 and 3.",
+    "zluda": "v6 stable; v7-preview.11 is not fetched (PREVIEW only if v6 fails). The gate's ruling 3.",
+    "genai": "GenAI 0.16.0 (CPU) with onnxruntime 1.30.0; the WinML wheel is fetched for its file listing only. "
+             "G-GA/dml and G-GA/amdgpu are NOT RUN at 0.16, and hip-ep is not fetched. The gate's rulings 5 and 6.",
+    "rocm": "TheRock 10.0.0 wheels: no checksum is published anywhere, so each is hashed at download and its size "
+            "checked ('pinned only'); S3's prereg pins the hash. The gate's ruling 2.",
+}
+
+
 def fetch(component: str) -> int:
-    logs = sorted(RESULTS.glob("hybrid_s0_assets_*.log"))
-    if not logs:
-        print("FETCH REFUSED: no assets log; run the assets stage and send the list to the gate first", flush=True)
+    p = RESULTS / APPROVED_ASSETS_LOG
+    lf = hashlib.sha256(p.read_bytes().replace(b"\r\n", b"\n")).hexdigest() if p.exists() else None
+    want = APPROVED_ROWS.get(component, ())
+    say("FETCH_PLAN_JSON", {"assets_log": APPROVED_ASSETS_LOG, "assets_log_lf_sha256": lf,
+                            "approved_assets_lf": APPROVED_ASSETS_LF, "approved_rows": list(want),
+                            "component": component, "dir": f"{rel(RT)}/{RT_DIR.get(component)}",
+                            "note": FETCH_NOTES.get(component), "utc": utc_now()})
+    if lf != APPROVED_ASSETS_LF:
+        print("FETCH REFUSED: the assets log is missing or its LF sha256 differs from the approved pin", flush=True)
         return 2
-    lines = logs[-1].read_text(encoding="utf-8").splitlines()
-    rows = [json.loads(s.split(" ", 1)[1]) for s in lines if s.startswith("ASSET_JSON ")]
-    rows = [r for r in rows if r["component"] == component and r["fetch"]]
-    lf = hashlib.sha256(logs[-1].read_bytes().replace(b"\r\n", b"\n")).hexdigest()
-    say("FETCH_PLAN_JSON", {"assets_log": logs[-1].name, "assets_log_lf_sha256": lf, "component": component,
-                            "rows": [r["name"] for r in rows], "utc": utc_now()})
-    if not rows:
-        print(f"FETCH REFUSED: the assets log marks nothing to fetch for {component}", flush=True)
+    lines = p.read_text(encoding="utf-8").splitlines()
+    logged = {}
+    for s in lines:
+        if s.startswith("ASSET_JSON "):
+            r = json.loads(s.split(" ", 1)[1])
+            if r["component"] == component:
+                logged[r["name"]] = r
+    missing = [n for n in want if n not in logged]
+    if not want or missing:
+        print(f"FETCH REFUSED: {component} has no approved rows, or the approved log lacks {missing}", flush=True)
         return 2
+    rows = [logged[n] for n in want]
     rc = 0
     for r in rows:
-        dest = RT / f"{component}-{r['version']}"
+        dest = RT / RT_DIR[component]
         dest.mkdir(parents=True, exist_ok=True)
         out = dest / r["name"]
         before = disk()
@@ -617,21 +658,72 @@ def fetch(component: str) -> int:
         if rc:
             print(f"FETCH STOP: {r['name']} failed verification; the partial file is deleted", flush=True)
             return rc
-    print(f"FETCH OK: {component}, {len(rows)} assets in {rel(RT)}/{component}-*", flush=True)
+    print(f"FETCH OK: {component}, {len(rows)} assets in {rel(RT)}/{RT_DIR[component]}", flush=True)
     return 0
+
+
+# ---------------------------------------------------------------- contents (a read of each fetched archive)
+
+FLAGS = {
+    "rocblas_hipblas": re.compile(r"(?i)(^|/)(rocblas|hipblas|hipblaslt)[^/]*\.dll$"),
+    "hip_runtime": re.compile(r"(?i)(^|/)(amdhip64[^/]*|amd_comgr[^/]*|rocm_kpack[^/]*|hiprtc[^/]*)\.dll$"),
+    "cuda_standins": re.compile(r"(?i)(^|/)(nvcuda|nvml|cublas|cublaslt|cufft|cusparse|cudnn|cudart|nvrtc)[^/]*\.dll$"),
+    "webgpu": re.compile(r"(?i)(webgpu|dawn|dxcompiler|dxil)[^/]*\.(dll|pyd)$"),
+    "directml_winml": re.compile(r"(?i)(directml|windows\.ai\.machinelearning|winml|microsoft\.windows\.ai)[^/]*\.(dll|pyd|winmd)$"),
+    "onnxruntime_dll": re.compile(r"(?i)(^|/)onnxruntime[^/]*\.(dll|pyd)$"),
+    "providers": re.compile(r"(?i)providers?[^/]*\.(dll|pyd)$"),
+    "tools": re.compile(r"(?i)(^|/)(llama-perplexity|llama-cli|llama-bench|zluda[^/]*|cuda_check)\.exe$"),
+}
+FULL_LIST_MAX = 400
+
+
+def members(path: Path) -> tuple:
+    import tarfile
+    import zipfile
+    if path.suffix in (".zip", ".whl"):
+        with zipfile.ZipFile(path) as z:
+            infos = z.infolist()
+            meta = next((i for i in infos if i.filename.endswith(".dist-info/METADATA")), None)
+            requires = [ln.split(":", 1)[1].strip() for ln in z.read(meta).decode("utf-8", "replace").splitlines()
+                        if ln.startswith("Requires-Dist:")] if meta else None
+            return [(i.filename, i.file_size) for i in infos if not i.is_dir()], requires
+    with tarfile.open(path) as t:
+        return [(m.name, m.size) for m in t.getmembers() if m.isfile()], None
+
+
+def contents() -> int:
+    """List every approved, fetched archive's members: a read, nothing is extracted or executed."""
+    print("S0 CONTENTS (a read of the fetched archives; nothing extracted or run). GB = 1e9 bytes.", flush=True)
+    say("TIME_JSON", {"utc": utc_now()})
+    missing = []
+    for comp, names in APPROVED_ROWS.items():
+        for name in names:
+            path = RT / RT_DIR[comp] / name
+            if not path.exists():
+                missing.append(name)
+                continue
+            mem, requires = members(path)
+            flags = {k: sorted(n for n, _ in mem if rx.search(n)) for k, rx in FLAGS.items()}
+            say("CONTENTS_JSON", {"component": comp, "name": name, "sha256": sha256_file(path),
+                                  "members": len(mem), "uncompressed_bytes": sum(s for _, s in mem),
+                                  "requires_dist": requires, "flags": {k: v for k, v in flags.items() if v},
+                                  "list": sorted(n for n, _ in mem) if len(mem) <= FULL_LIST_MAX
+                                  else f"{len(mem)} members (over {FULL_LIST_MAX}: flags only)"})
+    print(f"CONTENTS {'OK' if not missing else 'INCOMPLETE: not fetched ' + ', '.join(missing)}", flush=True)
+    return 0 if not missing else 2
 
 
 def main() -> int:
     sys.stdout.reconfigure(encoding="utf-8")
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("mode", choices=("baseline", "assets", "fetch"))
+    ap.add_argument("mode", choices=("baseline", "assets", "fetch", "contents"))
     ap.add_argument("args", nargs="*")
     a = ap.parse_args()
     if a.mode == "fetch":
-        if len(a.args) != 1 or a.args[0] not in COMPONENTS:
-            ap.error(f"fetch takes one COMPONENT: {', '.join(COMPONENTS)}")
+        if len(a.args) != 1 or a.args[0] not in APPROVED_ROWS:
+            ap.error(f"fetch takes one COMPONENT: {', '.join(APPROVED_ROWS)}")
         return fetch(a.args[0])
-    return {"baseline": baseline, "assets": assets}[a.mode]()
+    return {"baseline": baseline, "assets": assets, "contents": contents}[a.mode]()
 
 
 if __name__ == "__main__":
