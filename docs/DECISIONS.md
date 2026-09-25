@@ -423,6 +423,28 @@
     - F2-E's answer cannot change the N2 pick. By the dominance fact, F2 cannot beat N2 on energy.
     - F2 continues as the int4-weight alternative (the user's decision, 2026-09-25), and its remaining case is
       memory.
+  - **Hybrid stack F2-E, integerized 8-bit scales at S = ROW: form B with FLUSH_B2 is the pick, in a CPU
+    emulation, and it cannot change the N2 pick (2026-09-25).**
+    - F2-E (the tool frozen at `f88fe73`, its selftest and pins logs at `3c258b0`, the run log at `96f83a8`;
+      numpy against MatMulNBits levels 0 and 4 on the CPU):
+      - F2-E PICK: form B, FLUSH_B2, S = ROW, E_F2 23.28125.
+      - Both deciding arms read 1.047–1.189× L4's own departure from level 0 over the 21 cases, against the gate's
+        rule of ≤ 2.0×. They are ACCEPTABLE at 2.0 and 1.41, not at 1.12.
+      - Form A fails at ROW on all three down_proj cases (2.2978×, 2.2589×, 2.3300×; report-only). Form A keeps L4's
+        codes under a rounded qx. So the host must requantize the activations (form B), with Sx rounded up.
+      - S = 16 and 8 read better (worst 1.1287× and 1.1016×), but F2-0b's flush budget allows ROW only.
+      - The grid, not the flush, carries the departure. No block rounds to qw = 0 at any S. P4 held vacuously:
+        every fraction is 0.
+      - A2-F2's threshold, for a later kernel test, is 1.4e-05.
+    - Scope: layer 16's inputs on S1's sequence 0, 256 rows, for all three layers; a numpy emulation of the
+      compiled flush order; no silicon run.
+    - It cannot change the N2 pick. F2's best modelled energy is 2.7292 mJ with idle, compute only at an assumed
+      power: 1.67× N-i8's MEASURED 1.6334.
+    - ([BENCHMARKS](BENCHMARKS.md#hybrid-stack-f2-e-integerized-8-bit-scales-at-s--row-in-a-cpu-emulation-form-b-with-flush_b2-is-the-pick-every-case-within-119-l4s-own-departure-from-level-0-form-a-fails-on-all-three-down_proj-cases-and-f2-e-cannot-change-the-n2-pick-2026-09-25-desktop-2))
+  - **The user decided to plan F2-A (2026-09-25).**
+    - F2-A is being planned on the user's go (2026-09-25). It cannot change the N2 pick, and F2's case is weight
+      memory.
+    - Its pre-registration text goes to the gate before anything is coded or run.
 - **A pre-registered size floor caught a builder defect (2026-09-23).** `tools/llm_gemv_bench.py build`
   first sized the fp16-scale variant's copies from the fp32 variant, so six DirectML rows streamed
   0.90–0.98 GiB against a pre-registered ≥ 1 GiB, and the verdict came out INCOMPLETE (`4620b53`).

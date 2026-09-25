@@ -5488,6 +5488,166 @@ The comparison, MEASURED in 3c at M = 2,048 (the post-hoc log's lines 24, 25 and
 - That the fp32 add rounds to nearest even. It is INFERRED, as in U6-E.
 - The cost of the scale bytes, or F2's memory case (sharing the GPU's Q4_0 weights), which is unmeasured.
 
+### Hybrid stack F2-E, integerized 8-bit scales at S = ROW in a CPU emulation: form B with FLUSH_B2 is the pick, every case within 1.19× L4's own departure from level 0, form A fails on all three down_proj cases, and F2-E cannot change the N2 pick (2026-09-25, Desktop 2)
+
+**The result, with its qualifiers.**
+- **F2-E PICK: form B, FLUSH_B2, S = ROW, E_F2 23.28125**, by the frozen rule, in a numpy emulation of the compiled
+  flush against MatMulNBits accuracy level 0 (L0) on the CPU
+  ([run log](../results/llm/hybrid_f2e_run_desktop2_20260925.log), line 133; MEASURED).
+  - The rule: an arm is ACCEPTABLE iff every case's r_F2 = rel-L2(emulation, L0) is ≤ 2.0 × r_R, where r_R =
+    rel-L2(L4, L0) is L4's own departure from level 0 on the same rows.
+  - Both deciding arms, form B at S = ROW with FLUSH_B2 and with FLUSH_B3, read 1.047–1.189 × r_R over the 21 cases
+    (DERIVED from MEASURED). The worst is 1.1891, on layer 33's o.
+  - So both are ACCEPTABLE at 2.0 and at 1.41, and neither is at 1.12. B2 is picked as the cheaper flush.
+  - E_F2 = 22 + 82 / 64 = 745/32, computed exactly from F2-0b's log (DERIVED from bundles, static).
+- **Form A fails at ROW, on all three down_proj cases** (report-only; MEASURED): 2.2978 × r_R on layer 0's down,
+  2.2589 × on layer 16's and 2.3300 × on layer 33's. Outside down it reads 1.23–1.48 ×.
+  - Form A keeps L4's activation codes and rounds qx = s_x / Sx to nearest. Form B requantizes each block's
+    activations on the host against qx · Sx, with qx the exact ceiling.
+  - So form B's requantization is what makes ROW hold. A host running F2 must reproduce it, with Sx rounded up.
+- **S = 16 and 8 read better, and F2-0b's flush budget excludes them** (report-only). Form B's worst is 1.1287 × at
+  16 and 1.1016 × at 8, and form B at 8 is ACCEPTABLE even at 1.12.
+  - F2-0b allowed S = ROW only: S = 16 needed FLUSH ≤ 32, and S = 8 needed ≤ 16.
+  - Accuracy at 8 is necessary, not sufficient.
+- **The grid carries the departure, not the flush** (DERIVED from MEASURED).
+  - The grid's own value in float64, with no flush rounding, reads the emulation's ratio to 3 decimals in every case,
+    for all 12 arms.
+  - At ROW under form B, each flush sits 5.98e-6 – 6.56e-6 (B2) and 4.33e-8 – 4.60e-8 (B3) in rel-L2 from that
+    float64 form.
+- **The feared mechanism did not occur.** No nonzero d_w rounds to qw = 0 at any S, in any of the 21 cases. That
+  includes down_proj, where one Dw spans 320 blocks. The smallest nonzero |qw| at ROW is 2.
+- **F2-E cannot change the N2 pick.** The log's NOTE (line 135): "F2-E cannot change the N2 pick: F2's best
+  modelled energy is 1.67x N-i8's measured energy (DECISIONS at ca75870); F2-E answers only whether F2's arithmetic
+  is acceptable at S = ROW".
+  - F2's best modelled energy is 2.7292 mJ with idle per prompt token per layer: compute only, at N-w4's assumed
+    power (DERIVED).
+  - N-i8 MEASURED 1.6334
+    ([F2-0 and F2-0b](#hybrid-stack-f2-0-and-f2-0b-route-i-with-integerized-8-bit-scales-the-core-adds-22-cycles-per-32-lane-block-tile-and-a-flush-with-no-srs-on-an-acc64-costs-116-or-82-cycles-per-superblock-so-both-flush-forms-pass-e--24-at-s--row-compute-only-yet-f2s-best-modelled-energy-is-167-the-measured-energy-of-n-i8-the-kernel-n2-runs-2026-09-25-desktop-2)).
+- **What follows:** F2-A is being planned on the user's go (2026-09-25). It cannot change the N2 pick, and F2's case
+  is weight memory.
+
+**What F2-E asks.** The source is the F2-E addendum, a git-ignored draft (LF `1ad61601`). It amends the F2 plan's
+sections 1 and 3. The tool pins it with the plan (`b98787f4`) and the F2-0b addendum (`81dfe8da`).
+- F2-0b read both flush forms PASS at S = ROW only. So F2-E asks whether one scale per whole row of K holds.
+  - That is one Sx per activation row and superblock, and one Dw per weight column and superblock.
+  - The superblock spans all 64, 80 or 320 blocks of K.
+- **The grid:**
+  - Sx and Dw round up: each is the smallest fp32 with 255 · Sx ≥ max s_x and 127 · Dw ≥ max |d_w|, checked with an
+    exact product.
+  - Form B (deciding): qx = max(1, c), with c the exact ceiling of s_x / Sx. The codes are RNE(x / (qx · Sx)), in
+    float64.
+  - Form A (report-only): L4's codes, with qx = max(1, RNE(s_x / Sx)).
+  - qw = RNE(d_w / Dw). The 4-bit weight codes are unchanged.
+  - Any clip, c = 256, or a round-up that fails its check is a STOP.
+- **The sum and the flush:**
+  - I = Σ_b i · qx · qw, exact in int64. Then fp32(I) = RNE(I).
+  - Then f2_flush_b.cc's B3 or B2, in the source's term order: one flush per superblock, in increasing K.
+  - Every fp32 add rounds once, by RNE. That is U6-E's assumption, INFERRED.
+- **The arms:** activation form (A, B) × flush (B2, B3) × S (ROW, 16, 8), 12 per case.
+  - Deciding: form B at ROW, with B2 and with B3.
+  - The pick is B2 if ACCEPTABLE, else B3, else NONE.
+- **The rule:** r_F2 ≤ 2.0 × r_R on all 21 cases.
+  - F2_FACTOR 2.0 is the gate's ruling, frozen in the tool before any real input was read.
+  - The ACCEPTABLE sets are printed at 1.12, 1.41 and 2.0.
+- **A2-F2, for a later kernel test:** the integer I must match exactly. The flushed y must sit within up2(2 × the
+  pick's worst rel-L2 against its float64 form).
+  - Here that is up2(2 × 6.5555e-6) = 1.4e-5 (line 134), from layer 16's o.
+
+**The run.** The logs are the [selftest](../results/llm/hybrid_f2e_selftest_desktop2_20260925.log),
+[pins](../results/llm/hybrid_f2e_pins_desktop2_20260925.log) and [run](../results/llm/hybrid_f2e_run_desktop2_20260925.log).
+The tool is `tools/hybrid_f2e.py`, frozen at `f88fe73`; the runner stages are `scripts/hybrid-stack.sh f2e-*`.
+MEASURED, on the CPU: 201.2 s of per-case time over the 21 cases, at a peak of 2.04 GB private.
+- **The selftest** passed 30 of 30, synthetic only. Among the checks:
+  - the round-up and its step, and the exact ceiling;
+  - each STOP tripping on a plant: a code clip, a qw clip, an Sx or Dw one ulp under;
+  - the flush against an independent scalar walk of the source's order, bit for bit. A reversed order changes some
+    bits;
+  - B3 within 8 · 2^-24 of float64 on every sample, and B2's worst sample above that;
+  - the hold: a STOP planted in the last case prints no case line.
+- **The cases:** the seven linears of layers 0, 16 and 33 (21 cases).
+  - The rows are 0, 8, …, 2,040 (256 rows) of layer 16's captured inputs, on S1's sequence 0.
+  - Layers 0 and 33 take layer 16's inputs. That is U6-E's recorded assumption.
+- **L0 and L4:** MatMulNBits at accuracy levels 0 and 4, through U6-E's path: S1's C2 graph, ONNX Runtime
+  1.23.3.dev20260320.
+- **The pipeline checks held before any F2 number:**
+  - all eight pins equal. The GGUF's size and sha256, the x16 and weight hashes and ORT equal U6-E's pins;
+  - E_F2 exact from F2-0b's log (745/32 and 381/16), with its printed 4-dp values in agreement;
+  - the source's term orders equal to the emulation's;
+  - ANCHORS OK (line 38). L4 equals S1's C2 output bit for bit on layer 16's seven linears. r_R reproduces U6-E's
+    logged L4-against-L0 departures on 21 of 21, with a worst relative difference of 0.0;
+  - no STOP: no clip, no c = 256, no failed round-up, no |I| ≥ 2^39;
+  - the case lines held until all 21 passed, then printed in order (lines 60–80).
+
+  | Arm | Role | Worst r_F2 / r_R | Worst case | ACCEPTABLE at 1.12, 1.41, 2.0 | Worst rel-L2 against its float64 form |
+  |---|---|---:|---|---|---:|
+  | B/B2/ROW | DECIDING, the pick | 1.1891 | 33.o | no, yes, yes | 6.56e-6 |
+  | B/B3/ROW | DECIDING | 1.1891 | 33.o | no, yes, yes | 4.60e-8 |
+  | B/B2/16 | report-only | 1.1287 | 16.o | no, yes, yes | 6.35e-6 |
+  | B/B3/16 | report-only | 1.1287 | 16.o | no, yes, yes | 1.84e-7 |
+  | B/B2/8 | report-only | 1.1016 | 33.o | yes, yes, yes | 7.77e-6 |
+  | B/B3/8 | report-only | 1.1016 | 33.o | yes, yes, yes | 2.56e-7 |
+  | A/B2/ROW | report-only | 2.3300 | 33.down | no, no, no | 6.55e-6 |
+  | A/B3/ROW | report-only | 2.3300 | 33.down | no, no, no | 4.61e-8 |
+  | A/B2/16 | report-only | 1.2275 | 0.q | no, yes, yes | 6.35e-6 |
+  | A/B3/16 | report-only | 1.2275 | 0.q | no, yes, yes | 1.84e-7 |
+  | A/B2/8 | report-only | 1.1415 | 0.q | no, yes, yes | 7.76e-6 |
+  | A/B3/8 | report-only | 1.1415 | 0.q | no, yes, yes | 2.57e-7 |
+
+  The arm lines are the log's lines 117–128. A case is layer.linear.
+
+  | Over the 21 cases, form B at S = ROW | FLUSH_B2, the pick | FLUSH_B3 |
+  |---|---:|---:|
+  | r_F2 = rel-L2 against L0 | 6.34e-3 – 1.39e-2 | 6.34e-3 – 1.39e-2 |
+  | r_F2 / r_R | 1.047 – 1.189 | 1.047 – 1.189 |
+  | rel-L2 against L4 | 5.36e-3 – 9.63e-3 | 5.36e-3 – 9.63e-3 |
+  | rel-L2 against its float64 form | 5.98e-6 – 6.56e-6 | 4.33e-8 – 4.60e-8 |
+
+  r_R reads 5.37e-3 – 1.32e-2, U6-E's range.
+- **F2 is not R's arithmetic** (report-only).
+  - The pick departs from L4 by 5.36e-3 – 9.63e-3 on these rows. On the same rows, llama.cpp's fp16-scale form (S1's
+    C2 form) departs from L4 by 1.25e-4 – 2.54e-4, and reads 1.000–1.001 × r_R against L0.
+  - Per case, the pick's departure from L4 is 0.72–1.14 × r_R, and its departure from L0 is 1.047–1.189 × r_R
+    (DERIVED). So F2's grid moves y about as far from L4 as L4 sits from level 0.
+  - Whether that holds at model level is F2-A's question.
+- **The mechanism** (MEASURED counts; they decide nothing):
+  - **qw = 0:** 0 blocks at every S in all 21 cases. The ROW counts are lines 96–116, down_proj's three first.
+  - **The smallest nonzero |qw|:** 2 at ROW (16.up, 16.down, 33.down), 2 at 16 (16.up), and 3 at 8 (16.up,
+    16.down).
+  - **qx = 1:**
+    - under form B at ROW, 7 of 20,480 blocks (0.0342%) in each of the nine q, k and v cases, which share one input,
+      and 0 in the others;
+    - under form B at 16 and at 8, 1 block per q, k and v case;
+    - under form A at ROW, 60 per q, k and v case (0.293%), 549 in all.
+  - **Form B's all-zero-code blocks:** 0. **Round-up steps:** 0, for Sx and for Dw.
+- **Predictions** (ESTIMATE; they decide nothing; PRED_JSON, line 93):
+  - F2E-P1 HELD: the worst |r_F2(B2) − r_F2(B3)| is 1.35e-5 × r_R, against a limit of 0.01 × r_R.
+  - F2E-P2 HELD: at ROW, form B's r_F2 ≤ form A's in every case, with 0 violations.
+  - F2E-P3 HELD: under form B, r_F2 does not increase from ROW to 16 to 8, with 0 violations. The worst ratios read
+    1.1891, 1.1287 and 1.1016.
+  - **F2E-P4 HELD vacuously (every fraction is 0).**
+    - Line 132 prints the tool's fixed text, "down has the largest ROW qw = 0 fraction".
+    - PRED_JSON shows every per-layer fraction at 0.0, a tie. So it shows nothing about down_proj.
+  - The side of the line at ROW was not predicted.
+
+**Hashes** (CRLF working copy, then LF blob).
+- The selftest (`3c258b0`): `0209dc4c58bc325bb3ea7aec74b12d53560b8fb35a63f26209e93a647e6057b1`,
+  `d26a61701a49536a2798e317c77a409f226955592526997a33c1d2f91ed8f630`.
+- The pins (`3c258b0`): `ac1bf170a00236149571436c8a708eddd1fa7c9c47f975a59afd17d8a58bc93d`,
+  `38d5e27ff9d9626e411ef001872339a7c95ae6d3e4697769b21660776a82f5fb`.
+- The run (`96f83a8`): `df46857e395e04186dc7024c250e8252f5bbf74ace207cd29306b732fcef2bec`,
+  `da97478e6894a6c7904616cf12038cc031c38d493282bba76dd07e1ceca73291`.
+- The tool: `tools/hybrid_f2e.py` LF `dac40cdf…`. The addendum: LF `1ad61601…`.
+
+**What this does not establish.**
+- Model-level accuracy. That is F2-A's question.
+- Other layers' activations, or other sequences. Only layer 16's inputs on S1's sequence 0 are read, on 256 rows.
+- A silicon result. The flush is the compiled source's order, in numpy. The lane order and the RNE add (INFERRED)
+  are not tested on a core.
+- Anything about energy or the N2 pick.
+- The host quantizer's fp32 form. The round-up of Sx and Dw and form B's float64 codes are F2-E's choices, and a
+  host must reproduce them. A host that rounds Sx to nearest is not modelled.
+- The scale bytes' cost, or F2's memory case, which is unmeasured.
+
 ### MobileViT-XXS does not survive per-tensor INT8, and AdaRound cannot save it
 
 The accuracy question the attention work deferred, now measured on the full 1000-image
