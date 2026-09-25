@@ -48,20 +48,24 @@ SPLITS = (2, 3)
 
 # The rule that turns the numbers into the two outputs. L4 is MatMulNBits at accuracy level 4 and F64 the float64
 # value of its own form (MLAS CompInt8's codes and scales times the Q4_0 weights, S1's q4_dot), both on ROWS.
-SPLIT_FACTOR = 2.0                                       # proposed margin (the gate rules on it before any run)
+SPLIT_FACTOR = 2.0                                       # the gate's ruling (2026-09-25); SPLIT_BOUND
 SPLIT_RULE = ("a T-term split is ENOUGH iff, for every case c (layers 0, 16 and 33 x the seven linears), "
               "rel_l2(emu_T, L4) <= SPLIT_FACTOR x rel_l2(L4, F64). The split is the smallest ENOUGH T of (2, 3), "
               "and NONE if neither is.")
 SPLIT_BOUND = ("the bound is L4's own departure from its exact form, per case, on the same rows. On layer 16 it is "
                "anchored to S1's C2 (3.02e-7 to 7.57e-7 over 2,048 rows): the run STOPs unless L4 reproduces C2's "
-               "output bit for bit. On layers 0 and 33 it is this run's own measurement. SPLIT_FACTOR 2.0 is a "
-               "proposed margin with no measured source: the emulation may sit up to twice as far from L4 as L4 sits "
-               "from exact arithmetic (an error uncorrelated with L4's own may reach about sqrt(3) = 1.73 x the floor).")
-A2_FACTOR = 2.0                                          # proposed margin (the gate rules on it before any run)
+               "output bit for bit. On layers 0 and 33 it is this run's own measurement. SPLIT_FACTOR 2.0 is the "
+               "gate's ruling (2026-09-25), sourced in the plan's 'fp32-grade products from bf16 pieces' (section "
+               "1): the emulation may depart from L4 by at most about twice L4's own departure from its exact form. "
+               "Two independently rounded fp32 outputs differ by about sqrt(2) x the floor, so an exact-product "
+               "3-term split passes at 2.0 if its add order is the only difference.")
+A2_FACTOR = 2.0                                          # the gate's ruling (2026-09-25); A2_BOUND
 A2_RULE = ("A2's threshold = up2(A2_FACTOR x the maximum over the 21 cases of rel_l2(emu_T, L4)) for the chosen T, "
            "rounded up at 2 significant figures. It is NOT SET if the split is NONE.")
-A2_BOUND = ("A2_FACTOR 2.0 is a proposed margin with no measured source: headroom for what the emulation does not "
-            "model (the kernel's lane order within a tile, and accfloat's rounding; ASSUMPTIONS).")
+A2_BOUND = ("A2_FACTOR 2.0 is the gate's ruling (2026-09-25): headroom for what the emulation does not model (the "
+            "kernel's lane order within a tile, and accfloat's rounding; ASSUMPTIONS).")
+RULINGS = ("SPLIT_FACTOR and A2_FACTOR are the gate's rulings (2026-09-25). The user may override them before U6's "
+           "prereg freezes them. Once any real number has been seen, they are not re-tuned.")
 NONE_READING = ("if the split is NONE, even 3 pieces (which carry s_x, d_w and P exactly) do not bring the "
                 "emulation within the rule, so the limiter is the fp32 add order, not the split; each case's "
                 "vs_f64 is then the reading to look at, and A2 is not set.")
@@ -100,7 +104,8 @@ def protocol() -> dict:
             "rows": {"text": ROWS_TEXT, "count": len(ROWS), "first": ROWS[0], "last": ROWS[-1],
                      "step": ROWS[1] - ROWS[0]},
             "splits": SPLITS, "split_factor": SPLIT_FACTOR, "split_rule": SPLIT_RULE, "split_bound": SPLIT_BOUND,
-            "a2_factor": A2_FACTOR, "a2_rule": A2_RULE, "a2_bound": A2_BOUND, "none_reading": NONE_READING,
+            "a2_factor": A2_FACTOR, "a2_rule": A2_RULE, "a2_bound": A2_BOUND, "rulings": RULINGS,
+            "none_reading": NONE_READING,
             "order": {str(t): v for t, v in ORDER.items()}, "form": FORM, "ort_version": ORT_VERSION,
             "c2_logged": C2_LOGGED, "c2_rel_tol": C2_REL_TOL, "x16_sha": X16_SHA, "w_sha": W_SHA,
             "gguf_pin": {k: gc.GGUF_PIN[k] for k in ("repo", "file", "revision", "size", "sha256")},
@@ -286,10 +291,12 @@ def selftest() -> int:
     check("bf16 RNE on known ties", np.array_equal(got, np.array([b for _, b in ties], dtype=np.float32)),
           cases=[[a, b, float(g)] for (a, b), g in zip(ties, got)])
 
-    # 2. bf16() equals ml_dtypes' RNE on random values and on every tie pattern (low half 0x8000; denormals included)
-    x = np.concatenate([rng.standard_normal(1_000_000).astype(np.float32) * np.float32(10.0) ** rng.integers(-6, 6, 1_000_000),
-                        (np.arange(1, 65536, dtype=np.uint32) << np.uint32(16) | np.uint32(0x8000)).view(np.float32)[:30000],
-                        np.array([1.0, -1.0, 0.0, 3.0e-3, 1.5e-5], dtype=np.float32)]).astype(np.float32)
+    # 2. bf16() equals ml_dtypes' RNE on random values and on every finite tie pattern (low half 0x8000, all 65,535
+    #    upper halves; denormals included). The non-finite patterns are dropped in fp32, before any cast.
+    tie = (np.arange(1, 65536, dtype=np.uint32) << np.uint32(16) | np.uint32(0x8000)).view(np.float32)
+    x = np.concatenate([(rng.standard_normal(1_000_000).astype(np.float32)
+                         * np.float32(10.0) ** rng.integers(-6, 6, 1_000_000)).astype(np.float32),
+                        tie[np.isfinite(tie)], np.array([1.0, -1.0, 0.0, 3.0e-3, 1.5e-5], dtype=np.float32)])
     x = x[np.isfinite(x)]
     ref = x.astype(ml_dtypes.bfloat16).astype(np.float32)
     check("bf16 equals ml_dtypes RNE", np.array_equal(bf16(x).view(np.uint32), ref.view(np.uint32)), n=int(x.size))
@@ -399,8 +406,8 @@ def run() -> int:
     header("U6-E RUN (hybrid U6), CPU only.")
     plan = lf_sha(PLAN_FILE) if PLAN_FILE.exists() else None
     s1.say("PLAN_JSON", {"pinned": PLAN_SHA, "file_lf_sha": plan})
-    if plan is not None and plan != PLAN_SHA:
-        print("U6-E STOP: the plan file differs from the approved plan", flush=True)
+    if plan != PLAN_SHA:
+        print("U6-E STOP: the plan file is missing or differs from the approved plan", flush=True)
         return 2
     s1.start_gate("U6-E")
     if not X16_SHA or not W_SHA:
@@ -456,6 +463,10 @@ def run() -> int:
             dw = gc.f16_to_f32(d).reshape(N, K // 32)
             floor = rel_l2(y4, f64)
             case = {"layer": L, "name": name, "rows": len(rows), "l4_vs_f64": floor, "l4_vs_l0": rel_l2(y4, y0)}
+            if not floor > 0.0:                          # a zero (or NaN) floor: the ratio is undefined
+                s1.say("CASE_JSON", case)
+                print(f"U6-E STOP: layer {L} {name}: rel_l2(L4, F64) is {floor}, a pipeline defect", flush=True)
+                return 2
             for t in SPLITS:
                 e = emulate(q, sx, codes, dw, t)
                 assert np.isfinite(e).all()
