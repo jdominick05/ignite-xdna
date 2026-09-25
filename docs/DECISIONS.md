@@ -373,6 +373,47 @@
       - the untested U6-0b forms, 2 × 2 blocking and per-row and per-column splits, whose gain is
         unestimated.
     - ([BENCHMARKS](BENCHMARKS.md#hybrid-stack-u6-e-and-u6-0-the-epilogue-of-a-q4_0-npu-kernel-fp32-grade-products-take-three-bf16-pieces-and-that-epilogue-costs-97-cycles-per-32-lane-block-tile-so-route-i-as-built-misses-the-users-bar-on-time-and-energy-by-the-u6-plans-own-model-2026-09-25-desktop-2))
+  - **The user moved the prompt-KV arm to N2, with the GPU computing the last prompt position (the user's
+    decision, 2026-09-25).**
+    - N2 (int8) serves the prompt's KV, and the GPU computes the last prompt position, 2,047.
+    - It was taken with S1b's interval in hand. S1b's verdict kept the pick at N3 and left this move to the user;
+      its prereg's consequence was that N2 can serve the prompt's KV only if the GPU computes the last prompt
+      position.
+    - ([BENCHMARKS](BENCHMARKS.md#hybrid-stack-s1b-n2-serving-the-prompts-kv-r0s-continuation-on-n2s-kv-passes-on-the-pooled-set-c-not-narrow-the-last-prompt-position-fails-report-only-and-the-pick-stays-n3-in-a-cpu-emulation-2026-09-25-desktop-2))
+  - **Hybrid stack F2-0 and F2-0b, integerized 8-bit scales for route (i): both flush forms pass E ≤ 24 at
+    S = ROW, compute only, and F2 cannot beat the chosen N2 arm on energy (2026-09-25).**
+    - F2 replaces route (i)'s per-block fp32 scales with 8-bit integers under one fp32 scale per superblock, and
+      keeps the integer sum exact in a 64-bit accumulator.
+    - F2-0 (the tool at `a47e631`, the log at `ca2f0de`; compile only, the NPU did not run):
+      - E_core = 22 cycles per 32-lane block-tile, DERIVED from bundles (static).
+      - The flush read VOID by U6-0's rule. Its loop holds 18 mode writes from aie_api's `_conf` srs inside
+        `to_float` on an acc64. That is a rule artefact, not a malformed flush.
+      - The tier was STOP, and the gate ruled the flush onto the core.
+    - F2-0b (the tool at `a72726e`, the log at `5a5e15a`; compile only):
+      - F2_CORE's re-read is bit-identical, and acc64 is CONFIRMED: r4 = 0x35a, amode 1 (`aiev2_vmult.h:15-25`).
+      - fp32(I) is built by shuffles with one rounding (DERIVED; that the add is RNE is INFERRED).
+      - FLUSH_B3 116 gives E_F2 23.81 and FLUSH_B2 82 gives 23.28, both PASS. PASS is necessary, not sufficient.
+      - S is ROW only. B2's loop holds one accumulator spill, counted.
+    - Energy (DERIVED; compute only, at N-w4's assumed power; mJ with idle per prompt token per layer):
+      - in the plan's form, B3 2.7849 and B2 2.7292, beside D-nb16's 2.8569 and N-bf16's 2.7417;
+      - in the serial form, 3.84 and 3.78, above D-nb16.
+      - Any F2 edge rests on the epilogue overlapping N-w4's measured transport.
+    - **The dominance fact** (DERIVED, under the plan's power assumption):
+      - N-i8, the kernel N2 runs, MEASURED 1.6334 mJ with idle: 96.92 ms at 34.53 W (the 3c post-hoc log,
+        line 26).
+      - F2's best form, in its optimistic compute-only model, reads 2.7292, 1.67× that. So F2 cannot beat the
+        chosen N2 arm on energy.
+      - The bases differ: F2's figure is compute only at an assumed power, and N-i8's is measured.
+      - F2's remaining case is memory: sharing the GPU's Q4_0 weights instead of an int8 copy. It is unmeasured.
+    - Not established: a silicon time; F2's own power; accuracy (F2-E's question); the lane order on silicon (it
+      rests on IR semantics); the RNE add (INFERRED).
+    - ([BENCHMARKS](BENCHMARKS.md#hybrid-stack-f2-0-and-f2-0b-route-i-with-integerized-8-bit-scales-the-core-adds-22-cycles-per-32-lane-block-tile-and-a-flush-with-no-srs-on-an-acc64-costs-116-or-82-cycles-per-superblock-so-both-flush-forms-pass-e--24-at-s--row-compute-only-yet-f2s-best-modelled-energy-is-167-the-measured-energy-of-n-i8-the-kernel-n2-runs-2026-09-25-desktop-2))
+  - **The user decided to write up F2-0 and F2-0b, then run F2-E (2026-09-25).**
+    - F2-E is the accuracy question at S = ROW, for both flush forms. Its plan text goes to the gate before
+      anything is coded.
+    - F2-E's answer cannot change the N2 pick. By the dominance fact, F2 cannot beat N2 on energy.
+    - F2 continues as the int4-weight alternative (the user's decision, 2026-09-25), and its remaining case is
+      memory.
 - **A pre-registered size floor caught a builder defect (2026-09-23).** `tools/llm_gemv_bench.py build`
   first sized the fp16-scale variant's copies from the fp32 variant, so six DirectML rows streamed
   0.90–0.98 GiB against a pre-registered ≥ 1 GiB, and the verdict came out INCOMPLETE (`4620b53`).

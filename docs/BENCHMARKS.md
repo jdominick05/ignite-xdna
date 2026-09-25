@@ -5037,6 +5037,9 @@ totals are DERIVED from the states log's per-window seconds; GB = 1e9 bytes).
   (report-only).
 - A change to the pick. S1's pick, N3, stands. Any change to the hybrid's NPU numerics is the user's decision.
 
+After this verdict, the user moved the prompt-KV arm to N2, with the GPU computing the last prompt position (the
+user's decision, 2026-09-25).
+
 ### Hybrid stack U6-E and U6-0, the epilogue of a q4_0 NPU kernel: fp32-grade products take three bf16 pieces, and that epilogue costs 97 cycles per 32-lane block-tile, so route (i) as built misses the user's bar on time and energy by the U6 plan's own model (2026-09-25, Desktop 2)
 
 **The result, with its qualifiers.**
@@ -5288,6 +5291,202 @@ MEASURED, on the CPU.
   unmeasured.
 - F2 or F3: neither is designed or measured here.
 - The energy at the epilogue's own power. The table uses N-w4's.
+
+### Hybrid stack F2-0 and F2-0b, route (i) with integerized 8-bit scales: the core adds 22 cycles per 32-lane block-tile and a flush with no srs on an acc64 costs 116 or 82 cycles per superblock, so both flush forms pass E ≤ 24 at S = ROW, compute only, yet F2's best modelled energy is 1.67× the measured energy of N-i8, the kernel N2 runs (2026-09-25, Desktop 2)
+
+**The result, with its qualifiers.**
+- **F2-0: E_core = 22 cycles per 32-lane block-tile** (DERIVED from bundles, static; compile only, the NPU did not
+  run; [log](../results/llm/hybrid_f2_0_desktop2_20260925.log)).
+  - E_core is F2_CORE's 29 bundles minus CONTROL's 7.
+  - That core accumulates i × (qx · qw) exactly into a 64-bit accumulator, and round-trips I through L1 every block.
+- **F2-0's flush read VOID, and its tier was STOP.**
+  - The loop holds 18 control-register writes (16 to crSat, 2 to crRnd), which U6-0's rule reads as VOID.
+  - They come from aie_api's `to_float` on an acc64. The loop holds 8 srs from the accumulator per 32 lanes, and
+    each one passes its rounding and saturation modes per call (the `_conf` intrinsics,
+    `aie_api/detail/aie2/elementary.hpp:491-499, 513-518`). So it is a rule artefact, not a malformed flush.
+  - Its 142 bundles are not carried as a count anywhere.
+  - The gate ruled the flush onto the core, and a host flush was not proposed.
+- **F2-0b: acc64 CONFIRMED, and both flush forms pass the line at S = ROW** (DERIVED from bundles, static; compile
+  only; [log](../results/llm/hybrid_f2_0b_desktop2_20260925.log)).
+  - F2_CORE recompiled from the same source reads 29 bundles, with its loop text and .text (496 B) identical to
+    F2-0's: a re-read, not a new count.
+  - The MACs on I use r4, set once before the loop to 0x35a. Against llvm-aie's `aiev2_compute_control`
+    (`aiev2/aiev2_vmult.h:15-25`), that is amode 1, the acc64 mode. So E_core = 22 stands.
+  - fp32(I) is built by shuffles with one rounding (DERIVED; that the fp32 add is RNE is INFERRED).
+
+  | Flush form | bf16 pieces | FLUSH, cycles per tile and superblock | E_F2 = 22 + FLUSH / 64 | Tier | Allowed S |
+  |---|---:|---:|---:|---|---|
+  | FLUSH_B3 | 3 | 116 | 23.81 | PASS | ROW |
+  | FLUSH_B2 | 2 | 82 | 23.28 | PASS | ROW |
+
+  - PASS is necessary, not sufficient.
+  - S = 16 needed FLUSH ≤ 32, and S = 8 needed ≤ 16. Neither form comes near, so S is ROW only: one scale per
+    whole row of K.
+  - B2's loop holds one accumulator spill, four stack loads per iteration, counted in its 82.
+- **Energy, compute only, at N-w4's assumed power** (DERIVED; the plan's assumption E2, 32.78 W with idle):
+  - in the plan's form, B3 reads 2.7849 and B2 2.7292 mJ with idle per prompt token per layer, beside D-nb16's
+    2.8569 and N-bf16's 2.7417;
+  - in the serial form, B3 reads 3.84 and B2 3.78, both above D-nb16.
+  - **Any F2 energy edge rests on the epilogue's cycles overlapping N-w4's measured transport** (83.91 ms per layer,
+    against the model's 18.02 ms of MACs). If they add, F2 sits above D-nb16.
+- **F2 cannot beat the chosen N2 arm on energy** (DERIVED, under the plan's power assumption).
+  - N-i8, the kernel N2 runs, MEASURED 1.6334 mJ with idle per prompt token per layer: 96.92 ms at 34.53 W
+    ([post-hoc log](../results/llm/llm_prefill3c_posthoc_desktop2_20260924.log), line 26).
+  - F2's best form, in its optimistic compute-only model, reads 2.7292: 1.67× that.
+  - The bases differ: F2's figure is compute only at an assumed power; N-i8's is measured.
+  - F2's remaining case is memory: sharing the GPU's Q4_0 weights instead of holding an int8 copy. It is unmeasured.
+- **What follows:** F2-E, the accuracy question at S = ROW (the user's decision, 2026-09-25). Its answer cannot
+  change the N2 pick.
+
+**What F2 asks.** The sources are the F2 plan (v2 final) and its F2-0b addendum, git-ignored drafts. Both tools pin
+the plan at LF `b98787f4`, and F2-0b's pins the addendum at LF `81dfe8da`.
+- Route (i) is Q4_0 weights times int8 activations per 32-block, as in
+  [U6](#hybrid-stack-u6-e-and-u6-0-the-epilogue-of-a-q4_0-npu-kernel-fp32-grade-products-take-three-bf16-pieces-and-that-epilogue-costs-97-cycles-per-32-lane-block-tile-so-route-i-as-built-misses-the-users-bar-on-time-and-energy-by-the-u6-plans-own-model-2026-09-25-desktop-2),
+  with F2 replacing the per-block fp32 scales with 8-bit integers under one fp32 scale per superblock of S blocks.
+  - qx is a uint8 in [1, 255], and qw a signed int8 in [−127, 127].
+  - The integer sum I = Σ_b i · qx · qw is exact in a 64-bit accumulator: |i · qx · qw| ≤ 1,052,901,120 < 2^30,
+    and 320 blocks stay under 2^39.
+  - One flush per superblock: y += fp32(I) × (Sx ⊗ Dw).
+- **The line:** E_F2 = E_core + FLUSH / S ≤ 24, in the U6 plan's form, 18.02 ms + 6.55 ms × E per layer, against the
+  break-even with D-nb16 at 178.49 ms per layer.
+  - E_F2 ≤ 24 is PASS. In F2-0b's tiers, 128 < FLUSH ≤ 159 (E_F2 ≤ 24.48) is MARGINAL, and FLUSH > 159 or a VOID
+    fails that form. S = ROW is read at its smallest block count, 64.
+  - The loop form (E ≤ 20) and the serial form (E ≤ 14) are sensitivities, not deciding.
+
+**F2-0: the core, and a flush that read VOID.** The pieces:
+- the tool, `tools/hybrid_f2_0.py` at `a47e631`, importing U6-0's reader;
+- the kernel, `kernels/f2_epilogue/f2_epilogue.cc`;
+- the runner stage, `scripts/hybrid-stack.sh f2-0`.
+
+The method is U6-0's
+([bundle count = cycle count](#aie2-machine-code-the-bundle-count-of-a-loop-is-its-cycle-count)) on the same pinned
+toolchain. The selftest passed 39 of 39 inside the run.
+- **The core, `f2_block`:** U6-0's tile loop (the A and B loads, `mmul<4,16,8,int8,int4>`), then:
+  - i to int16 by srs at shift 0, which is exact;
+  - P = qx ⊗ qw in int16, from 4 broadcast bytes and a widened 16-byte qw record;
+  - I += i × P by `aie::mac` on two `accum<acc64,16>` halves;
+  - I loaded and stored through `aie::vector_cast` every block, an L1 round-trip, U6-0's conservative form.
+- **The flush, `f2_flush`:** `aie::to_float` on the acc64 halves, then U6-E's 3-term products, with six y terms.
+
+  | Case | Role | Loop bundles | Integer MACs | bf16 MACs | Vector ops | Loads, stores | .text B | Pipelined, read off the text |
+  |---|---|---:|---:|---:|---:|---|---:|---|
+  | CONTROL | baseline | 7 | 2 | 0 | 2 | 8, 4 | 272 | SHOWN |
+  | F2_CORE | DECIDING | 29 | 5 | 0 | 29 | 21, 8 | 496 | SHOWN |
+  | F2_FLUSH | DECIDING through E_F2; read VOID | 142 | 0 | 24 | 134 | 17, 4 | 896 | NOT SHOWN |
+  | F2_CORE_I32 | report-only | 30 | 7 | 0 | 33 | 21, 8 | 528 | SHOWN |
+
+- So E_core = 29 − 7 = 22, and 23 with i kept as int32 (report-only).
+- **F2_CORE's census:** vmul 2 and vmac 3 (the mmul's two, P's multiply, the two acc64 MACs), vsrs.s16.s32 2,
+  vshift 8, vbcst.16 4, vunpack 1, vmov 9, 16 vector loads and 8 vector stores. No float work runs per block.
+- **F2_FLUSH's census** holds the 8 acc64 srs (vsrs.d16.s64 6, vsrs.s16.s64 2) and 26 `mov`, among them the 18
+  in-loop mode writes. The set_rounding write, crRnd #0xc at 0x3a, sits outside the loop.
+- **Predictions** (ESTIMATE): F2-P1 (every case compiles), F2-P2 (no float work in the core) and F2-P3 (E_core < 68,
+  U6-0's 2-term E) HOLD. F2-P4 (E_F2 ≤ 24) reads VOID.
+
+**F2-0b: a flush with no srs on an acc64, and the acc64 confirmation.** The pieces:
+- the tool, `tools/hybrid_f2_0b.py` at `a72726e`, importing U6-0's reader and F2-0's tool, both unedited;
+- the kernel, `kernels/f2_epilogue/f2_flush_b.cc`;
+- the runner stage, `scripts/hybrid-stack.sh f2-0b`.
+
+The selftest passed 64 of 64 inside the run: F2-0's 39 and F2-0b's 25.
+- **fp32(I) with no srs** (the addendum's section 1):
+  - I is read as F2_CORE leaves it in L1, 64 int32 words per tile. `filter_even` and `filter_odd` take each lane's
+    low word, as uint16 h0 and h1, and its high word, whose low half h2 is signed.
+  - `aie::to_float`'s 16-bit path converts h2 at shift −32, h1 at −16 and h0 at 0, each exact.
+  - I = h2 · 2^32 + h1 · 2^16 + h0 exactly for |I| < 2^47. The sum runs (f2 + f1) + f0: the first add is exact,
+    since |I / 2^16| < 2^23 (the selftest's largest, 5,141,118), so fp32(I) takes one rounding, at the last add
+    (DERIVED). That the fp32 add rounds to nearest even is INFERRED, U6-E's standing assumption.
+  - **Not shifts:** aie_api lowers a lane shift of an int32 vector as an ups and an srs
+    (`aie_api/detail/aie2/shift.hpp:101-104`), and that srs rounds by the ambient crRnd (conv_even here). So
+    lo32 >> 16 would round, not floor.
+  - **The lane order** (the low word of each 64-bit lane at the even int32 index) is DERIVED from the pinned
+    clang's IR. The cast is `bitcast <8 x i64> to <16 x i32>` under a little-endian datalayout. F2_CORE's own
+    stores put cm4's quarters at offsets 0x0, 0x20, 0x40 and 0x60, and cm6's at 0x80 to 0xe0. It rests on the
+    compiler lowering its IR correctly; no run on a core checked it.
+  - The selftest checks the conversion against RNE(I) bit for bit, with 0 mismatches:
+    - on 345 listed values: 0, ±1, the bound 336,928,358,400, ±(2^39 − 1), 2^k and 2^k ± 1 for k ≤ 38, and fp32
+      ties;
+    - on 10^6 random I, seed 20260925.
+
+    A word-swapped reading fails on 342 of the 345.
+- **The two forms:**
+  - FLUSH_B3 is F2-0's flush after the conversion, verbatim: three pieces and ORDER[3]['P'] for P and y.
+  - FLUSH_B2 is U6-E's two-piece form, ORDER[2]. It drops fp32(I)'s third piece and the second-order terms. Its
+    accuracy is F2-E's question.
+- **The acc64 confirmation** (a precondition of any PASS or MARGINAL):
+  - **The re-read:** RE-READ, 29 bundles, with the body and .text identical to F2-0's.
+  - **The MACs on I** are the loop's integer MACs whose accumulator the loop stores as all four quarters: vmac cm4
+    and vmac cm6, both on r4.
+  - **The setup:** one write to r4, before the loop, `mova r4, #0x35a`.
+  - **The decode** (`aiev2_vmult.h:15-25`, amode at bits 1-2):
+    - 0x35a reads amode 1, bmode 3, variant 2, both operands signed.
+    - The header's 3,556 intrinsics that build a control word pair amode 0 only with acc32, 1 only with acc64
+      and cacc64, and 2 only with accfloat and caccfloat.
+    - The int16 MAC into acc64 that `aie::mac` calls passes amode 1 (`aiev2_vmult.h:16189-16195`).
+  - **The decoder's controls:** the mmul's config (r1 = 0x300) and P's (r3 = 0x338) read amode 0, acc32, as the
+    source says.
+
+  | Flush form | Loop bundles | bf16 MACs | Vector ops | Loads, stores | Stack refs in loop | .text B | Pipelined |
+  |---|---:|---:|---:|---|---:|---:|---|
+  | FLUSH_B3 | 116 | 24 | 121 | 17, 4 | 0 | 720 | NOT SHOWN |
+  | FLUSH_B2 | 82 | 12 | 84 | 21, 4 | 4 | 592 | NOT SHOWN |
+
+- **The flush loops hold no vsrs and no control-register write.** The only such write in each is crRnd #0xc,
+  before the loop.
+- **B3's census:** vmac.f 22 and vmul.f 2, vconv 35, vsub.f 20, vmov 18, vshuffle 10, vups 3, vadd 3, vadd.f 4 and
+  vbcst.32 4.
+- **B2's census:** vmac.f 10 and vmul.f 2, vconv 21, vsub.f 13, vmov 14, vshuffle 10, vups 3, vadd 3, vadd.f 4 and
+  vbcst.32 4.
+- **B2's four stack loads** are one accumulator's four quarters, reloaded from sp each iteration (a 128 B frame),
+  and they are counted.
+- **Predictions** (ESTIMATE): F2b-P1 to F2b-P5 all HOLD: both flushes compile to one loop with no mode write
+  inside; no vsrs; B2 < B3; the re-read is bit-identical; r4 reads amode 1.
+- **Disclosed before the run** (the commit bodies of `a38057a` and `a72726e`):
+  - both flush forms were compiled in a dry run and deleted unread;
+  - the lane-order probe was compiled to IR only;
+  - an offline test of run()'s plumbing used stubs, F2-0's already-logged loop body and a synthetic pre-loop.
+
+  No F2-0b bundle count and no r4 setup was seen before the logged run.
+
+**Energy, per form** (DERIVED; compute only, at N-w4's power; with idle, mJ per prompt token per layer; excluded:
+the scale bytes, bank conflicts, lock and DMA waits, and code outside the loop):
+
+| Form | E_F2 | Plan form, 18.02 + 6.55 × E, ms | With idle, mJ | Serial form, 83.91 + 6.55 × E, ms | With idle, mJ | Loop form, 6.55 × (7 + E), ms | With idle, mJ |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| FLUSH_B3 | 23.81 | 173.99 | 2.7849 | 239.88 | 3.8395 | 201.82 | 3.2303 |
+| FLUSH_B2 | 23.28 | 170.51 | 2.7292 | 236.40 | 3.7838 | 198.34 | 3.1746 |
+
+The comparison, MEASURED in 3c at M = 2,048 (the post-hoc log's lines 24, 25 and 26):
+
+| Arm | ms per layer | With idle, mJ |
+|---|---:|---:|
+| D-nb16 | 79.49 | 2.8569 |
+| N-bf16 | 166.00 | 2.7417 |
+| N-i8, the kernel N2 runs | 96.92 | 1.6334 |
+
+- In the plan's form, both forms sit below D-nb16's 2.8569. B2 also sits below N-bf16's 2.7417, and B3 does not.
+- Only the plan's form reads below D-nb16. It overlaps the epilogue with a transport that N-w4 MEASURED at 83.91
+  ms, against the model's 18.02 ms of MACs. The serial form, with no overlap, reads 3.78–3.84, above D-nb16.
+- Against N-i8's measured 1.6334, F2's best modelled form is 1.67× (B2) and B3 is 1.70×.
+
+**Hashes** (CRLF working copy, then LF blob).
+- The F2-0 run (`ca2f0de`): `0e1c59b64f360e02ac52c7e77a30eb51aecbe650bc12c4ef2755d99681a3dc61`,
+  `2bf5e1afc60d9ed9e1194335fbe7e95ce0eeee250c5250b88ac872b2811b5140`.
+- The F2-0b run (`5a5e15a`): `e00e74e8c19c4ca22a07ed59629c0ef5e188976f7a833c2991b2461cf2713298`,
+  `dfd4849f5a7cbe8fe16ca39b69c9221a33333c682bd05b8588490eb9b371c4bf`.
+- The tools: `tools/hybrid_f2_0.py` LF `1d6960e9…` and `tools/hybrid_f2_0b.py` LF `7a953146…`. The sources:
+  `f2_epilogue.cc` LF `76af35b2…` and `f2_flush_b.cc` LF `caa62ce0…`. The header `aiev2_vmult.h` is pinned at LF
+  `685cf910…`.
+
+**What this does not establish.**
+- A silicon time. E_core and FLUSH are static counts of loops, lower bounds: bank conflicts and waits are excluded.
+  No F2 kernel has run on the NPU.
+- The energy at F2's own power. The model uses N-w4's, an assumption.
+- Accuracy. Whether one scale per whole row of K holds, and whether B2's two pieces do, is F2-E's question, then
+  F2-A's.
+- The lane order on silicon. It rests on the compiler's IR semantics, and no run on a core checked it.
+- That the fp32 add rounds to nearest even. It is INFERRED, as in U6-E.
+- The cost of the scale bytes, or F2's memory case (sharing the GPU's Q4_0 weights), which is unmeasured.
 
 ### MobileViT-XXS does not survive per-tensor INT8, and AdaRound cannot save it
 
