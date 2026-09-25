@@ -1,0 +1,39 @@
+CHECK (hybrid S1), no chip. 2026-09-25T01:06:12Z
+PREREG_TEXT_SHA256 d2e416e5c916ac08816f3071ccd2de37091b6652ed00ac833f50af2e0c81598e
+PROTOCOL_JSON_SHA256 9750abf81d27747158e903bd519e1c57ba1168b7c7c6c32e0a1461799cdd02b3
+VERDICT_CODE_SHA256 d78b0f48d978b52d773caf11cd228cddc2a46f3c5c8575651c5efeda61df50b7
+FROZEN_JSON {"prereg_log": "hybrid_s1_prereg_desktop2_20260924_amended.log", "prereg_log_lf_sha256": "ab62403e4837e5dfb046bd56b2e2ae96be08d82ef621c8c2c676a313f56eb7d3", "equal": true, "PREREG_TEXT_SHA256": "d2e416e5c916ac08816f3071ccd2de37091b6652ed00ac833f50af2e0c81598e", "PROTOCOL_JSON_SHA256": "9750abf81d27747158e903bd519e1c57ba1168b7c7c6c32e0a1461799cdd02b3", "VERDICT_CODE_SHA256": "d78b0f48d978b52d773caf11cd228cddc2a46f3c5c8575651c5efeda61df50b7"}
+C1_ROW_JSON {"name": "q", "x_pin": true, "w_pin": true, "N1_int32_equal_3c": true, "N2_int32_exact": true, "N3_bits_rne": true, "N3_rel_l2": 1.0049879141588086e-07}
+C1_ROW_JSON {"name": "k", "x_pin": true, "w_pin": true, "N1_int32_equal_3c": true, "N2_int32_exact": true, "N3_bits_rne": true, "N3_rel_l2": 1.0088033353567085e-07}
+C1_ROW_JSON {"name": "v", "x_pin": true, "w_pin": true, "N1_int32_equal_3c": true, "N2_int32_exact": true, "N3_bits_rne": true, "N3_rel_l2": 1.0091228543309843e-07}
+C1_ROW_JSON {"name": "o", "x_pin": true, "w_pin": true, "N1_int32_equal_3c": true, "N2_int32_exact": true, "N3_bits_rne": true, "N3_rel_l2": 9.428417535504978e-08}
+C1_ROW_JSON {"name": "gate", "x_pin": true, "w_pin": true, "N1_int32_equal_3c": true, "N2_int32_exact": true, "N3_bits_rne": true, "N3_rel_l2": 1.0050298031841036e-07}
+C1_ROW_JSON {"name": "up", "x_pin": true, "w_pin": true, "N1_int32_equal_3c": true, "N2_int32_exact": true, "N3_bits_rne": true, "N3_rel_l2": 1.006044778337392e-07}
+C1_ROW_JSON {"name": "down", "x_pin": true, "w_pin": true, "N1_int32_equal_3c": true, "N2_int32_exact": true, "N3_bits_rne": true, "N3_rel_l2": 1.7326888586804703e-07}
+C1_ARM_JSON {"arm": "N1", "ok": true}
+C1_ARM_JSON {"arm": "N2", "ok": true}
+C1_ARM_JSON {"arm": "N3", "ok": true}
+CHILD _c1 rc 0 (attempt 1)
+MEMORY_START_JSON {"child": "R0 (C5, C6)", "available_gb": 20.6, "min_gb": 15.0}
+C5_JSON {"sha_run1": "a5597e1ffad816ad48a7dfb911883e3ec99bc454018890701fdca1e7a359ae83", "sha_run2": "a5597e1ffad816ad48a7dfb911883e3ec99bc454018890701fdca1e7a359ae83", "outcome": "PASS"}
+C6_RUNS_JSON {"chunked_sha": "0caa84b3b552118e1046e837e5010bbac802ba85ef3a8ed57001f7d015b1e557", "oneshot_sha": "de82102721c25e7d87259f90fd8bf974815bd0b34eed03bb2410d69e5235f076", "chunked_rows": 1024, "oneshot_rows": 3072}
+MEM_JSON {"child": "R0 (C5, C6)", "wset_gb": 4.9, "peak_wset_gb": 4.93, "private_gb": 5.56, "peak_private_gb": 5.59}
+CHILD _r0 rc 0 (attempt 1)
+MEMORY_START_JSON {"child": "R0_probe16 (C2's inputs)", "available_gb": 20.7, "min_gb": 15.0}
+PROBE16_JSON {"hidden_equals_r0": true, "inputs": ["x_attn", "x_o", "x_ffn", "x_down"]}
+CHILD _probe16 rc 0 (attempt 1)
+MEMORY_START_JSON {"child": "torch reference (C4)", "available_gb": 20.7, "min_gb": 15.0}
+TORCH_JSON {"rows": 2048, "seconds": 39.8, "finite": true, "wset_gb": 4.33, "peak_wset_gb": 7.5, "private_gb": 1.77, "peak_private_gb": 6.31}
+CHILD _torch rc 0 (attempt 1)
+MEMORY_START_JSON {"child": "compare (C4, C6, C2)", "available_gb": 20.7, "min_gb": 15.0}
+GATES_JSON {"C4": "PASS", "C6": "PASS"}
+C2_JSON {"name": "q", "nb4_vs_ort_form": 3.4442778290698247e-07, "nb4_vs_llama_form": 0.00012831963338032646, "ort_form_vs_llama_form": 0.00012831974950821063}
+C2_JSON {"name": "k", "nb4_vs_ort_form": 3.1888439057385116e-07, "nb4_vs_llama_form": 0.00013476600278290734, "ort_form_vs_llama_form": 0.0001347658076660254}
+C2_JSON {"name": "v", "nb4_vs_ort_form": 5.645603249807371e-07, "nb4_vs_llama_form": 0.0001789678445354741, "ort_form_vs_llama_form": 0.00017896279346369054}
+C2_JSON {"name": "o", "nb4_vs_ort_form": 3.0176442337857616e-07, "nb4_vs_llama_form": 0.00014124715710286804, "ort_form_vs_llama_form": 0.00014124603943021892}
+C2_JSON {"name": "gate", "nb4_vs_ort_form": 3.33442604459366e-07, "nb4_vs_llama_form": 0.00013978098812800904, "ort_form_vs_llama_form": 0.00013978074313626741}
+C2_JSON {"name": "up", "nb4_vs_ort_form": 5.047437104722956e-07, "nb4_vs_llama_form": 0.00018530844314457585, "ort_form_vs_llama_form": 0.00018530718544478586}
+C2_JSON {"name": "down", "nb4_vs_ort_form": 7.572597852043961e-07, "nb4_vs_llama_form": 0.0001528144645733614, "ort_form_vs_llama_form": 0.0001528154644302949}
+CHILD _compare rc 0 (attempt 1)
+CHECK_JSON {"C1": {"N1": true, "N2": true, "N3": true}, "C5": "PASS", "C4": "PASS", "C6": "PASS", "rc": {"_c1": 0, "_r0": 0, "_probe16": 0, "_torch": 0, "_compare": 0}, "stop": false}
+CHECK OK
