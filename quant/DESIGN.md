@@ -713,6 +713,8 @@ The matcher's rejections (Clip, Sigmoid, multi-consumer convs — `results/mobil
 cle_pattern_count.log`) are reproduced, not fixed; CLE across ReLU6 is not sound and the
 record already says so.
 
+Note (2026-09-25): yolov8n-cut's 0 patterns is MEASURED, no longer an expectation: Quark and quant/ both count 0 on the prepared graph (`results/quant/prepare_probe_yolov8n_cut.log:269, :296`).
+
 **`quant/refine.py`** — the shift rules
 
 ```
