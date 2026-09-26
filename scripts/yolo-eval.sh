@@ -78,7 +78,7 @@ for m in "${MODELS[@]}"; do
     fi
     step "$stem on ${ep^^}  ($N images)"
     log="results/map_${stem}_${ep}${TAG:+_$TAG}.log"
-    # Refuse to overwrite a COMMITTED log. CLAUDE.md: "never rewrite or tidy an
+    # Refuse to overwrite a COMMITTED log. The rule is "never rewrite or tidy an
     # existing log -- add a new one", and the derived name collides for any
     # re-run of the same model on a second machine. Measured the hard way: a
     # re-run of yolov8l here silently replaced the tracked 1532s laptop-era log

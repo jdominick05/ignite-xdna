@@ -395,13 +395,15 @@ with activations and weights sharing bank 2.
 | Quantity | Value | Tag and evidence |
 |---|---|---|
 | 16-core bf16 peak | 4.10 TFLOPS at 1.0 GHz; 6.55 TFLOPS at 1.6 GHz; **7.37 TFLOPS at the measured 1.80 GHz** | DERIVED: 16 × 128 × 2 × f; clock MEASURED `results/aie/clock_probe_npu.log` |
-| Best measured | 2072.54 GFLOPS (1024³, bf16 out) | MEASURED `results/aie/bf16_matmul_niche_npu.log` |
+| Best measured, upstream design | 2072.54 GFLOPS (1024³, bf16 out, the default 64×32 tile) | MEASURED `results/aie/bf16_matmul_niche_npu.log` |
+| Best measured, C tile single-buffered (a local `whole_array.py` patch, §3.1) | **2700.44 GFLOPS** (2048×4096×4096, 32×128 tile), the best bf16 figure in this repo; 1.89× the same sitting's CPU bf16 mean | MEASURED `results/aie/gemm_tile_sweep_c_single_buffer_npu.log` |
 | Typical at production shapes | 1776.68 (2048×4096×4096, f32 out), 1800.86 (down-projection K=11008), 1846.96 (4096×2048×2048) GFLOPS | MEASURED `results/aie/bf16_matmul_attention_scale_npu.log`, `..._ffn_real_shape_npu.log`, `..._niche_npu.log` |
-| Share of peak | 50.6% (1.0 GHz) / 31.6% (1.6 GHz) / **28.1% (measured 1.80 GHz)** at the best point; 43–45% / 27–28% / 24–25% at production shapes | DERIVED |
-| Per core at the best point | 2072.54 ÷ 16 = 129.5 GFLOPS = 64.8 GMAC/s = 40.5 MAC/cycle of 128 at 1.6 GHz, **36.0 at the measured 1.80 GHz** | DERIVED |
+| Share of peak | 50.6% (1.0 GHz) / 31.6% (1.6 GHz) / **28.1% (measured 1.80 GHz)** at the upstream design's best point, **36.6%** at 1.80 GHz single-buffered; 43–45% / 27–28% / 24–25% at production shapes | DERIVED |
+| Per core at the best point | Upstream: 2072.54 ÷ 16 = 129.5 GFLOPS = 64.8 GMAC/s = 40.5 MAC/cycle of 128 at 1.6 GHz, **36.0 at the measured 1.80 GHz**. Single-buffered: 2700.44 ÷ 16 = 168.8 GFLOPS = 84.4 GMAC/s = **46.9 MAC/cycle at 1.80 GHz** | DERIVED |
 | CPU bar (torch bf16, 8 Zen4 cores) | 1100.6–1362.8 GFLOPS across every shape measured | MEASURED, the same logs |
 
-The NPU's measured edge here is 1.13–1.78× over the CPU, and it comes from running the
+The NPU's measured edge here is 1.13–1.78× over the CPU with the upstream design (1.89×
+single-buffered), and it comes from running the
 array at roughly a third to a half of its bf16 peak. Section 3.1 says why, and how much of
 the rest is physically recoverable.
 
@@ -789,7 +791,14 @@ per core directly, independent of host timing and of S2. Decides: the same quest
 S2 at lower fidelity and zero toolchain risk; use whichever lands first.
 
 **S4. Package power under load, and the NPU's share of it.**
-Physical basis: nothing in this repo has ever measured a watt. 1.7 has the clock and the
+Status, 2026-09-16: the package half is measured. `tools/power_probe.py` reads AMD's RAPL
+package counter through Windows PDH (`\Energy Meter(RAPL_Package0_PKG)\Power`, sampled by
+`typeperf`, no driver or elevation), and `tools/energy_sitting.py` turns it into energy per
+frame against an idle baseline taken in the same sitting
+([first results](BENCHMARKS.md#energy-per-frame-against-amds-stack-and-power-modes-2026-09-16-desktop-2)).
+The NPU's own share is still inferred, not read, and no GEMM or single kernel has had its
+energy measured. The plan below is kept as written.
+Physical basis, when this was written: nothing in this repo had measured a watt. 1.7 has the clock and the
 GPU-engine utilization percentage, and every "is it worth it" verdict in
 `docs/BENCHMARKS.md` — the iGPU comparison, MobileNetV2 being too cheap to accelerate,
 `resnetv2_50x3_bit` losing by 25% — is a latency verdict, while the part's stated reason

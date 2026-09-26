@@ -1,0 +1,89 @@
+$ python tools/coco_heldout_rescore.py --root <root>   (<root> = the checkout holding data/ and dets)
+tool LF sha256 6cf9526df8d780192f321b3b981578c031091efdb9b11e3f1a7518394515f287
+date 2026-09-25 19:29  env mlir-aie-iron  python 3.13.15  numpy 2.5.3  pycocotools 2.0.11  process priority below normal
+data/coco_calib: 300 jpg files, ids 139..557501
+data/coco/annotations/instances_val2017.json: sha256 e8c7f7908f1d7278341fae127d0da654f102f11bd7b21d8aeefa635b8c810b6f  5000 images; calibration ids not in it: 0; H = 4700 images
+data/coco/annotations/person_keypoints_val2017.json: sha256 788e2dae83c86bd547be7fab269d6399df5671063d29a61360cdb2cc370d2b14  5000 images; calibration ids not in it: 0; H = 4700 images
+
+per file: published (backing log) | rescored on all 5,000 | on H; mAP@50-95 / mAP@50
+yolov6n fp32 (bbox)
+  dets results/dets_yolov6n_cpu.json  146786550 B  sha256 dc0b5d694b51aba829a8c65b08086e71f4b286ea3ddf81db2b4fc902a8d4d9d9  1500000 detections
+  log  results/map_yolov6n_fp32_cpu.log (1 mAP@50-95 line; the first is used)
+  published 36.95 / 51.98 | all 36.95 / 51.98 MATCH | H 36.88 / 51.90  (92 s)
+yolov6n xint8 (bbox)
+  dets results/dets_yolov6n_cut_xint8_npu.json  142115982 B  sha256 3af8c366fa6b501896936414f7b976c395a3a51392f8cc48c56114829f15ac37  1500000 detections
+  log  results/map_yolov6n_cut_xint8_npu.log (1 mAP@50-95 line; the first is used)
+  published 22.92 / 34.98 | all 22.92 / 34.98 MATCH | H 22.87 / 34.90  (90 s)
+yolov6n adaround (bbox)
+  dets results/dets_yolov6n_cut_xint8_adaround_npu.json  142325913 B  sha256 c0822543ecab9c0ec070fa8c30d1aaa6bb10561c6869732eb067985622b3ab53  1500000 detections
+  log  results/map_yolov6n_cut_xint8_adaround_npu.log (1 mAP@50-95 line; the first is used)
+  published 33.57 / 49.84 | all 33.57 / 49.84 MATCH | H 33.55 / 49.80  (92 s)
+yolov8n-pose fp32 (keypoints)
+  dets results/dets_kpts_yolov8n-pose_cut_cpu.json  74051340 B  sha256 4dac11233646f911ca3d6d8f8bc0fab17eb1edd759908ad928b2732f803fcce9  177660 detections
+  log  results/map_kpts_yolov8n-pose_cut_full5000_cpu.log (1 mAP@50-95 line; the first is used)
+  published 49.86 / 78.69 | all 49.86 / 78.69 MATCH | H 49.82 / 78.63  (13 s)
+yolov8n-pose xint8 (keypoints)
+  dets results/dets_kpts_yolov8n-pose_cut_xint8_npu.json  46645079 B  sha256 da9c5ab005061a92068151faee49ace2abdd1d3b14d6a73df6c4901bf13dd64b  118729 detections
+  log  results/map_kpts_yolov8n-pose_cut_xint8_full5000_npu.log (1 mAP@50-95 line; the first is used)
+  published 32.64 / 66.90 | all 32.64 / 66.90 MATCH | H 32.53 / 66.77  (12 s)
+yolov8n-pose adaround (keypoints)
+  dets results/dets_kpts_yolov8n-pose_cut_xint8_adaround_npu.json  54857031 B  sha256 84c5b8e10db2c8026c7723226b5659aaabe66ef84c65504aaea46caaa80bb29c  139993 detections
+  log  results/map_kpts_yolov8n-pose_cut_xint8_adaround_npu.log (1 mAP@50-95 line; the first is used)
+  published 34.32 / 71.85 | all 34.32 / 71.85 MATCH | H 34.24 / 71.85  (12 s)
+yolov8m fp32 (bbox)
+  dets results/dets_yolov8m_cpu.json  45960150 B  sha256 11c7ab3eccd1a2ba2bc0c61a84f79f1264215985bb382980210c96c24e63ba89  471168 detections
+  log  results/bench/map_yolov8m_cpu.log (1 mAP@50-95 line; the first is used)
+  published 49.54 / 66.09 | all 49.54 / 66.09 MATCH | H 49.62 / 66.21  (48 s)
+yolov8m xint8_c64 (bbox)
+  dets results/dets_yolov8m_cut_xint8_npu.json  42995309 B  sha256 747f58dadd7790b37923b13ca8c651f485f802ff0a1dedc5789395286a423d72  440669 detections
+  log  results/wide/map_yolov8m_npu.log (1 mAP@50-95 line; the first is used)
+  published 43.49 / 59.79 | all 43.49 / 59.79 MATCH | H 43.58 / 59.95  (47 s)
+yolov8m xint8_c200 (bbox)
+  dets results/dets_yolov8m_cut_xint8_c200_npu.json  45601421 B  sha256 42ad16e06c511a417fe7c8401937b72162870e6a88fc304ea8919b300fa3a02f  467163 detections
+  log  results/bench/map_yolov8m_cut_xint8_c200_npu.log (1 mAP@50-95 line; the first is used)
+  published 43.38 / 59.62 | all 43.38 / 59.62 MATCH | H 43.44 / 59.77  (49 s)
+yolov8m adaround (bbox)
+  dets results/dets_yolov8m_cut_xint8_adaround_npu.json  38671584 B  sha256 dd121bcc91190179dca6792c5245f3aab65ebedd3bd781b5a876a3fc14047d41  396445 detections
+  log  results/map_yolov8m_cut_xint8_adaround_npu.log (1 mAP@50-95 line; the first is used)
+  published 45.32 / 61.71 | all 45.32 / 61.71 MATCH | H 45.38 / 61.84  (44 s)
+yolov8s fp32 (bbox)
+  dets results/dets_yolov8s_cpu.json  54563097 B  sha256 d1e20b575e0e673d023c49957e68fc70d8cb877fbf188f048dfcf01507bfaec9  559065 detections
+  log  results/bench/map_yolov8s_cpu.log (1 mAP@50-95 line; the first is used)
+  published 44.29 / 60.69 | all 44.29 / 60.69 MATCH | H 44.23 / 60.63  (53 s)
+yolov8s adaround (bbox)
+  dets results/dets_yolov8s_cut_xint8_adaround_npu.json  45283306 B  sha256 d0350ebae9381692be80a3dc83ca41216ef5d6e5838ce32515c4075ae1027139  464038 detections
+  log  results/map_yolov8s_cut_xint8_adaround_npu.log (1 mAP@50-95 line; the first is used)
+  published 39.98 / 56.11 | all 39.98 / 56.11 MATCH | H 39.95 / 56.09  (48 s)
+yolov8n fp32 (bbox)
+  dets results/dets_yolov8n_cpu.json  67406802 B  sha256 a92ffac9a249b9eb758658be622d2b4d847cac2a3c8a27e486ec472f02c13aab  689838 detections
+  log  results/bench/map_yolov8n_cpu.log (1 mAP@50-95 line; the first is used)
+  published 36.69 / 51.64 | all 36.69 / 51.64 MATCH | H 36.60 / 51.52  (60 s)
+yolov8n adaround (bbox)
+  dets results/dets_yolov8n_cut_xint8_adaround_npu.json  59033557 B  sha256 b6a1cb7c087a874c56ed8b2f244f7c3a222cd8fb4b6304d2186fe1241ba75cfc  604075 detections
+  log  results/bench/map_yolov8n_cut_xint8_adaround_npu.log (1 mAP@50-95 line; the first is used)
+  published 32.19 / 47.04 | all 32.19 / 47.04 MATCH | H 32.10 / 46.89  (55 s)
+
+summary, mAP@50-95 points, reproduced rows only
+  all-H: the arm's score on all 5,000 minus on H. excess: the arm's all-H minus FP32's all-H,
+  i.e. how much more the arm gains from the 300 calibration images than the float model does.
+  yolov6n       fp32        all  36.95  H  36.88  all-H +0.07
+  yolov6n       xint8       all  22.92  H  22.87  all-H +0.05  excess -0.02  drop from FP32: all 14.03, H 14.02
+  yolov6n       adaround    all  33.57  H  33.55  all-H +0.03  excess -0.04  drop from FP32: all 3.38, H 3.34
+  yolov8n-pose  fp32        all  49.86  H  49.82  all-H +0.04
+  yolov8n-pose  xint8       all  32.64  H  32.53  all-H +0.11  excess +0.07  drop from FP32: all 17.22, H 17.29
+  yolov8n-pose  adaround    all  34.32  H  34.24  all-H +0.08  excess +0.04  drop from FP32: all 15.55, H 15.59
+  yolov8m       fp32        all  49.54  H  49.62  all-H -0.07
+  yolov8m       xint8_c64   all  43.49  H  43.58  all-H -0.09  excess -0.01  drop from FP32: all 6.05, H 6.04
+  yolov8m       xint8_c200  all  43.38  H  43.44  all-H -0.06  excess +0.01  drop from FP32: all 6.16, H 6.18
+  yolov8m       adaround    all  45.32  H  45.38  all-H -0.06  excess +0.01  drop from FP32: all 4.22, H 4.23
+  yolov8s       fp32        all  44.29  H  44.23  all-H +0.06
+  yolov8s       adaround    all  39.98  H  39.95  all-H +0.03  excess -0.03  drop from FP32: all 4.31, H 4.28
+  yolov8n       fp32        all  36.69  H  36.60  all-H +0.09
+  yolov8n       adaround    all  32.19  H  32.10  all-H +0.09  excess +0.00  drop from FP32: all 4.50, H 4.50
+
+recovery the claims state (AdaRound minus plain XINT8), on all 5,000 and on H
+  yolov6n       xint8 -> adaround: all +10.66  H +10.68  difference -0.02
+  yolov8n-pose  xint8 -> adaround: all +1.68  H +1.71  difference -0.03
+  yolov8m       xint8_c64 -> adaround: all +1.83  H +1.80  difference +0.03
+
+rows reproduced: 14 of 14

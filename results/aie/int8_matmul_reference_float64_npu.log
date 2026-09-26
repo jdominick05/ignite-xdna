@@ -17,7 +17,7 @@ computes A.astype(int64) @ B.astype(int64); numpy has no BLAS path for integer m
 that is a scalar loop, and it dominated the int8 sweep's wall time: 760.9 s "wall incl.
 compile" for the 2048x4096x4096 row whose NPU time is 33.6 ms
 (results/aie/int8_matmul_sweep_npu.log, RAW NPU OUTPUT). The word "int64" then travelled
-through two handoff notes (HANDOFF_GEMINI.md, HANDOFF_CLAUDE.md) as if it were a research
+through two handoff notes (HANDOFF_<tool>.md, HANDOFF_<tool>.md) as if it were a research
 item reserved for this session. It is an oracle, not a datatype anything here computes in:
 the AIE GEMM designs accumulate int8 into int32 and bf16 into float32.
 
@@ -164,7 +164,7 @@ echo "=== done $(date '+%Y-%m-%d %H:%M:%S') exit=$? ==="
 # rows already passed against. 2048x4096x4096 twice: the first wall may include a JIT
 # compile, the second is cache-warm.
 set -u
-source "C:/Users/<user>/.claude/jobs/77babca4/tmp/ironenv.sh"
+source "<job-tmp>/ironenv.sh"
 cd "$HOME/PycharmProjects/ryzen-ai-xdna1-quantization" || exit 1
 snap() { powershell -NoProfile -Command "Get-CimInstance Win32_Process | Where-Object { \$_.Name -match '^(python|aiecc|clang|peano)' } | ForEach-Object { '{0} {1} {2}' -f \$_.ProcessId, \$_.Name, (\$_.CommandLine -replace '\s+',' ').Substring(0, [Math]::Min(140, (\$_.CommandLine).Length)) }"; }
 echo "=== float64-reference proof on the NPU. start $(date '+%Y-%m-%d %H:%M:%S') ==="

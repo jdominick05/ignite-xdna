@@ -76,7 +76,7 @@ check_npu_contention() {
 
 # check_host_load <mode> [witness] -- the host-side counterpart to the check above.
 # That one asks whether another session holds the AIE tiles; this asks whether one
-# holds the CPU. Desktop 2 runs three Claude sessions, agy and PyCharm against the
+# holds the CPU. Desktop 2 runs several development sessions and IDEs against the
 # same 16 threads, so a producer's wall time or peak working set says nothing unless
 # it is read beside what else was running -- which is how the 2026-09-08 MODNet
 # AdaRound oracle came to share the box with another session's yolow quantization.

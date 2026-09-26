@@ -144,9 +144,9 @@ void conv_im2col_kernel(
 Compilation to the AIE2 ELF object `build/conv_im2col_kernel.o` was executed via the native Windows Peano toolchain:
 
 ```powershell
-& "C:\Users\Ignis\mlir-aie\ironenv\Lib\site-packages\llvm-aie\bin\clang++.exe" -O2 -std=c++20 `
+& "C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\llvm-aie\bin\clang++.exe" -O2 -std=c++20 `
     --target=aie2-none-unknown-elf -nostdlib -DNDEBUG -D__AIE_API_AIE_ADF_HPP__ `
-    -I "C:\Users\Ignis\mlir-aie\ironenv\Lib\site-packages\mlir_aie\include" `
+    -I "C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\mlir_aie\include" `
     -c kernels/aie2/conv_im2col_kernel.cc -o build/conv_im2col_kernel.o
 ```
 

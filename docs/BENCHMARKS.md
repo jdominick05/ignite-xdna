@@ -40,13 +40,13 @@ gap couldn't be extra CPU fallback, and nothing else explained it. A same-sittin
 node-for-node, op-type-for-op-type, device-for-device identical (`results/
 adaround_latency_diff_diag_xint8.log`, `results/adaround_latency_diff_diag_adaround.log`).
 No log in this repo now reproduces the original 5.63/6.93 ms pair; the leading suspect is
-the log-name collision this project has been burned by before (`CLAUDE.md`, "Never let two
-machines silently overwrite the same result-log name") — `results/bench_xint8_npu.log` and
+the log-name collision this project has been burned by before (two machines writing
+the same result-log name) — `results/bench_xint8_npu.log` and
 `results/bench_xint8_adaround_npu.log` exist today at only 100 images, not the 1000 the
 headline table cites, meaning a smaller probe run reused those names after the original.
 Treat 5.63/6.93 ms as unverified, not as the number to plan around; the accuracy figures
 (71.70/79.80%) do still match a current log and stand. Latency also drifts session to
-session on this shared machine (`CLAUDE.md`), so the fair comparison is always the
+session on this shared machine, so the fair comparison is always the
 back-to-back pair above, not either number in isolation.
 See `results/adaround_latency_diff_xint8_npu.log`,
 `results/adaround_latency_diff_adaround_npu.log`.
@@ -1240,9 +1240,11 @@ The same `n=64` in bf16 needs 68,864 B against a 65,536 B tile: it misses by exa
 
 **The verdict, by this repo's mean-based convention: with `n=64`, NPU int8 beats the CPU's
 best int8 kernel 1.10×–1.83× at every shape with M ≥ 512 and N ≥ 2048**, and still loses at
-512³, 512×512×1024 and short prefill (M=128: 2.6×, M=256: 1.5×). 4607 GOPS is the highest
-ops rate any single dispatch has reached in this project (28.8% of the 16 TOPS nameplate;
-the 39.3% above is a whole-graph figure across four columns), and 2.5× the bf16 rate of the
+512³, 512×512×1024 and short prefill (M=128: 2.6×, M=256: 1.5×). 4607 GOPS was, at this
+sitting, the highest ops rate any single dispatch had reached in this project (28.8% of the 16 TOPS nameplate;
+the 39.3% above is a whole-graph figure across four columns; later, with the C tile
+single-buffered by a local patch, 64/128/64 reached 4,852.06 GOPS at 2048³, and int4 weights
+at that tile 6,195.33 — [W4A8 on the whole array](#w4a8-on-the-whole-array-int4-weights-pay-at-the-best-int8-tile-and-not-through-the-core)), and 2.5× the bf16 rate of the
 same sitting at 2048³ — the 2× the MAC count promised, but only once the tile bf16 cannot
 have. **The margin is thin at the largest shapes:** torch's kernel has a large mean/min
 spread there (2048³: 7.08 ms mean, 4.09 ms min), and read against its best case the
@@ -1423,7 +1425,8 @@ derived from a clock: the 16 TOPS nameplate is what 20 cores do at 1.6 GHz, and 
 `default` this part runs at 1.80 — 18.4 TOPS for the full array, 14.7 for the 16 cores the
 `4x4` overlay reaches, so that overlay's physical ceiling is 92% of nameplate, not 82%; a
 column is 3.69 int8 TOPS, the vendor DPU's measured 1.650 is 44.8% of it; the 16-core bf16
-peak is 7.37 TFLOPS and the best GEMM here (2072.54 GFLOPS) is 28.1% of it. The
+peak is 7.37 TFLOPS; the best upstream-design bf16 GEMM (2072.54 GFLOPS) is 28.1% of it, and
+the best with the C tile single-buffered by a local patch (2700.44, above) is 36.6%. The
 conversion from any figure quoted "at 1.6 GHz" is the ratio 1.6 ÷ 1.8 = 0.889; the old
 columns stay in that file beside the new one. Power mode is a **2.25× lever on the clock**
 (0.80 → 1.80 GHz) that no log in this repo recorded: any future comparison across sessions
@@ -3706,6 +3709,13 @@ pattern that AdaRound has less room to recover as width increases.
 > plain-XINT8 row — the exact "a model can arrive with no log explaining it" risk this
 > repo's own machine notes warn about.
 
+> **In-sample check (2026-09-25).** Every calibration image here is a val2017 image, so each
+> is also among the 5000 scored ([pitfall](DECISIONS.md#rejected-approaches-and-known-pitfalls)).
+> Rescored from the saved detections on the other 4,700: yolov8s AdaRound 39.95; yolov8m
+> AdaRound 45.38 against plain XINT8's 43.58 (+1.80, against +1.83 on all 5000); and
+> yolov8n-pose's recovery (next section) +1.71 against +1.68
+> (`results/bench/coco_heldout_rescore_desktop2_20260925.log`).
+
 ### yolov8n-pose end to end on the NPU
 
 Head-cut partitions 1015/1025 (99.0%), ~9.1–9.4 ms/frame, same clean pattern as detect:
@@ -3822,6 +3832,11 @@ Three findings:
    distributions would degrade INT8 PTQ "beyond the recovery capacity of AdaRound" —
    measured, they don't: the same AdaRound recipe used elsewhere in this repo, with no
    yolov6n-specific tuning, recovers the large majority of the plain-XINT8 loss.
+
+Checked 2026-09-25: the 300 calibration images are among the 5000 scored
+([pitfall](DECISIONS.md#rejected-approaches-and-known-pitfalls)). On the 4,700 others the
+recovery is +10.68 points (33.55 against 22.87; FP32 36.88), so finding 3 does not rest on them
+(`results/bench/coco_heldout_rescore_desktop2_20260925.log`).
 
 ### Category C, second candidate: YOLOv11n (C2PSA Attention Block & Decoupled DWConv Head)
 
@@ -5352,13 +5367,13 @@ timing and a GPU oracle are still open.
 
 A GPU AdaRound run with its adapter on record and a same-env CPU baseline beside it:
 Ignition's transcription (`python -m quant adaround`) on ResNet50's c64 CLE base, on
-**Desktop 1** (`JORDAN-PC`, Ryzen 7 7800X3D, RX 7900 XTX, gfx1100, 24 GB). It is not
+**Desktop 1** (Ryzen 7 7800X3D, RX 7900 XTX, gfx1100, 24 GB). It is not
 Quark's FastFinetune on a GPU, and it makes no accuracy claim: Desktop 1 has no NPU, so
 full-set top-1 and EP placement for the new artifacts are Desktop 2's to run, with
 `--fresh`.
 
 It is not the first GPU request here.
-[`yolo8m_adaround_gpu_compile.log`](../results/yolo8m_adaround_gpu_compile.log) (JORDAN-PC,
+[`yolo8m_adaround_gpu_compile.log`](../results/yolo8m_adaround_gpu_compile.log) (Desktop 1,
 `resnet_env_rocm`) shows Quark's own FastFinetune reporting "optimized by adaround on
 cuda" for yolov8m, with its ORT half falling back to the CPU. That log names no adapter
 and has no CPU arm beside it, yet RESEARCH credits yolov8m to "GPU-accelerated
@@ -5455,7 +5470,7 @@ the GPU.
 
 ### Ignition: a GPU-built AdaRound file on the NPU (2026-09-10, Desktop 2)
 
-Desktop 1 (`JORDAN-PC`, RX 7900 XTX) built two AdaRound files from the same CLE c64 base,
+Desktop 1 (RX 7900 XTX) built two AdaRound files from the same CLE c64 base,
 `models/resnet50_ignition_cle_c64.onnx`, in one conda env (`resnet_env_rocm`: torch
 `2.9.1+rocm7.2.1`, ONNX Runtime 1.29.0). The only difference between them is `--device`:
 - `cuda` wrote `resnet50_ignition_cle_adaround_c64_gpu_desktop1.onnx` (`811a699e…`), with
@@ -9516,6 +9531,10 @@ recover the accuracy. GPTQ rounding with an int32 bias does, and needs no core p
 with its command. Code: `ca5b6cd` (HardSwish after the residual add, `pipelines/yolow/3a_split_attn_conv.py`) and
 `80ca69e` (int32 biases, `pipelines/yolow/3c_gptq_cv2.py`). Accuracy is COCO val2017 mAP@50-95 on the **first 300
 images**, the subset of variant D's rows above.
+Not held out: GPTQ's 64 statistics images are the first 64 of `data/coco_calib`, which are val2017 images,
+and 19 of them are among these 300. Their effect here is unmeasured, since the detections were not kept;
+where it was measured, on AdaRound and plain XINT8 files, it stayed within 0.07 points
+([pitfall](DECISIONS.md#rejected-approaches-and-known-pitfalls)).
 
 **Accuracy** (MEASURED; ONNX Runtime CPU unless the row says otherwise):
 
@@ -12348,3 +12367,59 @@ The consequences:
 - **Turbo pmode.**
 - **Trace-timer cycle counts.** Every cycle figure here is a wall-clock slope × the measured 1.80 GHz.
 - **Moving the loops' same-bank pair apart.** Impossible without changing the kernel.
+
+## Laya on the CPU and the 780M: the bar an NPU build has to beat (2026-09-26, Desktop 2)
+
+Laya (Convai Innovations, Apache 2.0) is a typed-decision model: ModernBERT-large plus a decision head, 421M
+parameters, one forward pass per question and no text generated. This sitting measures what an NPU build of it would
+have to beat. The NPU was not run.
+
+- **Model:** receptron/laya-onnx at revision `68f27dfe`, the English checkpoint in fp32 (`laya.onnx` `a874eb25`,
+  weights `48774636`).
+- **Inputs:** synthetic and full length: fixed-seed token ids, the whole attention mask set, four option markers,
+  question type choice. Latency depends on the shape, not the words, and no decision is judged here.
+- **Stack:** ONNX Runtime 1.27.0, CPU with 8 intra-op threads, DirectML on the Radeon 780M (driver 32.0.31041.1004),
+  Balanced power scheme.
+- **Energy:** `tools/energy_sitting.py`, package power minus each arm's own 30 s idle (17.4-20.1 W), over a 60 s
+  window.
+- **Tool:** `tools/laya_baseline.py`.
+- **Evidence:** `results/laya/laya_baseline_desktop2_20260926.log` and its JSON. The preparation steps are in
+  `laya_prep_desktop2_20260926.log`: DirectML failing on the unmodified export, `dmlcopy`, and the int8 file re-made
+  byte-identical.
+
+| Per sequence, mean | CPU fp32 | CPU int8 (dynamic) | 780M DirectML fp32 |
+|---|---|---|---|
+| 512 tokens: latency | 1112.4 ms | 638.8 ms | **632.8 ms** |
+| 512 tokens: package above idle; energy | +59.0 W; 65.5 J | +58.4 W; 37.4 J | +54.1 W; **34.2 J** |
+| 512 tokens: CPU load | 52.2% | 52.1% | **8.3%** |
+| 1,024 tokens: latency; energy | 2912.9 ms; 170.8 J | **2061.3 ms**; 115.1 J | 2191.1 ms; **106.2 J** |
+| 4 × 512 in one call: latency; energy | 1070.7 ms; 64.2 J | **668.3 ms**; **37.7 J** | 881.0 ms; 43.0 J |
+
+- **At 512 tokens the 780M and CPU int8 tie on latency** (within 1%). The 780M spends 8.4% less energy and leaves the
+  CPU at 8% load, against 52%. CPU fp32 is 1.74-1.76× slower and spends 1.91× the 780M's energy.
+- **At 1,024 tokens CPU int8 is 6% faster** than the 780M, which spends 7.7% less energy.
+- **Batching buys nothing.** Four sequences per call cost the 780M 28% per sequence. The CPU moves by less than 5%
+  either way.
+- **Effective rate** (DERIVED; 409 GOP per 512-token sequence by the tool's shape-inference count): 0.37 TOPS CPU
+  fp32, 0.64 CPU int8, 0.65 on the 780M.
+  - For scale only, not a prediction: the NPU's best measured single-GEMM rates here are 4,906 GOPS int8 and
+    2,700 GFLOPS bf16, at 2048-class shapes. Laya's GEMMs are 512 rows.
+- **DirectML needed one graph change.** 77 of the export's 138 Reshape nodes carry `allowzero=1`, which this ORT's
+  DirectML rejects (0x80070057 at `node_view`). The tool's `dmlcopy` clears it (`laya_az0.onnx`, `fd35271c`).
+  - That is equivalent here: none of the 69 run-time Reshape targets holds a 0 at 512 or 1,024 tokens, and the CPU
+    outputs are bit-identical.
+  - The copy's DirectML logits are within 2.2e-6 of the CPU's, with 98% of kernel time on DirectML.
+- **The int8 file is ORT dynamic quantization.** Its weights are per-channel int8, on MatMuls with constant weights
+  only. Its accuracy is unchecked: on the synthetic input its logits move up to 0.141 from fp32's, with the same top
+  option.
+- **Superseded log lines.** The log's "MACs per call" lines come from an earlier counter: fp32 188.0 G, int8 0.0 G
+  (it missed `MatMulInteger`). The committed tool gives both 188.6 G weight + 16.1 G attention at 512 tokens.
+  - The committed tool postdates the sitting. Re-run, its `run` output differs only in that line.
+  - The prep log re-ran `dmlcopy` and `quantize` with the committed version.
+
+**Not run:**
+- the NPU;
+- DirectML fp16 (no converter in the environment);
+- the multilingual and 1,024-token checkpoints (no ONNX export);
+- shorter real inputs, which the CPU and the 780M run faster while a fixed-shape NPU build pays for all 512 tokens;
+- decision accuracy.
