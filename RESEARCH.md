@@ -1913,9 +1913,11 @@ sections above.
   mixed-precision API shapes now have [measured verdicts](docs/BENCHMARKS.md#four-silicon-levers-measured-2026-09-19-desktop-2).
   Open from it: S0's concurrent-VitisAI-EP leg; S1's attribution of the shared bandwidth
   cap to DRAM, NoC or channel count; and S2's
-  full trace, whose upstream parser mis-times gaps over 2^18 cycles; and S4, the
-  package-power delta that would let a work-per-watt verdict exist at all — nothing here
-  has ever measured a watt, and no per-NPU rail is exposed to read one from.
+  full trace, whose upstream parser mis-times gaps over 2^18 cycles; and S4's NPU share. The
+  package-power delta itself has been measured since 2026-09-16 (`tools/power_probe.py`, RAPL
+  through Windows PDH; [energy per frame](docs/BENCHMARKS.md#energy-per-frame-against-amds-stack-and-power-modes-2026-09-16-desktop-2)),
+  but no per-NPU rail is exposed to read the NPU's share from, and no GEMM or single kernel
+  has had its energy measured.
 - **The cycles themselves, read off the machine code.** Peano's `llvm-objdump` disassembles
   AIE2, so a kernel's inner-loop cost is readable without hardware: the core is a statically
   scheduled VLIW that covers operand latency with explicit nop bundles, and a hardware loop's

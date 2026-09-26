@@ -1240,9 +1240,11 @@ The same `n=64` in bf16 needs 68,864 B against a 65,536 B tile: it misses by exa
 
 **The verdict, by this repo's mean-based convention: with `n=64`, NPU int8 beats the CPU's
 best int8 kernel 1.10×–1.83× at every shape with M ≥ 512 and N ≥ 2048**, and still loses at
-512³, 512×512×1024 and short prefill (M=128: 2.6×, M=256: 1.5×). 4607 GOPS is the highest
-ops rate any single dispatch has reached in this project (28.8% of the 16 TOPS nameplate;
-the 39.3% above is a whole-graph figure across four columns), and 2.5× the bf16 rate of the
+512³, 512×512×1024 and short prefill (M=128: 2.6×, M=256: 1.5×). 4607 GOPS was, at this
+sitting, the highest ops rate any single dispatch had reached in this project (28.8% of the 16 TOPS nameplate;
+the 39.3% above is a whole-graph figure across four columns; later, with the C tile
+single-buffered by a local patch, 64/128/64 reached 4,852.06 GOPS at 2048³, and int4 weights
+at that tile 6,195.33 — [W4A8 on the whole array](#w4a8-on-the-whole-array-int4-weights-pay-at-the-best-int8-tile-and-not-through-the-core)), and 2.5× the bf16 rate of the
 same sitting at 2048³ — the 2× the MAC count promised, but only once the tile bf16 cannot
 have. **The margin is thin at the largest shapes:** torch's kernel has a large mean/min
 spread there (2048³: 7.08 ms mean, 4.09 ms min), and read against its best case the
@@ -1423,7 +1425,8 @@ derived from a clock: the 16 TOPS nameplate is what 20 cores do at 1.6 GHz, and 
 `default` this part runs at 1.80 — 18.4 TOPS for the full array, 14.7 for the 16 cores the
 `4x4` overlay reaches, so that overlay's physical ceiling is 92% of nameplate, not 82%; a
 column is 3.69 int8 TOPS, the vendor DPU's measured 1.650 is 44.8% of it; the 16-core bf16
-peak is 7.37 TFLOPS and the best GEMM here (2072.54 GFLOPS) is 28.1% of it. The
+peak is 7.37 TFLOPS; the best upstream-design bf16 GEMM (2072.54 GFLOPS) is 28.1% of it, and
+the best with the C tile single-buffered by a local patch (2700.44, above) is 36.6%. The
 conversion from any figure quoted "at 1.6 GHz" is the ratio 1.6 ÷ 1.8 = 0.889; the old
 columns stay in that file beside the new one. Power mode is a **2.25× lever on the clock**
 (0.80 → 1.80 GHz) that no log in this repo recorded: any future comparison across sessions
