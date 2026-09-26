@@ -12338,6 +12338,8 @@ have to beat. The NPU was not run.
   option.
 - **Superseded log lines.** The log's "MACs per call" lines come from an earlier counter: fp32 188.0 G, int8 0.0 G
   (it missed `MatMulInteger`). The committed tool gives both 188.6 G weight + 16.1 G attention at 512 tokens.
+  - The committed tool postdates the sitting. Re-run, its `run` output differs only in that line.
+  - The prep log re-ran `dmlcopy` and `quantize` with the committed version.
 
 **Not run:**
 - the NPU;
