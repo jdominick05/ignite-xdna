@@ -1,0 +1,831 @@
+# W4V step 5, pre-registration text, v2.4: post-training W4 recovery on YOLOv8n and YOLOv8s (2026-09-25)
+
+Status: accepted by the gate (LF sha256 = PREREG_SHA) and embedded in `tools/w4v_verdict.py`. At acceptance no W4V
+method had read an image, and nothing had run but the synthetic selftests.
+
+The gate read v1 (LF `d42bb241`, kept as `scratch/w4v/w4v_screen_prereg_draft_v1.md`) and ruled on O1-O11. This
+text applies every ruling (section 14 lists each and where it lands). From here the order is section 13's: the
+step-5 commits, then START REQUEST 1.
+
+No screen run happens before the freeze and a START REQUEST. Push is the gate's.
+
+**This text amends W4V v2 in three places, each marked AMENDS:**
+- the calibration line (v2 section 4), which is false. The user ruled (B) on the leakage (section 4);
+- the "13-30 s per arm" cite (v2 section 4), which the gate asked to fix;
+- the BN re-estimation route (v2 section 4), replaced by VC, a folded per-channel output-variance correction
+  (section 3.3, the gate's O3 ruling).
+
+The plan file stays unedited at LF `88b440fa`.
+
+**Changes after the gate's read (v1 → v2):**
+- **O1 (the user's (B)):**
+  - K-D is on all 5,000 AND on H (sections 4 and 6);
+  - the screen prints H's 468 beside the 500, and the cut stays on the 500 (section 5);
+  - the (B) line goes into the DECISIONS entry (15.1a).
+- **(B)'s mechanics, new in v2 (the gate has not seen these):**
+  - every row writes its detections JSON through `--dets` into the git-ignored `scratch/w4v/dets/`, and its log
+    prints the file's sha256;
+  - the verdict re-scores all 5,000 from that JSON, and must match the logged figure, before it scores H from the
+    same file;
+  - H's id list is pinned (sections 6, 7 and 9);
+  - a K-D delta per arm, max(Δ_all, Δ_H), orders the arms and defines NARROW (section 6);
+  - PASS, the headline and NARROW count decision-eligible arms only, and F arms are printed report-only (section 6);
+  - the annotation file both the eval and the verdict score against is pinned in C0 (section 7);
+  - C9 also prints, report-only, whether each row's detections are byte-identical to gate D's surviving file
+    (section 7);
+  - the dets disk cost is MEASURED from gate D's surviving files (section 12).
+- **O3:** BNR is renamed VC (folded variance correction) everywhere. It is defined as re-estimating no BatchNorm
+  statistics.
+- **O2:** the pair rule is the gate's reading, and the user may override it (section 6).
+- **O6:** a NARROW AdaRound is a new pre-registration, never a re-run (section 3.4).
+- **O10:** C8 must include at least one int32-bias form-b file, or its log states why none advanced (section 7).
+- **O11:** `w4v-eval.sh` gains a `repro` stage for C9 (section 8). v1's stage list lacked it.
+- **GPTQ's Hessian is written G** (section 3.5), so that H means only the held-out set.
+- **Section 0:** the stale quant/DESIGN.md:709-714 gets a dated note in the step-5 commit (15.4).
+- **15.1a:** the (B) line states the 64-image calibration set as the method's setting (accepted from v1), then the
+  user's ruling. The ruling itself covers only K-D on all 5,000 and on H.
+- **15.1b, withdrawn on the gate's later message:** the coco_calib pitfall lands on main, from the gate, in a
+  docs commit that also covers main's AdaRound and GPTQ claims. It is not added on this branch, which would
+  duplicate it and conflict at merge. 15.1a's (B) sentence points at it in plain text, "(see the coco_calib
+  pitfall entry)". It is not a link: this branch cannot resolve the anchor before main is merged in.
+- **Section 14:** the open points became the list of rulings.
+
+Sources:
+- **W4V v2**, accepted: hybrid-stack `scratch/w4v/w4v_plan_draft.md`, LF `88b440fa`, sections 4-6.
+- **The census:** `eb66153` (tool) and `c4672a7` (log, LF `8185c5ee`), both CONFIRMED.
+- **Gate D, frozen and read only:**
+  - `tools/w4a8_emulate.py`, `tools/w4a8_verdict.py`, `tools/w4a8_engine_gate.py` and `scripts/w4a8-eval.sh`;
+  - `results/int4/w4a8_accuracy_{prereg,verdict}_desktop2_20260923.log`, and the controls logs and sidecars.
+- **The frozen-triple mechanics** of S1, S1b and F2-A: hybrid-stack `scratch/llm/hybrid_f2a_prereg_draft.md`,
+  section 8.
+- **quant/, read and not run:** `adaround.py`, `calib.py` and `pow2.py`, and the parity logs in `results/quant/`.
+
+Labels: MEASURED, DERIVED, INFERRED, ESTIMATE, SPEC. Line cites are this branch at `c4672a7` (= main `dc6b850`
+for the docs): B = docs/BENCHMARKS.md, D = docs/DECISIONS.md, MZ = docs/MODEL_ZOO_BENCHMARKS.md.
+
+## 0. The question, and what W4V cannot change
+
+- **The question:** does a post-training recovery method bring a W4 YOLOv8n or YOLOv8s within 1.0 point of
+  mAP@50-95 of its B8, measured the gate-D way, in a scale form the engine can lower (E1, E2 or U, tag named)?
+- **What decides:** K-D, per model, on the decisive 5,000-image run and on its held-out H (section 6). The
+  500-image screen only cuts (section 5).
+- **What cannot change:**
+  - Gate B's and gate D's records stand as logged.
+  - K-B is report-only, and the census is done.
+  - Phase 2 (the lowering, and K-F) is decided after the verdict, on the user's ruling.
+  - QAT and CLE are out (v2 section 4).
+    - CLE finds 0 patterns on these SiLU graphs (MEASURED: `results/quant/prepare_probe_yolov8n_cut.log:269, :296`;
+      YOLOv8s on Quark's side, `results/bench/quant_yolov8s_cut_xint8_c200.log:65`).
+    - quant/DESIGN.md:709-714 still calls that a "design expectation", which is stale. The step-5 commit adds a
+      dated one-line note beneath it (15.4). The paragraph itself stays as written.
+
+## 1. Inherited from gate D, unchanged
+
+- **The files:** the float head-cut `models/yolov8{n,s}_cut.onnx` and the shipped XINT8
+  `models/yolov8{n,s}_cut_xint8.onnx`. They are pinned by gate D's prereg shas: `11b52c25…`, `f02e86ba…`,
+  `f713208d…` and `065f6252…` (prereg log :41-42, :47-48). A mismatch is a STOP.
+- **What changes:** only the Conv weights, plus the Conv bias for the bias-correcting methods (BC, VC). Every
+  activation Q/DQ, every other scale and the graph stay as shipped.
+- **The grid:** [-7, 7], 15 levels. -8 is left out because its int8 image, -128, is outside XINT8
+  (`w4a8_emulate.py:7-8`).
+- **pos4 per group:** Quark's MinMSE on the float weights, with bounds [-7, 7] and window -1:5; the first minimum wins.
+  - This is gate D's `choose_pos` (`w4a8_emulate.py:101-121`, default window at :586).
+  - It is fixed for every method except VC (section 3.3) and F (section 2).
+- **Storage, per conv:**
+  - form b (q4 << k under the shipped per-tensor pos8 scale, k in [0, 4]; a plain XINT8 file) when every group
+    allows it;
+  - otherwise form a (a per-channel scale vector, axis 0; the file is `*_ortonly.onnx`).
+  - This is exactly `w4a8_emulate`'s `--form auto` (:20-26, :404).
+- **The evaluation:**
+  - `pipelines/yolov8n/5_eval_map.py --ep cpu --ort-opt disable_all --ort-threads 8` (conf 0.001, IoU 0.7,
+    max_det 300, per-class NMS, pycocotools);
+  - resnet_env17, ORT 1.23.3.dev20260320, serial, never `--fresh`;
+  - the images are `sorted(coco.getImgIds())[:n]` (5_eval_map.py:169-171).
+  - New for (B): every row passes `--dets scratch/w4v/dets/<row>.json` (:142, written at :239).
+    - Without it the script writes `results/dets_<stem>_cpu.json` (:237), inside results/, and a later row would
+      overwrite it.
+    - `w4v-eval.sh` refuses an existing dets path before it calls the eval, which stays unedited.
+- **"8 pinned threads" means `--ort-threads 8`,** which sets `intra_op_num_threads`, as gate D ran it
+  (`w4a8-eval.sh:36`).
+  - There is no CPU affinity mask in the eval path, and none is added.
+  - Otherwise B8 and the RTN controls could not reproduce gate D's figures.
+
+## 2. Scale forms and their tags (v2 section 4, unchanged)
+
+The tag names the scale form, not the storage form: gate D's E2 and U files were both `*_ortonly`.
+- **E1**, one pow2 scale per tensor. It lowers today: form b wherever k is in [0, 4], and gate D's E1 files were
+  form b.
+- **E2**, one pow2 scale per 32-output-channel group. It needs a shift per packet: a compiler change, phase 2.
+- **U**, one pow2 scale per output channel. It needs a kernel change, phase 2. `graph_ir.scale_zp` reads channel 0
+  (D:309-313), so U files are `*_ortonly`.
+- **F**, a float scale per output channel. It is an upper bound only, cannot pass K-D, and is `*_ortonly`.
+  - The scale is s_c = α · max|w_c| / 7, with α in {0.50, 0.51, …, 1.00} minimizing
+    Σ (w_c − s_c · clip(rint(w_c / s_c), −7, 7))².
+  - The arithmetic is float32 and the first minimum wins.
+
+## 3. Methods
+
+**Common to every method:**
+- **Calibration:** section 4, the user's ruling (B).
+  - The first 64 images of `data/coco_calib` by file name, letterboxed exactly as `5_eval_map.py` does
+    (`npu/yolo.py:103-121`).
+  - 64 is what quant/'s AdaRound used in both of its bitwise-parity runs.
+  - AdaRound's memory is linear in the image count: 5,742,055,424 B peak on YOLOv8n at 64 (MEASURED,
+    `results/quant/quant_yolov8n_cut_ignition_cle_adaround_c64.log:1107`).
+- **Order and inputs: sequential.** Conv l's input comes from the QDQ model with every earlier conv already
+  holding its new weights (and bias).
+  - GPTQ, BC and VC walk the XINT8 graph's Conv order. Each captures through a sub-model to that conv's input,
+    under ORT_DISABLE_ALL at 8 intra-op threads.
+  - AdaRound runs quant/adaround's own sessions, as in its parity runs: ORT's default intra-op threads, and ORT's
+    default graph optimisation for the float reference (`_run_quantized_inputs`, `_run_float`). It walks
+    vendor_order; the ORDER control checks that both orders are topological. torch runs at 8 threads.
+- **Reference:** the float head-cut model's output of the same conv, on the float network's own input
+  (`adaround.py:586-587`; Quark's DropRatio 1). GPTQ is the exception: its objective uses the same quantized
+  input, its published form.
+- **Biases (O10, ruled):**
+  - RTN, GPTQ and AdaRound keep the shipped int8 bias as it is, which is gate D's rule. So RTN rebuilds gate D's
+    files byte for byte (C2).
+  - BC and VC write the bias as int32 at s_x · s_w (per channel in form a).
+  - The graph engine lowers an int32 conv bias since `2299f0b`: graph_ir takes int8 or int32, and the YOLOv8n
+    containers rebuilt byte-identical.
+  - The engine gate (C8) re-checks it on the form-b files that reach the decisive run: at least one int32-bias
+    file among them whenever one advances, or else the reason none did (section 7).
+
+### 3.1 RTN (the control)
+
+Gate D's arms. They must rebuild gate D's files byte for byte (C2), and their mAPs must reproduce at 5,000 (C9).
+
+### 3.2 BC: empirical bias correction
+
+- Per conv, in order, per output channel c: b′_c = b_c + mean(y_f,c) − mean(y_q,c).
+  - The mean runs over every output position of the calibration images.
+  - y_q is the quantized model's conv output with the current weights and bias, on its sequential inputs.
+  - y_f is the float model's conv output.
+- In tier 1 it sits on RTN; in tier 2 it is a second pass over a finished AdaRound or GPTQ model.
+
+### 3.3 VC (folded variance correction) (AMENDS v2's route; the gate's O3 ruling)
+
+VC re-estimates no BatchNorm statistics. It is a per-channel output-variance correction on the folded conv. Per
+conv, in order, on one capture of its sequential input x:
+1. a_c = std(y_f,c) / std(y_q,c), with y_q from the current base-quantized layer.
+2. Rescale the float weights, w′_c = a_c · w_c, and re-quantize them by the base method (tier 1: RTN, with pos4
+   re-chosen on w′ by MinMSE).
+3. Set the bias as BC does, on the rescaled layer. Its y_q′ is computed from the same captured x, so no new ORT run
+   is needed.
+
+**Why folded, and not v2's route through the .pt:**
+- BN is already folded in both files. The head-cut ONNX has no BatchNormalization, and the head's last convs have
+  none to begin with.
+- v2's route re-estimated BN statistics in `models/yolov8{n,s}.pt`, refolded and re-exported. That moves every
+  re-estimated channel by σ/σ′ after quantization, off the grid, so it would have to be re-quantized anyway.
+- That route's export would also have to reproduce the shipped head-cut graph in every non-weight tensor.
+  - Its ultralytics lives only in `resnet_env`, whose ORT is 1.22.1.
+  - The shipped files were made on another host, with ORT 1.29.0 (`results/bench_s_probe.log:108, :116`).
+- VC does the per-channel rescale in place, on the folded weights.
+
+### 3.4 AdaRound at W4 (quant/, with the additive grid of section 8)
+
+- **The call:** `quant/adaround.finetune`, the bitwise-parity transcription of Quark's fast finetune, with its
+  config unchanged:
+  - `FastFinetuneConfig`: seed 1705472343, batch 2, 1,000 iterations (O6, ruled), lr 0.1, early stop, reg 0.01,
+    β 20→2, warm start 0.2, drop ratio 1.0, and ζ/γ 1.1/−0.1 (adaround.py:59, :64-83);
+  - data size 64.
+- **If a model is NARROW** (section 6) and its best decision-eligible AdaRound arm (AdaRound, AdaRound + BC or
+  MX-AdaRound) is itself in (1.0, 2.0], a 10k-iteration run is a new pre-registration, never a re-run of this one.
+- **The only change is the W4 override.** Per layer, the weight quantizer is the arm's form (scale 2^-pos4 per
+  group, clamped to [-7, 7]) during optimisation. The result is written back in the arm's storage form.
+- **It is called from `w4_recover.py`.** quant/'s CLI needs an Ignition sidecar with a calibration listing
+  (quant/cli.py:149-158), which the shipped Quark files do not have.
+- **The base must be the round-to-nearest shipped file.** An AdaRounded int8 base can hold -128, which
+  `w4a8_emulate.conv_weights` rejects (:169-170).
+- **Forms E1, E2 and U only.** No F arm, to save cost (O6, ruled).
+
+### 3.5 GPTQ at W4
+
+- **Layout:** W reshaped to (cout, cin·kh·kw) in ONNX order. X is the im2col of the conv's sequential quantized
+  input, with its pads, strides and dilations, in the same column order.
+- **The Hessian,** written G here because H names the held-out image set: G = 2XXᵀ/N in float64, over every
+  output position of the 64 images, damped by 0.01 · mean(diag G).
+- **A dead column** (G_ii = 0) gets G_ii = 1 and zero weights.
+- **Act-order is ON** (columns in descending diag G; O9, ruled). The group scales are per output row and fixed in
+  advance, so the column order does not interact with them.
+- **Lazy block 128, and the Cholesky-inverse update** of Frantar et al. (2022).
+- **The quantizer** is the arm's per-row group scale and [-7, 7]. It is deterministic.
+- **What it generalizes:** `pipelines/yolow/3c_gptq_cv2.py`, which is 1×1 only, int8 (−128 included), per tensor,
+  with no act-order and no blocks (:50-67), to k×k, the W4 grid and the forms.
+
+### 3.6 MX: mixed W4/W8 by sensitivity (tier 2; O8, ruled)
+
+- **The W8 set is chosen once per model and form,** before any method runs, by sensitivity:
+  - the relative output error ‖y_f − y_q‖² / ‖y_f‖² of each conv's RTN-W4 weights (y_f here: float weights and
+    bias on B8's input);
+  - on the calibration images, with B8's own inputs (one capture).
+- **The rule:** the most sensitive convs are kept at W8, most sensitive first, while the W8 share stays ≤ 5% of
+  conv weight elements. For scale, E1h's seven W8 convs are 1.01% and 0.39% (MEASURED,
+  `w4a8_controls_yolov8{n,s}_desktop2_20260923.log:241`).
+- **MX is decision-eligible** within that budget.
+- **The W8 convs keep the shipped weights exactly.** The rest go through AdaRound or GPTQ with them in place.
+- **Phase-2 cost:** per-layer packet types. W8 layers save no bytes.
+
+### 3.7 The matrix
+
+| tier | method | forms | arms per model |
+|---|---|---|---:|
+| control | B8 | the shipped file | 1 |
+| 1 | RTN | E1, E2, U, F | 4 |
+| 1 | BC (on RTN) | E1, E2, U | 3 |
+| 1 | VC (folded variance correction, on RTN) | E1, E2, U | 3 |
+| 1 | AdaRound | E1, E2, U | 3 |
+| 1 | GPTQ | E1, E2, U, F | 4 |
+| 2 | AdaRound + BC | E1, E2, U | 3 |
+| 2 | GPTQ + BC | E1, E2, U | 3 |
+| 2 | MX-AdaRound | E1, E2, U | 3 |
+| 2 | MX-GPTQ | E1, E2, U | 3 |
+
+- 17 tier-1 and 12 tier-2 arms per model; with B8, 30 screen rows per model and 60 in all.
+- **Not in the matrix:** VC stacked on AdaRound or GPTQ (O4, ruled). Its per-channel rescale fits the same channel
+  statistics that their reconstruction already fits.
+- **Tier 2 is fixed now and runs unconditionally,** as its own START REQUEST after tier 1's screen (O5, ruled).
+  Nothing in it is chosen from tier 1's results.
+
+## 4. Calibration data, and the user's ruling (B) (AMENDS v2 section 4)
+
+**The finding (read-only, 2026-09-25):**
+- v2's line "coco_calib's 300 images, which are not in val2017" is false. `data/coco_calib` is every 16th val2017
+  file (`pipelines/yolov8n/2_fetch_coco.py:65-71`). All 300 names are in val2017, and the spot-check sha256s are
+  byte-identical.
+- `data/coco128` in this repo is a subset of coco_calib.
+- No train2017 image exists anywhere on disk.
+- **The shipped files were themselves calibrated inside it:**
+  - B8 on 32 of these images (scripts/yolo-bench.sh:19-20; D:1065; `results/bench_s_probe.log:4, :102`);
+  - `yolov8n_cut_xint8_adaround` on all 300 (yolo-bench.sh:19-20; `3b_quantize_cut.py`'s default calibration
+    directory is `data/coco_calib`, :75).
+  - B8's leakage is in the activation scales every arm shares, so it is inherited and equal across arms.
+- A W4V method fits weights or biases to its calibration images. That is new leakage, and it favours the methods.
+- **Its size, exactly** (DERIVED from 2_fetch_coco.py's stride, 5,000 // 300 = 16, over sorted names, which sort
+  as the ids do):
+  - the first 64 calibration images are val2017 indices 0, 16, …, 1008;
+  - 32 of them (indices 0-496) are inside the screen's first 500, and those 32 are all of coco_calib's images that
+    fall there;
+  - all 300 are inside the decisive 5,000.
+
+**The user's ruling, relayed by the gate (verbatim):** "O1, THE USER RULED (B). K-D per model: within 1.0 point of
+B8 on all 5,000 AND on H, the 4,700 images of val2017 minus all 300 of coco_calib, each against B8 on the same
+images, from the same detections. The screen prints H's 468 beside the 500, report-only. The cut stays on the 500:
+leakage can only advance more arms, and H catches them at the decisive run."
+
+**As applied:**
+- **The calibration set:** the first 64 of `data/coco_calib` by name, pinned by name and sha256 (C0).
+- **H is val2017 minus all 300 of coco_calib,** not only the 64 used, so it also holds none of B8's own 32
+  calibration images.
+  - H_5000 is 4,700 images. H_500, the screen's, is 468 (DERIVED: the first 500 minus the 32 above).
+  - The id lists are fixed from `data/coco_calib`'s names and pinned by sha256 (C0, section 9).
+- **There is no extra inference run.** Each H figure is pycocotools over the same row's detections JSON, with
+  `params.imgIds` set to H (the same call as 5_eval_map.py:245-247).
+- **Not taken:** (A), disclose only, and (C), download coco128 from train2017. No download is made.
+- **The repo-wide pitfall is a DECISIONS entry that the gate lands on main** (15.1b), not on this branch. Every
+  calibration-driven result evaluated on val2017 here shares it, for example:
+  - quant/'s AdaRound mAPs;
+  - YOLO-World's GPTQ (19 of its 64 images fall in the first 300 it was scored on).
+
+## 5. The screen and its cut
+
+- **What runs:** the first 500 val2017 image ids, both models, every tier-1 arm plus B8, then every tier-2 arm. One
+  sitting per tier, serial, YOLOv8n then YOLOv8s.
+- **The cut:**
+  - An arm advances to the decisive run iff B8_500 − arm_500 ≤ 2.0, on the printed 2-decimal values. The cut
+    stays on the 500 (the user's (B)).
+  - F arms follow the same cut and stay report-only.
+  - B8 always runs in the decisive sitting, as its anchor. RTN's 5,000-image figures come from C9's reproduction
+    stage, not from the cut.
+- **H's 468, report-only:** the screen prints every row's figure on H_500 and its delta against B8's H_500, beside
+  the 500. They decide nothing.
+  - Leakage can only make an arm look better on the 500, so it can only advance more arms (INFERRED).
+  - H catches those at the decisive run.
+  - Checked, report-only: the screen log flags every arm that is cut on the 500 (B8_500 − arm_500 > 2.0) but
+    whose delta on H_500 (the 468) is ≤ 2.0. The flag decides nothing, because the cut stays on the 500 (the
+    user's (B)). It only shows whether the inference held.
+- **Every screen figure is report-only.** The screen decides nothing but the cut.
+- **The cut log:** a complete screen prints SCREEN COMPLETE, then the cut (each model's advanced and cut arms) and
+  the flags; an incomplete one prints PROBLEM lines and SCREEN INCOMPLETE, and no cut.
+  - The engine gate, the decisive run and the verdict read the cut from exactly one committed, clean cut log per
+    tier, and each model's advanced plus cut arms must be exactly its pinned arms of that tier.
+- **The time, the fixed cite (AMENDS v2's "13-30 s per arm; B:2430-2443"):**
+  - 13-30 s was the diagnostic's 500-image loop: 13-14 s on YOLOv8n and 30 s on YOLOv8s
+    (`results/int4/diag_*_n500_desktop2_20260923.log:12`). But those ran the float models.
+  - The screen runs QDQ files unoptimized. Gate D measured those loops at 242-294 s (YOLOv8n) and 548-568 s
+    (YOLOv8s) over 5,000 images (MEASURED, `eval_yolov8{n,s}_*_cpu_unopt_desktop2_20260923.log:21`).
+  - So about 24-29 s and 55-57 s per 500 images (DERIVED, the image loop only). Session load and pycocotools are
+    not included, and are UNMEASURED.
+
+## 6. K-D, the verdict (gate D's line, under the user's rulings)
+
+- **Per arm, two deltas, each on the printed 2-decimal values (gate D's delta), from the same detections JSON:**
+  - Δ_all = B8_5000 − arm_5000, on all 5,000;
+  - Δ_H = B8_H − arm_H, on H's 4,700, B8 also scored on H.
+- **An arm passes iff Δ_all ≤ 1.0 AND Δ_H ≤ 1.0.** Its K-D delta is max(Δ_all, Δ_H).
+- **Per model, PASS** iff at least one decision-eligible arm passes.
+- **Decision-eligible:** every arm in E1, E2 or U, of any method and either tier, MX within its budget included.
+  F never is. B8 and the RTN controls are rows.
+- **A form-b file must pass C8 to be decision-eligible, whatever its tag.** A FAIL, or no C8 row, and the arm is
+  not. A form-a (`*_ortonly`) E2 or U arm has no engine lowering to check and stays decision-eligible.
+  - An RTN arm has its 5,000-image rows from C9 whether or not the screen advanced it. A form-b RTN arm the screen
+    cut has no C8 row, so it is not decision-eligible. The verdict prints it on an INFO line, "not
+    decision-eligible: cut, no C8 row", which decides nothing.
+- **The E1 tag needs a form-b file.**
+  - An E1 arm with any form-a conv is `*_ortonly` and does not lower today.
+  - Only VC can produce one, because it re-chooses pos4. AdaRound and GPTQ keep RTN's pos4, and so its k.
+  - Such an arm is not decision-eligible as E1.
+- **The headline names, per model, the best passing decision-eligible arm** (the smallest K-D delta; ties go to
+  section 3.7's row order), with its tag, both deltas and its phase-2 cost:
+  - E1 lowers today; E2 needs a shift per packet; U needs a kernel change;
+  - MX adds per-layer packet types;
+  - a BC or VC arm carries an int32 bias, which lowers since `2299f0b`.
+- **KILLED otherwise:** "W4 killed at the tested post-training recovery set (RTN, BC, VC (folded variance
+  correction), AdaRound, GPTQ, their BC stacks and MX; pow2 scales, this dialect); QAT untested."
+- **NARROW:** if no decision-eligible arm passes and the best decision-eligible K-D delta is in (1.0, 2.0], the log
+  adds gate D's note. It does not change the verdict. For AdaRound, see section 3.4.
+- **F arms** get both deltas printed, report-only. They never enter PASS, the headline or NARROW.
+- **The dets check, before any figure is used:**
+  - Each row's JSON must match the sha256 its eval log printed.
+  - The all-5,000 figure re-scored from it must equal the logged figure at 2 decimals.
+  - Otherwise the row is missing.
+- **No verdict** if any of these holds. The log ends VERDICT REFUSED (nothing scored) or VERDICT INCOMPLETE (the
+  table printed, nothing decided):
+  - a row is missing;
+  - a row has fewer than 5,000 images, or any skipped;
+  - H does not hold exactly its 4,700 pinned ids;
+  - ORT or the threads differ between rows, or from the protocol;
+  - a control fails or is missing;
+  - the frozen triple or TOOLS_JSON differs from the prereg log's, in the tool or in any row;
+  - a log it reads, or any earlier stage's log, is not committed and clean, lacks its success line or holds a
+    hash block unlike the frozen values (section 9), or the cut logs break section 5's rule;
+  - a form-b arm that advanced has no C8 row.
+- **The pair rule** (the gate's reading of O2; the user may override it):
+  - EXTEND to YOLOv8n-pose and YOLO26n iff one method passes on both models. The method is the method label; the
+    forms may differ per model.
+  - Otherwise the extension does not open.
+- **Disclosed, not corrected:** the decisive run takes the best of up to 29 arms per model on the same 5,000
+  images, and the screen's 500 are among them.
+
+## 7. Controls (pipeline facts, PASS or FAIL; a FAIL is a STOP)
+
+- **C0, the pins:**
+  - the four model shas (section 1);
+  - ORT 1.23.3.dev20260320, resnet_env17, `--ort-threads 8`;
+  - the calibration listing's names and sha256s;
+  - H's two id lists (4,700 and 468) and their sha256s;
+  - the annotation file the eval and the verdict both score against, `data/coco/annotations/instances_val2017.json`
+    (5_eval_map.py's default, :121-122, loaded at :168), with its sha256 fixed in the protocol JSON at the freeze;
+  - the embedded text's sha against the accepted one. The log opens with the frozen triple and TOOLS_JSON; the
+    prereg log is what freezes them (section 9).
+- **C1, w8check through `w4_recover.py`'s emit path:** it rebuilds both shipped files.
+  - graph_diff is empty;
+  - the sha equals gate D's w8check: YOLOv8n `ec48c462…` and YOLOv8s `434ffa8b…`
+    (`w4a8_controls_yolov8{n,s}_desktop2_20260923.log:76`).
+- **C2, RTN rebuilds gate D's E1, E2, E1h and U files byte for byte,** by sha against gate D's prereg log
+  (:43-46, :49-52).
+  - The files survive in the int4-study worktree's `scratch/int4_w4a8/`.
+  - E1h is emitted for this byte-identity check only; it has no screen row.
+- **C3, form a == form b, bit for bit on 16 images:** RTN E1, plus one AdaRound and one GPTQ E1 arm per model
+  (gate D's `compare`).
+- **C4, the negative control:** `compare` tells the shipped file from RTN E1 (gate D's).
+- **C5, every emitted file:**
+  - graph_diff against the shipped file plus exactly the intended rewrite is empty:
+    - the weights;
+    - the biases for BC and VC;
+    - MX's W8 convs identical to shipped;
+  - the grid check;
+  - float identity: stored × scale == the method's dequantized weights;
+  - pos4 == MinMSE for every method except VC and F.
+- **C6, quant/ int8 parity after the additive grid (section 8),** `--calib-method exact` throughout. Since
+  `ebe4237` quant/ defaults to histogram mode (cli.py:58), which no parity log covers.
+  - (a) Replay: `python -m quant quantize --in-model models/yolov8{n,s}_cut.onnx --cle --scales-from
+    models/yolov8{n,s}_cut_xint8.onnx` gives GRAPH_DIFF_PASS on both. YOLOv8n repeats
+    `prepare_probe_yolov8n_cut.log:418`; YOLOv8s is its first record.
+  - (b) The recorded Quark oracle: an exact c64 CLE quantize against `models/yolov8n_cut_quark_cle_c64.onnx` (on
+    disk, with its reference.json) gives INT8_EXACT True, as `diff_yolov8n_cut_ignition_cle_c64.log:9929`.
+  - (c) AdaRound W8 on yolov8n c64 against `models/yolov8n_cut_quark_cle_adaround_c64.onnx` (on disk) gives
+    INT8_EXACT True, as `diff_yolov8n_cut_ignition_cle_adaround_c64.log:11007-11008`.
+- **C7, determinism:** GPTQ, BC, VC and AdaRound on YOLOv8n E1, each emitted twice, give the same sha.
+- **C8, the engine gate** (`tools/w4a8_engine_gate.py`, mlir-aie-iron, offline, no device), on every form-b file
+  that advances to the decisive run. Each file gets a `W4V_GATE <sha> PASS|FAIL` line.
+  - Every layer must be exact on bus.jpg, 4 COCO images and one random input.
+  - A form-b file that fails costs its arm decision-eligibility, whatever its tag (section 6). It is not a C8 FAIL.
+  - The int32 coverage (O10): `W4V_CONTROL C8 int32` PASSes iff at least one int32-bias form-b file (a BC, VC,
+    AdaRound + BC or GPTQ + BC arm) that advanced was checked, whatever its result, or none advanced. It FAILs only
+    if one advanced and none was checked.
+  - The C8 log names every other int32-bias arm and what stopped it: the cut, or a form-a conv.
+  - The C8 log ends with `W4V_DONE gate`, printed only after the int32 marker PASSes. The decisive run needs both
+    lines (section 9).
+- **C9, B8 and RTN at 5,000 reproduce gate D exactly:** B8 27.10 / 37.21, E1 0.06 / 2.76, E2 0.02 / 2.76 and
+  U 1.58 / 2.47.
+  - It runs as its own stage right after the tool freeze, before any heavy stage (O11, ruled).
+    - The files are byte-identical to gate D's by C2, so any drift here is the environment's.
+    - Drift should surface before about 7 h of emit and screen.
+  - A mismatch is a STOP.
+  - Its rows also write dets and print H figures, because RTN's decisive figures come from this stage. My report
+    states only whether gate D's figures match.
+  - Report-only: each row's dets sha256 beside gate D's surviving file for the same row (int4-study worktree,
+    `results/dets_<model>_<arm>_cpu_unopt.json`, `w4a8-eval.sh:217-219`). The mAP match decides C9; byte
+    identity of the detections is printed, not required.
+  - The decisive run re-runs B8 only, as its in-sitting anchor, and it must read 27.10 / 37.21 again.
+
+## 8. The tools, and the additive quant/ grid
+
+- **`tools/w4_recover.py`** (new, AGPL-3.0-or-later):
+  - Modes: `selftest`, `controls`, `sensitivity`, `emit --model --method --form --tier`.
+  - It imports `w4a8_emulate` read only (`conv_weights`, `choose_pos`, `quantize_bounded`, `groups`,
+    `stem_and_head`, `emit_a`, `emit_b`, `rewire_a` and `expected_graph`). Its RTN path is gate D's own code,
+    which is why C2 can demand byte identity.
+  - It imports quant/ (`Graph`, `graph_diff`, `adaround.finetune`). It writes a sidecar per arm and refuses to
+    overwrite:
+    - gate D's fields and the method's per-layer figures;
+    - the pinned models' and the arm file's shas, the frozen triple with TOOLS_JSON, and the controls' result;
+    - for AdaRound, its timing, peak memory and threads (ORT's intra-op setting, torch's thread count).
+    - Its paths are repo-relative, and the runner greps every sidecar for the profile name.
+- **`tools/w4v_verdict.py`** (new): the prereg text, the protocol JSON, the frozen triple and TOOLS_JSON.
+  - `--prereg` prints the text, the protocol JSON (with H's id-list shas), the triple and TOOLS_JSON, and the sha
+    of every model, capture and tier-1 arm file. It refuses if a prereg log exists, if a model is not the pinned
+    one, if the tools and every TOOLS_JSON file are not committed and clean, or if an earlier stage's log does not
+    hold as section 9 says: the selftest, controls, parity, repro, sensitivity and emit1 logs, every hash block in
+    them equal to its own.
+  - `--pins` pins tier 2's files the same way, against the committed prereg log. It also wants the emit2 logs'
+    success lines, and every hash block in them equal to its own; their commit is checked by screen2's `--ready`.
+  - `--c9` checks the reproduction rows against gate D (C9). `--c8` prints C8's int32 coverage marker from the
+    engine gate's lines.
+  - `--pins`, `--c9`, `--screen`, `--advanced`, `--c8` and `--verdict` each print the triple and TOOLS_JSON first;
+    `--prereg` prints them after the text and the protocol JSON.
+  - `--screen` parses the 500-image logs and their dets into the cut list, with H_500 beside them.
+  - `--advanced` lists the arms the committed cut logs advance.
+  - `--verdict` parses the 5,000-image logs and their dets into K-D, on all 5,000 and on H. It reads the cut logs
+    itself.
+  - `--hashes`, `--pinned`, `--ready`, `--src-tree` and `--dets-sha` are the runner's checks.
+  - It follows `w4a8_verdict.py`'s pattern and log-name parser.
+- **`scripts/w4v-eval.sh`** (new):
+  - Stages, in run order: `selftest`, `controls`, `parity`, `repro`, `emit1`, `prereg`, `screen1`, `emit2`,
+    `screen2`, `gate`, `decisive` and `verdict`.
+  - `refuse`, `logged` and the host-load witness are copied from `w4a8-eval.sh` (:69-90, :202-204) and extended:
+    `logged` runs `no_profile` on its log, and the witness log opens with the hash block (section 9).
+  - Its `scrub` extends that one. It also replaces either profile path escaped (with doubled separators), and the
+    profile's name as a path component. A scrub that fails stops the stage.
+  - The profile's name is read at run time, as the last path component of `USERPROFILE`, else of `HOME`, and is
+    never written into a committed file. A name under 3 characters, or "user" in any case, stops the runner
+    before anything runs: the scrub and its check could not be trusted.
+  - `no_profile` then greps every log, sidecar and load witness (`load_w4v_*`) for that name, ignoring case. A hit
+    stops the stage, and so do a missing file and a grep that cannot read the file (exit 2), which never pass
+    as "no match".
+  - Each stage refuses to start unless `w4v_verdict.py --ready <stage>` passes (section 9).
+  - Every eval row passes `--dets` into `scratch/w4v/dets/`, refuses an existing path and logs the JSON's sha256.
+  - It runs in resnet_env17, and in mlir-aie-iron for the engine gate.
+  - It reaches the git-ignored `models/`, `data/` and `build/` through links to the main checkout.
+    - This is how the int4-study worktree does it (`int4-study/{build,data,models}` are links).
+    - They are created once, are git-ignored and are never committed.
+- **The quant/ grid is additive, but it touches shared functions, hence C6:**
+  - `pow2.quantize` and `pow2.sqerr`: an optional `grid=(lo, hi)`, defaulting to `qrange(dtype)`. Storage and the
+    zero point stay int8.
+  - `calib.choose_pow2_minmse`: optional `grid=` and `window=`, defaulting to `qrange(dtype)` and (-1, 3).
+  - `adaround`: an optional per-layer weight-quantizer override (a per-row scale 2^-pos4, clamped to the grid),
+    defaulting to None.
+    - With None, today's path runs line for line.
+    - The write-back in the arm's storage form is `w4_recover`'s.
+  - Nothing else in quant/ changes: qdq emit, refine, verify and the CLI are untouched. The only other quant/ edit
+    in step 5 is the dated note in DESIGN.md (15.4).
+- **Frozen and untouched:**
+  - `int4_bytes_gate.py`, `w4a8_emulate.py`, `w4a8_verdict.py`, `w4a8_engine_gate.py`, `w4a8-eval.sh` and
+    `int4_census.py`;
+  - every gate-B, gate-D and census log;
+  - `pipelines/yolov8n/5_eval_map.py`, which is only called.
+- **The overlap with worktree-bf16-engine:** none. It touches no file above (v2 section 6).
+
+## 9. The frozen triple, TOOLS_JSON and the pins (as S1, S1b and F2-A)
+
+- **PREREG_TEXT_SHA256:** this text, inside `w4v_verdict.py`.
+- **PROTOCOL_JSON_SHA256:**
+  - the models and their shas;
+  - the arms (method × form × tier) and every method's hyperparameters;
+  - the calibration listing and its shas, and the seed;
+  - H's definition and its two id lists' sha256s;
+  - the MX budget;
+  - the screen size and cut, and K-D's line (on all 5,000 and on H) and eligibility;
+  - the eval settings, ORT and the threads.
+- **VERDICT_CODE_SHA256:** the whole LF source of `tools/w4v_verdict.py` and `scripts/w4v-eval.sh`, plus the
+  verdict constants.
+- **TOOLS_JSON,** beside it, holds the LF sha of every repo file in the import graph of the code that makes or
+  judges an arm, and of `scripts/lib.sh`, which the runner sources. The graph's roots:
+  - `tools/w4_recover.py`, which makes every arm;
+  - `pipelines/yolov8n/5_eval_map.py`, which writes every row's detections;
+  - `tools/w4a8_engine_gate.py`, which decides C8's eligibility;
+  - `tools/quant_compare.py`, `quant/__main__.py` and `quant/cli.py`, which run C6.
+  - The graph is read statically, and nothing is imported to read it. It takes every import statement, module-level
+    or inside a function, and every `importlib.import_module` of a literal name, resolved as each root's own run
+    resolves it. The eval's `--decoder` import is not literal: the runner passes no `--decoder`, and its default
+    module, `npu.yolo_decode`, the eval also imports by name.
+- **That is 30 files:**
+  - in `tools/`: `w4_recover`, `w4a8_emulate`, `w4a8_engine_gate` and `quant_compare`;
+  - `pipelines/yolov8n/5_eval_map.py`;
+  - in `quant/`: `__init__`, `__main__`, `adaround`, `calib`, `cle`, `cli`, `graph`, `passes`, `pow2`, `qdq`,
+    `quantize`, `refine`, `report`, `shift_cut`, `sources` and `verify`;
+  - in `npu/`: `__init__`, `modnet`, `paths`, `preprocess`, `session`, `yolo` and `yolo_decode`;
+  - `ignite_xdna/__init__.py`, the repo-root forwarder into `src/`;
+  - `scripts/lib.sh`.
+  - `w4v_verdict.py`, which the graph also reaches, is VERDICT_CODE_SHA256's. The selftest checks the list against
+    the graph by set equality (section 10).
+- **`src/` is not in the graph.** The gate stage records it instead, as `SRC_TREE <tree>`, the tree
+  `git rev-parse HEAD:src` names (`w4v_verdict.py --src-tree`).
+  - It refuses before the engine gate runs unless `src/` is clean against HEAD, with no staged, unstaged or
+    untracked path. `--c8` refuses too if it is not.
+  - The line records which compiler C8 judged with.
+- **All three, and TOOLS_JSON, are printed in every W4V log, the load witnesses included.** `w4_recover` imports
+  them. `--pins`, `--screen`, `--advanced`, `--c8` and `--verdict` refuse unless all four equal those of the one
+  prereg log, committed and clean.
+- **Committed means in HEAD and unchanged against it** (`git cat-file -e HEAD:<path>` and `git diff --quiet HEAD
+  -- <path>`); a file only `git add`ed is not committed.
+- **No stage runs until every earlier stage's logs hold.** `w4v_verdict.py --ready <stage>` checks them, and
+  `w4v-eval.sh` calls it before every stage after the selftest, in section 13's order. `--prereg`, `--pins`,
+  `--c9`, `--screen`, `--c8` and `--verdict` apply the same check themselves. Each earlier stage's logs need:
+  - exactly one log per expected name, committed and clean;
+  - its success line, printed only when that stage finished: the selftest's two `[selftest] PASS` lines; each
+    model's `[controls] <model> PASS`; the PASS lines of C6a (both models), C6b and C6c; a `DETS_SHA256` line in
+    every eval row; C9's PASS for both models; the sensitivity and emit logs' `W4V_DONE` lines; the prereg and
+    pins logs' `PINNED` count; each cut log's `SCREEN COMPLETE`; and the gate log's `SRC_TREE` line, its C8 int32
+    PASS and its `W4V_DONE gate`;
+  - no `W4V_CONTROL` line that FAILs;
+  - at least one hash block, and every hash block equal to the tool's own. A log of several tool calls, such as
+    an emit log, holds one block per call, and a log whose blocks differ from each other refuses.
+  - A log that exists but fails any of these refuses the next stage, as a missing log does. So no emit runs
+    before C9's log is committed with a PASS on both models.
+  - The prereg run also refuses unless the tools and every TOOLS_JSON file are committed and clean.
+- **Nor does a stage run while a log of its own exists,** of any date, committed or not: a restart needs the gate's
+  ruling.
+  - The runner's `--ready` checks this before the stage writes anything. It covers the stage's logs above, its
+    load witness and C6c's report-only env17 log.
+  - The in-stage checks (`--c9`, `--screen`, `--c8`, `--prereg`, `--pins` and `--verdict`) run inside their stage,
+    once its `--ready` has passed, so they leave this check to it.
+- **The prereg run pins every emitted arm's sha before any mAP.**
+  - The screen and the decisive run refuse a file whose sha differs.
+  - Tier 2's shas are pinned by a prereg-pins log, with the same triple and TOOLS_JSON, before tier 2's screen.
+  - Pins are read only from the one prereg log and at most one pins log, each committed and clean.
+
+## 10. Blind-safety
+
+- **Everything in sections 3-7 is fixed in the tools** before any W4V method reads a calibration image.
+- **The selftest is synthetic only:**
+  - GPTQ on tiny random convs: equal to an independent unblocked OBQ reference, never worse than RTN in any case,
+    and at the brute-force optimum in at least 30 of 40;
+  - the BC and VC identities, and MX's sensitivity on B8's captured input;
+  - form a/b identity;
+  - the verdict's rule, the H scoring and the dets check, on synthetic logs and JSONs;
+  - the freeze, the pins, the cut logs and the commit checks, in a temporary git repository;
+  - there too, the stage order: a later stage refuses on a committed log that FAILs, a log cut short of its
+    success line, a missing or differing hash block, and an uncommitted log;
+  - that `--advanced` and `--c8` print the triple and TOOLS_JSON first;
+  - that TOOLS_JSON's list is the import graph of its roots plus `scripts/lib.sh` (section 9).
+- **Controls, parity and emit print pipeline facts only:**
+  - shas, counts, PASS or FAIL;
+  - per-layer reconstruction loss and SQNR, report-only, as gate D's sidecars printed SQNR before its evaluation.
+- **The screen logs print each arm's 500-image mAP and its H_500 figure** (their purpose) and the cut list. My
+  report after a screen carries the cut list and counts, not the mAPs (O7, ruled).
+- **No re-runs:**
+  - a failed stage stops and comes to the gate as it stands;
+  - a crashed arm is a missing row (INCOMPLETE), restarted only on the gate's ruling.
+- **The verdict runs once,** on the gate's go.
+
+## 11. Predictions (ESTIMATE; scored HIT or MISS in the verdict report; they decide nothing)
+
+- **W4V-P2** (v2): RTN reproduces gate D exactly (C2, C9).
+- **W4V-P3** (v2): YOLOv8n is harder to recover than YOLOv8s.
+- **W4V-P4:** no E1 arm passes on either model.
+- **W4V-P5:** in U, GPTQ and AdaRound each beat RTN by more than 10 points on the screen, on both models.
+- **W4V-P1** concerns the census. It is scored in the verdict report against the census log, on its ms items only
+  (the ring has no ms share).
+
+## 12. Cost, and the START REQUESTs (ESTIMATE unless tagged)
+
+| stage | work | cost | kind |
+|---|---|---|---|
+| selftest | synthetic | seconds | light (FYI and DONE) |
+| controls + parity | C0-C6 | about 20 min: C6(b)'s calibration 244.5 s and C6(c)'s AdaRound 511.97 s were MEASURED on YOLOv8n | START REQUEST 1 |
+| reproduction (C9) | B8 and RTN E1, E2, U at 5,000, both models: 8 rows | about 1 h: gate D's loops were 242-294 s and 548-568 s (MEASURED) | START REQUEST 1b |
+| emit tier 1 | 17 arms × 2 models | about 3.5 h | START REQUEST 2 |
+| prereg | pins | minutes | light |
+| screen tier 1 | 18 rows × 2 models at 500 | about 35 min | START REQUEST 3 |
+| emit tier 2 + pins | 12 arms × 2 models | about 3.5 h | START REQUEST 4 |
+| screen tier 2 | 12 rows × 2 models | about 25 min | START REQUEST 5 |
+| engine gate | form-b files that advance | minutes each | light |
+| decisive | B8 per model, plus the advancing arms | about 15 min, plus 4-5 min (n) or 9-10 min (s) per advancing arm | START REQUEST 6 |
+| verdict | parse, re-score all 5,000 and score H per row | minutes (a pycocotools pass per figure, UNMEASURED) | light |
+
+**The bases of the estimates:**
+- **AdaRound:** 511.97 s per YOLOv8n form at W8 (MEASURED: 157.3 s ORT + 353.2 s torch, c64 log :1012, :1107).
+  YOLOv8s is UNMEASURED; taken at 3× (its conv weights are 3.5×, per the census).
+- **GPTQ, BC and VC captures:** at most 63 sub-model runs × 64 images per pass, each under one full forward
+  (42.89 / 104.92 ms per image, MEASURED, gate D's B8 unopt logs). That is ≤ 3 min (n) and ≤ 7 min (s) per pass.
+- **The float-side statistics** (y_f) are captured once per model and shared by every arm.
+- **Memory:**
+  - AdaRound peaked at 5.74 GB on YOLOv8n at 64 images (MEASURED).
+  - YOLOv8s is UNMEASURED; about 10-15 GB is an ESTIMATE, against MODNet's 22.3 GB at 64 (MEASURED, the repo's
+    largest).
+  - BFP16's needs go in each START REQUEST.
+- **Disk:** one detections JSON per row, 60 screen rows plus the 5,000-image rows, in `scratch/w4v/dets/`.
+  - Gate D's surviving files, in the int4-study worktree's `results/`, are MEASURED at 21,275,566 B (YOLOv8s U) to
+    67,668,653 B (YOLOv8n B8) per 5,000-image row, and 6,424,894 B (n) and 5,536,967 B (s) per 500-image B8 row.
+  - So the screen needs under 0.5 GB (ESTIMATE, 60 rows at up to about 7 MB). Each 5,000-image row needs up to about
+    70 MB (ESTIMATE). Every row prints its file's size.
+
+## 13. Files and order
+
+1. v1 to the gate (done); its rulings on O1-O11 (done); v2 to v2.4; the gate's acceptance (LF).
+2. The diff (`w4_recover.py`, `w4v_verdict.py`, `w4v-eval.sh` and the quant/ grid), with the selftest's output,
+   for the gate's go.
+3. **The step-5 commit(s)**, then HEAD reported:
+   - the frozen tools with the selftest log, which the controls stage needs committed;
+   - the DECISIONS entry (15.1a); the pitfall entry is the gate's, on main (15.1b);
+   - the BENCHMARKS gate-B line (15.2);
+   - the results/README census row (15.3);
+   - the quant/DESIGN.md dated note (15.4).
+4. START REQUEST 1: controls and parity.
+   - The controls logs are committed before parity runs, then the parity logs; each commit holds logs alone, with
+     a pipeline-facts report.
+   - Then START REQUEST 1b: C9's reproduction. Its logs are committed. Gate D's figures are known, so the report
+     states whether they match.
+5. START REQUEST 2: emit tier 1; its sensitivity and emit logs are committed. Then the prereg run (it pins every
+   tier-1 arm), committed before any mAP.
+6. START REQUEST 3: screen tier 1, with B8 at 500. The log is committed, and the report is the cut list.
+7. START REQUEST 4: emit tier 2; its emit logs and its pins log are committed. Then START REQUEST 5: screen tier 2.
+8. The engine gate on every advancing form-b file (light). Its log is committed before the decisive run.
+9. START REQUEST 6: the decisive run. The logs are committed.
+10. The verdict, once, on the gate's go.
+
+Logs are `results/int4/w4v_*`, and the load witnesses `results/int4/load_w4v_*`: UTF-8, the profile path scrubbed,
+never overwritten, each committed alone. Arm files, captures and detections JSONs stay in the git-ignored
+`scratch/w4v/`.
+
+## 14. The rulings on v1's open points, as applied
+
+| point | ruling | where it lands |
+|---|---|---|
+| O1 | THE USER RULED (B): K-D on all 5,000 AND on H (4,700); the screen prints H's 468, report-only; the cut stays on the 500 | sections 4, 5, 6, 7 (C0), 9; 15.1a |
+| O2 | the gate's reading: ONE METHOD passing on BOTH models opens pose and YOLO26n; the user may override | section 6 |
+| O3 | folded, accepted, named "VC (folded variance correction)", never bare "BN re-estimation" | sections 1, 3, 3.3, 3.7, 6, 7, 10, 12; 15.1a |
+| O4 | no VC stacks | section 3.7 |
+| O5 | tier 2 unconditional | section 3.7 |
+| O6 | 1,000 iterations; a NARROW AdaRound means a new pre-registration at 10k, never a re-run | section 3.4 |
+| O7 | the cut list only in reports | section 10 |
+| O8 | ≤ 5%, decision-eligible | section 3.6 |
+| O9 | act-order ON | section 3.5 |
+| O10 | int32 for BC and VC; C8 includes ≥ 1 int32-bias form-b file or states why none advanced | sections 3, 7 (C8) |
+| O11 | C9 as its own stage (the `repro` stage) | sections 7 (C9), 8, 12, 13 |
+| docs | 15.1: accepted, with the (B) line and the VC name; the pitfall TAKEN, with the adaround fact, then moved to main by the gate; 15.2 and 15.3 accepted; the DESIGN.md note | 15.1a, 15.1b, 15.4 |
+
+## 15. Text for the step-5 commit (the gate's rulings on steps 4 and 5)
+
+### 15.1a docs/DECISIONS.md: after :975, a sibling of gate D's bullet under "Rejected: int4 weights in the graph engine"
+
+```
+  - **The user paused the LLM work and turned int4 to the vision engine's models (2026-09-25).**
+    "pause the LLM work and focus on INT4 as a broader function, so i think we should use the models
+    we already know this chip is good at." (the user's direction, relayed by the gate)
+    - Criterion (b): accuracy is the gate. int4 is a capability: a W4 model within 1.0 point of its
+      B8, measured the gate-D way, in a scale form the engine can lower, with the form named. Speed
+      and energy are report-only; bytes decide nothing.
+    - YOLOv8n and YOLOv8s first; YOLOv8n-pose and YOLO26n only if a method works on that pair.
+    - The engine lowering, which collides with the bf16 branch's files, is decided after the
+      accuracy screen.
+    - Gate B and gate D stand. This is gate D's reopen attempt: post-training recovery at W4, with
+      bias correction; VC (folded variance correction), a per-channel output-variance correction
+      that re-estimates no BatchNorm statistics; AdaRound; GPTQ; and mixed W4/W8. It is
+      pre-registered in `tools/w4v_verdict.py` before any method reads an image. QAT is out unless
+      every post-training method fails and the user rules for it.
+    - The methods calibrate on the first 64 images of `data/coco_calib`, which is inside val2017
+      (see the coco_calib pitfall entry). The user ruled (B) on that leakage: K-D passes a model
+      only within 1.0 point of B8 both on all 5,000 images and on H, the 4,700 images of val2017
+      outside `data/coco_calib`, each against B8 on the same images, from the same detections.
+    - A byte census ran first and decides nothing
+      (`results/int4/w4v_census_desktop2_20260925.log`).
+    - Plan W4V v2 (git-ignored, LF `88b440fa`); branch `worktree-int4-vision`.
+```
+
+### 15.1b docs/DECISIONS.md: the coco_calib pitfall, NOT on this branch
+
+- The gate lands it on main, in a docs commit that also covers main's AdaRound and GPTQ claims.
+- This branch adds nothing there. 15.1a names the entry in plain text until main is merged in.
+- My offered text, and the facts I verified for it, went to the gate with v1 and v2:
+  - `2_fetch_coco.py:65-71`;
+  - `yolo-bench.sh:19-20`;
+  - `3b_quantize_cut.py:75`.
+
+### 15.2 docs/BENCHMARKS.md: after :2332 (gate B's reopen bullet), before "**Gate C**" at :2334 (accepted as v1)
+
+```
+- **Correction (2026-09-25): two denominators above were not the smallest measured dispatch.**
+  SESR-M7 also measured 4.178 ms and YOLOv8n-pose 7.527 ms (the energy sitting,
+  [the balanced default](#the-amd-comparisons-re-measured-in-the-balanced-default-2026-09-16-desktop-2)),
+  against the 4.208 and 7.548 ms used. On them, SESR-M7's int4 bound moves from 1.365% to 1.375% and
+  its ceiling from 1.674% to 1.686%; YOLOv8n-pose's from 2.762% to 2.770% and from 4.159% to 4.170%
+  (DERIVED, recomputed from the log's bytes and task counts, which the log prints to one decimal as
+  1.4 / 1.7 / 2.8 / 4.2%). Every move is under 0.02 points, the verdict stands, and the log is
+  unchanged.
+```
+
+### 15.3 results/README.md: the `int4/` row (:108), a sentence appended before the link cell (accepted as v1)
+
+```
+Then W4V (2026-09-25): `w4v_census_desktop2_20260925.log`, the int4 byte census of nine engine rows
+(eight models, ten containers) and six AMD-stack models from `tools/int4_census.py` (no device; report-only, it decides
+nothing; every file read is listed with its sha256, and every trust check passes).
+```
+
+### 15.4 quant/DESIGN.md: a dated one-line note after :714, as its own paragraph before "**`quant/refine.py`**" (:716)
+
+```
+Note (2026-09-25): yolov8n-cut's 0 patterns is MEASURED, no longer an expectation: Quark and quant/ both count 0 on the prepared graph (`results/quant/prepare_probe_yolov8n_cut.log:269, :296`).
+```
+
+PROTOCOL_JSON {"annotations": {"bytes": 19987840, "path": "data/coco/annotations/instances_val2017.json", "sha256": "e8c7f7908f1d7278341fae127d0da654f102f11bd7b21d8aeefa635b8c810b6f"}, "c9_arms": ["rtn_e1", "rtn_e2", "rtn_u"], "calibration": {"all_count": 300, "all_names_sha256": "41f5539df88fa7d97a8ba39d97551f8ce4c93e85747f0b1d375bbffdcb15e6df", "dir": "data/coco_calib", "first": "000000000139.jpg", "last": "000000119995.jpg", "listing_form": "'<name> <sha256>\\n' per file, the first n by name", "listing_sha256": "07fcde156cd48c6a7b5e1fd726a1d93c649021d355cada6122281f8c84871a45", "n": 64, "order": "sorted file names (quant.sources.CocoSource)", "preprocess": "npu.yolo.letterbox, the graph input's size (640), as 5_eval_map.py"}, "cut_line": 2.0, "deciding_forms": ["e1", "e2", "u"], "decisive_n": 5000, "env": "resnet_env17", "eval": {"conf": 0.001, "ep": "cpu", "images": "sorted(coco.getImgIds())[:n]; --n 0 for all 5,000", "iou": 0.7, "max_det": 300, "ort_opt": "disable_all", "script": "pipelines/yolov8n/5_eval_map.py", "threads": "8"}, "gate_d_files": {"yolov8n": {"e1": "4b0c957edb101091d28c02bbc544a8c980fedec9e4d6ca25c1136322b9f96733", "e1h": "f600d16e19fd13639071afa4d9de1da759af7cfba7332e48d3316a1edbc70a4b", "e2": "b90d25b6f780296df48c6ad633a26a0af3240ef8d5985fbcb782a9b12400a37d", "u": "b1fd9f528f54e524c80bc826d325ba88c4f88024d5d63131179eb063bc35346f", "w8check": "ec48c462cae898af2ce5f6e12f3071477c571ba47c12c3d07e9a4876485e14ec"}, "yolov8s": {"e1": "92633c4528637553de18a83821f69c560e57597b080426ce3c02d2a53b8130a3", "e1h": "b531a131f543ce1d15735987de803b3879293d6a3a90b76bc8d599d638b713ea", "e2": "15bdc6caf9363f5da6f572c95c50c0ce4bb0485c4fddb352b2ac9a99f8108475", "u": "946bf15230b7b5c2921d6d13556410f8341bae585fe9b73e0ec2df85f4ff17cc", "w8check": "434ffa8bc3e42d409e61ead968fe7eb384e3ed208a5ab77f4e157059ac964395"}}, "gate_d_map": {"yolov8n": {"b8": "27.10", "rtn_e1": "0.06", "rtn_e2": "0.02", "rtn_u": "1.58"}, "yolov8s": {"b8": "37.21", "rtn_e1": "2.76", "rtn_e2": "2.76", "rtn_u": "2.47"}}, "grid": [-7, 7], "group": 32, "h": {"500": [468, "2e297c3beba1eebfdbc4042f07ae3d8a4e8582f1652aedadf9c06834c6f940cd"], "5000": [4700, "ae0670418aa729575165614527596c559c74be2dc3c39ea3bf84da7200f11e02"], "definition": "sorted val2017 image ids, minus every id of data/coco_calib (all 300)", "id_text": "'<id>\\n' per id, ascending"}, "hyper": {"adaround": {"BatchSize": 2, "BetaRange": [20, 2], "DataSize": 64, "DropRatio": 1.0, "EarlyStop": true, "FixedSeed": 1705472343, "LearningRate": 0.1, "NumIterations": 1000, "OptimDevice": "cpu", "RegParam": 0.01, "WarmStart": 0.2, "override": "quant.adaround.WeightGrid per layer: 2**-pos4 per output channel, [-7, 7]; None keeps an MX W8 layer", "sessions": "quant/adaround's own: ORT's default intra-op threads, the float reference at ORT's default graph optimisation; torch at 8 threads", "zeta_gamma": [1.1, -0.1]}, "bc": "b'_c = b_c + mean(y_f,c) - mean(y_q,c) over every output position of the calibration images", "bias": "RTN/GPTQ/AdaRound keep the shipped int8 bias; BC and VC write int32 at s_x * s_w (per channel in form a), rint in float64", "capture": "GPTQ, BC and VC: a sub-model to each Conv's input from the current QDQ graph, ORT_DISABLE_ALL, 8 intra-op threads; y_f from the float head-cut graph, the same session options. AdaRound: quant/adaround's own sessions, as in its parity runs (ORT's default intra-op threads; the float reference at ORT's default graph optimisation); torch at 8 threads", "f": {"alphas": "0.50, 0.51, ..., 1.00", "scale": "alpha * max|w_c| / 7, float32, first minimum wins"}, "gptq": {"act_order": true, "block": 128, "damp": 0.01, "dead_column": "H_ii = 0 -> H_ii = 1 and W[:, i] = 0", "hessian": "2 X X^T / N, float64, every output position of the 64 images", "layout": "ONNX (cin, kh, kw)", "quantizer": "the arm's per-row scale, clip(rint(w / s), -7, 7)"}, "mx": {"budget": 0.05, "rule": "most sensitive first; stop at the first conv that would take the W8 share of conv weight elements over the budget", "sensitivity": "sum ||y_f - y_q||^2 / sum ||y_f||^2 on B8's captured Conv inputs: y_f the float weights, y_q the RTN-W4 weights, both with the float bias; once per model and form"}, "order": "sequential; GPTQ, BC, VC and MX-GPTQ in the XINT8 graph's Conv order (quant.graph topological); AdaRound and MX-AdaRound in quant/adaround's vendor_order; the ORDER control checks that both orders are topological", "reference": "the float graph's Conv output on the float network's own input (DropRatio 1); GPTQ uses its own sequential quantized input", "torch_threads": 8, "vc": "a_c = std(y_f,c) / std(y_q,c) (population std; a_c = 1 where std(y_q,c) = 0); w' = a_c * w; RTN with pos4 re-chosen on w' by MinMSE; then the bias as BC on the same captured input"}, "int32_bias": ["bc", "vc", "arbc", "gptqbc"], "k_max": 4, "kill_line": 1.0, "matrix": [[1, "rtn", ["e1", "e2", "u", "f"]], [1, "bc", ["e1", "e2", "u"]], [1, "vc", ["e1", "e2", "u"]], [1, "ar", ["e1", "e2", "u"]], [1, "gptq", ["e1", "e2", "u", "f"]], [2, "arbc", ["e1", "e2", "u"]], [2, "gptqbc", ["e1", "e2", "u"]], [2, "mxar", ["e1", "e2", "u"]], [2, "mxgptq", ["e1", "e2", "u"]]], "method_text": {"ar": "AdaRound", "arbc": "AdaRound + BC", "bc": "BC", "gptq": "GPTQ", "gptqbc": "GPTQ + BC", "mxar": "MX-AdaRound", "mxgptq": "MX-GPTQ", "rtn": "RTN", "vc": "VC (folded variance correction)"}, "models": {"yolov8n": {"float": ["models/yolov8n_cut.onnx", "11b52c2530def3c99bccc4bee39a40683aab8619d4278a334b5f0f78c43fd0a1"], "xint8": ["models/yolov8n_cut_xint8.onnx", "f02e86ba1bf61ff3fdc159e29b15259567e279df06f68c6d9adeb966fe56c885"]}, "yolov8s": {"float": ["models/yolov8s_cut.onnx", "f713208d79578f41240d2ffaca96dfca711ad45bcf251326adb68da212ab04d5"], "xint8": ["models/yolov8s_cut_xint8.onnx", "065f62523000b806e47e227f0b9d71a689f10d8c5368a7c5b6d0ff3b9f733fcc"]}}, "mx": ["mxar", "mxgptq"], "narrow_line": 2.0, "onnxruntime": "1.23.3.dev20260320", "rules": {"best": "smallest K-D delta among decision-eligible arms, ties in section 3.7's row order", "cut": "advance iff B8_500 - arm_500 <= cut_line, printed 2-decimal values", "eligible": "forms e1/e2/u only; a form-b file needs its own C8 PASS, any form (a FAIL loses the arm its eligibility); e1 needs form b", "flag": "report-only: cut on the 500 but H_500 delta <= cut_line", "incomplete": "a row missing, < n images or any skipped, H not its pinned ids, ORT or threads differ, a control fails or is missing, the frozen triple or TOOLS_JSON mismatches, a log is not committed and clean, lacks its success line or holds a hash block that differs", "kd": "pass iff B8_5000 - arm_5000 <= kill_line AND B8_H - arm_H <= kill_line; K-D delta = max of the two; PASS per model iff a decision-eligible arm passes", "narrow": "no decision-eligible arm passes and kill_line < best K-D delta <= narrow_line", "pair": "EXTEND iff one method passes on both models"}, "screen_n": 500, "window": [-1, 5]}
+PREREG_TEXT_SHA256 7ff9c2c46e9280e5002aafb6cb573646d0c920b6257b6aba4e2ff47a08caee49
+PROTOCOL_JSON_SHA256 46297af64e23a10df62c363f766bacc3f78faf121b5194ea8e6077b364710872
+VERDICT_CODE_SHA256 2fc815d93451a3be1f8403d768cddb5737218d9e58abe282cc25e77fb7eb7c64
+TOOLS_JSON {"ignite_xdna/__init__.py": "ef016e665caaf8a1f43c196632b0cddf6e8b693a4b10efba3ac2fe7301198ab2", "npu/__init__.py": "7c8079f009174f9992dc12578079959704d0cb08710f8d68c666925559b8c599", "npu/modnet.py": "d6239523a4041df1194afc6b78a24bdf9c0f6e03039e4de4126d7938f9d015ca", "npu/paths.py": "e5e05f6a3e7bbc070b059a603281478ce76ee28f036361e90985b3c424c788a1", "npu/preprocess.py": "d981eb2c9cee4b941670ebd41ceb8d4c6636e14ea5a1e78bbaa3dd7f1bbf09ab", "npu/session.py": "1f7ec8e0aba8e70000d4c704aeb11a7ece6a33b8d57b9c8c7b34642eaca0edcc", "npu/yolo.py": "04222f86d1e2da8ca2cc68e0675cd75883ce541a804be4ba916df7c4ed3abd04", "npu/yolo_decode.py": "a245363a16fc845384611c125ba60725c106622f07b69b8567afd211b2c235fb", "pipelines/yolov8n/5_eval_map.py": "fb25e914e1b28078e0a99413c14b491dfcb57a17c6fb5b740ac0eb51145a753f", "quant/__init__.py": "6a457c2b7f7de2ed3e56fa9020d171291bff4b2633a4ce16b4b028e37b7289ec", "quant/__main__.py": "b67e8ef3ca621732d04cc7f54627011e89e00ed964b932561198519f7d1cd2af", "quant/adaround.py": "60f06bd2a3f28bfcb99f55ae462c2f41b3469f9fd3565877418dde95bb6a0704", "quant/calib.py": "a68f24d9bc39fcbc51988ce7b6b9dd79bf62f7d454689886d866ab8d04a2dcd6", "quant/cle.py": "6b876fc61b66ce348cbc9053974927a16888798305096bd2ccd23ebde2285e35", "quant/cli.py": "fb05ead47ee3d0fc25c41d305ec3d6bd7e57fafde074c9266c5737f59c87a194", "quant/graph.py": "35171c86a1535a34fbfaac40e54a1c8646dadec25af287df710b9feb5ae89342", "quant/passes.py": "63df9a473fe7fc8b576e0313b8ba8124a17a0541f212b3bde1befc17d8846397", "quant/pow2.py": "2212eaa226d72ad6b54a75f97a854ec9a9589861cd92baff6fea1d8d2d752fab", "quant/qdq.py": "4c4cf421ade75c578762e373f99ca2aba2daed1bf1ab8590d8dd044783958286", "quant/quantize.py": "6fbdc88bd88bdbfbb8882f53cb3c3586e7af916dcf0d665f45b2e284bcc3b327", "quant/refine.py": "2f10e3bcaaa57c441f029af91fbe2bc87c3b07b20d63b74eaf5aca45b58fadfd", "quant/report.py": "f186e05bf38d4cb7aff66514e059e0fc7fb02abe3fd4981bfd4980272aa2d4e9", "quant/shift_cut.py": "80fa8bfc76c7c13e526107ea6917cc3cee4a0da65caa8a4305ccbbf43fe4246a", "quant/sources.py": "0ef5e110296022af5d4b9e36493099fe7be009fe49687c16a1dc30c148ed8286", "quant/verify.py": "1263884ebbd17fbbfe1a83b42e971f84a67b847e22fabd132638f83721f6dd18", "scripts/lib.sh": "325383a38b0f8cc2d5d30cab3cef0c261dca41c40b8f79c7b5e771de6daa90fd", "tools/quant_compare.py": "d193031b0e238fb9ea92bb7c8492bf08d1830c9fa17a6eb5260080a5cbc6f1bf", "tools/w4_recover.py": "8a9562972a5183689a95ab405783e59387788f459d54dcd7643b56d4a928b155", "tools/w4a8_emulate.py": "298129b5c2de794dc680f18537db7e0a07659637fe8d342d78a44694a3fceeff", "tools/w4a8_engine_gate.py": "a8a61cb805fc40aa2b5cd2a166ac32c8296ffb42c3e3b492b05fbaf94b7972c4"}
+PREREG_TEXT_EQUALS_ACCEPTED True (the accepted text's LF sha256 7ff9c2c46e9280e5002aafb6cb573646d0c920b6257b6aba4e2ff47a08caee49)
+MODEL_PIN yolov8n float models/yolov8n_cut.onnx sha256 11b52c2530def3c99bccc4bee39a40683aab8619d4278a334b5f0f78c43fd0a1 == pinned
+MODEL_PIN yolov8n xint8 models/yolov8n_cut_xint8.onnx sha256 f02e86ba1bf61ff3fdc159e29b15259567e279df06f68c6d9adeb966fe56c885 == pinned
+MODEL_PIN yolov8s float models/yolov8s_cut.onnx sha256 f713208d79578f41240d2ffaca96dfca711ad45bcf251326adb68da212ab04d5 == pinned
+MODEL_PIN yolov8s xint8 models/yolov8s_cut_xint8.onnx sha256 065f62523000b806e47e227f0b9d71a689f10d8c5368a7c5b6d0ff3b9f733fcc == pinned
+COMMITTED OK tools/w4v_verdict.py
+COMMITTED OK scripts/w4v-eval.sh
+COMMITTED OK tools/w4_recover.py
+COMMITTED OK tools/w4a8_emulate.py
+COMMITTED OK tools/w4a8_engine_gate.py
+COMMITTED OK tools/quant_compare.py
+COMMITTED OK pipelines/yolov8n/5_eval_map.py
+COMMITTED OK quant/__init__.py
+COMMITTED OK quant/__main__.py
+COMMITTED OK quant/adaround.py
+COMMITTED OK quant/calib.py
+COMMITTED OK quant/cle.py
+COMMITTED OK quant/cli.py
+COMMITTED OK quant/graph.py
+COMMITTED OK quant/passes.py
+COMMITTED OK quant/pow2.py
+COMMITTED OK quant/qdq.py
+COMMITTED OK quant/quantize.py
+COMMITTED OK quant/refine.py
+COMMITTED OK quant/report.py
+COMMITTED OK quant/shift_cut.py
+COMMITTED OK quant/sources.py
+COMMITTED OK quant/verify.py
+COMMITTED OK npu/__init__.py
+COMMITTED OK npu/modnet.py
+COMMITTED OK npu/paths.py
+COMMITTED OK npu/preprocess.py
+COMMITTED OK npu/session.py
+COMMITTED OK npu/yolo.py
+COMMITTED OK npu/yolo_decode.py
+COMMITTED OK ignite_xdna/__init__.py
+COMMITTED OK scripts/lib.sh
+git HEAD 07cfa423acb307090b20da9579da610e1fb36d18 (+0 uncommitted paths: this log's own commit)
+onnxruntime 1.23.3.dev20260320
+PIN 11b52c2530def3c99bccc4bee39a40683aab8619d4278a334b5f0f78c43fd0a1  models/yolov8n_cut.onnx
+PIN f02e86ba1bf61ff3fdc159e29b15259567e279df06f68c6d9adeb966fe56c885  models/yolov8n_cut_xint8.onnx
+PIN d758cf8fdd38f3de8879aeda2cdddef0e2619caf672c39e2448e9d7ad6a57af4  scratch/w4v/captures/yolov8n_yf.npz
+PIN c2d37e01af65c4f8994d0463c6b606f1d11b74e48d7fadb027a9697bb8f52ccf  scratch/w4v/captures/yolov8n_mx.json
+PIN 4b0c957edb101091d28c02bbc544a8c980fedec9e4d6ca25c1136322b9f96733  scratch/w4v/arms/yolov8n_w4v_rtn_e1.onnx
+PIN b90d25b6f780296df48c6ad633a26a0af3240ef8d5985fbcb782a9b12400a37d  scratch/w4v/arms/yolov8n_w4v_rtn_e2_ortonly.onnx
+PIN b1fd9f528f54e524c80bc826d325ba88c4f88024d5d63131179eb063bc35346f  scratch/w4v/arms/yolov8n_w4v_rtn_u_ortonly.onnx
+PIN 8188c74b78cba42a8fa19e7aa23dd2e829f9f16773d4e276f8f5145b62f2bfec  scratch/w4v/arms/yolov8n_w4v_rtn_f_ortonly.onnx
+PIN e74c53347bf2fcbe59e02a55180d24547a121635906af9065e3a6ba9f475ff3b  scratch/w4v/arms/yolov8n_w4v_bc_e1.onnx
+PIN c1c8d746336290772f9403e20b897081937ac3cebda67c2f868a54fa27ae5482  scratch/w4v/arms/yolov8n_w4v_bc_e2_ortonly.onnx
+PIN ae89c25dd5ffc402301f4d75f84f72de5860b19577d9b41c35d717bb65fe72af  scratch/w4v/arms/yolov8n_w4v_bc_u_ortonly.onnx
+PIN 66b3d011484733975105c05e387f287fd8255878a2e8927a9175b489dd26108b  scratch/w4v/arms/yolov8n_w4v_vc_e1_ortonly.onnx
+PIN 3cdbed75823abc200be6ea83de36562f00dce3688b0eef8b3da5071a4cc6341e  scratch/w4v/arms/yolov8n_w4v_vc_e2_ortonly.onnx
+PIN d58f5c351e4f53b002d8e1deaae4273be57f0e6288e8ec3245366a13b997427f  scratch/w4v/arms/yolov8n_w4v_vc_u_ortonly.onnx
+PIN da7f01d4b2d594b8856a292bdf32f6e1d019bb78eedd3afd5061d875671411a1  scratch/w4v/arms/yolov8n_w4v_ar_e1.onnx
+PIN f6d554fa3274957b8d7f76477cf9b36cebd9819954c4c507b98417ad01428e3a  scratch/w4v/arms/yolov8n_w4v_ar_e2_ortonly.onnx
+PIN b83e7a9760181e58a3dd600a0fc3e55ef3c7a0c275bad8e0bc1f58c5ed145309  scratch/w4v/arms/yolov8n_w4v_ar_u_ortonly.onnx
+PIN b540204d98a11b3861813e280000ff822a31c3c747f906d7a4f95236d5196520  scratch/w4v/arms/yolov8n_w4v_gptq_e1.onnx
+PIN e0062cc315230924d7459fc61ee2be35ba6ccdb2437143bb8f80c23a3a6a83d0  scratch/w4v/arms/yolov8n_w4v_gptq_e2_ortonly.onnx
+PIN 6539b2aa25182f6492a772ec7ae8acee864c4db749f1cc046093be97ff6ac758  scratch/w4v/arms/yolov8n_w4v_gptq_u_ortonly.onnx
+PIN a1ed4881abda898218bce42bb2bc53da2bf5c50e52f68ce94ffcb6d1e9d62683  scratch/w4v/arms/yolov8n_w4v_gptq_f_ortonly.onnx
+PIN f713208d79578f41240d2ffaca96dfca711ad45bcf251326adb68da212ab04d5  models/yolov8s_cut.onnx
+PIN 065f62523000b806e47e227f0b9d71a689f10d8c5368a7c5b6d0ff3b9f733fcc  models/yolov8s_cut_xint8.onnx
+PIN fbb0a69f1df7e7d99649228a2662d3b3350ee1bf59882c54943fd84b0c1157a1  scratch/w4v/captures/yolov8s_yf.npz
+PIN 44ce3ed902248338077fe33a2e4dbe6af7604d9ecb154e8a7b1e7caeda0eeaf3  scratch/w4v/captures/yolov8s_mx.json
+PIN 92633c4528637553de18a83821f69c560e57597b080426ce3c02d2a53b8130a3  scratch/w4v/arms/yolov8s_w4v_rtn_e1.onnx
+PIN 15bdc6caf9363f5da6f572c95c50c0ce4bb0485c4fddb352b2ac9a99f8108475  scratch/w4v/arms/yolov8s_w4v_rtn_e2_ortonly.onnx
+PIN 946bf15230b7b5c2921d6d13556410f8341bae585fe9b73e0ec2df85f4ff17cc  scratch/w4v/arms/yolov8s_w4v_rtn_u_ortonly.onnx
+PIN 47cb4b7c020307172c2b9b4ce26903fcfd496e76e2a00c4e6345d92d971a663c  scratch/w4v/arms/yolov8s_w4v_rtn_f_ortonly.onnx
+PIN 2700ece0499075fd7bfe6321d878c30cc67a0b7123ce1ae57589a8feec15ffe4  scratch/w4v/arms/yolov8s_w4v_bc_e1.onnx
+PIN 43017aa7f21aebf512d9bea0215fb0c1803cf88dd3ef71109de9a06aa18c530b  scratch/w4v/arms/yolov8s_w4v_bc_e2_ortonly.onnx
+PIN 2251065c992be860e8687ef3706018b5b99f3cb68abe0d7ddec051403a2a52b4  scratch/w4v/arms/yolov8s_w4v_bc_u_ortonly.onnx
+PIN 1ed74944b0c0be104b6d839dad1fcc6f2615e0b83d815aacb9dba749fb9cf46a  scratch/w4v/arms/yolov8s_w4v_vc_e1_ortonly.onnx
+PIN c07f23eccfb2dfe9f7cd84401feb9ed57cd33d481bbfc706bb1ad25e1a34f897  scratch/w4v/arms/yolov8s_w4v_vc_e2_ortonly.onnx
+PIN 9c792b72a281edf75f191b8d7caa9cecf66bce7d78fcfcac2c18bccc7eb82ba5  scratch/w4v/arms/yolov8s_w4v_vc_u_ortonly.onnx
+PIN 4520931ca248c11d98f9a625fb6dd77cbf8fc211b9303b5928461898c110e8c7  scratch/w4v/arms/yolov8s_w4v_ar_e1.onnx
+PIN 27cd4ce245390238e3556e0d091882ca32bf8067496ab8263f5fe8ab60070d0a  scratch/w4v/arms/yolov8s_w4v_ar_e2_ortonly.onnx
+PIN b3d032aaaf27c1dc6dbc32b1e3334f7271a1ea256b62051233e276b6056ed545  scratch/w4v/arms/yolov8s_w4v_ar_u_ortonly.onnx
+PIN 1793e82c7069d118b42e12daa2a65929fb535bfa81a494339d56581d0c00da11  scratch/w4v/arms/yolov8s_w4v_gptq_e1.onnx
+PIN b2679dfdd0177647b473772172275bd141305ea7d27ae71402476afd06f23fee  scratch/w4v/arms/yolov8s_w4v_gptq_e2_ortonly.onnx
+PIN 425c65cfb7155dc410ed69407da88181bf787880e85f7221038a1f6e6e9b3431  scratch/w4v/arms/yolov8s_w4v_gptq_u_ortonly.onnx
+PIN 8dc50888f9a3be53e79abfe521d2cad35d9d8acb72c2fc7a52907dd2f5a9c63b  scratch/w4v/arms/yolov8s_w4v_gptq_f_ortonly.onnx
+PINNED 42 files
