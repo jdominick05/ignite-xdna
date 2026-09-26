@@ -2330,6 +2330,14 @@ merged, plus half the weight DMA tasks' issue time.
   than the layouts it declares. The trim is still a DERIVED best case until someone builds it.
 - **Reopen int4 only with a new mechanism:** activations that stop round-tripping DDR, a
   weight-bound model, or a slower measured transport. Pricing the same bytes again is not one.
+- **Correction (2026-09-25): two denominators above were not the smallest measured dispatch.**
+  SESR-M7 also measured 4.178 ms and YOLOv8n-pose 7.527 ms (the energy sitting,
+  [the balanced default](#the-amd-comparisons-re-measured-in-the-balanced-default-2026-09-16-desktop-2)),
+  against the 4.208 and 7.548 ms used. On them, SESR-M7's int4 bound moves from 1.365% to 1.375% and
+  its ceiling from 1.674% to 1.686%; YOLOv8n-pose's from 2.762% to 2.770% and from 4.159% to 4.170%
+  (DERIVED, recomputed from the log's bytes and task counts, which the log prints to one decimal as
+  1.4 / 1.7 / 2.8 / 4.2%). Every move is under 0.02 points, the verdict stands, and the log is
+  unchanged.
 
 **Gate C: the silicon demo.** `results/aie/int4_demo_npu_desktop2_20260923.log`, with raw JSONL
 per sweep and a 1 s witness. The NPU ran 05:06–05:16Z. The driver, XRT and toolchain match the
