@@ -27,7 +27,7 @@ WHAT WAS RUN
 # Resolves the contradiction flagged in 92cba62 (live 800/1800 readback vs "flat 800 across
 # all five power modes"). Restores --pmode default at the end and prints the mode read back.
 cd /c/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization || exit 1
-T="$CLAUDE_JOB_DIR/tmp"
+T="<job-tmp>"
 EXE=./tools/hwinfo_npu_bridge.exe
 SMI="/c/Windows/System32/AMD/xrt-smi.exe"
 LOG="$T/pmode_events.txt"; : > "$LOG"
@@ -78,7 +78,7 @@ EOF
 # another session's 128-stream wide_resnet101_2 run). The monitor runs at 0.1 s this time, so
 # the run also answers "does a 10 Hz monitor plus a GEMM hold hang the device" on its own.
 cd /c/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization || exit 1
-T="$CLAUDE_JOB_DIR/tmp"
+T="<job-tmp>"
 EXE=./tools/hwinfo_npu_bridge.exe
 SMI="/c/Windows/System32/AMD/xrt-smi.exe"
 LOG="$T/clean_pmode_events.txt"; : > "$LOG"
@@ -150,7 +150,7 @@ python whole_array.py --dev npu -M 2048 -K 2048 -N 2048 -m 64 -k 64 -n 64 --dtyp
 
 RUN A  2026-09-07 23:51:23-23:57:02 -- CONTAMINATED, kept because the clock result stands
 --------------------------------------------------------------------------------------------
-Another Claude session on this machine was running its 128-stream wide_resnet101_2
+Another <tool> session on this machine was running its 128-stream wide_resnet101_2
 concurrency sweep at the same time (results/nstream_wide_resnet101_2_128_ceiling.log,
 written 23:57:43): a second python context (pid 16756, 204 MB) appears in the rows from
 23:51:36 and the hold hung at 23:51:52 (ERT_CMD_STATE_TIMEOUT); its timeout expired at

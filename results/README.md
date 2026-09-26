@@ -23,8 +23,10 @@ and the full-family YOLOv8 split suite with
 
 Raw logs behind every number in `README.md`, `RESEARCH.md` and `docs/BENCHMARKS.md`. Each
 log is the UTF-8 stdout of one script invocation, written by the wrappers in `scripts/`;
-nothing here is edited by hand except that the local user profile path has been replaced
-with `C:\Users\<user>`.
+nothing here is edited by hand except for token redactions. The local user profile path
+is `C:\Users\<user>`, and host names, development-tool names, job-scratch paths and
+worktree paths are `<host>`, `<tool>`, `<job-tmp>`/`<job-dir>` and `<worktree>`
+([record](scrub_record_desktop2_20260926.log)).
 
 Two kinds of log say what else was on the machine while a number was taken, so a latency,
 wall time or peak-memory figure can be read back against the contention it saw. A

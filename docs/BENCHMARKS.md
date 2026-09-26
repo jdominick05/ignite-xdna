@@ -5288,13 +5288,13 @@ timing and a GPU oracle are still open.
 
 A GPU AdaRound run with its adapter on record and a same-env CPU baseline beside it:
 Ignition's transcription (`python -m quant adaround`) on ResNet50's c64 CLE base, on
-**Desktop 1** (`JORDAN-PC`, Ryzen 7 7800X3D, RX 7900 XTX, gfx1100, 24 GB). It is not
+**Desktop 1** (Ryzen 7 7800X3D, RX 7900 XTX, gfx1100, 24 GB). It is not
 Quark's FastFinetune on a GPU, and it makes no accuracy claim: Desktop 1 has no NPU, so
 full-set top-1 and EP placement for the new artifacts are Desktop 2's to run, with
 `--fresh`.
 
 It is not the first GPU request here.
-[`yolo8m_adaround_gpu_compile.log`](../results/yolo8m_adaround_gpu_compile.log) (JORDAN-PC,
+[`yolo8m_adaround_gpu_compile.log`](../results/yolo8m_adaround_gpu_compile.log) (Desktop 1,
 `resnet_env_rocm`) shows Quark's own FastFinetune reporting "optimized by adaround on
 cuda" for yolov8m, with its ORT half falling back to the CPU. That log names no adapter
 and has no CPU arm beside it, yet RESEARCH credits yolov8m to "GPU-accelerated
@@ -5391,7 +5391,7 @@ the GPU.
 
 ### Ignition: a GPU-built AdaRound file on the NPU (2026-09-10, Desktop 2)
 
-Desktop 1 (`JORDAN-PC`, RX 7900 XTX) built two AdaRound files from the same CLE c64 base,
+Desktop 1 (RX 7900 XTX) built two AdaRound files from the same CLE c64 base,
 `models/resnet50_ignition_cle_c64.onnx`, in one conda env (`resnet_env_rocm`: torch
 `2.9.1+rocm7.2.1`, ONNX Runtime 1.29.0). The only difference between them is `--device`:
 - `cuda` wrote `resnet50_ignition_cle_adaround_c64_gpu_desktop1.onnx` (`811a699e…`), with

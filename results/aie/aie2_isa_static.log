@@ -122,7 +122,7 @@ object IRON built for the hardware run, structure for structure:
     loop .L_LEnd0 0x2d0-0x300: 8 bundles = 8 cycles/iteration, 13 live ops, density 1.62 of 6
 
   rebuilt standalone with the command above:
-== C:\Users\<user>\.claude\jobs\8a20f3f5\tmp\clock_rebuilt.o
+== <job-tmp>\clock_rebuilt.o
   section .text.clock_probe: 102 bundles (29 full-width, 73 compressed), frame 32 B, stack refs 0
     loop .L_LEnd3 0xc0-0xd0: 2 bundles = 2 cycles/iteration, 3 live ops, density 1.50 of 6
     loop .L_LEnd2 0x150-0x1b0: 9 bundles = 9 cycles/iteration, 4 live ops, density 0.44 of 6
@@ -142,7 +142,7 @@ k-reduction loop, the shape upstream's conv2dk3 uses, and sweeps K. Two signals:
 accumulator registers the allocator names, and stack references anywhere in the function.
 
 Live aie::mmul<4,8,8,int8,int8,acc32> accumulators vs register pressure
-  source   C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\.claude\worktrees\curious-tinkering-whistle\kernels\acc_spill_probe\acc_kernels.cc
+  source   <worktree>\kernels\acc_spill_probe\acc_kernels.cc
   clang    C:\Users\<user>/mlir-aie/ironenv/Lib/site-packages/llvm-aie/bin/clang++.exe
   objects  C:\Users\<user>\AppData\Local\Temp\acc_spill_gene80av
 

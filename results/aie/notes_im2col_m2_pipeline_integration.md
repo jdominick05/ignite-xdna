@@ -136,12 +136,12 @@ The complete automated compilation pipeline operates via `aie-opt`, `aie-transla
 
 ```powershell
 # Set environment PATH to LLVM-AIE and MLIR-AIE binaries
-$env:PATH = "C:\Users\Ignis\mlir-aie\ironenv\Lib\site-packages\llvm-aie\bin;C:\Users\Ignis\mlir-aie\ironenv\Scripts;" + $env:PATH
+$env:PATH = "C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\llvm-aie\bin;C:\Users\<user>\mlir-aie\ironenv\Scripts;" + $env:PATH
 
 # 1. Compile C++ M=2 Kernel to AIE2 ELF Object
 & clang++.exe -O2 -std=c++20 --target=aie2-none-unknown-elf -nostdlib `
     -DNDEBUG -D__AIE_API_AIE_ADF_HPP__ `
-    -I "C:\Users\Ignis\mlir-aie\ironenv\Lib\site-packages\mlir_aie\include" `
+    -I "C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\mlir_aie\include" `
     -c kernels/aie2/conv_im2col_kernel.cc -o build/conv_im2col_kernel_m2.o
 
 # 2. Lower MLIR-AIE Dataflow (Route Flows, Assign Buffer Addresses, Assign BD IDs)

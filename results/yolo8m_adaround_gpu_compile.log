@@ -1,7 +1,7 @@
 [32m
 [QUARK-INFO]: Checking custom ops library ...[0m
 [33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [32m
 [QUARK-INFO]: Start compiling CPU version of custom ops library.[0m
 W0905 23:31:00.279000 30240 site-packages\torch\utils\cpp_extension.py:480] Error checking compiler version for cl: [WinError 2] The system cannot find the file specified
@@ -11,44 +11,44 @@ INFO: Could not find files for the given pattern(s).
 [33m
 [QUARK-WARNING]: Custom ops library compilation failed: CPU version of custom ops library compilation failed:Command '['where', 'cl']' returned non-zero exit status 1..[0m
 Traceback (most recent call last):
-  File "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\build_custom_ops.py", line 58, in compile_custom_op_cpu
+  File "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\build_custom_ops.py", line 58, in compile_custom_op_cpu
     load(
-  File "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\torch\utils\cpp_extension.py", line 1692, in load
+  File "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\torch\utils\cpp_extension.py", line 1692, in load
     return _jit_compile(
            ^^^^^^^^^^^^^
-  File "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\torch\utils\cpp_extension.py", line 2134, in _jit_compile
+  File "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\torch\utils\cpp_extension.py", line 2134, in _jit_compile
     _write_ninja_file_and_build_library(
-  File "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\torch\utils\cpp_extension.py", line 2271, in _write_ninja_file_and_build_library
+  File "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\torch\utils\cpp_extension.py", line 2271, in _write_ninja_file_and_build_library
     _write_ninja_file_to_build_library(
-  File "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\torch\utils\cpp_extension.py", line 2764, in _write_ninja_file_to_build_library
+  File "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\torch\utils\cpp_extension.py", line 2764, in _write_ninja_file_to_build_library
     _write_ninja_file(
-  File "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\torch\utils\cpp_extension.py", line 2950, in _write_ninja_file
+  File "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\torch\utils\cpp_extension.py", line 2950, in _write_ninja_file
     cl_paths = subprocess.check_output(['where',
                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\subprocess.py", line 466, in check_output
+  File "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\subprocess.py", line 466, in check_output
     return run(*popenargs, stdout=PIPE, timeout=timeout, check=True,
            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\subprocess.py", line 571, in run
+  File "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\subprocess.py", line 571, in run
     raise CalledProcessError(retcode, process.args,
 subprocess.CalledProcessError: Command '['where', 'cl']' returned non-zero exit status 1.
 
 During handling of the above exception, another exception occurred:
 
 Traceback (most recent call last):
-  File "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\build_custom_ops.py", line 291, in compile_library
+  File "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\build_custom_ops.py", line 291, in compile_library
     compile_library_core("CPU", extra_cuda_cflags, extra_cflags)
-  File "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\build_custom_ops.py", line 257, in compile_library_core
+  File "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\build_custom_ops.py", line 257, in compile_library_core
     compile_custom_op_cpu(file_name, build_directory, extra_cuda_cflags, extra_cflags)
-  File "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\shares\utils\log.py", line 136, in wrapper
+  File "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\shares\utils\log.py", line 136, in wrapper
     return func(*args, **kwargs)
            ^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\build_custom_ops.py", line 72, in compile_custom_op_cpu
+  File "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\build_custom_ops.py", line 72, in compile_custom_op_cpu
     raise RuntimeError("CPU version of custom ops library compilation failed:" + str(e))
 RuntimeError: CPU version of custom ops library compilation failed:Command '['where', 'cl']' returned non-zero exit status 1.
 [32m
 [QUARK-INFO]: Checked custom ops library.[0m
 [33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
 [QUARK-WARNING]: Config has been replaced by QConfig. The old API will be removed in the next release.[0m
 [33m
@@ -99,7 +99,7 @@ quantizing with XINT8 + AdaRound -> models/yolov8m_cut_xint8_adaround.onnx
 2026-09-05 23:31:02.461870
 [QUARK_INFO]: OS and CPU information:
                                         system --- Windows
-                                          node --- JORDAN-PC
+                                          node --- <host>
                                        release --- 11
                                        version --- 10.0.26200
                                        machine --- AMD64
@@ -524,11 +524,11 @@ quantizing with XINT8 + AdaRound -> models/yolov8m_cut_xint8_adaround.onnx
 [33m
 [QUARK-WARNING]: No GPU EPs available in current ORT version, falling back to CPU[0m
   0%|          | 0/83 [00:00<?, ?it/s][33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: Failed to register custom op library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 0, onnx inference (quantized model + float model) time consumed 67.868788s[0m
 [32m
@@ -560,11 +560,11 @@ quantizing with XINT8 + AdaRound -> models/yolov8m_cut_xint8_adaround.onnx
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 0, torch training time consumed 30.632448s[0m
   1%|1         | 1/83 [01:38<2:14:37, 98.51s/it][33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: Failed to register custom op library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 1, onnx inference (quantized model + float model) time consumed 18.725500s[0m
 [32m
@@ -596,11 +596,11 @@ quantizing with XINT8 + AdaRound -> models/yolov8m_cut_xint8_adaround.onnx
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 1, torch training time consumed 76.996336s[0m
   2%|2         | 2/83 [03:14<2:10:57, 97.01s/it][33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: Failed to register custom op library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 2, onnx inference (quantized model + float model) time consumed 11.697895s[0m
 [32m
@@ -632,11 +632,11 @@ quantizing with XINT8 + AdaRound -> models/yolov8m_cut_xint8_adaround.onnx
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 2, torch training time consumed 20.092274s[0m
   4%|3         | 3/83 [03:46<1:29:38, 67.23s/it][33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: Failed to register custom op library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 3, onnx inference (quantized model + float model) time consumed 9.215683s[0m
 [32m
@@ -668,11 +668,11 @@ quantizing with XINT8 + AdaRound -> models/yolov8m_cut_xint8_adaround.onnx
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 3, torch training time consumed 12.898906s[0m
   5%|4         | 4/83 [04:08<1:05:04, 49.42s/it][33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: Failed to register custom op library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 4, onnx inference (quantized model + float model) time consumed 10.630632s[0m
 [32m
@@ -704,11 +704,11 @@ quantizing with XINT8 + AdaRound -> models/yolov8m_cut_xint8_adaround.onnx
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 4, torch training time consumed 12.552426s[0m
   6%|6         | 5/83 [04:31<51:56, 39.96s/it]  [33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: Failed to register custom op library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 5, onnx inference (quantized model + float model) time consumed 12.573728s[0m
 [32m
@@ -740,11 +740,11 @@ quantizing with XINT8 + AdaRound -> models/yolov8m_cut_xint8_adaround.onnx
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 5, torch training time consumed 12.364469s[0m
   7%|7         | 6/83 [04:56<44:43, 34.85s/it][33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: Failed to register custom op library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 6, onnx inference (quantized model + float model) time consumed 14.514617s[0m
 [32m
@@ -776,11 +776,11 @@ quantizing with XINT8 + AdaRound -> models/yolov8m_cut_xint8_adaround.onnx
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 6, torch training time consumed 12.558601s[0m
   8%|8         | 7/83 [05:23<40:55, 32.31s/it][33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: Failed to register custom op library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 7, onnx inference (quantized model + float model) time consumed 27.165446s[0m
 [32m
@@ -812,11 +812,11 @@ quantizing with XINT8 + AdaRound -> models/yolov8m_cut_xint8_adaround.onnx
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 7, torch training time consumed 78.232445s[0m
  10%|9         | 8/83 [07:09<1:09:29, 55.59s/it][33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: Failed to register custom op library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 8, onnx inference (quantized model + float model) time consumed 23.141151s[0m
 [32m
@@ -848,11 +848,11 @@ quantizing with XINT8 + AdaRound -> models/yolov8m_cut_xint8_adaround.onnx
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 8, torch training time consumed 21.380686s[0m
  11%|#         | 9/83 [07:53<1:04:17, 52.13s/it][33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: Failed to register custom op library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 9, onnx inference (quantized model + float model) time consumed 21.504640s[0m
 [32m
@@ -884,11 +884,11 @@ quantizing with XINT8 + AdaRound -> models/yolov8m_cut_xint8_adaround.onnx
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 9, torch training time consumed 11.383541s[0m
  12%|#2        | 10/83 [08:26<56:12, 46.20s/it] [33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: Failed to register custom op library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 10, onnx inference (quantized model + float model) time consumed 22.122955s[0m
 [32m
@@ -920,11 +920,11 @@ quantizing with XINT8 + AdaRound -> models/yolov8m_cut_xint8_adaround.onnx
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 10, torch training time consumed 8.264238s[0m
  13%|#3        | 11/83 [08:56<49:37, 41.36s/it][33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: Failed to register custom op library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 11, onnx inference (quantized model + float model) time consumed 23.331932s[0m
 [32m
@@ -956,11 +956,11 @@ quantizing with XINT8 + AdaRound -> models/yolov8m_cut_xint8_adaround.onnx
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 11, torch training time consumed 7.753129s[0m
  14%|#4        | 12/83 [09:27<45:14, 38.24s/it][33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: Failed to register custom op library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 12, onnx inference (quantized model + float model) time consumed 25.036959s[0m
 [32m
@@ -992,11 +992,11 @@ quantizing with XINT8 + AdaRound -> models/yolov8m_cut_xint8_adaround.onnx
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 12, torch training time consumed 7.538400s[0m
  16%|#5        | 13/83 [10:00<42:36, 36.52s/it][33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: Failed to register custom op library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 13, onnx inference (quantized model + float model) time consumed 26.571280s[0m
 [32m
@@ -1028,11 +1028,11 @@ quantizing with XINT8 + AdaRound -> models/yolov8m_cut_xint8_adaround.onnx
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 13, torch training time consumed 7.663204s[0m
  17%|#6        | 14/83 [10:34<41:12, 35.83s/it][33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: Failed to register custom op library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 14, onnx inference (quantized model + float model) time consumed 27.765966s[0m
 [32m
@@ -1064,11 +1064,11 @@ quantizing with XINT8 + AdaRound -> models/yolov8m_cut_xint8_adaround.onnx
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 14, torch training time consumed 8.185480s[0m
  18%|#8        | 15/83 [11:10<40:39, 35.87s/it][33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: Failed to register custom op library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 15, onnx inference (quantized model + float model) time consumed 29.535577s[0m
 [32m
@@ -1100,11 +1100,11 @@ quantizing with XINT8 + AdaRound -> models/yolov8m_cut_xint8_adaround.onnx
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 15, torch training time consumed 7.618774s[0m
  19%|#9        | 16/83 [11:47<40:29, 36.26s/it][33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: Failed to register custom op library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 16, onnx inference (quantized model + float model) time consumed 31.295292s[0m
 [32m
@@ -1136,11 +1136,11 @@ quantizing with XINT8 + AdaRound -> models/yolov8m_cut_xint8_adaround.onnx
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 16, torch training time consumed 7.854803s[0m
  20%|##        | 17/83 [12:27<40:50, 37.13s/it][33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: Failed to register custom op library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 17, onnx inference (quantized model + float model) time consumed 32.406209s[0m
 [32m
@@ -1172,11 +1172,11 @@ quantizing with XINT8 + AdaRound -> models/yolov8m_cut_xint8_adaround.onnx
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 17, torch training time consumed 7.777089s[0m
  22%|##1       | 18/83 [13:07<41:13, 38.05s/it][33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: Failed to register custom op library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 18, onnx inference (quantized model + float model) time consumed 37.539389s[0m
 [32m
@@ -1208,11 +1208,11 @@ quantizing with XINT8 + AdaRound -> models/yolov8m_cut_xint8_adaround.onnx
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 18, torch training time consumed 43.430200s[0m
  23%|##2       | 19/83 [14:28<54:20, 50.95s/it][33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: Failed to register custom op library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 19, onnx inference (quantized model + float model) time consumed 39.613619s[0m
 [32m
@@ -1244,11 +1244,11 @@ quantizing with XINT8 + AdaRound -> models/yolov8m_cut_xint8_adaround.onnx
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 19, torch training time consumed 11.922734s[0m
  24%|##4       | 20/83 [15:19<53:41, 51.13s/it][33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: Failed to register custom op library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 20, onnx inference (quantized model + float model) time consumed 38.881677s[0m
 [32m
@@ -1280,11 +1280,11 @@ quantizing with XINT8 + AdaRound -> models/yolov8m_cut_xint8_adaround.onnx
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 20, torch training time consumed 6.271947s[0m
  25%|##5       | 21/83 [16:04<50:59, 49.34s/it][33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: Failed to register custom op library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 21, onnx inference (quantized model + float model) time consumed 39.804520s[0m
 [32m
@@ -1316,11 +1316,11 @@ quantizing with XINT8 + AdaRound -> models/yolov8m_cut_xint8_adaround.onnx
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 21, torch training time consumed 6.197463s[0m
  27%|##6       | 22/83 [16:50<49:08, 48.34s/it][33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: Failed to register custom op library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 22, onnx inference (quantized model + float model) time consumed 40.946628s[0m
 [32m
@@ -1352,11 +1352,11 @@ quantizing with XINT8 + AdaRound -> models/yolov8m_cut_xint8_adaround.onnx
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 22, torch training time consumed 6.123165s[0m
  28%|##7       | 23/83 [17:38<47:57, 47.96s/it][33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: Failed to register custom op library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 23, onnx inference (quantized model + float model) time consumed 42.336672s[0m
 [32m
@@ -1388,11 +1388,11 @@ quantizing with XINT8 + AdaRound -> models/yolov8m_cut_xint8_adaround.onnx
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 23, torch training time consumed 5.840657s[0m
  29%|##8       | 24/83 [18:26<47:13, 48.03s/it][33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: Failed to register custom op library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 24, onnx inference (quantized model + float model) time consumed 43.561950s[0m
 [32m
@@ -1424,11 +1424,11 @@ quantizing with XINT8 + AdaRound -> models/yolov8m_cut_xint8_adaround.onnx
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 24, torch training time consumed 5.863938s[0m
  30%|###       | 25/83 [19:15<46:50, 48.45s/it][33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: Failed to register custom op library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 25, onnx inference (quantized model + float model) time consumed 43.503273s[0m
 [32m
@@ -1460,11 +1460,11 @@ quantizing with XINT8 + AdaRound -> models/yolov8m_cut_xint8_adaround.onnx
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 25, torch training time consumed 4.791760s[0m
  31%|###1      | 26/83 [20:03<45:59, 48.40s/it][33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: Failed to register custom op library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 26, onnx inference (quantized model + float model) time consumed 42.295865s[0m
 [32m
@@ -1496,11 +1496,11 @@ quantizing with XINT8 + AdaRound -> models/yolov8m_cut_xint8_adaround.onnx
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 26, torch training time consumed 5.012835s[0m
  33%|###2      | 27/83 [20:51<44:52, 48.08s/it][33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: Failed to register custom op library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 27, onnx inference (quantized model + float model) time consumed 43.291435s[0m
 [32m
@@ -1532,11 +1532,11 @@ quantizing with XINT8 + AdaRound -> models/yolov8m_cut_xint8_adaround.onnx
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 27, torch training time consumed 4.999034s[0m
  34%|###3      | 28/83 [21:39<44:07, 48.14s/it][33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: Failed to register custom op library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 28, onnx inference (quantized model + float model) time consumed 44.162691s[0m
 [32m
@@ -1568,11 +1568,11 @@ quantizing with XINT8 + AdaRound -> models/yolov8m_cut_xint8_adaround.onnx
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 28, torch training time consumed 4.988881s[0m
  35%|###4      | 29/83 [22:28<43:36, 48.45s/it][33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: Failed to register custom op library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 29, onnx inference (quantized model + float model) time consumed 47.000227s[0m
 [32m
@@ -1604,11 +1604,11 @@ quantizing with XINT8 + AdaRound -> models/yolov8m_cut_xint8_adaround.onnx
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 29, torch training time consumed 12.523584s[0m
  36%|###6      | 30/83 [23:28<45:44, 51.77s/it][33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: Failed to register custom op library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 30, onnx inference (quantized model + float model) time consumed 48.151809s[0m
 [32m
@@ -1640,11 +1640,11 @@ quantizing with XINT8 + AdaRound -> models/yolov8m_cut_xint8_adaround.onnx
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 30, torch training time consumed 7.293157s[0m
  37%|###7      | 31/83 [24:23<45:49, 52.88s/it][33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: Failed to register custom op library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 31, onnx inference (quantized model + float model) time consumed 49.121978s[0m
 [32m
@@ -1676,11 +1676,11 @@ quantizing with XINT8 + AdaRound -> models/yolov8m_cut_xint8_adaround.onnx
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 31, torch training time consumed 3.832847s[0m
  39%|###8      | 32/83 [25:16<44:58, 52.91s/it][33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: Failed to register custom op library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 32, onnx inference (quantized model + float model) time consumed 49.527997s[0m
 [32m
@@ -1712,11 +1712,11 @@ quantizing with XINT8 + AdaRound -> models/yolov8m_cut_xint8_adaround.onnx
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 32, torch training time consumed 3.768648s[0m
  40%|###9      | 33/83 [26:09<44:11, 53.03s/it][33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: Failed to register custom op library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 33, onnx inference (quantized model + float model) time consumed 50.190048s[0m
 [32m
@@ -1748,11 +1748,11 @@ quantizing with XINT8 + AdaRound -> models/yolov8m_cut_xint8_adaround.onnx
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 33, torch training time consumed 3.603066s[0m
  41%|####      | 34/83 [27:03<43:29, 53.26s/it][33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: Failed to register custom op library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 34, onnx inference (quantized model + float model) time consumed 50.630997s[0m
 [32m
@@ -1784,11 +1784,11 @@ quantizing with XINT8 + AdaRound -> models/yolov8m_cut_xint8_adaround.onnx
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 34, torch training time consumed 3.675398s[0m
  42%|####2     | 35/83 [27:58<42:51, 53.58s/it][33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: Failed to register custom op library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 35, onnx inference (quantized model + float model) time consumed 51.400296s[0m
 [32m
@@ -1820,11 +1820,11 @@ quantizing with XINT8 + AdaRound -> models/yolov8m_cut_xint8_adaround.onnx
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 35, torch training time consumed 3.679072s[0m
  43%|####3     | 36/83 [28:53<42:19, 54.03s/it][33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: Failed to register custom op library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 36, onnx inference (quantized model + float model) time consumed 53.244461s[0m
 [32m
@@ -1856,11 +1856,11 @@ quantizing with XINT8 + AdaRound -> models/yolov8m_cut_xint8_adaround.onnx
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 36, torch training time consumed 4.948039s[0m
  45%|####4     | 37/83 [29:51<42:23, 55.28s/it][33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: Failed to register custom op library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 37, onnx inference (quantized model + float model) time consumed 52.696825s[0m
 [32m
@@ -1892,11 +1892,11 @@ quantizing with XINT8 + AdaRound -> models/yolov8m_cut_xint8_adaround.onnx
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 37, torch training time consumed 3.278191s[0m
  46%|####5     | 38/83 [30:47<41:37, 55.49s/it][33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: Failed to register custom op library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 38, onnx inference (quantized model + float model) time consumed 53.353152s[0m
 [32m
@@ -1928,11 +1928,11 @@ quantizing with XINT8 + AdaRound -> models/yolov8m_cut_xint8_adaround.onnx
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 38, torch training time consumed 4.768143s[0m
  47%|####6     | 39/83 [31:45<41:16, 56.28s/it][33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: Failed to register custom op library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 39, onnx inference (quantized model + float model) time consumed 55.826730s[0m
 [32m
@@ -1964,11 +1964,11 @@ quantizing with XINT8 + AdaRound -> models/yolov8m_cut_xint8_adaround.onnx
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 39, torch training time consumed 8.898810s[0m
  48%|####8     | 40/83 [32:50<42:09, 58.82s/it][33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: Failed to register custom op library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 40, onnx inference (quantized model + float model) time consumed 55.768693s[0m
 [32m
@@ -2000,11 +2000,11 @@ quantizing with XINT8 + AdaRound -> models/yolov8m_cut_xint8_adaround.onnx
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 40, torch training time consumed 5.066621s[0m
  49%|####9     | 41/83 [33:51<41:35, 59.43s/it][33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: Failed to register custom op library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 41, onnx inference (quantized model + float model) time consumed 57.065645s[0m
 [32m
@@ -2036,11 +2036,11 @@ quantizing with XINT8 + AdaRound -> models/yolov8m_cut_xint8_adaround.onnx
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 41, torch training time consumed 5.068233s[0m
  51%|#####     | 42/83 [34:53<41:09, 60.24s/it][33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: Failed to register custom op library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 42, onnx inference (quantized model + float model) time consumed 58.689052s[0m
 [32m
@@ -2072,11 +2072,11 @@ quantizing with XINT8 + AdaRound -> models/yolov8m_cut_xint8_adaround.onnx
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 42, torch training time consumed 4.990432s[0m
  52%|#####1    | 43/83 [35:56<40:50, 61.27s/it][33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: Failed to register custom op library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 43, onnx inference (quantized model + float model) time consumed 59.894413s[0m
 [32m
@@ -2108,11 +2108,11 @@ quantizing with XINT8 + AdaRound -> models/yolov8m_cut_xint8_adaround.onnx
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 43, torch training time consumed 5.066048s[0m
  53%|#####3    | 44/83 [37:01<40:32, 62.38s/it][33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: Failed to register custom op library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 44, onnx inference (quantized model + float model) time consumed 61.635629s[0m
 [32m
@@ -2144,11 +2144,11 @@ quantizing with XINT8 + AdaRound -> models/yolov8m_cut_xint8_adaround.onnx
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 44, torch training time consumed 7.911555s[0m
  54%|#####4    | 45/83 [38:11<40:52, 64.53s/it][33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: Failed to register custom op library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 45, onnx inference (quantized model + float model) time consumed 70.135988s[0m
 [32m
@@ -2180,11 +2180,11 @@ quantizing with XINT8 + AdaRound -> models/yolov8m_cut_xint8_adaround.onnx
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 45, torch training time consumed 43.776527s[0m
  55%|#####5    | 46/83 [40:05<48:56, 79.36s/it][33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: Failed to register custom op library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 46, onnx inference (quantized model + float model) time consumed 67.932887s[0m
 [32m
@@ -2216,11 +2216,11 @@ quantizing with XINT8 + AdaRound -> models/yolov8m_cut_xint8_adaround.onnx
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 46, torch training time consumed 6.551752s[0m
  57%|#####6    | 47/83 [41:19<46:44, 77.90s/it][33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: Failed to register custom op library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 47, onnx inference (quantized model + float model) time consumed 66.185803s[0m
 [32m
@@ -2252,11 +2252,11 @@ quantizing with XINT8 + AdaRound -> models/yolov8m_cut_xint8_adaround.onnx
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 47, torch training time consumed 6.180245s[0m
  58%|#####7    | 48/83 [42:32<44:28, 76.24s/it][33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: Failed to register custom op library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 48, onnx inference (quantized model + float model) time consumed 66.977570s[0m
 [32m
@@ -2288,11 +2288,11 @@ quantizing with XINT8 + AdaRound -> models/yolov8m_cut_xint8_adaround.onnx
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 48, torch training time consumed 6.040043s[0m
  59%|#####9    | 49/83 [43:45<42:39, 75.27s/it][33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: Failed to register custom op library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 49, onnx inference (quantized model + float model) time consumed 68.469793s[0m
 [32m
@@ -2324,11 +2324,11 @@ quantizing with XINT8 + AdaRound -> models/yolov8m_cut_xint8_adaround.onnx
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 49, torch training time consumed 6.255104s[0m
  60%|######    | 50/83 [44:59<41:18, 75.11s/it][33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: Failed to register custom op library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 50, onnx inference (quantized model + float model) time consumed 71.955655s[0m
 [32m
@@ -2360,11 +2360,11 @@ quantizing with XINT8 + AdaRound -> models/yolov8m_cut_xint8_adaround.onnx
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 50, torch training time consumed 15.091803s[0m
  61%|######1   | 51/83 [46:27<41:58, 78.69s/it][33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: Failed to register custom op library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 51, onnx inference (quantized model + float model) time consumed 71.781836s[0m
 [32m
@@ -2396,11 +2396,11 @@ quantizing with XINT8 + AdaRound -> models/yolov8m_cut_xint8_adaround.onnx
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 51, torch training time consumed 7.809150s[0m
  63%|######2   | 52/83 [47:46<40:47, 78.96s/it][33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: Failed to register custom op library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 52, onnx inference (quantized model + float model) time consumed 72.121213s[0m
 [32m
@@ -2432,11 +2432,11 @@ quantizing with XINT8 + AdaRound -> models/yolov8m_cut_xint8_adaround.onnx
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 52, torch training time consumed 8.152366s[0m
  64%|######3   | 53/83 [49:06<39:40, 79.36s/it][33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: Failed to register custom op library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 53, onnx inference (quantized model + float model) time consumed 73.575000s[0m
 [32m
@@ -2468,11 +2468,11 @@ quantizing with XINT8 + AdaRound -> models/yolov8m_cut_xint8_adaround.onnx
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 53, torch training time consumed 13.401979s[0m
  65%|######5   | 54/83 [50:33<39:27, 81.65s/it][33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: Failed to register custom op library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 54, onnx inference (quantized model + float model) time consumed 73.026989s[0m
 [32m
@@ -2504,11 +2504,11 @@ quantizing with XINT8 + AdaRound -> models/yolov8m_cut_xint8_adaround.onnx
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 54, torch training time consumed 4.703943s[0m
  66%|######6   | 55/83 [51:51<37:33, 80.47s/it][33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: Failed to register custom op library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 55, onnx inference (quantized model + float model) time consumed 77.920724s[0m
 [32m
@@ -2540,11 +2540,11 @@ quantizing with XINT8 + AdaRound -> models/yolov8m_cut_xint8_adaround.onnx
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 55, torch training time consumed 12.889799s[0m
  67%|######7   | 56/83 [53:22<37:36, 83.58s/it][33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: Failed to register custom op library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 56, onnx inference (quantized model + float model) time consumed 73.389039s[0m
 [32m
@@ -2576,11 +2576,11 @@ quantizing with XINT8 + AdaRound -> models/yolov8m_cut_xint8_adaround.onnx
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 56, torch training time consumed 6.711946s[0m
  69%|######8   | 57/83 [54:42<35:45, 82.54s/it][33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: Failed to register custom op library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 57, onnx inference (quantized model + float model) time consumed 86.824274s[0m
 [32m
@@ -2612,11 +2612,11 @@ quantizing with XINT8 + AdaRound -> models/yolov8m_cut_xint8_adaround.onnx
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 57, torch training time consumed 3.977534s[0m
  70%|######9   | 58/83 [56:13<35:25, 85.02s/it][33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: Failed to register custom op library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 58, onnx inference (quantized model + float model) time consumed 90.332465s[0m
 [32m
@@ -2648,11 +2648,11 @@ quantizing with XINT8 + AdaRound -> models/yolov8m_cut_xint8_adaround.onnx
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 58, torch training time consumed 6.462497s[0m
  71%|#######1  | 59/83 [57:50<35:25, 88.55s/it][33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: Failed to register custom op library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 59, onnx inference (quantized model + float model) time consumed 74.613406s[0m
 [32m
@@ -2684,11 +2684,11 @@ quantizing with XINT8 + AdaRound -> models/yolov8m_cut_xint8_adaround.onnx
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 59, torch training time consumed 4.923280s[0m
  72%|#######2  | 60/83 [59:09<32:54, 85.85s/it][33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: Failed to register custom op library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 60, onnx inference (quantized model + float model) time consumed 81.189833s[0m
 [32m
@@ -2720,11 +2720,11 @@ quantizing with XINT8 + AdaRound -> models/yolov8m_cut_xint8_adaround.onnx
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 60, torch training time consumed 5.562941s[0m
  73%|#######3  | 61/83 [1:00:36<31:34, 86.12s/it][33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: Failed to register custom op library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 61, onnx inference (quantized model + float model) time consumed 84.524402s[0m
 [32m
@@ -2756,11 +2756,11 @@ quantizing with XINT8 + AdaRound -> models/yolov8m_cut_xint8_adaround.onnx
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 61, torch training time consumed 5.634316s[0m
  75%|#######4  | 62/83 [1:02:06<30:34, 87.34s/it][33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: Failed to register custom op library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 62, onnx inference (quantized model + float model) time consumed 85.672261s[0m
 [32m
@@ -2792,11 +2792,11 @@ quantizing with XINT8 + AdaRound -> models/yolov8m_cut_xint8_adaround.onnx
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 62, torch training time consumed 5.856667s[0m
  76%|#######5  | 63/83 [1:03:38<29:31, 88.60s/it][33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: Failed to register custom op library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 63, onnx inference (quantized model + float model) time consumed 86.870761s[0m
 [32m
@@ -2828,11 +2828,11 @@ quantizing with XINT8 + AdaRound -> models/yolov8m_cut_xint8_adaround.onnx
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 63, torch training time consumed 8.801783s[0m
  77%|#######7  | 64/83 [1:05:13<28:43, 90.72s/it][33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: Failed to register custom op library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 64, onnx inference (quantized model + float model) time consumed 88.307937s[0m
 [32m
@@ -2864,11 +2864,11 @@ quantizing with XINT8 + AdaRound -> models/yolov8m_cut_xint8_adaround.onnx
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 64, torch training time consumed 7.122773s[0m
  78%|#######8  | 65/83 [1:06:49<27:38, 92.14s/it][33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: Failed to register custom op library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 65, onnx inference (quantized model + float model) time consumed 88.995096s[0m
 [32m
@@ -2900,11 +2900,11 @@ quantizing with XINT8 + AdaRound -> models/yolov8m_cut_xint8_adaround.onnx
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 65, torch training time consumed 5.766149s[0m
  80%|#######9  | 66/83 [1:08:24<26:19, 92.93s/it][33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: Failed to register custom op library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 66, onnx inference (quantized model + float model) time consumed 90.223768s[0m
 [32m
@@ -2936,11 +2936,11 @@ quantizing with XINT8 + AdaRound -> models/yolov8m_cut_xint8_adaround.onnx
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 66, torch training time consumed 9.199065s[0m
  81%|########  | 67/83 [1:10:03<25:18, 94.88s/it][33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: Failed to register custom op library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 67, onnx inference (quantized model + float model) time consumed 89.813548s[0m
 [32m
@@ -2972,11 +2972,11 @@ quantizing with XINT8 + AdaRound -> models/yolov8m_cut_xint8_adaround.onnx
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 67, torch training time consumed 3.115184s[0m
  82%|########1 | 68/83 [1:11:36<23:34, 94.30s/it][33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: Failed to register custom op library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 68, onnx inference (quantized model + float model) time consumed 90.877501s[0m
 [32m
@@ -3008,11 +3008,11 @@ quantizing with XINT8 + AdaRound -> models/yolov8m_cut_xint8_adaround.onnx
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 68, torch training time consumed 5.865196s[0m
  83%|########3 | 69/83 [1:13:13<22:10, 95.03s/it][33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: Failed to register custom op library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 69, onnx inference (quantized model + float model) time consumed 89.902935s[0m
 [32m
@@ -3044,11 +3044,11 @@ quantizing with XINT8 + AdaRound -> models/yolov8m_cut_xint8_adaround.onnx
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 69, torch training time consumed 5.222077s[0m
  84%|########4 | 70/83 [1:14:48<20:35, 95.06s/it][33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: Failed to register custom op library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 70, onnx inference (quantized model + float model) time consumed 99.427744s[0m
 [32m
@@ -3080,11 +3080,11 @@ quantizing with XINT8 + AdaRound -> models/yolov8m_cut_xint8_adaround.onnx
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 70, torch training time consumed 2.639648s[0m
  86%|########5 | 71/83 [1:16:30<19:25, 97.17s/it][33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: Failed to register custom op library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 71, onnx inference (quantized model + float model) time consumed 100.919837s[0m
 [32m
@@ -3116,11 +3116,11 @@ quantizing with XINT8 + AdaRound -> models/yolov8m_cut_xint8_adaround.onnx
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 71, torch training time consumed 3.577412s[0m
  87%|########6 | 72/83 [1:18:14<18:13, 99.37s/it][33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: Failed to register custom op library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 72, onnx inference (quantized model + float model) time consumed 90.572260s[0m
 [32m
@@ -3152,11 +3152,11 @@ quantizing with XINT8 + AdaRound -> models/yolov8m_cut_xint8_adaround.onnx
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 72, torch training time consumed 4.177080s[0m
  88%|########7 | 73/83 [1:19:49<16:19, 97.99s/it][33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: Failed to register custom op library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 73, onnx inference (quantized model + float model) time consumed 91.393248s[0m
 [32m
@@ -3188,11 +3188,11 @@ quantizing with XINT8 + AdaRound -> models/yolov8m_cut_xint8_adaround.onnx
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 73, torch training time consumed 4.256783s[0m
  89%|########9 | 74/83 [1:21:25<14:35, 97.29s/it][33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: Failed to register custom op library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 74, onnx inference (quantized model + float model) time consumed 91.395513s[0m
 [32m
@@ -3224,11 +3224,11 @@ quantizing with XINT8 + AdaRound -> models/yolov8m_cut_xint8_adaround.onnx
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 74, torch training time consumed 4.367707s[0m
  90%|######### | 75/83 [1:23:01<12:54, 96.83s/it][33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: Failed to register custom op library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 75, onnx inference (quantized model + float model) time consumed 91.975260s[0m
 [32m
@@ -3260,11 +3260,11 @@ quantizing with XINT8 + AdaRound -> models/yolov8m_cut_xint8_adaround.onnx
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 75, torch training time consumed 4.271700s[0m
  92%|#########1| 76/83 [1:24:37<11:16, 96.66s/it][33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: Failed to register custom op library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 76, onnx inference (quantized model + float model) time consumed 93.356837s[0m
 [32m
@@ -3296,11 +3296,11 @@ quantizing with XINT8 + AdaRound -> models/yolov8m_cut_xint8_adaround.onnx
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 76, torch training time consumed 5.426401s[0m
  93%|#########2| 77/83 [1:26:16<09:43, 97.30s/it][33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: Failed to register custom op library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 77, onnx inference (quantized model + float model) time consumed 93.036643s[0m
 [32m
@@ -3332,11 +3332,11 @@ quantizing with XINT8 + AdaRound -> models/yolov8m_cut_xint8_adaround.onnx
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 77, torch training time consumed 3.954311s[0m
  94%|#########3| 78/83 [1:27:53<08:06, 97.21s/it][33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: Failed to register custom op library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 78, onnx inference (quantized model + float model) time consumed 94.474650s[0m
 [32m
@@ -3368,11 +3368,11 @@ quantizing with XINT8 + AdaRound -> models/yolov8m_cut_xint8_adaround.onnx
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 78, torch training time consumed 5.259416s[0m
  95%|#########5| 79/83 [1:29:32<06:31, 97.97s/it][33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: Failed to register custom op library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 79, onnx inference (quantized model + float model) time consumed 93.814156s[0m
 [32m
@@ -3404,11 +3404,11 @@ quantizing with XINT8 + AdaRound -> models/yolov8m_cut_xint8_adaround.onnx
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 79, torch training time consumed 2.599411s[0m
  96%|#########6| 80/83 [1:31:09<04:52, 97.51s/it][33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: Failed to register custom op library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 80, onnx inference (quantized model + float model) time consumed 93.032594s[0m
 [32m
@@ -3440,11 +3440,11 @@ quantizing with XINT8 + AdaRound -> models/yolov8m_cut_xint8_adaround.onnx
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 80, torch training time consumed 3.392820s[0m
  98%|#########7| 81/83 [1:32:45<03:14, 97.18s/it][33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: Failed to register custom op library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 81, onnx inference (quantized model + float model) time consumed 102.019898s[0m
 [32m
@@ -3476,11 +3476,11 @@ quantizing with XINT8 + AdaRound -> models/yolov8m_cut_xint8_adaround.onnx
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 81, torch training time consumed 2.595182s[0m
  99%|#########8| 82/83 [1:34:30<01:39, 99.41s/it][33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
-[QUARK-WARNING]: Failed to register custom op library C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\Flame\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env_rocm\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
 [32m
 [QUARK-INFO]: Quark_latency_profiler: finetuning layer 82, onnx inference (quantized model + float model) time consumed 102.289794s[0m
 [32m

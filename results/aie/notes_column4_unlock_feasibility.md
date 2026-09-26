@@ -23,7 +23,7 @@ This study investigates the addressability and viability of unlocking the 5th ph
 
 ### 2.1 Upstream MLIR-AIE Model Restriction
 
-Audit of `C:\Users\Ignis\mlir-aie` source reveals that MLIR-AIE restricts NPU1 devices to 4 columns across both C++ compiler passes and Python bindings:
+Audit of `C:\Users\<user>\mlir-aie` source reveals that MLIR-AIE restricts NPU1 devices to 4 columns across both C++ compiler passes and Python bindings:
 
 1. **`lib/Dialect/AIE/IR/AIEDialect.cpp` [SPEC]:**
    ```cpp

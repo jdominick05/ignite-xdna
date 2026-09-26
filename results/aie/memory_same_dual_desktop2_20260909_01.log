@@ -1,9 +1,9 @@
 RESEARCH_PLATFORM {"machine": "Desktop 2", "cpu": "AMD Ryzen 7 8700G w/ Radeon 780M Graphics", "os": "Windows-11-10.0.26200-SP0", "ram_bytes": 33381138432, "source_sha256": {"tools/research_process.py": "39a2884c9c6a24dc3bd6fcb571d60e63b51cae646b4d2988096f08638dc25f29", "tools/quant_calib_alphabet.py": "630502e608ec522abd2008c47993eac51a9c32b735e601ae0b1b45073f03cd00", "tools/xint8_arithmetic_probe.py": "f9c4b7def7909edbf5a5394b3bc31e1d10f2732ebb6a445b5febc6a9e078aa5c", "scripts/research-lowlevel.sh": "e7a59c463cd83f3c8dc9887c213b3569cc62ffa47b1ccc601a4b837063787cae", "scripts/research-iron.sh": "eb3e68dad67727528407f4ae41698c5f52178f9a24c53ef2705a7639fe55ac44", "kernels/memory_placement/probe.py": "32be788140cc99e8a53474bb0b1b3cc1f9733630436ab0b16b1fca438bdd54f0", "kernels/memory_placement/memory_kernels.cc": "01fbe2cb8ed6ed153eef0f20512422e3eb44e5a1f5b8759956d039f04eef46f3"}, "commit": "1e27c5d48b30b9e83a821d36a27a0e8b81fa2bbc", "command": ["bash", "scripts/research-iron.sh", "kernels/memory_placement/probe.py", "--layout", "same", "--targets", "512,2048,8192", "--iters", "5", "--out", "scratch/memory_same_dual_01", "--reference", "scratch/memory_separate_dual_01/result.json"], "seconds_limit": 240.0, "rss_gib_limit": 6.0, "checks_only": false, "free_ram_bytes": 23904878592}
 HOST_LOAD busy_cores=2.75 logical_cores=16 free_ram_gb=22.2 sample_sec=1
-HOST_LOAD_TOP 1.82 agy:22084 ws_mb=447
+HOST_LOAD_TOP 1.82 <tool>:22084 ws_mb=447
 HOST_LOAD_TOP 0.37 pycharm64:9008 ws_mb=1964
 HOST_LOAD_TOP 0.11 HWiNFO64:11920 ws_mb=13
-HOST_LOAD_TOP 0.06 codex:19884 ws_mb=98
+HOST_LOAD_TOP 0.06 <tool>:19884 ws_mb=98
 HOST_LOAD_TOP 0.05 powershell:14772 ws_mb=79
 HOST_LOAD_VERDICT CLEAR
 

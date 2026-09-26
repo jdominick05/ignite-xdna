@@ -1,9 +1,9 @@
 RESEARCH_PLATFORM {"machine": "Desktop 2", "cpu": "AMD Ryzen 7 8700G w/ Radeon 780M Graphics", "os": "Windows-11-10.0.26200-SP0", "ram_bytes": 33381138432, "source_sha256": {"tools/research_process.py": "39a2884c9c6a24dc3bd6fcb571d60e63b51cae646b4d2988096f08638dc25f29", "tools/quant_calib_alphabet.py": "630502e608ec522abd2008c47993eac51a9c32b735e601ae0b1b45073f03cd00", "tools/xint8_arithmetic_probe.py": "f9c4b7def7909edbf5a5394b3bc31e1d10f2732ebb6a445b5febc6a9e078aa5c", "scripts/research-lowlevel.sh": "e7a59c463cd83f3c8dc9887c213b3569cc62ffa47b1ccc601a4b837063787cae", "scripts/research-iron.sh": "eb3e68dad67727528407f4ae41698c5f52178f9a24c53ef2705a7639fe55ac44", "kernels/memory_placement/probe.py": "32be788140cc99e8a53474bb0b1b3cc1f9733630436ab0b16b1fca438bdd54f0", "kernels/memory_placement/memory_kernels.cc": "01fbe2cb8ed6ed153eef0f20512422e3eb44e5a1f5b8759956d039f04eef46f3"}, "commit": "1e27c5d48b30b9e83a821d36a27a0e8b81fa2bbc", "command": ["python", "tools/quant_calib_alphabet.py", "--in-model", "../../models/resnet50_fp32.onnx", "--calib-dir", "../../data/calib", "--cfg-path", "../../models/preprocess_config.json", "--out", "scratch/alphabet_resnet50_cle_dual_02.onnx", "--reference", "../../models/resnet50_ignition_cle_c64.onnx", "--method", "dual", "--limit", "64", "--cle"], "seconds_limit": 600.0, "rss_gib_limit": 8.0, "checks_only": false, "free_ram_bytes": 23038676992}
 HOST_LOAD busy_cores=2.5 logical_cores=16 free_ram_gb=21.4 sample_sec=1
-HOST_LOAD_TOP 1.73 agy:22084 ws_mb=458
+HOST_LOAD_TOP 1.73 <tool>:22084 ws_mb=458
 HOST_LOAD_TOP 0.25 pycharm64:9008 ws_mb=1956
 HOST_LOAD_TOP 0.11 HWiNFO64:11920 ws_mb=13
-HOST_LOAD_TOP 0.09 codex:19884 ws_mb=104
+HOST_LOAD_TOP 0.09 <tool>:19884 ws_mb=104
 HOST_LOAD_TOP 0.05 hwinfo_npu_bridge:11512 ws_mb=5
 HOST_LOAD_VERDICT CLEAR
 
@@ -25,7 +25,7 @@ HOST_TIMELINE {"elapsed_seconds": 23.687, "tree_rss_bytes": 1932599296, "foreign
 HOST_TIMELINE {"elapsed_seconds": 26.296, "tree_rss_bytes": 2090717184, "foreign_peers": []}
 HOST_TIMELINE {"elapsed_seconds": 29.031, "tree_rss_bytes": 1200021504, "foreign_peers": []}
 HOST_TIMELINE {"elapsed_seconds": 31.828, "tree_rss_bytes": 1798971392, "foreign_peers": []}
-HOST_TIMELINE {"elapsed_seconds": 34.421, "tree_rss_bytes": 1710313472, "foreign_peers": [{"pid": 22084, "name": "agy.exe", "cores": 2.169, "command": "C:\\Users\\<user>\\AppData\\Local\\agy\\bin\\agy.exe"}]}
+HOST_TIMELINE {"elapsed_seconds": 34.421, "tree_rss_bytes": 1710313472, "foreign_peers": [{"pid": 22084, "name": "<tool>.exe", "cores": 2.169, "command": "C:\\Users\\<user>\\AppData\\Local\\<tool>\\bin\\<tool>.exe"}]}
 HOST_TIMELINE {"elapsed_seconds": 37.093, "tree_rss_bytes": 1522229248, "foreign_peers": []}
 HOST_TIMELINE {"elapsed_seconds": 39.718, "tree_rss_bytes": 1431007232, "foreign_peers": []}
 HOST_TIMELINE {"elapsed_seconds": 42.234, "tree_rss_bytes": 1504821248, "foreign_peers": []}
@@ -37,7 +37,7 @@ HOST_TIMELINE {"elapsed_seconds": 55.484, "tree_rss_bytes": 1490874368, "foreign
 HOST_TIMELINE {"elapsed_seconds": 58.156, "tree_rss_bytes": 1347809280, "foreign_peers": []}
 HOST_TIMELINE {"elapsed_seconds": 60.859, "tree_rss_bytes": 1299255296, "foreign_peers": []}
 HOST_TIMELINE {"elapsed_seconds": 63.468, "tree_rss_bytes": 1307983872, "foreign_peers": []}
-HOST_TIMELINE {"elapsed_seconds": 66.171, "tree_rss_bytes": 1131425792, "foreign_peers": [{"pid": 22084, "name": "agy.exe", "cores": 2.683, "command": "C:\\Users\\<user>\\AppData\\Local\\agy\\bin\\agy.exe"}]}
+HOST_TIMELINE {"elapsed_seconds": 66.171, "tree_rss_bytes": 1131425792, "foreign_peers": [{"pid": 22084, "name": "<tool>.exe", "cores": 2.683, "command": "C:\\Users\\<user>\\AppData\\Local\\<tool>\\bin\\<tool>.exe"}]}
 HOST_TIMELINE {"elapsed_seconds": 68.859, "tree_rss_bytes": 1178501120, "foreign_peers": []}
 HOST_TIMELINE {"elapsed_seconds": 71.343, "tree_rss_bytes": 1121918976, "foreign_peers": []}
 ALPHABET_RESULT {"method": "dual", "store": "float16_bit_pattern_counts_uint64", "images": 64, "augmented_graph_sha256": "028718ef0856f049571df463b8a2dea26b8a48d847163b2ade39d9e67fac8ad8", "graph_optimization": "ORT_DISABLE_ALL", "ort_version": "1.23.3.dev20260320", "numpy_version": "1.26.4", "spooled_tensors": 74, "skipped_prunable_tensors": 49, "legacy_sample_bytes": 2174678016, "count_table_bytes": 38797312, "fallback_tensors": 57, "fallback_sample_bytes": 2100166656, "sample_bytes": 2174678016, "timings": {"inference_seconds": 1.664550000015879, "count_seconds": 3.388072599846055, "write_seconds": 1.9645017998336698, "hash_seconds": 1.1610767998281517, "certificate_seconds": 0.2578875999970478, "legacy_reduction_seconds": 55.51306530000147}, "collector_seconds": 69.91664299999684, "certified_tensors": 17, "certified_positions_checked_against_legacy": true}

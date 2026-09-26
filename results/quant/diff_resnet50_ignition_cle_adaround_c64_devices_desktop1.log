@@ -1,4 +1,4 @@
-Desktop 1 (JORDAN-PC) AdaRound device arms, 2026-09-10: time split and int8 divergence
+Desktop 1 (<host>) AdaRound device arms, 2026-09-10: time split and int8 divergence
 Analysis only, run in resnet_env after all four arms had finished: no torch device, no NPU session.
 Arms (all Desktop 1, same sitting, sequential, check_host_load CLEAR before each):
   A   = resnet_env_rocm (torch 2.9.1+rocm7.2.1) --device cpu
@@ -9,7 +9,7 @@ Arms (all Desktop 1, same sitting, sequential, check_host_load CLEAR before each
 
 $ python tools/adaround_log_times.py --baseline results/quant/quant_resnet50_ignition_cle_adaround_c64_cpu_desktop1.log results/quant/quant_resnet50_ignition_cle_adaround_c64_cpu_desktop1.log results/quant/quant_resnet50_ignition_cle_adaround_c64_gpu_desktop1.log results/quant/quant_resnet50_ignition_cle_adaround_c64_gpu_desktop1_rerun.log results/quant/quant_resnet50_ignition_cle_adaround_c64_cpu_resnet_env_desktop1.log
 == results\quant\quant_resnet50_ignition_cle_adaround_c64_cpu_desktop1.log
-   hostname         JORDAN-PC
+   hostname         <host>
    cpu              AMD Ryzen 7 7800X3D 8-Core Processor
    conda_env        resnet_env_rocm
    torch_hip        7.2.53211-158bd99533
@@ -27,7 +27,7 @@ $ python tools/adaround_log_times.py --baseline results/quant/quant_resnet50_ign
    speedup vs quant_resnet50_ignition_cle_adaround_c64_cpu_desktop1.log: torch phase 1.00x, whole run 1.00x
 
 == results\quant\quant_resnet50_ignition_cle_adaround_c64_gpu_desktop1.log
-   hostname         JORDAN-PC
+   hostname         <host>
    cpu              AMD Ryzen 7 7800X3D 8-Core Processor
    conda_env        resnet_env_rocm
    torch_hip        7.2.53211-158bd99533
@@ -46,7 +46,7 @@ $ python tools/adaround_log_times.py --baseline results/quant/quant_resnet50_ign
    speedup vs quant_resnet50_ignition_cle_adaround_c64_cpu_desktop1.log: torch phase 3.05x, whole run 2.27x
 
 == results\quant\quant_resnet50_ignition_cle_adaround_c64_gpu_desktop1_rerun.log
-   hostname         JORDAN-PC
+   hostname         <host>
    cpu              AMD Ryzen 7 7800X3D 8-Core Processor
    conda_env        resnet_env_rocm
    torch_hip        7.2.53211-158bd99533
@@ -65,7 +65,7 @@ $ python tools/adaround_log_times.py --baseline results/quant/quant_resnet50_ign
    speedup vs quant_resnet50_ignition_cle_adaround_c64_cpu_desktop1.log: torch phase 3.13x, whole run 2.34x
 
 == results\quant\quant_resnet50_ignition_cle_adaround_c64_cpu_resnet_env_desktop1.log
-   hostname         JORDAN-PC
+   hostname         <host>
    cpu              AMD Ryzen 7 7800X3D 8-Core Processor
    conda_env        resnet_env
    torch_hip        None

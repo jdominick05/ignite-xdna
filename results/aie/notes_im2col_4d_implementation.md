@@ -183,7 +183,7 @@ scf.for %arg0 = %c0 to %c3 step %c1 {
 
 #### 1. Dataflow Lowering & Address Assignment
 ```powershell
-& "C:\Users\Ignis\mlir-aie\ironenv\Scripts\aie-opt.exe" `
+& "C:\Users\<user>\mlir-aie\ironenv\Scripts\aie-opt.exe" `
     --aie-create-pathfinder-flows `
     --aie-assign-buffer-addresses `
     kernels/aie2/im2col_4d.mlir -o build/im2col_4d_lowered.mlir
@@ -193,7 +193,7 @@ scf.for %arg0 = %c0 to %c3 step %c1 {
 
 #### 2. BD ID Hardware Allocation
 ```powershell
-& "C:\Users\Ignis\mlir-aie\ironenv\Scripts\aie-opt.exe" `
+& "C:\Users\<user>\mlir-aie\ironenv\Scripts\aie-opt.exe" `
     --aie-create-pathfinder-flows `
     --aie-assign-buffer-addresses `
     --aie-assign-bd-ids `
@@ -209,7 +209,7 @@ scf.for %arg0 = %c0 to %c3 step %c1 {
 
 #### 3. Core-to-Standard Dialect Outlining
 ```powershell
-& "C:\Users\Ignis\mlir-aie\ironenv\Scripts\aie-opt.exe" `
+& "C:\Users\<user>\mlir-aie\ironenv\Scripts\aie-opt.exe" `
     --aie-standard-lowering `
     kernels/aie2/im2col_4d.mlir
 ```

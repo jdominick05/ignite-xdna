@@ -1,10 +1,10 @@
 [32m
 [QUARK-INFO]: Checking custom ops library ...[0m
 [33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [32m
 [QUARK-INFO]: Start compiling CPU version of custom ops library.[0m
-C:\Users\Flame\miniforge3\envs\resnet_env\Lib\site-packages\torch\utils\cpp_extension.py:380: UserWarning: Error checking compiler version for cl: [WinError 2] The system cannot find the file specified
+C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\torch\utils\cpp_extension.py:380: UserWarning: Error checking compiler version for cl: [WinError 2] The system cannot find the file specified
   warnings.warn(f'Error checking compiler version for {compiler}: {error}')
 INFO: Could not find files for the given pattern(s).
 [31m
@@ -12,44 +12,44 @@ INFO: Could not find files for the given pattern(s).
 [33m
 [QUARK-WARNING]: Custom ops library compilation failed: CPU version of custom ops library compilation failed:Command '['where', 'cl']' returned non-zero exit status 1..[0m
 Traceback (most recent call last):
-  File "C:\Users\Flame\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\build_custom_ops.py", line 58, in compile_custom_op_cpu
+  File "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\build_custom_ops.py", line 58, in compile_custom_op_cpu
     load(
-  File "C:\Users\Flame\miniforge3\envs\resnet_env\Lib\site-packages\torch\utils\cpp_extension.py", line 1312, in load
+  File "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\torch\utils\cpp_extension.py", line 1312, in load
     return _jit_compile(
            ^^^^^^^^^^^^^
-  File "C:\Users\Flame\miniforge3\envs\resnet_env\Lib\site-packages\torch\utils\cpp_extension.py", line 1722, in _jit_compile
+  File "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\torch\utils\cpp_extension.py", line 1722, in _jit_compile
     _write_ninja_file_and_build_library(
-  File "C:\Users\Flame\miniforge3\envs\resnet_env\Lib\site-packages\torch\utils\cpp_extension.py", line 1821, in _write_ninja_file_and_build_library
+  File "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\torch\utils\cpp_extension.py", line 1821, in _write_ninja_file_and_build_library
     _write_ninja_file_to_build_library(
-  File "C:\Users\Flame\miniforge3\envs\resnet_env\Lib\site-packages\torch\utils\cpp_extension.py", line 2246, in _write_ninja_file_to_build_library
+  File "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\torch\utils\cpp_extension.py", line 2246, in _write_ninja_file_to_build_library
     _write_ninja_file(
-  File "C:\Users\Flame\miniforge3\envs\resnet_env\Lib\site-packages\torch\utils\cpp_extension.py", line 2382, in _write_ninja_file
+  File "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\torch\utils\cpp_extension.py", line 2382, in _write_ninja_file
     cl_paths = subprocess.check_output(['where',
                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\Flame\miniforge3\envs\resnet_env\Lib\subprocess.py", line 466, in check_output
+  File "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\subprocess.py", line 466, in check_output
     return run(*popenargs, stdout=PIPE, timeout=timeout, check=True,
            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\Flame\miniforge3\envs\resnet_env\Lib\subprocess.py", line 571, in run
+  File "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\subprocess.py", line 571, in run
     raise CalledProcessError(retcode, process.args,
 subprocess.CalledProcessError: Command '['where', 'cl']' returned non-zero exit status 1.
 
 During handling of the above exception, another exception occurred:
 
 Traceback (most recent call last):
-  File "C:\Users\Flame\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\build_custom_ops.py", line 291, in compile_library
+  File "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\build_custom_ops.py", line 291, in compile_library
     compile_library_core("CPU", extra_cuda_cflags, extra_cflags)
-  File "C:\Users\Flame\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\build_custom_ops.py", line 257, in compile_library_core
+  File "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\build_custom_ops.py", line 257, in compile_library_core
     compile_custom_op_cpu(file_name, build_directory, extra_cuda_cflags, extra_cflags)
-  File "C:\Users\Flame\miniforge3\envs\resnet_env\Lib\site-packages\quark\shares\utils\log.py", line 136, in wrapper
+  File "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\shares\utils\log.py", line 136, in wrapper
     return func(*args, **kwargs)
            ^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\Flame\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\build_custom_ops.py", line 72, in compile_custom_op_cpu
+  File "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\build_custom_ops.py", line 72, in compile_custom_op_cpu
     raise RuntimeError("CPU version of custom ops library compilation failed:" + str(e))
 RuntimeError: CPU version of custom ops library compilation failed:Command '['where', 'cl']' returned non-zero exit status 1.
 [32m
 [QUARK-INFO]: Checked custom ops library.[0m
 [33m
-[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
 [33m
 [QUARK-WARNING]: Config has been replaced by QConfig. The old API will be removed in the next release.[0m
 [33m
@@ -82,7 +82,7 @@ config: XINT8  ->  models/resnetv2_50x3_xint8.onnx
 2026-09-06 05:38:27.245567
 [QUARK_INFO]: OS and CPU information:
                                         system --- Windows
-                                          node --- JORDAN-PC
+                                          node --- <host>
                                        release --- 11
                                        version --- 10.0.26200
                                        machine --- AMD64

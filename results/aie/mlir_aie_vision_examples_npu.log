@@ -19,7 +19,7 @@ package. Both gaps are now filled -- this log runs those designs.
   - torch 2.14.0+cpu (latest, CPU-only wheel) into mlir-aie's own `ironenv` venv, needed
     only so two ml/* examples (bottleneck, conv2d) can generate a torch/numpy host-side
     reference to check the NPU's output against -- not used for anything performance-
-    relevant, and not touching this repo's own resnet_env/resnet_env17 (CLAUDE.md's
+    relevant, and not touching this repo's own resnet_env/resnet_env17 (<tool>.md's
     "don't install torch into resnet_env17" is about the pipeline's own quantize/run env;
     this is the fully separate mlir-aie-iron/ironenv toolchain).
   - A `python3.exe` shim (copy of `ironenv\Scripts\python.exe`) added to that same

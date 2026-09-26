@@ -32,7 +32,7 @@ to HWiNFO) was running throughout every run below.
 # Purpose: see what the Windows engine counter actually reads at each rate under the same load
 # (functional check of the monitor, not a benchmark -- an AdaRound job is running on the CPU).
 cd /c/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization || exit 1
-T="$CLAUDE_JOB_DIR/tmp"
+T="<job-tmp>"
 EXE=./tools/hwinfo_npu_bridge.exe
 for iv in 0.1 0.25 0.5; do
   $EXE --plain --no-hwinfo --interval $iv > "$T/rate_load_$iv.txt" 2>&1 &
@@ -141,7 +141,7 @@ context ALREADY on the device before this hold started, with 1.9 GB allocated:
   ...
 23:49:12.698 util=0.0% clk=800MHz mem=0.0MB(win) 0MB(xrt) ctx=0/0 cols=none compl/s=n/a subm/s=n/a period=0.25s smi-age=1.1s
 23:49:12.948 util=0.0% clk=800MHz mem=0.0MB(win) 0MB(xrt) ctx=0/0 cols=none compl/s=n/a subm/s=n/a period=0.25s smi-age=1.4s
-That context belonged to another Claude session on this machine, which was running
+That context belonged to another <tool> session on this machine, which was running
 tools/nstream_bench-style concurrent-stream sweeps of wide_resnet101_2 at the same time
 (results/nstream_wide_resnet101_2.log, 32 streams, file written 23:49:12; commit 38ff572
 "Concurrent streams: wide_resnet101_2 and streams past 16, up to 32", 23:49). A 2048^3 GEMM

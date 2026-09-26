@@ -1726,6 +1726,25 @@ merge `adc4468`, while `results/aie/dpu_transaction_disasm.log` was first handle
 a readable sibling and leaving the corrupt original. The sibling approach is withdrawn —
 one canonical, greppable file per measurement.
 
+### A log's identifying tokens are redacted in place, with a hash record
+
+On 2026-09-26, 189 tracked `results/` files had their identifying tokens replaced:
+- a Windows profile name, with `<user>`;
+- one machine's host name, with `<host>`;
+- job-scratch paths, with `<job-tmp>` or `<job-dir>`;
+- worktree paths, with `<worktree>`;
+- development-tool process and session names, with `<tool>`.
+
+Nothing else changed. Line counts, line endings and every digit outside 17 path lines are as
+they were. Each file's blob sha256 before and after is in
+[`scrub_record_desktop2_20260926.log`](../results/scrub_record_desktop2_20260926.log). As
+with the encoding fix above, the bytes changed and the measurement did not, and the pre-scrub
+bytes stay at `36ff439`.
+
+`results/quant/summary_lowlevel_desktop2_20260909_01.log` records a `log_sha256` for 18 of
+these files. Those values were taken before the scrub, from Desktop 2's CRLF working copy, so
+they match `git show 36ff439:<path>` with CRLF endings, not the files as they are now.
+
 
 
 
