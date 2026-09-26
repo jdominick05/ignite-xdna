@@ -22,6 +22,20 @@ def qrange(dtype: str) -> tuple[int, int]:
     raise ValueError(f"Unsupported XINT8 dtype: {dtype!r}")
 
 
+def bounds(dtype: str, grid: tuple[int, int] | None = None) -> tuple[int, int]:
+    """Clipping bounds: the producer's range, or a narrower integer grid inside it.
+
+    ``grid`` is additive (W4V's [-7, 7] held in int8 storage); None is the producer's range.
+    """
+    low, high = qrange(dtype)
+    if grid is None:
+        return low, high
+    lo, hi = (operator.index(v) for v in grid)
+    if not low <= lo < hi <= high:
+        raise ValueError(f"Grid {grid} is not inside the {dtype} producer range")
+    return lo, hi
+
+
 def _position(pos: int) -> int:
     if isinstance(pos, (bool, np.bool_)):
         raise ValueError("Position must be an integer, not bool")
@@ -90,15 +104,15 @@ def _float_input(x: np.ndarray) -> np.ndarray:
     return value
 
 
-def quantize(x: np.ndarray, pos: int, zp: int, dtype: str) -> np.ndarray:
-    """float32 divide, ties-to-even rounding, zero point, symmetric clipping."""
+def quantize(x: np.ndarray, pos: int, zp: int, dtype: str, grid: tuple[int, int] | None = None) -> np.ndarray:
+    """float32 divide, ties-to-even rounding, zero point, symmetric clipping (to ``grid`` if given)."""
     scale = pos2scale(pos)
     zp = _zero_point(zp, dtype)
     value = _float_input(x)
     # Division may overflow for finite inputs at extreme positions; clip saturates it.
     with np.errstate(over="ignore"):
         rounded = np.rint(value / scale) + np.float32(zp)
-    return np.asarray(np.clip(rounded, *qrange(dtype)), dtype=dtype)
+    return np.asarray(np.clip(rounded, *bounds(dtype, grid)), dtype=dtype)
 
 
 def dequantize(q: np.ndarray, pos: int, zp: int) -> np.ndarray:
@@ -107,11 +121,11 @@ def dequantize(q: np.ndarray, pos: int, zp: int) -> np.ndarray:
     return np.asarray((value.astype(np.float32) - np.float32(zp)) * pos2scale(pos), dtype=np.float32)
 
 
-def sqerr(x: np.ndarray, pos: int, zp: int, dtype: str) -> float:
+def sqerr(x: np.ndarray, pos: int, zp: int, dtype: str, grid: tuple[int, int] | None = None) -> float:
     """Float32 summed squared error, matching Quark's MinMSE accumulation dtype.
 
     Position search lives in calib.py.
     """
     value = _float_input(x)
-    restored = dequantize(quantize(value, pos, zp, dtype), pos, zp)
+    restored = dequantize(quantize(value, pos, zp, dtype, grid), pos, zp)
     return float(np.sum((restored - value) ** 2, dtype=np.float32))
