@@ -12291,3 +12291,57 @@ The consequences:
 - **Turbo pmode.**
 - **Trace-timer cycle counts.** Every cycle figure here is a wall-clock slope × the measured 1.80 GHz.
 - **Moving the loops' same-bank pair apart.** Impossible without changing the kernel.
+
+## Laya on the CPU and the 780M: the bar an NPU build has to beat (2026-09-26, Desktop 2)
+
+Laya (Convai Innovations, Apache 2.0) is a typed-decision model: ModernBERT-large plus a decision head, 421M
+parameters, one forward pass per question and no text generated. This sitting measures what an NPU build of it would
+have to beat. The NPU was not run.
+
+- **Model:** receptron/laya-onnx at revision `68f27dfe`, the English checkpoint in fp32 (`laya.onnx` `a874eb25`,
+  weights `48774636`).
+- **Inputs:** synthetic and full length: fixed-seed token ids, the whole attention mask set, four option markers,
+  question type choice. Latency depends on the shape, not the words, and no decision is judged here.
+- **Stack:** ONNX Runtime 1.27.0, CPU with 8 intra-op threads, DirectML on the Radeon 780M (driver 32.0.31041.1004),
+  Balanced power scheme.
+- **Energy:** `tools/energy_sitting.py`, package power minus each arm's own 30 s idle (17.4-20.1 W), over a 60 s
+  window.
+- **Tool:** `tools/laya_baseline.py`.
+- **Evidence:** `results/laya/laya_baseline_desktop2_20260926.log` and its JSON. The preparation steps are in
+  `laya_prep_desktop2_20260926.log`: DirectML failing on the unmodified export, `dmlcopy`, and the int8 file re-made
+  byte-identical.
+
+| Per sequence, mean | CPU fp32 | CPU int8 (dynamic) | 780M DirectML fp32 |
+|---|---|---|---|
+| 512 tokens: latency | 1112.4 ms | 638.8 ms | **632.8 ms** |
+| 512 tokens: package above idle; energy | +59.0 W; 65.5 J | +58.4 W; 37.4 J | +54.1 W; **34.2 J** |
+| 512 tokens: CPU load | 52.2% | 52.1% | **8.3%** |
+| 1,024 tokens: latency; energy | 2912.9 ms; 170.8 J | **2061.3 ms**; 115.1 J | 2191.1 ms; **106.2 J** |
+| 4 × 512 in one call: latency; energy | 1070.7 ms; 64.2 J | **668.3 ms**; **37.7 J** | 881.0 ms; 43.0 J |
+
+- **At 512 tokens the 780M and CPU int8 tie on latency** (within 1%). The 780M spends 8.4% less energy and leaves the
+  CPU at 8% load, against 52%. CPU fp32 is 1.74-1.76× slower and spends 1.91× the 780M's energy.
+- **At 1,024 tokens CPU int8 is 6% faster** than the 780M, which spends 7.7% less energy.
+- **Batching buys nothing.** Four sequences per call cost the 780M 28% per sequence. The CPU moves by less than 5%
+  either way.
+- **Effective rate** (DERIVED; 409 GOP per 512-token sequence by the tool's shape-inference count): 0.37 TOPS CPU
+  fp32, 0.64 CPU int8, 0.65 on the 780M.
+  - For scale only, not a prediction: the NPU's best measured single-GEMM rates here are 4,906 GOPS int8 and
+    2,700 GFLOPS bf16, at 2048-class shapes. Laya's GEMMs are 512 rows.
+- **DirectML needed one graph change.** 77 of the export's 138 Reshape nodes carry `allowzero=1`, which this ORT's
+  DirectML rejects (0x80070057 at `node_view`). The tool's `dmlcopy` clears it (`laya_az0.onnx`, `fd35271c`).
+  - That is equivalent here: none of the 69 run-time Reshape targets holds a 0 at 512 or 1,024 tokens, and the CPU
+    outputs are bit-identical.
+  - The copy's DirectML logits are within 2.2e-6 of the CPU's, with 98% of kernel time on DirectML.
+- **The int8 file is ORT dynamic quantization.** Its weights are per-channel int8, on MatMuls with constant weights
+  only. Its accuracy is unchecked: on the synthetic input its logits move up to 0.141 from fp32's, with the same top
+  option.
+- **Superseded log lines.** The log's "MACs per call" lines come from an earlier counter: fp32 188.0 G, int8 0.0 G
+  (it missed `MatMulInteger`). The committed tool gives both 188.6 G weight + 16.1 G attention at 512 tokens.
+
+**Not run:**
+- the NPU;
+- DirectML fp16 (no converter in the environment);
+- the multilingual and 1,024-token checkpoints (no ONNX export);
+- shorter real inputs, which the CPU and the 780M run faster while a fixed-shape NPU build pays for all 512 tokens;
+- decision accuracy.

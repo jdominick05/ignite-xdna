@@ -1,0 +1,120 @@
+Energy sitting on <host>, started 2026-09-26T15:42:47Z
+Package power: typeperf '\Energy Meter(RAPL_Package0_PKG)\Power', 1 s samples, milliwatts. Idle 30 s before each arm; window from progress line 2 to the last.
+== 2026-09-26T15:42:47Z [cpu fp32 seq512 b1]
+  setup     $ C:\Users\<user>/miniforge3/envs/ryzen-ai-1.8.0/python.exe tools/laya_baseline.py platform --model scratch/laya/laya-onnx/laya.onnx --model scratch/laya/laya-onnx/laya_az0.onnx --model scratch/laya/laya-int8-dyn/laya_int8.onnx
+    PLATFORM onnxruntime 1.27.0, providers ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider'], python 3.12.11, numpy 1.26.4
+    PLATFORM CPU AMD Ryzen 7 8700G w/ Radeon 780M Graphics, 16 logical
+    PLATFORM GPU Microsoft Remote Display Adapter, driver 10.0.26100.9278
+    PLATFORM GPU AMD Radeon 780M Graphics, driver 32.0.31041.1004
+    PLATFORM power scheme (read-only) Power Scheme GUID: 381b4222-f694-41f0-9685-ff5bb260df2e  (Balanced)
+    PLATFORM file laya.onnx 3807291 bytes sha256 a874eb254b58b0fcb1e7ad56fbb188c29d64e08c9a46b689433e1f52c66dba1e
+    PLATFORM file laya.onnx.data 1685258240 bytes sha256 487746363a8da57bcadb4345352997d22a0fb90d70aa22c6856668d023242aba
+    PLATFORM file laya_az0.onnx 3807291 bytes sha256 fd35271c6e5c5083cdb50b8b35f358d5174ac37a7dc81c4507a613d34fd46580
+    PLATFORM file laya_int8.onnx 5163365 bytes sha256 160eafa3438597ab4717d970bcc63cbaa1beab3e16eb3045f97d4920bfb141c7
+    PLATFORM file laya_int8.onnx.data 576297984 bytes sha256 3f49bc9627f31a65833189522355134c30101aec2b7805c33f0006120a21af6b
+  idle      29 samples, mean 20.104 W, stdev 2.386 W, CPU 3.6 %
+  $ C:\Users\<user>/miniforge3/envs/ryzen-ai-1.8.0/python.exe tools/laya_baseline.py run --ep cpu --model scratch/laya/laya-onnx/laya.onnx --seq 512 --batch 1 --seconds 60
+    [summary] cpu laya.onnx seq 512 batch 1: providers ['CPUExecutionProvider'], threads 8, session load 1.3 s
+    [summary] latency ms over 54 calls after 5 warm-up: mean 1112.44, median 1112.76, min 1015.73, p90 1147.80, max 1193.27; 0.90 sequences/s, 460 tokens/s
+    [summary] MACs per call (DERIVED from the graph): weight MatMuls 188.0 G, attention 16.1 G; 0.367 TOPS effective at the mean
+    [summary] memory: process peak working set 1.69 GB, lowest available 19.4 GB; outputs [(1, 4), (1, 2)], logits finite True
+  window    51 frames in 56.7 s = 0.90 fps, 54 power samples, CPU 52.2 %
+  energy    package 79.061 W - idle 20.104 W = +58.958 W -> 65509.79 mJ per frame
+== 2026-09-26T15:44:34Z [cpu int8-dyn seq512 b1]
+  setup     $ C:\Users\<user>/miniforge3/envs/ryzen-ai-1.8.0/python.exe tools/laya_baseline.py check --ep cpu --model scratch/laya/laya-int8-dyn/laya_int8.onnx --ref scratch/laya/laya-onnx/laya.onnx --seq 512
+    CHECK cpu laya_int8.onnx vs cpu laya.onnx, seq 512 batch 1: logits max |diff| 1.413e-01, act_probs max |diff| 0.000e+00, same top option True (synthetic input; not an accuracy verdict)
+  idle      29 samples, mean 17.414 W, stdev 0.731 W, CPU 1.8 %
+  $ C:\Users\<user>/miniforge3/envs/ryzen-ai-1.8.0/python.exe tools/laya_baseline.py run --ep cpu --model scratch/laya/laya-int8-dyn/laya_int8.onnx --seq 512 --batch 1 --seconds 60
+    [summary] cpu laya_int8.onnx seq 512 batch 1: providers ['CPUExecutionProvider'], threads 8, session load 0.8 s
+    [summary] latency ms over 94 calls after 5 warm-up: mean 638.83, median 636.07, min 595.68, p90 667.07, max 695.04; 1.57 sequences/s, 801 tokens/s
+    [summary] MACs per call (DERIVED from the graph): weight MatMuls 0.0 G, attention 16.1 G; 0.050 TOPS effective at the mean
+    [summary] memory: process peak working set 0.56 GB, lowest available 20.6 GB; outputs [(1, 4), (1, 2)], logits finite True
+  window    91 frames in 58.2 s = 1.56 fps, 56 power samples, CPU 52.1 %
+  energy    package 75.837 W - idle 17.414 W = +58.423 W -> 37360.67 mJ per frame
+== 2026-09-26T15:46:19Z [dml fp32 seq512 b1]
+  setup     $ C:\Users\<user>/miniforge3/envs/ryzen-ai-1.8.0/python.exe tools/laya_baseline.py placement --ep dml --model scratch/laya/laya-onnx/laya_az0.onnx --seq 512 --profile-dir <job-tmp>
+    PLACEMENT dml seq 512: CPUExecutionProvider ran 163 nodes, 1.9% of kernel time over 3 profiled calls
+    PLACEMENT dml seq 512: DmlExecutionProvider ran 1615 nodes, 98.1% of kernel time over 3 profiled calls
+    [0;93m2026-09-26 11:46:19.9207385 [W:onnxruntime:Default, config_options.cc:45 onnxruntime::ConfigOptions::AddConfigEntry] Config with key [ep.dmlexecutionprovider.device_id] already exists with value [0]. It will be overwritten[m
+  setup     $ C:\Users\<user>/miniforge3/envs/ryzen-ai-1.8.0/python.exe tools/laya_baseline.py check --ep dml --model scratch/laya/laya-onnx/laya_az0.onnx --ref scratch/laya/laya-onnx/laya.onnx --seq 512
+    CHECK dml laya_az0.onnx vs cpu laya.onnx, seq 512 batch 1: logits max |diff| 2.176e-06, act_probs max |diff| 0.000e+00, same top option True (synthetic input; not an accuracy verdict)
+    [0;93m2026-09-26 11:46:26.0905501 [W:onnxruntime:Default, config_options.cc:45 onnxruntime::ConfigOptions::AddConfigEntry] Config with key [ep.dmlexecutionprovider.device_id] already exists with value [0]. It will be overwritten[m
+  idle      29 samples, mean 17.691 W, stdev 1.152 W, CPU 1.8 %
+  $ C:\Users\<user>/miniforge3/envs/ryzen-ai-1.8.0/python.exe tools/laya_baseline.py run --ep dml --model scratch/laya/laya-onnx/laya_az0.onnx --seq 512 --batch 1 --seconds 60 --warmup 10
+    [summary] dml laya_az0.onnx seq 512 batch 1: providers ['DmlExecutionProvider', 'CPUExecutionProvider'], threads -, session load 1.2 s
+    [summary] latency ms over 95 calls after 10 warm-up: mean 632.80, median 633.23, min 604.09, p90 643.72, max 658.94; 1.58 sequences/s, 809 tokens/s
+    [summary] MACs per call (DERIVED from the graph): weight MatMuls 188.0 G, attention 16.1 G; 0.645 TOPS effective at the mean
+    [summary] memory: process peak working set 1.93 GB, lowest available 19.3 GB; outputs [(1, 4), (1, 2)], logits finite True
+  window    92 frames in 58.2 s = 1.58 fps, 56 power samples, CPU 8.3 %
+  energy    package 71.776 W - idle 17.691 W = +54.085 W -> 34230.48 mJ per frame
+== 2026-09-26T15:48:13Z [cpu fp32 seq1024 b1]
+  idle      29 samples, mean 17.706 W, stdev 0.835 W, CPU 2.3 %
+  $ C:\Users\<user>/miniforge3/envs/ryzen-ai-1.8.0/python.exe tools/laya_baseline.py run --ep cpu --model scratch/laya/laya-onnx/laya.onnx --seq 1024 --batch 1 --seconds 60
+    [summary] cpu laya.onnx seq 1024 batch 1: providers ['CPUExecutionProvider'], threads 8, session load 1.2 s
+    [summary] latency ms over 21 calls after 5 warm-up: mean 2912.95, median 2918.20, min 2825.71, p90 2950.01, max 2970.57; 0.34 sequences/s, 352 tokens/s
+    [summary] MACs per call (DERIVED from the graph): weight MatMuls 376.1 G, attention 64.4 G; 0.302 TOPS effective at the mean
+    [summary] memory: process peak working set 2.22 GB, lowest available 19.0 GB; outputs [(1, 4), (1, 2)], logits finite True
+  window    18 frames in 52.5 s = 0.34 fps, 51 power samples, CPU 48.2 %
+  energy    package 76.302 W - idle 17.706 W = +58.596 W -> 170834.79 mJ per frame
+== 2026-09-26T15:50:07Z [cpu int8-dyn seq1024 b1]
+  idle      29 samples, mean 18.583 W, stdev 2.266 W, CPU 2.3 %
+  $ C:\Users\<user>/miniforge3/envs/ryzen-ai-1.8.0/python.exe tools/laya_baseline.py run --ep cpu --model scratch/laya/laya-int8-dyn/laya_int8.onnx --seq 1024 --batch 1 --seconds 60
+    [summary] cpu laya_int8.onnx seq 1024 batch 1: providers ['CPUExecutionProvider'], threads 8, session load 0.8 s
+    [summary] latency ms over 30 calls after 5 warm-up: mean 2061.31, median 2061.32, min 1996.93, p90 2093.18, max 2102.99; 0.49 sequences/s, 497 tokens/s
+    [summary] MACs per call (DERIVED from the graph): weight MatMuls 0.0 G, attention 64.4 G; 0.063 TOPS effective at the mean
+    [summary] memory: process peak working set 0.94 GB, lowest available 20.3 GB; outputs [(1, 4), (1, 2)], logits finite True
+  window    27 frames in 55.7 s = 0.48 fps, 54 power samples, CPU 45.5 %
+  energy    package 74.362 W - idle 18.583 W = +55.779 W -> 115110.56 mJ per frame
+== 2026-09-26T15:51:57Z [dml fp32 seq1024 b1]
+  setup     $ C:\Users\<user>/miniforge3/envs/ryzen-ai-1.8.0/python.exe tools/laya_baseline.py placement --ep dml --model scratch/laya/laya-onnx/laya_az0.onnx --seq 1024 --profile-dir <job-tmp>
+    PLACEMENT dml seq 1024: CPUExecutionProvider ran 163 nodes, 1.8% of kernel time over 3 profiled calls
+    PLACEMENT dml seq 1024: DmlExecutionProvider ran 1615 nodes, 98.2% of kernel time over 3 profiled calls
+    [0;93m2026-09-26 11:51:58.1671194 [W:onnxruntime:Default, config_options.cc:45 onnxruntime::ConfigOptions::AddConfigEntry] Config with key [ep.dmlexecutionprovider.device_id] already exists with value [0]. It will be overwritten[m
+  idle      29 samples, mean 18.151 W, stdev 0.868 W, CPU 2.0 %
+  $ C:\Users\<user>/miniforge3/envs/ryzen-ai-1.8.0/python.exe tools/laya_baseline.py run --ep dml --model scratch/laya/laya-onnx/laya_az0.onnx --seq 1024 --batch 1 --seconds 60 --warmup 10
+    [summary] dml laya_az0.onnx seq 1024 batch 1: providers ['DmlExecutionProvider', 'CPUExecutionProvider'], threads -, session load 1.2 s
+    [summary] latency ms over 28 calls after 10 warm-up: mean 2191.07, median 2193.13, min 2149.92, p90 2213.73, max 2230.70; 0.46 sequences/s, 467 tokens/s
+    [summary] MACs per call (DERIVED from the graph): weight MatMuls 376.1 G, attention 64.4 G; 0.402 TOPS effective at the mean
+    [summary] memory: process peak working set 2.06 GB, lowest available 19.1 GB; outputs [(1, 4), (1, 2)], logits finite True
+  window    25 frames in 54.8 s = 0.46 fps, 54 power samples, CPU 9.3 %
+  energy    package 66.555 W - idle 18.151 W = +48.404 W -> 106195.67 mJ per frame
+== 2026-09-26T15:54:08Z [cpu fp32 seq512 b4]
+  idle      29 samples, mean 17.887 W, stdev 1.020 W, CPU 1.9 %
+  $ C:\Users\<user>/miniforge3/envs/ryzen-ai-1.8.0/python.exe tools/laya_baseline.py run --ep cpu --model scratch/laya/laya-onnx/laya.onnx --seq 512 --batch 4 --seconds 60
+    [summary] cpu laya.onnx seq 512 batch 4: providers ['CPUExecutionProvider'], threads 8, session load 1.2 s
+    [summary] latency ms over 20 calls after 5 warm-up: mean 4282.60, median 4280.07, min 4130.18, p90 4407.50, max 4420.88; 0.93 sequences/s, 478 tokens/s
+    [summary] MACs per call (DERIVED from the graph): weight MatMuls 752.2 G, attention 64.4 G; 0.381 TOPS effective at the mean
+    [summary] memory: process peak working set 2.40 GB, lowest available 18.8 GB; outputs [(4, 4), (4, 2)], logits finite True
+  window    17 frames in 73.0 s = 0.23 fps, 71 power samples, CPU 49.5 %
+  energy    package 77.686 W - idle 17.887 W = +59.799 W -> 256764.87 mJ per frame
+== 2026-09-26T15:56:34Z [cpu int8-dyn seq512 b4]
+  idle      29 samples, mean 17.601 W, stdev 0.829 W, CPU 2.2 %
+  $ C:\Users\<user>/miniforge3/envs/ryzen-ai-1.8.0/python.exe tools/laya_baseline.py run --ep cpu --model scratch/laya/laya-int8-dyn/laya_int8.onnx --seq 512 --batch 4 --seconds 60
+    [summary] cpu laya_int8.onnx seq 512 batch 4: providers ['CPUExecutionProvider'], threads 8, session load 0.9 s
+    [summary] latency ms over 23 calls after 5 warm-up: mean 2673.16, median 2667.58, min 2612.95, p90 2711.88, max 2721.31; 1.50 sequences/s, 766 tokens/s
+    [summary] MACs per call (DERIVED from the graph): weight MatMuls 0.0 G, attention 64.4 G; 0.048 TOPS effective at the mean
+    [summary] memory: process peak working set 0.93 GB, lowest available 20.3 GB; outputs [(4, 4), (4, 2)], logits finite True
+  window    20 frames in 53.3 s = 0.37 fps, 51 power samples, CPU 47.3 %
+  energy    package 74.149 W - idle 17.601 W = +56.548 W -> 150806.57 mJ per frame
+== 2026-09-26T15:58:27Z [dml fp32 seq512 b4]
+  idle      29 samples, mean 17.929 W, stdev 0.816 W, CPU 2.0 %
+  $ C:\Users\<user>/miniforge3/envs/ryzen-ai-1.8.0/python.exe tools/laya_baseline.py run --ep dml --model scratch/laya/laya-onnx/laya_az0.onnx --seq 512 --batch 4 --seconds 60 --warmup 10
+    [summary] dml laya_az0.onnx seq 512 batch 4: providers ['DmlExecutionProvider', 'CPUExecutionProvider'], threads -, session load 1.2 s
+    [summary] latency ms over 20 calls after 10 warm-up: mean 3523.87, median 3521.82, min 3494.94, p90 3545.32, max 3555.11; 1.14 sequences/s, 581 tokens/s
+    [summary] MACs per call (DERIVED from the graph): weight MatMuls 752.2 G, attention 64.4 G; 0.463 TOPS effective at the mean
+    [summary] memory: process peak working set 2.23 GB, lowest available 19.0 GB; outputs [(4, 4), (4, 2)], logits finite True
+  window    17 frames in 59.8 s = 0.28 fps, 58 power samples, CPU 9.8 %
+  energy    package 66.736 W - idle 17.929 W = +48.807 W -> 171822.02 mJ per frame
+Idle baselines span 17.414-20.104 W, more than 2.0 W: the median-idle column does not hold across that; read arms against their own idle
+
+Median idle over 9 undisturbed baselines: 17.887 W
+arm                                           fps  CPU %  +W own idle  mJ/frame  mJ vs median idle
+cpu fp32 seq512 b1                           0.90   52.2       58.958  65509.79           67973.50
+cpu int8-dyn seq512 b1                       1.56   52.1       58.423  37360.67           37058.42
+dml fp32 seq512 b1                           1.58    8.3       54.085  34230.48           34106.81
+cpu fp32 seq1024 b1                          0.34   48.2       58.596 170834.79          170309.50
+cpu int8-dyn seq1024 b1                      0.48   45.5       55.779 115110.56          116547.62
+dml fp32 seq1024 b1                          0.46    9.3       48.404 106195.67          106775.46
+cpu fp32 seq512 b4                           0.23   49.5       59.799 256764.87          256764.87
+cpu int8-dyn seq512 b4                       0.37   47.3       56.548 150806.57          150045.35
+dml fp32 seq512 b4                           0.28    9.8       48.807 171822.02          171970.58
