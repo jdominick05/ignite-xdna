@@ -3,7 +3,8 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """W4V: the screen's pre-registration, its pins, the 500-image cut and the K-D verdict, from one set of constants.
 
-PREREG below is the accepted pre-registration text (v2.4, LF 7ff9c2c4...), verbatim. Every W4V log prints the
+PREREG below is the accepted pre-registration text, verbatim: v2.4 (PREREG_V24, LF 7ff9c2c4...) and the v2.5
+amendment after the screen1 STOP (PREREG_V25, LF 2d309756...), joined by one newline. Every W4V log prints the
 frozen triple and TOOLS_JSON: PREREG_TEXT_SHA256 (that text), PROTOCOL_JSON_SHA256 (protocol(): the models, the
 arms, every hyperparameter, the calibration and H pins, the cut and K-D), VERDICT_CODE_SHA256 (the whole LF source
 of this file and scripts/w4v-eval.sh, plus verdict_constants()) and TOOLS_JSON (the LF shas of every repo file in
@@ -11,7 +12,9 @@ the import graph of TOOL_ROOTS, the code that makes or judges an arm, and script
 gate stage's SRC_TREE instead). --pins, --screen, --advanced, --c8 and --verdict refuse unless all four equal those
 of the one committed, clean prereg log; pins are read only from committed, clean prereg and pins logs. No stage runs
 until every earlier stage's logs are committed and clean, carry their success lines, and hold only hash blocks
-equal to this tool's, nor while a log of the stage itself exists (ready(), --ready).
+equal to this tool's, nor while a log of the stage itself exists (ready(), --ready). v2.5 section E: a CARRIED_V24
+log stands in for its stage's v2.5 run while rules 1-5 hold (carry_problems()), and a SUPERSEDED_V24 log is skipped
+by every glob that would count it, at exactly its listed sha (live()).
 
     python tools/w4v_verdict.py --hashes
     python tools/w4v_verdict.py --prereg --files <models, captures, tier-1 arm files>   tier 1's pins, before any mAP
@@ -36,6 +39,7 @@ Nothing here was tuned after seeing a mAP: the constants are the ones --prereg p
 import argparse
 import ast
 import contextlib
+import fnmatch
 import hashlib
 import io
 import json
@@ -51,8 +55,13 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 RESULTS = ROOT / "results" / "int4"
 
-# v2.4: v2.3, with the gate's F4 ruling (TOOLS_JSON's roots, SRC_TREE) and S2 (a stage's own logs)
-PREREG_SHA = "7ff9c2c46e9280e5002aafb6cb573646d0c920b6257b6aba4e2ff47a08caee49"
+# v2.4: v2.3, with the gate's F4 ruling (TOOLS_JSON's roots, SRC_TREE) and S2 (a stage's own logs); v2.5: v2.4 plus
+# the amendment after the screen1 STOP (zero-detection rows, C5b, the carry-across rule), accepted on 2026-09-26.
+# PREREG_SHA is the whole text's. tools/w4_recover.py:1010 (C0) still labels its check "text == the accepted v2.4";
+# under v2.5 that line compares with this PREREG_SHA, the accepted v2.4 + v2.5 text.
+PREREG_V24_SHA = "7ff9c2c46e9280e5002aafb6cb573646d0c920b6257b6aba4e2ff47a08caee49"
+PREREG_V25_SHA = "2d30975688379c02c243538f35cb361923e57e08330617a9b3aa78cb5b3aa1bd"
+PREREG_SHA = "56a169e84fe79d3e6b31b6b878ae2fa32ef7ab62f2239b52eebd86c00d2f2f98"
 
 MODELS = ("yolov8n", "yolov8s")
 MODEL_PIN = {   # gate D's prereg log :41-42, :47-48 (results/int4/w4a8_accuracy_prereg_desktop2_20260923.log)
@@ -153,6 +162,88 @@ HYPER = {
     "torch_threads": 8,
 }
 
+# v2.5 section E: the v2.4 values a carried log's hash blocks must equal (rule 2; its TOOLS_JSON is rule 3's), the
+# carried logs and the superseded ones (name -> HEAD LF sha256), generated from HEAD's logs, never retyped
+V24_FROZEN = {   # the v2.4 prereg log's one hash block (results/int4/w4v_prereg_desktop2_20260926.log, LF 35c758ec...)
+    "PREREG_TEXT_SHA256": "7ff9c2c46e9280e5002aafb6cb573646d0c920b6257b6aba4e2ff47a08caee49",
+    "PROTOCOL_JSON_SHA256": "46297af64e23a10df62c363f766bacc3f78faf121b5194ea8e6077b364710872",
+    "VERDICT_CODE_SHA256": "2fc815d93451a3be1f8403d768cddb5737218d9e58abe282cc25e77fb7eb7c64",
+    "TOOLS_JSON": {
+        "ignite_xdna/__init__.py": "ef016e665caaf8a1f43c196632b0cddf6e8b693a4b10efba3ac2fe7301198ab2",
+        "npu/__init__.py": "7c8079f009174f9992dc12578079959704d0cb08710f8d68c666925559b8c599",
+        "npu/modnet.py": "d6239523a4041df1194afc6b78a24bdf9c0f6e03039e4de4126d7938f9d015ca",
+        "npu/paths.py": "e5e05f6a3e7bbc070b059a603281478ce76ee28f036361e90985b3c424c788a1",
+        "npu/preprocess.py": "d981eb2c9cee4b941670ebd41ceb8d4c6636e14ea5a1e78bbaa3dd7f1bbf09ab",
+        "npu/session.py": "1f7ec8e0aba8e70000d4c704aeb11a7ece6a33b8d57b9c8c7b34642eaca0edcc",
+        "npu/yolo.py": "04222f86d1e2da8ca2cc68e0675cd75883ce541a804be4ba916df7c4ed3abd04",
+        "npu/yolo_decode.py": "a245363a16fc845384611c125ba60725c106622f07b69b8567afd211b2c235fb",
+        "pipelines/yolov8n/5_eval_map.py": "fb25e914e1b28078e0a99413c14b491dfcb57a17c6fb5b740ac0eb51145a753f",
+        "quant/__init__.py": "6a457c2b7f7de2ed3e56fa9020d171291bff4b2633a4ce16b4b028e37b7289ec",
+        "quant/__main__.py": "b67e8ef3ca621732d04cc7f54627011e89e00ed964b932561198519f7d1cd2af",
+        "quant/adaround.py": "60f06bd2a3f28bfcb99f55ae462c2f41b3469f9fd3565877418dde95bb6a0704",
+        "quant/calib.py": "a68f24d9bc39fcbc51988ce7b6b9dd79bf62f7d454689886d866ab8d04a2dcd6",
+        "quant/cle.py": "6b876fc61b66ce348cbc9053974927a16888798305096bd2ccd23ebde2285e35",
+        "quant/cli.py": "fb05ead47ee3d0fc25c41d305ec3d6bd7e57fafde074c9266c5737f59c87a194",
+        "quant/graph.py": "35171c86a1535a34fbfaac40e54a1c8646dadec25af287df710b9feb5ae89342",
+        "quant/passes.py": "63df9a473fe7fc8b576e0313b8ba8124a17a0541f212b3bde1befc17d8846397",
+        "quant/pow2.py": "2212eaa226d72ad6b54a75f97a854ec9a9589861cd92baff6fea1d8d2d752fab",
+        "quant/qdq.py": "4c4cf421ade75c578762e373f99ca2aba2daed1bf1ab8590d8dd044783958286",
+        "quant/quantize.py": "6fbdc88bd88bdbfbb8882f53cb3c3586e7af916dcf0d665f45b2e284bcc3b327",
+        "quant/refine.py": "2f10e3bcaaa57c441f029af91fbe2bc87c3b07b20d63b74eaf5aca45b58fadfd",
+        "quant/report.py": "f186e05bf38d4cb7aff66514e059e0fc7fb02abe3fd4981bfd4980272aa2d4e9",
+        "quant/shift_cut.py": "80fa8bfc76c7c13e526107ea6917cc3cee4a0da65caa8a4305ccbbf43fe4246a",
+        "quant/sources.py": "0ef5e110296022af5d4b9e36493099fe7be009fe49687c16a1dc30c148ed8286",
+        "quant/verify.py": "1263884ebbd17fbbfe1a83b42e971f84a67b847e22fabd132638f83721f6dd18",
+        "scripts/lib.sh": "325383a38b0f8cc2d5d30cab3cef0c261dca41c40b8f79c7b5e771de6daa90fd",
+        "tools/quant_compare.py": "d193031b0e238fb9ea92bb7c8492bf08d1830c9fa17a6eb5260080a5cbc6f1bf",
+        "tools/w4_recover.py": "8a9562972a5183689a95ab405783e59387788f459d54dcd7643b56d4a928b155",
+        "tools/w4a8_emulate.py": "298129b5c2de794dc680f18537db7e0a07659637fe8d342d78a44694a3fceeff",
+        "tools/w4a8_engine_gate.py": "a8a61cb805fc40aa2b5cd2a166ac32c8296ffb42c3e3b492b05fbaf94b7972c4",
+    },
+}
+CARRIED_V24 = {
+    "load_w4v_repro_desktop2_20260925.log": "1a665b29cbd7c30a5994a9e36ecbe42c894363b7726e08cf2224999f86accba9",
+    "w4v_controls_yolov8n_desktop2_20260925.log": "3230ae56d3275ece32933480ce0a8f80b8ecfaeac2f00bca7c45a7def5f6ec98",
+    "w4v_controls_yolov8s_desktop2_20260925.log": "851fa188434c0f9e0b2a09adb9386d205480bb0b973a6bccd2a563a0fcee7a54",
+    "w4v_emit1_yolov8n_desktop2_20260926.log": "8a70e4bc1f6e1e037f0c11570923a5c08f88dba592eb0703c4db89da6f4c9d1f",
+    "w4v_emit1_yolov8s_desktop2_20260926.log": "605379a310388e509c0606b9081090ff2405e04260b4516e444a8093d5443a5a",
+    "w4v_parity_c6a_yolov8n_desktop2_20260925.log": "d5b83902878341423e84245def7daae8396e1bc6dee599dd776f640a737053b6",
+    "w4v_parity_c6a_yolov8s_desktop2_20260925.log": "df44ee761f19f40b9c92d639ff1986d159d55eccf99f4b57df87b69a2c35234b",
+    "w4v_parity_c6b_yolov8n_desktop2_20260925.log": "1b0b49ebd013004a649edfaadba60fa614d1c2c2dbe9042a3f192a618536fe39",
+    "w4v_parity_c6c_env17_yolov8n_desktop2_20260925.log":
+        "6bc22cbc430f740f4d49b33ca2dfaa7de5cfa1ddd826a1e12989ef16331a6d2e",
+    "w4v_parity_c6c_yolov8n_desktop2_20260925.log": "f7a14d7c739443783ca5672f648677fc552aa7120b67c55470c21993af5861da",
+    "w4v_repro_c9_desktop2_20260925.log": "e174c2c7096d02a1747ea8cd5469a3d899d2efcc2d5d6cb203fbe835804dc348",
+    "w4v_repro_yolov8n_b8_n5000_desktop2_20260925.log":
+        "cbdb9ae5b861b4de177f20edbeb459683bbe19e296edff8ba33a2c97c3f85a21",
+    "w4v_repro_yolov8n_rtn_e1_n5000_desktop2_20260925.log":
+        "4e2eca4165cbf578f8cc19e430712a0e5f081d4a90beb5f9f25ac99cec2dfb7b",
+    "w4v_repro_yolov8n_rtn_e2_n5000_desktop2_20260925.log":
+        "4f3b3d649fd49b766b40cea72cc9a82f17079732a1d90a00b37620edc8ddee42",
+    "w4v_repro_yolov8n_rtn_u_n5000_desktop2_20260925.log":
+        "0e70b22215c876f98c3364ee74cc252599676c1af4bc8c92ae750afb362d7a2a",
+    "w4v_repro_yolov8s_b8_n5000_desktop2_20260925.log":
+        "74471da4518272671612dfa80beabc1fb075e77efcc464db8d0b733470c7383e",
+    "w4v_repro_yolov8s_rtn_e1_n5000_desktop2_20260925.log":
+        "d0268253cf11f9c70344032a8539e24548b5fc435cd1639763f86279d2129493",
+    "w4v_repro_yolov8s_rtn_e2_n5000_desktop2_20260925.log":
+        "bfd776faa6695ab7b2fe0b451bcd79b61e3079ee6fd0197cf0327105ed022363",
+    "w4v_repro_yolov8s_rtn_u_n5000_desktop2_20260925.log":
+        "50f7f0e0829a64773e6d418cbea2ce1de2dbd13474bff3d535969d243054ef3e",
+    "w4v_sensitivity_yolov8n_desktop2_20260926.log": "4a6e64be7adc4644d2cd2639f646da8cbf4fc8489c6e3deed89c4f1851fc45e8",
+    "w4v_sensitivity_yolov8s_desktop2_20260926.log": "beff7fbb90c264ed46a84eaf91eb8bc463e325bfa0b42d0930d5bbec1eb478a1",
+}
+SUPERSEDED_V24 = {
+    "w4v_prereg_desktop2_20260926.log": "35c758eceafd53d4c99c62fadc0fe541188f694dbcd27741f620fb49567acc6e",
+    "w4v_selftest_desktop2_20260925.log": "55f34e43e42fd736c36e2d23f6a679fd73130fe26bdc6140644697fa25f3c5dd",
+}
+# v2.5 sections B and C: the zero-detection record's audits and C5b's stages
+AUDIT_SCRIPT_SHA = "dbc4b7bb4d2d0195f4becf479b4711732f62d0a9f3952fcbfc3c06e34741bd89"   # w4v_audit/w4v_bc_audit.py
+C5B_TOOL = "tools/w4v_bias_audit.py"
+AUDIT_LOGS = {"yolov8n": "results/int4/w4v_audit/recompute_yolov8n_rerun_desktop2_20260926.log",   # GENUINE, bc_e1
+              "yolov8s": "results/int4/w4v_audit/recompute_yolov8s_rerun2_desktop2_20260926.log"}
+BIAS1_ARMS = ("bc_e2", "bc_u", "vc_e1", "vc_e2", "vc_u")   # the tier-1 int32-bias arms not yet audited on (a)
+
 
 def git(*args) -> str:
     return subprocess.run(["git", *args], cwd=ROOT, capture_output=True, text=True, check=True).stdout.strip()
@@ -188,7 +279,44 @@ def arms(tier: int | None = None) -> list[str]:
     return [f"{m}_{f}" for t, m, forms in MATRIX if tier in (None, t) for f in forms]
 
 
+def bias_arms(tier: int) -> list[str]:
+    """The arms C5b audits in stage bias<tier>: bias1, BIAS1_ARMS; bias2, every tier-2 int32-bias arm (the +BC arms)."""
+    return list(BIAS1_ARMS) if tier == 1 else [a for a in arms(2) if a.split("_")[0] in INT32_BIAS]
+
+
+def audits() -> dict:
+    """'<model> <arm>' -> the audit a zero-detection record cites (v2.5 B.3, B.4): a committed GENUINE log's path for
+    bc_e1, else the C5b stage whose one committed log per model covers the arm."""
+    return {**{f"{m} bc_e1": AUDIT_LOGS[m] for m in MODELS},
+            **{f"{m} {a}": f"bias{t}" for t in (1, 2) for m in MODELS for a in bias_arms(t)}}
+
+
+def v25() -> dict:
+    """protocol()'s one added key (v2.5 E rule 4: the protocol minus it is v2.4's)."""
+    return {"v24_frozen": V24_FROZEN, "carried_v24": CARRIED_V24, "superseded_v24": SUPERSEDED_V24,
+            "audits": audits(), "audit_script_sha256": AUDIT_SCRIPT_SHA, "c5b_tool": C5B_TOOL,
+            "c5b_base": {"bc": "rtn_<form>", "arbc": "ar_<form>", "gptqbc": "gptq_<form>",
+                         "vc": "its own weights, from the shipped biases"},
+            "bias_arms": {"bias1": bias_arms(1), "bias2": bias_arms(2)},
+            "zero_detection": {
+                "row": "5_eval_map.py printed '0 detections over <N> images in <s>s' (N the row's image count) and "
+                       "'wrote <its --dets path>', then exited with 'no detections at all -- something is broken "
+                       "upstream'; its dets file parses as an empty list; no DETS_SHA256 line; its model sha256 line "
+                       "is the arm's pin; no skip unreadable line",
+                "figures": "AP 0.00 on its N images and 0.00 on H, by rule (B.2); nothing is rescored",
+                "recorded": "an int32-bias arm whose audit (audits) reads GENUINE for its exact pinned sha, from "
+                            "dbc4b7bb or the frozen C5b tool, with no w4_recover or quant import",
+                "stop": "any other arm (D2: RTN, AdaRound, GPTQ, MX), B8, C9's RTN rows, a DEFECT, or no audit",
+                "record": "results/int4/w4v_zerodet_<model>_<arm>_n<N>_<machine>_<date>.log from --zerodet; the row "
+                          "log stays byte-identical"}}
+
+
 def protocol() -> dict:
+    """v2.4's protocol JSON plus the one key v2.5 adds (v2.5 E rule 4)."""
+    return {**protocol_v24(), "v2_5": v25()}
+
+
+def protocol_v24() -> dict:
     return {"models": MODEL_PIN, "gate_d_files": GATE_D_FILES, "gate_d_map": GATE_D_MAP,
             "matrix": [[t, m, list(f)] for t, m, f in MATRIX], "method_text": METHOD_TEXT,
             "grid": list(GRID), "window": list(WINDOW), "group": GROUP, "k_max": K_MAX,
@@ -226,8 +354,10 @@ CODE_FILES = ("tools/w4v_verdict.py", "scripts/w4v-eval.sh")   # VERDICT_CODE_SH
 TOOL_ROOTS = ("tools/w4_recover.py",                # makes every arm
               "pipelines/yolov8n/5_eval_map.py",    # writes every row's detections
               "tools/w4a8_engine_gate.py",          # C8's eligibility
-              "tools/quant_compare.py", "quant/__main__.py", "quant/cli.py")   # C6
-TOOL_FILES = ("tools/w4_recover.py", "tools/w4a8_emulate.py", "tools/w4a8_engine_gate.py", "tools/quant_compare.py",
+              "tools/quant_compare.py", "quant/__main__.py", "quant/cli.py",   # C6
+              C5B_TOOL)                             # C5b (v2.5 section C)
+TOOL_FILES = (C5B_TOOL,
+              "tools/w4_recover.py", "tools/w4a8_emulate.py", "tools/w4a8_engine_gate.py", "tools/quant_compare.py",
               "pipelines/yolov8n/5_eval_map.py",
               "quant/__init__.py", "quant/__main__.py", "quant/adaround.py", "quant/calib.py", "quant/cle.py",
               "quant/cli.py", "quant/graph.py", "quant/passes.py", "quant/pow2.py", "quant/qdq.py",
@@ -541,12 +671,26 @@ def committed_clean(path, root: Path = ROOT) -> bool:
     return ok("cat-file", "-e", f"HEAD:{rel}") and ok("diff", "--quiet", "HEAD", "--", rel)
 
 
+def live(pattern: str, root: Path = ROOT) -> tuple[list[Path], list[str]]:
+    """The results/int4 files a glob matches, minus each SUPERSEDED_V24 name that is committed and clean at exactly
+    its listed LF sha (v2.5 E: it stays committed and untouched, and no glob counts it). A listed name at any other
+    sha, or not committed and clean, is a problem, so nothing can hide behind the list."""
+    found, problems = [], []
+    for p in sorted((Path(root) / "results" / "int4").glob(pattern)):
+        want = SUPERSEDED_V24.get(p.name)
+        if want is None:
+            found.append(p)
+        elif sha_lf(p) != want or not committed_clean(p, root):
+            problems.append(f"{p.name} is listed as superseded at LF {want[:12]}..., but reads {sha_lf(p)[:12]}... "
+                            f"or is not committed and clean")
+    return found, problems
+
+
 def frozen_state(root: Path = ROOT) -> list[str]:
     """Problems with the frozen state: the triple and TOOLS_JSON against the ONE committed, clean prereg log's, and
     the text against the accepted sha. Empty means frozen."""
     got = frozen_values(root)
-    logs = sorted((root / "results" / "int4").glob("w4v_prereg_*.log"))
-    problems = []
+    logs, problems = live("w4v_prereg_*.log", root)
     if got["PREREG_TEXT_SHA256"] != PREREG_SHA:
         problems.append("the embedded text is not the accepted one")
     if len(logs) != 1:
@@ -563,8 +707,9 @@ def frozen_state(root: Path = ROOT) -> list[str]:
 def pins(root: Path = ROOT, allow_none: bool = False) -> dict:
     """basename -> sha256 from the one prereg log and the pins log, each committed and clean (a basename pinned twice
     must agree). allow_none: before any prereg log exists (tier 1's emit), no pins is an empty table."""
-    results = root / "results" / "int4"
-    pre, extra = sorted(results.glob("w4v_prereg_*.log")), sorted(results.glob("w4v_pins_*.log"))
+    (pre, p1), (extra, p2) = live("w4v_prereg_*.log", root), live("w4v_pins_*.log", root)
+    if p1 + p2:
+        raise SystemExit(f"pins refused: {'; '.join(p1 + p2)}")
     if allow_none and not pre and not extra:
         return {}
     if len(pre) != 1 or len(extra) > 1:
@@ -639,7 +784,7 @@ STAGES = ("selftest", "controls", "parity", "repro", "emit1", "prereg", "screen1
           "decisive", "verdict")   # w4v-eval.sh's stages, in run order
 DETS_LINE = r"^DETS_SHA256 [0-9a-f]{64} \S+$"
 SRC_TREE_LINE = r"^SRC_TREE [0-9a-f]{40,64}$"
-CONTROL_FAIL = r"^W4V_CONTROL \S+ \S+ FAIL"
+CONTROL_FAIL = r"^W4V_CONTROL \S+ \S+( \S+)? FAIL"   # one scope token, or C5b's two (v2.5 C: <model> <arm>)
 OWN_EXTRA = {   # the logs a stage writes beyond stage_logs' (report-only ones, the load witnesses, every decisive row)
     "parity": ["w4v_parity_c6c_env17_yolov8n_*.log"],
     "repro": ["load_w4v_repro_*.log"],
@@ -686,10 +831,47 @@ def stage_logs(stage: str, advanced: dict | None = None) -> list[tuple[str, list
     return []
 
 
+def carry_global(root: Path = ROOT) -> list[str]:
+    """v2.5 E rules 3 and 4, which every carried log needs: each file of v2.4's TOOLS_JSON at the same LF sha in
+    v2.5's (v2.5 may add files), and v2.5's protocol JSON minus its one added key equal to v2.4's."""
+    now = tools_json(root)
+    out = [f"rule 3: {rel} is not at v2.4's LF sha {s[:12]}..." for rel, s in sorted(V24_FROZEN["TOOLS_JSON"].items())
+           if now.get(rel) != s]
+    rest = {k: v for k, v in protocol().items() if k != "v2_5"}
+    if sha_bytes(json.dumps(rest, sort_keys=True).encode("utf-8")) != V24_FROZEN["PROTOCOL_JSON_SHA256"]:
+        out.append("rule 4: the protocol JSON minus v2_5 is not v2.4's")
+    return out
+
+
+def carry_problems(path: Path, success: list[tuple[str, int]], root: Path = ROOT) -> list[str]:
+    """v2.5 E: a CARRIED_V24 log stands in for its v2.5 re-run iff (1) it is listed and reads its listed LF sha,
+    (2) every hash block in it equals V24_FROZEN, (3, 4) carry_global() holds, and (5) it is committed and clean,
+    carries its success lines and holds no W4V_CONTROL FAIL line."""
+    out = []
+    want = CARRIED_V24.get(path.name)
+    if want is None or sha_lf(path) != want:
+        out.append(f"rule 1: not carried at its listed LF sha ({(want or 'unlisted')[:12]}...)")
+    if not committed_clean(path, root):
+        out.append("rule 5: is not committed and clean")
+    text = Path(path).read_text(encoding="utf-8")
+    for pattern, least in success:
+        if len(re.findall(pattern, text, re.M)) < least:
+            out.append(f"rule 5: lacks its success line {pattern}" + (f" ({least} wanted)" if least > 1 else ""))
+    if re.search(CONTROL_FAIL, text, re.M):
+        out.append("rule 5: holds a W4V_CONTROL FAIL line")
+    blocks = hash_blocks(text)
+    if not blocks or any(b != V24_FROZEN for b in blocks):
+        out.append(f"rule 2: {sum(b != V24_FROZEN for b in blocks) if blocks else 'no'} of {len(blocks)} hash blocks "
+                   f"unlike V24_FROZEN")
+    return out + carry_global(root)
+
+
 def log_problems(path: Path, success: list[tuple[str, int]], want: dict, root: Path = ROOT,
                  need_commit: bool = True) -> list[str]:
     """One stage log: committed and clean, its success lines, no W4V_CONTROL FAIL line, and at least one hash
-    block, every one equal to want (the frozen values)."""
+    block, every one equal to want (the frozen values). A CARRIED_V24 log is judged by carry_problems() instead."""
+    if Path(path).name in CARRIED_V24:
+        return carry_problems(Path(path), success, root)
     out = []
     if need_commit and not committed_clean(path, root):
         out.append("is not committed and clean")
@@ -708,10 +890,15 @@ def log_problems(path: Path, success: list[tuple[str, int]], want: dict, root: P
 
 
 def own_logs(stage: str, root: Path = ROOT) -> list[Path]:
-    """Every log the stage itself has written already, of any date, committed or not."""
+    """Every log the stage itself has written already, of any date, committed or not. A superseded v2.4 log at its
+    listed sha is not the stage's; at any other sha it is (so the stage refuses to start)."""
     results = root / "results" / "int4"
-    globs = [g for g, _ in stage_logs(stage)] + OWN_EXTRA.get(stage, [])
-    return sorted({p for g in globs for p in results.glob(g)})
+    found = set()
+    for g in [g for g, _ in stage_logs(stage)] + OWN_EXTRA.get(stage, []):
+        for p in results.glob(g):
+            if p.name not in SUPERSEDED_V24 or live(p.name, root)[1]:
+                found.add(p)
+    return sorted(found)
 
 
 def ready(stage: str, root: Path = ROOT, want: dict | None = None, starting: bool = False) -> list[str]:
@@ -732,10 +919,10 @@ def ready(stage: str, root: Path = ROOT, want: dict | None = None, starting: boo
         except SystemExit as e:
             advanced, cut_problems = {}, [str(e)]
         problems += cut_problems
-    results = root / "results" / "int4"
     for s in before:
         for pattern, success in stage_logs(s, advanced):
-            found = sorted(results.glob(pattern))
+            found, sup = live(pattern, root)
+            problems += [f"{s}: {p}" for p in sup]
             if len(found) != 1:
                 problems.append(f"{s}: {len(found)} {pattern}, want exactly one")
                 continue
@@ -899,8 +1086,9 @@ def common_problems(rows: list[dict], pinned: dict) -> list[str]:
     for r in rows:
         if r["ort"] != ORT_VERSION or r["ort_opt"] != EVAL["ort_opt"] or r["threads"] != EVAL["threads"]:
             problems.append(f"{r['log']}: ORT {r['ort']}, ort-opt {r['ort_opt']}, threads {r['threads']}")
-        if r["triple"] != want:
-            problems.append(f"{r['log']}: its frozen triple or TOOLS_JSON differs from this tool's")
+        if r["triple"] != (V24_FROZEN if r["log"] in CARRIED_V24 else want):   # a carried row holds v2.4's (E rule 2)
+            problems.append(f"{r['log']}: its frozen triple or TOOLS_JSON differs from this tool's"
+                            + (" (v2.4's, as carried)" if r["log"] in CARRIED_V24 else ""))
         names = set(by_sha.get(r["sha256"], []))
         wanted = ({f"{r['model']}_cut_xint8.onnx"} if r["arm"] == "b8" else
                   {f"{r['model']}_w4v_{r['arm']}.onnx", f"{r['model']}_w4v_{r['arm']}_ortonly.onnx"})
@@ -942,6 +1130,27 @@ def required_controls() -> list[tuple[str, str]]:
     return req
 
 
+def v24_pins(root: Path = ROOT) -> tuple[dict, list[str]]:
+    """The superseded v2.4 prereg log's PIN lines (path -> sha256), read only while it is committed and clean at its
+    listed LF sha."""
+    name = next(n for n in SUPERSEDED_V24 if n.startswith("w4v_prereg_"))
+    p = Path(root) / "results" / "int4" / name
+    if not p.is_file() or sha_lf(p) != SUPERSEDED_V24[name] or not committed_clean(p, root):
+        return {}, [f"{name}: not committed and clean at its listed LF sha, so its pins cannot be read"]
+    return ({path: sha for sha, path in re.findall(r"^PIN ([0-9a-f]{64})  (\S+)$", p.read_text(encoding="utf-8"),
+                                                    re.M)}, [])
+
+
+def v24_pins_problems(files: list[str], root: Path = ROOT) -> list[str]:
+    """v2.5 E: the v2.5 prereg pins exactly the v2.4 prereg's files, at equal shas, or refuses."""
+    old, problems = v24_pins(root)
+    new = {shown(f): sha_file(f) for f in files}
+    print(f"V24_PINS_EQUAL {old == new} (v2.4 prereg {len(old)} files; this prereg {len(new)})", flush=True)
+    if not problems and old != new:
+        problems.append("the v2.5 prereg does not pin exactly the v2.4 prereg's files at equal shas")
+    return problems
+
+
 def refuse(problems: list[str], what: str) -> int:
     for p in problems:
         print(f"PROBLEM {p}")
@@ -978,9 +1187,11 @@ def cmd_prereg(args, tier2: bool) -> int:
         # every earlier stage's committed logs (controls, parity, repro, sensitivity, emit1 and the selftest):
         # their success lines, and every hash block equal to this tool's
         problems += ready("prereg")
-        existing = sorted(RESULTS.glob("w4v_prereg_*.log"))
+        existing, sup = live("w4v_prereg_*.log")
+        problems += sup
         if existing:
             problems.append(f"a prereg log exists already: {[p.name for p in existing]}")
+        problems += v24_pins_problems(args.files)
         for m, files in MODEL_PIN.items():
             for kind, (path, want) in files.items():
                 got = sha_file(ROOT / path)
@@ -1224,8 +1435,8 @@ def cmd_dets_sha(path: str) -> int:
 def selftest() -> int:
     """Synthetic data only: no model, COCO image, capture, arm file or detections JSON is read. The git checks run in
     a throwaway repository under the system temp directory, on copies of the tool files. Read-only, it also reads the
-    repo's own sources (the frozen values, TOOLS_JSON's import graph), and the --advanced and --c8 children it starts
-    read the committed W4V logs in results/int4/, if any."""
+    repo's own sources (the frozen values, TOOLS_JSON's import graph) and the committed carried and superseded v2.4
+    logs (v2.5 E), and the --advanced and --c8 children it starts read the committed W4V logs in results/int4/."""
     import numpy as np
     fails = []
 
@@ -1235,8 +1446,11 @@ def selftest() -> int:
             fails.append(what)
 
     h1 = hashes()
-    expect(f"the embedded text is the accepted v2.4 (LF sha256 {PREREG_SHA[:8]}...)",
-           h1["PREREG_TEXT_SHA256"] == PREREG_SHA)
+    expect(f"the embedded text is the accepted v2.4 + v2.5 (LF sha256 {PREREG_SHA[:8]}...): v2.4's part is "
+           f"{PREREG_V24_SHA[:8]}... (V24_FROZEN's), v2.5's is {PREREG_V25_SHA[:8]}..., joined by one newline",
+           h1["PREREG_TEXT_SHA256"] == PREREG_SHA and PREREG == PREREG_V24 + "\n" + PREREG_V25
+           and sha_bytes(PREREG_V24.encode("utf-8")) == PREREG_V24_SHA == V24_FROZEN["PREREG_TEXT_SHA256"]
+           and sha_bytes(PREREG_V25.encode("utf-8")) == PREREG_V25_SHA)
     expect("the triple is stable across calls", h1 == hashes())
     global KILL_LINE
     saved, KILL_LINE = KILL_LINE, 1.5
@@ -1245,6 +1459,36 @@ def selftest() -> int:
     finally:
         KILL_LINE = saved
     expect("the matrix has 17 tier-1 and 12 tier-2 arms", (len(arms(1)), len(arms(2))) == (17, 12))
+
+    # v2.5 E on this checkout: rules 3 and 4, the carried and superseded tables against the committed logs, and the
+    # widened FAIL regex (read-only: the committed W4V logs in results/int4/)
+    rest = {k: v for k, v in protocol().items() if k != "v2_5"}
+    expect("rule 4: the protocol JSON minus v2_5, its one added key, is v2.4's (PROTOCOL_JSON_SHA256 46297af6...)",
+           sha_bytes(json.dumps(rest, sort_keys=True).encode("utf-8")) == V24_FROZEN["PROTOCOL_JSON_SHA256"]
+           and set(protocol()) - set(rest) == {"v2_5"} and rest == protocol_v24())
+    expect("rule 3: every file of v2.4's TOOLS_JSON is at its v2.4 LF sha, and v2.5 adds exactly the C5b tool",
+           carry_global() == [] and set(tools_json()) - set(V24_FROZEN["TOOLS_JSON"]) == {C5B_TOOL}
+           and set(V24_FROZEN["TOOLS_JSON"]) <= set(tools_json()))
+
+    def success_of(name):   # the success lines ready() wants of a log with this name, or none (a witness)
+        for s in STAGES:
+            for g, succ in stage_logs(s, {m: [] for m in MODELS}):
+                if fnmatch.fnmatch(name, g):
+                    return succ
+        return []
+    carried = {n: carry_problems(RESULTS / n, success_of(n)) if (RESULTS / n).is_file() else ["missing"]
+               for n in CARRIED_V24}
+    expect(f"the {len(CARRIED_V24)} carried v2.4 logs pass rules 1-5: committed and clean at their listed LF shas, "
+           f"every hash block V24_FROZEN, their success lines, no FAIL line under the widened regex",
+           all(v == [] for v in carried.values()))
+    expect(f"the {len(SUPERSEDED_V24)} superseded v2.4 logs are committed and clean at their listed LF shas, and no "
+           f"glob counts them", all((RESULTS / n).is_file() and live(n) == ([], []) for n in SUPERSEDED_V24))
+    fail_lines = ("W4V_CONTROL C5b yolov8n bc_e2 FAIL", "W4V_CONTROL C6c yolov8n FAIL (exit 1)",
+                  "W4V_CONTROL C2 yolov8s FAIL")
+    pass_lines = ("W4V_CONTROL C5b yolov8n bc_e2 PASS", "W4V_CONTROL C5 yolov8n_bc_e1 PASS", "W4V_REPORT x y FAIL")
+    expect("CONTROL_FAIL reads one scope token or C5b's two: every FAIL form trips it, no PASS or report line does",
+           all(re.search(CONTROL_FAIL, s, re.M) for s in fail_lines)
+           and not any(re.search(CONTROL_FAIL, s, re.M) for s in pass_lines))
 
     expect("delta works on the printed values", delta("27.10", "25.10") == 2.0 and delta("27.10", "25.09") == 2.01)
     expect("the cut is <= 2.00", advances(2.0) and not advances(2.01))
@@ -1348,7 +1592,7 @@ def selftest() -> int:
         expect("no prereg log: not frozen", frozen_state(tmp) != [])
         pins_a = {f"{m}_w4v_{a}{'_ortonly' if orto[m][a] else ''}.onnx": sha_bytes(f"{m}{a}".encode())
                   for m in MODELS for a in arms(1)}
-        prereg = res_dir / "w4v_prereg_desktop2_20260926.log"
+        prereg = res_dir / "w4v_prereg_desktop2_20260928.log"   # not a SUPERSEDED_V24 name
         prereg.write_text("\n".join(hash_lines(tmp) + [f"PIN {s}  scratch/w4v/arms/{n}" for n, s in pins_a.items()])
                           + "\n", encoding="utf-8")
         s_uncommitted = frozen_state(tmp)
@@ -1376,6 +1620,48 @@ def selftest() -> int:
         pins_log.unlink()
         expect("pins come from committed, clean logs only (an uncommitted pins log refuses them all)",
                table == pins_a and refused and pins(tmp) == pins_a)
+
+        # v2.5 E: a superseded log (a synthetic table) is skipped at each site at its listed sha, refused if edited
+        old_pre = res_dir / "w4v_prereg_desktop2_20260930.log"
+        old_pre.write_text(hash_lines(tmp)[0] + "\nPIN " + "d" * 64 + "  scratch/w4v/arms/old.onnx\n", encoding="utf-8")
+        old_st = res_dir / "w4v_selftest_desktop2_20260930.log"
+        old_st.write_text("[selftest] PASS\n", encoding="utf-8")
+        new_st = res_dir / "w4v_selftest_desktop2_20260926.log"
+        new_st.write_text(("\n".join(hash_lines(tmp)) + "\n[selftest] PASS\n") * 2, encoding="utf-8")
+        g("add", "-A")
+        g("commit", "-q", "-m", "superseded")
+        saved_sup = SUPERSEDED_V24
+        globals()["SUPERSEDED_V24"] = {old_pre.name: sha_lf(old_pre), old_st.name: sha_lf(old_st)}
+        try:   # the table is in protocol(), so the hash blocks differ under the patch: only the counts are read here
+            def st_problems():
+                return [p for p in ready("controls", tmp) if "want exactly one" in p or "superseded" in p]
+
+            def pre_problems():
+                return [p for p in frozen_state(tmp) if "prereg_*.log files" in p or "superseded" in p]
+            u_live = live("w4v_prereg_*.log", tmp)
+            u_frozen, u_pins, u_own, u_ready = pre_problems(), pins(tmp), own_logs("prereg", tmp), st_problems()
+            old_pre.write_text(old_pre.read_text(encoding="utf-8") + "edited\n", encoding="utf-8")
+            old_st.write_text("edited\n", encoding="utf-8")
+            e_live, e_frozen, e_own, e_ready = live("w4v_prereg_*.log", tmp), pre_problems(), own_logs(
+                "prereg", tmp), st_problems()
+            try:
+                pins(tmp)
+                e_pins = False
+            except SystemExit:
+                e_pins = True
+        finally:
+            globals()["SUPERSEDED_V24"] = saved_sup
+            g("checkout", "--", old_pre.relative_to(tmp).as_posix(), old_st.relative_to(tmp).as_posix())
+            g("rm", "-q", old_pre.relative_to(tmp).as_posix(), old_st.relative_to(tmp).as_posix(),
+              new_st.relative_to(tmp).as_posix())
+            g("commit", "-q", "-m", "superseded, removed")
+        expect("superseded (v2.5 E): a listed log at its sha is skipped by live(), frozen_state() (one prereg log), "
+               "pins() (its PIN lines unread), ready()'s stage_logs (one selftest log) and own_logs(); edited, it is a "
+               "PROBLEM or a refusal at each",
+               u_live == ([prereg], []) and u_frozen == [] and u_pins == pins_a and u_own == [prereg]
+               and u_ready == [] and e_live[0] == [prereg] and len(e_live[1]) == 1
+               and any("superseded" in p for p in e_frozen) and e_pins and old_pre in e_own
+               and any("superseded" in p for p in e_ready))
 
         def cut_log(text):
             p = res_dir / "w4v_cut_tier1_desktop2_20260926.log"
@@ -1447,7 +1733,7 @@ def selftest() -> int:
         s_ctrl_fail = ready("parity", tmp)
         expect("parity waits for both controls logs' PASS lines; a committed controls FAIL log refuses it",
                s_ctrl == [] and any("w4v_controls_yolov8s" in p for p in s_ctrl_fail))
-        emit = put("w4v_emit1_yolov8n_desktop2_20260926.log", (blk + "W4V_CONTROL C5 yolov8n_bc_e1 PASS\n") * 14
+        emit = put("w4v_emit1_yolov8n_desktop2_20260928.log", (blk + "W4V_CONTROL C5 yolov8n_bc_e1 PASS\n") * 14
                    + "W4V_DONE emit1 yolov8n\n", commit=False)
         emit1_success = dict(stage_logs("emit1"))["w4v_emit1_yolov8n_*.log"]
         expect("an emit log's 14 equal hash blocks pass; --pins reads an uncommitted emit log (need_commit off), "
@@ -1493,6 +1779,60 @@ def selftest() -> int:
         verdict_log.unlink()
         expect("the verdict runs once: its --ready refuses while a verdict log exists, of any date",
                not restart(s_v0) and any("w4v_verdict_desktop2_20260920" in p for p in restart(s_v1)))
+
+        # v2.5 E: a carried log (synthetic tables): accepted in place of its stage's v2.5 run, then each rule broken
+        v24_syn = {"PREREG_TEXT_SHA256": "1" * 64, "PROTOCOL_JSON_SHA256": V24_FROZEN["PROTOCOL_JSON_SHA256"],
+                   "VERDICT_CODE_SHA256": "2" * 64,
+                   "TOOLS_JSON": {k: v for k, v in tools_json(tmp).items() if k != C5B_TOOL}}
+        blk24 = "\n".join([f"{k} {v24_syn[k]}" for k in ("PREREG_TEXT_SHA256", "PROTOCOL_JSON_SHA256",
+                                                           "VERDICT_CODE_SHA256")]
+                          + ["TOOLS_JSON " + json.dumps(v24_syn["TOOLS_JSON"], sort_keys=True)]) + "\n"
+        c_name = "w4v_controls_yolov8n_desktop2_20260920.log"
+        c_succ = dict(stage_logs("controls"))["w4v_controls_yolov8n_*.log"]
+        c_good = blk24 + "W4V_CONTROL C0 yolov8n PASS\n[controls] yolov8n PASS\n"
+        saved_carry, saved_cut = (CARRIED_V24, V24_FROZEN), CUT_LINE
+        try:
+            globals()["V24_FROZEN"] = v24_syn
+
+            def carried(text, commit=True):   # each call writes new content, so its commit is never empty
+                p = put(c_name, text, commit)
+                globals()["CARRIED_V24"] = {c_name: sha_lf(p)}
+                return log_problems(p, c_succ, want, tmp)
+            k_ok = carried(c_good)
+            p_c = res_dir / c_name
+            globals()["CARRIED_V24"] = {c_name: "0" * 64}
+            k_1 = log_problems(p_c, c_succ, want, tmp)
+            globals()["CARRIED_V24"] = {c_name: sha_lf(p_c)}
+            pow2.write_bytes(pow2.read_bytes() + b"\n")
+            k_3 = log_problems(p_c, c_succ, want, tmp)
+            g("checkout", "--", "quant/pow2.py")
+            globals()["CUT_LINE"] = 2.5
+            k_4 = log_problems(p_c, c_succ, want, tmp)
+            globals()["CUT_LINE"] = saved_cut
+            k_2 = carried(blk + "W4V_CONTROL C0 yolov8n PASS\n[controls] yolov8n PASS\n")
+            k_5b = carried(blk24 + "W4V_CONTROL C0 yolov8n PASS\n")
+            k_5c = carried(c_good + "W4V_CONTROL C5b yolov8n bc_e2 FAIL\n")
+            k_5a = carried(c_good + "x\n", commit=False)
+            row = {"log": c_name, "ort": ORT_VERSION, "ort_opt": EVAL["ort_opt"], "threads": EVAL["threads"],
+                   "triple": v24_syn, "sha256": "e" * 64, "model": "yolov8n", "arm": "b8"}
+            k_rows = (common_problems([row], {"yolov8n_cut_xint8.onnx": "e" * 64}),
+                      common_problems([{**row, "triple": frozen_values()}], {"yolov8n_cut_xint8.onnx": "e" * 64}))
+            globals()["CARRIED_V24"] = {}
+            k_rows += (common_problems([row], {"yolov8n_cut_xint8.onnx": "e" * 64}),)
+        finally:
+            (globals()["CARRIED_V24"], globals()["V24_FROZEN"]), globals()["CUT_LINE"] = saved_carry, saved_cut
+            g("checkout", "--", "quant/pow2.py")
+            g("rm", "-q", "-f", f"results/int4/{c_name}")
+            g("commit", "-q", "-m", "carried, removed")
+        expect("carried (v2.5 E): a listed log with V24_FROZEN blocks stands in for its v2.5 run, and its row's v2.4 "
+               "triple is accepted; refused on rule 1 (another sha), 2 (a v2.5 block), 3 (a tool changed), 4 (the "
+               "protocol minus v2_5 changed), 5 (uncommitted; no success line; a C5b FAIL line); an unlisted row "
+               "with the v2.4 triple is refused",
+               k_ok == [] and any(p.startswith("rule 1") for p in k_1) and any(p.startswith("rule 2") for p in k_2)
+               and any(p.startswith("rule 3") for p in k_3) and any(p.startswith("rule 4") for p in k_4)
+               and any("not committed" in p for p in k_5a) and any("success line" in p for p in k_5b)
+               and any("FAIL" in p for p in k_5c)
+               and k_rows[0] == [] and k_rows[1] != [] and k_rows[2] != [])
 
         # F4: SRC_TREE is the tree HEAD records for src/, refused unless src/ is clean against it
         t_none = src_tree(tmp)
@@ -1704,7 +2044,7 @@ def main() -> int:
 
 # ------------------------------------------------------------ the plan (PREREG: the accepted text, verbatim)
 
-PREREG = r"""# W4V step 5, pre-registration text, v2.4: post-training W4 recovery on YOLOv8n and YOLOv8s (2026-09-25)
+PREREG_V24 = r"""# W4V step 5, pre-registration text, v2.4: post-training W4 recovery on YOLOv8n and YOLOv8s (2026-09-25)
 
 Status: accepted by the gate (LF sha256 = PREREG_SHA) and embedded in `tools/w4v_verdict.py`. At acceptance no W4V
 method had read an image, and nothing had run but the synthetic selftests.
@@ -2448,6 +2788,468 @@ nothing; every file read is listed with its sha256, and every trust check passes
 Note (2026-09-25): yolov8n-cut's 0 patterns is MEASURED, no longer an expectation: Quark and quant/ both count 0 on the prepared graph (`results/quant/prepare_probe_yolov8n_cut.log:269, :296`).
 ```
 """
+
+PREREG_V25 = r"""# W4V pre-registration v2.5: the amendment after the screen1 STOP (DRAFT, 2026-09-26)
+
+**Status:** accepted by the user on 2026-09-26 after the gate's review. It is the reviewed draft (LF `dfea7430…`) unchanged except for this Status block; the title keeps the draft's wording. It is embedded in `tools/w4v_verdict.py` as PREREG's v2.5 part.
+- Nothing runs under v2.5 before its prereg stage freezes the triple.
+- v2.5 is v2.4 with the sections below added. Section references are to v2.4's text (`tools/w4v_verdict.py` PREREG,
+  LF `7ff9c2c4…`).
+- No frozen tool changes: `5_eval_map.py`, `w4_recover.py`, `w4a8_*`, `quant/` and `npu/` stay as they are.
+- What changes:
+  - the text;
+  - the protocol JSON, by one added key, `v2_5`;
+  - the verdict code: `w4v_verdict.py` and `w4v-eval.sh`;
+  - TOOLS_JSON, by one added root, `tools/w4v_bias_audit.py`;
+  - new evidence files.
+- Figures carry MEASURED, DERIVED or ESTIMATE. None of them is an mAP or H figure.
+
+---
+
+## A. Preamble: what happened, and what is on the record
+
+**The STOP (MEASURED, `scratch/w4v/monitor/ram_screen1.log` and the runner's output).**
+- screen1 ran on the gate's GO from 07:27:40 to 07:42:12Z, 872 s, and ended with rc 1.
+- Row 24 of 36, `w4v_screen_yolov8s_bc_e1_n500`, printed `0 detections over 500 images` (5_eval_map.py:233). It wrote
+  its detections file (:239-240), then raised `SystemExit("no detections at all -- something is broken upstream")`
+  (:243). The runner stopped the stage, as §10 requires.
+  - Its file was the pinned one (`2700ece0…`). Its setup was normal.
+- 23 rows were complete and clean: all 18 YOLOv8n rows, plus YOLOv8s B8 and rtn_e1, rtn_e2, rtn_u, rtn_f.
+- 12 YOLOv8s rows and the cut never ran. Under §10 the screen is INCOMPLETE.
+- **The held files, never committed and not read since:**
+  - the 24 row logs;
+  - the load witness;
+  - the 24 detections files in `scratch/w4v/dets/`.
+
+**No metric line was read (INT4's statement, for the record).**
+- INT4 has not read the metric line of any completed screen1 row.
+- Method, the session transcript: no tool result since 2026-09-26T07:27:00Z carries an mAP-like figure (`mAP…`, `AP`,
+  `H_500` or `H (n images)` followed by a 2-decimal number). The last metric line in any tool result of that session
+  is dated 2026-09-25T20:14Z and carries no W4V stem.
+- The runner's console output holds 23 metric lines. It was never opened; it was only count-grepped.
+- The row logs, the witness and the detections were never opened. INT4's per-file check prints only `DETS_SHA256`,
+  `W4V_CONTROL`, `W4V_REPORT` and `Traceback` lines.
+- `0 detections over 500 images` is the eval's detection-count line (:233), not a metric line. The failing row never
+  reached the metric print (:250).
+
+**The audit (the gate's ruling of 2026-09-26; criteria fixed before any run).**
+- **The criteria.** An arm is a DEFECT if any of these holds:
+  - (a) in any Conv, the emitted int32 bias, dequantized at its stored scale, differs from an independent
+    recomputation of §3.2 by more than 1 LSB (of s_x·s_w for that channel) in any channel;
+  - (b) any Conv's int32 bias scale is not its s_x·s_w as read from the QDQ graph;
+  - (c) any bias channel is clamped or saturated short of `make_bias`'s overflow refusal;
+  - (d) any int32 bias is wired to the wrong Conv, has the wrong length, or carries a nonzero zero point or a scale
+    other than (b)'s.
+- **The script:** `w4v_bc_audit.py`, sha256 `dbc4b7bb4d2d0195f4becf479b4711732f62d0a9f3952fcbfc3c06e34741bd89`.
+  - It is new code written from §3.2 and never imports `w4_recover.py` or `quant/`.
+  - The gate read it and accepted it before any (a) result existed.
+  - It has two walks:
+    - SEQ: an independent sequential walk from the pinned RTN file;
+    - ANCHORED: the fixed-point test on the arm file's own sequential inputs.
+  - Its self-checks are bit-identity checks.
+- **Results (MEASURED; logs in `scratch/w4v/audit/`, cited under B.6):**
+
+  | arm | (a) SEQ | (a) ANCHORED | (b) | (c) | (d) | outcome |
+  |---|---|---|---|---|---|---|
+  | yolov8n bc_e1 (the control) | 0/63 Conv beyond 1 LSB, max 0.500 | 0/63, max 0.500 | False | False | False | GENUINE |
+  | yolov8s bc_e1 | 0/63, max 0.500 | 0/63, max 0.500 | False | False | False | GENUINE |
+  | yolov8s bc_e2, bc_u, vc_e1, vc_e2, vc_u | not run (static only) | not run | False | False (static) | False | — |
+
+  - The emitted int32 equals SEQ's on 63/63 Conv for yolov8s bc_e1.
+  - No channel is clamped, and no SEQ value overflows.
+  - Every self-check is True. No import of `w4_recover.py` or `quant/`.
+  - Every file equals its prereg PIN, and the calibration listing equals its pin.
+- **Tensor facts (MEASURED, 16 C3 images, letterboxed as the eval does):**
+  - (i) class-logit outputs at the output quantizer's minimum code: 0/10,752,000 for rtn_e1, and the same for bc_e1;
+  - (ii) no Conv has bc_e1's per-channel mean error above rtn_e1's in more than half its channels.
+- **The mechanism of the zero detections is UNEXPLAINED.** v2.5 states no mechanism.
+  - The audit rules out a bias-emission defect on the pre-stated criterion.
+  - (i) shows that no class logit of either arm sits at the output quantizer's floor.
+  - (ii) shows that no Conv has BC's mean error exceeding RTN's in most of its channels.
+  - Neither fact explains the row.
+
+**The machine (the gate's dating from run timings; the user replaced the part).**
+- Desktop 2's CPU fan failed between about 07:42 and 08:08Z on 2026-09-26. It was replaced before the 12:25:44Z
+  reboot, and is the likely cause of the two unclean stops:
+  - after the 08:08Z audit run's last write at 08:24:43Z;
+  - at about 11:27Z, during the 11:11Z run.
+  - 08:23:48Z is event 6008's last-alive stamp, not the stop.
+- Every W4V log up to 07:42Z predates it: controls, parity, repro, emit1, prereg and the held screen1 rows.
+- The audit runs at 08:08, 10:58 and 11:11Z ran throttled, about 7-8x slow. Their results do not depend on speed.
+- **Partial and superseded, never deleted:**
+  - `recompute_yolov8n_desktop2_20260926.log` (CONV 0-40 of 63), superseded by `recompute_yolov8n_rerun_…`;
+  - `recompute_yolov8s_rerun_desktop2_20260926.log` (CONV 0-19), superseded by `recompute_yolov8s_rerun2_…`.
+- From v2.5 on, any W4V run longer than 15 min holds:
+  - the per-run keep-awake (`SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED)`, released at the runner's
+    exit; no power setting changes);
+  - HWiNFO CSV logging (`Documents\HWiNFO-logs`);
+  - the RAM monitor.
+  - Known limit: the RAM monitor's psutil tree does not reach a python started under Git Bash, because the msys fork
+    stub exits. Its available-RAM samples are right, but its stop does not reach the python. That python's pid is
+    stopped by hand on two samples under 2 GB.
+
+**C5, corrected.**
+- §7 lists C5's bias item as part of "graph_diff against the shipped file plus exactly the intended rewrite". It is
+  more than that, and less than an independent check.
+- `check_arm` (w4_recover.py:344-358) checks each int32 bias numerically: its scale must equal the method's own
+  `float32(s_x) · w_scale(row)`, and `i32 · scale` must lie within half a step of the method's own float b′. It
+  printed 63/63 for every BC and VC arm in emit1.
+- The check is self-referential: it compares b′ with itself. It verifies the rounding and the scale of the method's
+  output, never b′ against §3.2.
+- The graph_diff part is value-blind for biases, because the expected graph takes its bias values from the emitted
+  file (:290-294).
+- C5b (section C) is the independent check.
+
+**Conv order, INFO.**
+- §3 says GPTQ, BC and VC "walk the XINT8 graph's Conv order". BC walked the emitted files' Conv node order: the emit1
+  `[seq]` lines equal the arm file's order.
+- That order differs from the shipped XINT8 file's node order from position 38, where the model.18 and model.21 cv1
+  convs trade places with the model.22 cv2.x.1 and cv3.x.1 convs.
+- All three orders (shipped, arm file, walked) are dependency-consistent in the shipped graph, with 0 Conv pairs out
+  of order (MEASURED). A sequential walk therefore gives the same result in each.
+- So it is a textual mismatch, with no numeric consequence. v2.5 reads §3's phrase as "a dependency-consistent order
+  of the XINT8 graph's Convs".
+
+---
+
+## B. Zero-detection rows (new §5.1; applies to every eval row W4V scores)
+
+**B.1 Definition.** A *zero-detection row* is an eval row whose `5_eval_map.py` run did all of these:
+- printed `0 detections over <N> images in <s>s` (:233), with N equal to the row's image count (500 or 5,000);
+- printed `wrote <its --dets path>` (:240);
+- exited with `no detections at all -- something is broken upstream` (:243), rc 1.
+
+It also has these properties:
+- its detections file exists and parses as an empty JSON list: count 0; `[]`, 2 bytes, for the held row;
+- its log has no `DETS_SHA256` line, since the runner prints that only after the eval succeeds;
+- its `model sha256` line (:186) equals the arm's pinned sha;
+- it has no `skip unreadable` line.
+
+**B.2 The figure is defined by rule.**
+- pycocotools 2.0.11 cannot score an empty result list: `COCO.loadRes` indexes `anns[0]` (coco.py:330) after its two
+  asserts.
+- Zero detections give zero recall at every IoU threshold. v2.5 **defines** a zero-detection row's figures as **AP
+  0.00 on its N images and 0.00 on H**, from the same (empty) detections file. Nothing is rescored.
+- The definition agrees with COCOeval's own code on these image sets (source read in resnet_env17; nothing scored):
+  - `evaluateImg` returns None only for an image with neither ground truth nor detections (cocoeval.py:247-248);
+  - so for every category with non-ignored ground truth, zero detections give recall 0 (:392), and precision stays 0
+    through the `except: pass` path (:403-409);
+  - the -1 "absent" sentinel (:334) survives only for categories with no ground truth (:360-361, :373-374), and
+    `summarize` leaves those out (:452-453).
+  - The 500 and H_500 both hold ground truth, so COCOeval, if it could load the empty list, would give 0.00, not -1.
+
+**B.3 When a zero-detection row is recorded.**
+- **Arms with int32 biases** (BC, VC, AdaRound + BC, GPTQ + BC):
+  - the row is recorded as AP 0.00 iff a committed audit log for **that exact arm file sha** ends `HELD … (a) False
+    (ANCHORED agrees: True) (b) False (c) False (d) False -> GENUINE`;
+  - that log must come from the accepted script (dbc4b7bb) or from C5b's tool (section C), and must print `IMPORTS …
+    none`;
+  - otherwise the stage stops. The arm is audited on (a)-(d) before anything else, and the result goes to the gate.
+- **A DEFECT:**
+  - the stage stops; the arm gets no row;
+  - the fix in `w4_recover.py`, its validation by (a)-(d) on the affected arm and on one GENUINE control arm, the
+    re-emit of every arm the fixed code path emits, and their re-pin form a **v2.6** amendment, which goes to the gate
+    and to the user;
+  - "detections appeared" never validates a fix.
+- **Arms with no int32 bias** (RTN, AdaRound, GPTQ, MX): (a)-(d) are vacuous there, since their biases are the
+  shipped int8 ones.
+  - Recommended: a zero-detection row of such an arm is a STOP, as in v2.4. It goes to the gate, with no AP 0.00 by
+    rule. (Decision D2.)
+  - Why: their emitted weights are checked only by C5's self-referential float identity, and no pre-registered audit
+    covers them. Recording 0.00 would enter an unexplained, unchecked result as a method result.
+- **B8, and the RTN rows of C9:** a zero-detection row there is always a STOP. B8 is the shipped file, and C9 is a
+  control.
+
+**B.4 The completion record (no frozen tool edited, the row log untouched).**
+- A new command, `w4v_verdict.py --zerodet --log <row log> --dets <dets file> --audit <audit log>`, writes
+  `results/int4/w4v_zerodet_<model>_<arm>_n<N>_<machine>_<date>.log`.
+- **What it prints:**
+  - the hash block;
+  - the row log's name and LF sha256;
+  - the dets path, its sha256 and the count 0;
+  - the audit log's name, its LF sha, its HELD line and the arm file sha it covers;
+  - `ZERO_DET_ROW <row> AP_N 0.00 AP_H 0.00 (rule B.2)`.
+- **It refuses unless** B.1 holds line by line, and the audit log is committed and clean and satisfies B.3.
+  - The arm file's sha is taken from the audit log's `PIN_CHECK` line for the arm file, never from a log name, and
+    must equal the arm's current pin (`pins()`). So an arm re-pinned after a v2.6 can never cite a stale audit.
+- **The row log stays byte-identical.** The record is the only added file.
+- **In the runner** (`w4v-eval.sh` `eval_row`), when `row_body` fails:
+  - it checks for B.1's exact exit;
+  - if B.1 holds, it looks up the arm's audit log in the protocol's `v2_5.audits` table and calls `--zerodet`;
+  - a refusal stops the stage exactly as in v2.4;
+  - a record lets the stage go on to the next row.
+- **In `ready()`, `stage_logs()` and `--screen`:**
+  - a screen or decisive row counts as present iff its log has `DETS_SHA256` (v2.4) or a committed, clean
+    `w4v_zerodet_*` record names it and re-verifies (B.1 and the dets sha);
+  - `parse_eval_log` reads such a row's image count from :233 and its ORT, thread and model-sha lines from :184-186;
+  - `dets_check` is bypassed for it, and its figures are 0.00 and 0.00 by rule.
+  - The cut, the flag and K-D then apply unchanged. B8_500 − 0.00 > 2.0, so the arm is cut. It is not flagged, since
+    B8_H − 0.00 > 2.0. It can never pass K-D.
+
+**B.5 Scope.**
+- B applies to every eval row W4V scores: both screens and the decisive run.
+- **emit2 arms:**
+  - the tier-2 +BC arms (AdaRound + BC, GPTQ + BC) fall under B.3's int32-bias branch. Their C5b log (section C) is
+    their audit, so a zero-detection row with a C5b PASS is recorded directly;
+  - MX-AdaRound and MX-GPTQ carry no int32 bias. They fall under the no-bias branch: STOP, if D2 is taken as
+    recommended.
+- A decisive row cannot be a zero-detection row of an advanced arm unless its 5,000-image run differs from its screen
+  in kind. The rule still covers it.
+
+**B.6 The audit's evidence is committed before it is cited.**
+- **The audit logs** move from `scratch/w4v/audit/` to a new `results/int4/w4v_audit/`: names unchanged,
+  byte-identical, with a `results/README.md` row.
+  - They are CRLF, so each is labelled "working copy X; its LF blob Y".
+  - Every one first passes the gate's detection pass (D.2).
+
+  | log | what | LF sha256 |
+  |---|---|---|
+  | static_yolov8n_desktop2_20260926.log | (b)-(d), yolov8n bc_e1 | `0f04d645ff9d6d42480d36d2d70ffae126ab3a1968983ac7279876dcedbc831e` |
+  | static_yolov8s_desktop2_20260926.log | (b)-(d), 6 yolov8s arms | `2225f7179fe1959325d384635d931c73e7af213068c37daf214ecc98ba89d571` |
+  | recompute_yolov8n_rerun_desktop2_20260926.log | (a)-(d), yolov8n bc_e1: GENUINE | `6cb4d247199a46e0dc5ae0843003c73b9dde043791a7e0508e8aa6d5c63950f7` |
+  | recompute_yolov8s_rerun2_desktop2_20260926.log | (a)-(d), yolov8s bc_e1: GENUINE | `8ac21b7e3b00ecf91467095c367c039d14c0c1dfc395da7b0d4781f835e0c3fd` |
+  | tensors_yolov8s_rerun2_desktop2_20260926.log | (i), (ii) | `d8f2e5dab3c3cd116f5cfc00cb9704208077715d79bf021314ff61b4bc9f4f39` |
+  | recompute_yolov8n_desktop2_20260926.log | PARTIAL (CONV 0-40), superseded | `b52aa5378198397b8e9b60fd6b0f89b5c56956f8e36dc3a14ba72c5a3392801b` |
+  | recompute_yolov8s_rerun_desktop2_20260926.log | PARTIAL (CONV 0-19), superseded | `6217213499e82dcfe72fe82d6e4b632a308774dbf8cef95a6d7b0193d17a0a47` |
+
+- **The script** is committed byte-identical (sha `dbc4b7bb…`) beside the logs as evidence of what ran, not as a tool:
+  `results/int4/w4v_audit/w4v_bc_audit.py`.
+  - Its docstring still says "uncommitted". That is stale, and the line is kept so that the sha holds.
+  - Where it lives is decision D4.
+- **Not committed:** the keep-awake helper and its logs, the sequence scripts and the RAM monitor logs. They are
+  scratch helpers, and the gate's rule keeps the helper uncommitted. They hold profile paths.
+
+---
+
+## C. C5b, the independent bias check (new control; the gate's preference)
+
+**The tool:** `tools/w4v_bias_audit.py`, a new TOOLS_JSON root (AGPL header).
+- It is `w4v_bc_audit.py` (dbc4b7bb) with the arm and its base as parameters. Its static (b)-(d), SEQ, ANCHORED and
+  self-check code stay line for line, so the gate can diff it against dbc4b7bb.
+- It reads its pins through `w4v_verdict.pins()`, not a hard-coded prereg log name.
+- It drops the tensors mode, which was a diagnostic.
+- It prints dbc4b7bb's `IMPORTS w4_recover or quant loaded: none` line.
+- Its new sha goes to the gate before any use.
+- **Its TOOLS_JSON addition**, as the import-graph code (`import_graph`, :242) computes it:
+  - it reaches `w4v_verdict.py`, which is VERDICT_CODE's and excepted from TOOLS_JSON (:223-225, and the selftest's
+    set check at :1564). `w4_recover.py` already reaches that file today;
+  - it reaches `npu/yolo.py`, which is already in;
+  - so the expected addition is exactly `tools/w4v_bias_audit.py`. F.2 confirms it by running that computation
+    (light, no inference) before the text is frozen.
+- **Validation before any use (the gate's precondition).** Run on yolov8n bc_e1 and yolov8s bc_e1, it must reproduce
+  the committed GENUINE logs (B.6):
+  - every CONV line, line for line with the timings stripped;
+  - the (b), (c), (d), SELFCHECK and HELD lines.
+  - The gate checks it with its own parser. A diff against dbc4b7bb alone is not enough.
+
+**Per method:**
+
+| method | SEQ base (weights; starting biases) | BASE check |
+|---|---|---|
+| BC (tier 1) | the pinned `rtn_<form>` file; its shipped biases | the arm's non-bias initializers == the base's |
+| AdaRound + BC, GPTQ + BC (tier 2) | the pinned tier-1 `ar_<form>` / `gptq_<form>` file (w4_recover.py:843-844); its shipped biases | the same |
+| VC (tier 1) | the arm's own weights, the shipped biases as the start (§3.3 step 3: BC on the rescaled layer) | none: the weights are rescaled by design; C5 checks them, self-referentially |
+
+On a VC arm, C5b checks only the BC step on the rescaled weights. It does not check the rescale (a_c) or the
+re-quantization; C5 covers those, self-referentially.
+
+**PASS:** `HELD … (a) False (ANCHORED agrees: True) (b) False (c) False (d) False -> GENUINE` for the pinned arm sha.
+Anything else is a C5b FAIL, which is a DEFECT and falls under B.3 (STOP, v2.6).
+
+**When.** C5b runs as its own stage, before the screen of the arms it covers:
+- **`bias2`**, after emit2 and its pins, before screen2: all 12 +BC arms (6 per model). This is the gate's
+  preference, and it is recommended.
+  - ESTIMATE about 56 min: 6 × 370 s plus 6 × about 190 s.
+    - 370 s is the yolov8s SEQ, MEASURED in rerun2, unthrottled.
+    - About 190 s for yolov8n (ESTIMATE): about 2.9 s per Conv × 63, plus about 9 s. This is taken from the
+      unthrottled CONV 0-14 of the 10:58Z rerun. That run throttled after CONV 14, so no single factor applies to its
+      total.
+    - VC arms may differ.
+- **`bias1`** (decision D3; beyond the gate's ask), after the v2.5 prereg, before the screen1 re-run: the 5 tier-1
+  int32-bias arms per model not yet audited on (a) (bc_e2, bc_u, vc_e1, vc_e2, vc_u).
+  - ESTIMATE about 47 min: 5 × 370 s plus 5 × about 190 s. The VC arms may differ.
+  - Why offered: the screen1 cut uses these arms, and their biases carry only C5's self-referential check.
+  - A second reason: bias1 runs before the roughly 30-min screen1 re-run, so it is the first run over 20 min on the
+    new fan, under HWiNFO logging. The fan is proven so far for 6.3 min (rerun2, 12:32:01-12:38:19Z). bias1 closes
+    that gap before screen1.
+  - A bias1 PASS is also their B.3 audit.
+- Both stages exceed 15 min and are heavy runs: START REQUEST, keep-awake, HWiNFO and the RAM monitor.
+- Their logs are `w4v_bias{1,2}_<model>_<machine>_<date>.log`, with `W4V_CONTROL C5b <model> <arm> PASS|FAIL` lines
+  and a `W4V_DONE bias<tier> <model>` success line.
+- `STAGES` gains `bias1` (if D3 is yes) and `bias2`.
+
+---
+
+## D. screen1 under v2.5: re-run, or complete the held run (decision D1)
+
+- Section B's record defines how a zero-detection row is recorded. It applies to whichever bc_e1 row is scored; in
+  option A, that is the re-run's row.
+- The choice between A and B is the user's. The gate's position is A.
+
+**Option A: re-run from row 1 (recommended).**
+- **The held v2.4 files are archived, not deleted.** This is their first commit, so it is not a rewrite.
+  - The 24 row logs and the load witness go to `results/int4/w4v_v24_screen1_stop/`, after D.2's detection pass and
+    the witness scrub. The directory gets a `results/README.md` row.
+  - The bc_e1 row log stays byte-identical there.
+  - The 24 detections files move to `scratch/w4v/dets_v24_screen1_stop/`, git-ignored. Their sha256s go into the
+    archive commit's body.
+- **Why the move is needed:**
+  - The dets path has no date (`$DETS/w4v_screen_<model>_<arm>_n500.json`, w4v-eval.sh:220), and the runner refuses
+    an existing target (:94), so a re-run collides whatever its date.
+  - `ready()`, `own_logs()` and the runner's `ls` globs are all non-recursive (w4v_verdict.py:714, :738;
+    w4v-eval.sh:478, :563-566), so the subdirectory is invisible to them. No code has to learn about it.
+- **In the re-run:**
+  - all 36 rows and the cut run under the v2.5 triple, in one sitting: B8 and the 17 tier-1 arms per model;
+  - yolov8s bc_e1 will again be a zero-detection row. Its record cites
+    `w4v_audit/recompute_yolov8s_rerun2_desktop2_20260926.log` (GENUINE for `2700ece0…`).
+- **Report-only**, in the repro pattern (`GATE_D_DETS_SHA256`, w4v-eval.sh:197-203): each re-run row prints
+  `V24_DETS_SHA256 <archived sha> (byte-identical True|False)` against the archived v2.4 detections of the same row.
+  Printed, not required.
+- **Cost:**
+  - MEASURED: the v2.4 sitting ran 24 rows in 872 s.
+  - ESTIMATE: the full 36 rows and the cut take about 30 min, so the run needs the keep-awake and HWiNFO.
+  - One triple per stage. No resume logic.
+
+**Option B: complete the held run.**
+- The 23 complete v2.4 rows and the bc_e1 row (with its record) are carried inside a v2.5 stage.
+- The runner gains resume logic: `stage_screen1` skips the rows it carries.
+- `log_problems` accepts v2.4 hash blocks for exactly those 24 names.
+- There are two witnesses for one stage.
+- Only the 12 remaining yolov8s rows and the cut run. ESTIMATE about 15 min.
+- **Against it:**
+  - a stage with mixed triples;
+  - new resume code in the one stage that failed;
+  - a saving of about 15 min.
+
+**Recommendation: A.** It keeps one triple per stage, needs no resume path, and matches the gate's first ruling. It
+also gives a free determinism check of 24 rows.
+
+**D.2 The detection pass and the scrub (before any commit of screen1 files or audit logs; the gate's terms).**
+- **Read-only, over the load witness and the 24 row logs, and over the audit logs of B.6.** It looks for:
+  - the gate's tool-name list: (ii)'s six names plus five more, case-insensitive. The list is operational: it stays
+    in the pass's script and out of v2.5's committed text, which may hold no tool names;
+  - `Users[\\/]<name>`;
+  - the machine's hostname;
+  - the job-tmp and worktree paths.
+- Every hit is reported under (iii) with its line numbers. No metric line is printed.
+- **Then the witness fix, rule (ii), narrowed (A):**
+  - in `HOST_LOAD_TOP` lines only, the image-name token before `:<pid>` becomes `<tool>` where it matches (ii)'s six
+    names: 29 tokens;
+  - every other hit goes to the gate first;
+  - the commit body gives the pre- and post-fix sha256s and the counts;
+  - no metric line is touched.
+- If `w4v_witness_fix.py` changes, its new sha goes to the gate first.
+
+---
+
+## E. The carry-across rule (new §9.1)
+
+**The rule, stated generally.** A committed v2.4 log is accepted by v2.5's `ready()` and `log_problems()` in place of
+its v2.5 re-run iff all of these hold:
+1. **Listed:** its name and HEAD LF sha256 are in `v2_5.carried_v24` (below), and the committed file matches.
+2. **Its blocks:** every hash block in it equals `V24_FROZEN`, embedded in v2.5:
+   - PREREG_TEXT_SHA256 `7ff9c2c46e9280e5002aafb6cb573646d0c920b6257b6aba4e2ff47a08caee49`;
+   - PROTOCOL_JSON_SHA256 `46297af64e23a10df62c363f766bacc3f78faf121b5194ea8e6077b364710872`;
+   - VERDICT_CODE_SHA256 `2fc815d93451a3be1f8403d768cddb5737218d9e58abe282cc25e77fb7eb7c64`;
+   - the 30-file TOOLS_JSON the v2.4 prereg log prints.
+3. **Tools unchanged:** every file in v2.4's TOOLS_JSON has the same LF sha in v2.5's. v2.5 may add files.
+   - Its expected addition is exactly `tools/w4v_bias_audit.py`, as the import-graph code computes it (section C). A
+     run in F.2 confirms it.
+   - Any change or removal refuses every carried log, and those stages then re-run.
+4. **Inputs unchanged:** v2.5's protocol JSON minus its one added key, `v2_5`, equals v2.4's protocol JSON exactly. The
+   v2.4 JSON is embedded and checked against `46297af6…`. That covers the models and their shas, the arms, every
+   hyperparameter, the calibration listing, H, the eval settings, ORT and the threads.
+5. **As before:** committed and clean, its success lines, and no `W4V_CONTROL … FAIL`.
+
+Any log that fails 1-5 is not carried: its stage re-runs, on the gate's ruling.
+
+**Per stage:**
+
+| stage | v2.4 log(s) (HEAD LF sha256) | v2.5 | why |
+|---|---|---|---|
+| selftest | `w4v_selftest_desktop2_20260925.log` `55f34e43e42fd736c36e2d23f6a679fd73130fe26bdc6140644697fa25f3c5dd` | RE-RUN; the v2.4 log is SUPERSEDED | it tests the verdict code, which v2.5 changes. §10 requires it to cover the new behaviour synthetically: the zerodet record and its refusals, carried-log acceptance and refusal (each of 1-5 broken once), the superseded exclusion, and C5b's PASS/FAIL parsing |
+| controls | `w4v_controls_yolov8n_…20260925.log` `3230ae56d3275ece32933480ce0a8f80b8ecfaeac2f00bca7c45a7def5f6ec98`; `w4v_controls_yolov8s_…20260925.log` `851fa188434c0f9e0b2a09adb9386d205480bb0b973a6bccd2a563a0fcee7a54` | CARRY | `w4_recover` and its imports are unchanged (rule 3) |
+| parity | `w4v_parity_c6a_yolov8n_…` `d5b83902878341423e84245def7daae8396e1bc6dee599dd776f640a737053b6`; `…c6a_yolov8s_…` `df44ee761f19f40b9c92d639ff1986d159d55eccf99f4b57df87b69a2c35234b`; `…c6b_yolov8n_…` `1b0b49ebd013004a649edfaadba60fa614d1c2c2dbe9042a3f192a618536fe39`; `…c6c_yolov8n_…` `f7a14d7c739443783ca5672f648677fc552aa7120b67c55470c21993af5861da`; report-only `…c6c_env17_yolov8n_…` `6bc22cbc430f740f4d49b33ca2dfaa7de5cfa1ddd826a1e12989ef16331a6d2e` | CARRY | `quant/` is unchanged |
+| repro | `w4v_repro_<model>_<arm>_n5000_desktop2_20260925.log`: n b8 `cbdb9ae5b861b4de177f20edbeb459683bbe19e296edff8ba33a2c97c3f85a21`, n rtn_e1 `4e2eca4165cbf578f8cc19e430712a0e5f081d4a90beb5f9f25ac99cec2dfb7b`, n rtn_e2 `4f3b3d649fd49b766b40cea72cc9a82f17079732a1d90a00b37620edc8ddee42`, n rtn_u `0e70b22215c876f98c3364ee74cc252599676c1af4bc8c92ae750afb362d7a2a`, s b8 `74471da4518272671612dfa80beabc1fb075e77efcc464db8d0b733470c7383e`, s rtn_e1 `d0268253cf11f9c70344032a8539e24548b5fc435cd1639763f86279d2129493`, s rtn_e2 `bfd776faa6695ab7b2fe0b451bcd79b61e3079ee6fd0197cf0327105ed022363`, s rtn_u `50f7f0e0829a64773e6d418cbea2ce1de2dbd13474bff3d535969d243054ef3e`; `w4v_repro_c9_…` `e174c2c7096d02a1747ea8cd5469a3d899d2efcc2d5d6cb203fbe835804dc348`; witness `load_w4v_repro_…` `1a665b29cbd7c30a5994a9e36ecbe42c894363b7726e08cf2224999f86accba9` | CARRY; C9 re-derived | the eval is unchanged. The C9 PASS line was printed by v2.4's verdict code, so v2.5's `--verdict` re-derives C9 from the carried rows (the same comparison `--c9` made) and refuses on a mismatch |
+| emit1 | `w4v_sensitivity_yolov8n_…20260926.log` `4a6e64be7adc4644d2cd2639f646da8cbf4fc8489c6e3deed89c4f1851fc45e8`; `w4v_emit1_yolov8n_…` `8a70e4bc1f6e1e037f0c11570923a5c08f88dba592eb0703c4db89da6f4c9d1f`; `w4v_sensitivity_yolov8s_…` `beff7fbb90c264ed46a84eaf91eb8bc463e325bfa0b42d0930d5bbec1eb478a1`; `w4v_emit1_yolov8s_…` `605379a310388e509c0606b9081090ff2405e04260b4516e444a8093d5443a5a` (the 28 sidecars go with them) | CARRY | `w4_recover` is unchanged; the arm files keep their pins |
+| (census, not a stage) | `w4v_census_desktop2_20260925.log` `8185c5ee75278918a00fbc401fa3d36bcb38ccb57031fcec73d1ce50fa895197` | unchanged | report-only; only P1's scoring reads it |
+| prereg | `w4v_prereg_desktop2_20260926.log` `35c758eceafd53d4c99c62fadc0fe541188f694dbcd27741f620fb49567acc6e` | RE-RUN; the v2.4 log is SUPERSEDED | the prereg log is what freezes the triple. The v2.5 run must pin exactly the v2.4 log's 42 files with equal shas, or refuse |
+| screen1 | the held 24 row logs and the witness, never committed | ARCHIVED (option A), or carried (option B) | section D |
+
+**What SUPERSEDED means** (`v2_5.superseded_v24`: name and LF sha, for exactly the selftest and prereg logs above):
+- The file stays committed and untouched.
+- Every glob that would otherwise count it skips exactly that name at exactly that sha:
+  - `frozen_state()` (:548);
+  - `pins()` (:567), which never reads a superseded prereg log's PIN lines;
+  - `stage_logs()` for selftest and prereg (:659, :673), and so `ready()` (:738) and `own_logs()` (:714);
+  - `cmd_prereg`'s "a prereg log exists already" check (:981).
+- A superseded name whose sha differs is a refusal, so nothing can hide behind the list.
+
+**Names.**
+- v2.5 logs keep `<machine>_<date>` (TAG `desktop2_<date>`), because the runner's screen2 and verdict globs use
+  `_${MACHINE}_*` (w4v-eval.sh:478, :563-566).
+- A v2.5 log may never take a v2.4 log's name: the runner refuses an existing path (:94).
+- The runner's date is local (`date +%Y%m%d`, :65), which is EDT on Desktop 2. So the v2.5 prereg can run from
+  2026-09-27 00:00 EDT, which is 04:00Z, at the earliest. That is a stated cost.
+- The v2.5 selftest may run on 2026-09-26, since the v2.4 selftest is dated 20260925.
+
+**No merge of main before the verdict.**
+- main's `8b54cb6` (`quant/cli.py`) and `37d5950` (`scripts/lib.sh`) are not in worktree-int4-vision, and both files
+  are in the 30-file TOOLS_JSON.
+- A merge would change them, and rule 3 would then refuse every carried log.
+
+---
+
+## F. Order after approval (every run on the gate's GO; commits local, via commit.sh)
+
+1. **Evidence, no run.**
+   1. The detection pass (D.2) over the audit logs, then commit `results/int4/w4v_audit/` (B.6) and its README row.
+      - The script there is the first .py under results/. `tools/license_header_audit.py` (report-only, never
+        `--apply`) lists only tracked files that name AMD or Xilinx, and the script names neither: 0 matches for
+        amd|xilinx|apache today.
+      - The report-only run confirms it once the file is tracked. pytest does not collect it.
+   2. The detection pass and the witness fix over the held screen1 files, then commit
+      `results/int4/w4v_v24_screen1_stop/` and its README row. Move the dets (option A).
+      - These logs carry v2.4 metric lines. The gate reviews this commit by sha, line counts and the hygiene grep
+        only; no diff of those logs is sent.
+2. **The code.** The v2.5 text, `protocol()["v2_5"]`, `--zerodet`, the carried and superseded rules, the zero-row
+   parse, the `eval_row` branch, the `V24_DETS_SHA256` line, `bias1`/`bias2`, `tools/w4v_bias_audit.py` and the new
+   selftest cases.
+   - Each diff and sha goes to the gate before its commit.
+   - The frozen tools stay untouched.
+   - Before the text is frozen, run `import_graph()` over TOOL_ROOTS plus the new root (light, no inference), to
+     confirm TOOLS_JSON's addition set is exactly `tools/w4v_bias_audit.py`.
+   - C5b's validation (section C) runs on yolov8n bc_e1 and yolov8s bc_e1 and reproduces the committed GENUINE logs.
+     The gate checks it, before any bias1 or bias2 use. ESTIMATE about 9 min, light.
+3. **Re-freeze.**
+   - The selftest stage (light); commit.
+   - The prereg stage (light; not before 2026-09-27 00:00 EDT = 04:00Z, by the naming rule; the same 42 pins);
+     commit.
+   - v2.5's triple is now frozen.
+4. **bias1** (only if D3 is yes): START REQUEST; heavy, ~47 min ESTIMATE, keep-awake and HWiNFO; commit.
+5. **screen1** (option A): START REQUEST, ~30 min ESTIMATE, keep-awake and HWiNFO; commit the rows, the zerodet
+   record, the witness and the cut.
+   - The report carries the cut list and counts per §10 (O7), no mAP.
+6. **The rest.**
+   - emit2 (START REQUEST), then bias2 (START REQUEST, ~56 min ESTIMATE), then pins, then screen2, then the gate, then
+     the decisive run, then the verdict.
+   - After the verdict: the README clause that `quant/cli.py:232` was fixed on main in `8b54cb6`.
+
+---
+
+## G. Decisions for the gate, then the user
+
+| # | decision | recommended | the gate | why |
+|---|---|---|---|---|
+| D1 | screen1: re-run from row 1 (A) or complete the held run (B) | **A** | A | one triple per stage, no resume code; ~15 min dearer (ESTIMATE) |
+| D2 | a zero-detection row of an arm with no int32 bias (RTN, AR, GPTQ, MX) | **STOP**, as v2.4 | STOP | no pre-registered audit covers those arms; 0.00 by rule would record an unchecked result |
+| D3 | bias1: C5b on the 10 tier-1 int32-bias arms not yet audited on (a) | **yes** | yes | the screen1 cut uses them, and their biases carry only a self-referential check. It is also the first run over 20 min on the new fan (proven for 6.3 min), under HWiNFO, before the ~30 min screen1. ~47 min ESTIMATE. It is beyond the gate's ask |
+| D4 | where the audit script is committed | `results/int4/w4v_audit/` beside its logs | accept | evidence of what ran, byte-identical; C5b's tool is the one under `tools/` |
+| D5 | the report-only `V24_DETS_SHA256` line in the re-run | **yes** | yes | a free determinism check of 24 rows; prints byte identity only |
+"""
+
+PREREG = PREREG_V24 + "\n" + PREREG_V25
+
 
 
 if __name__ == "__main__":
