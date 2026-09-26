@@ -42,19 +42,22 @@ find_package(OpenMP REQUIRED)
 
 # XRT Root and Conda Library paths
 set(XRT_ROOT_DIR "C:/Xilinx/XRT/xrt_sdk/xrt" CACHE PATH "Path to XRT SDK")
+file(TO_CMAKE_PATH "$ENV{USERPROFILE}/miniforge3/envs/mlir-aie-iron" _iron_env_default)
+set(IRON_ENV_DIR "${_iron_env_default}" CACHE PATH "mlir-aie-iron conda env (fallback CONDA_PREFIX; its headers are always searched)")
 if(DEFINED ENV{CONDA_PREFIX} AND NOT "$ENV{CONDA_PREFIX}" STREQUAL "")
     set(CONDA_PREFIX "$ENV{CONDA_PREFIX}")
 else()
-    set(CONDA_PREFIX "C:/Users/Ignis/miniforge3/envs/mlir-aie-iron")
+    set(CONDA_PREFIX "${IRON_ENV_DIR}")
 endif()
 
 message(STATUS "Using CONDA_PREFIX: ${CONDA_PREFIX}")
 message(STATUS "Using XRT_ROOT_DIR: ${XRT_ROOT_DIR}")
+message(STATUS "Using IRON_ENV_DIR: ${IRON_ENV_DIR}")
 
 include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${XRT_ROOT_DIR}/include
-    "C:/Users/Ignis/miniforge3/envs/mlir-aie-iron/Library/include"
+    "${IRON_ENV_DIR}/Library/include"
     ${CONDA_PREFIX}/Library/include
 )
 

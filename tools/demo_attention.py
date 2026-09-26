@@ -23,9 +23,9 @@ from pathlib import Path
 
 # Paths
 REPO_ROOT = Path(__file__).resolve().parent.parent
-IRON_ENV_SCRIPT = r"C:\Users\Ignis\mlir-aie\iron_env.ps1"
-RESNET_ENV17_PYTHON = r"C:\Users\Ignis\miniforge3\envs\resnet_env17\python.exe"
-RESNET_ENV_PYTHON = r"C:\Users\Ignis\miniforge3\envs\resnet_env\python.exe"
+IRON_ENV_SCRIPT = Path.home() / "mlir-aie" / "iron_env.ps1"
+RESNET_ENV17_PYTHON = Path.home() / "miniforge3" / "envs" / "resnet_env17" / "python.exe"
+RESNET_ENV_PYTHON = Path.home() / "miniforge3" / "envs" / "resnet_env" / "python.exe"
 GOLDEN_BASE = REPO_ROOT / "data" / "golden"
 MODEL_PATH = REPO_ROOT / "models" / "mobilevit_cut_backbone_xint8.onnx"
 # Cache lives at the repo root like every other compile cache here, and the key
