@@ -973,6 +973,27 @@
       same way (`scripts/w4a8-eval.sh`).
     - [Gate D](BENCHMARKS.md#int4-on-phoenix-gates-first-the-chip-runs-the-engines-uint8--int4-and-on-paper-the-current-weight-packets-leave-int4-little-to-save-2026-09-23-desktop-2),
       `results/int4/w4a8_accuracy_verdict_desktop2_20260923.log`.
+  - **The user paused the LLM work and turned int4 to the vision engine's models (2026-09-25).**
+    "pause the LLM work and focus on INT4 as a broader function, so i think we should use the models
+    we already know this chip is good at." (the user's direction, relayed by the gate)
+    - Criterion (b): accuracy is the gate. int4 is a capability: a W4 model within 1.0 point of its
+      B8, measured the gate-D way, in a scale form the engine can lower, with the form named. Speed
+      and energy are report-only; bytes decide nothing.
+    - YOLOv8n and YOLOv8s first; YOLOv8n-pose and YOLO26n only if a method works on that pair.
+    - The engine lowering, which collides with the bf16 branch's files, is decided after the
+      accuracy screen.
+    - Gate B and gate D stand. This is gate D's reopen attempt: post-training recovery at W4, with
+      bias correction; VC (folded variance correction), a per-channel output-variance correction
+      that re-estimates no BatchNorm statistics; AdaRound; GPTQ; and mixed W4/W8. It is
+      pre-registered in `tools/w4v_verdict.py` before any method reads an image. QAT is out unless
+      every post-training method fails and the user rules for it.
+    - The methods calibrate on the first 64 images of `data/coco_calib`, which is inside val2017
+      (see the coco_calib pitfall entry). The user ruled (B) on that leakage: K-D passes a model
+      only within 1.0 point of B8 both on all 5,000 images and on H, the 4,700 images of val2017
+      outside `data/coco_calib`, each against B8 on the same images, from the same detections.
+    - A byte census ran first and decides nothing
+      (`results/int4/w4v_census_desktop2_20260925.log`).
+    - Plan W4V v2 (git-ignored, LF `88b440fa`); branch `worktree-int4-vision`.
 
 ## The YOLOv8 partitioning failure (resolved)
 
