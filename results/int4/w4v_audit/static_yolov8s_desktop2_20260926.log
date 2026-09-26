@@ -1,0 +1,45 @@
+AUDIT static yolov8s bc_e1 bc_e2 bc_u vc_e1 vc_e2 vc_u | 2026-09-26T08:06:54Z | script sha256 dbc4b7bb4d2d0195f4becf479b4711732f62d0a9f3952fcbfc3c06e34741bd89 | onnxruntime 1.23.3.dev20260320 | threads 8 | ORT_DISABLE_ALL
+PIN_CHECK models/yolov8s_cut_xint8.onnx sha256 065f62523000b806e47e227f0b9d71a689f10d8c5368a7c5b6d0ff3b9f733fcc == pinned
+PIN_CHECK scratch/w4v/arms/yolov8s_w4v_bc_e1.onnx sha256 2700ece0499075fd7bfe6321d878c30cc67a0b7123ce1ae57589a8feec15ffe4 == pinned
+INFO scratch/w4v/arms/yolov8s_w4v_bc_e1.onnx: the shipped Conv names; node order == XINT8 order False
+STATIC yolov8s bc_e1 (scratch/w4v/arms/yolov8s_w4v_bc_e1.onnx): 63 Conv, 63 int32 biases
+(b) yolov8s bc_e1: bias scale == float32(s_x) * float32(s_w) from the graph on 63/63 Conv
+(c) yolov8s bc_e1 static: channels at an int32 extreme 0; max |int32| 87572 (2^31 = 2147483648); INFO channels on a smaller bound value (2^k - 1 or 2^k, k = 7, 15, 23) 5
+(d) yolov8s bc_e1: wiring, length, zero point and scale right on 63/63 Conv
+HELD yolov8s bc_e1 (b) False (c, static) False (d) False
+PIN_CHECK scratch/w4v/arms/yolov8s_w4v_bc_e2_ortonly.onnx sha256 43017aa7f21aebf512d9bea0215fb0c1803cf88dd3ef71109de9a06aa18c530b == pinned
+INFO scratch/w4v/arms/yolov8s_w4v_bc_e2_ortonly.onnx: the shipped Conv names; node order == XINT8 order False
+STATIC yolov8s bc_e2 (scratch/w4v/arms/yolov8s_w4v_bc_e2_ortonly.onnx): 63 Conv, 63 int32 biases
+(b) yolov8s bc_e2: bias scale == float32(s_x) * float32(s_w) from the graph on 63/63 Conv
+(c) yolov8s bc_e2 static: channels at an int32 extreme 0; max |int32| 88228 (2^31 = 2147483648); INFO channels on a smaller bound value (2^k - 1 or 2^k, k = 7, 15, 23) 2
+(d) yolov8s bc_e2: wiring, length, zero point and scale right on 63/63 Conv
+HELD yolov8s bc_e2 (b) False (c, static) False (d) False
+PIN_CHECK scratch/w4v/arms/yolov8s_w4v_bc_u_ortonly.onnx sha256 2251065c992be860e8687ef3706018b5b99f3cb68abe0d7ddec051403a2a52b4 == pinned
+INFO scratch/w4v/arms/yolov8s_w4v_bc_u_ortonly.onnx: the shipped Conv names; node order == XINT8 order False
+STATIC yolov8s bc_u (scratch/w4v/arms/yolov8s_w4v_bc_u_ortonly.onnx): 63 Conv, 63 int32 biases
+(b) yolov8s bc_u: bias scale == float32(s_x) * float32(s_w) from the graph on 63/63 Conv
+(c) yolov8s bc_u static: channels at an int32 extreme 0; max |int32| 86717 (2^31 = 2147483648); INFO channels on a smaller bound value (2^k - 1 or 2^k, k = 7, 15, 23) 3
+(d) yolov8s bc_u: wiring, length, zero point and scale right on 63/63 Conv
+HELD yolov8s bc_u (b) False (c, static) False (d) False
+PIN_CHECK scratch/w4v/arms/yolov8s_w4v_vc_e1_ortonly.onnx sha256 1ed74944b0c0be104b6d839dad1fcc6f2615e0b83d815aacb9dba749fb9cf46a == pinned
+INFO scratch/w4v/arms/yolov8s_w4v_vc_e1_ortonly.onnx: the shipped Conv names; node order == XINT8 order False
+STATIC yolov8s vc_e1 (scratch/w4v/arms/yolov8s_w4v_vc_e1_ortonly.onnx): 63 Conv, 63 int32 biases
+(b) yolov8s vc_e1: bias scale == float32(s_x) * float32(s_w) from the graph on 63/63 Conv
+(c) yolov8s vc_e1 static: channels at an int32 extreme 0; max |int32| 50210 (2^31 = 2147483648); INFO channels on a smaller bound value (2^k - 1 or 2^k, k = 7, 15, 23) 5
+(d) yolov8s vc_e1: wiring, length, zero point and scale right on 63/63 Conv
+HELD yolov8s vc_e1 (b) False (c, static) False (d) False
+PIN_CHECK scratch/w4v/arms/yolov8s_w4v_vc_e2_ortonly.onnx sha256 c07f23eccfb2dfe9f7cd84401feb9ed57cd33d481bbfc706bb1ad25e1a34f897 == pinned
+INFO scratch/w4v/arms/yolov8s_w4v_vc_e2_ortonly.onnx: the shipped Conv names; node order == XINT8 order False
+STATIC yolov8s vc_e2 (scratch/w4v/arms/yolov8s_w4v_vc_e2_ortonly.onnx): 63 Conv, 63 int32 biases
+(b) yolov8s vc_e2: bias scale == float32(s_x) * float32(s_w) from the graph on 63/63 Conv
+(c) yolov8s vc_e2 static: channels at an int32 extreme 0; max |int32| 48910 (2^31 = 2147483648); INFO channels on a smaller bound value (2^k - 1 or 2^k, k = 7, 15, 23) 4
+(d) yolov8s vc_e2: wiring, length, zero point and scale right on 63/63 Conv
+HELD yolov8s vc_e2 (b) False (c, static) False (d) False
+PIN_CHECK scratch/w4v/arms/yolov8s_w4v_vc_u_ortonly.onnx sha256 9c792b72a281edf75f191b8d7caa9cecf66bce7d78fcfcac2c18bccc7eb82ba5 == pinned
+INFO scratch/w4v/arms/yolov8s_w4v_vc_u_ortonly.onnx: the shipped Conv names; node order == XINT8 order False
+STATIC yolov8s vc_u (scratch/w4v/arms/yolov8s_w4v_vc_u_ortonly.onnx): 63 Conv, 63 int32 biases
+(b) yolov8s vc_u: bias scale == float32(s_x) * float32(s_w) from the graph on 63/63 Conv
+(c) yolov8s vc_u static: channels at an int32 extreme 0; max |int32| 41376 (2^31 = 2147483648); INFO channels on a smaller bound value (2^k - 1 or 2^k, k = 7, 15, 23) 4
+(d) yolov8s vc_u: wiring, length, zero point and scale right on 63/63 Conv
+HELD yolov8s vc_u (b) False (c, static) False (d) False
+IMPORTS w4_recover or quant loaded: none | END 2026-09-26T08:06:55Z

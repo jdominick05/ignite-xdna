@@ -1,0 +1,10 @@
+AUDIT static yolov8n bc_e1 | 2026-09-26T08:06:35Z | script sha256 dbc4b7bb4d2d0195f4becf479b4711732f62d0a9f3952fcbfc3c06e34741bd89 | onnxruntime 1.23.3.dev20260320 | threads 8 | ORT_DISABLE_ALL
+PIN_CHECK models/yolov8n_cut_xint8.onnx sha256 f02e86ba1bf61ff3fdc159e29b15259567e279df06f68c6d9adeb966fe56c885 == pinned
+PIN_CHECK scratch/w4v/arms/yolov8n_w4v_bc_e1.onnx sha256 e74c53347bf2fcbe59e02a55180d24547a121635906af9065e3a6ba9f475ff3b == pinned
+INFO scratch/w4v/arms/yolov8n_w4v_bc_e1.onnx: the shipped Conv names; node order == XINT8 order False
+STATIC yolov8n bc_e1 (scratch/w4v/arms/yolov8n_w4v_bc_e1.onnx): 63 Conv, 63 int32 biases
+(b) yolov8n bc_e1: bias scale == float32(s_x) * float32(s_w) from the graph on 63/63 Conv
+(c) yolov8n bc_e1 static: channels at an int32 extreme 0; max |int32| 31723 (2^31 = 2147483648); INFO channels on a smaller bound value (2^k - 1 or 2^k, k = 7, 15, 23) 4
+(d) yolov8n bc_e1: wiring, length, zero point and scale right on 63/63 Conv
+HELD yolov8n bc_e1 (b) False (c, static) False (d) False
+IMPORTS w4_recover or quant loaded: none | END 2026-09-26T08:06:35Z
