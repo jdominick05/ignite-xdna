@@ -38,7 +38,7 @@ resnet_env has torch, onnx and onnxruntime, so the whole thing runs in one activ
     python kernels/bottleneck_sweep/cpu_sweep.py --workdir scratch/bottleneck_sweep
 
 Do NOT write the intermediate ONNX into models/ -- that directory is a Syncthing folder
-shared with two other machines (see CLAUDE.md). scratch/ is git-ignored and local.
+shared with two other machines. scratch/ is git-ignored and local.
 
 Run this in the same sitting as the NPU sweep: NPU latency on this machine drifts
 between sessions independently of any code change.

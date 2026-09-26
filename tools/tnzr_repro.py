@@ -28,7 +28,7 @@ so this measures throughput only, never correctness.
     python tools/tnzr_repro.py run --out results/aie/tnzr_bf16_32x32x32_repro_desktop2_<ts>.log
 
 Before `run`: `xrt-smi examine -r aie-partitions` must show no hardware contexts, and another
-session's NPU work must not be in flight (CLAUDE.md, "Three sessions can be on this one NPU").
+session's NPU work must not be in flight: several sessions can share this one NPU.
 """
 from __future__ import annotations
 

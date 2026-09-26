@@ -6,7 +6,7 @@ performance trade-offs, and failure modes of the AMD XDNA1 NPU on Phoenix / Hawk
 The eight non-interactive demos below execute directly against the physical hardware,
 timing `sess.run` alone, clearing the compile cache between graph variants, and capturing
 every figure in a comparison together so cross-session latency drift cannot leak into a
-ratio (`CLAUDE.md`). The two webcam demos are interactive and need a person at the machine.
+ratio. The two webcam demos are interactive and need a person at the machine.
 
 **Every figure in the table below is quoted from a log in
 [`results/demos/`](../results/demos), captured 2026-09-07 on Desktop 2.** They were

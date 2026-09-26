@@ -70,7 +70,7 @@ def main():
 
     torch.onnx.export(
         model, img, args.out,
-        opset_version=17,          # LOCKED: project invariant, see CLAUDE.md
+        opset_version=17,          # LOCKED: docs/DECISIONS.md, locked decision 5
         input_names=["images"],
         output_names=["outputs"],
         dynamic_axes=None,         # LOCKED: static batch 1 only

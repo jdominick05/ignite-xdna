@@ -23,7 +23,7 @@ from npu.paths import ROOT
 XRT_SMI = Path(r"C:\Windows\System32\AMD\xrt-smi.exe")
 HOST_LOAD_PS1 = ROOT / "tools" / "host_load.ps1"
 
-# Which machine is this? CLAUDE.md: work has already been handed to the wrong box
+# Which machine is this? Work has already been handed to the wrong box
 # because a session guessed from what happened to be installed on it. An unrecorded
 # hostname is reported as unknown, never inferred.
 MACHINES = {

@@ -6,7 +6,7 @@
 #
 # This is the host-side counterpart to the xrt-smi check in scripts/lib.sh. That one
 # answers "is another session on the AIE tiles"; this one answers "is another session
-# on the CPU". Desktop 2 runs three Claude sessions, agy and PyCharm against the same
+# on the CPU". Desktop 2 runs several development sessions and IDEs against the same
 # 16 threads, so a wall-time or peak-memory figure taken without a witness is a guess
 # -- which is exactly how the 2026-09-08 MODNet AdaRound oracle started.
 #
@@ -35,7 +35,7 @@ $CORES_PEER = 2.0          # one process at or above this is a heavy peer whatev
 $CMD_CHARS  = 140          # command lines are truncated to keep a witness line readable
 
 # Build tools, by process name. Anything that forks a compiler lands here through its
-# children, so agy or a Claude session running a build is caught by what it spawned.
+# children, so an IDE or another session running a build is caught by what it spawned.
 $PEER_NAMES = '^(cl|link|lib|ninja|cmake|make|nmake|msbuild|devenv|gcc|g\+\+|cc1|cc1plus|' +
               'clang|clang\+\+|lld|lld-link|ld|rustc|cargo|go|javac|node|tsc|' +
               'xchesscc|xchesscc_wrapper|aie-opt|aie-translate|llc|opt|nvcc|hipcc)$'

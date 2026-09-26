@@ -1,11 +1,11 @@
 """
 Batch>1 Silent Failure Demo: The Unwritten Slot Bug on AMD XDNA1 NPU.
 
-Demonstrates the critical negative finding recorded in CLAUDE.md & docs/DECISIONS.md:
-"Batch 1 only: static, no dynamic_axes, opset 17, dynamo=False. Measured at static batch 2,
+Demonstrates the critical negative finding in docs/DECISIONS.md (locked decision 5):
+batch 1 only: static, no dynamic_axes, opset 17, dynamo=False. Measured at static batch 2,
 the EP takes 80/395 nodes and WRITES ONLY SLOT 0 — slot 1's logits are byte-identical
 across every input, i.e. a stale buffer, not a miscomputation. It fails silently, with
-a plausible-looking latency." (Filed as AMD issue #401).
+a plausible-looking latency. (Filed as AMD issue #401).
 
 This demo:
   1. Runs two distinct image pairs ([A, B] then [C, D]) through models/resnet50_b2_xint8_c64.onnx.

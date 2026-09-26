@@ -95,7 +95,7 @@ def run_model(model_path, cfg, img_path, runs, ep, log_sev):
     for _ in range(3):
         sess.run(None, {inp_name: tensor})
 
-    # Timed inference (sess.run strictly alone per CLAUDE.md invariant)
+    # Timed inference: sess.run strictly alone (demos/README.md)
     ts = []
     for _ in range(runs):
         t0 = time.perf_counter()

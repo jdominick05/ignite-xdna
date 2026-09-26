@@ -40,13 +40,13 @@ gap couldn't be extra CPU fallback, and nothing else explained it. A same-sittin
 node-for-node, op-type-for-op-type, device-for-device identical (`results/
 adaround_latency_diff_diag_xint8.log`, `results/adaround_latency_diff_diag_adaround.log`).
 No log in this repo now reproduces the original 5.63/6.93 ms pair; the leading suspect is
-the log-name collision this project has been burned by before (`CLAUDE.md`, "Never let two
-machines silently overwrite the same result-log name") — `results/bench_xint8_npu.log` and
+the log-name collision this project has been burned by before (two machines writing
+the same result-log name) — `results/bench_xint8_npu.log` and
 `results/bench_xint8_adaround_npu.log` exist today at only 100 images, not the 1000 the
 headline table cites, meaning a smaller probe run reused those names after the original.
 Treat 5.63/6.93 ms as unverified, not as the number to plan around; the accuracy figures
 (71.70/79.80%) do still match a current log and stand. Latency also drifts session to
-session on this shared machine (`CLAUDE.md`), so the fair comparison is always the
+session on this shared machine, so the fair comparison is always the
 back-to-back pair above, not either number in isolation.
 See `results/adaround_latency_diff_xint8_npu.log`,
 `results/adaround_latency_diff_adaround_npu.log`.

@@ -4,7 +4,7 @@
 #
 #   ./scripts/run-dispatch-cpp.sh [--iters N] [--payload N] [--batch-sizes L]
 #
-# WHY BOTH IN ONE SITTING: CLAUDE.md's standing rule is that NPU latency on this shared
+# WHY BOTH IN ONE SITTING: the standing rule is that NPU latency on this shared
 # machine drifts between sittings independent of any code change, so the committed
 # 2026-09-09 Python figures are NOT a valid baseline for a C++ number measured today.
 # This runs measure_runlist.py and dispatch_runner.exe back to back on the same cache

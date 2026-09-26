@@ -94,8 +94,8 @@ accuracy, or whether the VitisAI EP accepts a graph, run the relevant pipeline a
 the log in `results/` before describing the change as verified. Never report a number
 you did not measure.
 
-Every new `npu/`, `quant/` or `tui/` module joins the import list here and in the
-local `CLAUDE.md`. `quant/` must never import Quark, `npu/` must never import
+Every new `npu/`, `quant/` or `tui/` module joins the import list here.
+`quant/` must never import Quark, `npu/` must never import
 `quant/`, and nothing in `npu/` may import `tui/` -- the launcher depends on the
 library, never the other way round.
 

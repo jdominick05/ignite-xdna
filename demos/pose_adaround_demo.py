@@ -64,7 +64,7 @@ def _run_pose(model_path, source_img, runs, ep, conf, log_sev):
     for _ in range(3):
         run_raw()
 
-    # Timed inference (sess.run strictly alone per CLAUDE.md invariant)
+    # Timed inference: sess.run strictly alone (demos/README.md)
     ts = []
     for _ in range(runs):
         t0 = time.perf_counter()

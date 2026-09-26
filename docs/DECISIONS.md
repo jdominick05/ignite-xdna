@@ -230,11 +230,11 @@
 
 
 - **A wall-time or peak-memory figure from Desktop 2 without a host-load witness is a
-  guess.** That box runs three Claude sessions, `agy` and PyCharm against the same 16
+  guess.** That box runs several development sessions and IDEs against the same 16
   threads, and `xrt-smi` answers only the device question -- nothing was watching the CPU.
   On 2026-09-08 the MODNet AdaRound oracle spent its whole calibration and MinMSE phase
   beside another session's `pipelines/yolow/3b_quantize_cut.py`, which nobody knew until a
-  check was written for it; the suspicion at the time was `agy` compiling, and `agy`
+  check was written for it; the suspicion at the time was an IDE compiling, and that IDE
   measured 0.2 cores. `tools/host_load.ps1` is the host-side counterpart to the `xrt-smi`
   check: one-shot it classifies build tools, this repo's own producers (by command line,
   because every producer here is `python.exe`) and any process holding 2+ cores, and

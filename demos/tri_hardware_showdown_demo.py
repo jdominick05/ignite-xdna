@@ -10,7 +10,7 @@ Four pathways evaluated back-to-back on the exact same test image:
   3. DirectML FP16 (iGPU)     — Radeon 780M running FP16 (one-line convert, 0 mAP loss)
   4. Ryzen AI NPU (XDNA1)     — 4x4 AIE2 tile running XINT8 + AdaRound (head-cut)
 
-Timing follows the CLAUDE.md invariant:
+Timing follows the repo's timing rule (demos/README.md):
   * "infer" is sess.run strictly alone (hardware compute)
   * "post" is DFL decode (cut models) + NMS
   * Measured in a single sitting to eliminate cross-session latency drift
@@ -121,7 +121,7 @@ def run_pathway(model_path, ep, cache_key, source_img, runs, conf, log_sev):
     for _ in range(3):
         run_raw(x)
 
-    # Timed inference (sess.run strictly alone per CLAUDE.md invariant)
+    # Timed inference: sess.run strictly alone (demos/README.md)
     ts = []
     for _ in range(runs):
         t0 = time.perf_counter()
