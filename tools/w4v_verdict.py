@@ -30,10 +30,13 @@ by every glob that would count it, at exactly its listed sha (live()).
     python tools/w4v_verdict.py --c8 --logs <W4V_GATE lines>    C8's int32 coverage marker, after the engine gate
     python tools/w4v_verdict.py --verdict --logs <repro and decisive eval logs> --controls <controls, parity, repro
         C9, emit and gate logs>
+    python tools/w4v_verdict.py --zerodet --log <row log> --dets <its dets> --audit <its audit log>
+                                                            v2.5 B.4: a zero-detection row's record, or a refusal
     python tools/w4v_verdict.py --selftest                  the rule, the H scoring and the dets check, synthetic
 
 An eval row's log is results/int4/w4v_<screen|repro|decisive>_<model>_<arm>_n<500|5000>_<machine>_<date>.log:
-pipelines/yolov8n/5_eval_map.py's output, the frozen triple before it and a DETS_SHA256 line after it.
+pipelines/yolov8n/5_eval_map.py's output, the frozen triple before it and a DETS_SHA256 line after it; a
+zero-detection row (v2.5 B.1) has no DETS_SHA256 line and counts only through its w4v_zerodet_ record (B.4).
 Nothing here was tuned after seeing a mAP: the constants are the ones --prereg prints.
 """
 import argparse
@@ -955,8 +958,8 @@ def read_cuts(pinned: dict, root: Path = ROOT, tiers=(1, 2)) -> tuple[dict, list
     return advanced, problems
 
 
-STAGES = ("selftest", "controls", "parity", "repro", "emit1", "prereg", "screen1", "emit2", "screen2", "gate",
-          "decisive", "verdict")   # w4v-eval.sh's stages, in run order
+STAGES = ("selftest", "controls", "parity", "repro", "emit1", "prereg", "bias1", "screen1", "emit2", "bias2", "screen2",
+          "gate", "decisive", "verdict")   # w4v-eval.sh's stages, in run order; v2.5 C adds bias1 and bias2
 DETS_LINE = r"^DETS_SHA256 [0-9a-f]{64} \S+$"
 SRC_TREE_LINE = r"^SRC_TREE [0-9a-f]{40,64}$"
 CONTROL_FAIL = r"^W4V_CONTROL \S+ \S+( \S+)? FAIL"   # one scope token, or C5b's two (v2.5 C: <model> <arm>)
@@ -992,6 +995,8 @@ def stage_logs(stage: str, advanced: dict | None = None) -> list[tuple[str, list
                 for m in MODELS for k in ("sensitivity", "emit1")]
     if stage == "prereg":
         return [("w4v_prereg_*.log", [(r"^PINNED \d+ files$", 1)])]
+    if stage in ("bias1", "bias2"):   # v2.5 C: a C5b FAIL line is a W4V_CONTROL FAIL, which log_problems refuses
+        return [(f"w4v_{stage}_{m}_*.log", [(rf"^W4V_DONE {stage} {m}$", 1)]) for m in MODELS]
     if stage == "emit2":
         return ([(f"w4v_emit2_{m}_*.log", [(rf"^W4V_DONE emit2 {m}$", 1)]) for m in MODELS]
                 + [("w4v_pins_*.log", [(r"^PINNED \d+ files$", 1)])])
@@ -1749,6 +1754,42 @@ def selftest() -> int:
            all(re.search(CONTROL_FAIL, s, re.M) for s in fail_lines)
            and not any(re.search(CONTROL_FAIL, s, re.M) for s in pass_lines))
 
+    # v2.5 C: the bias stages, their place in the run, the runner's stage list, and every int32-bias arm's audit
+    runner_text = (ROOT / "scripts" / "w4v-eval.sh").read_text(encoding="utf-8")
+    case_line = next(x for x in runner_text.splitlines() if x.strip().startswith("selftest|controls|"))
+    expect("bias1 runs after the prereg and before screen1, bias2 after emit2 and before screen2 (v2.5 C); the runner "
+           "takes exactly STAGES as its stage argument and has a stage_<name>() for each",
+           STAGES.index("prereg") + 1 == STAGES.index("bias1") == STAGES.index("screen1") - 1
+           and STAGES.index("emit2") + 1 == STAGES.index("bias2") == STAGES.index("screen2") - 1
+           and case_line.split(")")[0].strip().split("|") == list(STAGES)
+           and all(re.search(rf"^stage_{s}\(\) {{", runner_text, re.M) for s in STAGES))
+    t1 = [a for a in arms(1) if a.split("_")[0] in INT32_BIAS]
+    t2 = [a for a in arms(2) if a.split("_")[0] in INT32_BIAS]
+    au = audits()
+    expect("every int32-bias arm has one audit in audits() and no other arm has one: bc_e1 the committed GENUINE "
+           "logs, the other tier-1 ones bias1, the tier-2 +BC arms (6 per model) bias2, the arms bias_arms() gives",
+           sorted(au) == sorted(f"{m} {a}" for m in MODELS for a in t1 + t2)
+           and all(au[f"{m} bc_e1"] == AUDIT_LOGS[m] for m in MODELS)
+           and all(au[f"{m} {a}"] == "bias1" for m in MODELS for a in t1 if a != "bc_e1")
+           and all(au[f"{m} {a}"] == "bias2" for m in MODELS for a in t2)
+           and sorted(bias_arms(1)) == sorted(set(t1) - {"bc_e1"}) and bias_arms(2) == t2 and len(t2) == 6)
+    m24 = re.search(r"^v24_dets\(\) \{\n    python -c '(.*?)' \"\$1\" \"\$2\"\n\}", runner_text, re.M | re.S)
+    with tempfile.TemporaryDirectory(prefix="w4v-selftest-v24-") as t:   # the runner's own snippet, run three ways
+        for name, text in (("row.json", "[]"), ("same.json", "[]"), ("other.json", "[ ]")):
+            (Path(t) / name).write_bytes(text.encode("utf-8"))
+
+        def v24(archived):
+            return subprocess.run([sys.executable, "-c", m24.group(1) if m24 else "", str(Path(t) / "row.json"),
+                                   str(Path(t) / archived)], capture_output=True, text=True).stdout.strip()
+        v_same, v_other, v_none = v24("same.json"), v24("other.json"), v24("gone.json")
+    s_row = sha_bytes(b"[]")
+    expect("the runner's V24_DETS_SHA256 line (v2.5 D, report-only): byte-identical True or False against the archived "
+           "v2.4 file of the row, and 'none (no v2.4 row)', no comparison, where the held run left none",
+           m24 is not None and v_same.startswith(f"V24_DETS_SHA256 {s_row} (byte-identical True) ")
+           and v_other.startswith(f"V24_DETS_SHA256 {sha_bytes(b'[ ]')} (byte-identical False) ")
+           and v_none.startswith("V24_DETS_SHA256 none (no v2.4 row) ") and "byte-identical" not in v_none
+           and all(x.endswith(f"(report-only; this row: {s_row})") for x in (v_same, v_other, v_none)))
+
     expect("delta works on the printed values", delta("27.10", "25.10") == 2.0 and delta("27.10", "25.09") == 2.01)
     expect("the cut is <= 2.00", advances(2.0) and not advances(2.01))
     expect("the flag: cut on the 500, within the line on H", flagged(2.5, 1.9) and not flagged(2.5, 2.1)
@@ -2308,6 +2349,32 @@ def selftest() -> int:
                and any("no C5B yolov8s bc_e2 PASS line" in p for p in z_b_fail)
                and any("2 w4v_bias1_yolov8s_*.log" in p for p in z_b_two))
 
+        # v2.5 C: screen1 waits for both bias1 logs, committed, each with its W4V_DONE line and no C5b FAIL line; a
+        # screen1 row's report-only V24_DETS_SHA256 line (v2.5 D) leaves a zero row's B.1 and --zerodet as they were
+        def bias1_ready(texts):   # model -> its bias1 log's text; ready("screen1")'s bias1 problems
+            for m, text in texts.items():
+                put(f"w4v_bias1_{m}_desktop2_20260928.log", text)
+            return [p for p in ready("screen1", tmp) if p.startswith("bias1:")]
+        good_b1 = {m: blk + "".join(f"W4V_CONTROL C5b {m} {a} PASS\n" for a in bias_arms(1)) + f"W4V_DONE bias1 {m}\n"
+                   for m in MODELS}
+        b1_ok = bias1_ready(good_b1)
+        b1_fail = bias1_ready({"yolov8n": good_b1["yolov8n"].replace("W4V_CONTROL C5b yolov8n bc_u PASS",
+                                                                      "W4V_CONTROL C5b yolov8n bc_u FAIL (exit 1)")})
+        b1_done = bias1_ready({"yolov8n": blk + "W4V_CONTROL C5b yolov8n bc_e2 PASS\n"})
+        g("rm", "-q", "results/int4/w4v_bias1_yolov8n_desktop2_20260928.log")
+        g("commit", "-q", "-m", "bias1 yolov8n removed")
+        b1_none = [p for p in ready("screen1", tmp) if p.startswith("bias1:")]
+        v24_at = f"scratch/w4v/dets_v24_screen1_stop/{z_name}.json (report-only; this row: {sha_bytes(b'[]')})"
+        v24_lines = [f"V24_DETS_SHA256 {'a' * 64} (byte-identical False) {v24_at}",
+                     f"V24_DETS_SHA256 none (no v2.4 row) {v24_at}"]
+        expect("screen1 waits for both committed bias1 logs with W4V_DONE bias1 <model>: refused on a C5b FAIL line, "
+               "on a log without W4V_DONE, on a missing log; a zero row's V24_DETS_SHA256 line, either form, leaves "
+               "B.1 and --zerodet as they were",
+               b1_ok == [] and any("W4V_CONTROL FAIL" in p for p in b1_fail)
+               and any("W4V_DONE bias1 yolov8n" in p for p in b1_done)
+               and any("0 w4v_bias1_yolov8n_*.log" in p for p in b1_none)
+               and all(b1(ls) == [] for x in v24_lines for ls in (z_lines + [x], z_lines[:-1] + [x, z_lines[-1]])))
+
         # F4: SRC_TREE is the tree HEAD records for src/, refused unless src/ is clean against it
         t_none = src_tree(tmp)
         mod = tmp / "src" / "ignite_xdna" / "mod.py"
@@ -2435,6 +2502,12 @@ def selftest() -> int:
         expect("the parser reads the row, and its triple with TOOLS_JSON", rows["b8"]["map"] == logs["b8"][1]
                and rows["b8"]["images"] == 12 and rows["b8"]["dets"] == "dets_b8.json"
                and rows["b8"]["triple"] == frozen_values())
+        v24_log = root / "w4v_decisive_yolov8n_b8_n5000_desktop2_20260927.log"   # the runner prints it before DETS
+        v24_log.write_text(logs["b8"][0].read_text(encoding="utf-8").replace(
+            "DETS_SHA256 ", f"V24_DETS_SHA256 {'a' * 64} (byte-identical False) x.json (report-only; this row: "
+                            f"{sha_file(root / 'dets_b8.json')})\nDETS_SHA256 "), encoding="utf-8")
+        expect("a V24_DETS_SHA256 line (v2.5 D, report-only) leaves the row the parser reads unchanged",
+               {**parse_eval_log(v24_log), "log": None} == {**rows["b8"], "log": None})
         chk = dets_check(rows["b8"], data.coco, ids, h, root)
         expect("the dets check re-scores the logged figure", chk["ok"] and chk["h"] == logs["b8"][2])
         expect("perfect detections score 100.00 on all and on H", chk["rescored"] == "100.00" and chk["h"] == "100.00")

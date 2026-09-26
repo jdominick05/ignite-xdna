@@ -12,8 +12,10 @@
 #   ./scripts/w4v-eval.sh repro      # C9: B8 and RTN E1, E2, U at 5,000, both models; a mismatch is a STOP
 #   ./scripts/w4v-eval.sh emit1      # the MX sensitivity and y_f statistics, then every other tier-1 arm
 #   ./scripts/w4v-eval.sh prereg     # pins the models, the captures and every tier-1 arm; commit it next
+#   ./scripts/w4v-eval.sh bias1      # C5b on the tier-1 int32-bias arms not yet audited (v2.5 C; a FAIL is a STOP)
 #   ./scripts/w4v-eval.sh screen1    # B8 and the tier-1 arms at 500, then the cut (tier 1)
 #   ./scripts/w4v-eval.sh emit2      # the tier-2 arms over the pinned tier-1 files, then their pins log
+#   ./scripts/w4v-eval.sh bias2      # C5b on the tier-2 +BC arms (v2.5 C; a FAIL is a STOP)
 #   ./scripts/w4v-eval.sh screen2    # the tier-2 arms at 500, then the cut (tier 2, against tier 1's B8)
 #   ./scripts/w4v-eval.sh gate       # C8: the engine's integer oracle on every advancing form-b file
 #   ./scripts/w4v-eval.sh decisive   # B8 and every advancing arm at 5,000
@@ -24,10 +26,12 @@
 #
 # Every evaluation is 5_eval_map.py --ep cpu --ort-opt disable_all --ort-threads 8, never --fresh, with
 # --dets into the git-ignored scratch/w4v/dets/; a row's log is the frozen triple, the eval and the
-# DETS_SHA256 line. The screen and the decisive rows refuse a file that no committed prereg or pins log
-# pins. Logs go to results/int4/w4v_* (UTF-8, profile path scrubbed), sidecars to results/int4/w4v_sidecars/;
-# the script refuses to replace either (delete by hand to re-run). Arm files, captures and detections stay in
-# scratch/w4v/. A file with a per-channel weight scale is *_ortonly.onnx and must never reach ignite-compile.
+# DETS_SHA256 line. A row whose eval ends in v2.5 B.1's "no detections at all" exit gets a w4v_zerodet_ record
+# from --zerodet, citing its arm's audit, or the stage stops (B.3, B.4). The screen and the decisive rows refuse a
+# file that no committed prereg or pins log pins. Logs go to results/int4/w4v_* (UTF-8, profile path scrubbed),
+# sidecars to results/int4/w4v_sidecars/; the script refuses to replace either (delete by hand to re-run). Arm
+# files, captures and detections stay in scratch/w4v/. A file with a per-channel weight scale is *_ortonly.onnx and
+# must never reach ignite-compile.
 # models/, data/ and build/ are links to the main checkout's, as in the int4-study worktree.
 
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
@@ -35,7 +39,7 @@
 STAGE="" MACHINE=""
 while [ $# -gt 0 ]; do
     case "$1" in
-        selftest|controls|parity|repro|emit1|prereg|screen1|emit2|screen2|gate|decisive|verdict) STAGE="$1" ;;
+        selftest|controls|parity|repro|emit1|prereg|bias1|screen1|emit2|bias2|screen2|gate|decisive|verdict) STAGE="$1" ;;
         --machine) MACHINE="$2"; shift ;;
         -h|--help) usage "${BASH_SOURCE[0]}"; exit 0 ;;
         *)         die "unknown argument $1" ;;
@@ -73,6 +77,7 @@ RAW="$W/raw"
 OUT=results/int4
 SIDE="$OUT/w4v_sidecars"
 GATE_D_DETS=../int4-study/results   # gate D's surviving detections (w4a8-eval.sh:217-219), report-only
+V24_DETS=""   # screen1 only: the archived v2.4 detections (v2.5 D, option A), for the report-only V24_DETS_SHA256 line
 MODELS=(yolov8n yolov8s)
 C9_ARMS=(rtn_e1 rtn_e2 rtn_u)
 
@@ -186,13 +191,31 @@ advanced() {
 
 row_name() { echo "w4v_${1}_${2}_${3}_n${4}"; }   # row_name <stage> <model> <arm> <n>
 
-# row_body <stage> <model> <arm> <model file> <n flag> <dets> -- one row's log.
+# v24_dets <dets> <archived dets> -- v2.5 D's report-only line: the archived v2.4 detections' sha256 and whether this
+# row's are byte-identical. A row the held v2.4 run never reached has no archived file and gets "none (no v2.4 row)",
+# which is no comparison, so every "byte-identical False" is a real mismatch. Printed, not required; row_body prints
+# it before it returns, so a zero-detection row's log holds it before --zerodet pins that log's sha.
+v24_dets() {
+    python -c 'import hashlib, pathlib, sys
+a, b = (pathlib.Path(p) for p in sys.argv[1:3])
+sa = hashlib.sha256(a.read_bytes()).hexdigest() if a.is_file() else "missing"
+if b.is_file():
+    sb = hashlib.sha256(b.read_bytes()).hexdigest()
+    print(f"V24_DETS_SHA256 {sb} (byte-identical {sa == sb}) {sys.argv[2]} (report-only; this row: {sa})")
+else:
+    print(f"V24_DETS_SHA256 none (no v2.4 row) {sys.argv[2]} (report-only; this row: {sa})")' "$1" "$2"
+}
+
+# row_body <stage> <model> <arm> <model file> <n flag> <dets> -- one row's log. A failed eval returns the eval's own
+# exit code, after the report-only V24 line, so eval_row can look for v2.5 B.1's exit (1, "no detections at all").
 row_body() {
-    local stage="$1" m="$2" arm="$3" f="$4" n="$5" dets="$6" g
+    local stage="$1" m="$2" arm="$3" f="$4" n="$5" dets="$6" g rc=0
     python tools/w4v_verdict.py --hashes || return 1
     if [ "$stage" != repro ]; then python tools/w4v_verdict.py --pinned "$f" || return 1; fi
     python pipelines/yolov8n/5_eval_map.py --model "$f" --ep cpu --n "$n" --ort-opt disable_all \
-        --ort-threads "$THREADS" --dets "$dets" || return 1
+        --ort-threads "$THREADS" --dets "$dets" || rc=$?
+    if [ -n "$V24_DETS" ]; then v24_dets "$dets" "$V24_DETS/$(basename "$dets")" || return 1; fi
+    [ "$rc" = 0 ] || return "$rc"
     python tools/w4v_verdict.py --dets-sha "$dets" || return 1
     if [ "$stage" = repro ]; then
         g="$GATE_D_DETS/dets_${m}_${arm#rtn_}_cpu_unopt.json"
@@ -204,11 +227,32 @@ print(f"GATE_D_DETS_SHA256 {sb} {sys.argv[2]} (report-only; this row: {sa}, byte
     fi
 }
 
-# eval_row <stage> <model> <arm> <n> -- n is 500 or 5000 (5_eval_map.py --n 0 means all 5,000).
+# audit_of <model> <arm> -- the audit log a zero-detection record cites: v2.5 v2_5.audits, through
+# tools/w4v_verdict.py audit_for (the committed GENUINE log for bc_e1, else the one committed bias<tier> log).
+audit_of() {
+    python -c 'import sys
+sys.path.insert(0, "tools")
+import w4v_verdict as v
+p, problems = v.audit_for(sys.argv[1], sys.argv[2])
+for x in problems:
+    print(f"PROBLEM {x}", file=sys.stderr)
+if problems or p is None:
+    sys.exit(1)
+print(v.shown(p))' "$1" "$2"
+}
+
+# zerodet_name <model> <arm> <n> -- the record's log (v2.5 B.4; it names no stage).
+zerodet_name() { echo "$OUT/w4v_zerodet_${1}_${2}_n${3}_${TAG}.log"; }
+
+# eval_row <stage> <model> <arm> <n> -- n is 500 or 5000 (5_eval_map.py --n 0 means all 5,000). A row that ends in
+# B.1's exit gets its record, or the stage stops (v2.5 B.3, B.4); the row log itself is never touched again. A refused
+# record stays in results/int4/ with its PROBLEM lines, like any refused log: the stage's --ready then refuses a
+# restart (own_logs, zerodet_globs) until the gate rules, and nothing here deletes it.
 eval_row() {
-    local stage="$1" m="$2" arm="$3" n="$4" f row nflag t0
+    local stage="$1" m="$2" arm="$3" n="$4" f row nflag t0 rc=0 log audit rec
     f="$(arm_file "$m" "$arm")" || die "no file for $m $arm"
     row="$(row_name "$stage" "$m" "$arm" "$n")"
+    log="$OUT/${row}_${TAG}.log"
     nflag="$n"; [ "$n" = 5000 ] && nflag=0
     step "$stage $m $arm on $n images  ($f)"
     # the snapshot names processes, so it is taken raw and scrubbed like the logs
@@ -217,8 +261,17 @@ eval_row() {
     scrub "$RAW/$(basename "$WITNESS")" "$WITNESS"
     no_profile "$WITNESS"
     t0=$SECONDS
-    logged "$OUT/${row}_${TAG}.log" row_body "$stage" "$m" "$arm" "$f" "$nflag" "$DETS/${row}.json" \
-        || die "$row failed; the stage stops here and goes to the gate as it stands"
+    logged "$log" row_body "$stage" "$m" "$arm" "$f" "$nflag" "$DETS/${row}.json" || rc=$?
+    if [ "$rc" != 0 ]; then
+        [ "$rc" = 1 ] && grep -q "^no detections at all -- something is broken upstream" "$log" \
+            || die "$row failed; the stage stops here and goes to the gate as it stands"
+        audit="$(audit_of "$m" "$arm")" \
+            || die "$row: zero detections, and no audit covers $m $arm; STOP (v2.5 B.3), to the gate"
+        rec="$(zerodet_name "$m" "$arm" "$n")"
+        logged "$rec" python tools/w4v_verdict.py --zerodet --log "$log" --dets "$DETS/${row}.json" --audit "$audit" \
+            || die "$row: zero detections, and --zerodet refused the record; STOP (v2.5 B.3), see $rec"
+        info "$row: zero detections, recorded as AP 0.00 by rule B.2 in $rec"
+    fi
     info "$row: $((SECONDS - t0)) s"
 }
 
@@ -229,7 +282,8 @@ run_rows() {
     targets+=("$WITNESS")
     for r in "$@"; do
         read -r m arm n <<< "$r"
-        targets+=("$OUT/$(row_name "$stage" "$m" "$arm" "$n")_${TAG}.log" "$DETS/$(row_name "$stage" "$m" "$arm" "$n").json")
+        targets+=("$OUT/$(row_name "$stage" "$m" "$arm" "$n")_${TAG}.log" "$DETS/$(row_name "$stage" "$m" "$arm" "$n").json"
+                  "$(zerodet_name "$m" "$arm" "$n")")
     done
     refuse "${targets[@]}"
     use_env resnet_env17
@@ -419,13 +473,54 @@ stage_prereg() {
         for arm in $TIER_ARMS; do f="$(arm_file "$m" "$arm")" || die "no file for $m $arm"; files+=("$f"); done
     done
     logged "$log" python tools/w4v_verdict.py --prereg --files "${files[@]}" || die "prereg refused, see $log"
-    ok "commit $log before: $0 screen1"
+    ok "commit $log before: $0 bias1"
+}
+
+# bias_arms_of <tier> -- the arms C5b audits in stage bias<tier> (tools/w4v_verdict.py bias_arms, v2.5 C).
+bias_arms_of() {
+    python -c 'import sys; sys.path.insert(0, "tools"); import w4v_verdict as v; print(" ".join(v.bias_arms(int(sys.argv[1]))))' "$1"
+}
+
+# bias_body <tier> <model> -- C5b (v2.5 C) on each of the stage's arms, against its pinned file: a W4V_CONTROL C5b
+# <model> <arm> PASS|FAIL line each, keyed on the tool's own "C5B <model> <arm> PASS" line. A FAIL is a DEFECT and a
+# STOP (B.3): no later arm runs and no W4V_DONE is printed.
+bias_body() {
+    local tier="$1" m="$2" arm arms
+    python tools/w4v_verdict.py --hashes || return 1
+    arms="$(bias_arms_of "$tier")" || return 1
+    [ -n "$arms" ] || return 1
+    for arm in $arms; do
+        printf '\n### C5b %s %s\n' "$m" "$arm"
+        marked C5b "$m $arm" "^C5B $m $arm PASS" python tools/w4v_bias_audit.py recompute "$m" "$arm" || return 1
+    done
+    echo "W4V_DONE bias${tier} $m"   # the stage's success line (tools/w4v_verdict.py ready)
+}
+
+# stage_bias <tier> -- bias1 after the prereg, bias2 after emit2 and its pins, each before its screen (v2.5 C).
+stage_bias() {
+    local tier="$1" m logs=()
+    for m in "${MODELS[@]}"; do logs+=("$OUT/w4v_bias${tier}_${m}_${TAG}.log"); done
+    refuse "${logs[@]}"
+    use_env resnet_env17
+    ready "bias${tier}"
+    for m in "${MODELS[@]}"; do
+        step "C5b bias${tier} $m: the independent bias check"
+        logged "$OUT/w4v_bias${tier}_${m}_${TAG}.log" bias_body "$tier" "$m" \
+            || die "C5b bias${tier} $m did not pass: a DEFECT is a STOP (v2.5 B.3); see its log and go to the gate"
+    done
+}
+
+stage_bias1() {
+    stage_bias 1
+    ok "C5b bias1 pass; commit the bias1 logs, then $0 screen1 on the gate's go"
 }
 
 stage_screen1() {
     local m arm arms rows=() logs=()
     use_env resnet_env17
     ready screen1
+    V24_DETS="$W/dets_v24_screen1_stop"
+    [ -d "$V24_DETS" ] || warn "$V24_DETS is missing: every V24_DETS_SHA256 line will read none (report-only)"
     tier_arms 1
     arms="$TIER_ARMS"
     for m in "${MODELS[@]}"; do
@@ -440,7 +535,7 @@ stage_screen1() {
     done
     logged "$OUT/w4v_cut_tier1_${TAG}.log" python tools/w4v_verdict.py --screen --tier 1 --logs "${logs[@]}" \
         || die "the tier-1 screen is incomplete, see $OUT/w4v_cut_tier1_${TAG}.log"
-    ok "commit the screen and cut logs; next: $0 emit2 on the gate's go"
+    ok "commit the screen and cut logs and any w4v_zerodet_ records; next: $0 emit2 on the gate's go"
 }
 
 stage_emit2() {
@@ -460,7 +555,12 @@ stage_emit2() {
     done
     logged "$OUT/w4v_pins_${TAG}.log" python tools/w4v_verdict.py --pins --files "${files[@]}" \
         || die "pins refused, see $OUT/w4v_pins_${TAG}.log"
-    ok "commit the emit2 logs and $OUT/w4v_pins_${TAG}.log before: $0 screen2"
+    ok "commit the emit2 logs and $OUT/w4v_pins_${TAG}.log before: $0 bias2"
+}
+
+stage_bias2() {
+    stage_bias 2
+    ok "C5b bias2 pass; commit the bias2 logs, then $0 screen2 on the gate's go"
 }
 
 stage_screen2() {
@@ -481,7 +581,7 @@ stage_screen2() {
     done
     logged "$OUT/w4v_cut_tier2_${TAG}.log" python tools/w4v_verdict.py --screen --tier 2 --logs "${logs[@]}" \
         || die "the tier-2 screen is incomplete, see $OUT/w4v_cut_tier2_${TAG}.log"
-    ok "commit the screen and cut logs; next: $0 gate"
+    ok "commit the screen and cut logs and any w4v_zerodet_ records; next: $0 gate"
 }
 
 # gate_body -- SRC_TREE (the compiler C8 judges with, as HEAD records it; src/ clean), then C8 on every advancing
