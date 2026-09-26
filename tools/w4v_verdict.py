@@ -527,6 +527,181 @@ def dets_check(row: dict, coco, ids: list[int], h: list[int], root: Path) -> dic
     return got
 
 
+# v2.5 section B: zero-detection rows. B.1's three lines, 5_eval_map.py:233, :240 and :243's exit message
+ZERO_LINES = ((r"^0 detections over (\d+) images in \S+s$", "0 detections over <N> images"),
+              (r"^wrote (\S+)$", "wrote <dets>"),
+              (r"^(no detections at all -- something is broken upstream)$", "no detections at all"))
+
+
+def row_of(log_name: str) -> str:
+    """w4v_<stage>_<model>_<arm>_n<N> from its log's name (the runner's row name; its dets file is <row>.json)."""
+    return log_name[:-len(".log")].rsplit("_", 2)[0]
+
+
+def zero_row(path: Path, root: Path = ROOT) -> tuple[dict, list[str]]:
+    """v2.5 B.1, line by line, on an eval row log with no DETS_SHA256 line: 5_eval_map.py printed '0 detections over
+    <N> images' (N the row's n) and 'wrote <the runner's dets path>', then exited with 'no detections at all'; the
+    dets file parses as an empty list; no skip unreadable line. The row's fields, with its figures 0.00 by rule B.2,
+    and the problems (none iff B.1 holds)."""
+    m = LOG_NAME.match(path.name)
+    if not m:
+        return {}, [f"{path.name}: not w4v_<stage>_<model>_<arm>_n<N>_<machine>_<date>.log"]
+    text = Path(path).read_text(encoding="utf-8")
+    problems = []
+
+    def one(pattern, what):
+        found = re.findall(pattern, text, flags=re.M)
+        if len(found) != 1:
+            problems.append(f"B.1: {len(found)} '{what}' lines, want one")
+            return None
+        return found[0]
+    n = int(m.group(4))
+    got_n, wrote, _ = (one(p, w) for p, w in ZERO_LINES)
+    sha, ort_v = one(r"^model sha256 ([0-9a-f]{64})$", "model sha256"), one(r"^onnxruntime (\S+)$", "onnxruntime")
+    opt, threads = one(r"^ort-opt : (\S+)", "ort-opt"), one(r"ort-threads : (.+)$", "ort-threads")
+    if got_n is not None and int(got_n) != n:
+        problems.append(f"B.1: {got_n} images, the row's n is {n}")
+    if re.search(DETS_LINE, text, re.M):
+        problems.append("B.1: a DETS_SHA256 line: the eval succeeded")
+    if re.search(r"^\s*skip unreadable", text, re.M):
+        problems.append("B.1: a skip unreadable line")
+    want = f"scratch/w4v/dets/{row_of(path.name)}.json"
+    if wrote is not None and wrote != want:
+        problems.append(f"B.1: wrote {wrote}, not the runner's {want}")
+    dets = Path(root) / want
+    count = None
+    try:
+        got = json.loads(dets.read_text(encoding="utf-8"))
+        count = len(got) if isinstance(got, list) else None
+    except (OSError, ValueError):
+        pass
+    if count != 0:
+        problems.append(f"B.1: {want} is {'missing or not a JSON list' if count is None else f'{count} detections'}")
+    row = {"stage": m.group(1), "model": m.group(2), "arm": m.group(3), "n": n, "log": path.name, "map": "0.00",
+           "images": int(got_n) if got_n is not None else 0, "ort_opt": opt, "threads": (threads or "").strip(),
+           "ort": ort_v, "sha256": sha, "dets": want, "dets_sha256": sha_file(dets) if dets.is_file() else None,
+           "skipped": 0, "triple": logged_hashes(text), "zero": True}
+    return row, problems
+
+
+def audit_for(model: str, arm: str, root: Path = ROOT) -> tuple[Path | None, list[str]]:
+    """The audit a zero-detection record cites (audits()): the committed GENUINE log for bc_e1, else exactly one
+    committed, clean w4v_bias<tier>_<model>_*.log (the gate's Q5 ruling)."""
+    ref = audits().get(f"{model} {arm}")
+    if ref is None:
+        return None, [f"B.3: no audit covers {model} {arm}"]
+    if ref.startswith("results/"):
+        p, problems = Path(root) / ref, []
+    else:
+        found, problems = live(f"w4v_{ref}_{model}_*.log", root)
+        if len(found) != 1:
+            return None, problems + [f"B.3: {len(found)} w4v_{ref}_{model}_*.log, want exactly one"]
+        p = found[0]
+    if not p.is_file() or not committed_clean(p, root):
+        problems.append(f"B.3: {shown(p)} is not committed and clean")
+    return p, problems
+
+
+def audit_problems(path: Path, model: str, arm: str, arm_sha: str, root: Path = ROOT) -> tuple[str | None, list[str]]:
+    """v2.5 B.3: the arm's section of an audit log (from its AUDIT line to the next) is a recompute by the accepted
+    script (dbc4b7bb) or the frozen C5b tool; it PIN_CHECKs exactly this arm file at its pinned sha; its HELD line
+    reads GENUINE in full; no w4_recover or quant import; and the C5b tool's own C5B line reads PASS."""
+    sections, cur = [], None
+    for line in Path(path).read_text(encoding="utf-8").replace("\r\n", "\n").split("\n"):
+        if line.startswith("AUDIT "):
+            cur = [line]
+            sections.append(cur)
+        elif cur is not None:
+            cur.append(line)
+    mine = [s for s in sections if any(x.startswith(f"HELD {model} {arm} (a) ") for x in s)]
+    if len(mine) != 1:
+        return None, [f"B.3: {path.name} has {len(mine)} sections with a full HELD line for {model} {arm}, want one"]
+    s, problems = mine[0], []
+    script = re.match(r"^AUDIT recompute \S.*\| script (LF )?sha256 ([0-9a-f]{64}) \|", s[0])
+    c5b_sha = tools_json(root).get(C5B_TOOL)
+    if not script or script.group(2) not in (AUDIT_SCRIPT_SHA, c5b_sha):
+        problems.append(f"B.3: {path.name}'s {model} {arm} section is not a recompute by dbc4b7bb or the frozen C5b "
+                        f"tool")
+    pins_seen = re.findall(rf"^PIN_CHECK scratch/w4v/arms/{model}_w4v_{arm}(?:_ortonly)?\.onnx sha256 ([0-9a-f]{{64}})"
+                           rf" == pinned$", "\n".join(s), re.M)
+    if pins_seen != [arm_sha]:
+        problems.append(f"B.3: the section's PIN_CHECK of the arm file is not its pin {arm_sha[:12]}...")
+    held = [x for x in s if x.startswith(f"HELD {model} {arm} (a) ")]
+    if len(held) != 1 or not held[0].startswith(f"HELD {model} {arm} (a) False (ANCHORED agrees: True) (b) False "
+                                                  f"(c) False (d) False -> GENUINE ("):
+        problems.append(f"B.3: {model} {arm}'s HELD line does not read GENUINE in full")
+    if sum(x.startswith("IMPORTS w4_recover or quant loaded: none |") for x in s) != 1:
+        problems.append("B.3: the section's IMPORTS line does not read none")
+    if script and script.group(2) == c5b_sha and f"C5B {model} {arm} PASS" not in s:
+        problems.append(f"B.3: no C5B {model} {arm} PASS line")
+    return held[0] if held else None, problems
+
+
+def zerodet_problems(row_log: Path, dets: str, audit: str | None, root: Path = ROOT) -> tuple[list[str], list[str]]:
+    """--zerodet (v2.5 B.4): B.1 on the row, B.3 on the arm and its audit. The record's lines, and the problems (none
+    iff the row is recorded as AP 0.00 on N and 0.00 on H by rule B.2)."""
+    row, problems = zero_row(row_log, root)
+    if not row:
+        return [], problems
+    model, arm = row["model"], row["arm"]
+    if row["stage"] == "repro" or arm == "b8":
+        problems.append(f"B.3: a zero-detection {row['stage']} {arm} row is always a STOP")
+    elif arm.split("_")[0] not in INT32_BIAS:
+        problems.append(f"B.3 (D2): {arm} has no int32 bias; its zero-detection row is a STOP")
+    if dets != row["dets"]:
+        problems.append(f"B.1: --dets {dets} is not the row's {row['dets']}")
+    try:
+        pinned = pins(root)
+    except SystemExit as e:
+        pinned, problems = {}, problems + [str(e)]
+    arm_sha = pinned.get(f"{model}_w4v_{arm}.onnx") or pinned.get(f"{model}_w4v_{arm}_ortonly.onnx")
+    if arm_sha is None or row["sha256"] != arm_sha:
+        problems.append(f"B.1: the row's model sha256 is not {model} {arm}'s pin")
+    held, path = None, None
+    if not problems:
+        path, ap = audit_for(model, arm, root)
+        problems += ap
+        if path is not None and (audit is None or Path(audit).resolve() != path.resolve()):
+            problems.append(f"B.4: --audit {audit} is not {model} {arm}'s audit {shown(path)}")
+        if path is not None and path.is_file():
+            held, hp = audit_problems(path, model, arm, arm_sha, root)
+            problems += hp
+    lines = [f"ZERO_DET_LOG {row_log.name} LF {sha_lf(row_log)}",
+             f"ZERO_DET_DETS {row['dets']} sha256 {row['dets_sha256']} count 0",
+             f"ZERO_DET_AUDIT {shown(path) if path else 'none'} LF {sha_lf(path) if path and path.is_file() else '-'}",
+             f"ZERO_DET_HELD {held}",
+             f"ZERO_DET_ARM {model} {arm} sha256 {arm_sha}",
+             f"ZERO_DET_ROW {row_of(row_log.name)} AP_N 0.00 AP_H 0.00 (rule B.2)"]
+    return lines, problems
+
+
+def zero_record(row_log: Path, root: Path = ROOT, want: dict | None = None, need_commit: bool = True) -> tuple[
+        dict, list[str]]:
+    """A row log with no DETS_SHA256 line counts as present iff exactly one w4v_zerodet_<model>_<arm>_n<N>_*.log
+    names it (committed and clean, need_commit), its hash blocks equal want, it names this row log at its current LF
+    sha and the dets at their current sha, and B.1 re-verifies (v2.5 B.4). The row (0.00 by rule) and the problems."""
+    row, problems = zero_row(row_log, root)
+    if not row:
+        return row, problems
+    recs, sup = live(f"w4v_zerodet_{row['model']}_{row['arm']}_n{row['n']}_*.log", root)
+    problems += sup
+    if len(recs) != 1:
+        return row, problems + [f"{len(recs)} zero-detection records name {row_of(row_log.name)}, want one"]
+    rec = recs[0]
+    text = rec.read_text(encoding="utf-8")
+    if need_commit and not committed_clean(rec, root):
+        problems.append(f"{rec.name} is not committed and clean")
+    blocks = hash_blocks(text)
+    if want is not None and (not blocks or any(b != want for b in blocks)):
+        problems.append(f"{rec.name}: its hash blocks are not the frozen values")
+    for line in (f"ZERO_DET_LOG {row_log.name} LF {sha_lf(row_log)}",
+                 f"ZERO_DET_DETS {row['dets']} sha256 {row['dets_sha256']} count 0",
+                 f"ZERO_DET_ROW {row_of(row_log.name)} AP_N 0.00 AP_H 0.00 (rule B.2)"):
+        if not re.search(rf"^{re.escape(line)}$", text, re.M):
+            problems.append(f"{rec.name} lacks '{line[:60]}...' as the row stands now")
+    return row, problems
+
+
 def delta(b8: str, arm: str) -> float:
     return round(float(b8) - float(arm), 2)
 
@@ -785,6 +960,7 @@ STAGES = ("selftest", "controls", "parity", "repro", "emit1", "prereg", "screen1
 DETS_LINE = r"^DETS_SHA256 [0-9a-f]{64} \S+$"
 SRC_TREE_LINE = r"^SRC_TREE [0-9a-f]{40,64}$"
 CONTROL_FAIL = r"^W4V_CONTROL \S+ \S+( \S+)? FAIL"   # one scope token, or C5b's two (v2.5 C: <model> <arm>)
+C9_TAG = "C9_REDERIVED"   # --verdict's C9 lines, re-derived from the repro rows (v2.5 E); never a W4V_CONTROL line
 OWN_EXTRA = {   # the logs a stage writes beyond stage_logs' (report-only ones, the load witnesses, every decisive row)
     "parity": ["w4v_parity_c6c_env17_yolov8n_*.log"],
     "repro": ["load_w4v_repro_*.log"],
@@ -889,12 +1065,20 @@ def log_problems(path: Path, success: list[tuple[str, int]], want: dict, root: P
     return out
 
 
+def zerodet_globs(stage: str) -> list[str]:
+    """The zero-detection records a stage writes. Their names carry no stage, so each is matched by its arm and n:
+    no arm is scored at n500 in both screens (tier 1 and tier 2 are disjoint), and n5000 rows are only decisive's."""
+    if stage in ("screen1", "screen2"):
+        return [f"w4v_zerodet_{m}_{a}_n{SCREEN_N}_*.log" for m in MODELS for a in arms(int(stage[-1]))]
+    return [f"w4v_zerodet_*_n{DECISIVE_N}_*.log"] if stage == "decisive" else []
+
+
 def own_logs(stage: str, root: Path = ROOT) -> list[Path]:
     """Every log the stage itself has written already, of any date, committed or not. A superseded v2.4 log at its
     listed sha is not the stage's; at any other sha it is (so the stage refuses to start)."""
     results = root / "results" / "int4"
     found = set()
-    for g in [g for g, _ in stage_logs(stage)] + OWN_EXTRA.get(stage, []):
+    for g in [g for g, _ in stage_logs(stage)] + OWN_EXTRA.get(stage, []) + zerodet_globs(stage):
         for p in results.glob(g):
             if p.name not in SUPERSEDED_V24 or live(p.name, root)[1]:
                 found.add(p)
@@ -926,7 +1110,14 @@ def ready(stage: str, root: Path = ROOT, want: dict | None = None, starting: boo
             if len(found) != 1:
                 problems.append(f"{s}: {len(found)} {pattern}, want exactly one")
                 continue
-            problems += [f"{s}: {found[0].name} {p}" for p in log_problems(found[0], success, want, root)]
+            got = log_problems(found[0], success, want, root)
+            if (DETS_LINE, 1) in success and any(DETS_LINE in p for p in got):   # a zero-detection row (v2.5 B.4)
+                _, rec = zero_record(found[0], root, want=want)
+                if rec:
+                    got += [f"zero-detection record: {p}" for p in rec]
+                else:
+                    got = [p for p in got if DETS_LINE not in p]
+            problems += [f"{s}: {found[0].name} {p}" for p in got]
     return problems
 
 
@@ -982,7 +1173,7 @@ def screen_table(rows: list[dict], data, expected: dict, root: Path) -> dict:
                 problems.append(f"{model} {arm}: {len(found)} rows, want 1")
                 continue
             r = found[0]
-            chk = dets_check(r, data.coco, ids, h, root)
+            chk = row_check(r, data.coco, ids, h, root)
             if not chk["ok"]:
                 problems.append(f"{model} {arm}: dets check {chk}")
                 continue
@@ -1050,7 +1241,7 @@ def verdict_table(rows: list[dict], data, advanced: dict, gate: dict, arms_pinne
             r = one(stage, arm)
             if r is None:
                 continue
-            chk = dets_check(r, data.coco, ids, h, root)
+            chk = row_check(r, data.coco, ids, h, root)
             if not chk["ok"]:
                 problems.append(f"{model} {arm}: dets check {chk}")
                 continue
@@ -1073,8 +1264,25 @@ def verdict_table(rows: list[dict], data, advanced: dict, gate: dict, arms_pinne
             "pair": pair_rule(outcomes) if len(outcomes) == len(MODELS) else None}
 
 
-def load_rows(paths: list[str]) -> list[dict]:
-    return [parse_eval_log(Path(p)) for p in paths]
+def load_rows(paths: list[str], need_commit: bool = False, root: Path = ROOT) -> list[dict]:
+    """The eval rows; one with no DETS_SHA256 line is read through its zero-detection record (v2.5 B.4), committed
+    and clean when need_commit (after its stage; --screen reads the stage's own, not yet committed)."""
+    out = []
+    for p in map(Path, paths):
+        if re.search(DETS_LINE, p.read_text(encoding="utf-8"), re.M):
+            out.append(parse_eval_log(p))
+            continue
+        row, problems = zero_record(p, root, want=frozen_values(root), need_commit=need_commit)
+        if problems:
+            raise ValueError(f"{p.name}: no DETS_SHA256 line, and not a recorded zero-detection row: "
+                             + "; ".join(problems))
+        out.append(row)
+    return out
+
+
+def row_check(row: dict, coco, ids: list[int], h: list[int], root: Path) -> dict:
+    """dets_check, or for a recorded zero-detection row its figures by rule B.2 (nothing is rescored)."""
+    return {"ok": True, "zero": True, "h": "0.00"} if row.get("zero") else dets_check(row, coco, ids, h, root)
 
 
 def common_problems(rows: list[dict], pinned: dict) -> list[str]:
@@ -1245,43 +1453,63 @@ def cmd_src_tree() -> int:
     return 0
 
 
+def c9_setup(r: dict, want_now: dict) -> bool:
+    """C9's setup check on one repro row: all 5,000 images, none skipped, the protocol's ORT, ort-opt and threads,
+    and the frozen triple with TOOLS_JSON (v2.4's when the row is carried, E rule 2; this tool's otherwise)."""
+    return (r["images"] == DECISIVE_N and not r["skipped"] and r["ort"] == ORT_VERSION
+            and r["ort_opt"] == EVAL["ort_opt"] and r["threads"] == EVAL["threads"]
+            and r["triple"] == (V24_FROZEN if r["log"] in CARRIED_V24 else want_now))
+
+
+def c9_rederive(rows: list[dict], data, root: Path = ROOT, tag: str = "C9") -> tuple[str, dict]:
+    """C9's comparison, for --c9 and for v2.5's --verdict, which re-derives it from the carried repro rows (section E:
+    their C9 PASS line was printed by v2.4's code): each gate D row's printed figure against gate D's, its setup
+    against the protocol (its triple v2.4's when the row is carried, E rule 2) and its dets check with its H figure.
+    The annotations line, and model -> (its row lines, PASS), every line led by tag."""
+    ids, h = data.sets(0)
+    h_ok = (len(h), id_text_sha(h)) == H_PIN[DECISIVE_N]
+    ok = data.ann_sha == ANN["sha256"] and h_ok
+    head = (f"{tag} annotations {'as pinned' if data.ann_sha == ANN['sha256'] else 'NOT the pinned file'}; H holds "
+            f"{len(h)} ids, {'as pinned' if h_ok else 'NOT as pinned'}")
+    want_now = frozen_values(root)
+    out = {}
+    for m in MODELS:
+        good, lines = ok, []
+        for a, want in GATE_D_MAP[m].items():
+            found = [r for r in rows if r["model"] == m and r["arm"] == a and r["stage"] == "repro"]
+            if len(found) != 1:
+                lines.append(f"{tag} {m} {a}: {len(found)} rows, want 1")
+                good = False
+                continue
+            r = found[0]
+            setup = c9_setup(r, want_now)
+            same = r["map"] == want
+            chk = dets_check(r, data.coco, ids, h, root)
+            lines.append(f"{tag} {m} {a}: {'matches' if same else 'DOES NOT MATCH'} gate D's {DECISIVE_N}-image "
+                         f"figure; setup {'as pre-registered' if setup else 'DIFFERS'}; dets check "
+                         + (f"ok, H ({len(h)} images) {chk['h']}" if chk["ok"] else "FAILED, no H figure")
+                         + f" ({r['log']})")
+            good &= same and setup and chk["ok"]
+        out[m] = (lines, good)
+    return head, out
+
+
 def cmd_c9(args) -> int:
     """C9 at the end of the repro stage: each row's printed figure against gate D's, its setup against the protocol,
-    and its H figure (section 7: RTN's decisive figures come from here). A mismatch is a STOP; --verdict re-checks
-    the same logs. It runs before the prereg log exists, so it reads no pins."""
+    and its H figure (section 7: RTN's decisive figures come from here). A mismatch is a STOP; --verdict re-derives
+    it from the same logs (c9_rederive()). It runs before the prereg log exists, so it reads no pins."""
     print_hashes()
     problems = ready("repro")
     if problems:
         return refuse(problems, "C9 REFUSED: an earlier stage's logs do not hold; nothing is scored")
     rows = load_rows(args.logs)
-    data = Data(ROOT / ANN["path"], ROOT / CALIB["dir"])
-    ids, h = data.sets(0)
-    ok = data.ann_sha == ANN["sha256"] and (len(h), id_text_sha(h)) == H_PIN[DECISIVE_N]
-    print(f"C9 annotations {'as pinned' if data.ann_sha == ANN['sha256'] else 'NOT the pinned file'}; H holds "
-          f"{len(h)} ids, {'as pinned' if (len(h), id_text_sha(h)) == H_PIN[DECISIVE_N] else 'NOT as pinned'}")
-    want_hashes = frozen_values()
-    all_ok = ok
-    for m in MODELS:
-        good = ok
-        for a, want in GATE_D_MAP[m].items():
-            found = [r for r in rows if r["model"] == m and r["arm"] == a and r["stage"] == "repro"]
-            if len(found) != 1:
-                print(f"C9 {m} {a}: {len(found)} rows, want 1")
-                good = False
-                continue
-            r = found[0]
-            setup = (r["images"] == DECISIVE_N and not r["skipped"] and r["ort"] == ORT_VERSION
-                     and r["ort_opt"] == EVAL["ort_opt"] and r["threads"] == EVAL["threads"]
-                     and r["triple"] == want_hashes)
-            same = r["map"] == want
-            chk = dets_check(r, data.coco, ids, h, ROOT)
-            print(f"C9 {m} {a}: {'matches' if same else 'DOES NOT MATCH'} gate D's {DECISIVE_N}-image figure; "
-                  f"setup {'as pre-registered' if setup else 'DIFFERS'}; dets check "
-                  + (f"ok, H ({len(h)} images) {chk['h']}" if chk["ok"] else "FAILED, no H figure") + f" ({r['log']})")
-            good &= same and setup and chk["ok"]
+    head, c9 = c9_rederive(rows, Data(ROOT / ANN["path"], ROOT / CALIB["dir"]))
+    print(head)
+    for m, (lines, good) in c9.items():
+        for line in lines:
+            print(line)
         print(f"W4V_CONTROL C9 {m} {'PASS' if good else 'FAIL'}")
-        all_ok &= good
-    return 0 if all_ok else 1
+    return 0 if all(good for _, good in c9.values()) else 1
 
 
 def cmd_screen(args) -> int:
@@ -1290,7 +1518,11 @@ def cmd_screen(args) -> int:
     if problems:
         return refuse(problems, "SCREEN REFUSED: the frozen state or an earlier stage's logs do not hold; nothing is "
                                 "scored")
-    rows = load_rows(args.logs)
+    try:
+        rows = load_rows(args.logs)
+    except ValueError as e:
+        return refuse([str(e)], "SCREEN REFUSED: a row log is neither an eval nor a recorded zero-detection row; "
+                                "nothing is scored")
     pinned = pins()
     tier = args.tier
     expected = {m: arms(tier) for m in MODELS}
@@ -1369,7 +1601,11 @@ def cmd_verdict(args) -> int:
                                 "scored")
     pinned = pins()
     advanced, problems = read_cuts(pinned)
-    rows = load_rows(args.logs)
+    try:
+        rows = load_rows(args.logs, need_commit=True)
+    except ValueError as e:
+        return refuse(problems + [str(e)], "VERDICT REFUSED: a row log is neither an eval nor a recorded "
+                                           "zero-detection row; nothing is scored")
     problems += common_problems(rows, pinned)
     marks = controls_status(args.controls)
     for key in required_controls():
@@ -1381,9 +1617,17 @@ def cmd_verdict(args) -> int:
     data = Data(ROOT / ANN["path"], ROOT / CALIB["dir"])
     if data.ann_sha != ANN["sha256"]:
         problems.append(f"annotation sha {data.ann_sha} != pinned {ANN['sha256']}")
+    head, c9 = c9_rederive(rows, data, ROOT, C9_TAG)   # v2.5 E: C9 from the carried rows, as --c9 made it
+    print(head)
+    for m, (lines, good) in c9.items():
+        for line in lines:
+            print(line)
+        print(f"{C9_TAG} {m} {'PASS' if good else 'FAIL'}")
+        if not good:
+            problems.append(f"C9 re-derived from the repro rows: {m} FAIL")
     if problems:
-        return refuse(problems, "VERDICT REFUSED: the rows, the cut logs or the controls do not meet the "
-                                "pre-registered setup; nothing is scored")
+        return refuse(problems, "VERDICT REFUSED: the rows, the cut logs, the controls or the re-derived C9 do not "
+                                "meet the pre-registered setup; nothing is scored")
     res = verdict_table(rows, data, advanced, gate_status(args.controls), pinned_arms(pinned), ROOT)
     say("C9_JSON", res["c9"])
     for m, o in res["outcomes"].items():
@@ -1423,6 +1667,19 @@ def cmd_verdict(args) -> int:
     return 0
 
 
+def cmd_zerodet(args) -> int:
+    """v2.5 B.4, for the runner's eval_row when a row's eval exits with B.1's lines: the completion record. It prints
+    the record's lines only when B.1 and B.3 hold; a refusal stops the stage exactly as in v2.4."""
+    print_hashes()
+    problems = frozen_state()
+    lines, zp = zerodet_problems(Path(args.log), args.dets, args.audit)
+    if problems + zp:
+        return refuse(problems + zp, "ZERODET REFUSED: B.1 or B.3 does not hold; the stage stops (v2.5 B.3)")
+    for line in lines:
+        print(line)
+    return 0
+
+
 def cmd_dets_sha(path: str) -> int:
     p = Path(path)
     print(f"DETS_SHA256 {sha_file(p)} {shown(p)}")
@@ -1435,8 +1692,10 @@ def cmd_dets_sha(path: str) -> int:
 def selftest() -> int:
     """Synthetic data only: no model, COCO image, capture, arm file or detections JSON is read. The git checks run in
     a throwaway repository under the system temp directory, on copies of the tool files. Read-only, it also reads the
-    repo's own sources (the frozen values, TOOLS_JSON's import graph) and the committed carried and superseded v2.4
-    logs (v2.5 E), and the --advanced and --c8 children it starts read the committed W4V logs in results/int4/."""
+    repo's own sources (the frozen values, TOOLS_JSON's import graph), the committed carried and superseded v2.4 logs
+    (v2.5 E), the archived yolov8s bc_e1 screen1 row and the committed audit logs (v2.5 B.1, B.3; the row's dets are
+    given as the held [] in a temp directory), and the --advanced and --c8 children it starts read the committed W4V
+    logs in results/int4/."""
     import numpy as np
     fails = []
 
@@ -1550,6 +1809,64 @@ def selftest() -> int:
     expect("SCREEN INCOMPLETE prints no CUT_JSON or FLAG_JSON; SCREEN COMPLETE comes first, then the cut",
            not any(line.startswith(("CUT_JSON", "FLAG_JSON")) for line in bad) and bad[-1] == "SCREEN INCOMPLETE"
            and good[0] == "SCREEN COMPLETE" and good[1].startswith("CUT_JSON ") and good[2].startswith("FLAG_JSON "))
+
+    # v2.5 B.2, B.4 and E: a zero row's figures by rule, and C9's setup and its re-derivation in --verdict
+    expect("a recorded zero-detection row is 0.00 by rule and never rescored; B8 - 0.00 > 2.0 on the 500 and on H, "
+           "so it is cut and not flagged (B.4)",
+           row_check({"zero": True}, None, [], [], ROOT) == {"ok": True, "zero": True, "h": "0.00"}
+           and not advances(delta("30.00", "0.00")) and not flagged(delta("30.00", "0.00"), delta("29.00", "0.00")))
+    now = frozen_values()
+    r9 = {"images": DECISIVE_N, "skipped": 0, "ort": ORT_VERSION, "ort_opt": EVAL["ort_opt"],
+          "threads": EVAL["threads"]}
+    carried9 = next(n for n in CARRIED_V24 if n.startswith("w4v_repro_yolov8n_rtn_e1_"))
+    fresh9 = "w4v_repro_yolov8n_rtn_e1_n5000_desktop2_20260928.log"
+    expect("C9's setup (v2.5 E): a carried repro row wants v2.4's triple, any other row this tool's; 4,999 images or "
+           "one skipped image fails it",
+           c9_setup({**r9, "log": carried9, "triple": V24_FROZEN}, now)
+           and not c9_setup({**r9, "log": carried9, "triple": now}, now)
+           and c9_setup({**r9, "log": fresh9, "triple": now}, now)
+           and not c9_setup({**r9, "log": fresh9, "triple": V24_FROZEN}, now)
+           and not c9_setup({**r9, "log": carried9, "triple": V24_FROZEN, "images": DECISIVE_N - 1}, now)
+           and not c9_setup({**r9, "log": carried9, "triple": V24_FROZEN, "skipped": 1}, now))
+
+    class NoData:   # stands in for Data: another annotation file and no H; with no rows nothing is scored
+        ann_sha, coco = "0" * 64, None
+
+        def sets(self, n):
+            return [], []
+    head9, c9 = c9_rederive([], NoData(), ROOT, C9_TAG)
+    lines9 = [head9] + [x for ls, _ in c9.values() for x in ls]
+    expect("--verdict re-derives C9 under its own tag, never a W4V_CONTROL line; another annotation file or a missing "
+           "repro row is a FAIL for its model",
+           all(x.startswith(C9_TAG + " ") for x in lines9) and "NOT the pinned file" in head9
+           and not any(x.startswith("W4V_CONTROL") for x in lines9 + [f"{C9_TAG} {m} FAIL" for m in MODELS])
+           and sorted(c9) == sorted(MODELS) and not any(good for _, good in c9.values())
+           and sum(x.endswith(": 0 rows, want 1") for x in lines9) == sum(len(GATE_D_MAP[m]) for m in MODELS))
+
+    # v2.5 B.1 and B.3 on the committed evidence, at the v2.4 prereg's pins: the archived yolov8s bc_e1 row (its dets
+    # given as the held [] in a temp root) is B.1's zero row, and every committed audit log passes B.3 at its pin
+    pins24, _ = v24_pins()
+
+    def pin24(m, a):
+        return (pins24.get(f"scratch/w4v/arms/{m}_w4v_{a}.onnx")
+                or pins24.get(f"scratch/w4v/arms/{m}_w4v_{a}_ortonly.onnx"))
+    with tempfile.TemporaryDirectory(prefix="w4v-selftest-zero-") as t:
+        (Path(t) / "scratch" / "w4v" / "dets").mkdir(parents=True)
+        (Path(t) / "scratch" / "w4v" / "dets" / "w4v_screen_yolov8s_bc_e1_n500.json").write_text("[]", encoding="utf-8")
+        z_row, z_problems = zero_row(RESULTS / "w4v_v24_screen1_stop" /
+                                     "w4v_screen_yolov8s_bc_e1_n500_desktop2_20260926.log", Path(t))
+    z_real = [(audit_problems(RESULTS / "w4v_audit" / n, m, a, pin24(m, a))[1],
+               audit_problems(RESULTS / "w4v_audit" / n, m, a, "0" * 64)[1])
+              for n, m, a in (("recompute_yolov8n_rerun_desktop2_20260926.log", "yolov8n", "bc_e1"),
+                              ("recompute_yolov8s_rerun2_desktop2_20260926.log", "yolov8s", "bc_e1"),
+                              ("c5b_validate_yolov8n_desktop2_20260926.log", "yolov8n", "bc_e1"),
+                              ("c5b_validate_yolov8s_desktop2_20260926.log", "yolov8s", "bc_e1"),
+                              ("c5b_precheck_vc_yolov8n_desktop2_20260926.log", "yolov8n", "vc_e1"))]
+    expect("B.1 and B.3 on the committed evidence: the archived yolov8s bc_e1 row is B.1's zero row at its v2.4 pin; "
+           "both GENUINE recomputes, both C5b validations and the VC pre-check pass B.3 at their v2.4 pins, and each "
+           "is refused at another pin",
+           z_problems == [] and z_row["sha256"] == pin24("yolov8s", "bc_e1") and z_row["images"] == SCREEN_N
+           and all(ok == [] and any("PIN_CHECK" in p for p in bad) for ok, bad in z_real))
 
     # git: committed and clean, the one prereg log, TOOLS_JSON, pins and the cut logs (A, B, C, D, G)
     tmp = Path(tempfile.mkdtemp(prefix="w4v-selftest-git-"))
@@ -1831,8 +2148,165 @@ def selftest() -> int:
                k_ok == [] and any(p.startswith("rule 1") for p in k_1) and any(p.startswith("rule 2") for p in k_2)
                and any(p.startswith("rule 3") for p in k_3) and any(p.startswith("rule 4") for p in k_4)
                and any("not committed" in p for p in k_5a) and any("success line" in p for p in k_5b)
-               and any("FAIL" in p for p in k_5c)
+               and any(p.startswith("rule 5: holds a W4V_CONTROL FAIL") for p in k_5c)
                and k_rows[0] == [] and k_rows[1] != [] and k_rows[2] != [])
+
+        # v2.5 B.3 and B.4: --zerodet's record, its refusals (B.1 and B.3 each broken once), and a recorded row in
+        # ready(), load_rows() and own_logs(); the audits are the committed logs, re-pinned to this repo's pins
+        dets_dir = tmp / "scratch" / "w4v" / "dets"
+        dets_dir.mkdir(parents=True)
+        (res_dir / "w4v_audit").mkdir()
+
+        def pin_a(m, a):
+            return pins_a.get(f"{m}_w4v_{a}.onnx") or pins_a.get(f"{m}_w4v_{a}_ortonly.onnx")
+
+        def zlines(stage, m, a, n=SCREEN_N):   # B.1's row log, in 5_eval_map.py's format (the archived row's)
+            row = f"w4v_{stage}_{m}_{a}_n{n}"
+            return row, [*hash_lines(tmp), f"onnxruntime {ORT_VERSION}",
+                         f"ort-opt : {EVAL['ort_opt']}   ort-threads : {EVAL['threads']}",
+                         f"model sha256 {pin_a(m, a) or 'f' * 64}", f"0 detections over {n} images in 46s",
+                         f"wrote scratch/w4v/dets/{row}.json", "no detections at all -- something is broken upstream"]
+
+        def zput(row, lines, dets="[]", commit=True):
+            (dets_dir / f"{row}.json").write_text(dets, encoding="utf-8")
+            return put(f"{row}_desktop2_20260928.log", "\n".join(lines) + "\n", commit)
+
+        def zd(row_p, audit=None):
+            return zerodet_problems(row_p, f"scratch/w4v/dets/{row_of(row_p.name)}.json",
+                                    str(audit or tmp / AUDIT_LOGS["yolov8s"]), tmp)
+
+        def undo(*ps):   # back to HEAD: every case below edits a committed file without committing
+            g("checkout", "--", *[p.relative_to(tmp).as_posix() for p in ps])
+        real_s = (ROOT / AUDIT_LOGS["yolov8s"]).read_text(encoding="utf-8")
+        audit_p = put("w4v_audit/" + Path(AUDIT_LOGS["yolov8s"]).name,
+                      real_s.replace(pin24("yolov8s", "bc_e1"), pin_a("yolov8s", "bc_e1")))
+        z_name, z_lines = zlines("screen", "yolov8s", "bc_e1")
+        row_p = zput(z_name, z_lines)
+        z_dets = dets_dir / f"{z_name}.json"
+        rec_lines, z_ok = zd(row_p)
+        z_before = [p for p in ready("emit2", tmp) if z_name in p]
+        try:
+            load_rows([str(row_p)], True, tmp)
+            z_raised = False
+        except ValueError:
+            z_raised = True
+        rec_text = blk + "\n".join(rec_lines) + "\n"
+        rec_p = put(f"w4v_zerodet_yolov8s_bc_e1_n{SCREEN_N}_desktop2_20260928.log", rec_text)
+        z_rec = zero_record(row_p, tmp, want)[1]
+        z_loaded = load_rows([str(row_p)], True, tmp)
+        z_after = [p for p in ready("emit2", tmp) if z_name in p]
+        z_own = (rec_p in own_logs("screen1", tmp), rec_p in own_logs("screen2", tmp))
+        expect("zerodet (v2.5 B.4): a B.1 row of an int32-bias arm with its committed GENUINE audit at its pin gets "
+               "the record's six lines; recorded and committed, the row reads 0.00 by rule in load_rows() and counts "
+               "in ready(), which refused it before; screen1's own_logs() holds the record, screen2's not",
+               z_ok == [] and [x.split()[0] for x in rec_lines] == ["ZERO_DET_LOG", "ZERO_DET_DETS", "ZERO_DET_AUDIT",
+                                                                    "ZERO_DET_HELD", "ZERO_DET_ARM", "ZERO_DET_ROW"]
+               and rec_lines[5] == f"ZERO_DET_ROW {z_name} AP_N 0.00 AP_H 0.00 (rule B.2)"
+               and rec_lines[3].endswith(")") and "-> GENUINE (" in rec_lines[3]
+               and z_raised and any("zero-detection record" in p for p in z_before) and z_after == [] and z_rec == []
+               and z_loaded[0]["zero"] and z_loaded[0]["map"] == "0.00" and z_own == (True, False))
+
+        # the record's refusals: uncommitted, the dets or the row changed after it, two records, another hash block
+        rec_p.write_text(rec_text + "x\n", encoding="utf-8")
+        r_unc = (zero_record(row_p, tmp, want)[1], zero_record(row_p, tmp, want, need_commit=False)[1])
+        rec_p.write_text(blk_other + "\n".join(rec_lines) + "\n", encoding="utf-8")
+        r_blk = zero_record(row_p, tmp, want, need_commit=False)[1]
+        undo(rec_p)
+        z_dets.write_text("[ ]", encoding="utf-8")
+        r_dets = zero_record(row_p, tmp, want)[1]
+        z_dets.write_text("[]", encoding="utf-8")
+        row_p.write_text("\n".join(z_lines) + "\n# x\n", encoding="utf-8")
+        r_row = zero_record(row_p, tmp, want)[1]
+        undo(row_p)
+        second = put(f"w4v_zerodet_yolov8s_bc_e1_n{SCREEN_N}_desktop2_20260929.log", rec_text, commit=False)
+        r_two = zero_record(row_p, tmp, want)[1]
+        second.unlink()
+        expect("a record counts only while it holds: refused when it is uncommitted (need_commit), when its hash "
+               "block is not the frozen one, when the dets or the row log changed after it, and when two name the row",
+               any("not committed" in p for p in r_unc[0]) and r_unc[1] == []
+               and any("hash blocks are not the frozen values" in p for p in r_blk)
+               and any("ZERO_DET_DETS" in p for p in r_dets) and any("ZERO_DET_LOG" in p for p in r_row)
+               and any("2 zero-detection records" in p for p in r_two) and zero_record(row_p, tmp, want)[1] == [])
+
+        # --zerodet's refusals. B.1, line by line, and the dets file
+        def b1(lines=None, dets="[]"):
+            row_p.write_text("\n".join(lines or z_lines) + "\n", encoding="utf-8")
+            z_dets.write_text(dets, encoding="utf-8")
+            out = zd(row_p)[1]
+            undo(row_p)
+            z_dets.write_text("[]", encoding="utf-8")
+            return out
+        wrote = f"wrote scratch/w4v/dets/{z_name}.json"
+        z_b1 = [b1([x.replace(f"over {SCREEN_N} images", "over 499 images") for x in z_lines]),
+                b1(z_lines[:-1]),
+                b1(z_lines + [f"DETS_SHA256 {'a' * 64} scratch/w4v/dets/{z_name}.json"]),
+                b1(z_lines + ["  skip unreadable 000000000001.jpg"]),
+                b1([x.replace(wrote, "wrote scratch/w4v/dets/other.json") for x in z_lines]),
+                b1(dets='[{"image_id": 1}]'), b1(dets="{}")]
+        want_b1 = ["499 images, the row's n is 500", "0 'no detections at all' lines", "a DETS_SHA256 line",
+                   "a skip unreadable line", "not the runner's", "is 1 detections", "missing or not a JSON list"]
+        # B.3: the arm's kind, its pin, and its audit (the static bc_e1 log: its commit, HELD, PIN_CHECK, IMPORTS and
+        # script; --audit naming another log)
+        z_kind = []
+        for stage, m, a, n in (("screen", "yolov8s", "b8", SCREEN_N), ("repro", "yolov8n", "rtn_e1", DECISIVE_N),
+                               ("screen", "yolov8n", "rtn_e1", SCREEN_N)):
+            kn, kl = zlines(stage, m, a, n)
+            kp = zput(kn, kl, commit=False)
+            z_kind.append(zd(kp)[1])
+            kp.unlink()
+            (dets_dir / f"{kn}.json").unlink()
+        row_p.write_text("\n".join(x.replace(pin_a("yolov8s", "bc_e1"), "e" * 64) for x in z_lines) + "\n",
+                         encoding="utf-8")
+        z_sha = zd(row_p)[1]
+        undo(row_p)
+
+        def audit_as(text):
+            audit_p.write_text(text, encoding="utf-8")
+            out = zd(row_p)[1]
+            undo(audit_p)
+            return out
+        a_text = audit_p.read_text(encoding="utf-8")
+        z_audit = [audit_as(a_text + "\n"), audit_as(a_text.replace("-> GENUINE (", "-> DEFECT (")),
+                   audit_as(a_text.replace(pin_a("yolov8s", "bc_e1"), pin24("yolov8s", "bc_e1"))),
+                   audit_as(a_text.replace("IMPORTS w4_recover or quant loaded: none |",
+                                           "IMPORTS w4_recover or quant loaded: quant.qdq |")),
+                   audit_as(a_text.replace(AUDIT_SCRIPT_SHA, "0" * 64)),
+                   zd(row_p, res_dir / "note.log")[1]]
+        want_audit = ["is not committed and clean", "does not read GENUINE in full", "PIN_CHECK of the arm file",
+                      "IMPORTS line does not read none", "not a recompute by dbc4b7bb", "B.4: --audit"]
+        expect("--zerodet refuses unless B.1 holds line by line (another N, no exit line, a DETS_SHA256 line, a skip "
+               "line, another wrote path, a detection, a dets that is no list) and B.3 holds (B8, C9's RTN rows and "
+               "an arm with no int32 bias are STOPs; the row's model sha is the pin; its audit is committed, reads "
+               "GENUINE in full, PIN_CHECKs this pin, imports nothing, is by dbc4b7bb, and is the one --audit names)",
+               all(any(w in p for p in got) for got, w in zip(z_b1, want_b1)) and len(z_b1) == len(want_b1)
+               and any("always a STOP" in p for p in z_kind[0]) and any("always a STOP" in p for p in z_kind[1])
+               and any("(D2)" in p for p in z_kind[2]) and any("is not yolov8s bc_e1's pin" in p for p in z_sha)
+               and all(any(w in p for p in got) for got, w in zip(z_audit, want_audit))
+               and len(z_audit) == len(want_audit) and zd(row_p)[1] == [])
+
+        # a bias1 arm (v2.5 B.3, the gate's Q5): exactly one committed, clean w4v_bias1_<model>_*.log, whose section
+        # for the arm is by the frozen C5b tool with its C5B PASS line
+        bn, bl = zlines("screen", "yolov8s", "bc_e2")
+        bp = zput(bn, bl, commit=False)
+        c5b_s = (ROOT / "results" / "int4" / "w4v_audit" / "c5b_validate_yolov8s_desktop2_20260926.log").read_text(
+            encoding="utf-8").replace(pin24("yolov8s", "bc_e1"), pin_a("yolov8s", "bc_e2")).replace("bc_e1", "bc_e2")
+        bias_name = "w4v_bias1_yolov8s_desktop2_20260928.log"
+        z_b_none = zd(bp, res_dir / bias_name)[1]
+        bias_p = put(bias_name, c5b_s)
+        z_b_ok = zd(bp, bias_p)[1]
+        bias_p.write_text(c5b_s.replace("C5B yolov8s bc_e2 PASS", "C5B yolov8s bc_e2 FAIL"), encoding="utf-8")
+        z_b_fail = zd(bp, bias_p)[1]
+        undo(bias_p)
+        other_bias = put("w4v_bias1_yolov8s_desktop2_20260929.log", c5b_s, commit=False)
+        z_b_two = zd(bp, bias_p)[1]
+        other_bias.unlink()
+        bp.unlink()
+        (dets_dir / f"{bn}.json").unlink()
+        expect("a bias1 arm's audit is its one committed, clean w4v_bias1_<model>_*.log: none or two refuse; the "
+               "frozen C5b tool's section passes with its C5B PASS line and is refused with a C5B FAIL line",
+               any("0 w4v_bias1_yolov8s_*.log" in p for p in z_b_none) and z_b_ok == []
+               and any("no C5B yolov8s bc_e2 PASS line" in p for p in z_b_fail)
+               and any("2 w4v_bias1_yolov8s_*.log" in p for p in z_b_two))
 
         # F4: SRC_TREE is the tree HEAD records for src/, refused unless src/ is clean against it
         t_none = src_tree(tmp)
@@ -2009,7 +2483,11 @@ def main() -> int:
     mode.add_argument("--advanced", action="store_true")
     mode.add_argument("--c8", action="store_true")
     mode.add_argument("--verdict", action="store_true")
+    mode.add_argument("--zerodet", action="store_true")
     mode.add_argument("--selftest", action="store_true")
+    ap.add_argument("--log")
+    ap.add_argument("--dets")
+    ap.add_argument("--audit")
     ap.add_argument("--files", nargs="*", default=[])
     ap.add_argument("--logs", nargs="*", default=[])
     ap.add_argument("--controls", nargs="*", default=[])
@@ -2038,6 +2516,10 @@ def main() -> int:
         return cmd_c8(args)
     if args.verdict:
         return cmd_verdict(args)
+    if args.zerodet:
+        if not (args.log and args.dets):
+            ap.error("--zerodet needs --log and --dets (and --audit)")
+        return cmd_zerodet(args)
     print_hashes()
     return selftest()
 
