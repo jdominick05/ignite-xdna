@@ -1,0 +1,80 @@
+{
+ "study": "Laya step 2: do int8 and bf16 keep Laya's decisions and calibration against fp32 on the CPU?",
+ "frozen": "before any int8 or bf16 arm is scored on the items; the fp32 reference was scored first",
+ "tool": "tools/laya_accuracy.py",
+ "items": {
+  "file": "items.jsonl",
+  "file_sha256": "138b8a76ce66af5e838e2558832be3f0d33b8740c326ba35616185d079f33f59",
+  "per_task_sha256": {
+   "fixture": "7e30c62e1c1e34433062e2804381d2a03d0fd3efd0bc4f0dd3e98655a0307af1",
+   "ag_news": "ba7c0141d5f8deca1344cc702175cd97d280d0fa08bf6caad0fa73c4cd8e7e10",
+   "emotion": "e3e398c6e3014be19f39b866278bbf099551282ef04d5b9ad7497a2c1191e89f",
+   "banking77": "8110983e312074855e8440688c8fe1bd5e2a3aa0e0b24e2bd5c63929807a67e5",
+   "massive_en": "5e99c129b045c4521911e9e0495532c2df1fac9ce41107e0363f4800315ce728",
+   "xnli_en": "a6a8503d40657a10af45824d32d0965c9571894fc50a9b30f04a6d8baa51a5ff",
+   "sst5": "fe88b8d765e63dc3c984952d68ee4990b17635a8973883c8e6ad8f455a320b45"
+  },
+  "labelled": 2400,
+  "fixture_questions": 3,
+  "note": "each task's first rows of its test split, built as the model card's runs built them; the fixture is receptron's reference ticket (no gold)"
+ },
+ "reference": {
+  "arm": "fp32",
+  "files": {
+   "laya.onnx": "a874eb254b58b0fcb1e7ad56fbb188c29d64e08c9a46b689433e1f52c66dba1e",
+   "laya.onnx.data": "487746363a8da57bcadb4345352997d22a0fb90d70aa22c6856668d023242aba"
+  },
+  "logits_file": "fp32.npz",
+  "logits_sha256": "417f7007214b3319a77d3006b9f494f4ac116b4b6c76800bb8b5b6092dfcf896"
+ },
+ "arms": {
+  "int8_dyn": {
+   "files": {
+    "laya_int8.onnx": "160eafa3438597ab4717d970bcc63cbaa1beab3e16eb3045f97d4920bfb141c7",
+    "laya_int8.onnx.data": "3f49bc9627f31a65833189522355134c30101aec2b7805c33f0006120a21af6b"
+   },
+   "what": "step 1's copy: ORT dynamic quantization, per-channel int8 weights on the 120 MatMuls with constant weights, a per-call activation scale; the 4 head Gemms stay fp32"
+  },
+  "bf16_emul": {
+   "files": {
+    "laya_bf16emu.onnx": "f033cb924cd05702a7998f6d6c19240daa6e80fa0a07e65b478415543e0f4251",
+    "laya_bf16emu.onnx.data": "7774073883bd0ac4eff10d66a6a235dd4dc4853776a2347d8001ea5286de3f28"
+   },
+   "what": "all 124 MatMul/Gemm with constant 2-D weights: weights rounded to bf16 (nearest, ties to even), a Cast pair rounding each one's activation input; fp32 accumulate, fp32 out; attention products, norms and embeddings fp32"
+  }
+ },
+ "session": {
+  "onnxruntime": "1.27.0",
+  "ep": "CPUExecutionProvider",
+  "intra_op_threads": 8,
+  "inter_op_threads": 1,
+  "execution": "sequential",
+  "graph_optimization": "ORT default",
+  "batch": 1
+ },
+ "criteria": {
+  "agree_pooled_min": 0.97,
+  "dacc_pooled_min": -0.005,
+  "dacc_task_min": -0.015,
+  "dece1_pooled_max": 0.01,
+  "dece1_task_max": 0.02
+ },
+ "criteria_text": {
+  "C0": "the scored file is the pre-registered arm (both file hashes)",
+  "C1": "the same top option as fp32 on at least this share of the 2,400 labelled items, pooled",
+  "C2": "pooled accuracy no more than 0.5 pt below fp32's",
+  "C3": "each task's accuracy no more than 1.5 pt below fp32's",
+  "C4": "pooled ECE at T=1 no more than 0.010 above fp32's",
+  "C5": "each task's ECE at T=1 no more than 0.020 above fp32's"
+ },
+ "c1_rule": "0.99, lowered to 1 - (items whose fp32 top-two gap at the shipped temperatures is under 0.048) / 2400 when that is lower, rounded down to 0.5%: never tighter than what the authors' own torch bf16 shift (max |dp| 0.024 on choice questions) could flip on these items",
+ "decision": "an arm PASSES iff C0-C5 all hold. int8 failing removes int8 from an NPU build of Laya; bf16 failing as well stops the NPU numeric path for Laya at these schemes. Speed is step 3's question.",
+ "why_t1": "calibration is judged at T=1: the shipped choice:11+ temperature (0.1006) multiplies logit shifts about 10x on Banking77 and MASSIVE, and laya's current package clamps temperatures to [0.5, 5]",
+ "reported_not_deciding": [
+  "ECE at the shipped temperatures",
+  "|dp| at T=1 and at the shipped temperatures",
+  "SST-5's score answer (sum of i * p_i) shift",
+  "the fixture's three answers, including the only noul question",
+  "per-task same-decision counts"
+ ]
+}

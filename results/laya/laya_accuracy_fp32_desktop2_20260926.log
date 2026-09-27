@@ -1,0 +1,39 @@
+Laya step 2, the fp32 reference, Desktop 2; python is the ryzen-ai-1.8.0 environment. Scored 2026-09-27T00:42:04Z to 00:50:49Z; the report re-run 2026-09-27T00:54:12Z with the committed tool.
+1. One call per item, batch 1, raw logits:
+$ python tools/laya_accuracy.py score --model scratch/laya/laya-onnx/laya.onnx --items scratch/laya/step2/items.jsonl --out scratch/laya/step2/fp32.npz
+  SCORE laya.onnx: onnxruntime 1.27.0, providers ['CPUExecutionProvider'], 8 threads, batch 1, session load 1.2 s; items items.jsonl sha256 138b8a76ce66af5e838e2558832be3f0d33b8740c326ba35616185d079f33f59; laya.onnx sha256 a874eb254b58b0fcb1e7ad56fbb188c29d64e08c9a46b689433e1f52c66dba1e; laya.onnx.data sha256 487746363a8da57bcadb4345352997d22a0fb90d70aa22c6856668d023242aba
+  KEEPAWAKE HOLD True
+  [score] 200/2403 items, 39 s
+  [score] 400/2403 items, 72 s
+  [score] 600/2403 items, 90 s
+  [score] 800/2403 items, 108 s
+  [score] 1000/2403 items, 217 s
+  [score] 1200/2403 items, 325 s
+  [score] 1400/2403 items, 383 s
+  [score] 1600/2403 items, 428 s
+  [score] 1800/2403 items, 456 s
+  [score] 2000/2403 items, 479 s
+  [score] 2200/2403 items, 500 s
+  [score] 2400/2403 items, 522 s
+  [score] 2403/2403 items, 523 s
+  KEEPAWAKE RELEASE
+  SCORE laya.onnx: 2403 items in 521 s of calls (median 143 ms per item; batch 1 on shared hardware, not a timing measurement); logits finite True; fp32.npz sha256 417f7007214b3319a77d3006b9f494f4ac116b4b6c76800bb8b5b6092dfcf896
+2. CPU temperature and package power over the run (HWiNFO CSV, read-only watch; alert at Tctl >= 90 C, STOP at 95 C or a thermal-throttle flag held 60 s):
+  00:42:04Z WATCH START score_fp32.log
+  00:42:04Z STATUS Tctl max 46.6 C, pkg max 20.8 W; seq: -
+  00:45:04Z STATUS Tctl max 89.4 C, pkg max 87.1 W; seq: [score] 800/2403 items, 108 s
+  00:45:39Z ALERT Tctl 90.0 C
+  00:48:04Z STATUS Tctl max 91.6 C, pkg max 87.7 W; seq: [score] 1200/2403 items, 325 s
+  00:50:39Z ALERT Tctl 90.2 C
+  00:50:49Z END seq: SCORE laya.onnx: 2403 items in 521 s of calls (median 143 ms per item; batch 1 on shared hardware, not a timing measurem; Tctl max 91.6 C, pkg max 87.7 W
+3. The reference against the model card's published figures:
+$ python tools/laya_accuracy.py report --model-dir scratch/laya/laya-onnx --items scratch/laya/step2/items.jsonl --ref scratch/laya/step2/fp32.npz
+  REPORT items items.jsonl sha256 138b8a76ce66af5e838e2558832be3f0d33b8740c326ba35616185d079f33f59; reference laya.onnx (fp32.npz sha256 417f7007214b3319a77d3006b9f494f4ac116b4b6c76800bb8b5b6092dfcf896)
+  REF ag_news: n 400, accuracy 0.9500 (published 0.9500, CPU fp32, first 400 test rows); shipped temperature: ECE 0.0316, confidence 0.9220 (published 0.0316, 0.9220); T=1: ECE 0.0274, confidence 0.9712
+  REF emotion: n 400, accuracy 0.5950 (published 0.5950, CPU fp32, first 400 test rows); shipped temperature: ECE 0.3063, confidence 0.9013 (published 0.3063, 0.9013); T=1: ECE 0.3063, confidence 0.9013
+  REF banking77: n 400, accuracy 0.4250 (published 0.4250, CPU fp32, first 400 test rows); shipped temperature: ECE 0.5397, confidence 0.9616 (published 0.5397, 0.9616); T=1: ECE 0.2077, confidence 0.5785
+  REF massive_en: n 300, accuracy 0.7833 (published 0.7833, T4 fp16, first 300 test rows); shipped temperature: ECE 0.2144, confidence 0.9946 (published 0.2143, 0.9942); T=1: ECE 0.1264, confidence 0.9068; published at T=1: ECE 0.1263, confidence 0.9067
+  REF xnli_en: n 300, accuracy 0.8600 (published 0.8600, T4 fp16, first 300 test rows); shipped temperature: ECE 0.0685, confidence 0.9208 (published 0.0685, 0.9208); T=1: ECE 0.1174, confidence 0.9737; published at T=1: ECE 0.1174, confidence 0.9737
+  REF sst5: n 600, accuracy 0.3717 (published 0.3717, T4 fp16, first 600 test rows); shipped temperature: ECE 0.2478, confidence 0.6195 (published 0.2478, 0.6194); T=1: ECE 0.3006, confidence 0.6723; published at T=1: ECE 0.3006, confidence 0.6723
+  REF pooled 2400 labelled items: accuracy 0.6267, T=1 ECE 0.1924
+  REF near ties: top-two gap under 0.048 (twice the authors' largest bf16 choice shift, 0.024) on 65 items at the shipped temperatures and 111 at T=1, of 2400
