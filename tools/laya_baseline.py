@@ -20,8 +20,8 @@ not on the words, so no text is needed; nothing here judges a decision.
 
 ``run`` prints ``[run] frame N`` after every call, so ``tools/energy_sitting.py`` can take the window and the package
 power, and ``[summary]`` lines: latency over the timed calls (mean, median, min, p90, max), calls and tokens per
-second, and the multiply-accumulates per call DERIVED from the graph's MatMul shapes. The int8 copy's accuracy is
-unchecked: it is ORT's dynamic scheme, not the static one an NPU build would use.
+second, and the multiply-accumulates per call DERIVED from the graph's MatMul shapes. The int8 copy is ORT's dynamic
+scheme, not a static one; its accuracy was checked in step 2 (tools/laya_accuracy.py), where it fails the gate.
 """
 import argparse
 import ctypes

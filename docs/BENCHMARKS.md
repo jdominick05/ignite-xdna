@@ -12321,6 +12321,9 @@ have to beat. The NPU was not run.
 
 - **At 512 tokens the 780M and CPU int8 tie on latency** (within 1%). The 780M spends 8.4% less energy and leaves the
   CPU at 8% load, against 52%. CPU fp32 is 1.74-1.76× slower and spends 1.91× the 780M's energy.
+  - CPU int8 is not accuracy-equivalent
+    ([next section](#laya-in-bf16-and-int8-bf16-keeps-its-decisions-orts-dynamic-int8-does-not-2026-09-26-desktop-2)),
+    so at equal accuracy the 780M's fp32 figures are the bar.
 - **At 1,024 tokens CPU int8 is 6% faster** than the 780M, which spends 7.7% less energy.
 - **Batching buys nothing.** Four sequences per call cost the 780M 28% per sequence. The CPU moves by less than 5%
   either way.
@@ -12334,8 +12337,9 @@ have to beat. The NPU was not run.
     outputs are bit-identical.
   - The copy's DirectML logits are within 2.2e-6 of the CPU's, with 98% of kernel time on DirectML.
 - **The int8 file is ORT dynamic quantization.** Its weights are per-channel int8, on MatMuls with constant weights
-  only. Its accuracy is unchecked: on the synthetic input its logits move up to 0.141 from fp32's, with the same top
-  option.
+  only. On the synthetic input its logits move up to 0.141 from fp32's, with the same top option.
+  - On labelled tasks it fails the accuracy gate: 7.96 pt below fp32, pooled
+    ([next section](#laya-in-bf16-and-int8-bf16-keeps-its-decisions-orts-dynamic-int8-does-not-2026-09-26-desktop-2)).
 - **Superseded log lines.** The log's "MACs per call" lines come from an earlier counter: fp32 188.0 G, int8 0.0 G
   (it missed `MatMulInteger`). The committed tool gives both 188.6 G weight + 16.1 G attention at 512 tokens.
   - The committed tool postdates the sitting. Re-run, its `run` output differs only in that line.
@@ -12346,4 +12350,84 @@ have to beat. The NPU was not run.
 - DirectML fp16 (no converter in the environment);
 - the multilingual and 1,024-token checkpoints (no ONNX export);
 - shorter real inputs, which the CPU and the 780M run faster while a fixed-shape NPU build pays for all 512 tokens;
-- decision accuracy.
+- decision accuracy (run in the [next section](#laya-in-bf16-and-int8-bf16-keeps-its-decisions-orts-dynamic-int8-does-not-2026-09-26-desktop-2)).
+
+## Laya in bf16 and int8: bf16 keeps its decisions, ORT's dynamic int8 does not (2026-09-26, Desktop 2)
+
+An NPU build of Laya would run its weight products in bf16 or int8. This checks both against fp32 on the CPU, on the
+public tasks the model card reports, before anything is built for the NPU. The criteria were committed (`465a1fd`)
+before either arm was scored.
+
+- **Items:** 2,400 labelled questions, pinned by hash.
+  - The first test rows of AG News, Emotion and Banking77 (400 each), MASSIVE-en and XNLI-en (300 each), and SST-5
+    (600), built as the card's two published runs built them.
+  - Also receptron's reference support ticket: 3 questions, no gold, and the only noul question here.
+- **Reference:** the fp32 ONNX, step 1's `laya.onnx`, at batch 1. It reproduces the card:
+  - accuracy on all six tasks, to the item;
+  - ECE and confidence to 4 decimals against the card's CPU fp32 run;
+  - within 0.0004 of its T4 fp16 run, and exactly at T=1;
+  - the reference ticket to 4 decimals, 267 tokens.
+- **bf16 arm (emulated):** all 124 MatMul/Gemm with constant weights take bf16 operands and accumulate in fp32 with
+  fp32 out, as the NPU's bf16 GEMM can.
+  - The weights are rounded to nearest-even, and a Cast pair rounds each activation input.
+  - ORT 1.27.0's Cast matches numpy's round-to-nearest-even bit for bit on 119,808 values.
+  - Attention products, norms and embeddings stay fp32.
+- **int8 arm (ORT dynamic):** step 1's copy, a proxy for an NPU build whose host computes the activation scale.
+  - Per-channel int8 weights on the 120 MatMuls; the 4 head Gemms stay fp32.
+  - Activations take one scale per call over the whole tensor, which is why every arm runs at batch 1: padding would
+    change that scale.
+- **Stack:** ONNX Runtime 1.27.0, CPU with 8 intra-op threads.
+- **Criteria:** an arm passes only if all hold.
+  - The same top option as fp32 on at least 97.0% of the items, pooled, so up to 72 of 2,400 may differ. The rule,
+    fixed before the fp32 report, allowed as many as the authors' own bf16 shift (0.024) could flip on these items.
+  - Accuracy at most 0.5 pt below fp32 pooled, and at most 1.5 pt below on each task.
+  - ECE at T=1 at most 0.010 above fp32's pooled, and at most 0.020 above on each task. Calibration is judged at
+    T=1 because the shipped 11+-option temperature (0.1006) multiplies logit shifts about 10×.
+- **Tool:** `tools/laya_accuracy.py`.
+- **Evidence:** in `results/laya/`, run the evening of 2026-09-26 local time (the logs stamp 09-27, UTC):
+  - `laya_accuracy_prereg_desktop2_20260926.json`, the criteria;
+  - `laya_accuracy_prep_desktop2_20260926.log`: the rounding and ticket checks, the items, and the bf16 model;
+  - `laya_accuracy_fp32_desktop2_20260926.log`;
+  - `laya_accuracy_arms_desktop2_20260926.log`.
+
+| Against fp32 | bf16 (emulated) | int8 (ORT dynamic) |
+|---|---|---|
+| Same top option, pooled | **2,395 / 2,400 (99.79%)** | 1,667 / 2,400 (69.46%) |
+| Accuracy, pooled (fp32 0.6267) | **0.6258 (−0.08 pt)** | 0.5471 (−7.96 pt) |
+| Worst task's accuracy | Banking77 −0.25 pt, MASSIVE −0.33 pt (1 item each) | Banking77 0.135 (fp32 0.425, −29.0 pt) |
+| T=1 ECE, pooled (fp32 0.1924) | 0.1921 | 0.1902 |
+| Worst task's T=1 ECE rise | +0.0055 (MASSIVE) | +0.0536 (SST-5) |
+| Reference ticket, largest probability shift | 0.0024 | 0.278 (billing 0.9415 → 0.6635) |
+| Verdict | **PASS** | FAIL: same top option, pooled and per-task accuracy, per-task ECE |
+
+- **bf16 keeps Laya's decisions.**
+  - 5 of 2,400 top options change, for a net 2 fewer correct.
+  - At T=1 the largest task's 99th-percentile probability shift is 0.0193 (XNLI).
+  - SST-5's score answer moves 0.0041 on average (at most 0.043).
+  - The largest single shift at the shipped temperatures, 0.226, is on a MASSIVE item, where the 0.1006 temperature
+    magnifies a small logit change.
+  - For scale: the authors report 0.024 (choice), 0.058 (noul) and 0.017 (score) for their torch bf16 against fp32.
+- **ORT's dynamic int8 does not.**
+  - 733 of 2,400 top options change, and accuracy falls on all six tasks. The worst is Banking77, 77 options at
+    once, which keeps only 110 of 400 decisions.
+  - Then MASSIVE (−7.33 pt), SST-5 (−6.17), AG News (−2.00), Emotion (−1.25) and XNLI (−1.00).
+  - Pooled T=1 ECE is the one criterion it meets.
+  - The cause was not probed.
+  - Step 1's synthetic check (the same top option, logits within 0.141) did not show this.
+- **For an NPU build:**
+  - bf16 operands with fp32 accumulation, as emulated here, are accuracy-equivalent to fp32 on these tasks. What
+    passed is the 124 weight products in bf16 with fp32 GEMM output; attention, norms and embeddings stayed fp32.
+    Step 3 can build exactly that.
+  - This int8 scheme is out.
+  - Step 1's CPU int8 figure (638.8 ms, 37.4 J at 512 tokens) comes with 8 pt less accuracy. At equal accuracy the
+    bar is the 780M in fp32: 632.8 ms and 34.2 J.
+    - Its logits were within 2.2e-6 of the CPU's in step 1, on synthetic input; it was not scored on the items.
+
+**Not run:**
+- int8 with static, per-token or per-channel activation scales, or outlier handling;
+- bf16 GEMM output (the arm keeps fp32 out);
+- attention products, norms or embeddings in bf16;
+- the NPU, and any timing (step 3);
+- noul questions beyond the ticket's one;
+- the multilingual checkpoint, the other MASSIVE and XNLI languages, and the card's typed-decisions benchmark, which
+  is not public.
