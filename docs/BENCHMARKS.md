@@ -12346,7 +12346,8 @@ have to beat. The NPU was not run.
   - The prep log re-ran `dmlcopy` and `quantize` with the committed version.
 
 **Not run:**
-- the NPU;
+- the NPU (screened in
+  [step 3](#laya-on-the-npu-screened-the-floor-beats-the-cpu-and-the-780m-without-the-nan-guards-2026-09-26-desktop-2));
 - DirectML fp16 (no converter in the environment);
 - the multilingual and 1,024-token checkpoints (no ONNX export);
 - shorter real inputs, which the CPU and the 780M run faster while a fixed-shape NPU build pays for all 512 tokens;
@@ -12417,7 +12418,8 @@ before either arm was scored.
 - **For an NPU build:**
   - bf16 operands with fp32 accumulation, as emulated here, are accuracy-equivalent to fp32 on these tasks. What
     passed is the 124 weight products in bf16 with fp32 GEMM output; attention, norms and embeddings stayed fp32.
-    Step 3 can build exactly that.
+    Step 3 can build exactly that
+    ([screened](#laya-on-the-npu-screened-the-floor-beats-the-cpu-and-the-780m-without-the-nan-guards-2026-09-26-desktop-2)).
   - This int8 scheme is out.
   - Step 1's CPU int8 figure (638.8 ms, 37.4 J at 512 tokens) comes with 8 pt less accuracy. At equal accuracy the
     bar is the 780M in fp32: 632.8 ms and 34.2 J.
@@ -12427,7 +12429,107 @@ before either arm was scored.
 - int8 with static, per-token or per-channel activation scales, or outlier handling;
 - bf16 GEMM output (the arm keeps fp32 out);
 - attention products, norms or embeddings in bf16;
-- the NPU, and any timing (step 3);
+- the NPU, and any timing
+  ([step 3](#laya-on-the-npu-screened-the-floor-beats-the-cpu-and-the-780m-without-the-nan-guards-2026-09-26-desktop-2));
 - noul questions beyond the ticket's one;
 - the multilingual checkpoint, the other MASSIVE and XNLI languages, and the card's typed-decisions benchmark, which
   is not public.
+
+## Laya on the NPU, screened: the floor beats the CPU, and the 780M without the NaN guards (2026-09-26, Desktop 2)
+
+Step 3 bounds a hybrid build before building it. The 124 weight products that passed in bf16
+([previous section](#laya-in-bf16-and-int8-bf16-keeps-its-decisions-orts-dynamic-int8-does-not-2026-09-26-desktop-2))
+would run on the NPU, everything else on the host. The two sides were run apart. No hybrid exists, and no decision
+came from the NPU. The rule, stated before any NPU run but not committed: build if the floor beats the 780M in fp32
+on latency or energy, or if it beats CPU fp32 only (the NPU then frees the GPU rather than beating it); otherwise
+stop.
+
+- **NPU side:** mlir-aie's `whole_array` GEMM (IRON, 4 columns, bf16 in, fp32 accumulation and output,
+  `whole_array.py` `92db1cad`), at n=64 with the C tile single-buffered (`kernels/gemm_tile_sweep/`).
+  - The 120 products with 512 rows come in six shapes, one design each; 1024→5248 runs as 5,376 columns, the extra
+    128 zero. Each design matches numpy on the same bf16 operands within 1.94e-6 of the largest output.
+  - Weights are written once and stay resident. Per product: the fp32 activation rounded to bf16 into the input
+    buffer (8 threads), sync in, the call, sync out of the fp32 result.
+  - `shapes` repeats each shape alone. `chain` runs the 120 in Laya's order, the designs alternating, on random
+    activations with no host compute between. A sequence cannot batch its calls: each waits on host work.
+- **Host side:** an ONNX Runtime CPU profile of the whole fp32 model (8 threads, 512 tokens): kernel time outside
+  the 124 weight products, plus time outside kernels. Profiled calls run 3.7-7.4% slower than unprofiled, so it is
+  an upper figure.
+- **Energy:** `tools/energy_sitting.py`, one sitting of five arms: the NPU chain, and the CPU and the 780M on both
+  exports. The machine was not quiet: 3 of the 5 idles stayed disturbed after three tries, and the 780M ran the
+  shipped export 13.8% slower than in step 1. Every energy figure from this sitting is against its median
+  undisturbed idle, 18.5 W. Tctl peaked at 81.9 °C.
+- **Tool:** `tools/laya_npu_screen.py`.
+- **Evidence:** in `results/laya/`, run the evening of 2026-09-26 local time (the logs stamp 09-27, UTC):
+  - `laya_npu_screen_desktop2_20260926.log`: both host shares, the guard-free copy and its checks, the NPU runs;
+  - `laya_npu_screen_energy_desktop2_20260926.log` and its JSON.
+
+| Per 512-token sequence, ms | NPU, each shape alone | NPU, Laya's order |
+|---|---|---|
+| Round to bf16 and write | 67.6 | 82.3 |
+| Sync in and out | 11.1 | 12.6 |
+| Calls | 261.1 | 460.2 |
+| of which in the NPU bracket | **191.6** | 331.8 |
+| Total | 339.8 | 556.9 (mean of 108; 1.8 in the loop) |
+
+| Per 512-token sequence, CPU, ms | Shipped export | Guard-free copy |
+|---|---|---|
+| Host share | 607.2 | **269.3** |
+| of which the Softmax NaN guards | 325.9 | 0 |
+| The weight products, not in the host share | 651.8 | 669.2 |
+| Whole model, unprofiled | 1172.7 | 905.5 |
+
+| Per 512-token sequence | Shipped export: latency; energy | Guard-free copy: latency; energy |
+|---|---|---|
+| Host share + NPU in Laya's order (DERIVED) | 1,164 ms; 48.0 J | 826 ms; 28.5 J |
+| Host share + NPU, one design (DERIVED) | 947 ms; 43.1 J | 609 ms; 23.6 J |
+| Host share + NPU floor: bracket and syncs, 202.7 ms (DERIVED) | 810 ms; 40.0 J | **472 ms; 20.5 J** |
+| 780M DirectML fp32, this sitting | 719.9 ms; 38.3 J | 688.1 ms; 36.5 J |
+| 780M DirectML fp32, step 1 | 632.8 ms; 34.2 J | not run |
+| CPU fp32, this sitting | 1121.3 ms; 65.6 J | 834.2 ms; 49.5 J |
+
+- **By the rule as stated, build.** The shipped export's floor, 810 ms and 40.0 J, beats CPU fp32 by 28% and 39%.
+  It loses to the 780M on both, so on this export the NPU would take Laya off the GPU, not beat it.
+- **Without the NaN guards the floor beats the 780M:** 472 ms and 20.5 J, 31% faster and 44% less energy than the
+  780M running the same copy. It also clears step 1's quieter 780M figures (632.8 ms, 34.2 J). The copy came out of
+  this screen; the rule did not name it.
+- **As built, neither export beats the 780M.** Laya's order costs 217.1 ms more than the same products repeated
+  alone: 140.2 ms more in the NPU bracket and 58.9 ms more outside it, the cost of alternating among six designs.
+  - Guard-free as built: 826 ms, slower than the 780M's 688.1 and level with the CPU's 834.2, at 28.5 J against
+    36.5 and 49.5 J.
+- **What the floor leaves out.** Measured: rounding and writing the activations (67.6 ms), IRON's call outside the
+  bracket (69.5 ms, 0.58 ms per call), and the switching (217.1 ms). Not measured: splitting the host graph around
+  120 products. The four head products with 1-4 rows (4.5 M MACs) and the head Gemms' bias adds stay on the host,
+  inside the profile's weight-product time. The floor is this design's; faster GEMMs would lower it.
+- **The energy sums rest on two assumptions.** The NPU side draws the chain's +22.3 W, which includes rounding on 8
+  threads. The host share draws the whole-model CPU arm's +58.5 W (+59.4 W guard-free).
+  - Against each arm's own idle instead, the shipped floor ties the 780M at 38.6 J, the guard-free floor is 19.8 J
+    against 34.6, and the CPU bars are 63.2 and 47.7 J. The verdicts stand.
+- **In its bracket the NPU runs the 120 products at 1.97 TFLOPS** (DERIVED: 377.2 GFLOP in 191.6 ms), 1,731-2,352
+  GFLOPS by shape, and 1.14 TFLOPS in Laya's order. The CPU's profile gives the 124 weight products 651.8 ms in fp32.
+- **The shipped export spends 326 ms of CPU per call on NaN guards.** torch's safe softmax exports as
+  `Where(IsNaN(s), 0, s)` over each layer's [1, 16, 512, 512] attention probabilities: IsNaN 140.5 ms and Where
+  185.4 ms, 54% of the host share. Without them the CPU runs the whole model in 834.2 ms against 1121.3 (−25.6%,
+  same sitting) and the 780M in 688.1 against 719.9 ms (−4.4%). Step 1's figures stand for the export as shipped;
+  this is a variant of it.
+  - `noguard` removes all 28, from step 1's `laya_az0.onnx` (whose CPU outputs match `laya.onnx`'s bit for bit).
+    On all 2,403 of step 2's items the logits stay bit-identical to its fp32 reference, and so does every decision
+    and calibration figure.
+  - The first item of each task padded to 512 tokens, as a fixed-512 build would pad it (46-313 real tokens), comes
+    out finite and bit-identical to the guarded export (7 of 7), and bit-identical to the same items unpadded.
+- **Next, in order:**
+  1. one hardware context serving all six shapes, to remove the switching;
+  2. a raw XRT host path in place of IRON's per-call overhead;
+  3. rounding folded into the host op before each product;
+  4. the host graph split;
+  5. then the hybrid end to end, scored against step 2's bf16 emulation, and run beside an LLM on the 780M.
+
+**Not run:**
+- the hybrid, so no decision came from the NPU (its GEMMs match numpy; step 2's emulation is the accuracy evidence);
+- a raw XRT path, one context across shapes, and int8 on the NPU;
+- two sequences in flight, the NPU on one while the host runs the other (throughput, not latency);
+- lengths other than 512 tokens, and batch above 1;
+- the guard-free copy on the 780M in a quiet sitting, and its logits there (timed only here; step 1 checked the
+  shipped copy's, within 2.2e-6);
+- padded inputs beyond those 7 items;
+- the host share on the 780M.
