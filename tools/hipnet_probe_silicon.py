@@ -11,8 +11,8 @@ exact, each reused slot holding its planned final tenant, and the output exact.
 
 Phase 2 (sitting), --passes times over all models, interleaved per model:
   npu dispatch   sess.dispatch() alone, default container
-  npu call       float32 [1,32,5,20] in -> quantize -> stage_tensor -> dispatch -> read_tensor -> dequantize ->
-                 float32 [1,32,5,20] out: what a caller pays per frame
+  npu call       float32 [1,C,H,W] in -> quantize -> stage_tensor -> dispatch -> read_tensor -> dequantize ->
+                 float32 [1,C,H,W] out: what a caller pays per frame (the shape comes from --calib)
   cpu fp32       ONNX Runtime CPU, the original FP32 export, 1 intra-op and 1 inter-op thread
   cpu qdq        ONNX Runtime CPU, the XINT8 QDQ model, 1 thread
 each --warmup calls then --iters timed calls, inputs cycling through the calibration frames. ONNX Runtime

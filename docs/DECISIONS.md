@@ -2289,6 +2289,9 @@ a scheduling granularity, not a core limit, so it was lifted without touching th
   - Every fill and drain keeps a positive core-row stride. `merge_quad` still folds the four fills into one task,
     and the drain's outermost dimension stays positive.
   - The cost is 4x the workspace for those tensors, and three cores of each column computing junk.
+  - Measured since: that junk is the price of a 20-row map. The 20x20 redesign schedules to the same byte counts
+    and the same dispatch, so a five-row model pays for twenty rows and uses five
+    ([Twenty rows cost the NPU what five did](BENCHMARKS.md#twenty-rows-cost-the-npu-what-five-did-the-same-sensor-model-at-20x20-is-31x-faster-than-one-cpu-thread-on-main-2026-09-28-desktop-2)).
 - **What was not attempted: stride 0.** The alternative points all four core rows at the same five rows: the same
   bytes written four times, the principle SESR's overlapping edge tile already relies on. It would need a stride-0
   core-row dimension on both the fills and the drain.

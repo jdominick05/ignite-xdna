@@ -108,7 +108,7 @@ def main() -> int:
                          "out": [ir.tensors[L.output].channels, ir.tensors[L.output].height,
                                  ir.tensors[L.output].width]} for L in ir.layers]
                     rec["placements"] = {n: {"base": p.base, "halo": p.halo, "planes": p.planes,
-                                             "replicas": p.replicas, "nbytes": p.nbytes}
+                                             "replicas": getattr(p, "replicas", 1), "nbytes": p.nbytes}
                                          for n, p in ws.placements.items()}
                 emu_ok = all(v == 0 for v in layer_bad.values())
                 ort_ok = reuse or all(v == 0 for v in ort_bad.values())

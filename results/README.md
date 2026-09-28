@@ -23,7 +23,9 @@ and the full-family YOLOv8 split suite with
 
 Five-row maps (a 5x20 sensor model, the hipnet probe) are indexed under
 [AIE five-row maps](aie/README.md#five-row-maps-the-hipnet-probe-2026-09-28-desktop-2), with
-[exactness, the sitting and what was not run](../docs/BENCHMARKS.md#five-row-maps-on-the-existing-core-a-5x20-sensor-model-compiles-whole-and-layer-exact-and-is-13x-slower-than-one-cpu-thread-2026-09-28-desktop-2).
+[exactness, the sitting and what was not run](../docs/BENCHMARKS.md#five-row-maps-on-the-existing-core-a-5x20-sensor-model-compiles-whole-and-layer-exact-and-is-13x-slower-than-one-cpu-thread-2026-09-28-desktop-2),
+and its 20x20 redesign, on `main`, with
+[the same dispatch and a 3.1x win over one CPU thread](../docs/BENCHMARKS.md#twenty-rows-cost-the-npu-what-five-did-the-same-sensor-model-at-20x20-is-31x-faster-than-one-cpu-thread-on-main-2026-09-28-desktop-2).
 
 Raw logs behind every number in `README.md`, `RESEARCH.md` and `docs/BENCHMARKS.md`. Each
 log is the UTF-8 stdout of one script invocation, written by the wrappers in `scripts/`;
