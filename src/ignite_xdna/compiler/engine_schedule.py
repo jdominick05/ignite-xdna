@@ -53,6 +53,19 @@ class Placement:
     add one and both refuse a four-dimensional pattern: at three dimensions a fill gets the
     quad merge only, at two it gets both. Only an access that stays inside one band can be
     laid out this way, which is k1 and res; ``_band_rows`` picks the tensors."""
+    replicas: int = 1
+    """1, or ROWS for a map one tile row tall (``short_map``). A quad is one column of four cores stacked
+    five rows apart, so it covers twenty rows; a five-row map has real rows for core row 0 only. Core row r
+    of such a quad instead reads and writes replica r, a whole copy of the tensor's layout placed ``r *
+    replica_stride`` bytes on, so every fill and drain keeps a positive core-row stride (``merge_quad`` and
+    the drain's outermost dimension both need one) and no core writes a row core 0 reads. Replica 0 is the
+    tensor, at ``base`` in the ordinary layout, which is all the runtime reads or stages; replicas 1-3 hold
+    junk no one reads."""
+
+    @property
+    def replica_stride(self) -> int:
+        """Bytes from one replica to the next: the tensor's whole footprint."""
+        return self.nbytes
 
     @property
     def pitch(self) -> int:
@@ -142,6 +155,18 @@ class Workspace:
         planes[:, p.halo:p.halo + p.height, p.halo:p.halo + p.width, :] = blocked
 
 
+def short_map(height: int) -> bool:
+    """A map exactly one 5-row tile tall, which a quad covers with core row 0 only (``Placement.replicas``).
+
+    Heights between one tile and one quad (10 and 15) still refuse: their real rows span two or three core
+    rows, and the remaining rows' drains would need a second stride in the same dimension."""
+    return height == TILE_R
+
+
+def _replicas(height: int) -> int:
+    return ROWS if short_map(height) else 1
+
+
 def _halos(ir: GraphIR) -> Tuple[Dict[str, int], Dict[str, int]]:
     """Per-tensor halo width and halo value: zero point for 3x3 convs, 0 for max pools."""
     halo = {name: 0 for name in ir.tensors}
@@ -202,7 +227,7 @@ def _band_rows(ir: GraphIR, halo: Dict[str, int]) -> Dict[str, int]:
     out: Dict[str, int] = {}
     for name, t in ir.tensors.items():
         ok = (name in produced and name not in reserved and halo.get(name, 0) == 0
-              and t.height % TILE_R == 0
+              and t.height % TILE_R == 0 and not short_map(t.height)
               and readers.get(name) and readers[name] <= {"k1", "res"})
         out[name] = TILE_R if ok else 0
     return out
@@ -223,16 +248,18 @@ def plan_workspace(ir: GraphIR, slack_bytes: int = 64, reuse: bool = True) -> Wo
             junk = (-t.blocks) % OUT_BLOCKS if engine_written else 0
             p = Placement(name=name, base=cursor, halo=halo[name], height=t.height, width=t.width,
                           blocks=t.blocks, planes=t.blocks + junk, producer=t.producer, halo_value=halo_value[name],
-                          dtype=t.dtype, band_rows=band[name])
+                          dtype=t.dtype, band_rows=band[name], replicas=_replicas(t.height))
             placements[name] = p
-            cursor = (cursor + p.nbytes + 63) // 64 * 64
+            cursor = (cursor + p.replicas * p.nbytes + 63) // 64 * 64
         ws = Workspace(placements=placements, nbytes=cursor, input=ir.input)
         max_read = cursor
         for L in ir.layers:
             for chunk in layer_chunks(ir, L):
                 for y0, x0 in ((ir.tensors[L.output].height - TILE_R, ir.tensors[L.output].width - TILE_C),):
-                    pat = a_pattern(ws, ir, L, chunk, y0, x0)
-                    max_read = max(max_read, int(pat.indices().max()) + 1)
+                    pats = (quad_patterns(ws, ir, L, chunk, 0, x0) if short_map(ir.tensors[L.output].height)
+                            else [a_pattern(ws, ir, L, chunk, y0, x0)])
+                    for pat in pats:
+                        max_read = max(max_read, int(pat.indices().max()) + 1)
         ws.nbytes = (max_read + slack_bytes + 63) // 64 * 64
         return ws
 
@@ -267,9 +294,9 @@ def plan_workspace(ir: GraphIR, slack_bytes: int = 64, reuse: bool = True) -> Wo
     t_in = ir.tensors[ir.input]
     p_in = Placement(name=ir.input, base=0, halo=halo[ir.input], height=t_in.height, width=t_in.width,
                      blocks=t_in.blocks, planes=t_in.blocks, producer=t_in.producer,
-                     halo_value=halo_value[ir.input], dtype=t_in.dtype)
+                     halo_value=halo_value[ir.input], dtype=t_in.dtype, replicas=_replicas(t_in.height))
     placements[ir.input] = p_in
-    cursor = (p_in.nbytes + 63) // 64 * 64
+    cursor = (p_in.replicas * p_in.nbytes + 63) // 64 * 64
 
     # Group intermediate tensors by geometry key (height, width, halo, halo_value).
     # Identical geometry guarantees identical plane pitch, row stride, and interior offsets.
@@ -312,13 +339,13 @@ def plan_workspace(ir: GraphIR, slack_bytes: int = 64, reuse: bool = True) -> Wo
         plane_bytes = (h + 2 * hal) * pitch
         for slot in slots:
             base = cursor
-            slot_bytes = slot["max_planes"] * plane_bytes
+            slot_bytes = _replicas(h) * slot["max_planes"] * plane_bytes
             cursor = (cursor + slot_bytes + 63) // 64 * 64
             for name, planes in slot["tensors"]:
                 t = ir.tensors[name]
                 p = Placement(name=name, base=base, halo=hal, height=h, width=w,
                               blocks=t.blocks, planes=slot["max_planes"], producer=t.producer,
-                              halo_value=val, dtype=dtype, band_rows=band_rows)
+                              halo_value=val, dtype=dtype, band_rows=band_rows, replicas=_replicas(h))
                 placements[name] = p
 
     ws = Workspace(placements=placements, nbytes=cursor, input=ir.input)
@@ -331,8 +358,10 @@ def plan_workspace(ir: GraphIR, slack_bytes: int = 64, reuse: bool = True) -> Wo
             for y0 in (0, t.height - TILE_R):
                 for x0 in (0, t.width - TILE_C):
                     for g in range(n_groups):
-                        pat = a_pattern(ws, ir, L, chunk, y0, x0, group=g)
-                        max_read = max(max_read, int(pat.indices().max()) + 1)
+                        pats = (quad_patterns(ws, ir, L, chunk, 0, x0, group=g) if short_map(t.height)
+                                else [a_pattern(ws, ir, L, chunk, y0, x0, group=g)])
+                        for pat in pats:
+                            max_read = max(max_read, int(pat.indices().max()) + 1)
     ws.nbytes = (max_read + slack_bytes + 63) // 64 * 64
     return ws
 
@@ -451,7 +480,10 @@ def a_pattern(ws: Workspace, ir: GraphIR, layer, chunk: Chunk, y0: int, x0: int,
 def o_pattern(ws: Workspace, layer, group: int, y0: int, x0: int) -> DmaPattern:
     """DMA pattern that drains one joined 12,800-byte object: four strips of four blocks."""
     p = ws.placements[layer.output]
-    quad_stride = p.band_stride if p.band_rows else TILE_R * p.pitch
+    if p.replicas > 1:
+        quad_stride = p.replica_stride   # core row r drains into replica r (Placement.replicas)
+    else:
+        quad_stride = p.band_stride if p.band_rows else TILE_R * p.pitch
     return DmaPattern("ws", p.offset(group * OUT_BLOCKS, y0, x0), (4, OUT_BLOCKS, TILE_R, TILE_C * 8),
                       (quad_stride, p.plane_stride, p.pitch, 1))
 
@@ -466,6 +498,17 @@ UP2_PHASES_STRIP = (0, 1, 0, 1)
 def quad_patterns(ws: Workspace, ir: GraphIR, layer, chunk: Chunk, y_quad: int, x0: int, group: int = 0,
                   coarse: bool = False) -> List[DmaPattern]:
     """The four per-core fill patterns of the quad starting at output row ``y_quad``."""
+    if ws.placements[layer.output].replicas > 1:
+        # A five-row output: every core row computes the same rows, core row r from replica r of its input,
+        # so the four fills stay one constant stride apart and the junk rows land in the output's replicas.
+        src = ws.placements[chunk_tensor(layer, chunk)]
+        if isinstance(layer, FusedConvLayer) or chunk.kind not in ("k1", "k3s1", "k5s1", "res", "pool") \
+                or src.replicas != ROWS:
+            raise ValueError(f"{layer.name}: a {TILE_R}-row output needs {TILE_R}-row inputs read at stride 1 "
+                             f"({chunk.kind} from {chunk_tensor(layer, chunk)}, {src.height} rows)")
+        base = a_pattern(ws, ir, layer, chunk, y_quad, x0, group)
+        return [DmaPattern(base.buffer, base.offset + r * src.replica_stride, base.sizes, base.strides)
+                for r in range(ROWS)]
     if coarse and chunk.kind == "k1up2":
         seg = layer.inputs[chunk.seg_index]
         p = ws.placements[seg.tensor]
@@ -994,7 +1037,9 @@ def schedule_layer_coarse(ir: GraphIR, ws: Workspace, layer, store: PacketStore,
     single = len(chunks) == 1
     n_groups = (t.blocks + OUT_BLOCKS - 1) // OUT_BLOCKS
     quad_rows = TILE_R * ROWS
-    ys, xs = tile_origins(t.height, quad_rows), tile_origins(t.width, TILE_C)
+    # A five-row map is one quad whose core rows 1-3 compute into replicas (Placement.replicas).
+    ys = [0] if short_map(t.height) else tile_origins(t.height, quad_rows)
+    xs = tile_origins(t.width, TILE_C)
     max_quads = MAX_REPEAT // ROWS
     programs: List[List[tuple]] = [[] for _ in range(COLS)]
     n_rounds = n_packets = n_w = 0
@@ -1158,6 +1203,8 @@ def schedule_layer(ir: GraphIR, ws: Workspace, layer, store: PacketStore, merge_
         # ObjectFifo, so a layer left on the per-group schedule would fetch activations nothing ever serves.
         plan = ring_plan(ir, layer, activation_ring)
         if plan is not None:
+            if short_map(ir.tensors[layer.output].height):
+                raise ValueError(f"{layer.name}: the activation ring does not schedule {TILE_R}-row maps")
             return schedule_layer_ring(ir, ws, layer, store, plan, trim_ncin=trim_ncin)
         return schedule_layer_coarse(ir, ws, layer, store, weight_repeat=weight_repeat, trim_ncin=trim_ncin,
                                      balance_columns=balance_columns, merge_group_weights=merge_group_weights,

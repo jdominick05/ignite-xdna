@@ -508,10 +508,15 @@ def compile_graph_engine(input_path: Union[str, Path], output_path: Union[str, P
         c = manifest["classification"]
         print(f"    [OK] classification output: {c['channels']} classes at scale {c['scale']}, "
         f"layout {c['layout']} -> logits {manifest['output_shapes']['logits']}")
-    else:
+    elif "transform" in manifest["dense_output"]:
         d = manifest["dense_output"]
         print(f"    [OK] dense output: {d['channels']}x{d['height']}x{d['width']} uint8 at scale {d['scale']}, "
               f"host {d['transform']['op']} x{d['transform']['blocksize']} -> image {manifest['output_shapes']['image']}")
+    else:
+        # segment / matte: the map is read back as it is, with no host transform (engine_compile.DENSE_TASKS)
+        d = manifest["dense_output"]
+        print(f"    [OK] {manifest.get('task')} output: {d['channels']}x{d['height']}x{d['width']} "
+              f"{d.get('dtype', 'uint8')} at scale {d.get('scale')} -> map {manifest['output_shapes']['map']}")
     print(f"    [OK] egress bytes: {manifest['egress_bytes']:,}")
     return out_p.stat().st_size
 
