@@ -12431,3 +12431,88 @@ before either arm was scored.
 - noul questions beyond the ticket's one;
 - the multilingual checkpoint, the other MASSIVE and XNLI languages, and the card's typed-decisions benchmark, which
   is not public.
+
+## Five-row maps on the existing core: a 5x20 sensor model compiles whole and layer-exact, and is 1.3x slower than one CPU thread (2026-09-28, Desktop 2)
+
+hipnet v0 is an untrained hip-rotation estimator from a separate project, designed from Ignition's model guide. Its
+feature map is one 5x20 tile: rows are five tracker groups, columns twenty frames at 30 Hz, 32 or 64 channels. It
+uses only 3x3 and 1x1 convolutions, ReLU and residual adds, and its raw output is decoded on the host. Two variants
+ask a question each: `k5` puts 5x5 convolutions in the blocks, `relu_after_add` puts a ReLU after each add.
+
+- **Quantization:** plain XINT8, Quark 0.11rc1 `get_default_config("XINT8")` (CLE on), on the project's 64
+  calibration frames. Every scale is a power of two, activations are uint8 at zero point 128, and the input scale is
+  2^-7. On ORT CPU the QDQ output is within 0.0126 of FP32 at the readout, whose magnitude is 0.18-0.20: no
+  collapse. The models are untrained, so this is not accuracy.
+- **Tools:** `tools/hipnet_probe_silicon.py` (exactness and the sitting), `tools/hipnet_probe_offline.py` (lowering,
+  schedule emulation, ORT intermediates) and `tools/schedule_fingerprint.py` (the identical-schedule check). The
+  models, containers and calibration frames are the other project's and are not in this repository.
+
+**`main` (`de276fb`) refuses all three.** The base and `k5` models stop at scheduling with
+`ValueError: a 5-pixel map is smaller than one 20-pixel tile`. A core computes a 5x20 tile, but the scheduler issues
+a column of four cores stacked five rows apart as one quad, which covers twenty rows. `relu_after_add` stops earlier,
+in lowering: `add has 0 QuantizeLinear consumers`, because Quark writes Add -> Relu -> QuantizeLinear
+([`hipnet_probe_5x20_main_refusals_desktop2_20260928.log`](../results/aie/hipnet_probe_5x20_main_refusals_desktop2_20260928.log)).
+
+**`b58ea8f` (branch `worktree-hipnet-short-map`, not on `main`) takes both, with no kernel change.**
+- A tensor exactly five rows tall reserves four copies of its layout. Core row r of the quad reads copy r of its
+  input and drains into copy r of its output. Copy 0 is the tensor at its usual base, so the runtime is unchanged;
+  copies 1-3 hold junk. The workspace for those tensors is 4x
+  ([DECISIONS](DECISIONS.md#five-row-maps-are-scheduled-on-replicas-not-on-a-stride-0-quad-2026-09-28)).
+- ReLU after an add becomes the residual packet's post-add epilogue, the same `max(q, 128)` constants a
+  convolution's ReLU uses. No shipped model uses that epilogue.
+- Heights 10 and 15 still refuse.
+- Nothing else moves. YOLOv8n, YOLOv8s and SESR M7 hash identically under `de276fb` and `b58ea8f`, with workspace
+  reuse on and off: every placement, every column program and the weight packets.
+
+**Exact on silicon.** The ONNX graph's 27 compute nodes (33 in `relu_after_add`) lower to 14 layers:
+- each Conv is a layer, with its ReLU as the layer's epilogue;
+- each Add is the second convolution's RESIDUAL step, with the ReLU after it (`relu_after_add`) as the post-add
+  epilogue;
+- 0 host segments.
+
+Over 16 calibration frames per container:
+
+| Model | Reuse-free container | Default container | Output vs ORT CPU on the QDQ model | Activation packets |
+|---|---|---|---|---|
+| hipnet_v0 | 14/14 layers exact | 5/5 readable exact, 9/9 reused slots hold their final tenant | 0 mismatches | 252 |
+| hipnet_v0_k5 | 14/14 | 5/5, 9/9 | 0 | 828 |
+| hipnet_v0_relu_after_add | 14/14 | 5/5, 9/9 | 0 | 252 |
+
+Offline, the emulated schedule equals the reference at every layer in both workspace modes. The reference equals ORT
+CPU's uint8 intermediates at every layer
+([`hipnet_probe_5x20_offline_desktop2_20260928.log`](../results/aie/hipnet_probe_5x20_offline_desktop2_20260928.log)).
+The containers make 0 ONNX Runtime calls, counted in the harness.
+
+**The sitting.** Three passes, arms interleaved per model, 50 warm-up and 1,000 timed calls per block, NPU pmode
+`default`, xrt-smi idle before and after
+([`hipnet_probe_5x20_desktop2_20260928T2211Z.log`](../results/aie/hipnet_probe_5x20_desktop2_20260928T2211Z.log)).
+- "NPU call" is what a caller pays: float32 [1,32,5,20] in, quantize, stage, dispatch, read back, dequantize.
+- The CPU arms are ONNX Runtime 1.30.0 on one intra-op and one inter-op thread.
+
+| Median over the 3 passes (ms) | NPU dispatch | NPU call | CPU FP32 | CPU QDQ |
+|---|---|---|---|---|
+| hipnet_v0 | 0.6514-0.6532 | **0.7253-0.7260** | 0.5535-0.5656 | 0.9602-0.9640 |
+| hipnet_v0_k5 | 1.4421-1.4432 | **1.5377-1.5394** | 1.4333-1.4474 | 2.4806-2.4899 |
+| hipnet_v0_relu_after_add | 0.6665-0.6680 | **0.7401-0.7440** | 0.5540-0.5696 | 0.9903-0.9998 |
+
+- **The NPU is slower than one CPU thread on this model.** An NPU call is 1.28-1.31x the CPU's FP32 time on the base
+  model, 1.31-1.34x on `relu_after_add` and 1.06-1.07x on `k5` (DERIVED, per pass). It beats the same int8 graph
+  on the CPU by 1.32-1.34x (1.61-1.62x on `k5`).
+- **It costs the host little CPU time.** Process CPU time per NPU call was 0.0469-0.1406 ms across the nine blocks,
+  against 0.5625-0.5781 ms per FP32 call on the base model. `process_time` ticks at 15.6 ms on Windows, so 1,000
+  calls resolve it to about 0.016 ms: read that as under 0.15 ms, not as a per-pass figure.
+- **`k5` costs 2.2x the base model's dispatch** and moves 828 activation packets to its 252. That fits one packet
+  per 8 input channels for a 5x5 convolution, but nothing else was held fixed, so it is not isolated.
+- **Why 14 layers of 5x20 take 0.65 ms of dispatch** (about 47 us per layer, DERIVED) is unexplained. Nothing here
+  separates per-layer cost from transfer.
+- The p99 of an NPU call is 0.8145-0.8242 ms on the base model, against 0.7410-0.9023 for the CPU.
+
+**Not run:**
+- accuracy (the models are untrained);
+- the reuse-free containers' latency;
+- AMD's VitisAI EP on these models;
+- the laptop's Hawk Point NPU;
+- energy;
+- heights 10 and 15;
+- the stride-0 alternative to replicas (not attempted:
+  [DECISIONS](DECISIONS.md#five-row-maps-are-scheduled-on-replicas-not-on-a-stride-0-quad-2026-09-28)).

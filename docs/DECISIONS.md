@@ -2275,3 +2275,34 @@ A hand schedule is now a measured option, not a speculative one. It has costs: h
 the hardware does not interlock (latencies, delay slots, bank pairing, hardware-loop setup rules), and the
 engine's `.text` has 224 B of headroom. Record of the audit:
 [`notes_tnzr_cross_audit.md`](../results/aie/notes_tnzr_cross_audit.md).
+
+### Five-row maps are scheduled on replicas, not on a stride-0 quad (2026-09-28)
+
+A core computes a 5x20 tile, but `schedule_layer_coarse` issues a column of four cores, stacked five rows apart, as
+one quad of twenty rows. A map one tile row tall (a 5x20 sensor window) therefore stopped at `tile_origins`. That is
+a scheduling granularity, not a core limit, so it was lifted without touching the kernel (`b58ea8f`).
+
+- **What was chosen: replicas.** `Placement.replicas` is `ROWS` for a tensor exactly `TILE_R` tall, and reserves
+  four copies of its layout, `replica_stride` apart. Core row r reads copy r of its input and drains into copy r of
+  its output.
+  - Copy 0 is the tensor at its usual base, so the runtime, the halo fill and staging are untouched.
+  - Every fill and drain keeps a positive core-row stride. `merge_quad` still folds the four fills into one task,
+    and the drain's outermost dimension stays positive.
+  - The cost is 4x the workspace for those tensors, and three cores of each column computing junk.
+- **What was not attempted: stride 0.** The alternative points all four core rows at the same five rows: the same
+  bytes written four times, the principle SESR's overlapping edge tile already relies on. It would need a stride-0
+  core-row dimension on both the fills and the drain.
+  - `merge_quad` and `merge_runs` refuse a delta of 0.
+  - Whether a shim S2MM descriptor takes a stride-0 repeat on this part was never measured. A wrong guess there hangs
+    the device rather than raising.
+  - Replicas needed neither. This is not a rejection: nothing was measured.
+- **Still refused:**
+  - heights 10 and 15, whose real rows span several core rows, so the junk rows would need a second stride in the
+    same dimension;
+  - a short map under the activation ring or fused stencils;
+  - any stride-2 or upsampling read into a short map.
+- **No other model's schedule changes.** YOLOv8n, YOLOv8s and SESR M7 hash identically before and after
+  (`tools/schedule_fingerprint.py`).
+
+Measured:
+[Five-row maps on the existing core](BENCHMARKS.md#five-row-maps-on-the-existing-core-a-5x20-sensor-model-compiles-whole-and-layer-exact-and-is-13x-slower-than-one-cpu-thread-2026-09-28-desktop-2).

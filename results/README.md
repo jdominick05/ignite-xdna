@@ -21,6 +21,10 @@ Split container sizing logs are indexed under
 and the full-family YOLOv8 split suite with
 [measurements and early-exit cascades](../docs/BENCHMARKS.md#all-yolov8-variants-on-split-containers-and-what-each-segment-costs-2026-09-20-desktop-2).
 
+Five-row maps (a 5x20 sensor model, the hipnet probe) are indexed under
+[AIE five-row maps](aie/README.md#five-row-maps-the-hipnet-probe-2026-09-28-desktop-2), with
+[exactness, the sitting and what was not run](../docs/BENCHMARKS.md#five-row-maps-on-the-existing-core-a-5x20-sensor-model-compiles-whole-and-layer-exact-and-is-13x-slower-than-one-cpu-thread-2026-09-28-desktop-2).
+
 Raw logs behind every number in `README.md`, `RESEARCH.md` and `docs/BENCHMARKS.md`. Each
 log is the UTF-8 stdout of one script invocation, written by the wrappers in `scripts/`;
 nothing here is edited by hand except for token redactions. The local user profile path

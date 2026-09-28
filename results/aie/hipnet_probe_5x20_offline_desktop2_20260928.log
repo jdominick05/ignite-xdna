@@ -1,0 +1,37 @@
+hipnet NPU probe, offline evidence (Desktop 2, <host>, 2026-09-28)
+
+== 1. Plain XINT8, Quark 0.11rc1 get_default_config('XINT8') (CLE on), resnet_env, 64 calibration frames ==
+Contract per model: every Q/DQ scale a power of two, activation zero point 128, weight zero point 0; ORT 1.22.1
+CPU (optimizations off) FP32 vs QDQ over the 64 frames, whole map and the readout (chest row 2, column 19,
+channels 0..5). The models are untrained: a collapse check, not accuracy.
+hipnet_v0: ops {'DequantizeLinear': 49, 'QuantizeLinear': 21, 'Conv': 14, 'Relu': 7, 'Add': 6}; non-power-of-two scales 0; zero points {'int8:0': 28, 'uint8:128': 42}; input uint8 scale 2^-7 zp 128; QDQ vs FP32 max |d| whole 0.02033, readout 0.01257 (mean readout 0.00669; FP32 readout |y| mean max 0.1931)
+hipnet_v0_k5: ops {'DequantizeLinear': 49, 'QuantizeLinear': 21, 'Conv': 14, 'Relu': 7, 'Add': 6}; non-power-of-two scales 0; zero points {'int8:0': 28, 'uint8:128': 42}; input uint8 scale 2^-7 zp 128; QDQ vs FP32 max |d| whole 0.02190, readout 0.01198 (mean readout 0.00598; FP32 readout |y| mean max 0.2036)
+hipnet_v0_relu_after_add: ops {'DequantizeLinear': 49, 'QuantizeLinear': 21, 'Conv': 14, 'Relu': 13, 'Add': 6}; non-power-of-two scales 0; zero points {'int8:0': 28, 'uint8:128': 42}; input uint8 scale 2^-7 zp 128; QDQ vs FP32 max |d| whole 0.02303, readout 0.01064 (mean readout 0.00552; FP32 readout |y| mean max 0.1848)
+
+== 2. Lowering, workspace, schedule and packet emulation at b58ea8f (offline_check.py, ironenv) ==
+ignite_xdna from <worktree>\src\ignite_xdna\__init__.py
+hipnet_v0 [no_reuse]: 14 layers, ws 531264 B, emulator EXACT; run_direct vs ORT CPU EXACT over 16 samples
+hipnet_v0 [reuse]: 14 layers, ws 176448 B, emulator EXACT over 16 samples
+hipnet_v0_k5 [no_reuse]: 14 layers, ws 721728 B, emulator EXACT; run_direct vs ORT CPU EXACT over 16 samples
+hipnet_v0_k5 [reuse]: 14 layers, ws 224064 B, emulator EXACT over 16 samples
+hipnet_v0_relu_after_add [no_reuse]: 14 layers, ws 531264 B, emulator EXACT; run_direct vs ORT CPU EXACT over 16 samples
+hipnet_v0_relu_after_add [reuse]: 14 layers, ws 176448 B, emulator EXACT over 16 samples
+OFFLINE PASS
+
+== 3. Existing models schedule identically: placements, column programs and weight packets hashed ==
+-- de276fb (main) --
+code from C:\Users\<user>\PycharmProjects\ignite-xdna\src\ignite_xdna\__init__.py
+yolov8n_cut_xint8.onnx reuse=True: d9f350d597939e15 (66 layers, ws 14867072 B)
+yolov8n_cut_xint8.onnx reuse=False: 31d6f673e581f182 (66 layers, ws 22039296 B)
+yolov8s_cut_xint8.onnx reuse=True: 6e034a5c0aec8596 (66 layers, ws 20816640 B)
+yolov8s_cut_xint8.onnx reuse=False: 49ebce37bcce2e23 (66 layers, ws 32236672 B)
+sesr_m7_xint8.onnx reuse=True: 00d650c497a5bcae (9 layers, ws 11191360 B)
+sesr_m7_xint8.onnx reuse=False: bad32f71126e1db1 (9 layers, ws 19711552 B)
+-- b58ea8f (branch) --
+code from <worktree>\src\ignite_xdna\__init__.py
+yolov8n_cut_xint8.onnx reuse=True: d9f350d597939e15 (66 layers, ws 14867072 B)
+yolov8n_cut_xint8.onnx reuse=False: 31d6f673e581f182 (66 layers, ws 22039296 B)
+yolov8s_cut_xint8.onnx reuse=True: 6e034a5c0aec8596 (66 layers, ws 20816640 B)
+yolov8s_cut_xint8.onnx reuse=False: 49ebce37bcce2e23 (66 layers, ws 32236672 B)
+sesr_m7_xint8.onnx reuse=True: 00d650c497a5bcae (9 layers, ws 11191360 B)
+sesr_m7_xint8.onnx reuse=False: bad32f71126e1db1 (9 layers, ws 19711552 B)
