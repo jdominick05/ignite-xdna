@@ -7694,7 +7694,21 @@ metadata** (2026-10-12, Desktop 2, [log](../results/aie/xdp_trace_attach_desktop
   reason itself: "AIE metadata read failed" and "AIE Metadata is empty for AIE Trace". The plugin wants
   the metadata as `aie_control_config.json` in the run directory, although the overlay xclbin carries an
   `AIE_METADATA` section.
-- **Not yet tried:** supplying that file, which would be a new pre-registered attempt.
+- **Not yet tried:** supplying that file, which would be a new pre-registered attempt. *(Tried the same
+  day as Gate 0b, below.)*
+
+**Gate 0b: with its own metadata supplied, the plugin finds no trace streams in the overlay**
+(2026-10-12, Desktop 2, [log](../results/aie/xdp_trace_metadata_desktop2_20261012T214206Z.log)).
+- **The change.** A byte copy of the overlay xclbin's `AIE_METADATA` went into the run directory as
+  `aie_control_config.json`. Nothing else changed.
+- **What happened.** The metadata loads. The plugin then stops with "Neither PLIO nor GMIO trace
+  infrastructure is found in the given design". In XDP's source that means the design declares no trace
+  streams.
+- **Why.** The metadata agrees: `TraceGMIOs` is empty. The 16 GMIOs carry data (IFM/WGT/OFM), and the 4
+  PLIOs are `TCT0`–`TCT3`. So the shipped Phoenix overlay has no trace routing, and XRT's trace plugin
+  cannot observe its cores by configuration alone. Gate 0b **fails**; the outputs stayed bit-equal.
+- **Not tried:** editing the metadata to declare trace streams. XDP would then program routes into the
+  live partition, which is no longer configuration-only observation.
 
 ---
 

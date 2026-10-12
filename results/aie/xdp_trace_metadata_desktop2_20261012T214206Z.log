@@ -1,0 +1,54 @@
+# Gate 0b of the dynamic-witness plan, Desktop 2 (DESKTOP-CBL5NUA), started 20261012T214206Z UTC, resnet_env17.
+# It follows results/aie/xdp_trace_attach_desktop2_20261012T213156Z.log (Gate 0: plugin attached, no trace,
+# "AIE Metadata is empty"). The one change is that aie_control_config.json, a byte copy of the AIE_METADATA
+# section of the xclbin the EP is given, is placed in the traced arm's working directory.
+# Tool unchanged: tools/xdp_trace_attach_probe.py (sha256 e71fd98fa00dd29e1d5f591aaeeb5dfa825b4d7e8407f67740e5e0387f1c57fa). Reference: the Gate 0 untraced arm.
+# No DLL copied or replaced; nothing patched; the metadata file is AMD's own, unedited.
+#
+# Pre-registration (sha256 9e12389f0dbbdeedb4524f42546859ec94dd3a80c9c868dc1c5733849dd1e04f):
+#   written_utc 2026-10-12T21:41:54Z, before the Gate 0b run.
+#   change from Gate 0: ONLY the addition of aie_control_config.json in the traced cwd, a byte copy (sha256 abda4d59e64953a6bde62db9f527f636249abe0f1f19408e87ba4dfcb0d1a0ee) of the AIE_METADATA:JSON section that xclbinutil dumps from the xclbin the EP is given (Ryzen AI 1.7.1 voe-4.0-win_amd64/xclbins/phoenix/4x4.xclbin, sha256 d3b5e845...). Same tool (tools/xdp_trace_attach_probe.py sha256 e71fd98fa00dd29e1d5f591aaeeb5dfa825b4d7e8407f67740e5e0387f1c57fa), same xrt.ini (sha256 98a92526665f4883bda0ef74218ddce0504398362f70ec9c4a6583f387782fe7), same AMD_NPU_SDK_PATH, --ref = the Gate 0 untraced arm.
+#   Gate 0b PASS iff: plugin loaded; >= 1 non-empty aie_trace* file in the cwd; outputs bit-equal to the Gate 0 untraced arm; cached xmodel sha256 and mtime unchanged; device idle before and after. Anything else FAIL with XRT's messages recorded. Trace CONTENT is not decoded or interpreted in Gate 0b.
+
+# ===== the metadata supplied (xclbinutil --dump-section AIE_METADATA:JSON; sha256 abda4d59e64953a6bde62db9f527f636249abe0f1f19408e87ba4dfcb0d1a0ee) =====
+driver_config: hw_gen=3, num_columns=5, num_rows=6, partition_num_cols=4, aie_tile_row_start=2, aie_tile_num_rows=4, mem_tile_row_start=1
+graphs: ipu_inst, 16 cores
+GMIOs: 16, types ['0', '1'] (0 = input, 1 = output): IFM_MT0 IFM_MT1 IFM_MT2 IFM_MT3 OFM_MT0 OFM_MT1 OFM_MT2 OFM_MT3 OFM_MT4 OFM_MT5 OFM_MT6 OFM_MT7 WGT_MT0 WGT_MT1 WGT_MT2 WGT_MT3
+PLIOs: 4: TCT0 TCT1 TCT2 TCT3
+TraceGMIOs: ''
+
+# ===== traced arm =====
+idle_before True; EP placement 5 of 7 nodes on NPU, NPU:Conv = 1; cached xmodel sha256 65afef8730cc42812759e7a2e1914313d180fef043bfcc70db568621b71a49b3
+loaded XRT / XDP modules:
+  32.0.20101.3761  C:\Windows\System32\DriverStore\FileRepository\kipudrv.inf_amd64_19a9c5cead79deb0\xdp_core.dll
+  32.0.20101.3761  C:\Windows\System32\DriverStore\FileRepository\kipudrv.inf_amd64_19a9c5cead79deb0\xrt_core.dll
+  32.0.20101.3761  C:\Windows\System32\xrt_coreutil.dll
+  None             C:\Xilinx\XRT\xrt_sdk\xrt\xdp_aie_trace_plugin.dll
+files present after the run in the traced cwd: aie_control_config.json, summary.csv, xrt.ini, xrt.run_summary
+XRT messages (runtime verbosity 7):
+  [XRT] INFO: Calling AIE Trace updateAIEDevice.
+  [XRT] WARNING: The AIE metadata JSON file is required in the same directory as the run directory to run AIE Profile.
+  [XRT] DEBUG: AIE metadata read successfully from disk!
+  [XRT] INFO: AIE metadataReader requested
+  [XRT] INFO: AIE metadataReader requested
+  [XRT] INFO: read clockRateAIEMHz: 1000.000000
+  [XRT] INFO: AIE metadataReader requested
+  [XRT] INFO: Parsed aie_trace_start_time: 0 cycles.
+  [XRT] WARNING: Neither PLIO nor GMIO trace infrastucture is found in the given design. So, AIE event trace will not be available.
+  [XRT] INFO: Destroying AIE Trace Plugin
+  [XRT] INFO: Beginning AIE Trace WriteAll.
+  [XRT] INFO: Beginning AIE Trace finishFlushAIEDevice.
+  [XRT] DEBUG: VPRunSummaryWriter: write contents
+gate0b_checks: {"plugin_loaded": true, "trace_file_nonempty": false, "outputs_bit_equal": true, "xmodel_unchanged": true, "idle_before": true}
+device idle after the arm exited (xrt-smi: "No hardware contexts running on device").
+
+# ===== verdict =====
+# Gate 0b FAILS on the same condition as Gate 0: no aie_trace* file. The metadata now loads ("AIE metadata read
+# successfully from disk!"). The plugin then stops with XDP's AIE_TRACE_UNAVAILABLE: "Neither PLIO nor GMIO trace
+# infrastructure is found in the given design". In XDP (profile/plugin/aie_trace/aie_trace_plugin.cpp) that is
+# getNumStreamsPLIO() == 0 && getNumStreamsGMIO() == 0, i.e. the design declares no trace streams.
+# The metadata agrees: TraceGMIOs is empty. The 16 GMIOs are data (IFM/WGT/OFM), and the 4 PLIOs are TCT0..3,
+# not trace. Outputs stayed bit-equal and the xmodel did not recompile.
+# Reading: the shipped Phoenix overlay was compiled without trace routing, so XRT's trace plugin cannot observe
+# its cores by configuration alone. Declaring trace streams in an edited metadata file was NOT tried: XDP would
+# then program routes into the live partition, which is no longer configuration-only observation.
