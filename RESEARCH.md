@@ -1897,7 +1897,9 @@ sections above.
   −5 and below cannot be expressed. Byte `0x7B` carries shift_bias in only 4 bits. A
   pre-registered test of "bit 7 zeroes the bias" (run 5) failed on 1 of 8 arms: `0x81` kept the
   bias and `0xc1` did not.
-  Still open: what `0x7B` bits 6–7 are, any shape other than one 1x1 Conv, and what a forward test that actually
+  Run 6 mapped all 64 values: bit 6 is ignored, and bit 7 removes the bias (or right-shifts it
+  by 8 or more) for every value except `0x81`, which is unexplained.
+  Still open: why `0x81` is the exception, any shape other than one 1x1 Conv, and what a forward test that actually
   reaches the edges would look like, given the EP refuses out-of-contract scales — and note
   the constraint is now sharper, since any file the producer emits is confined to
   `[14, 30]` by construction, so reaching an edge means defeating `adjust_shift_cut` first,

@@ -1070,6 +1070,8 @@ shape.
 
 **`dpu_sigma_patch_bit7_desktop2_20261012T193618Z.log`** — `tools/dpu_sigma_patch_test.py` run 5, a pre-registered test of the bit-7 reading fitted on run 4 ("byte `0x7B` bit 7 zeroes the bias"). The controls were valid. It matched 7 of 8 new arms and **missed `0x81`**, which kept an unshifted bias, so it is refuted. An after-the-fact fit over all high-shift_bias arms of runs 3–5 is embedded; no reading of bits 6–7 tried fits `0x81`, `0x85` and `0xc1` together, so it stays **unexplained**. [BENCHMARKS](../../docs/BENCHMARKS.md#the-aie2-shifter-reads-a-6-bit-code-so-theorem-1s-5-bit-shifter-is-not-the-bound-2026-10-12-desktop-2).
 
+**`dpu_sigma_patch_sbgrid_desktop2_20261012T194600Z.log`** — `tools/dpu_sigma_patch_test.py` run 6, a pre-registered map of byte `0x7B` over every shift_bias 0–63 (123 arms, controls exact, under a keep-awake helper). Predicted and held: bits 6–7 clear and bit 6 alone shift the bias by the low field (30/30, 31/31), and run 5 replicated. Mapped after the fact: with bit 7 set, `0x81` alone keeps an unshifted bias; all 31 others read as no bias or a bias right-shifted by 8 or more. The exception is **unexplained**. [BENCHMARKS](../../docs/BENCHMARKS.md#the-aie2-shifter-reads-a-6-bit-code-so-theorem-1s-5-bit-shifter-is-not-the-bound-2026-10-12-desktop-2).
+
 ## Windows local memory placement
 
 Desktop 2, 2026-09-09: [method, formulas and limits](../../docs/BENCHMARKS.md#windows-low-level-research-placement-and-xint8-arithmetic).

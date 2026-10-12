@@ -118,7 +118,9 @@ def model_out(x, w, b, sc, sb, acc='wide'):
     as measured). acc: 'wide' exact, 'sat32'/'wrap32' bound the accumulator to 32 bits.
     sb None means no bias at all."""
     codes = np.clip(np.rint(x.astype(np.float64)), -128, 127).astype(np.int64)
-    bias = np.zeros_like(b, dtype=np.int64) if sb is None else b.astype(np.int64) << sb
+    # 127 << 55 is the int64 ceiling; past it every 32-bit model (sat32, wrap32) and any shift a
+    # Conv output could resolve already reads the same, so larger shifts are capped there.
+    bias = np.zeros_like(b, dtype=np.int64) if sb is None else b.astype(np.int64) << min(sb, 55)
     t = w @ codes.reshape(w.shape[1], -1) + bias[:, None]
     if acc == 'sat32':
         t = np.clip(t, -2**31, 2**31 - 1)
@@ -234,8 +236,8 @@ def main():
         return out
     controls, patches = arms(a.controls), arms(a.patches)
     for v, sb in controls + patches + [(a.base, a.base_sb)]:
-        if a.site == 'reg0' and not (-128 <= v <= 255 and 0 <= sb <= 55):
-            ap.error('REG_0 holds shift_cut in one byte and shift_bias << 2 | 1 in another (oracle: sb <= 55)')
+        if a.site == 'reg0' and not (-128 <= v <= 255 and 0 <= sb <= 63):
+            ap.error('REG_0 holds shift_cut in one byte and shift_bias << 2 | 1 in another (shift_bias 0..63)')
         if a.site == 'param_buffer' and (sb != a.base_sb or len(field(v)) != len(field(a.base))):
             ap.error('shift_cut %d changes the varint length; only same-length patches are supported' % v)
     g, w, b = probe.model(a.channels, a.base, a.base_sb, False)

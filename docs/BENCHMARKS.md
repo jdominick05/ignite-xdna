@@ -7618,6 +7618,21 @@ is set. An after-the-fact fit over every arm of runs 3–5 with shift_bias ≥ 1
 The in-contract field (bits 2–5, bits 6–7 clear) is unaffected: every in-contract control in runs
 3–5 was exact.
 
+**Run 6 maps the whole byte: bit 6 is ignored, and bit 7 removes the bias except at `0x81`**
+(2026-10-12, Desktop 2, [log](../results/aie/dpu_sigma_patch_sbgrid_desktop2_20261012T194600Z.log)).
+Every shift_bias 0–63 was run at shift_cut 1, and again at shift_cut (low field + 1) where that
+differs: 123 arms, pre-registered, controls exact.
+- **Bits 6–7 clear (in contract):** the bias shifts by the low field, 30 of 30 arms (predicted).
+- **Bit 6 alone:** the same, `shift_bias & 15`, 31 of 31 (predicted). Bit 6 is ignored.
+- **Run 5 replicated:** `0x81` kept an unshifted bias and `0xc1` did not (predicted).
+- **Bit 7 set (mapping, no prediction):** fitted per byte after the run. `0x81` alone keeps an
+  unshifted bias. All 31 other bytes `0x85`–`0xfd` fit "no bias" or a bias right-shifted by 8 or
+  more with half-up rounding, which this fixture cannot separate. A floor right shift is excluded
+  at shift_cut 1 for every one of them.
+Why `0x81` is the exception is **unexplained**. This map is measured byte by byte; any rule
+drawn from it would need its own held-out run. None of it reaches a model the producer can emit,
+which never sets bits 6–7.
+
 ---
 
 ### The producer contract is the binding constraint, not Theorem 1 (2026-09-09, Desktop 2)
