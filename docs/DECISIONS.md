@@ -1675,8 +1675,9 @@ edge, the producer's ceiling rather than the silicon's. **MEASURED 2026-10-12:**
 shift byte patched in a cached xmodel, the DPU executes sigma 31, 32 and 33 exactly
 (`results/aie/dpu_sigma_patch_desktop2_20261012T182840Z.log`), so the upper edge is the producer/compiler contract, not the hardware.
 Later the same day (`results/aie/dpu_sigma_patch_desktop2_20261012T191325Z.log`): the shift_cut byte & 63 is the `vsrs`
-code itself, so the device runs shift_cut −1..59 (−2..−4 with a wrapping left shift), and
-the shift_bias field is 4 bits. The producer's [0, 16] is therefore narrower than the
+code itself. The device executes shift_cut −1 and 0..23 exactly (measured, decisive), 24..59
+read all zero point (consistent with the code, not separated from a clamp), and −2..−4 run
+with a wrapping left shift. The shift_bias field is 4 bits. The producer's [0, 16] is therefore narrower than the
 hardware on both sides, and Theorem 1's [0, 31] sigma window does not describe this DPU.
 
 Two consequences for anyone using the tool:

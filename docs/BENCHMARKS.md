@@ -7587,7 +7587,9 @@ What this settles, and what it does not:
   positions 0). It was not added to the byte before `vsrs`.
 - **Shifts up to 23 (sigma 37) execute exactly** and decisively (MEASURED). Every right shift
   from 24 to 59 reads all zero point here, consistent with the code but not separating it
-  from a clamp anywhere in that range: the accumulator cannot exceed 2^31.
+  from a clamp anywhere in that range. For 24–31 the limit is this fixture: its largest
+  value, bias plus accumulator, stays below 2^23, so a wider Conv could still separate them.
+  From 32 up, no 32-bit accumulator can.
 - **The lower edge is reachable, and wrong past −1.** Shift_cut −1 (byte `0xff`) runs exactly.
   −2..−4 run, but wrap rather than saturate when 32 ≤ |t| < 64 (for −2), the same rule as
   `vsrs` on one core. −5 and below cannot be expressed: their bytes are right-shift codes
