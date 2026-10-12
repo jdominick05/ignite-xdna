@@ -1894,9 +1894,10 @@ sections above.
   byte `& 63` is itself the `vsrs` code. That model was fitted on run 3, then held on all 19
   held-out arms that test it, and the sigma-wrap rival failed 8 arms. So shifts up to 23
   (sigma 37) execute exactly, shift_cut −1 does too, −2..−4 wrap rather than saturate, and
-  −5 and below cannot be expressed. Byte `0x7B` carries shift_bias in only 4 bits, and its
-  bit 7 zeroed the bias on 2 arms (fitted, untested).
-  Still open: what `0x7B` bit 7 is, any shape other than one 1x1 Conv, and what a forward test that actually
+  −5 and below cannot be expressed. Byte `0x7B` carries shift_bias in only 4 bits. A
+  pre-registered test of "bit 7 zeroes the bias" (run 5) failed on 1 of 8 arms: `0x81` kept the
+  bias and `0xc1` did not.
+  Still open: what `0x7B` bits 6–7 are, any shape other than one 1x1 Conv, and what a forward test that actually
   reaches the edges would look like, given the EP refuses out-of-contract scales — and note
   the constraint is now sharper, since any file the producer emits is confined to
   `[14, 30]` by construction, so reaching an edge means defeating `adjust_shift_cut` first,

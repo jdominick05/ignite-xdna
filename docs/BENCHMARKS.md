@@ -7578,7 +7578,7 @@ three of them (50:24, −8, −14).
 pre-registered is refuted by the two bit-7 arms.** After the fact, both bit-7 arms equal the
 shift with the bias zeroed (0 mismatches; `shift_bias & 15` misses by 14,352 and 28,672). That
 reading is fitted on 2 arms and untested, and these arms cannot tell a disabled bias from one
-shifted out of range.
+shifted out of range. *(Tested the same day, run 5 below: refuted by one arm.)*
 
 What this settles, and what it does not:
 - **Run 2's miss is explained.** The device does not shift by sigma = shift_cut + 14. It
@@ -7595,13 +7595,28 @@ What this settles, and what it does not:
   `vsrs` on one core. −5 and below cannot be expressed: their bytes are right-shift codes
   50–59. The 2026-09-09 "sigma 0 diverges" row ran on CPU fallback. This is the first DPU data
   below shift_cut 0.
-- **Not tested.** What `0x7B` bit 7 does, beyond zeroing the bias on two arms. Bits 0–1 of
-  `0x7B`. An accumulator-width probe: shift_bias is 4 bits, so the bias stays below 2^22, and
+- **Not tested.** What `0x7B` bit 7 does, beyond zeroing the bias on two arms *(run 5,
+  below)*. Bits 0–1 of `0x7B`. An accumulator-width probe: shift_bias is 4 bits, so the bias stays below 2^22, and
   the arms meant for it tested nothing. Any layer shape other than this 1x1 Conv.
 - **Alternatives ruled out.** Those of run 2 (no recompile, no stale cache, no host
   arithmetic), in every arm of both runs. For the shift reading: a clamp at 16 or 17 (shifts
   20–23 exact), a 5-bit mask, sigma wrapped to 6 bits (8 arms across both runs), plain
   saturation on left shifts (7 arms), and an unsigned byte (`0xff` is −1).
+
+**Run 5: "bit 7 zeroes the bias" is refuted, and `0x7B` bits 6–7 stay unexplained**
+(2026-10-12, Desktop 2, [log](../results/aie/dpu_sigma_patch_bit7_desktop2_20261012T193618Z.log)). It is a pre-registered
+held-out test of the bit-7 reading fitted on run 4. It used 8 new arms, all with bit 7 set, varying the low
+field, bit 6, shift_cut, a left-shift code and the byte `0xff`. The controls were valid. That reading matched 7 arms
+and **missed `1:32`** (byte `0x81`: bit 7 only, low field 0), where the bias applied unshifted.
+`1:48` (`0xc1`, bits 7 and 6, low field 0) read as no bias, so bit 6 is not ignored once bit 7
+is set. An after-the-fact fit over every arm of runs 3–5 with shift_bias ≥ 16 (in the log) gives:
+- **Bit 7 clear, bit 6 set.** The bias shifts by `shift_bias & 15`, and nothing else fits (5 informative arms).
+- **Bit 7 set.** `0x81` fits only an unshifted bias. Seven other arms fit only "no bias" or a bias
+  right-shifted by 4–8 or more, which this fixture cannot separate.
+- **No reading fits.** None tried fits `0x81`, `0x85` and `0xc1` together: bits 2–5, 2–6 or 2–7 as a
+  signed or unsigned shift, or bit 7 as a bias-off flag. **Unexplained.**
+The in-contract field (bits 2–5, bits 6–7 clear) is unaffected: every in-contract control in runs
+3–5 was exact.
 
 ---
 

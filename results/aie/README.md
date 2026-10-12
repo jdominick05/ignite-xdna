@@ -1068,6 +1068,8 @@ shape.
 
 **`dpu_sigma_patch_desktop2_20261012T191325Z.log`** — `tools/dpu_sigma_patch_test.py` runs 3 and 4, which also edit `REG_0` byte `0x7B` (shift_bias) and write negative shift_cut bytes. Run 3's controls were exact, and its pre-registered predictions **missed**. A model was fitted on its 36 arms: the shift_cut byte `& 63` is the `vsrs` code (60–63 shift left, saturating only when a one-bit shift would overflow, else wrapping), and shift_bias is `& 15`. Run 4 tested it on 23 new arms. **The shift half held on all 19 arms that test it, shifts 20–23 included**, and the sigma-wrap rival failed. Two arms with `0x7B` bit 7 set missed; after the fact they read as a zeroed bias (fitted on 2 arms). Both pre-registrations and every fit script hash are embedded. [BENCHMARKS](../../docs/BENCHMARKS.md#the-aie2-shifter-reads-a-6-bit-code-so-theorem-1s-5-bit-shifter-is-not-the-bound-2026-10-12-desktop-2).
 
+**`dpu_sigma_patch_bit7_desktop2_20261012T193618Z.log`** — `tools/dpu_sigma_patch_test.py` run 5, a pre-registered test of the bit-7 reading fitted on run 4 ("byte `0x7B` bit 7 zeroes the bias"). The controls were valid. It matched 7 of 8 new arms and **missed `0x81`**, which kept an unshifted bias, so it is refuted. An after-the-fact fit over all high-shift_bias arms of runs 3–5 is embedded; no reading of bits 6–7 tried fits `0x81`, `0x85` and `0xc1` together, so it stays **unexplained**. [BENCHMARKS](../../docs/BENCHMARKS.md#the-aie2-shifter-reads-a-6-bit-code-so-theorem-1s-5-bit-shifter-is-not-the-bound-2026-10-12-desktop-2).
+
 ## Windows local memory placement
 
 Desktop 2, 2026-09-09: [method, formulas and limits](../../docs/BENCHMARKS.md#windows-low-level-research-placement-and-xint8-arithmetic).

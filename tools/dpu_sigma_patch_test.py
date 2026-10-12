@@ -43,6 +43,9 @@ the device), so a pre-registration can name which outcomes each arm separates:
   code6_sb4      FITTED on run 3: the shift_cut byte & 63 is the vsrs code (60..63 shift left by
                  4..1, saturating only when a one-bit shift would overflow, else wrapping to 8 bits),
                  and the effective shift_bias is shift_bias & 15
+  code6_b7zero   code6_sb4, except that bit 7 of byte 0x7B (shift_bias bit 5) zeroes the bias:
+                 FITTED on run 4's two misses, then REFUTED by run 5 (0x81 kept its bias;
+                 results/aie/dpu_sigma_patch_bit7_desktop2_20261012T193618Z.log)
   sigma6_sb4     the rival reading: sigma = shift_cut + 14 wrapped to 6 bits, shift = sigma - 14
                  (so bytes with low bits 50..59 shift LEFT by 14..5), same bias mask and rule
   unsigned       a negative shift_cut's byte read as unsigned
@@ -112,9 +115,11 @@ def patch(original, site, base, v, base_sb=0, sb=0):
 
 def model_out(x, w, b, sc, sb, acc='wide'):
     """Output codes for shift_cut sc and shift_bias sb, in integers (half_up output rounding,
-    as measured). acc: 'wide' exact, 'sat32'/'wrap32' bound the accumulator to 32 bits."""
+    as measured). acc: 'wide' exact, 'sat32'/'wrap32' bound the accumulator to 32 bits.
+    sb None means no bias at all."""
     codes = np.clip(np.rint(x.astype(np.float64)), -128, 127).astype(np.int64)
-    t = w @ codes.reshape(w.shape[1], -1) + (b.astype(np.int64) << sb)[:, None]
+    bias = np.zeros_like(b, dtype=np.int64) if sb is None else b.astype(np.int64) << sb
+    t = w @ codes.reshape(w.shape[1], -1) + bias[:, None]
     if acc == 'sat32':
         t = np.clip(t, -2**31, 2**31 - 1)
     elif acc == 'wrap32':
@@ -146,6 +151,7 @@ def hypotheses(sc, sb, base=None):
     code = sc & 63                             # fitted on run 3: the byte itself is the vsrs code
     h['code6_sb4'] = (code if code < 60 else code - 64, sb & 15, 'lsat1')
     h['code6_sb4_sat'] = (h['code6_sb4'][0], sb & 15, 'wide')     # same shift, plain saturation
+    h['code6_b7zero'] = (h['code6_sb4'][0], None if sb & 32 else sb & 15, 'lsat1')   # fitted on run 4
     h['sigma6_sb4'] = (((sc + 14) & 63) - 14, sb & 15, 'lsat1')   # its closest rival on run 3
     if sc < 0:
         h['unsigned'] = (sc & 0xFF, sb, 'wide')
