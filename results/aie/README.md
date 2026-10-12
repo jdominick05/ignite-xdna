@@ -1078,6 +1078,10 @@ shape.
 **`xdp_trace_attach_desktop2_20261012T213156Z.log`** — Gate 0 of the dynamic witness: does XRT's AIE trace plugin attach to the VitisAI EP process by configuration alone? The EP loads System32's `xrt_coreutil` (2.21.0), and the plugin loads through `AMD_NPU_SDK_PATH` with outputs bit-equal and no recompile. **FAIL as pre-registered:** no trace was written, because XRT found no AIE metadata (`aie_control_config.json`) in the run directory. [BENCHMARKS](../../docs/BENCHMARKS.md#the-aie2-shifter-reads-a-6-bit-code-so-theorem-1s-5-bit-shifter-is-not-the-bound-2026-10-12-desktop-2).
 
 **`xdp_trace_metadata_desktop2_20261012T214206Z.log`** — Gate 0b: the same traced arm, with the overlay xclbin's own `AIE_METADATA` supplied as `aie_control_config.json`. The metadata loads, but XDP finds no trace streams (`TraceGMIOs` empty; the PLIOs are `TCT0`–`TCT3`). **FAIL:** the shipped overlay has no trace routing, so XRT's trace plugin cannot observe it by configuration alone. Outputs stayed bit-equal. [BENCHMARKS](../../docs/BENCHMARKS.md#the-aie2-shifter-reads-a-6-bit-code-so-theorem-1s-5-bit-shifter-is-not-the-bound-2026-10-12-desktop-2).
+
+**`xdp_profile_attach_desktop2_20261012T215835Z.log`** — B-0: XRT's AIE profile plugin in the EP process, configuration only. It configures all 16 cores and reads 64 counters back through `XDP_KERNEL`, but **every value is 0** (FAIL as pre-registered; the cause is unexplained among three candidates). Outputs stayed bit-equal. [BENCHMARKS](../../docs/BENCHMARKS.md#the-aie2-shifter-reads-a-6-bit-code-so-theorem-1s-5-bit-shifter-is-not-the-bound-2026-10-12-desktop-2).
+
+**`dpu_reg0_sensitivity_desktop2_20261012T220151Z.log`** — Route C, the `REG_0` sensitivity sweep: **stopped at its first arm** by its pre-registered stop rule. The error was host-side: `REG_0`'s value is a nested protobuf whose 3-byte header was flipped. No sensitivity result yet. [BENCHMARKS](../../docs/BENCHMARKS.md#the-aie2-shifter-reads-a-6-bit-code-so-theorem-1s-5-bit-shifter-is-not-the-bound-2026-10-12-desktop-2).
 ot-the-bound-2026-10-12-desktop-2).
 
 ## Windows local memory placement

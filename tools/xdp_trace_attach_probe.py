@@ -10,20 +10,23 @@ Two arms, each its own process (XRT reads xrt.ini and its env at load time):
       recompiles the worktree's own EP cache, runs every case twice (must repeat exactly), and saves the
       outputs, the cached xmodel's sha256 and mtime, the EP report summary, and the XRT/XDP/EP DLLs the process
       loaded.
-  --arm traced --ref DIR --out DIR2
+  --arm traced --ref DIR --out DIR2 [--expect trace|profile]
       Run with cwd, XRT_INI_PATH and AMD_NPU_SDK_PATH set by the caller. It does NOT clear the cache: the
       cached xmodel must keep the reference's sha256 and mtime (no recompile). Then it runs the same cases and
-      records the DLLs and every file that appeared in the working directory. Exit 0 iff the Gate 0
-      conditions all hold:
-      - the trace plugin is loaded;
-      - at least one non-empty aie_trace* file exists;
+      records the DLLs and every file that appeared in the working directory. Exit 0 iff these all hold:
+      - the xdp_aie_<expect>_plugin.dll is loaded;
+      - at least one non-empty aie_<expect>* file exists;
       - the outputs are bit-equal to the reference;
       - the xmodel is unchanged;
       - the device was idle before.
-      (Idle after exit is checked by the caller.)
+      XDP writes some files only at process exit (the profile CSV does), so the in-process file check is
+      advisory: a caller that needs those files lists the directory after the process ends. Idle after exit
+      is also the caller's check.
 
 Nothing here copies or replaces a DLL anywhere. Run in resnet_env17.
-What has been run: see results/aie/xdp_trace_attach_desktop2_*.log; until such a log exists, nothing.
+What has been run: results/aie/xdp_trace_attach_desktop2_20261012T213156Z.log (Gate 0, trace),
+xdp_trace_metadata_desktop2_20261012T214206Z.log (Gate 0b, trace, metadata supplied) and
+xdp_profile_attach_desktop2_20261012T215835Z.log (B-0, profile).
 """
 import argparse
 import ctypes
@@ -109,6 +112,8 @@ def main():
     ap.add_argument('--arm', choices=('untraced', 'traced'), required=True)
     ap.add_argument('--out', type=Path, required=True, help='new directory for this arm\'s results')
     ap.add_argument('--ref', type=Path, help='the untraced arm\'s --out (traced arm only)')
+    ap.add_argument('--expect', choices=('trace', 'profile'), default='trace',
+                    help='which XDP plugin\'s output the traced arm must find: aie_trace* or aie_profile* files')
     a = ap.parse_args()
     if a.out.exists():
         ap.error('--out must be new')
@@ -156,8 +161,8 @@ def main():
                                 else None} for n in new]
         ref_outs = np.load(a.ref / 'outputs.npz')
         checks = {
-            'plugin_loaded': 'xdp_aie_trace_plugin.dll' in names,
-            'trace_file_nonempty': any(f['name'].lower().startswith('aie_trace') and (f['size'] or 0) > 0
+            'plugin_loaded': 'xdp_aie_%s_plugin.dll' % a.expect in names,
+            'plugin_file_nonempty': any(f['name'].lower().startswith('aie_' + a.expect) and (f['size'] or 0) > 0
                                        for f in report['new_files']),
             'outputs_bit_equal': sorted(ref_outs.files) == sorted(outs)
                                  and all(np.array_equal(ref_outs[k], outs[k]) for k in outs),

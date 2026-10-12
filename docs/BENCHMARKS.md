@@ -7710,6 +7710,28 @@ metadata** (2026-10-12, Desktop 2, [log](../results/aie/xdp_trace_attach_desktop
 - **Not tried:** editing the metadata to declare trace streams. XDP would then program routes into the
   live partition, which is no longer configuration-only observation.
 
+**B-0: the profile plugin configures and reads the overlay's cores, but every counter reads 0**
+(2026-10-12, Desktop 2, [log](../results/aie/xdp_profile_attach_desktop2_20261012T215835Z.log)).
+- **What worked.** XRT's AIE profile plugin ran in the EP process on the same configuration-only setup.
+  It reserved 4 `heat_map` counters on each of the 16 cores, scheduled its setup and poll transactions
+  through `XDP_KERNEL`, and read 64 counter values back. So that kernel's configure-and-read path works on
+  this firmware.
+- **What failed.** Every value is 0, although the cores computed: the outputs are bit-equal and there
+  was no recompile. B-0 **fails** as pre-registered.
+- **Why is unexplained.** Three candidates, none ruled out: the PDI 2 load re-initialises the core
+  modules after XDP armed them at xclbin load; the end-of-run poll lands after a teardown reset; or these
+  events do not count here. Any replay therefore arms after a warm-up run.
+
+**Route C, a `REG_0` sensitivity sweep, stopped on its first arm**
+(2026-10-12, Desktop 2, [log](../results/aie/dpu_reg0_sensitivity_desktop2_20261012T220151Z.log)).
+- **The sweep and the stop.** It flips each byte of `REG_0[0x00..0xFF]` two ways and records whether the
+  Conv's outputs change. Its pre-registered stop rule ended it at byte `0x00`, with a host-side
+  deserialisation error that occurred before any device contact.
+- **The cause.** `REG_0`'s value is itself a nested protobuf message: `0a e0 0e` is field 1, 1888 B. The
+  parameter payload therefore starts at `REG_0` offset 3. The offsets quoted in this section (0x7B, 0x7C,
+  base 0x5B) are all in the same `REG_0`-value coordinates, so they stand.
+- **No sensitivity result yet.** Resuming at offset 3 waits for the user's OK, as pre-registered.
+
 ---
 
 ### The producer contract is the binding constraint, not Theorem 1 (2026-09-09, Desktop 2)
