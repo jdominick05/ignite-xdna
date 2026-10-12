@@ -7048,6 +7048,7 @@ recorded in `docs/DECISIONS.md` so there is one policy rather than two precedent
 >    either width. *(Updated 2026-10-12: the shifter is now measured, and it is a 6-bit code,
 >    not 5-bit. See "The AIE2 shifter reads a 6-bit code" below. The 15-bit multiplier is
 >    still unmeasured, and the highest sigma the DPU has executed is still 30.)*
+>    *(Superseded 2026-10-12: with the shift byte patched in a cached xmodel, the DPU executed sigma 31, 32 and 33 exactly, `results/aie/dpu_sigma_patch_desktop2_20261012T182840Z.log`.)*
 >
 > 5. **The zero was a tautology, and a third of the "analyzed" operations were not
 >    analyzed.** Added 2026-09-09 (Desktop 2), see the subsection below and
@@ -7099,7 +7100,7 @@ The hardware compiler approximates A using (M, sigma):
 **Theorem 1 (Systolic Shift-Cut Bound):**
 An operation is physically executable without numerical distortion on XDNA1 if and only if
 (**hypothesis, not a result — see the retraction at the top of this section; neither edge has
-been reached on hardware and the highest sigma ever executed is 30**):
+been reached on hardware and the highest sigma ever executed is 30**; *(Superseded 2026-10-12: with the shift byte patched in a cached xmodel, the DPU executed sigma 31, 32 and 33 exactly, `results/aie/dpu_sigma_patch_desktop2_20261012T182840Z.log`.)*):
 
     0 <= sigma <= 31
 
@@ -7257,7 +7258,7 @@ So sigma is reachable on this hardware only in **[14, 30]**, and Theorem 1's `[0
 never be tested at either edge with a Conv the DPU will actually run. That also explains, without
 any appeal to a shift register's width, why no model in this repo has ever shown a sigma outside
 7..30: the compiler will not accept the graph in the first place. The highest sigma ever executed
-here is 30.
+here is 30. *(Superseded 2026-10-12: with the shift byte patched in a cached xmodel, the DPU executed sigma 31, 32 and 33 exactly, `results/aie/dpu_sigma_patch_desktop2_20261012T182840Z.log`.)*
 
 The rounding results from the in-contract sweep are unaffected -- those fixtures did place, at 5 of
 7 nodes, and are reported in the arithmetic section above.
@@ -7471,8 +7472,8 @@ What this changes:
   fixtures. Another `param_buffer`: buffers 0 and 2 are identical across all nine.
 - **Not identified.** How the overlay's core programs read this buffer at run time.
 
-**Sigma 31–33 execute exactly on the DPU: the [14, 30] window's upper edge is the compiler's,
-not the silicon's** (2026-10-12, Desktop 2,
+**Sigma 31–33 execute exactly on the DPU: the [14, 30] window's upper edge is the producer and
+compiler contract, not the silicon** (2026-10-12, Desktop 2,
 [log](../results/aie/dpu_sigma_patch_desktop2_20261012T182840Z.log)).
 
 **Method.** [`tools/dpu_sigma_patch_test.py`](../tools/dpu_sigma_patch_test.py) compiles the
@@ -7498,6 +7499,8 @@ pre-registered rule no arm is interpreted. Five steps, each in its own process, 
   `reg_id_to_parameter_value` entry `REG_0`, 1891 B.
   - **What it holds.** In all 9 fixtures, byte `0x7B` is `shift_bias << 2 | 1` and byte
     `0x7C` is shift_cut. They are the only bytes that vary (`dpu_mc_fixtures.py --summary`).
+    Read together as a little-endian u16, they equal the varint's value,
+    `shift_cut << 8 | shift_bias << 2 | 1`. That is why one byte holds shift_cut only up to 255.
   - **What the attr is.** The `param_buffer` varint is a copy of the same two bytes, and the
     device does not read it.
 
@@ -7514,8 +7517,11 @@ pre-registered rule no arm is interpreted. Five steps, each in its own process, 
 
 What this settles, and what it does not:
 - **The upper edge is not the silicon.** The DPU executes sigma 31, 32 and 33 exactly
-  (MEASURED). So the EP's refusal above sigma 30 is the compiler's contract. **A 5-bit mask
-  is excluded**: it would turn sigma 32 into a shift of 0, and shift_cut 18 read exact.
+  (MEASURED). So the edge is the producer/compiler contract: Quark's `adjust_shift_cut` clamp,
+  then the EP's compile-time refusal. The finding rules out only the hardware. **A 5-bit mask
+  is excluded**: it would turn sigma 32 into a shift of 0, and shift_cut 18 read exact. It
+  would also turn sigma 59 into 27 (shift_cut 45 & 31 = 13), which gives thousands of
+  non-zero-point outputs here, and shift_cut 45 read all zero point.
 - **The miss at 46–49 rules out the straight path.** sigma = shift_cut + 14 does not reach a
   6-bit `vsrs` code unchanged, or those arms would have shifted left. That is consistent with
   the overlay's packet decode splitting the shift across the 4-bit and signed 6-bit fields
@@ -7551,7 +7557,7 @@ models lies in `[14, 30]`, zero outside.
 This also explains, with no new hardware, the fact recorded in `46c022a` that the highest
 sigma ever executed on this device is 30 — 30 is the contract's upper edge (`shift_cut` 16),
 i.e. the producer's ceiling rather than the silicon's. Both register widths behind Theorem 1
-remain unmeasured and both edges of `[0, 31]` remain unreached.
+remain unmeasured and both edges of `[0, 31]` remain unreached. *(Superseded 2026-10-12: with the shift byte patched in a cached xmodel, the DPU executed sigma 31, 32 and 33 exactly, `results/aie/dpu_sigma_patch_desktop2_20261012T182840Z.log`.)* The lower edge is still unreached.
 
 **166 of 1102 candidate operations were being scored on scales that were never read.** The
 analyzer initialised `scale_x`/`scale_w`/`scale_y` to 1.0 and overwrote each only where a

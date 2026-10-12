@@ -156,7 +156,8 @@ def reg0_span(x):
     first map<string, bytes> entry `0a 05 'REG_0' 12 <len>` after the one
     reg_id_to_parameter_value key. Later REG_0 entries belong to sibling maps (context types).
     MEASURED 2026-10-12: byte 0x7B = shift_bias << 2 | 1, byte 0x7C = shift_cut, and these are
-    the only bytes that vary across the sweep. Patching 0x7C alone moves the device's shift
+    the only bytes that vary across the sweep. Read as one little-endian u16 they equal the
+    param_buffer varint's value, shift_cut << 8 | shift_bias << 2 | 1. Patching 0x7C alone moves the device's shift
     (tools/dpu_sigma_patch_test.py); the param_buffer varint does not."""
     k = x.find(b'reg_id_to_parameter_value')
     entry = bytes.fromhex('0a 05') + b'REG_0' + bytes.fromhex('12')

@@ -1860,7 +1860,7 @@ sections above.
     No fixture has executed outside the producer's own `[0, 16]` shift-cut contract: fixtures
     built to reach sigma 0, 31 and 32 are refused by the VitisAI EP and run on the CPU EP
     instead, recording `"tested_conv_on_npu": false`, so a divergence measured there is a
-    software result. **The highest sigma ever executed on this DPU is 30.** Neither register
+    software result. **The highest sigma ever executed on this DPU is 30.** *(Superseded 2026-10-12: with the shift byte patched in a cached xmodel, the DPU executed sigma 31, 32 and 33 exactly, `results/aie/dpu_sigma_patch_desktop2_20261012T182840Z.log`.)* Neither register
     width behind the theorem — the 15-bit multiplier, the 5-bit shifter — has been measured
     (*shifter measured 2026-10-12, see below: it is not 5-bit*),
     and no AIE-ML or DPU ISA document in this repo states either; AMD's AI Engine
@@ -1874,7 +1874,7 @@ sections above.
     inside `[0, 31]`. Every analyzed Conv/Gemm on all eleven models lies in `[14, 30]`, as
     it must. This also explains the "highest sigma ever executed is 30" above without new
     hardware: 30 is the contract's upper edge, the producer's ceiling rather than the
-    silicon's. Separately, **166 of 1102** candidate operations were being scored on scales
+    silicon's (confirmed 2026-10-12: sigma 31–33 execute exactly on the DPU once the shift is patched past the contract). Separately, **166 of 1102** candidate operations were being scored on scales
     that were never read — the `_Scale`/`_Mul` DPU-simulation pairs, defaulted to 1.0 and
     counted as passing; they are the sub-14 minima in the tables above, and no Conv ever
     produced one.
@@ -1887,7 +1887,7 @@ sections above.
   byte-identical across sigma 14–30. The DPU reads it from one byte of the subgraph's `REG_0`
   parameter blob; the weight `param_buffer` holds a copy the device ignores. Patching that
   byte in a cached xmodel, **sigma 31, 32 and 33 execute exactly** (pre-registered, controls
-  valid), so the window's upper edge is the compiler's contract, not the silicon's, and a
+  valid), so the window's upper edge is the producer/compiler contract, not the silicon, and a
   5-bit mask is excluded. The predicted left shifts at sigma 60–63 did not appear (unexplained)
   ([working](docs/BENCHMARKS.md#the-aie2-shifter-reads-a-6-bit-code-so-theorem-1s-5-bit-shifter-is-not-the-bound-2026-10-12-desktop-2)).
   Still open: the lower edge (sigma < 14, untested), large shifts on a fixture wide

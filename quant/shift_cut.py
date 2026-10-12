@@ -43,6 +43,8 @@ Theorem 1 (Systolic Shift-Cut Bound) -- STATED, NOT VALIDATED ON THIS DEVICE:
     without giving the shift field's width, so the bound is not externally corroborated
     either.
 
+    SUPERSEDED 2026-10-12: with the shift byte patched in a cached xmodel, the DPU
+    executed sigma 31..33 exactly (results/aie/dpu_sigma_patch_desktop2_20261012T182840Z.log).
     Neither edge has been observed on hardware. The highest sigma ever executed on this
     DPU is 30; measured placements cover sigma in {14, 15, 17, 18, 22, 30}, all from
     fixtures whose scales sit inside the producer's own [0, 16] shift-cut contract.

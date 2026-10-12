@@ -1673,7 +1673,7 @@ all 744 analyzed Conv/Gemm across eleven models sit in `[14, 30]`
 hardware, why the highest sigma ever executed here is 30 — that is the contract's upper
 edge, the producer's ceiling rather than the silicon's. **MEASURED 2026-10-12:** with the
 shift byte patched in a cached xmodel, the DPU executes sigma 31, 32 and 33 exactly
-(`results/aie/dpu_sigma_patch_desktop2_20261012T182840Z.log`), so the upper edge is the compiler's refusal, not the hardware.
+(`results/aie/dpu_sigma_patch_desktop2_20261012T182840Z.log`), so the upper edge is the producer/compiler contract, not the hardware.
 
 Two consequences for anyone using the tool:
 
