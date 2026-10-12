@@ -1,0 +1,54 @@
+# kernels/srs_probe/srs_probe.py, sitting 5 of 2026-10-12 on Desktop 2 (DESKTOP-CBL5NUA), Phoenix XDNA1, mlir-aie ironenv
+# mode 2 (acc64->int32) left shifts, full lanes printed: the data the saturation model below was FITTED on
+DESKTOP-CBL5NUA
+20261012T175238Z
+== xrt-smi examine -r aie-partitions (before)
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+== mode 2 acc64->int32, ups [0, 16], 4 shifts, 16 lanes, floor + saturate
+  up  0 shift  -4: rnd 0 sat 1  matches NONE  (44.61 ms)
+     lanes: [0, 16, -16, 2147483647, -2147483648, 591751040, -591751040, 48, -758046448, -1086760320, -2147483648, -2147483648, 1852240240, -379221584, 2147483647, -2147483648]
+     accs:  [0, 1, -1, 2147483647, -2147483648, 305419896, -305419896, 3, -315813359, -604793432, -1762531292, -1137390030, 115765015, 781605019, 1645921324, -1676837634]
+  up  0 shift  -3: rnd 0 sat 1  matches NONE  (0.79 ms)
+     lanes: [0, 8, -8, 2147483647, -2147483648, -1851608128, 1851608128, 24, 1768460424, -543380160, -2147483648, -2147483648, 926120120, 1957872856, 2147483647, -2147483648]
+     accs:  [0, 1, -1, 2147483647, -2147483648, 305419896, -305419896, 3, -315813359, -604793432, -1762531292, -1137390030, 115765015, 781605019, 1645921324, -1676837634]
+  up  0 shift  -2: rnd 0 sat 1  matches NONE  (0.72 ms)
+     lanes: [0, 4, -4, 2147483647, -2147483648, 1221679584, -1221679584, 12, -1263253436, 1875793568, -2147483648, -2147483648, 463060060, -1168547220, 2147483647, -2147483648]
+     accs:  [0, 1, -1, 2147483647, -2147483648, 305419896, -305419896, 3, -315813359, -604793432, -1762531292, -1137390030, 115765015, 781605019, 1645921324, -1676837634]
+  up  0 shift  -1: rnd 0 sat 1  matches f6_m4_59  (0.73 ms)
+  up 16 shift  -4: rnd 0 sat 1  matches f6_m4_59  (0.72 ms)
+  up 16 shift  -3: rnd 0 sat 1  matches f6_m4_59  (1.49 ms)
+  up 16 shift  -2: rnd 0 sat 1  matches f6_m4_59  (0.69 ms)
+  up 16 shift  -1: rnd 0 sat 1  matches f6_m4_59  (0.69 ms)
+-- mode 2 acc64->int32: candidates matching EVERY lane at EVERY shift: NONE
+     and127   first fails at up 0 shift -4 lane 1: acc 1 expected 0 got 16
+     and31    first fails at up 0 shift -4 lane 1: acc 1 expected 0 got 16
+     and63    first fails at up 0 shift -4 lane 1: acc 1 expected 0 got 16
+     clamp31  first fails at up 0 shift -4 lane 1: acc 1 expected 1 got 16
+     clamp63  first fails at up 0 shift -4 lane 1: acc 1 expected 1 got 16
+     f6_m4_59 first fails at up 0 shift -4 lane 5: acc 305419896 expected 2147483647 got 591751040
+
+== xrt-smi examine -r aie-partitions (after)
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  Total Memory Usage: 64 MB
+  Partition Index   : 0
+    Columns: [1, 2, 3, 4]
+    HW Contexts:
+      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |
+      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |
+      |Memory Usage        |Instr BO   |            |            |     |FPS      |
+      |                    |           |            |            |     |Latency  |
+      |====================|===========|============|============|=====|=========|
+      |29464               |37         |8           |0           |0    |Normal   |
+      |python.exe          |Active     |8           |0           |     |N/A      |
+      |64 MB               |64 KB      |            |            |     |N/A      |
+      |                    |           |            |            |     |N/A      |
+      |--------------------|-----------|------------|------------|-----|---------|
+exit=0

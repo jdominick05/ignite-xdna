@@ -1,0 +1,310 @@
+# tools/xclbin_overlay_extract.py on Phoenix 4x4.xclbin (Ryzen AI 1.7.1), Desktop 2 (DESKTOP-CBL5NUA), 20261012T1737Z
+# xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+# sha256 d3b5e845b05f91beb90555b6f50ca542e05f69379f3fd9ab15246ad344c469fe (identical to modelcachekey\4x4.xclbin)
+# sections dumped with C:\Xilinx\XRT\xrt_sdk\xrt\xclbinutil.exe (XRT 2.21.0) --dump-section PDI:RAW; AIE_PARTITION:RAW wrote 0 B, :JSON works
+# AIE_PARTITION: column_width 4, start_columns [1], operations_per_cycle 8192, 15 PDIs, cdo pdi_id 0xf0..0xfe, dpu_kernel_ids 0x100..0x10e
+# disassembler: Peano llvm-objdump (llvm-aie, mlir-aie ironenv); images wrapped in a minimal ELF32 with e_machine/e_flags of a Peano engine ELF
+# Images and disassembly are AMD binaries: kept in git-ignored scratch/dpu_re/, NOT committed.
+# Known limit: every PDI's last DMA write (tile c3 r5) ends 28 B past the PDI file, so c3r5's last 4 bytes are missing; those 4 bytes are the 15 '4 unknown' lines below (exit 1 is that, nothing else).
+
+PDI 0000: 266944 B, records {3: 71, 2: 22, 5: 49}, 828 reg writes, 88 mask writes, 236 DMA writes, payload base 0x329c, payload overrun 28 B
+  c0 r2: 15438 B of 16384, sha256 a1c7236a7450e02a, 2687 disasm lines, 0 unknown, objdump exit 0
+  c0 r3: 15438 B of 16384, sha256 694235dc9e6f74b4, 2687 disasm lines, 0 unknown, objdump exit 0
+  c0 r4: 15438 B of 16384, sha256 694235dc9e6f74b4, 2687 disasm lines, 0 unknown, objdump exit 0
+  c0 r5: 15438 B of 16384, sha256 694235dc9e6f74b4, 2687 disasm lines, 0 unknown, objdump exit 0
+  c1 r2: 15438 B of 16384, sha256 a1c7236a7450e02a, 2687 disasm lines, 0 unknown, objdump exit 0
+  c1 r3: 15438 B of 16384, sha256 694235dc9e6f74b4, 2687 disasm lines, 0 unknown, objdump exit 0
+  c1 r4: 15438 B of 16384, sha256 694235dc9e6f74b4, 2687 disasm lines, 0 unknown, objdump exit 0
+  c1 r5: 15438 B of 16384, sha256 694235dc9e6f74b4, 2687 disasm lines, 0 unknown, objdump exit 0
+  c2 r2: 15438 B of 16384, sha256 a1c7236a7450e02a, 2687 disasm lines, 0 unknown, objdump exit 0
+  c2 r3: 15438 B of 16384, sha256 694235dc9e6f74b4, 2687 disasm lines, 0 unknown, objdump exit 0
+  c2 r4: 15438 B of 16384, sha256 694235dc9e6f74b4, 2687 disasm lines, 0 unknown, objdump exit 0
+  c2 r5: 15438 B of 16384, sha256 694235dc9e6f74b4, 2687 disasm lines, 0 unknown, objdump exit 0
+  c3 r2: 15438 B of 16384, sha256 a1c7236a7450e02a, 2687 disasm lines, 0 unknown, objdump exit 0
+  c3 r3: 15438 B of 16384, sha256 694235dc9e6f74b4, 2687 disasm lines, 0 unknown, objdump exit 0
+  c3 r4: 15438 B of 16384, sha256 694235dc9e6f74b4, 2687 disasm lines, 0 unknown, objdump exit 0
+  c3 r5: 15436 B of 16384, sha256 e4df08ecd99cc575, 2690 disasm lines, 4 unknown, objdump exit 0
+PDI 0001: 269248 B, records {3: 71, 2: 22, 5: 49}, 828 reg writes, 88 mask writes, 236 DMA writes, payload base 0x329c, payload overrun 28 B
+  c0 r2: 15582 B of 16384, sha256 55df180fa3d32268, 2736 disasm lines, 0 unknown, objdump exit 0
+  c0 r3: 15582 B of 16384, sha256 e58467917037ffc9, 2736 disasm lines, 0 unknown, objdump exit 0
+  c0 r4: 15582 B of 16384, sha256 e58467917037ffc9, 2736 disasm lines, 0 unknown, objdump exit 0
+  c0 r5: 15582 B of 16384, sha256 e58467917037ffc9, 2736 disasm lines, 0 unknown, objdump exit 0
+  c1 r2: 15582 B of 16384, sha256 55df180fa3d32268, 2736 disasm lines, 0 unknown, objdump exit 0
+  c1 r3: 15582 B of 16384, sha256 e58467917037ffc9, 2736 disasm lines, 0 unknown, objdump exit 0
+  c1 r4: 15582 B of 16384, sha256 e58467917037ffc9, 2736 disasm lines, 0 unknown, objdump exit 0
+  c1 r5: 15582 B of 16384, sha256 e58467917037ffc9, 2736 disasm lines, 0 unknown, objdump exit 0
+  c2 r2: 15582 B of 16384, sha256 55df180fa3d32268, 2736 disasm lines, 0 unknown, objdump exit 0
+  c2 r3: 15582 B of 16384, sha256 e58467917037ffc9, 2736 disasm lines, 0 unknown, objdump exit 0
+  c2 r4: 15582 B of 16384, sha256 e58467917037ffc9, 2736 disasm lines, 0 unknown, objdump exit 0
+  c2 r5: 15582 B of 16384, sha256 e58467917037ffc9, 2736 disasm lines, 0 unknown, objdump exit 0
+  c3 r2: 15582 B of 16384, sha256 55df180fa3d32268, 2736 disasm lines, 0 unknown, objdump exit 0
+  c3 r3: 15582 B of 16384, sha256 e58467917037ffc9, 2736 disasm lines, 0 unknown, objdump exit 0
+  c3 r4: 15582 B of 16384, sha256 e58467917037ffc9, 2736 disasm lines, 0 unknown, objdump exit 0
+  c3 r5: 15580 B of 16384, sha256 684422a45f1fe2ec, 2739 disasm lines, 4 unknown, objdump exit 0
+PDI 0002: 263872 B, records {3: 71, 2: 22, 5: 49}, 828 reg writes, 88 mask writes, 236 DMA writes, payload base 0x329c, payload overrun 28 B
+  c0 r2: 15246 B of 16384, sha256 f30a80ece2ff361d, 2568 disasm lines, 0 unknown, objdump exit 0
+  c0 r3: 15246 B of 16384, sha256 b5ff0f6652f7f434, 2568 disasm lines, 0 unknown, objdump exit 0
+  c0 r4: 15246 B of 16384, sha256 b5ff0f6652f7f434, 2568 disasm lines, 0 unknown, objdump exit 0
+  c0 r5: 15246 B of 16384, sha256 b5ff0f6652f7f434, 2568 disasm lines, 0 unknown, objdump exit 0
+  c1 r2: 15246 B of 16384, sha256 f30a80ece2ff361d, 2568 disasm lines, 0 unknown, objdump exit 0
+  c1 r3: 15246 B of 16384, sha256 b5ff0f6652f7f434, 2568 disasm lines, 0 unknown, objdump exit 0
+  c1 r4: 15246 B of 16384, sha256 b5ff0f6652f7f434, 2568 disasm lines, 0 unknown, objdump exit 0
+  c1 r5: 15246 B of 16384, sha256 b5ff0f6652f7f434, 2568 disasm lines, 0 unknown, objdump exit 0
+  c2 r2: 15246 B of 16384, sha256 f30a80ece2ff361d, 2568 disasm lines, 0 unknown, objdump exit 0
+  c2 r3: 15246 B of 16384, sha256 b5ff0f6652f7f434, 2568 disasm lines, 0 unknown, objdump exit 0
+  c2 r4: 15246 B of 16384, sha256 b5ff0f6652f7f434, 2568 disasm lines, 0 unknown, objdump exit 0
+  c2 r5: 15246 B of 16384, sha256 b5ff0f6652f7f434, 2568 disasm lines, 0 unknown, objdump exit 0
+  c3 r2: 15246 B of 16384, sha256 f30a80ece2ff361d, 2568 disasm lines, 0 unknown, objdump exit 0
+  c3 r3: 15246 B of 16384, sha256 b5ff0f6652f7f434, 2568 disasm lines, 0 unknown, objdump exit 0
+  c3 r4: 15246 B of 16384, sha256 b5ff0f6652f7f434, 2568 disasm lines, 0 unknown, objdump exit 0
+  c3 r5: 15244 B of 16384, sha256 edf74f8bbe376e89, 2571 disasm lines, 4 unknown, objdump exit 0
+PDI 0003: 247104 B, records {3: 103, 2: 22, 5: 81}, 860 reg writes, 88 mask writes, 236 DMA writes, payload base 0x359c, payload overrun 28 B
+  c0 r2: 14174 B of 16384, sha256 4a49a83dc9c32e90, 2444 disasm lines, 0 unknown, objdump exit 0
+  c0 r3: 14174 B of 16384, sha256 c03c0d7e53fac3af, 2444 disasm lines, 0 unknown, objdump exit 0
+  c0 r4: 14174 B of 16384, sha256 c03c0d7e53fac3af, 2444 disasm lines, 0 unknown, objdump exit 0
+  c0 r5: 14174 B of 16384, sha256 c03c0d7e53fac3af, 2444 disasm lines, 0 unknown, objdump exit 0
+  c1 r2: 14174 B of 16384, sha256 4a49a83dc9c32e90, 2444 disasm lines, 0 unknown, objdump exit 0
+  c1 r3: 14174 B of 16384, sha256 c03c0d7e53fac3af, 2444 disasm lines, 0 unknown, objdump exit 0
+  c1 r4: 14174 B of 16384, sha256 c03c0d7e53fac3af, 2444 disasm lines, 0 unknown, objdump exit 0
+  c1 r5: 14174 B of 16384, sha256 c03c0d7e53fac3af, 2444 disasm lines, 0 unknown, objdump exit 0
+  c2 r2: 14174 B of 16384, sha256 4a49a83dc9c32e90, 2444 disasm lines, 0 unknown, objdump exit 0
+  c2 r3: 14174 B of 16384, sha256 c03c0d7e53fac3af, 2444 disasm lines, 0 unknown, objdump exit 0
+  c2 r4: 14174 B of 16384, sha256 c03c0d7e53fac3af, 2444 disasm lines, 0 unknown, objdump exit 0
+  c2 r5: 14174 B of 16384, sha256 c03c0d7e53fac3af, 2444 disasm lines, 0 unknown, objdump exit 0
+  c3 r2: 14174 B of 16384, sha256 4a49a83dc9c32e90, 2444 disasm lines, 0 unknown, objdump exit 0
+  c3 r3: 14174 B of 16384, sha256 c03c0d7e53fac3af, 2444 disasm lines, 0 unknown, objdump exit 0
+  c3 r4: 14174 B of 16384, sha256 c03c0d7e53fac3af, 2444 disasm lines, 0 unknown, objdump exit 0
+  c3 r5: 14172 B of 16384, sha256 ec058c542f4d82db, 2447 disasm lines, 4 unknown, objdump exit 0
+PDI 0004: 240640 B, records {3: 103, 2: 22, 5: 81}, 860 reg writes, 88 mask writes, 252 DMA writes, payload base 0x369c, payload overrun 28 B
+  c0 r2: 13630 B of 16384, sha256 cfe0543faadc6e04, 2531 disasm lines, 0 unknown, objdump exit 0
+  c0 r3: 13630 B of 16384, sha256 217781e49fad2186, 2531 disasm lines, 0 unknown, objdump exit 0
+  c0 r4: 13630 B of 16384, sha256 217781e49fad2186, 2531 disasm lines, 0 unknown, objdump exit 0
+  c0 r5: 13630 B of 16384, sha256 217781e49fad2186, 2531 disasm lines, 0 unknown, objdump exit 0
+  c1 r2: 13630 B of 16384, sha256 cfe0543faadc6e04, 2531 disasm lines, 0 unknown, objdump exit 0
+  c1 r3: 13630 B of 16384, sha256 217781e49fad2186, 2531 disasm lines, 0 unknown, objdump exit 0
+  c1 r4: 13630 B of 16384, sha256 217781e49fad2186, 2531 disasm lines, 0 unknown, objdump exit 0
+  c1 r5: 13630 B of 16384, sha256 217781e49fad2186, 2531 disasm lines, 0 unknown, objdump exit 0
+  c2 r2: 13630 B of 16384, sha256 cfe0543faadc6e04, 2531 disasm lines, 0 unknown, objdump exit 0
+  c2 r3: 13630 B of 16384, sha256 217781e49fad2186, 2531 disasm lines, 0 unknown, objdump exit 0
+  c2 r4: 13630 B of 16384, sha256 217781e49fad2186, 2531 disasm lines, 0 unknown, objdump exit 0
+  c2 r5: 13630 B of 16384, sha256 217781e49fad2186, 2531 disasm lines, 0 unknown, objdump exit 0
+  c3 r2: 13630 B of 16384, sha256 cfe0543faadc6e04, 2531 disasm lines, 0 unknown, objdump exit 0
+  c3 r3: 13630 B of 16384, sha256 217781e49fad2186, 2531 disasm lines, 0 unknown, objdump exit 0
+  c3 r4: 13630 B of 16384, sha256 217781e49fad2186, 2531 disasm lines, 0 unknown, objdump exit 0
+  c3 r5: 13628 B of 16384, sha256 b625ccd15cd22c63, 2534 disasm lines, 4 unknown, objdump exit 0
+PDI 0005: 253504 B, records {3: 71, 2: 22, 5: 49}, 828 reg writes, 88 mask writes, 236 DMA writes, payload base 0x329c, payload overrun 28 B
+  c0 r2: 14622 B of 16384, sha256 b58753cc69157b5b, 2696 disasm lines, 0 unknown, objdump exit 0
+  c0 r3: 14622 B of 16384, sha256 5ef634176c4a4102, 2696 disasm lines, 0 unknown, objdump exit 0
+  c0 r4: 14622 B of 16384, sha256 5ef634176c4a4102, 2696 disasm lines, 0 unknown, objdump exit 0
+  c0 r5: 14622 B of 16384, sha256 5ef634176c4a4102, 2696 disasm lines, 0 unknown, objdump exit 0
+  c1 r2: 14622 B of 16384, sha256 b58753cc69157b5b, 2696 disasm lines, 0 unknown, objdump exit 0
+  c1 r3: 14622 B of 16384, sha256 5ef634176c4a4102, 2696 disasm lines, 0 unknown, objdump exit 0
+  c1 r4: 14622 B of 16384, sha256 5ef634176c4a4102, 2696 disasm lines, 0 unknown, objdump exit 0
+  c1 r5: 14622 B of 16384, sha256 5ef634176c4a4102, 2696 disasm lines, 0 unknown, objdump exit 0
+  c2 r2: 14622 B of 16384, sha256 b58753cc69157b5b, 2696 disasm lines, 0 unknown, objdump exit 0
+  c2 r3: 14622 B of 16384, sha256 5ef634176c4a4102, 2696 disasm lines, 0 unknown, objdump exit 0
+  c2 r4: 14622 B of 16384, sha256 5ef634176c4a4102, 2696 disasm lines, 0 unknown, objdump exit 0
+  c2 r5: 14622 B of 16384, sha256 5ef634176c4a4102, 2696 disasm lines, 0 unknown, objdump exit 0
+  c3 r2: 14622 B of 16384, sha256 b58753cc69157b5b, 2696 disasm lines, 0 unknown, objdump exit 0
+  c3 r3: 14622 B of 16384, sha256 5ef634176c4a4102, 2696 disasm lines, 0 unknown, objdump exit 0
+  c3 r4: 14622 B of 16384, sha256 5ef634176c4a4102, 2696 disasm lines, 0 unknown, objdump exit 0
+  c3 r5: 14620 B of 16384, sha256 953f7747a665a9d9, 2699 disasm lines, 4 unknown, objdump exit 0
+PDI 0006: 266944 B, records {3: 71, 2: 22, 5: 49}, 828 reg writes, 88 mask writes, 236 DMA writes, payload base 0x329c, payload overrun 28 B
+  c0 r2: 15438 B of 16384, sha256 e836d68167962b4e, 2626 disasm lines, 0 unknown, objdump exit 0
+  c0 r3: 15438 B of 16384, sha256 e1c432aa159222a9, 2626 disasm lines, 0 unknown, objdump exit 0
+  c0 r4: 15438 B of 16384, sha256 e1c432aa159222a9, 2626 disasm lines, 0 unknown, objdump exit 0
+  c0 r5: 15438 B of 16384, sha256 e1c432aa159222a9, 2626 disasm lines, 0 unknown, objdump exit 0
+  c1 r2: 15438 B of 16384, sha256 e836d68167962b4e, 2626 disasm lines, 0 unknown, objdump exit 0
+  c1 r3: 15438 B of 16384, sha256 e1c432aa159222a9, 2626 disasm lines, 0 unknown, objdump exit 0
+  c1 r4: 15438 B of 16384, sha256 e1c432aa159222a9, 2626 disasm lines, 0 unknown, objdump exit 0
+  c1 r5: 15438 B of 16384, sha256 e1c432aa159222a9, 2626 disasm lines, 0 unknown, objdump exit 0
+  c2 r2: 15438 B of 16384, sha256 e836d68167962b4e, 2626 disasm lines, 0 unknown, objdump exit 0
+  c2 r3: 15438 B of 16384, sha256 e1c432aa159222a9, 2626 disasm lines, 0 unknown, objdump exit 0
+  c2 r4: 15438 B of 16384, sha256 e1c432aa159222a9, 2626 disasm lines, 0 unknown, objdump exit 0
+  c2 r5: 15438 B of 16384, sha256 e1c432aa159222a9, 2626 disasm lines, 0 unknown, objdump exit 0
+  c3 r2: 15438 B of 16384, sha256 e836d68167962b4e, 2626 disasm lines, 0 unknown, objdump exit 0
+  c3 r3: 15438 B of 16384, sha256 e1c432aa159222a9, 2626 disasm lines, 0 unknown, objdump exit 0
+  c3 r4: 15438 B of 16384, sha256 e1c432aa159222a9, 2626 disasm lines, 0 unknown, objdump exit 0
+  c3 r5: 15436 B of 16384, sha256 98fd72dc6ed4b57d, 2629 disasm lines, 4 unknown, objdump exit 0
+PDI 0007: 238848 B, records {3: 71, 2: 22, 5: 49}, 828 reg writes, 88 mask writes, 236 DMA writes, payload base 0x329c, payload overrun 28 B
+  c0 r2: 13694 B of 16384, sha256 1f5b9937ba1a2ccc, 2451 disasm lines, 0 unknown, objdump exit 0
+  c0 r3: 13694 B of 16384, sha256 01d3f18461d4b3c8, 2451 disasm lines, 0 unknown, objdump exit 0
+  c0 r4: 13694 B of 16384, sha256 01d3f18461d4b3c8, 2451 disasm lines, 0 unknown, objdump exit 0
+  c0 r5: 13694 B of 16384, sha256 01d3f18461d4b3c8, 2451 disasm lines, 0 unknown, objdump exit 0
+  c1 r2: 13694 B of 16384, sha256 1f5b9937ba1a2ccc, 2451 disasm lines, 0 unknown, objdump exit 0
+  c1 r3: 13694 B of 16384, sha256 01d3f18461d4b3c8, 2451 disasm lines, 0 unknown, objdump exit 0
+  c1 r4: 13694 B of 16384, sha256 01d3f18461d4b3c8, 2451 disasm lines, 0 unknown, objdump exit 0
+  c1 r5: 13694 B of 16384, sha256 01d3f18461d4b3c8, 2451 disasm lines, 0 unknown, objdump exit 0
+  c2 r2: 13694 B of 16384, sha256 1f5b9937ba1a2ccc, 2451 disasm lines, 0 unknown, objdump exit 0
+  c2 r3: 13694 B of 16384, sha256 01d3f18461d4b3c8, 2451 disasm lines, 0 unknown, objdump exit 0
+  c2 r4: 13694 B of 16384, sha256 01d3f18461d4b3c8, 2451 disasm lines, 0 unknown, objdump exit 0
+  c2 r5: 13694 B of 16384, sha256 01d3f18461d4b3c8, 2451 disasm lines, 0 unknown, objdump exit 0
+  c3 r2: 13694 B of 16384, sha256 1f5b9937ba1a2ccc, 2451 disasm lines, 0 unknown, objdump exit 0
+  c3 r3: 13694 B of 16384, sha256 01d3f18461d4b3c8, 2451 disasm lines, 0 unknown, objdump exit 0
+  c3 r4: 13694 B of 16384, sha256 01d3f18461d4b3c8, 2451 disasm lines, 0 unknown, objdump exit 0
+  c3 r5: 13692 B of 16384, sha256 12e329399ebd5002, 2454 disasm lines, 4 unknown, objdump exit 0
+PDI 0008: 276032 B, records {3: 71, 2: 22, 5: 49}, 828 reg writes, 88 mask writes, 236 DMA writes, payload base 0x329c, payload overrun 28 B
+  c0 r2: 16030 B of 16384, sha256 05b521073a90206e, 2713 disasm lines, 0 unknown, objdump exit 0
+  c0 r3: 16030 B of 16384, sha256 049839d1f0cbc39a, 2713 disasm lines, 0 unknown, objdump exit 0
+  c0 r4: 16030 B of 16384, sha256 049839d1f0cbc39a, 2713 disasm lines, 0 unknown, objdump exit 0
+  c0 r5: 16030 B of 16384, sha256 049839d1f0cbc39a, 2713 disasm lines, 0 unknown, objdump exit 0
+  c1 r2: 16030 B of 16384, sha256 05b521073a90206e, 2713 disasm lines, 0 unknown, objdump exit 0
+  c1 r3: 16030 B of 16384, sha256 049839d1f0cbc39a, 2713 disasm lines, 0 unknown, objdump exit 0
+  c1 r4: 16030 B of 16384, sha256 049839d1f0cbc39a, 2713 disasm lines, 0 unknown, objdump exit 0
+  c1 r5: 16030 B of 16384, sha256 049839d1f0cbc39a, 2713 disasm lines, 0 unknown, objdump exit 0
+  c2 r2: 16030 B of 16384, sha256 05b521073a90206e, 2713 disasm lines, 0 unknown, objdump exit 0
+  c2 r3: 16030 B of 16384, sha256 049839d1f0cbc39a, 2713 disasm lines, 0 unknown, objdump exit 0
+  c2 r4: 16030 B of 16384, sha256 049839d1f0cbc39a, 2713 disasm lines, 0 unknown, objdump exit 0
+  c2 r5: 16030 B of 16384, sha256 049839d1f0cbc39a, 2713 disasm lines, 0 unknown, objdump exit 0
+  c3 r2: 16030 B of 16384, sha256 05b521073a90206e, 2713 disasm lines, 0 unknown, objdump exit 0
+  c3 r3: 16030 B of 16384, sha256 049839d1f0cbc39a, 2713 disasm lines, 0 unknown, objdump exit 0
+  c3 r4: 16030 B of 16384, sha256 049839d1f0cbc39a, 2713 disasm lines, 0 unknown, objdump exit 0
+  c3 r5: 16028 B of 16384, sha256 d0c5c6a844e51a24, 2716 disasm lines, 4 unknown, objdump exit 0
+PDI 0009: 264768 B, records {3: 71, 2: 22, 5: 49}, 828 reg writes, 88 mask writes, 236 DMA writes, payload base 0x329c, payload overrun 28 B
+  c0 r2: 15326 B of 16384, sha256 b428700301708ab3, 2579 disasm lines, 0 unknown, objdump exit 0
+  c0 r3: 15326 B of 16384, sha256 7c73d9dea5bd7d05, 2579 disasm lines, 0 unknown, objdump exit 0
+  c0 r4: 15326 B of 16384, sha256 7c73d9dea5bd7d05, 2579 disasm lines, 0 unknown, objdump exit 0
+  c0 r5: 15326 B of 16384, sha256 7c73d9dea5bd7d05, 2579 disasm lines, 0 unknown, objdump exit 0
+  c1 r2: 15326 B of 16384, sha256 b428700301708ab3, 2579 disasm lines, 0 unknown, objdump exit 0
+  c1 r3: 15326 B of 16384, sha256 7c73d9dea5bd7d05, 2579 disasm lines, 0 unknown, objdump exit 0
+  c1 r4: 15326 B of 16384, sha256 7c73d9dea5bd7d05, 2579 disasm lines, 0 unknown, objdump exit 0
+  c1 r5: 15326 B of 16384, sha256 7c73d9dea5bd7d05, 2579 disasm lines, 0 unknown, objdump exit 0
+  c2 r2: 15326 B of 16384, sha256 b428700301708ab3, 2579 disasm lines, 0 unknown, objdump exit 0
+  c2 r3: 15326 B of 16384, sha256 7c73d9dea5bd7d05, 2579 disasm lines, 0 unknown, objdump exit 0
+  c2 r4: 15326 B of 16384, sha256 7c73d9dea5bd7d05, 2579 disasm lines, 0 unknown, objdump exit 0
+  c2 r5: 15326 B of 16384, sha256 7c73d9dea5bd7d05, 2579 disasm lines, 0 unknown, objdump exit 0
+  c3 r2: 15326 B of 16384, sha256 b428700301708ab3, 2579 disasm lines, 0 unknown, objdump exit 0
+  c3 r3: 15326 B of 16384, sha256 7c73d9dea5bd7d05, 2579 disasm lines, 0 unknown, objdump exit 0
+  c3 r4: 15326 B of 16384, sha256 7c73d9dea5bd7d05, 2579 disasm lines, 0 unknown, objdump exit 0
+  c3 r5: 15324 B of 16384, sha256 514b77b1d4b84e1c, 2582 disasm lines, 4 unknown, objdump exit 0
+PDI 000a: 278208 B, records {3: 71, 2: 22, 5: 49}, 828 reg writes, 88 mask writes, 236 DMA writes, payload base 0x329c, payload overrun 28 B
+  c0 r2: 16142 B of 16384, sha256 0c1508fcb4b66c55, 2755 disasm lines, 0 unknown, objdump exit 0
+  c0 r3: 16142 B of 16384, sha256 f2fe43e77d036674, 2755 disasm lines, 0 unknown, objdump exit 0
+  c0 r4: 16142 B of 16384, sha256 f2fe43e77d036674, 2755 disasm lines, 0 unknown, objdump exit 0
+  c0 r5: 16142 B of 16384, sha256 f2fe43e77d036674, 2755 disasm lines, 0 unknown, objdump exit 0
+  c1 r2: 16142 B of 16384, sha256 0c1508fcb4b66c55, 2755 disasm lines, 0 unknown, objdump exit 0
+  c1 r3: 16142 B of 16384, sha256 f2fe43e77d036674, 2755 disasm lines, 0 unknown, objdump exit 0
+  c1 r4: 16142 B of 16384, sha256 f2fe43e77d036674, 2755 disasm lines, 0 unknown, objdump exit 0
+  c1 r5: 16142 B of 16384, sha256 f2fe43e77d036674, 2755 disasm lines, 0 unknown, objdump exit 0
+  c2 r2: 16142 B of 16384, sha256 0c1508fcb4b66c55, 2755 disasm lines, 0 unknown, objdump exit 0
+  c2 r3: 16142 B of 16384, sha256 f2fe43e77d036674, 2755 disasm lines, 0 unknown, objdump exit 0
+  c2 r4: 16142 B of 16384, sha256 f2fe43e77d036674, 2755 disasm lines, 0 unknown, objdump exit 0
+  c2 r5: 16142 B of 16384, sha256 f2fe43e77d036674, 2755 disasm lines, 0 unknown, objdump exit 0
+  c3 r2: 16142 B of 16384, sha256 0c1508fcb4b66c55, 2755 disasm lines, 0 unknown, objdump exit 0
+  c3 r3: 16142 B of 16384, sha256 f2fe43e77d036674, 2755 disasm lines, 0 unknown, objdump exit 0
+  c3 r4: 16142 B of 16384, sha256 f2fe43e77d036674, 2755 disasm lines, 0 unknown, objdump exit 0
+  c3 r5: 16140 B of 16384, sha256 fb72eebca3789469, 2758 disasm lines, 4 unknown, objdump exit 0
+PDI 000b: 187648 B, records {3: 71, 2: 22, 5: 49}, 828 reg writes, 88 mask writes, 236 DMA writes, payload base 0x329c, payload overrun 28 B
+  c0 r2: 10494 B of 16384, sha256 95ebcd28eaa5053e, 1780 disasm lines, 0 unknown, objdump exit 0
+  c0 r3: 10494 B of 16384, sha256 307fa1b7c824ec55, 1780 disasm lines, 0 unknown, objdump exit 0
+  c0 r4: 10494 B of 16384, sha256 307fa1b7c824ec55, 1780 disasm lines, 0 unknown, objdump exit 0
+  c0 r5: 10494 B of 16384, sha256 307fa1b7c824ec55, 1780 disasm lines, 0 unknown, objdump exit 0
+  c1 r2: 10494 B of 16384, sha256 95ebcd28eaa5053e, 1780 disasm lines, 0 unknown, objdump exit 0
+  c1 r3: 10494 B of 16384, sha256 307fa1b7c824ec55, 1780 disasm lines, 0 unknown, objdump exit 0
+  c1 r4: 10494 B of 16384, sha256 307fa1b7c824ec55, 1780 disasm lines, 0 unknown, objdump exit 0
+  c1 r5: 10494 B of 16384, sha256 307fa1b7c824ec55, 1780 disasm lines, 0 unknown, objdump exit 0
+  c2 r2: 10494 B of 16384, sha256 95ebcd28eaa5053e, 1780 disasm lines, 0 unknown, objdump exit 0
+  c2 r3: 10494 B of 16384, sha256 307fa1b7c824ec55, 1780 disasm lines, 0 unknown, objdump exit 0
+  c2 r4: 10494 B of 16384, sha256 307fa1b7c824ec55, 1780 disasm lines, 0 unknown, objdump exit 0
+  c2 r5: 10494 B of 16384, sha256 307fa1b7c824ec55, 1780 disasm lines, 0 unknown, objdump exit 0
+  c3 r2: 10494 B of 16384, sha256 95ebcd28eaa5053e, 1780 disasm lines, 0 unknown, objdump exit 0
+  c3 r3: 10494 B of 16384, sha256 307fa1b7c824ec55, 1780 disasm lines, 0 unknown, objdump exit 0
+  c3 r4: 10494 B of 16384, sha256 307fa1b7c824ec55, 1780 disasm lines, 0 unknown, objdump exit 0
+  c3 r5: 10492 B of 16384, sha256 c3ff3a07fd58abdb, 1783 disasm lines, 4 unknown, objdump exit 0
+PDI 000c: 275904 B, records {3: 71, 2: 22, 5: 49}, 828 reg writes, 88 mask writes, 236 DMA writes, payload base 0x329c, payload overrun 28 B
+  c0 r2: 15998 B of 16384, sha256 7ce6d3906b98e1cf, 2724 disasm lines, 0 unknown, objdump exit 0
+  c0 r3: 15998 B of 16384, sha256 775f07cec63e3f12, 2724 disasm lines, 0 unknown, objdump exit 0
+  c0 r4: 15998 B of 16384, sha256 775f07cec63e3f12, 2724 disasm lines, 0 unknown, objdump exit 0
+  c0 r5: 15998 B of 16384, sha256 775f07cec63e3f12, 2724 disasm lines, 0 unknown, objdump exit 0
+  c1 r2: 15998 B of 16384, sha256 7ce6d3906b98e1cf, 2724 disasm lines, 0 unknown, objdump exit 0
+  c1 r3: 15998 B of 16384, sha256 775f07cec63e3f12, 2724 disasm lines, 0 unknown, objdump exit 0
+  c1 r4: 15998 B of 16384, sha256 775f07cec63e3f12, 2724 disasm lines, 0 unknown, objdump exit 0
+  c1 r5: 15998 B of 16384, sha256 775f07cec63e3f12, 2724 disasm lines, 0 unknown, objdump exit 0
+  c2 r2: 15998 B of 16384, sha256 7ce6d3906b98e1cf, 2724 disasm lines, 0 unknown, objdump exit 0
+  c2 r3: 15998 B of 16384, sha256 775f07cec63e3f12, 2724 disasm lines, 0 unknown, objdump exit 0
+  c2 r4: 15998 B of 16384, sha256 775f07cec63e3f12, 2724 disasm lines, 0 unknown, objdump exit 0
+  c2 r5: 15998 B of 16384, sha256 775f07cec63e3f12, 2724 disasm lines, 0 unknown, objdump exit 0
+  c3 r2: 15998 B of 16384, sha256 7ce6d3906b98e1cf, 2724 disasm lines, 0 unknown, objdump exit 0
+  c3 r3: 15998 B of 16384, sha256 775f07cec63e3f12, 2724 disasm lines, 0 unknown, objdump exit 0
+  c3 r4: 15998 B of 16384, sha256 775f07cec63e3f12, 2724 disasm lines, 0 unknown, objdump exit 0
+  c3 r5: 15996 B of 16384, sha256 f34fd567ab2e4367, 2727 disasm lines, 4 unknown, objdump exit 0
+PDI 000d: 219392 B, records {3: 71, 2: 22, 5: 49}, 828 reg writes, 88 mask writes, 236 DMA writes, payload base 0x329c, payload overrun 28 B
+  c0 r2: 12478 B of 16384, sha256 92eb8df518687767, 2132 disasm lines, 0 unknown, objdump exit 0
+  c0 r3: 12478 B of 16384, sha256 cabc95899e3dd732, 2132 disasm lines, 0 unknown, objdump exit 0
+  c0 r4: 12478 B of 16384, sha256 cabc95899e3dd732, 2132 disasm lines, 0 unknown, objdump exit 0
+  c0 r5: 12478 B of 16384, sha256 cabc95899e3dd732, 2132 disasm lines, 0 unknown, objdump exit 0
+  c1 r2: 12478 B of 16384, sha256 92eb8df518687767, 2132 disasm lines, 0 unknown, objdump exit 0
+  c1 r3: 12478 B of 16384, sha256 cabc95899e3dd732, 2132 disasm lines, 0 unknown, objdump exit 0
+  c1 r4: 12478 B of 16384, sha256 cabc95899e3dd732, 2132 disasm lines, 0 unknown, objdump exit 0
+  c1 r5: 12478 B of 16384, sha256 cabc95899e3dd732, 2132 disasm lines, 0 unknown, objdump exit 0
+  c2 r2: 12478 B of 16384, sha256 92eb8df518687767, 2132 disasm lines, 0 unknown, objdump exit 0
+  c2 r3: 12478 B of 16384, sha256 cabc95899e3dd732, 2132 disasm lines, 0 unknown, objdump exit 0
+  c2 r4: 12478 B of 16384, sha256 cabc95899e3dd732, 2132 disasm lines, 0 unknown, objdump exit 0
+  c2 r5: 12478 B of 16384, sha256 cabc95899e3dd732, 2132 disasm lines, 0 unknown, objdump exit 0
+  c3 r2: 12478 B of 16384, sha256 92eb8df518687767, 2132 disasm lines, 0 unknown, objdump exit 0
+  c3 r3: 12478 B of 16384, sha256 cabc95899e3dd732, 2132 disasm lines, 0 unknown, objdump exit 0
+  c3 r4: 12478 B of 16384, sha256 cabc95899e3dd732, 2132 disasm lines, 0 unknown, objdump exit 0
+  c3 r5: 12476 B of 16384, sha256 13d42f9648ad3a5d, 2135 disasm lines, 4 unknown, objdump exit 0
+PDI 000e: 252608 B, records {3: 71, 2: 22, 5: 49}, 828 reg writes, 88 mask writes, 236 DMA writes, payload base 0x329c, payload overrun 28 B
+  c0 r2: 14542 B of 16384, sha256 ae4f6eaca3b962e9, 2539 disasm lines, 0 unknown, objdump exit 0
+  c0 r3: 14542 B of 16384, sha256 1d29259bb9390456, 2539 disasm lines, 0 unknown, objdump exit 0
+  c0 r4: 14542 B of 16384, sha256 1d29259bb9390456, 2539 disasm lines, 0 unknown, objdump exit 0
+  c0 r5: 14542 B of 16384, sha256 1d29259bb9390456, 2539 disasm lines, 0 unknown, objdump exit 0
+  c1 r2: 14542 B of 16384, sha256 ae4f6eaca3b962e9, 2539 disasm lines, 0 unknown, objdump exit 0
+  c1 r3: 14542 B of 16384, sha256 1d29259bb9390456, 2539 disasm lines, 0 unknown, objdump exit 0
+  c1 r4: 14542 B of 16384, sha256 1d29259bb9390456, 2539 disasm lines, 0 unknown, objdump exit 0
+  c1 r5: 14542 B of 16384, sha256 1d29259bb9390456, 2539 disasm lines, 0 unknown, objdump exit 0
+  c2 r2: 14542 B of 16384, sha256 ae4f6eaca3b962e9, 2539 disasm lines, 0 unknown, objdump exit 0
+  c2 r3: 14542 B of 16384, sha256 1d29259bb9390456, 2539 disasm lines, 0 unknown, objdump exit 0
+  c2 r4: 14542 B of 16384, sha256 1d29259bb9390456, 2539 disasm lines, 0 unknown, objdump exit 0
+  c2 r5: 14542 B of 16384, sha256 1d29259bb9390456, 2539 disasm lines, 0 unknown, objdump exit 0
+  c3 r2: 14542 B of 16384, sha256 ae4f6eaca3b962e9, 2539 disasm lines, 0 unknown, objdump exit 0
+  c3 r3: 14542 B of 16384, sha256 1d29259bb9390456, 2539 disasm lines, 0 unknown, objdump exit 0
+  c3 r4: 14542 B of 16384, sha256 1d29259bb9390456, 2539 disasm lines, 0 unknown, objdump exit 0
+  c3 r5: 14540 B of 16384, sha256 e03016f060a708b0, 2542 disasm lines, 4 unknown, objdump exit 0
+distinct program images: 45
+  a1c7236a7450e02a used by 4 tiles: 0000:c0r2 0000:c1r2 0000:c2r2 0000:c3r2
+  694235dc9e6f74b4 used by 11 tiles: 0000:c0r3 0000:c0r4 0000:c0r5 0000:c1r3 0000:c1r4 0000:c1r5 0000:c2r3 0000:c2r4 0000:c2r5 0000:c3r3 0000:c3r4
+  e4df08ecd99cc575 used by 1 tiles: 0000:c3r5
+  55df180fa3d32268 used by 4 tiles: 0001:c0r2 0001:c1r2 0001:c2r2 0001:c3r2
+  e58467917037ffc9 used by 11 tiles: 0001:c0r3 0001:c0r4 0001:c0r5 0001:c1r3 0001:c1r4 0001:c1r5 0001:c2r3 0001:c2r4 0001:c2r5 0001:c3r3 0001:c3r4
+  684422a45f1fe2ec used by 1 tiles: 0001:c3r5
+  f30a80ece2ff361d used by 4 tiles: 0002:c0r2 0002:c1r2 0002:c2r2 0002:c3r2
+  b5ff0f6652f7f434 used by 11 tiles: 0002:c0r3 0002:c0r4 0002:c0r5 0002:c1r3 0002:c1r4 0002:c1r5 0002:c2r3 0002:c2r4 0002:c2r5 0002:c3r3 0002:c3r4
+  edf74f8bbe376e89 used by 1 tiles: 0002:c3r5
+  4a49a83dc9c32e90 used by 4 tiles: 0003:c0r2 0003:c1r2 0003:c2r2 0003:c3r2
+  c03c0d7e53fac3af used by 11 tiles: 0003:c0r3 0003:c0r4 0003:c0r5 0003:c1r3 0003:c1r4 0003:c1r5 0003:c2r3 0003:c2r4 0003:c2r5 0003:c3r3 0003:c3r4
+  ec058c542f4d82db used by 1 tiles: 0003:c3r5
+  cfe0543faadc6e04 used by 4 tiles: 0004:c0r2 0004:c1r2 0004:c2r2 0004:c3r2
+  217781e49fad2186 used by 11 tiles: 0004:c0r3 0004:c0r4 0004:c0r5 0004:c1r3 0004:c1r4 0004:c1r5 0004:c2r3 0004:c2r4 0004:c2r5 0004:c3r3 0004:c3r4
+  b625ccd15cd22c63 used by 1 tiles: 0004:c3r5
+  b58753cc69157b5b used by 4 tiles: 0005:c0r2 0005:c1r2 0005:c2r2 0005:c3r2
+  5ef634176c4a4102 used by 11 tiles: 0005:c0r3 0005:c0r4 0005:c0r5 0005:c1r3 0005:c1r4 0005:c1r5 0005:c2r3 0005:c2r4 0005:c2r5 0005:c3r3 0005:c3r4
+  953f7747a665a9d9 used by 1 tiles: 0005:c3r5
+  e836d68167962b4e used by 4 tiles: 0006:c0r2 0006:c1r2 0006:c2r2 0006:c3r2
+  e1c432aa159222a9 used by 11 tiles: 0006:c0r3 0006:c0r4 0006:c0r5 0006:c1r3 0006:c1r4 0006:c1r5 0006:c2r3 0006:c2r4 0006:c2r5 0006:c3r3 0006:c3r4
+  98fd72dc6ed4b57d used by 1 tiles: 0006:c3r5
+  1f5b9937ba1a2ccc used by 4 tiles: 0007:c0r2 0007:c1r2 0007:c2r2 0007:c3r2
+  01d3f18461d4b3c8 used by 11 tiles: 0007:c0r3 0007:c0r4 0007:c0r5 0007:c1r3 0007:c1r4 0007:c1r5 0007:c2r3 0007:c2r4 0007:c2r5 0007:c3r3 0007:c3r4
+  12e329399ebd5002 used by 1 tiles: 0007:c3r5
+  05b521073a90206e used by 4 tiles: 0008:c0r2 0008:c1r2 0008:c2r2 0008:c3r2
+  049839d1f0cbc39a used by 11 tiles: 0008:c0r3 0008:c0r4 0008:c0r5 0008:c1r3 0008:c1r4 0008:c1r5 0008:c2r3 0008:c2r4 0008:c2r5 0008:c3r3 0008:c3r4
+  d0c5c6a844e51a24 used by 1 tiles: 0008:c3r5
+  b428700301708ab3 used by 4 tiles: 0009:c0r2 0009:c1r2 0009:c2r2 0009:c3r2
+  7c73d9dea5bd7d05 used by 11 tiles: 0009:c0r3 0009:c0r4 0009:c0r5 0009:c1r3 0009:c1r4 0009:c1r5 0009:c2r3 0009:c2r4 0009:c2r5 0009:c3r3 0009:c3r4
+  514b77b1d4b84e1c used by 1 tiles: 0009:c3r5
+  0c1508fcb4b66c55 used by 4 tiles: 000a:c0r2 000a:c1r2 000a:c2r2 000a:c3r2
+  f2fe43e77d036674 used by 11 tiles: 000a:c0r3 000a:c0r4 000a:c0r5 000a:c1r3 000a:c1r4 000a:c1r5 000a:c2r3 000a:c2r4 000a:c2r5 000a:c3r3 000a:c3r4
+  fb72eebca3789469 used by 1 tiles: 000a:c3r5
+  95ebcd28eaa5053e used by 4 tiles: 000b:c0r2 000b:c1r2 000b:c2r2 000b:c3r2
+  307fa1b7c824ec55 used by 11 tiles: 000b:c0r3 000b:c0r4 000b:c0r5 000b:c1r3 000b:c1r4 000b:c1r5 000b:c2r3 000b:c2r4 000b:c2r5 000b:c3r3 000b:c3r4
+  c3ff3a07fd58abdb used by 1 tiles: 000b:c3r5
+  7ce6d3906b98e1cf used by 4 tiles: 000c:c0r2 000c:c1r2 000c:c2r2 000c:c3r2
+  775f07cec63e3f12 used by 11 tiles: 000c:c0r3 000c:c0r4 000c:c0r5 000c:c1r3 000c:c1r4 000c:c1r5 000c:c2r3 000c:c2r4 000c:c2r5 000c:c3r3 000c:c3r4
+  f34fd567ab2e4367 used by 1 tiles: 000c:c3r5
+  92eb8df518687767 used by 4 tiles: 000d:c0r2 000d:c1r2 000d:c2r2 000d:c3r2
+  cabc95899e3dd732 used by 11 tiles: 000d:c0r3 000d:c0r4 000d:c0r5 000d:c1r3 000d:c1r4 000d:c1r5 000d:c2r3 000d:c2r4 000d:c2r5 000d:c3r3 000d:c3r4
+  13d42f9648ad3a5d used by 1 tiles: 000d:c3r5
+  ae4f6eaca3b962e9 used by 4 tiles: 000e:c0r2 000e:c1r2 000e:c2r2 000e:c3r2
+  1d29259bb9390456 used by 11 tiles: 000e:c0r3 000e:c0r4 000e:c0r5 000e:c1r3 000e:c1r4 000e:c1r5 000e:c2r3 000e:c2r4 000e:c2r5 000e:c3r3 000e:c3r4
+  e03016f060a708b0 used by 1 tiles: 000e:c3r5

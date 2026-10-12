@@ -7045,7 +7045,9 @@ recorded in `docs/DECISIONS.md` so there is one policy rather than two precedent
 >    (`"tested_conv_on_npu": false`), so they cannot speak to the DPU in either direction.
 >    **The highest sigma ever executed on this hardware is 30.** Neither the 15-bit
 >    multiplier nor the 5-bit shifter is measured, and no ISA document in this repo states
->    either width.
+>    either width. *(Updated 2026-10-12: the shifter is now measured, and it is a 6-bit code,
+>    not 5-bit. See "The AIE2 shifter reads a 6-bit code" below. The 15-bit multiplier is
+>    still unmeasured, and the highest sigma the DPU has executed is still 30.)*
 >
 > 5. **The zero was a tautology, and a third of the "analyzed" operations were not
 >    analyzed.** Added 2026-09-09 (Desktop 2), see the subsection below and
@@ -7101,7 +7103,7 @@ been reached on hardware and the highest sigma ever executed is 30**):
 
     0 <= sigma <= 31
 
-If sigma < 0, the operation requires an arithmetic left-shift exceeding the 32-bit accumulator, resulting in accumulator overflow. If sigma > 31, the hardware 5-bit shift register overflows or clamps.
+If sigma < 0, the operation requires an arithmetic left-shift exceeding the 32-bit accumulator, resulting in accumulator overflow. If sigma > 31, the hardware 5-bit shift register overflows or clamps. **Superseded 2026-10-12 as a silicon claim:** the AIE2 `vsrs` shift operand is a 6-bit code, 0–59 right and 60–63 left by 4..1, and shifts of 32–59 run exactly (MEASURED, "The AIE2 shifter reads a 6-bit code" below). The [14, 30] window is a contract, not this register.
 
 **Theorem 2 (Multi-Branch Inter-Scale Feasibility):**
 For multi-branch elementwise tensor operations C = A * B or C = A + B:
@@ -7159,7 +7161,7 @@ In power-of-two quantization where scale is parameterized by position (S = 2^(-p
 
     sigma = pos_x + pos_w - pos_y + 14
 
-Because the physical shift register is bounded by 0 <= sigma <= 31, the output scale position pos_y must satisfy the **Systolic Scale Feasibility Window**:
+Because the physical shift register is bounded by 0 <= sigma <= 31, the output scale position pos_y must satisfy the **Systolic Scale Feasibility Window** *(superseded 2026-10-12: no such physical bound. The AIE2 shifter reads a 6-bit code, see "The AIE2 shifter reads a 6-bit code" below. The window stands only as arithmetic on Theorem 1's hypothesis)*:
 
     pos_x + pos_w - 17 <= pos_y <= pos_x + pos_w + 14
 
@@ -7342,7 +7344,7 @@ When an ONNX graph contains violating nodes, `quant/shift_cut.py::project_scale_
 
 Tested on FastDepth `Conv_96`:
 - Original: pos_x = 7 (S_x = 2^-7), pos_w = 11 (S_w = 2^-11), pos_y = 0 (S_y = 1.0).
-- Analytical sigma: 7 + 11 - 0 + 14 = 32 > 31 (overflows 5-bit shifter by 1 bit).
+- Analytical sigma: 7 + 11 - 0 + 14 = 32 > 31 (overflows 5-bit shifter by 1 bit). *(Superseded 2026-10-12: the AIE2 shifter is not 5-bit, and a shift of 32 executes exactly in `vsrs`. Whether the DPU would run this layer is the EP's contract question, see "The AIE2 shifter reads a 6-bit code".)*
 - Feasible pos_y window: [18 - 17, 18 + 14] = [1, 32].
 - Projected: pos_y = 1 (S_y = 0.5), yielding sigma = 31 <= 31.
 - Outcome: The layer is 100% physically compliant with zero shift-cut violations, eliminating the clamp hazard without retraining.
@@ -7355,6 +7357,75 @@ Tested on FastDepth `Conv_96`:
 > i.e. every one had targeted a working op. `quant/shift_cut.py` now uses unclamped positions
 > and raises rather than emitting a scale the analyzer would flag. Do not run `--repair` on a
 > model that already places and scores.
+
+### The AIE2 shifter reads a 6-bit code, so Theorem 1's "5-bit shifter" is not the bound (2026-10-12, Desktop 2)
+
+**Measured:** the AIE2 shift-round-saturate takes its shift from a scalar `s` register
+(`mov s0, rX; vsrs ..., s0`). It reads only the low **6 bits** of that register:
+- codes **0–59** shift right;
+- codes **60–63** shift **left** by 4, 3, 2 and 1;
+- an acc32 lane shifted by 32–59 floors to 0 or −1, as an unbounded arithmetic shift would.
+
+So no 5-bit shift register stops sigma at 31. Lines in this section that rest on one
+(Theorem 1's "5-bit shift register overflows or clamps", the feasibility window's "physical shift
+register is bounded by 0 <= sigma <= 31", the FastDepth `Conv_96` "overflows 5-bit shifter by
+1 bit") are **superseded as statements about the silicon**, and are marked where they stand.
+
+**What it does not show:** that the VitisAI DPU could execute sigma 0 or 31. The table above
+still holds. The EP refuses any Conv whose shift-cut is outside `[0, 16]`, so sigma reaches
+the DPU only in [14, 30]. That window is now known **not** to come from the shifter's width. It
+is the producer's and compiler's contract, and possibly the overlay's packet format. Which of
+those binds is open, and the overlay decode below is how it gets settled.
+
+**How it was measured.** The probe is one kernel on one core, `kernels/srs_probe/` (IRON,
+`Tile(0, 2)`).
+- **Setup.** Rounding is forced to floor and saturation to saturate, and both are read back
+  (`crRnd` 0, `crSat` 1). The shift goes from the input buffer to `s0` with no masking: IRON's
+  built object was disassembled, and it is `lda r0` → `mov s0, r0` → `vsrs`.
+- **Comparison.** Every lane is compared exactly against oracles for several shifter readings.
+
+| Sitting | What it is | Result |
+|---|---|---|
+| [`T174901Z`](../results/aie/srs_shift_width_probe_desktop2_20261012T174901Z.log) | **Harness bug, no conclusion drawn.** Lanes were loaded from word 4. AIE vector loads drop the low address bits, so the kernel read from word 0, and output lane 0 was the mode. | Every oracle fails, at shift 0 too. |
+| [`T174942Z`](../results/aie/srs_shift_width_probe_desktop2_20261012T174942Z.log) | Lanes at the 128 B-aligned word 32. Shifts −8..72, three paths: acc32 → int16, acc32 → int8, acc64 → int32. | 0–59 behave as written. 60–63 multiply by 16/8/4/2. −8..−5 equal 56..59, and 64..72 equal 0..8. No oracle in the set survives. |
+| [`T175013Z`](../results/aie/srs_shift_width_probe_desktop2_20261012T175013Z.log) | Adds the 6-bit code oracle (`f6_m4_59`, **fitted on the sitting above**). Then **130 new shifts** (−70..−9 and 73..140) and new acc64 upshifts 16 and 31. | acc32 → int16 and acc32 → int8: `f6_m4_59` matches **every lane at all 211 shifts**, and every other oracle fails. acc64 → int32: 621 of 633 points match. The 12 misses are all left shifts at upshift 0. |
+| [`T175238Z`](../results/aie/srs_shift_width_probe_desktop2_20261012T175238Z.log) | Those acc64 left shifts again, all lanes printed. | The data the saturation rule below was **fitted** on. |
+| [`T175316Z`](../results/aie/srs_shift_width_probe_desktop2_20261012T175316Z.log) | 16 **held-out** lanes, most at the ±2³⁰ boundary. Predictions were written before the run, and the log carries them. | **64 of 64 lanes predicted exactly.** |
+
+**The acc64 → int32 left-shift rule** (fitted, then predicted out of sample): a lane saturates
+only if |acc| ≥ 2³⁰. Otherwise the result is `acc << k` wrapped to 32 bits, even when that
+overflows: `0x12345678 << 4` reads `0x23456780`. The overflow check behaves as if it assumes a
+one-bit shift. That is a model the silicon agrees with, not an observed mechanism. Why it is
+built this way is **unexplained**. It sits off the DPU's int8 path, whose accumulators are
+32-bit.
+
+**Alternatives ruled out:**
+- **A 5-bit field** (`s & 31`). Shift 32 differs from shift 0 on acc32.
+- **A 7-bit field** (`s & 127`). Shift 64 equals shift 0.
+- **A clamp at 31 or 63.** Codes 60–63 shift left.
+- **Plain two's complement over 6 bits.** Codes 32–59 shift right, not left.
+- **Software masking.** The disassembly above shows none.
+
+**Not tested:** rounding modes other than floor, `vups`, and the other `vsrs` variants beyond
+`s8.s32`, `s16.s32` and `s32.s64`.
+
+**Why this was the next step: the overlay.** The VitisAI "DPU" is a fixed set of AIE core programs.
+[`tools/xclbin_overlay_extract.py`](../tools/xclbin_overlay_extract.py) pulls them out of
+`phoenix\4x4.xclbin` ([log](../results/aie/dpu_overlay_extract_phoenix4x4_desktop2_20261012T1737Z.log)):
+- **What the PDIs hold.** There are 15 PDIs, one per DPU kernel ID `0x100`–`0x10e`, and each
+  programs all 16 cores. The images are compiled C programs of 13.6–15.6 KB, 45 distinct in all.
+- **The PDI layout, inferred from the bytes.** The CDO records are: type 3 writes, type 2
+  masked writes, and type 5 DMA descriptors into a payload region after a type-0 terminator.
+  The decoder exits nonzero on any record it cannot place. Peano disassembles 225 of the 240
+  images with no unknown encoding. The other 15 are the same tile, c3r5, whose last 4 B fall
+  28 B past the end of every PDI.
+- **How requantization works.** It is ordinary `vsrs`/`vups`, with `s0`–`s3` loaded from fields
+  of a 40-byte instruction packet. In the conv path, a `u16` field packs two 4-bit shifts, and
+  another shift adds a signed 6-bit value from a separate byte.
+
+Which packet field carries Theorem 1's sigma, and with what offset, is **not yet traced**. Until
+it is, the [14, 30] window cannot be attributed to the packet format. The images and their
+disassembly are AMD binaries and are not committed.
 
 ---
 
