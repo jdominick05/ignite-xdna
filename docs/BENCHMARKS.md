@@ -7682,6 +7682,20 @@ not located** (2026-10-12, Desktop 2, [log](../results/aie/ups_fused_probe_deskt
   the core reads them. The struct check read the xmodel, not device memory, so it does not exclude the
   second.
 
+**Gate 0 of a dynamic witness: XRT's trace plugin attaches to the EP, but writes no trace without AIE
+metadata** (2026-10-12, Desktop 2, [log](../results/aie/xdp_trace_attach_desktop2_20261012T213156Z.log)).
+- **The question.** Can XRT's own AIE trace plugin observe the overlay's cores, configured only by
+  env vars and an `xrt.ini`, with no DLL copied or replaced and no patch?
+- **Which runtime the EP uses.** The untraced arm shows the EP process loads System32's
+  `xrt_coreutil.dll` (XRT 2.21.0), not Ryzen AI's bundled 2.19.
+- **What held.** With `AMD_NPU_SDK_PATH` set to the XRT SDK, `xdp_aie_trace_plugin.dll` loaded. The
+  outputs stayed bit-equal on all 7 cases, and the cached xmodel was not recompiled.
+- **What failed.** No trace file was written, so Gate 0 **fails** as pre-registered. XRT gives the
+  reason itself: "AIE metadata read failed" and "AIE Metadata is empty for AIE Trace". The plugin wants
+  the metadata as `aie_control_config.json` in the run directory, although the overlay xclbin carries an
+  `AIE_METADATA` section.
+- **Not yet tried:** supplying that file, which would be a new pre-registered attempt.
+
 ---
 
 ### The producer contract is the binding constraint, not Theorem 1 (2026-09-09, Desktop 2)
