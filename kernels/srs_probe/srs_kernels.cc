@@ -10,6 +10,8 @@
 //   [0] mode: 0 = v32acc32 -> v32int16 (lsrs)      lanes: in[32..63] as int32
 //             1 = v32acc32 -> v32int8  (ssrs)      lanes: in[32..63] as int32
 //             2 = v16acc64 -> v16int32 (lsrs)      lanes: in[32..47] as int32, upshifted by in[2]
+//             3 = v32int8 -> v32acc32 (ups by shift) -> int32, the DPU's bias path
+//                                                lanes: low bytes of in[32..63] as int8
 //   [1] shift (any int; passed unmodified to the intrinsic)
 //   [2] upshift for mode 2 (0..32), applied with ups so acc64 lanes span 64 bits
 // Output (int32 x 64): [0] mode echo, [1] shift echo, [2] rounding read back,
@@ -49,6 +51,15 @@ void srs_probe(int32_t *in, int32_t *out) {
             aie::vector<int8_t, 32> rv(r);
             for (int i = 0; i < 32; ++i) out[LANE + i] = rv[i];
         }
+    } else if (mode == 3) {
+        // The DPU overlay's bias path: int8 lanes upshifted into acc32 by a RUNTIME scalar
+        // (vlda.ups.s32.s8 / vups.s32.s8 ..., sN), read back unshifted as int32.
+        aie::vector<int8_t, 32> v8;
+        for (int i = 0; i < 32; ++i) v8[i] = (int8_t)in[LANE + i];
+        aie::accum<acc32, 32> acc;
+        acc.from_vector(v8, shift);
+        aie::vector<int32_t, 32> rv = acc.template to_vector<int32_t>(0);
+        for (int i = 0; i < 32; ++i) out[LANE + i] = rv[i];
     } else {
         aie::vector<int32_t, 16> v = aie::load_v<16>(in + LANE);
         aie::accum<acc64, 16> acc;

@@ -1899,6 +1899,8 @@ sections above.
   bias and `0xc1` did not.
   Run 6 mapped all 64 values: bit 6 is ignored, and bit 7 removes the bias (or right-shifts it
   by 8 or more) for every value except `0x81`, which is unexplained.
+  The bias upshift itself is not the cause: native `vups` reads its scalar as `s & 63`, and no
+  scalar removes the bias, so the overlay's decode code does it.
   Still open: why `0x81` is the exception, any shape other than one 1x1 Conv, and what a forward test that actually
   reaches the edges would look like, given the EP refuses out-of-contract scales — and note
   the constraint is now sharper, since any file the producer emits is confined to

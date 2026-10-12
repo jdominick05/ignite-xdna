@@ -46,7 +46,7 @@ array program) into `~/.npu/cache/<hash>/`; later runs of the same shape hit the
 | `clock_probe/` | Nothing — measures the AIE core clock itself, per power mode | **1.80 GHz** in `default`/`performance`/`turbo`, 1.03 `balanced`, 0.80 `powersaver` |
 | `acc_spill_probe/` | Nothing — finds where the AIE2 accumulator file runs out | **5** live 4×8×8 int8 `aie::mmul` accumulators fit; 6 is the first that spills. Compile only, no NPU |
 | `pmu_probe/` | Nothing — routes the trace unit's stall taxonomy and occupancy | Calibrated on `clock_probe`'s own loops (2.0003, 9.0001). **68%** of a short kernel's cycles are lock wait |
-| `srs_probe/` | Nothing — measures how many bits of the `s` register the shift-round-saturate (`vsrs`) reads | **A 6-bit code**: 0–59 shift right, 60–63 shift left by 4..1. Not 5-bit |
+| `srs_probe/` | Nothing — measures how many bits of the `s` register the shift-round-saturate (`vsrs`) reads, and (mode 3) the int8 upshift | **A 6-bit code**: 0–59 shift right, 60–63 shift left by 4..1. Not 5-bit. The upshift reads `s & 63` as a plain saturating left shift |
 | `asm_probe/` | Nothing — asks whether hand-written AIE2 assembly is usable | **It assembles and links.** Only statement-level inline asm fails. Compile only, no NPU |
 | `bank_placement/` | A local copy of `whole_array.py` plus `--stack-size`, and an alternating A/B driver | Tests H12: does separating the int8 GEMM's colliding operands into different memory banks speed it up? **Not resolvable on a shared machine** — seven series, arms overlap, sign varies. Its `bank_stall_probe.py` is a **superseded** control whose headline was retracted; the working observable is `memory_placement/` |
 | `conv_accum/` | Local copies of both 1×1 conv kernels with their accumulators made register-resident | **Worth 2.99–3.01×** (116 → 350 marginal GOPS); hot loop 0.045 → 0.286 MACs/cycle. **The op class stays closed** — CPU still wins 2.4×, down from 7.2× |
@@ -422,6 +422,8 @@ behind Theorem 1's sigma window real silicon? One Worker on `Tile(0, 2)` runs `v
 a **runtime** shift, `mov s0, rX` as in the DPU overlay's requant handlers. Floor rounding and
 saturation are forced and read back. Three paths are tested: acc32 → int16, acc32 → int8 and
 acc64 → int32. Every lane is compared exactly against each candidate shifter reading.
+Mode 3 (`--modes 3`) runs the other direction, the DPU's bias path: int8 lanes upshifted into acc32
+by a runtime scalar. The harness reports every effective shift that reproduces the lanes.
 
 ```bash
 export PATH=/c/Users/<user>/mlir-aie/ironenv/Scripts:$PATH

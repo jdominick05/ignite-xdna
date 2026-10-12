@@ -7413,7 +7413,8 @@ on left shifts, fitted on run 3 and held out on 7 arms of run 4 below.)*
 
 **Not tested:** rounding modes other than floor, and the other `vsrs` variants beyond `s8.s32`,
 `s16.s32` and `s32.s64`. `vlda.ups` was exercised only as the acc64 lane builder at shifts 0,
-16 and 31, and is validated only implicitly at those three values.
+16 and 31, and is validated only implicitly at those three values. *(The int8 → acc32 upshift was
+measured later the same day at 384 scalars, below the run-6 paragraph.)*
 
 **Why this was the next step: the overlay.** The VitisAI "DPU" is a fixed set of AIE core programs.
 [`tools/xclbin_overlay_extract.py`](../tools/xclbin_overlay_extract.py) pulls them out of
@@ -7632,6 +7633,25 @@ differs: 123 arms, pre-registered, controls exact.
 Why `0x81` is the exception is **unexplained**. This map is measured byte by byte; any rule
 drawn from it would need its own held-out run. None of it reaches a model the producer can emit,
 which never sets bits 6–7.
+
+**The bias upshift does not decode `0x7B` itself, so `0x81` comes from the overlay's own code**
+(2026-10-12, Desktop 2, [log](../results/aie/ups_shift_probe_desktop2_20261012T202624Z.log)).
+- **The static trace.** PDI 2 is the Conv's (`graph_used_pdi_list` `[2]`). In it, the conv's output
+  `vsrs` takes its shift from a signed byte at offset 0x21 of a parameter struct, which matches `REG_0`
+  `0x7C`. Offset 0x20 is also loaded as a signed byte, and a scalar that plausibly holds it feeds
+  `vlda.ups.s32.s8`, the int8 bias upshift. "Plausibly", because the core has no interlocks and this
+  reading has no pipeline-timing model.
+- **The probe.** `kernels/srs_probe` mode 3 ran the upshift on one core at every scalar −128..255
+  (pre-registered).
+- **Result.** Fed the shift_bias byte, the upshift agrees with the run-6 DPU map at **0 of 64** values. Given 5
+  (shift_bias 1) it shifts by 5, where the DPU shifts by 1. So the overlay extracts the field before
+  the upshift, and the naive trace is incomplete.
+- **Native behaviour** (fitted on the same 384 points, all matching): `vups` reads `s & 63` as an
+  unsigned left shift, saturating to 32 bits. Unlike `vsrs`, codes 60–63 do not reverse. Shifts of 31 or
+  more saturate every nonzero lane and are not separated from each other.
+- **What it rules out.** No scalar zeroes the lanes or shifts them right. So the DPU's bit-7
+  outcome cannot be this upshift with any operand; for those bytes the overlay skips or reroutes
+  the bias. Why `0x81` is spared stays **unexplained**, now pinned to the overlay's decode code.
 
 ---
 

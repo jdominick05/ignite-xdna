@@ -17,6 +17,9 @@ One Worker on Tile(0, 2) runs kernels/srs_probe/srs_kernels.cc once per (mode, s
   mode 0  v32acc32 -> v32int16 (lsrs)       32 lanes of known int32
   mode 1  v32acc32 -> v32int8  (ssrs)       the DPU's int8 output path
   mode 2  v16acc64 -> v16int32 (lsrs)       16 lanes of (int32 << up), 64-bit accumulators
+  mode 3  v32int8 -> v32acc32 (ups)          the DPU's bias path: 32 fixed int8 lanes upshifted by the
+                                             runtime scalar; reports every effective k that fits
+                                             (results/aie/ups_shift_probe_desktop2_20261012T202624Z.log)
 Rounding is forced to floor and saturation to saturate, and both are read back.
 Every shift in --shifts is passed unmodified through `mov s0, rX`.
 
@@ -59,7 +62,35 @@ N_IO = 64
 LANE = 32  # must match srs_kernels.cc: lanes at a 128 B-aligned word offset
 _KERNEL_SRC = Path(__file__).resolve().parent / "srs_kernels.cc"
 _XRT_SMI = r"C:\Windows\System32\AMD\xrt-smi.exe"
-MODES = {0: ("acc32->int16", 16, 32), 1: ("acc32->int8", 8, 32), 2: ("acc64->int32", 32, 16)}
+MODES = {0: ("acc32->int16", 16, 32), 1: ("acc32->int8", 8, 32), 2: ("acc64->int32", 32, 16),
+         3: ("int8-ups->acc32", 32, 32)}
+LANES8 = [1, -1, 127, -128, 2, -2, 3, -3, 5, -5, 64, -64, 100, -100, 17, -17,
+          0, 7, -7, 33, -33, 99, -99, 126, -127, 11, -11, 85, -85, 42, -42, 120]
+
+
+def ups_fit(got):
+    """Every effective shift k (negative = right) and 32-bit treatment that reproduces all mode-3 lanes."""
+    fits = []
+    if all(g == 0 for g in got):
+        fits.append("zero")
+    for k in range(-40, 64):
+        for kind in ("wrap", "sat", "rnd_half_up"):
+            exp = []
+            for x in LANES8:
+                if k >= 0:
+                    v = x << k
+                elif kind == "rnd_half_up":
+                    v = (x + (1 << (-k - 1))) >> -k
+                else:
+                    v = x >> -k
+                if kind == "sat":
+                    v = sat(v, 32)
+                else:
+                    v = (v + (1 << 31)) % (1 << 32) - (1 << 31)
+                exp.append(v)
+            if exp == got:
+                fits.append(f"k={k}/{kind}")
+    return fits
 
 
 @iron.jit
@@ -68,7 +99,7 @@ def srs_probe(a_in: In, c_out: Out):
     fn = ExternalFunction(
         "srs_probe",
         source_file=str(_KERNEL_SRC),
-        object_file_name=f"srs_kernels_lane{LANE}.o",
+        object_file_name=f"srs_kernels_lane{LANE}_m3.o",
         arg_types=[io_ty, io_ty],
         include_dirs=[config.cxx_header_path()],
     )
@@ -171,6 +202,21 @@ def main():
     verdict_ok = True
     for mode in (int(m) for m in args.modes.split(",")):
         name, obits, nl = MODES[mode]
+        if mode == 3:
+            print(f"\n== mode 3 {name}: int8 lanes {LANES8}, {len(shifts)} shift scalars")
+            for s in shifts:
+                out = run_point(a, c, 3, s, 0, LANES8)
+                if out[0] != 3 or out[1] != s:
+                    print(f"  shift {s}: ECHO MISMATCH {out[:4].tolist()}")
+                    verdict_ok = False
+                    continue
+                got = out[LANE:LANE + 32].tolist()
+                fits = ups_fit(got)
+                print(f"  shift {s:4d} (0x{s & 0xffffffff:08x}): fits {', '.join(fits[:6]) or 'NONE'}"
+                      + (f" (+{len(fits) - 6})" if len(fits) > 6 else ""))
+                if not fits:
+                    print(f"     lanes: {got}")
+            continue
         ups = [int(u) for u in args.ups.split(",")] if mode == 2 else [0]
         vals = lanes_16(args.seed) if mode == 2 else lanes_32(args.seed)
         if mode == 2 and args.lanes16:
