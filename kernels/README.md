@@ -423,7 +423,9 @@ a **runtime** shift, `mov s0, rX` as in the DPU overlay's requant handlers. Floo
 saturation are forced and read back. Three paths are tested: acc32 → int16, acc32 → int8 and
 acc64 → int32. Every lane is compared exactly against each candidate shifter reading.
 Mode 3 (`--modes 3`) runs the other direction, the DPU's bias path: int8 lanes upshifted into acc32
-by a runtime scalar. The harness reports every effective shift that reproduces the lanes.
+by a runtime scalar. The harness reports every effective shift that reproduces the lanes. Mode 4
+loads the same lanes from memory, so the compiler fuses load and upshift into `vlda.ups`, the
+overlay's form.
 
 ```bash
 export PATH=/c/Users/<user>/mlir-aie/ironenv/Scripts:$PATH

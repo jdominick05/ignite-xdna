@@ -7651,7 +7651,30 @@ which never sets bits 6–7.
   more saturate every nonzero lane and are not separated from each other.
 - **What it rules out.** No scalar zeroes the lanes or shifts them right. So the DPU's bit-7
   outcome cannot be this upshift with any operand; for those bytes the overlay skips or reroutes
-  the bias. Why `0x81` is spared stays **unexplained**, now pinned to the overlay's decode code.
+  the bias. Why `0x81` is spared stays **unexplained**. *(This paragraph first said it was "now pinned to
+  the overlay's decode code". That is superseded by the trace below: on the one path traced, the core
+  does no decode at all.)*
+
+**The traced bias path passes `0x7B` raw, so the fixture Conv does not run it, and the decode is
+not located** (2026-10-12, Desktop 2, [log](../results/aie/ups_fused_probe_desktop2_20261012T203701Z.log)).
+- **The fused form decodes the same way (measured).** `kernels/srs_probe` mode 4 loads the int8 lanes
+  from memory, so the compiler emits `vlda.ups.s32.s8`, the overlay's own form; the disassembly
+  confirms it. Pre-registered against mode 3, it matches at all 384 scalars: `s & 63`, a saturating
+  left shift.
+- **The timing-aware trace (static).** `tools/aie_timing_slice.py` walks the definition chain back
+  using llvm-aie's scheduling latencies: a scalar load commits after 7 cycles, `mul` after 2, and
+  `vlda.ups` reads its scalar at cycle 7. These are SPEC(Peano), not measured. In the `0x24d0` loop the
+  bias upshift's scalar is the signed byte at `[p3 + 0x20]`, with a 15-cycle margin and nothing in
+  between. The output `vsrs` in the same loop takes `[p3 + 0x21]`.
+- **The struct base fits.** Across three fixtures, +0x20 tracks the shift_bias byte (`0x01`, `0x11`, `0x01`)
+  and +0x21 the shift_cut (8, 8, 16). So `[p3]` = `REG_0` + 0x5B fits the two bytes that vary.
+- **Conclusion.** That loop would shift the bias by `b & 63`, where the DPU shifts by `(b >> 2) & 15`, so
+  the fixture Conv does not run it with this byte. PDI 2 has 13 bias upshift sites. Their scalars come
+  from this byte, a stack slot, a constant 0 or a streamed byte, and static reading does not say which
+  one executes. Where the field is extracted, and why `0x81` is spared, stays **unexplained**.
+- **Candidates not ruled out:** another handler, a loader that rewrites the parameter memory, or another
+  struct base on the executed path. Separating them needs a dynamic witness, such as the core's program
+  counter or event trace during a fixture run.
 
 ---
 

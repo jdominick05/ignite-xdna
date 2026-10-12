@@ -63,9 +63,12 @@ LANE = 32  # must match srs_kernels.cc: lanes at a 128 B-aligned word offset
 _KERNEL_SRC = Path(__file__).resolve().parent / "srs_kernels.cc"
 _XRT_SMI = r"C:\Windows\System32\AMD\xrt-smi.exe"
 MODES = {0: ("acc32->int16", 16, 32), 1: ("acc32->int8", 8, 32), 2: ("acc64->int32", 32, 16),
-         3: ("int8-ups->acc32", 32, 32)}
+         3: ("int8-ups->acc32", 32, 32), 4: ("int8-vlda.ups->acc32", 32, 32)}
 LANES8 = [1, -1, 127, -128, 2, -2, 3, -3, 5, -5, 64, -64, 100, -100, 17, -17,
           0, 7, -7, 33, -33, 99, -99, 126, -127, 11, -11, 85, -85, 42, -42, 120]
+# Mode 4 reads the same int8 lanes straight from memory, packed little-endian four per int32 word.
+PACKED8 = [int(np.frombuffer(np.array(LANES8[i:i + 4], dtype=np.int8).tobytes(), dtype=np.int32)[0])
+           for i in range(0, 32, 4)]
 
 
 def ups_fit(got):
@@ -99,7 +102,7 @@ def srs_probe(a_in: In, c_out: Out):
     fn = ExternalFunction(
         "srs_probe",
         source_file=str(_KERNEL_SRC),
-        object_file_name=f"srs_kernels_lane{LANE}_m3.o",
+        object_file_name=f"srs_kernels_lane{LANE}_m4.o",
         arg_types=[io_ty, io_ty],
         include_dirs=[config.cxx_header_path()],
     )
@@ -202,11 +205,11 @@ def main():
     verdict_ok = True
     for mode in (int(m) for m in args.modes.split(",")):
         name, obits, nl = MODES[mode]
-        if mode == 3:
+        if mode in (3, 4):
             print(f"\n== mode 3 {name}: int8 lanes {LANES8}, {len(shifts)} shift scalars")
             for s in shifts:
-                out = run_point(a, c, 3, s, 0, LANES8)
-                if out[0] != 3 or out[1] != s:
+                out = run_point(a, c, mode, s, 0, LANES8 if mode == 3 else PACKED8)
+                if out[0] != mode or out[1] != s:
                     print(f"  shift {s}: ECHO MISMATCH {out[:4].tolist()}")
                     verdict_ok = False
                     continue

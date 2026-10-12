@@ -51,6 +51,15 @@ void srs_probe(int32_t *in, int32_t *out) {
             aie::vector<int8_t, 32> rv(r);
             for (int i = 0; i < 32; ++i) out[LANE + i] = rv[i];
         }
+    } else if (mode == 4) {
+        // Same as mode 3, but the int8 lanes come straight from memory (packed 4 per word at
+        // in[LANE..LANE+7]) so the load and the upshift can fuse into vlda.ups.s32.s8, the form
+        // the DPU overlay uses. Check the disassembly: the fusion is the compiler's choice.
+        aie::vector<int8_t, 32> v8 = aie::load_v<32>((const int8_t *)(in + LANE));
+        aie::accum<acc32, 32> acc;
+        acc.from_vector(v8, shift);
+        aie::vector<int32_t, 32> rv = acc.template to_vector<int32_t>(0);
+        for (int i = 0; i < 32; ++i) out[LANE + i] = rv[i];
     } else if (mode == 3) {
         // The DPU overlay's bias path: int8 lanes upshifted into acc32 by a RUNTIME scalar
         // (vlda.ups.s32.s8 / vups.s32.s8 ..., sN), read back unshifted as int32.
