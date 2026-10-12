@@ -148,15 +148,38 @@ def shift_field(buf):
     return raw, v
 
 
+REG0_SHIFT_BIAS, REG0_SHIFT_CUT = 0x7B, 0x7C
+
+
+def reg0_span(x):
+    """(start, length) of the subgraph's REG_0 bytes, the parameter memory the DPU loads: the
+    first map<string, bytes> entry `0a 05 'REG_0' 12 <len>` after the one
+    reg_id_to_parameter_value key. Later REG_0 entries belong to sibling maps (context types).
+    MEASURED 2026-10-12: byte 0x7B = shift_bias << 2 | 1, byte 0x7C = shift_cut, and these are
+    the only bytes that vary across the sweep. Patching 0x7C alone moves the device's shift
+    (tools/dpu_sigma_patch_test.py); the param_buffer varint does not."""
+    k = x.find(b'reg_id_to_parameter_value')
+    entry = bytes.fromhex('0a 05') + b'REG_0' + bytes.fromhex('12')
+    j = x.find(entry, k)
+    if k < 0 or j < 0 or x.find(b'reg_id_to_parameter_value', k + 1) >= 0:
+        raise SystemExit('reg_id_to_parameter_value/REG_0 not found exactly once')
+    n, i = varint(x, j + len(entry))
+    return i, n
+
+
 def summary(out):
-    """One row per built fixture: placement, mc_code identity, and the weight shift field."""
+    """One row per built fixture: placement, mc_code identity, the weight attr shift field and
+    the REG_0 shift bytes; then every REG_0 byte offset that varies across the fixtures."""
     rows = sorted(p.parent for p in out.glob('*/compiled.xmodel'))
     ref = None
     print('fixture   NPU:Conv  mc_code sha256        param_buffer#1 field  value   '
-          'sc<<8|sb<<2|1  buffers 0/2 == first')
+          'sc<<8|sb<<2|1  buffers 0/2 == first  REG_0 0x7B 0x7C  == (sb<<2|1, sc)')
     ok = True
+    regs = {}
     for d in rows:
         x = (d / 'compiled.xmodel').read_bytes()
+        i, n = reg0_span(x)
+        regs[d.name] = r = x[i:i + n]
         mc = {hashlib.sha256(b).hexdigest()[:16] for b in mc_code_blobs(x)}
         pb = param_buffers(x)
         raw, v = shift_field(pb[1])
@@ -165,10 +188,17 @@ def summary(out):
         res = json.loads(next(l for l in log.splitlines() if l.startswith('ARITHMETIC_RESULT ')).split(' ', 1)[1])
         sc, sb = res['shift_cut'], res['shift_bias']
         pred = (sc << 8) | (sb << 2) | 1
-        ok &= pred == v
-        print('%-9s %-8s  %-20s  [%-8s]            0x%04x  %-13s  %s' % (
+        reg_ok = (r[REG0_SHIFT_BIAS], r[REG0_SHIFT_CUT]) == ((sb << 2) | 1, sc)
+        ok &= pred == v and reg_ok
+        print('%-9s %-8s  %-20s  [%-8s]            0x%04x  %-13s  %-20s  %4d B  %02x   %02x    %s' % (
             d.name, res['tested_conv_on_npu'], ','.join(sorted(mc)), raw.hex(' '), v,
-            'yes' if pred == v else 'NO (0x%04x)' % pred, pb[0] == ref[0] and pb[2] == ref[2]))
+            'yes' if pred == v else 'NO (0x%04x)' % pred, pb[0] == ref[0] and pb[2] == ref[2],
+            n, r[REG0_SHIFT_BIAS], r[REG0_SHIFT_CUT], 'yes' if reg_ok else 'NO'))
+    lens = {len(r) for r in regs.values()}
+    varying = [o for o in range(min(lens)) if len({r[o] for r in regs.values()}) > 1]
+    print('\nREG_0 lengths %s; byte offsets that vary across all %d fixtures: %s'
+          % (sorted(lens), len(regs), ['0x%02x' % o for o in varying]))
+    ok &= len(lens) == 1 and varying == [REG0_SHIFT_BIAS, REG0_SHIFT_CUT]
     return 0 if ok else 1
 
 

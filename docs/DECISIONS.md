@@ -1671,7 +1671,9 @@ reach the `[0, 31]` edges without the producer's own clamp having failed first. 
 all 744 analyzed Conv/Gemm across eleven models sit in `[14, 30]`
 (`results/quant/shift_cut_contract_20260909_desktop2.log`). This also explains, with no new
 hardware, why the highest sigma ever executed here is 30 — that is the contract's upper
-edge, the producer's ceiling rather than the silicon's.
+edge, the producer's ceiling rather than the silicon's. **MEASURED 2026-10-12:** with the
+shift byte patched in a cached xmodel, the DPU executes sigma 31, 32 and 33 exactly
+(`results/aie/dpu_sigma_patch_desktop2_20261012T182840Z.log`), so the upper edge is the compiler's refusal, not the hardware.
 
 Two consequences for anyone using the tool:
 

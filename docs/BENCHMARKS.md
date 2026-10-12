@@ -7430,6 +7430,9 @@ built this way is **unexplained**. It sits off the DPU's int8 path, whose accumu
 ~~Which packet field carries Theorem 1's sigma, and with what offset, is **not yet traced**.~~
 *(Traced the same day, below.)* The images and their disassembly are AMD binaries and are not committed.
 
+*Superseded in part the same day (next block): the `param_buffer` varint below is a copy the
+device ignores. What the DPU loads is the same two bytes in the subgraph's `REG_0`.*
+
 **Where sigma lives: not in mc_code, but in the weight tensor's `param_buffer`** (2026-10-12,
 Desktop 2, [log](../results/aie/dpu_sigma_field_fixtures_desktop2_20261012T180818Z.log)).
 - **The fixtures.** [`tools/dpu_mc_fixtures.py`](../tools/dpu_mc_fixtures.py) compiles single-Conv
@@ -7454,18 +7457,74 @@ Desktop 2, [log](../results/aie/dpu_sigma_field_fixtures_desktop2_20261012T18081
   and held out alike.
 
 What this changes:
-- **The sigma window is not an mc_code property.** A patch to reach sigma 31 or 32 is a
-  `param_buffer` patch, not an `mc_code` patch.
+- **The sigma window is not an mc_code property.** ~~A patch to reach sigma 31 or 32 is a
+  `param_buffer` patch, not an `mc_code` patch.~~ *Wrong: it is a `REG_0` patch (below).*
 - **The field has room for sigma 31 and 32.** Shift_cut sits in bits 8 and up of a varint, so
   shift_cut 17 or 18 can be written. The EP refuses that model before it compiles, so no xmodel
   with such a value exists yet.
-- **What would settle the window.** Patch the field in a cached in-contract xmodel and load it
+- ~~**What would settle the window.** Patch the field in a cached in-contract xmodel and load it
   without `--fresh`. That needs the xmodel's integrity check (`files_md5sum` covers the source
   ONNX, not the xmodel) to accept it. It is the remaining step to attribute the [14, 30] window
-  to the producer's contract rather than the DPU, and it has not been run.
+  to the producer's contract rather than the DPU, and it has not been run.~~ *Run the same day
+  on `REG_0`, below; patching this field does nothing.*
 - **Alternatives ruled out.** mc_code carrying sigma: its hash is identical across all nine
   fixtures. Another `param_buffer`: buffers 0 and 2 are identical across all nine.
 - **Not identified.** How the overlay's core programs read this buffer at run time.
+
+**Sigma 31–33 execute exactly on the DPU: the [14, 30] window's upper edge is the compiler's,
+not the silicon's** (2026-10-12, Desktop 2,
+[log](../results/aie/dpu_sigma_patch_desktop2_20261012T182840Z.log)).
+
+**Method.** [`tools/dpu_sigma_patch_test.py`](../tools/dpu_sigma_patch_test.py) compiles the
+shift_cut-16 fixture `--fresh`. It then edits the shift in the **cached** xmodel and reloads it
+without `--fresh`, so the EP's compile-time refusal never runs. Every arm checks four things:
+- the device is idle;
+- the EP left the edited xmodel byte-identical (it did, in every arm);
+- the Conv is on the NPU;
+- the NPU output codes match the numpy oracle exactly, at both the patched shift and the base.
+
+**Run 1 was void, and it corrected the section above.** The edit went to the `param_buffer`
+varint. The in-contract controls (shift_cut 15 and 1) still read the base shift, so by the
+pre-registered rule no arm is interpreted. Five steps, each in its own process, found out why:
+- **Not in-process caching.** A fresh process reads the base shift too.
+- **Not the `fix_point` attributes.** Patching them, alone or with `param_buffer`, changes
+  nothing.
+- **The xmodel is read.** Without it the session refuses to build. With both `mc_code` copies
+  zeroed, it builds in 0.3 s and the output changes.
+- **The ONNX sets only the host scale.** Swapping in the shift_cut-15 ONNX under the
+  shift_cut-16 cache moves the host dequant to 2^-15, while the integer codes still follow 16.
+- **The diff had a blind spot.** The structural diff above compared opaque blobs by their
+  first 48 bytes. Hashed in full, one more blob differs: the subgraph's
+  `reg_id_to_parameter_value` entry `REG_0`, 1891 B.
+  - **What it holds.** In all 9 fixtures, byte `0x7B` is `shift_bias << 2 | 1` and byte
+    `0x7C` is shift_cut. They are the only bytes that vary (`dpu_mc_fixtures.py --summary`).
+  - **What the attr is.** The `param_buffer` varint is a copy of the same two bytes, and the
+    device does not read it.
+
+**Run 2 edits `REG_0` byte `0x7C`, one byte per arm,** pre-registered after the diagnosis
+(predictions and sha256 in the log):
+
+| shift_cut (sigma) | predicted | read | weight |
+|---|---|---|---|
+| 15 (29), 1 (15): controls | EXACT | **EXACT** | run valid: the byte moves the shift both ways |
+| 17, 18, 19 (31, 32, 33) | EXACT | **EXACT**, 0 mismatches each | **decisive**: neighbouring shifts differ by 4,056–7,520 outputs here |
+| 20, 31, 45 (34, 45, 59) | EXACT | EXACT | weak: every right shift ≥ 20 gives all zero point on this fixture |
+| 46, 47, 49 (60, 61, 63) | NEITHER (`vsrs` left-shift codes) | EXACT | **prediction missed**, unexplained |
+| 50 (64) | either | EXACT | uninformative |
+
+What this settles, and what it does not:
+- **The upper edge is not the silicon.** The DPU executes sigma 31, 32 and 33 exactly
+  (MEASURED). So the EP's refusal above sigma 30 is the compiler's contract. **A 5-bit mask
+  is excluded**: it would turn sigma 32 into a shift of 0, and shift_cut 18 read exact.
+- **The miss at 46–49 rules out the straight path.** sigma = shift_cut + 14 does not reach a
+  6-bit `vsrs` code unchanged, or those arms would have shifted left. That is consistent with
+  the overlay's packet decode splitting the shift across the 4-bit and signed 6-bit fields
+  above. Saturation or a clamp somewhere fits too, and this fixture cannot tell which.
+- **Not tested.** shift_cut < 0 (sigma < 14, the lower edge). Large shifts on a fixture whose
+  accumulator is wide enough to tell them apart. How the overlay's cores read `REG_0`.
+- **Alternatives ruled out for the upper edge.** A recompile: the xmodel was unchanged and the
+  build took 0.3 s. A stale cache: the restore arm reads the base again. The host doing the
+  arithmetic: the host scale stays at 2^-16 while the codes follow the patched shift.
 
 ---
 

@@ -32,7 +32,9 @@ Theorem 1 (Systolic Shift-Cut Bound) -- STATED, NOT VALIDATED ON THIS DEVICE:
     If sigma > 31, the hardware 5-bit shifter would clamp to 31 (shift clamp hazard).
     SUPERSEDED 2026-10-12: the AIE2 vsrs shift operand is MEASURED to be a 6-bit code
     (0..59 right, 60..63 left by 4..1; results/aie/srs_shift_width_probe_*_T175013Z.log),
-    so no 5-bit shifter clamps at 31. The [14, 30] window is the producer/compiler contract.
+    so no 5-bit shifter clamps at 31. The [14, 30] window is the producer/compiler contract:
+    with the shift byte patched in a cached xmodel, the DPU executes sigma 31..33 exactly
+    (results/aie/dpu_sigma_patch_desktop2_20261012T182840Z.log).
 
     Read the "if and only if" as a hypothesis, not a result. Both register widths --
     the 15-bit multiplier and the 5-bit shifter -- are asserted here, not measured, and
