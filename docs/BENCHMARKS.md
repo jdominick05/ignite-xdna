@@ -7402,12 +7402,16 @@ built this way is **unexplained**. It sits off the DPU's int8 path, whose accumu
 **Alternatives ruled out:**
 - **A 5-bit field** (`s & 31`). Shift 32 differs from shift 0 on acc32.
 - **A 7-bit field** (`s & 127`). Shift 64 equals shift 0.
-- **A clamp at 31 or 63.** Codes 60–63 shift left.
+- **A clamp at 31 or 63.** Codes 60–63 shift left. On acc32, a clamp at 31 cannot be told
+  from a real shift of 32–59, since both floor to 0 or −1. The **acc64** lanes at upshifts
+  16 and 31 exclude it: `clamp31` fails there while codes 32–59 shift by their full amount
+  (`T175013Z`). acc32 excludes the 5-bit wrap, and acc64 excludes the clamp.
 - **Plain two's complement over 6 bits.** Codes 32–59 shift right, not left.
 - **Software masking.** The disassembly above shows none.
 
-**Not tested:** rounding modes other than floor, `vups`, and the other `vsrs` variants beyond
-`s8.s32`, `s16.s32` and `s32.s64`.
+**Not tested:** rounding modes other than floor, and the other `vsrs` variants beyond `s8.s32`,
+`s16.s32` and `s32.s64`. `vlda.ups` was exercised only as the acc64 lane builder at shifts 0,
+16 and 31, and is validated only implicitly at those three values.
 
 **Why this was the next step: the overlay.** The VitisAI "DPU" is a fixed set of AIE core programs.
 [`tools/xclbin_overlay_extract.py`](../tools/xclbin_overlay_extract.py) pulls them out of

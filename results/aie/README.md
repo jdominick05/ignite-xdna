@@ -1139,6 +1139,8 @@ if Column 0's NoC DMA is unbonded or reserved. Details the MLIR-AIE dialect modi
 `AIEDeviceNPU1_5col`, `VirtualizedNPU1TargetModel(5, 0)`) and outlines the three-phase hardware verification roadmap
 to unlock +25.0% compute and SRAM capacity.
 
+**`overlay_column_census_desktop2_20261012T180108Z.log`** — `tools/cdo_column_census.py`, read-only, no device context. AMD's three `5x4_*.xclbin` overlays under `C:\Windows\System32\AMD` are, read inside, **4-column partitions**. Each declares `AIE_PARTITION` `column_width 4`, `start_columns [1]` and holds PLM-format CDO PDIs that program 16 cores in partition-relative columns 0–3 only, the same as the Ryzen AI 1.7.1 `phoenix\4x4.xclbin`. No AMD overlay on this machine programs physical column 0, so the vendor's 5x4 artifacts are not a route to the fifth column.
+
 ## Inter-core 512-bit accumulator cascade GEMM model
 
 [`notes_accumulator_cascade_gemm_model.md`](notes_accumulator_cascade_gemm_model.md) — formal

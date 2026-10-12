@@ -30,6 +30,9 @@ Theorem 1 (Systolic Shift-Cut Bound) -- STATED, NOT VALIDATED ON THIS DEVICE:
     If sigma < 0, the operation would require an arithmetic left-shift exceeding
     accumulator precision (accumulator overflow hazard).
     If sigma > 31, the hardware 5-bit shifter would clamp to 31 (shift clamp hazard).
+    SUPERSEDED 2026-10-12: the AIE2 vsrs shift operand is MEASURED to be a 6-bit code
+    (0..59 right, 60..63 left by 4..1; results/aie/srs_shift_width_probe_*_T175013Z.log),
+    so no 5-bit shifter clamps at 31. The [14, 30] window is the producer/compiler contract.
 
     Read the "if and only if" as a hypothesis, not a result. Both register widths --
     the 15-bit multiplier and the 5-bit shifter -- are asserted here, not measured, and
@@ -316,7 +319,7 @@ def _classify(sigma: int, kind: str, op_type: str) -> Tuple[bool, str]:
                       f"(requires left-shift beyond accumulator; UNVALIDATED bound)")
     if sigma > high:
         return True, (f"SHIFT CLAMP HAZARD: sigma={sigma} > {high} "
-                      f"(5-bit shifter would clamp; UNVALIDATED bound)")
+                      f"(stated bound; the AIE2 shifter itself is 6-bit, so UNVALIDATED for the DPU)")
     if op_type not in ("Conv", "Gemm"):
         return False, (f"Feasible {kind} shift. No producer contract is asserted: "
                        f"adjust_shift_cut clamps Conv/Gemm only, not {op_type}")
