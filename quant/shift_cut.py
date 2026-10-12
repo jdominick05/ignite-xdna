@@ -45,6 +45,9 @@ Theorem 1 (Systolic Shift-Cut Bound) -- STATED, NOT VALIDATED ON THIS DEVICE:
 
     SUPERSEDED 2026-10-12: with the shift byte patched in a cached xmodel, the DPU
     executed sigma 31..33 exactly (results/aie/dpu_sigma_patch_desktop2_20261012T182840Z.log).
+    Runs 3-4 (results/aie/dpu_sigma_patch_desktop2_20261012T191325Z.log): the shift_cut byte & 63 is the
+    vsrs code (sigma's +14 is not part of it); shift_cut -1..59 run, -2..-4 with a wrapping
+    left shift; shift_bias is a 4-bit field.
     Neither edge has been observed on hardware. The highest sigma ever executed on this
     DPU is 30; measured placements cover sigma in {14, 15, 17, 18, 22, 30}, all from
     fixtures whose scales sit inside the producer's own [0, 16] shift-cut contract.

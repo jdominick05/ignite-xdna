@@ -7398,7 +7398,8 @@ only if |acc| ≥ 2³⁰. Otherwise the result is `acc << k` wrapped to 32 bits,
 overflows: `0x12345678 << 4` reads `0x23456780`. The overflow check behaves as if it assumes a
 one-bit shift. That is a model the silicon agrees with, not an observed mechanism. Why it is
 built this way is **unexplained**. It sits off the DPU's int8 path, whose accumulators are
-32-bit.
+32-bit. *(2026-10-12, later: the same one-bit-check shape governs the DPU's own int8 output
+on left shifts, fitted on run 3 and held out on 7 arms of run 4 below.)*
 
 **Alternatives ruled out:**
 - **A 5-bit field** (`s & 31`). Shift 32 differs from shift 0 on acc32.
@@ -7512,7 +7513,7 @@ pre-registered rule no arm is interpreted. Five steps, each in its own process, 
 | 15 (29), 1 (15): controls | EXACT | **EXACT** | run valid: the byte moves the shift both ways |
 | 17, 18, 19 (31, 32, 33) | EXACT | **EXACT**, 0 mismatches each | **decisive**: neighbouring shifts differ by 4,056–7,520 outputs here |
 | 20, 31, 45 (34, 45, 59) | EXACT | EXACT | weak: every right shift ≥ 20 gives all zero point on this fixture |
-| 46, 47, 49 (60, 61, 63) | NEITHER (`vsrs` left-shift codes) | EXACT | **prediction missed**, unexplained |
+| 46, 47, 49 (60, 61, 63) | NEITHER (`vsrs` left-shift codes) | EXACT | **prediction missed**. *Explained by runs 3–4 (next block): the byte, not sigma, is the `vsrs` code, so 46–49 are right shifts* |
 | 50 (64) | either | EXACT | uninformative |
 
 What this settles, and what it does not:
@@ -7526,11 +7527,79 @@ What this settles, and what it does not:
   6-bit `vsrs` code unchanged, or those arms would have shifted left. That is consistent with
   the overlay's packet decode splitting the shift across the 4-bit and signed 6-bit fields
   above. Saturation or a clamp somewhere fits too, and this fixture cannot tell which.
+  *(Settled the same day, next block: no clamp. The byte goes to `vsrs` as its code, and
+  sigma's +14 is not part of it.)*
 - **Not tested.** shift_cut < 0 (sigma < 14, the lower edge). Large shifts on a fixture whose
   accumulator is wide enough to tell them apart. How the overlay's cores read `REG_0`.
+  *(The first two were run the same day, next block.)*
 - **Alternatives ruled out for the upper edge.** A recompile: the xmodel was unchanged and the
   build took 0.3 s. A stale cache: the restore arm reads the base again. The host doing the
   arithmetic: the host scale stays at 2^-16 while the codes follow the patched shift.
+
+**The shift_cut byte is the `vsrs` shift code itself, and a 4-bit field carries shift_bias**
+(2026-10-12, Desktop 2, runs 3 and 4,
+[log](../results/aie/dpu_sigma_patch_desktop2_20261012T191325Z.log)). Same method as run 2, now
+editing `REG_0` byte `0x7B` (`shift_bias << 2 | 1`) as well as `0x7C`. A negative shift_cut is
+written as its two's-complement byte. The bias is the lever: `127 << shift_bias` in the
+accumulator is what makes large shifts give non-zero outputs. Every arm is scored against named
+models, and `--dry-run` prints how far apart they are before anything loads.
+
+**Run 3 refuted its own pre-registration.** The five controls were exact, including three
+in-contract shift_bias arms (16:8, 16:15, 10:12; base differs by 2,715–47,848 elements). So
+byte `0x7B` does move the bias shift. But the predictions missed:
+- shift_bias above 15 does not shift the bias by that amount (16:17 reads within 6 elements of base);
+- bytes 63 and 255 read as shift_cut −1, and 64 and 128 as 0;
+- bytes `0xf8` (−8) and `0xf2` (−14) read all zero point;
+- −2 and −3 read close to a left shift, but not exactly.
+
+**A model fitted on run 3** (exhaustive search and a mismatch dump, both in the log):
+- **The shift.** The shift_cut byte `& 63` is the `vsrs` code: 0–59 shift right, 60–63 shift
+  left by 4..1.
+- **Left-shift saturation.** A left shift saturates only if a *one-bit* shift would overflow
+  int8 (t outside [−64, 63]). Otherwise `t << k` wraps to 8 bits. Every −2/−3 mismatch is that
+  wrap.
+- **The bias.** The effective shift_bias is `shift_bias & 15`.
+It reproduces all 36 run-3 arms. The rival reading, sigma = byte + 14 wrapped to 6 bits, fails
+three of them (50:24, −8, −14).
+
+**Run 4 tested the fit on 23 arms it was not fitted on** (pre-registered, sha in the log):
+
+| group | arms | separation from the fitted prediction | read |
+|---|---|---|---|
+| controls | 15:0, 1:0, 16:15 | — | **EXACT**, run valid |
+| left-shift codes, k = 4 new | 60, 61, 62, 124, 189, 190, −4 | plain saturation: 5,018–9,706 | **fit matches all 7**; plain saturation matches none |
+| low bits 50–59 | −5, −11, 54, 59, 114 | rival (left shifts): 37,179–52,422 | **fit matches all 5**; the rival matches none |
+| high bits ignored | 65, 192, −60 | exact: 38,105–54,184 | fit matches all 3 (does not separate the rival) |
+| shifts 20–23 (sigma 34–37) at shift_bias 15 | 20:15 … 23:15 | `sc_clamp17` 19,780; base 7,855–20,232 | **EXACT, all 4** |
+| `0x7B` bit 6 set | 16:21, 22:31 | `sb_clamp15` 28,672 at 16:21 | fit matches both |
+| `0x7B` bit 7 set | 15:40, 16:47 | `sb_clamp15` 42,976 at 15:40 | **fit MISSED both** |
+
+**So the shift_cut half of the fit held on all 19 arms that test it, and the model as
+pre-registered is refuted by the two bit-7 arms.** After the fact, both bit-7 arms equal the
+shift with the bias zeroed (0 mismatches; `shift_bias & 15` misses by 14,352 and 28,672). That
+reading is fitted on 2 arms and untested, and these arms cannot tell a disabled bias from one
+shifted out of range.
+
+What this settles, and what it does not:
+- **Run 2's miss is explained.** The device does not shift by sigma = shift_cut + 14. It
+  shifts by the byte, so shift_cut 46–49 are right-shift codes. Sigma's +14 is the producer's
+  bookkeeping, not part of the `vsrs` operand (on this fixture, with input and weight
+  positions 0). It was not added to the byte before `vsrs`.
+- **Shifts up to 23 (sigma 37) execute exactly** and decisively (MEASURED). Every right shift
+  from 24 to 59 reads all zero point here, consistent with the code but not separating it
+  from a clamp anywhere in that range: the accumulator cannot exceed 2^31.
+- **The lower edge is reachable, and wrong past −1.** Shift_cut −1 (byte `0xff`) runs exactly.
+  −2..−4 run, but wrap rather than saturate when 32 ≤ |t| < 64 (for −2), the same rule as
+  `vsrs` on one core. −5 and below cannot be expressed: their bytes are right-shift codes
+  50–59. The 2026-09-09 "sigma 0 diverges" row ran on CPU fallback. This is the first DPU data
+  below shift_cut 0.
+- **Not tested.** What `0x7B` bit 7 does, beyond zeroing the bias on two arms. Bits 0–1 of
+  `0x7B`. An accumulator-width probe: shift_bias is 4 bits, so the bias stays below 2^22, and
+  the arms meant for it tested nothing. Any layer shape other than this 1x1 Conv.
+- **Alternatives ruled out.** Those of run 2 (no recompile, no stale cache, no host
+  arithmetic), in every arm of both runs. For the shift reading: a clamp at 16 or 17 (shifts
+  20–23 exact), a 5-bit mask, sigma wrapped to 6 bits (8 arms across both runs), plain
+  saturation on left shifts (7 arms), and an unsigned byte (`0xff` is −1).
 
 ---
 

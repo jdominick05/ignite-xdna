@@ -1888,10 +1888,15 @@ sections above.
   parameter blob; the weight `param_buffer` holds a copy the device ignores. Patching that
   byte in a cached xmodel, **sigma 31, 32 and 33 execute exactly** (pre-registered, controls
   valid), so the window's upper edge is the producer/compiler contract, not the silicon, and a
-  5-bit mask is excluded. The predicted left shifts at sigma 60–63 did not appear (unexplained)
+  5-bit mask is excluded. The predicted left shifts at sigma 60–63 did not appear
   ([working](docs/BENCHMARKS.md#the-aie2-shifter-reads-a-6-bit-code-so-theorem-1s-5-bit-shifter-is-not-the-bound-2026-10-12-desktop-2)).
-  Still open: the lower edge (sigma < 14, untested), large shifts on a fixture wide
-  enough to separate them, and what a forward test that actually
+  **Explained the same day (runs 3–4):** the device does not shift by sigma. The shift_cut
+  byte `& 63` is itself the `vsrs` code. That model was fitted on run 3, then held on all 19
+  held-out arms that test it, and the sigma-wrap rival failed 8 arms. So shifts up to 23
+  (sigma 37) execute exactly, shift_cut −1 does too, −2..−4 wrap rather than saturate, and
+  −5 and below cannot be expressed. Byte `0x7B` carries shift_bias in only 4 bits, and its
+  bit 7 zeroed the bias on 2 arms (fitted, untested).
+  Still open: what `0x7B` bit 7 is, any shape other than one 1x1 Conv, and what a forward test that actually
   reaches the edges would look like, given the EP refuses out-of-contract scales — and note
   the constraint is now sharper, since any file the producer emits is confined to
   `[14, 30]` by construction, so reaching an edge means defeating `adjust_shift_cut` first,
