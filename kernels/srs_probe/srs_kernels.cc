@@ -12,6 +12,8 @@
 //             2 = v16acc64 -> v16int32 (lsrs)      lanes: in[32..47] as int32, upshifted by in[2]
 //             3 = v32int8 -> v32acc32 (ups by shift) -> int32, the DPU's bias path
 //                                                lanes: low bytes of in[32..63] as int8
+//             4 = mode 3 with the int8 lanes packed in memory at in[32..39], so the load and the
+//                 upshift fuse into vlda.ups.s32.s8 (the overlay's form)
 //   [1] shift (any int; passed unmodified to the intrinsic)
 //   [2] upshift for mode 2 (0..32), applied with ups so acc64 lanes span 64 bits
 // Output (int32 x 64): [0] mode echo, [1] shift echo, [2] rounding read back,

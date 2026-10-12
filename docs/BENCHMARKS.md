@@ -7668,13 +7668,19 @@ not located** (2026-10-12, Desktop 2, [log](../results/aie/ups_fused_probe_deskt
   between. The output `vsrs` in the same loop takes `[p3 + 0x21]`.
 - **The struct base fits.** Across three fixtures, +0x20 tracks the shift_bias byte (`0x01`, `0x11`, `0x01`)
   and +0x21 the shift_cut (8, 8, 16). So `[p3]` = `REG_0` + 0x5B fits the two bytes that vary.
-- **Conclusion.** That loop would shift the bias by `b & 63`, where the DPU shifts by `(b >> 2) & 15`, so
-  the fixture Conv does not run it with this byte. PDI 2 has 13 bias upshift sites. Their scalars come
+- **Conclusion.** The upshifted `cm4` seeds the accumulator chains that the loop's `vsrs` drain
+  (`vmac cm7, cm4` → `cm6` → `vsrs … cm6`). So that loop would shift the bias by `b & 63`, where the DPU
+  shifts by `(b >> 2) & 15`, and the fixture Conv does not run it with this byte. PDI 2 has 13 bias upshift sites. Their scalars come
   from this byte, a stack slot, a constant 0 or a streamed byte, and static reading does not say which
   one executes. Where the field is extracted, and why `0x81` is spared, stays **unexplained**.
 - **Candidates not ruled out:** another handler, a loader that rewrites the parameter memory, or another
   struct base on the executed path. Separating them needs a dynamic witness, such as the core's program
   counter or event trace during a fixture run.
+- **The evidence pulls two ways.** Runs 3–4 found the shift_cut byte acts exactly as a raw 6-bit `vsrs`
+  code, which is what this loop does with +0x21. The bias byte does not act as this loop would treat
+  +0x20. Either a twin handler shares the `vsrs` pattern, or a loader rewrites +0x20 but not +0x21 before
+  the core reads them. The struct check read the xmodel, not device memory, so it does not exclude the
+  second.
 
 ---
 

@@ -20,6 +20,9 @@ One Worker on Tile(0, 2) runs kernels/srs_probe/srs_kernels.cc once per (mode, s
   mode 3  v32int8 -> v32acc32 (ups)          the DPU's bias path: 32 fixed int8 lanes upshifted by the
                                              runtime scalar; reports every effective k that fits
                                              (results/aie/ups_shift_probe_desktop2_20261012T202624Z.log)
+  mode 4  v32int8 -> v32acc32 (vlda.ups)     mode 3's lanes loaded from memory, so load and upshift fuse
+                                             into vlda.ups.s32.s8, the overlay's form
+                                             (results/aie/ups_fused_probe_desktop2_20261012T203701Z.log)
 Rounding is forced to floor and saturation to saturate, and both are read back.
 Every shift in --shifts is passed unmodified through `mov s0, rX`.
 
