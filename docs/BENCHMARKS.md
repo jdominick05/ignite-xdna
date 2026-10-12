@@ -7427,9 +7427,45 @@ built this way is **unexplained**. It sits off the DPU's int8 path, whose accumu
   of a 40-byte instruction packet. In the conv path, a `u16` field packs two 4-bit shifts, and
   another shift adds a signed 6-bit value from a separate byte.
 
-Which packet field carries Theorem 1's sigma, and with what offset, is **not yet traced**. Until
-it is, the [14, 30] window cannot be attributed to the packet format. The images and their
-disassembly are AMD binaries and are not committed.
+~~Which packet field carries Theorem 1's sigma, and with what offset, is **not yet traced**.~~
+*(Traced the same day, below.)* The images and their disassembly are AMD binaries and are not committed.
+
+**Where sigma lives: not in mc_code, but in the weight tensor's `param_buffer`** (2026-10-12,
+Desktop 2, [log](../results/aie/dpu_sigma_field_fixtures_desktop2_20261012T180818Z.log)).
+- **The fixtures.** [`tools/dpu_mc_fixtures.py`](../tools/dpu_mc_fixtures.py) compiles single-Conv
+  XINT8 fixtures from `tools/xint8_arithmetic_probe.py`. They differ only in shift_cut: 0, 1, 2,
+  4, 8, 15 and 16, that is sigma 14–30. Each is built `--fresh` through the VitisAI EP, and
+  every one places its Conv on the NPU.
+- **What doesn't change.** The `mc_code` instruction stream is **byte-identical across all
+  seven** (one sha256). So are two of the three `param_buffer` attributes in the xmodel.
+- **What does.** The third, a 63–64 B `param_buffer` on the weight tensor, changes in one
+  varint field:
+
+      value = shift_cut << 8 | shift_bias << 2 | 1
+
+  `01` at sigma 14, `81 20` (0x1001) at sigma 30. The rule was fitted on shift_cut 0 and 16.
+  Predictions for shift_cut 1, 2, 4, 8 and 15 were written before those were compiled, and the
+  log embeds them: **5 of 5 match exactly**.
+- **The shift_bias term is exploratory.** It is fitted on three points at shift_cut 8: bias 0,
+  1 and 4 give `81 10`, `85 10` and `91 10`. Negative shift_bias is untested.
+- **The fixtures are numerically clean.** Every NPU output is exact under half-up output
+  rounding. The probe's default reference rounds half to even, so it differs by 1 LSB on ties
+  at shift_cut 1–8. Six rounding models with half-up output survive all nine fixtures, fitted
+  and held out alike.
+
+What this changes:
+- **The sigma window is not an mc_code property.** A patch to reach sigma 31 or 32 is a
+  `param_buffer` patch, not an `mc_code` patch.
+- **The field has room for sigma 31 and 32.** Shift_cut sits in bits 8 and up of a varint, so
+  shift_cut 17 or 18 can be written. The EP refuses that model before it compiles, so no xmodel
+  with such a value exists yet.
+- **What would settle the window.** Patch the field in a cached in-contract xmodel and load it
+  without `--fresh`. That needs the xmodel's integrity check (`files_md5sum` covers the source
+  ONNX, not the xmodel) to accept it. It is the remaining step to attribute the [14, 30] window
+  to the producer's contract rather than the DPU, and it has not been run.
+- **Alternatives ruled out.** mc_code carrying sigma: its hash is identical across all nine
+  fixtures. Another `param_buffer`: buffers 0 and 2 are identical across all nine.
+- **Not identified.** How the overlay's core programs read this buffer at run time.
 
 ---
 

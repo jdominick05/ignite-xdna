@@ -1883,7 +1883,10 @@ sections above.
   acc32 lanes. This is MEASURED on one core, with the rule fitted and then tested out of sample
   ([working](docs/BENCHMARKS.md#the-aie2-shifter-reads-a-6-bit-code-so-theorem-1s-5-bit-shifter-is-not-the-bound-2026-10-12-desktop-2)). So the [14, 30] window comes from the producer, the compiler or the
   DPU overlay's packet format. The overlay's requant reads its shifts from 4-bit and signed
-  6-bit packet fields, but which field carries sigma is not yet traced.
+  6-bit packet fields. **Traced 2026-10-12:** sigma is not in mc_code, which is byte-identical
+  across sigma 14–30. It is a varint, `shift_cut << 8 | shift_bias << 2 | 1`, in the weight
+  tensor's `param_buffer` (5 of 5 pre-registered held-out values). The remaining test is to
+  patch that field to sigma 31/32 in a cached xmodel ([working](docs/BENCHMARKS.md#the-aie2-shifter-reads-a-6-bit-code-so-theorem-1s-5-bit-shifter-is-not-the-bound-2026-10-12-desktop-2)).
   Still open: which of those binds, and what a forward test that actually
   reaches the edges would look like, given the EP refuses out-of-contract scales — and note
   the constraint is now sharper, since any file the producer emits is confined to
