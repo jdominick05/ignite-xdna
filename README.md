@@ -245,6 +245,6 @@ The whole repository, engine under `src/ignite_xdna/` included, is licensed unde
 General Public License v3.0 or later](LICENSE) (AGPL-3.0-or-later): use, study, modify and share it
 freely, including commercially, but any version you distribute or run as a network service must also
 be open-sourced under the AGPL. That follows from a dependency: `pipelines/yolov8n/1_export.py`
-imports `ultralytics`, whose YOLOv8 code is AGPL-3.0. Model artifacts keep their own licenses and are
-not redistributed (`models/` and `data/` are git-ignored); the few files copied from mlir-aie keep
-AMD's notice and licence, and say so in their header.
+imports `ultralytics`, whose YOLOv8 code is AGPL-3.0. The canonical models and containers are on [Hugging Face](https://huggingface.co/jdominick05/ignite-xdna)
+under their upstream licences (`python tools/fetch_hf_artifacts.py`); `data/` is never redistributed. The few
+files copied from mlir-aie keep AMD's notice and licence, and say so in their header.

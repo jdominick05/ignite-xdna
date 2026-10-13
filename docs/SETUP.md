@@ -169,6 +169,11 @@ WSL run would silently be CPU-only. Every script takes `--help`. Logs land in
 `results/`, in UTF-8; PowerShell's `*>` writes UTF-16, which makes later greps
 silently match nothing.
 
+To skip the export and quantize steps for the engine, `python tools/fetch_hf_artifacts.py`
+downloads the published canonical models and device-verified `.ignite` containers from
+[huggingface.co/jdominick05/ignite-xdna](https://huggingface.co/jdominick05/ignite-xdna) into
+`models/` and `build/`. It uses only the standard library, so any env runs it.
+
 ## Manual setup
 
 Not on the scripted path, or want to drive a step by hand? Both pipelines follow the

@@ -99,6 +99,13 @@ Every new `npu/`, `quant/` or `tui/` module joins the import list here.
 `quant/`, and nothing in `npu/` may import `tui/` -- the launcher depends on the
 library, never the other way round.
 
+The engine's `tests/` look for models and containers at fixed paths under the git-ignored
+`models/` and `build/`, and skip without them. `python tools/fetch_hf_artifacts.py` fetches the
+published set from Hugging Face into exactly those paths, pinned to a Hub commit and checked by
+sha256. It leaves alone any local file whose hash differs (`--force` replaces it), and with
+`--list` it only reports. To publish a new set: `python tools/hf_publish.py stage` (licence and
+privacy gates), then `hf upload`, then record the Hub commit as the manifest's `revision`.
+
 `python -m tui --selftest` is the closest thing to a regression test here: it
 resolves every model path, cache key and demo command line in the catalogue and
 opens no hardware context, so it is safe to run while the NPU is busy.
@@ -139,9 +146,11 @@ original work (`tools/license_header_audit.py` reports any that slip in). It was
 directly, and Ultralytics' own YOLOv8 code is AGPL-3.0; matching that license here
 avoids leaving an unresolved copyleft ambiguity between this repository and a
 dependency it imports at runtime. By contributing, you agree your contributions are
-licensed under the same terms. Note the license covers this repository's code only. The
-ResNet50, YOLOv8, ImageNet, and COCO artifacts it uses carry their own upstream licenses
-and are never redistributed by this repository.
+licensed under the same terms. Note the license covers this repository's code only. Model
+weights carry their own upstream licenses. The canonical models and containers published at
+[huggingface.co/jdominick05/ignite-xdna](https://huggingface.co/jdominick05/ignite-xdna) go up
+only for families whose upstream licence was read and recorded in `tools/hf_manifest.json`,
+each with a `LICENSE.md` beside it. ImageNet, COCO and Cityscapes data are never redistributed.
 
 ## Reporting bugs and ideas
 

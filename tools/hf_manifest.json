@@ -1,0 +1,338 @@
+{
+  "model_repo": "jdominick05/ignite-xdna",
+  "results_repo": "jdominick05/ignite-xdna-results",
+  "revision": "2a08bdd197ed4eed04e6d0a6c55be7e502c2e660",
+  "built_at": "394fc3d40dd3bc18f4c430b536fe3a67ed213c42",
+  "model_card": "tools/hf_model_card.md",
+  "results_card": "tools/hf_results_card.md",
+  "families": {
+    "yolov8n": {
+      "upstream": "Ultralytics YOLOv8n (yolov8n.pt)",
+      "license": "AGPL-3.0",
+      "license_source": "https://github.com/ultralytics/ultralytics/blob/main/LICENSE",
+      "verified": true,
+      "note": "Ultralytics also sells an Enterprise licence for commercial use of its models without the AGPL's obligations; this repository does not grant one."
+    },
+    "yolov8s": {
+      "upstream": "Ultralytics YOLOv8s (yolov8s.pt)",
+      "license": "AGPL-3.0",
+      "license_source": "https://github.com/ultralytics/ultralytics/blob/main/LICENSE",
+      "verified": true,
+      "note": "Ultralytics also sells an Enterprise licence for commercial use of its models without the AGPL's obligations; this repository does not grant one."
+    },
+    "yolov8n-pose": {
+      "upstream": "Ultralytics YOLOv8n-pose (yolov8n-pose.pt)",
+      "license": "AGPL-3.0",
+      "license_source": "https://github.com/ultralytics/ultralytics/blob/main/LICENSE",
+      "verified": true,
+      "note": "Ultralytics also sells an Enterprise licence for commercial use of its models without the AGPL's obligations; this repository does not grant one."
+    },
+    "yolov8n-cls": {
+      "upstream": "Ultralytics YOLOv8n-cls (yolov8n-cls.pt)",
+      "license": "AGPL-3.0",
+      "license_source": "https://github.com/ultralytics/ultralytics/blob/main/LICENSE",
+      "verified": true,
+      "note": "Test fixture only. Ultralytics also sells an Enterprise licence; this repository does not grant one."
+    },
+    "yolo11n": {
+      "upstream": "Ultralytics YOLO11n (yolo11n.pt)",
+      "license": "AGPL-3.0",
+      "license_source": "https://github.com/ultralytics/ultralytics/blob/main/LICENSE",
+      "verified": true,
+      "note": "Ultralytics also sells an Enterprise licence for commercial use of its models without the AGPL's obligations; this repository does not grant one."
+    },
+    "yolo-world": {
+      "upstream": "Ultralytics YOLOv8s-Worldv2 (yolov8s-worldv2.pt) and OpenAI CLIP ViT-B/32 (text encoder, via ultralytics' clip)",
+      "license": "AGPL-3.0 (detector) and MIT (CLIP text encoder)",
+      "license_source": "https://github.com/ultralytics/ultralytics/blob/main/LICENSE ; https://github.com/openai/CLIP/blob/main/LICENSE",
+      "verified": true,
+      "note": "yolow_text_encoder.onnx is CLIP ViT-B/32's text encoder (MIT, Copyright (c) 2021 OpenAI). yolow_text.npz holds CLIP's BPE merges and four guide projections plus logit scales taken from the YOLO-World weights."
+    },
+    "sesr_m7": {
+      "upstream": "SESR-M7 (Bhardwaj et al., arXiv 2103.09404) as published by AMD at huggingface.co/amd/sesr-m7-256x256-tiles-amdnpu",
+      "license": "Apache-2.0",
+      "license_source": "https://huggingface.co/amd/sesr-m7-256x256-tiles-amdnpu",
+      "verified": true,
+      "note": ""
+    },
+    "resnet50": {
+      "upstream": "timm resnet50.a1_in1k",
+      "license": "Apache-2.0",
+      "license_source": "https://huggingface.co/timm/resnet50.a1_in1k",
+      "verified": true,
+      "note": "Trained on ImageNet-1k. No ImageNet data is redistributed here."
+    },
+    "modnet": {
+      "upstream": "MODNet photographic portrait matting (ZHKKKe/MODNet, modnet_photographic_portrait_matting.ckpt)",
+      "license": "Apache-2.0",
+      "license_source": "https://github.com/ZHKKKe/MODNet#license",
+      "verified": true,
+      "note": "MODNet's README: \"The code, models, and demos in this repository (excluding GIF files under the folder doc/gif) are released under the Apache License 2.0 license.\""
+    },
+    "engine": {
+      "upstream": "ignite-xdna's own AIE kernels, compiled with mlir-aie",
+      "license": "AGPL-3.0-or-later",
+      "license_source": "https://github.com/jdominick05/ignite-xdna/blob/main/LICENSE",
+      "verified": true,
+      "note": "Test fixture only: kernels the offline and hardware tests load directly."
+    }
+  },
+  "held": {
+    "bisenetv2": "Weights (CoinCheung/BiSeNet, MIT code) are trained on Cityscapes, whose terms are non-commercial and restrict redistributing derivatives.",
+    "yolo26n": "The only yolo26n_cut_xint8.onnx on the build machine was written after build/yolo26n.ignite was compiled, so the two cannot be shown to pair."
+  },
+  "entries": [
+    {
+      "family": "yolov8n",
+      "src": "models/yolov8n_cut_xint8.onnx",
+      "dest": "yolov8n/yolov8n_cut_xint8.onnx",
+      "local": "models/yolov8n_cut_xint8.onnx",
+      "evidence": "source model of yolov8n/yolov8n_full.ignite",
+      "sha256": "f02e86ba1bf61ff3fdc159e29b15259567e279df06f68c6d9adeb966fe56c885",
+      "bytes": 3486300
+    },
+    {
+      "family": "yolov8n",
+      "src": "scratch/hf_verify/head/yolov8n_full.ignite",
+      "dest": "yolov8n/yolov8n_full.ignite",
+      "local": "build/yolov8n_full.ignite",
+      "evidence": "compiled at built_at with --silu-sigmoid; device-verified EXACT, results/hf/verify_published_containers_desktop2_20261013.log",
+      "sha256": "f03df8a7d0979acd3b7c786083e0a1f25e3594cf0525b314b63c1830d394d6ba",
+      "bytes": 8876224
+    },
+    {
+      "family": "yolov8s",
+      "src": "models/yolov8s_cut_xint8.onnx",
+      "dest": "yolov8s/yolov8s_cut_xint8.onnx",
+      "local": "models/yolov8s_cut_xint8.onnx",
+      "evidence": "source model of yolov8s/yolov8s.ignite",
+      "sha256": "065f62523000b806e47e227f0b9d71a689f10d8c5368a7c5b6d0ff3b9f733fcc",
+      "bytes": 11491426
+    },
+    {
+      "family": "yolov8s",
+      "src": "scratch/hf_verify/head/yolov8s.ignite",
+      "dest": "yolov8s/yolov8s.ignite",
+      "local": "build/yolov8s.ignite",
+      "evidence": "compiled at built_at with --silu-sigmoid; device-verified EXACT, results/hf/verify_published_containers_desktop2_20261013.log",
+      "sha256": "6b2e8c303e1c640ac9c6e2e91a6fe7467893bebfcf2a51467aa08133d6df58a6",
+      "bytes": 30734080
+    },
+    {
+      "family": "yolov8n-pose",
+      "src": "models/yolov8n-pose_cut_xint8.onnx",
+      "dest": "yolov8n-pose/yolov8n-pose_cut_xint8.onnx",
+      "local": "models/yolov8n-pose_cut_xint8.onnx",
+      "evidence": "source model of yolov8n-pose/yolov8n_pose.ignite",
+      "sha256": "b69b2d87fe3518fdb767e351194cb9632b0b9d222e7c62f10b0751ab18d4557b",
+      "bytes": 3662512
+    },
+    {
+      "family": "yolov8n-pose",
+      "src": "scratch/hf_verify/head/yolov8n_pose.ignite",
+      "dest": "yolov8n-pose/yolov8n_pose.ignite",
+      "local": "build/yolov8n_pose.ignite",
+      "evidence": "compiled at built_at with --silu-sigmoid; device-verified EXACT, results/hf/verify_published_containers_desktop2_20261013.log",
+      "sha256": "367540e6ebab58388a51b06daa12c637456b451d5a36320a0888c2441700ff26",
+      "bytes": 8917568
+    },
+    {
+      "family": "yolo11n",
+      "src": "models/yolo11n_cut_xint8.onnx",
+      "dest": "yolo11n/yolo11n_cut_xint8.onnx",
+      "local": "models/yolo11n_cut_xint8.onnx",
+      "evidence": "source model of yolo11n/yolo11n.ignite",
+      "sha256": "6dd5a29014ba8549f84cca009fae23c5b7ef0dd7bfb3c1e8ef52f26fe04a1ae1",
+      "bytes": 3106889
+    },
+    {
+      "family": "yolo11n",
+      "src": "scratch/hf_verify/head/yolo11n.ignite",
+      "dest": "yolo11n/yolo11n.ignite",
+      "local": "build/yolo11n.ignite",
+      "evidence": "compiled at built_at with the attention-core --host-region and --silu-sigmoid; device-verified EXACT, results/hf/verify_published_containers_desktop2_20261013.log",
+      "sha256": "7176c0b371ae4bd37af57a1c44ff68a64af8b43b54e3411cbd8970412644eaf5",
+      "bytes": 11468032
+    },
+    {
+      "family": "yolo-world",
+      "src": "models/yolov8s-worldv2_cut_xint8_gptqcv2.onnx",
+      "dest": "yolo-world/yolov8s-worldv2_cut_xint8_gptqcv2.onnx",
+      "local": "models/yolov8s-worldv2_cut_xint8_gptqcv2.onnx",
+      "evidence": "source model of yolo-world/yolow.ignite",
+      "sha256": "5ec0850885be34fdc5e8354b13e2eed3752e85b73b7707ea6cec83b31e2e31b6",
+      "bytes": 13020223
+    },
+    {
+      "family": "yolo-world",
+      "src": "scratch/hf_verify/head/yolow.ignite",
+      "dest": "yolo-world/yolow.ignite",
+      "local": "build/yolow.ignite",
+      "evidence": "compiled at built_at with the four /model.{12,15,18,21}/attn/ host regions; device-verified EXACT, results/hf/verify_published_containers_desktop2_20261013.log",
+      "sha256": "4d84b4e90878e42e64fa68e08f545781f1554908be5b0dc74949e071efd122bf",
+      "bytes": 33688256
+    },
+    {
+      "family": "yolo-world",
+      "src": "models/yolow_text_encoder.onnx",
+      "dest": "yolo-world/yolow_text_encoder.onnx",
+      "local": "models/yolow_text_encoder.onnx",
+      "evidence": "written by pipelines/yolow/6_text_encoder.py",
+      "sha256": "d2481c13bd50f7333e21eb3d5eef70804bae671b27377bbbb8f0e093bd3ff709",
+      "bytes": 254388933
+    },
+    {
+      "family": "yolo-world",
+      "src": "models/yolow_text.npz",
+      "dest": "yolo-world/yolow_text.npz",
+      "local": "models/yolow_text.npz",
+      "evidence": "written by pipelines/yolow/6_text_encoder.py",
+      "sha256": "9738bb5f998f1828bc3a504a087a07d7e8011b73fd306e98d1894d571767a782",
+      "bytes": 7640092
+    },
+    {
+      "family": "sesr_m7",
+      "src": "models/sesr_m7_xint8.onnx",
+      "dest": "sesr_m7/sesr_m7_xint8.onnx",
+      "local": "models/sesr_m7_xint8.onnx",
+      "evidence": "source model of sesr_m7/sesr_m7.ignite (its manifest records this file's sha256)",
+      "sha256": "bfafba18e93940f84b53f28fc1d4770caeec2e91dc00e8c95f11c2d2cf5b7d00",
+      "bytes": 38567
+    },
+    {
+      "family": "sesr_m7",
+      "src": "models/sesr_m7_fp32.onnx",
+      "dest": "sesr_m7/sesr_m7_fp32.onnx",
+      "local": "models/sesr_m7_fp32.onnx",
+      "evidence": "float reference the W8A16 oracle tests read",
+      "sha256": "816b87272c9b54a828dd964fe95f711a7480efc3649a7439124bebaff6a3e6b7",
+      "bytes": 91513
+    },
+    {
+      "family": "sesr_m7",
+      "src": "scratch/hf_verify/head/sesr_m7.ignite",
+      "dest": "sesr_m7/sesr_m7.ignite",
+      "local": "build/sesr_m7.ignite",
+      "evidence": "compiled at built_at; device-verified EXACT, results/hf/verify_published_containers_desktop2_20261013.log",
+      "sha256": "2e1349b31e5efebbb602d8148c19f2896515428f4079d4e200d0b411cd41df0a",
+      "bytes": 535808
+    },
+    {
+      "family": "resnet50",
+      "src": "models/resnet50_xint8_c64.onnx",
+      "dest": "resnet50/resnet50_xint8_c64.onnx",
+      "local": "models/resnet50_xint8_c64.onnx",
+      "evidence": "the whole-network XINT8 model of the VitisAI EP study (not an engine container)",
+      "sha256": "bd817280673fe25e67380a6adde1db82275d1aa284924a0e6b67ea97e4315722",
+      "bytes": 25670065
+    },
+    {
+      "family": "resnet50",
+      "src": "build/test_resnet50_head.onnx",
+      "dest": "resnet50/test_resnet50_head.onnx",
+      "local": "build/test_resnet50_head.onnx",
+      "evidence": "source model of resnet50/resnet50_head.ignite: the classifier head only, input [1,2048,20,20]",
+      "sha256": "6cb8fcae6b575ebefcbf551213875324811705125a2039b2b99f98e17337464b",
+      "bytes": 2052316
+    },
+    {
+      "family": "resnet50",
+      "src": "scratch/hf_verify/head/resnet50_head.ignite",
+      "dest": "resnet50/resnet50_head.ignite",
+      "local": "build/resnet50_head.ignite",
+      "evidence": "compiled at built_at with --task classify; device-verified EXACT (1/1 layer), results/hf/verify_published_containers_desktop2_20261013.log",
+      "sha256": "ab7794ebf604b47d2d63f88f0afe568f06dcd33c3d89b8fc94d9e91ec0fea34a",
+      "bytes": 9918336
+    },
+    {
+      "family": "modnet",
+      "src": "models/modnet/modnet_cut_xint8_calibfix.onnx",
+      "dest": "modnet/modnet_cut_xint8_calibfix.onnx",
+      "local": "models/modnet/modnet_cut_xint8_calibfix.onnx",
+      "evidence": "source model of modnet/modnet_cut_dense.ignite",
+      "sha256": "02e0b993a6aa52244eea912445ccaf827fe785b11d8c6d2a3683e7a25a053ab4",
+      "bytes": 6680009
+    },
+    {
+      "family": "modnet",
+      "src": "build/modnet_cut_dense.ignite",
+      "dest": "modnet/modnet_cut_dense.ignite",
+      "local": "build/modnet_cut_dense.ignite",
+      "evidence": "the 2026-09-19 container results/dense/compile_modnet_20260919.log compiled (model_sha256 of the calibfix ONNX, same created_utc); NOT device-verified for this upload (the verifier does not lower dense host regions)",
+      "sha256": "86247c02931f729c6fedd52382d3f52e67a529bd110287f3437192d2d9b74287",
+      "bytes": 10467264
+    },
+    {
+      "family": "yolov8n-cls",
+      "src": "models/yolov8n-cls_640_cut_xint8.onnx",
+      "dest": "fixtures/yolov8n-cls/yolov8n-cls_640_cut_xint8.onnx",
+      "local": "models/yolov8n-cls_640_cut_xint8.onnx",
+      "evidence": "read by tests/test_graph_engine_offline.py",
+      "sha256": "1def500616adc6aeedece55c7d804aa3da8edf13379928193e70b2efa93dfc89",
+      "bytes": 2881561
+    },
+    {
+      "family": "yolo11n",
+      "src": "models/yolo11n_no_c2psa_cut_xint8.onnx",
+      "dest": "fixtures/yolo11n/yolo11n_no_c2psa_cut_xint8.onnx",
+      "local": "models/yolo11n_no_c2psa_cut_xint8.onnx",
+      "evidence": "read by tests/test_engine_host_layer.py",
+      "sha256": "f973c6cd0132f92ae7a0bddf5e551799f84316ee262fa12b37aaca504ec62eb0",
+      "bytes": 2809909
+    },
+    {
+      "family": "yolo-world",
+      "src": "models/yolov8s-worldv2_cut.onnx",
+      "dest": "fixtures/yolo-world/yolov8s-worldv2_cut.onnx",
+      "local": "models/yolov8s-worldv2_cut.onnx",
+      "evidence": "read by tests/test_yolow_pipeline_offline.py",
+      "sha256": "7a9c0c0076f52506f843d171c3102d631f85a3828f0fa974cdbe5b46b4bca777",
+      "bytes": 50053947
+    },
+    {
+      "family": "yolo-world",
+      "src": "models/yolov8s-worldv2_cut_xint8.onnx",
+      "dest": "fixtures/yolo-world/yolov8s-worldv2_cut_xint8.onnx",
+      "local": "models/yolov8s-worldv2_cut_xint8.onnx",
+      "evidence": "read by tests/test_engine_host_layer.py",
+      "sha256": "34840abe429a3baa6e0bd77f776f61599800e28c62d078277b212207a16e11ea",
+      "bytes": 13016475
+    },
+    {
+      "family": "yolo-world",
+      "src": "models/yolov8s-worldv2_cut_xint8_fp32cv2.onnx",
+      "dest": "fixtures/yolo-world/yolov8s-worldv2_cut_xint8_fp32cv2.onnx",
+      "local": "models/yolov8s-worldv2_cut_xint8_fp32cv2.onnx",
+      "evidence": "read by tests/test_engine_host_layer.py",
+      "sha256": "1d42a4aa829f395df503bb6e1ebaa5a2c43b4b4a7919ddbaca7bc6dbed83eb88",
+      "bytes": 15466132
+    },
+    {
+      "family": "yolo-world",
+      "src": "models/yolov8s-worldv2_cut_split_xint8.onnx",
+      "dest": "fixtures/yolo-world/yolov8s-worldv2_cut_split_xint8.onnx",
+      "local": "models/yolov8s-worldv2_cut_split_xint8.onnx",
+      "evidence": "read by tests/test_engine_host_layer.py",
+      "sha256": "8903fe452b96f7ad32945183a2a4a9870f62be1cabd9cb7a50af6851792c13c0",
+      "bytes": 13029491
+    },
+    {
+      "family": "engine",
+      "src": "build/im2col_4d_16core.xclbin",
+      "dest": "fixtures/engine/im2col_4d_16core.xclbin",
+      "local": "build/im2col_4d_16core.xclbin",
+      "evidence": "read by tests/test_inference_session.py and tests/test_multi_layer_scheduler.py",
+      "sha256": "6f67c335a2686e1123d3a5cfd01652ff644c909f76d986388e7184dd161d3337",
+      "bytes": 33576
+    },
+    {
+      "family": "engine",
+      "src": "build/layer_conv0_exec.bin",
+      "dest": "fixtures/engine/layer_conv0_exec.bin",
+      "local": "build/layer_conv0_exec.bin",
+      "evidence": "read by tests/test_inference_session.py and tests/test_profiler.py",
+      "sha256": "e3f6cd28ade9825316f07ff7990807dc15d3dd20ff629998fad15a57d47baff3",
+      "bytes": 10496
+    }
+  ]
+}

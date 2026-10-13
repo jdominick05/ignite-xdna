@@ -805,3 +805,41 @@ reference to every digit at 0.1609 person IoU, AMD scores 0.1700, and FP32 score
 costs the model 68 % of its IoU and the gap between stacks is noise beside it. BiSeNetV2 cannot be
 scored this way at all, because its FP32 predicts 0.00-0.30 % person on images that are 84-96 %
 person: a Cityscapes model on COCO photographs is out of domain.
+
+## The containers published on Hugging Face, each device-verified (2026-10-13, Desktop 2)
+
+The canonical models and containers are published at
+[huggingface.co/jdominick05/ignite-xdna](https://huggingface.co/jdominick05/ignite-xdna), listed with
+their sha256 in `tools/hf_manifest.json`. None of the containers in `build/` could be shown to be built
+from the ONNX next to it, so they were not published. Only SESR M7's manifest records its source model's
+sha256. At HEAD the weight packets of a fresh YOLOv8n compile differ from the 2026-09-17 container's, even
+though two compiles at HEAD are byte-identical in `insts.bin` and `wpackets.bin`. Between the two, the
+compiler took 40 commits, among them band packing and the Silu guard change.
+`tools/verify_engine_container.py` also refuses the old container, because HEAD plans a different
+workspace (22,039,296 B against 14,867,072 B).
+
+So each published container was compiled at `394fc3d` (with `src/` clean), using the flags in
+Ignition's USAGE.md and this page, and each was run once on the device against its ONNX. All seven pass:
+
+| Container | Readable layers exact | Reused slots correct |
+|---|---|---|
+| `yolov8n_full` (`--silu-sigmoid`) | 28 / 28 | 38 / 38 |
+| `yolov8s` (`--silu-sigmoid`) | 28 / 28 | 38 / 38 |
+| `yolov8n_pose` (`--silu-sigmoid`) | 37 / 37 | 38 / 38 |
+| `yolo11n` (attention core on host, `--silu-sigmoid`) | 31 / 31 | 60 / 60 |
+| `yolow` (four text-attention host regions) | 29 / 29 | 41 / 41 |
+| `sesr_m7` | 5 / 5 | 4 / 4 |
+| `resnet50_head` (`--task classify`) | 1 / 1 | - |
+
+These checks prove correctness, not timing. Each container was dispatched only once, so they set no
+latency figure. The accuracy figures on this page were measured on earlier compiles of the same ONNX, and
+none was re-run on the published files.
+
+Three things were left out:
+- **MODNet-Cut**: published as the 2026-09-19 container. `results/dense/compile_modnet_20260919.log` names it
+  by its ONNX sha256. The verifier cannot lower dense host regions, so it was not re-run.
+- **YOLO26n**: held. The only `yolo26n_cut_xint8.onnx` on this machine was written at 2026-09-21 03:03Z,
+  after `build/yolo26n.ignite` (2026-09-20 21:45Z).
+- **BiSeNetV2**: held, because Cityscapes' terms restrict redistributing derivatives.
+
+Backing log: `results/hf/verify_published_containers_desktop2_20261013.log`.
