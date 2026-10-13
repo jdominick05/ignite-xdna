@@ -1283,11 +1283,23 @@ def emulate_layer(sched: LayerSchedule, store: PacketStore, ws_arr: np.ndarray, 
                 drains.pop(0).write(ws_arr, np.concatenate(pending[:n_obj]))
                 del pending[:n_obj]
 
-        def consume(stream):
+        # Stream sharing ("P" items, and "A" items carrying positions): the cores see quads in POSITION order -
+        # the MemTile chains read them so - whatever order the two streams issued them in, and a quad that
+        # arrives before its weight object waits for it in the MemTile rather than failing.
+        staged: Dict[int, List[np.ndarray]] = {}
+        shared = any(it[0] == "P" or (it[0] == "A" and len(it) > 2) for it in items)
+        # The layer's first position, not the first one staged: a stream-1 quad is issued ahead of the
+        # stream-0 quads that precede it in consumption order.
+        next_pos: List[Optional[int]] = [min((p for it in items if it[0] in ("A", "P") for p in it[2]),
+                                             default=None) if shared else None]
+
+        def consume(stream, wait_for_weights=False):
             """Feed activation packets through the cores, pairing every four of them with a weight object."""
             nonlocal cur_w, remaining
             packets.extend(stream)
             while len(packets) >= ROWS:
+                if remaining == 0 and not w_queue and wait_for_weights:
+                    return
                 obj = packets[:ROWS]
                 del packets[:ROWS]
                 if remaining == 0:
@@ -1304,18 +1316,41 @@ def emulate_layer(sched: LayerSchedule, store: PacketStore, ws_arr: np.ndarray, 
                     raise AssertionError("cores disagree on emission")
                 flush_drains()
 
+        def release_staged():
+            """Hand staged quads to the cores in position order, as far as the next missing position."""
+            if next_pos[0] is None and staged:
+                next_pos[0] = min(staged)
+            while next_pos[0] in staged:
+                consume(staged.pop(next_pos[0]), wait_for_weights=True)
+                next_pos[0] += 1
+            consume([], wait_for_weights=True)
+
         for it in items:
             kind = it[0]
+            if shared and kind in ("A", "P"):
+                data = it[1].read(ws_arr)
+                if data.size % (ROWS * em.A_BYTES):
+                    raise AssertionError(f"{sched.name}: a stream-shared fill of {data.size} B is not whole quads")
+                quad = ROWS * em.A_BYTES
+                for j, p in enumerate(it[2]):
+                    q = data[j * quad:(j + 1) * quad]
+                    staged[p] = [q[k:k + em.A_BYTES] for k in range(0, quad, em.A_BYTES)]
+                release_staged()
+                continue
             if kind == "w":
                 if blob is None:
                     w_queue.extend(store.packets_at(it[1], it[2]))
                 else:
                     w_queue.extend(blob[it[1] + k:it[1] + k + em.W_BYTES] for k in range(0, it[2], em.W_BYTES))
+                if shared:
+                    release_staged()
             elif kind == "W":
                 if blob is None:
                     blob = store.blob()
                 data = it[1].read(blob)
                 w_queue.extend(data[k:k + em.W_BYTES] for k in range(0, data.size, em.W_BYTES))
+                if shared:
+                    release_staged()
             elif kind in ("a", "A"):
                 stream = []
                 for pat in (it[1] if kind == "a" else [it[1]]):
@@ -1339,6 +1374,9 @@ def emulate_layer(sched: LayerSchedule, store: PacketStore, ws_arr: np.ndarray, 
             elif kind == "o":
                 drains.append(it[1])
                 flush_drains()
+        if staged:
+            raise AssertionError(f"{sched.name}: {len(staged)} stream-shared quads never reached the cores "
+                                 f"(next position {next_pos[0]}, staged from {min(staged)})")
         if packets:
             raise AssertionError(f"{sched.name}: {len(packets)} activation packets do not form whole objects")
         if pending or drains:

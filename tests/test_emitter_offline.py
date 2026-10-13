@@ -49,10 +49,12 @@ def item_model(programs):
                 continue
             it = prog[i]
             kind = it[0]
-            if kind in ("a", "A"):
+            if kind in ("a", "A", "P"):
+                # A stream-shared quad ("P") is an activation item issued on the weight channel.
                 fills[c] += 1
                 for _ in (it[1] if kind == "a" else [it[1]]):
-                    out.append({"col": c, "channel": "a", "hold": 0, "fills": fills[c]})
+                    out.append({"col": c, "channel": "w" if kind == "P" else "a", "hold": 0,
+                                "fills": fills[c], "act": True})
             elif kind in ("w", "W", "o"):
                 if kind == "w":
                     hold = it[3] if len(it) > 3 else 0
@@ -60,7 +62,7 @@ def item_model(programs):
                     hold = it[2] if len(it) > 2 else 0
                 out.append({"col": c, "channel": "o" if kind == "o" else "w", "hold": hold, "fills": fills[c]})
     for c in range(len(programs)):
-        acts = sorted({e["fills"] for e in out if e["col"] == c and e["channel"] == "a"})
+        acts = sorted({e["fills"] for e in out if e["col"] == c and e.get("act")})
         for channel in ("w", "o"):
             held = [e for e in out if e["col"] == c and e["channel"] == channel and e["hold"]]
             for e in held:
@@ -105,8 +107,17 @@ class RecordingEmitter(SequenceEmitter):
         for e in self.expected:
             self.final_fills[e["col"]] = max(self.final_fills[e["col"]], e["fills"])
 
-    def transfer(self, alloc, pattern, token):
+    def transfer(self, alloc, pattern, token, packet=None):
         channel, col = alloc[0], int(alloc[1:])
+        ids = getattr(self, "_packet_ids", None)
+        if ids is None:
+            self.t.assertIsNone(packet, "a packet header on a circuit-routed build")
+        elif channel == "w":
+            # Stream sharing: every weight-channel task is packet-routed, quads to buffer B, weights to the cores.
+            want = ids[col][1] if self.expected[self.cursor].get("act") else ids[col][0]
+            self.t.assertEqual(packet, (0, want), f"column {col}: wrong packet id on the weight stream")
+        else:
+            self.t.assertIsNone(packet, f"column {col}: a packet header on channel {channel}")
         self.t.assertLess(self.cursor, len(self.expected), "more transfers than the items call for")
         exp = self.expected[self.cursor]
         self.t.assertEqual((exp["col"], exp["channel"]), (col, channel), "transfer out of the items' issue order")
@@ -159,20 +170,27 @@ class RecordingEmitter(SequenceEmitter):
 class EmitterOffline(unittest.TestCase):
     _cache = {}
 
-    def _scheds(self, name):
+    def _scheds(self, name, shared=False):
         model = MODELS[name]
         if not model.exists():
             self.skipTest(f"{name} model not present")
-        if name not in self._cache:
+        key = (name, shared)
+        if key not in self._cache:
             ir = graph_ir.lower_yolov8n(model)
             ws = es.plan_workspace(ir)
-            self._cache[name] = es.schedule_graph(ir, ws)[0]
-        return self._cache[name]
+            if shared:
+                from ignite_xdna.compiler.stream_share import schedule_stream_shared
+                self._cache[key] = schedule_stream_shared(ir, ws)[1]
+            else:
+                self._cache[key] = es.schedule_graph(ir, ws)[0]
+        return self._cache[key]
 
-    def _run(self, name, bd_budget=14, queue_depth=4, retire_batch=None):
+    def _run(self, name, bd_budget=14, queue_depth=4, retire_batch=None, shared=False):
         em = RecordingEmitter(self, bd_budget, queue_depth)
+        if shared:
+            em._packet_ids = {c: (1 + 8 * c, 2 + 8 * c) for c in range(4)}
         tasks = 0
-        for s in self._scheds(name):
+        for s in self._scheds(name, shared):
             em.start_layer(s.programs)
             before = dict(em.issued_per_col)
             em.run_column_programs(s.programs, bd_budget=bd_budget, queue_depth=queue_depth,
@@ -210,6 +228,15 @@ class EmitterOffline(unittest.TestCase):
 
     def test_04_yolov8s_tighter_budget(self):
         self._run("yolov8s", bd_budget=10)
+
+    def test_06_stream_shared(self):
+        # compiler/stream_share.py moves one quad in four onto the weight channel as "P" items, issued ahead of
+        # the weight runs that need them and counted against the holds of the items they serve. Every rule
+        # above must still hold, at both cadences the frame rule can pick.
+        for name in ("yolov8n", "yolov8s"):
+            for rb in (2, 3):
+                with self.subTest(model=name, retire_batch=rb):
+                    self._run(name, retire_batch=rb, shared=True)
 
     def test_05_a_hold_binds(self):
         # On the shipped YOLOv8n/s schedules no hold ever stops a retirement (counted 2026-10-13: zero refusals),

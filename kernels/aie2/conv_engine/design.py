@@ -13,10 +13,11 @@ from pathlib import Path
 import numpy as np
 
 from aie.dialects import arith, memref
-from aie.dialects._aie_enum_gen import AIETileType, DMAChannelDir
-from aie.ir import IndexType
-from aie.iron import (Acquire, Bd, Buffer, DmaChannel, Flow, Lock, ObjectFifo, Program, Release,
-                      Runtime, TileDma, Worker)
+from aie.dialects._aie_enum_gen import AIETileType, DMAChannelDir, WireBundle
+from aie.ir import IndexType, IntegerType
+from aie.iron import (Acquire, Bd, BdIteration, Buffer, DmaChannel, Flow, Lock, ObjectFifo, PacketFlow, Program,
+                      Release, Runtime, TileDma, Worker)
+from aie.iron.dataflow.flow import PacketDest
 from aie.iron.controlflow import range_
 from aie.iron.device import Tile
 from aie.iron.kernel import ExternalFunction
@@ -433,8 +434,168 @@ def _activation_ring(col, name, slots):
     return handles, (flows, locks, tile_dmas)
 
 
+# Block 5 stream sharing (compiler/stream_share.py): one activation quad in four rides each column's weight stream.
+# The schedule side (which quad goes where, and the order that keeps both streams deadlock-free) is
+# compiler/stream_share.py; these are the pieces the transport pins, imported there and by the emitter.
+SHARE_PERIOD = 4                # quads per period of the MemTile chains
+SHARE_B_POSITIONS = (3,)        # positions of each period carried by stream 1
+SHARE_A_SLOTS = 6               # buffer A: two periods of its three positions
+SHARE_B_SLOTS = 8               # buffer B: every stream-1 quad one weight run waits behind
+SHARE_W_DEPTH = 2               # core-side weight objects: a weight task completes this far ahead of consumption
+SHARE_A_IN_CHANNEL = 0          # MemTile S2MM from shim stream 0 (circuit)
+SHARE_B_IN_CHANNEL = 5          # MemTile S2MM from shim stream 1 (packet); odd, clear of the join's S2MM 1-4
+# Descriptor ids, pinned for the reason the ring's are: the lowering assigns the output join's twelve even and
+# four odd ids around them. Even channels reach ids 0-23 and odd ones 24-47 (``isBdChannelAccessible``): A-in and
+# MM2S 0 and 2 take 0-11, B-in and MM2S 1 and 3 take 24-35, which is the ring's footprint exactly.
+SHARE_BD_A_IN = 0               # 0-3, one per core slice
+SHARE_BD_B_IN = 24              # 24-27
+SHARE_BD_SERVE_EVEN = 4         # MM2S 0: 4-7, MM2S 2: 8-11
+SHARE_BD_SERVE_ODD = 28         # MM2S 1: 28-31, MM2S 3: 32-35
+SHARE_LOCK_BASE = 40            # 16 MemTile locks: A space, A full, B space, B full, one per core; clear of the
+                                # join (0-7), the split's old 8-15, the ring's 0-5/16-21 and the buffer's 32-33
+SHARE_PKT_W, SHARE_PKT_B = 1, 2  # packet ids per column: + 8 * col (weights fan out to the cores, quads to B)
+
+
+def share_packet_ids(col):
+    """(weight packet id, buffer-B packet id) of one column's packet-routed weight stream."""
+    return SHARE_PKT_W + 8 * col, SHARE_PKT_B + 8 * col
+
+
+def _share_serve_bd(channel, k):
+    base = SHARE_BD_SERVE_ODD if channel % 2 else SHARE_BD_SERVE_EVEN
+    return base + (channel // 2) * SHARE_PERIOD + k
+
+
+def _core_fn_shared(w_bufs, w_full, w_space, a_bufs, a_full, a_space, parity, o_out, engine, psum, scratch_out,
+                    row):
+    """The core program with both inputs on raw double buffers, the buffer chosen by a parity word.
+
+    The core-side DMA alternates two descriptors (one per buffer) on a counting lock pair, exactly as an
+    ObjectFifo of depth 2 lowers; the ObjectFifo's own core side knows which buffer is next by unrolling the
+    loop by its depth, which a ``range_`` of runtime trip count cannot do. So the parity lives in a two-word
+    buffer instead - weights in word 0, activations in word 1 - flipped after every object consumed. The DMA
+    and the core advance one object at a time forever, so they stay in step across layers and frames with no
+    reset. ``engine.cc`` and the packets are unchanged.
+    """
+    idx_ty = IndexType.get()
+    i32 = IntegerType.get_signless(32)
+    par = getattr(parity, "op", parity)
+    c0, c1 = arith.constant(idx_ty, 0), arith.constant(idx_ty, 1)
+    zero, one = arith.constant(i32, 0), arith.constant(i32, 1)
+
+    def pick(word, bufs):
+        p = memref.load(par, [word])
+        b = arith.select(arith.cmpi(arith.CmpIPredicate.eq, p, zero),
+                         getattr(bufs[0], "op", bufs[0]), getattr(bufs[1], "op", bufs[1]))
+        memref.store(arith.xori(p, one), par, [word])
+        return b
+
+    w_full.acquire(1)
+    w = pick(c0, w_bufs)
+    n_out = arith.index_cast(idx_ty, memref.load(w, [arith.constant(idx_ty, H_COUNT_OUT)]))
+    n_acc = arith.index_cast(idx_ty, memref.load(w, [arith.constant(idx_ty, H_COUNT_ACC)]))
+    for _ in range_(n_out):
+        a_full.acquire(1)
+        a = pick(c1, a_bufs)
+        o = o_out.acquire(1)
+        engine(w, a, o, psum, row)
+        a_space.release(1)
+        o_out.release(1)
+    for _ in range_(n_acc):
+        a_full.acquire(1)
+        a = pick(c1, a_bufs)
+        engine(w, a, scratch_out, psum, row)
+        a_space.release(1)
+    w_space.release(1)
+
+
+def _stream_shared(col, names):
+    """One column's activation and weight inputs for stream sharing.
+
+    Shim stream 0 carries three quads of every four, circuit-routed into MemTile buffer A. Shim stream 1 is
+    packet-routed: weight objects (packet W) fan out to the four cores' S2MM 1, and the fourth quad of every
+    period (packet B) lands in buffer B. Each input channel writes core k's 6,400-byte slice of a quad with
+    descriptor k, so every core has its own lock pair per buffer; one ``BdIteration`` per descriptor walks the
+    buffer's slots, so depth costs no descriptors. Core k's MM2S reads its slice of positions 0, 1, 2 from A and
+    of position 3 from B - the cores see quads in consumption order, whichever stream brought them.
+
+    This is ``tools/stream_share_probe.py``'s ``build_qf`` (q = 1), moved to channels the output join leaves
+    free: B arrives on S2MM 5, not 1.
+
+    Returns ``(handles, parts)``: per core ``(w_bufs, w_full, w_space, a_bufs, a_full, a_space, parity)``, and
+    the flows, locks and DMA programs to register on the Runtime.
+    """
+    shim = Tile(col, 0, tile_type=AIETileType.ShimNOCTile)
+    mem = Tile(col, 1, tile_type=AIETileType.MemTile)
+    cores = [Tile(col, r + 2, tile_type=AIETileType.CoreTile) for r in range(ROWS)]
+    quad = ROWS * A_BYTES
+    u8 = np.dtype[np.uint8]
+    n_b = len(SHARE_B_POSITIONS)
+    n_a = SHARE_PERIOD - n_b
+    assert SHARE_A_SLOTS % n_a == 0 and SHARE_B_SLOTS % n_b == 0
+    bufs = {"A": (Buffer(np.ndarray[(SHARE_A_SLOTS * quad,), u8], name=f"{names['a']}_A", tile=mem), SHARE_A_SLOTS),
+            "B": (Buffer(np.ndarray[(SHARE_B_SLOTS * quad,), u8], name=f"{names['a']}_B", tile=mem), SHARE_B_SLOTS)}
+    lid = iter(range(SHARE_LOCK_BASE, SHARE_LOCK_BASE + 4 * ROWS))
+    space = {b: [Lock(mem, lock_id=next(lid), init=d, name=f"{names['a']}_{b}_space{k}") for k in range(ROWS)]
+             for b, (_, d) in bufs.items()}
+    full = {b: [Lock(mem, lock_id=next(lid), init=0, name=f"{names['a']}_{b}_full{k}") for k in range(ROWS)]
+            for b in bufs}
+    locks = [lk for grid in (space, full) for row in grid.values() for lk in row]
+    chans = []
+    for b, ch, bd0 in (("A", SHARE_A_IN_CHANNEL, SHARE_BD_A_IN), ("B", SHARE_B_IN_CHANNEL, SHARE_BD_B_IN)):
+        buf, d = bufs[b]
+        chans.append(DmaChannel(DMAChannelDir.S2MM, ch, [
+            Bd(buf, offset=k * A_BYTES, length=A_BYTES, bd_id=bd0 + k, acquires=[Acquire(space[b][k])],
+               releases=[Release(full[b][k])], iteration=BdIteration(size=d, stride=quad), next=(k + 1) % ROWS)
+            for k in range(ROWS)]))
+    flows = []
+    for k in range(ROWS):
+        chain, ia, ib = [], 0, 0
+        for p in range(SHARE_PERIOD):
+            if p in SHARE_B_POSITIONS:
+                buf, d = bufs["B"]
+                chain.append(Bd(buf, offset=ib * quad + k * A_BYTES, length=A_BYTES, bd_id=_share_serve_bd(k, p),
+                                acquires=[Acquire(full["B"][k])], releases=[Release(space["B"][k])],
+                                iteration=BdIteration(size=d // n_b, stride=n_b * quad), next=(p + 1) % SHARE_PERIOD))
+                ib += 1
+            else:
+                buf, d = bufs["A"]
+                chain.append(Bd(buf, offset=ia * quad + k * A_BYTES, length=A_BYTES, bd_id=_share_serve_bd(k, p),
+                                acquires=[Acquire(full["A"][k])], releases=[Release(space["A"][k])],
+                                iteration=BdIteration(size=d // n_a, stride=n_a * quad), next=(p + 1) % SHARE_PERIOD))
+                ia += 1
+        chans.append(DmaChannel(DMAChannelDir.MM2S, k, chain))
+        flows.append(Flow(mem, cores[k], src_channel=k, dst_channel=0))
+    tile_dmas = [TileDma(mem, chans)]
+    pkt_w, pkt_b = share_packet_ids(col)
+    flows.append(Flow(shim, mem, src_channel=0, dst_channel=SHARE_A_IN_CHANNEL, shim_symbol=names["a"]))
+    flows.append(PacketFlow(pkt_id=pkt_w, src=shim, dst=cores[0], src_port=WireBundle.DMA, src_channel=1,
+                            dst_port=WireBundle.DMA, dst_channel=1, shim_symbol=names["w"],
+                            extra_dsts=[PacketDest(core, WireBundle.DMA, 1) for core in cores[1:]]))
+    flows.append(PacketFlow(pkt_id=pkt_b, src=shim, dst=mem, src_port=WireBundle.DMA, src_channel=1,
+                            dst_port=WireBundle.DMA, dst_channel=SHARE_B_IN_CHANNEL))
+    handles = []
+    for r, core in enumerate(cores):
+        n = f"{names['a']}_{r}"
+        a_bufs = [Buffer(a_ty, name=f"{n}_a{s}", tile=core) for s in range(2)]
+        w_bufs = [Buffer(w_ty, name=f"{n}_w{s}", tile=core) for s in range(2)]
+        parity = Buffer(np.ndarray[(2,), np.dtype[np.int32]], name=f"{n}_parity", tile=core,
+                        initial_value=np.zeros(2, dtype=np.int32))
+        a_space, a_full = Lock(core, init=2, name=f"{n}_a_space"), Lock(core, init=0, name=f"{n}_a_full")
+        w_space, w_full = Lock(core, init=SHARE_W_DEPTH, name=f"{n}_w_space"), Lock(core, init=0, name=f"{n}_w_full")
+        locks += [a_space, a_full, w_space, w_full]
+        achain = [Bd(a_bufs[s], acquires=[Acquire(a_space)], releases=[Release(a_full)], next=1 - s)
+                  for s in range(2)]
+        wchain = [Bd(w_bufs[s], acquires=[Acquire(w_space)], releases=[Release(w_full)], next=1 - s)
+                  for s in range(SHARE_W_DEPTH)]
+        tile_dmas.append(TileDma(core, [DmaChannel(DMAChannelDir.S2MM, 0, achain),
+                                        DmaChannel(DMAChannelDir.S2MM, 1, wchain)]))
+        handles.append((w_bufs, w_full, w_space, a_bufs, a_full, a_space, parity))
+    return handles, (flows, locks, tile_dmas)
+
+
 def build_program(device, sequence_body, w_depth=2, ws_bytes=WS_BYTES, wp_bytes=WP_BYTES, a_ring: int = 0,
-                  w_buf: bool = False, ops=None, a_depth: int = 2, o_depth: int = 2):
+                  w_buf: bool = False, ops=None, a_depth: int = 2, o_depth: int = 2, stream_share: bool = False):
     """Return an IRON Program for the engine with ``sequence_body(ws, wp)``.
 
     The body emits raw shim DMA tasks against the FIFO allocation symbols
@@ -459,13 +620,19 @@ def build_program(device, sequence_body, w_depth=2, ws_bytes=WS_BYTES, wp_bytes=
         # ring's costing uninterpretable. The ring is off by default and slower, so this stays unbuilt
         # until there is a reason to pay for it.
         raise ValueError("the activation ring and the resident weight buffer cannot be built together yet")
+    if stream_share and (a_ring or w_buf or (w_depth, a_depth) != (2, 2)):
+        raise ValueError("stream sharing replaces both input fifos; it takes no ring, weight buffer or core depths")
     workers = []
     w_prods, a_prods, o_conses = [], [], []
     rings = []                       # (flows, locks, tile dmas) of each column's ring, registered below
     wbufs = []                       # the same, for each column's resident weight buffer
+    shares = []                      # the same, for each column's stream-shared inputs
     for c in range(COLS):
         names = fifo_names(c)
-        if w_buf:
+        if stream_share:
+            share_handles, share_parts = _stream_shared(c, names)
+            shares.append(share_parts)
+        elif w_buf:
             w_split, wbuf_parts = _weight_buffer(c, names["w"])
             wbufs.append(wbuf_parts)
         else:
@@ -473,7 +640,7 @@ def build_program(device, sequence_body, w_depth=2, ws_bytes=WS_BYTES, wp_bytes=
         if a_ring:
             a_split, ring_parts = _activation_ring(c, names["a"], a_ring)
             rings.append(ring_parts)
-        else:
+        elif not stream_share:
             a_col = ObjectFifo(a_col_ty, name=names["a"], depth=2)
             a_split = a_col.cons().split(
                 [r * A_BYTES for r in range(ROWS)],
@@ -493,7 +660,9 @@ def build_program(device, sequence_body, w_depth=2, ws_bytes=WS_BYTES, wp_bytes=
         for r in range(ROWS):
             psum = Buffer(psum_ty, name=f"psum_{c}_{r}")
             scratch = Buffer(o_ty, name=f"scratch_{c}_{r}")
-            if a_ring:
+            if stream_share:
+                fn, args = _core_fn_shared, [*share_handles[r], o_join[r].prod(), engine, psum, scratch, r]
+            elif a_ring:
                 buf, a_cons, a_prod = a_split[r]
                 fn, args = _core_fn_ring, [w_of.cons(), buf, a_cons, a_prod, o_join[r].prod(),
                                            engine, psum, scratch, r]
@@ -513,11 +682,11 @@ def build_program(device, sequence_body, w_depth=2, ws_bytes=WS_BYTES, wp_bytes=
                     stack_size=0x800,
                 )
             )
-        if not w_buf:
+        if not (w_buf or stream_share):
             # With the buffer the shim's weight stream lands in the MemTile, not in a fifo whose producer
             # is a shim endpoint, so there is no handle to register here - the flow carries the symbol.
             w_prods.append(w_of.prod(tile=Tile(c, 0)))
-        if not a_ring:
+        if not (a_ring or stream_share):
             a_prods.append(a_col.prod(tile=Tile(c, 0)))
         o_conses.append(o_col.cons(tile=Tile(c, 0)))
 
@@ -528,7 +697,7 @@ def build_program(device, sequence_body, w_depth=2, ws_bytes=WS_BYTES, wp_bytes=
     ws_t = np.ndarray[(int(ws_bytes),), np.dtype[np.uint8]]
     wp_t = np.ndarray[(int(wp_bytes),), np.dtype[np.uint8]]
     rt = Runtime(sequence, [ws_t, wp_t, w_prods, a_prods, o_conses])
-    for flows, locks, tile_dmas in rings + wbufs:
+    for flows, locks, tile_dmas in rings + wbufs + shares:
         for flow in flows:
             rt.add_flow(flow)
         for lock in locks:
