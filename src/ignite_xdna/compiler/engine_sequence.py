@@ -228,6 +228,20 @@ def program_task_count(items: Sequence[tuple]) -> int:
 
 OPS_PER_TASK_ISSUE = 4  # BLOCKWRITE (BD), DDR_PATCH, MASKWRITE, WRITE (queue push); a TCT per await
 
+# The compiler's retire cadence for a whole frame (2026-10-13, docs/DECISIONS.md, the cadence lock). Measured
+# rb3 against rb2, same containers otherwise: SESR M7 (1,007 shim tasks per frame) +0.609 ms, worse in 4/4
+# rounds; YOLOv8n (2,896) -0.027 and YOLOv8n-pose (2,931) -0.007, both inside noise; YOLOv8s (6,795) -0.196 and
+# -0.233 ms in two sittings, lower in every round. The threshold is a STAND-IN that separates the measured models,
+# not a mechanism: why the U-curve's minimum moves is unexplained, and a model between 1,007 and 2,896 tasks, or
+# far above 6,795, has not been timed at either cadence.
+WIDE_FRAME_TASKS = 2000
+
+
+def frame_retire_batch(frame_tasks: int) -> int:
+    """The retire cadence ``compile_graph_container`` uses when none is forced: 3 for a frame of at least
+    ``WIDE_FRAME_TASKS`` shim tasks, else 2. ``run_column_programs`` itself still defaults to 2."""
+    return 3 if frame_tasks >= WIDE_FRAME_TASKS else 2
+
 # ---------------------------------------------------------------------------
 # Arming the MemTile activation ring
 #

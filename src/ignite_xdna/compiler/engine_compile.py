@@ -495,10 +495,11 @@ def compile_graph_container(onnx_path, output_path, build_dir: Optional[Path] = 
 
     ``retire_batch`` is how many shim tasks the emitter lets pile up on one DMA channel before it retires a
     group (``engine_sequence.run_column_programs``). Bigger retires fewer completion tokens; it also moves
-    the await onto a later, slower-to-complete task. None takes the fixed default of 2: the best measured cadence
-    on SESR M7, while YOLOv8n and YOLOv8s measure best at 3 (docs/DECISIONS.md, the cadence lock). The
-    thinnest channel's task count is computed and recorded alongside, but it does not choose the value. The
-    effective value is recorded in the manifest, so a container declares the schedule it was built with.
+    the await onto a later, slower-to-complete task. None takes ``engine_sequence.frame_retire_batch`` of the
+    frame's shim task count: 3 from 2,000 tasks up (YOLOv8s measured 0.20-0.23 ms faster at 3), else 2 (SESR M7
+    measured 0.61 ms slower at 3) - a stand-in threshold between measured models, not a mechanism
+    (docs/DECISIONS.md, the cadence lock). The effective value and the frame's task count are recorded in the
+    manifest, so a container declares the schedule it was built with.
 
     ``core_depths`` = (weight, activation, output) core-side fifo depths, int8 engine only. None is (2, 2, 2),
     the shipped double-buffered design. Anything else is the Block 5 single-buffering experiment, recorded in
@@ -531,7 +532,7 @@ def compile_graph_container(onnx_path, output_path, build_dir: Optional[Path] = 
     import aie.iron as iron
     from aie.iron.device import NPU1
     from aie.utils.compile.utils import compile_mlir_module
-    from ignite_xdna.compiler.engine_sequence import SequenceEmitter
+    from ignite_xdna.compiler.engine_sequence import SequenceEmitter, frame_retire_batch, program_task_count
 
     eng = profile.load_design()
 
@@ -564,13 +565,15 @@ def compile_graph_container(onnx_path, output_path, build_dir: Optional[Path] = 
     ws_extent, wp_extent = eng.ddr_extents(ws.nbytes, store.nbytes)
 
     cadence: List[Dict[str, int]] = []
+    frame_tasks = sum(program_task_count(p) for s in scheds for p in s.programs)
+    frame_rb = retire_batch if retire_batch is not None else frame_retire_batch(frame_tasks)
 
     def body(ws_arg, wp_arg):
         emitter = SequenceEmitter(ws_arg, wp_arg, ws_extent, wp_extent,
                                   {c: eng.fifo_names(c) for c in range(eng.COLS)},
                                   a_ring=activation_ring)
         for s in scheds:
-            emitter.run_column_programs(s.programs, bd_budget=14, retire_batch=retire_batch)
+            emitter.run_column_programs(s.programs, bd_budget=14, retire_batch=frame_rb)
         cadence.append({"retire_batch": emitter.last_retire_batch,
                         "thinnest_channel_tasks": emitter.thinnest_channel_tasks})
 
@@ -638,13 +641,14 @@ def compile_graph_container(onnx_path, output_path, build_dir: Optional[Path] = 
     if core_depths is not None:   # absent means the shipped (2, 2, 2)
         manifest["graph_engine"]["core_depths"] = list(core_depths)
     if cadence:
-        # What the emitter retired on, per shim DMA channel: derived from the schedule's thinnest channel
-        # unless --retire-batch forced it. Dispatch time is a property of this number (SESR M7: 4.31 ms at 2,
-        # 5.25 ms at 4), so a container states the cadence it was built with. The minimum over the layers is
-        # the binding one -- a layer whose channels are all deeper is not the stall.
+        # What the emitter retired on, per shim DMA channel: frame_retire_batch(frame_tasks) unless --retire-batch
+        # forced it. Dispatch time is a property of this number (SESR M7: 4.17 ms at 2, 4.77 at 3; YOLOv8s:
+        # 16.15 at 2, 15.95 at 3), so a container states the cadence it was built with and the frame task
+        # count that chose it. The thinnest channel is recorded alongside; it does not choose the value.
         ge = manifest["graph_engine"]
         ge["retire_batch"] = min(c["retire_batch"] for c in cadence)
         ge["retire_batch_thinnest_channel"] = min(c["thinnest_channel_tasks"] for c in cadence)
+        ge["frame_shim_tasks"] = frame_tasks
         if retire_batch is not None:
             ge["retire_batch_forced"] = retire_batch
     segments = plan_segments(ir, scheds, split_layers=split_layers)

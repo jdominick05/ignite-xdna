@@ -197,6 +197,17 @@ class EmitterOffline(unittest.TestCase):
     def test_03_yolov8s_cadence_3(self):
         self._run("yolov8s", retire_batch=3)
 
+    def test_03b_frame_cadence_rule(self):
+        # The compiler's frame-level cadence (engine_sequence.frame_retire_batch): both YOLO schedules clear the
+        # 2,000-task threshold and so compile at 3, and the guard's rules must hold for YOLOv8n there too.
+        from ignite_xdna.compiler.engine_sequence import WIDE_FRAME_TASKS, frame_retire_batch
+        self.assertEqual(frame_retire_batch(WIDE_FRAME_TASKS - 1), 2)
+        self.assertEqual(frame_retire_batch(WIDE_FRAME_TASKS), 3)
+        for name in ("yolov8n", "yolov8s"):
+            n = sum(program_task_count(p) for s in self._scheds(name) for p in s.programs)
+            self.assertEqual(frame_retire_batch(n), 3, f"{name}: {n} tasks per frame")
+        self._run("yolov8n", retire_batch=3)
+
     def test_04_yolov8s_tighter_budget(self):
         self._run("yolov8s", bd_budget=10)
 

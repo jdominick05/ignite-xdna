@@ -59,11 +59,14 @@ SHAPES = {
 }
 
 
-def name_of(k, q, shape="contig"):
-    return f"k{k}_q{q}" if shape == "contig" else f"{shape}_k{k}_q{q}"
+def name_of(k, q, shape="contig", cols=COLS):
+    base = f"k{k}_q{q}" if shape == "contig" else f"{shape}_k{k}_q{q}"
+    return base if cols == COLS else f"{base}_c{cols}"
 
 
-def build_one(k: int, q: int, shape: str = "contig") -> Path:
+def build_one(k: int, q: int, shape: str = "contig", cols: int = COLS) -> Path:
+    """One variant on columns 0..cols-1; ``cols`` < 4 asks whether the small-task cost is per channel (it then
+    reappears in full on one column) or one issue path shared by the array (it then hides under transport)."""
     import aie.iron as iron
     from aie.dialects.aiex import dma_await_task, dma_free_task, dma_start_task, shim_dma_single_bd_task
     from aie.iron import ObjectFifo, Program, Runtime, Worker
@@ -73,7 +76,7 @@ def build_one(k: int, q: int, shape: str = "contig") -> Path:
     assert q % k == 0 and k <= 64
     assert shape != "e4" or k == 1, "the engine's 4-D quad leaves no dimension for a second quad"
     foot, sizes, strides = SHAPES[shape](k)
-    out_dir = BUILD / name_of(k, q, shape)
+    out_dir = BUILD / name_of(k, q, shape, cols)
     work = out_dir / "design.prj"
     if work.exists():
         shutil.rmtree(work)
@@ -87,7 +90,7 @@ def build_one(k: int, q: int, shape: str = "contig") -> Path:
         i.release(1)
 
     workers, shim_ends, names = [], [], []
-    for c in range(COLS):
+    for c in range(cols):
         name = f"a{c}"
         f = ObjectFifo(quad_ty, name=name, depth=2)
         parts = f.cons().split([j * A_BYTES for j in range(4)], tile=Tile(c, 1), depths=[2] * 4,
@@ -97,13 +100,13 @@ def build_one(k: int, q: int, shape: str = "contig") -> Path:
         shim_ends.append(f.prod(tile=Tile(c, 0)))
         names.append(name)
     col_bytes = q * foot             # DDR one column's quads span; each moves QUAD of it
-    total = COLS * col_bytes
-    moved = COLS * q * QUAD
+    total = cols * col_bytes
+    moved = cols * q * QUAD
     ntasks = q // k
 
     def sequence(inp, outp, *handles):
         inp = getattr(inp, "op", inp)
-        queues = {c: [] for c in range(COLS)}   # [task, token]
+        queues = {c: [] for c in range(cols)}   # [task, token]
 
         def retire(c):
             qu = queues[c]
@@ -115,7 +118,7 @@ def build_one(k: int, q: int, shape: str = "contig") -> Path:
 
         # Columns interleaved task by task, as the engine's emitter interleaves items.
         for n in range(ntasks):
-            for c in range(COLS):
+            for c in range(cols):
                 if len(queues[c]) >= QUEUE_DEPTH:
                     retire(c)
                 token = (n + 1) % RETIRE_BATCH == 0 or n == ntasks - 1
@@ -123,7 +126,7 @@ def build_one(k: int, q: int, shape: str = "contig") -> Path:
                                             sizes=list(sizes), strides=list(strides), issue_token=token)
                 dma_start_task(t)
                 queues[c].append([t, token])
-        for c in range(COLS):
+        for c in range(cols):
             while queues[c]:
                 retire(c)
 
@@ -135,16 +138,16 @@ def build_one(k: int, q: int, shape: str = "contig") -> Path:
     compile_mlir_module(module, insts_path=out_dir / "insts.bin", xclbin_path=out_dir / "probe.xclbin",
                         work_dir=work, device=iron.get_current_device())
     insts = (out_dir / "insts.bin").stat().st_size
-    (out_dir / "meta.json").write_text(json.dumps({"k": k, "q": q, "shape": shape, "sizes": list(sizes),
-                                                   "strides": list(strides), "tasks": COLS * ntasks,
+    (out_dir / "meta.json").write_text(json.dumps({"k": k, "q": q, "shape": shape, "cols": cols, "sizes": list(sizes),
+                                                   "strides": list(strides), "tasks": cols * ntasks,
                                                    "total_bytes": total, "moved_bytes": moved,
                                                    "insts_bytes": insts}), encoding="utf-8")
     return out_dir
 
 
-def time_one(k: int, q: int, iters: int, warmup: int, timeout_ms: int, shape: str = "contig") -> dict:
+def time_one(k: int, q: int, iters: int, warmup: int, timeout_ms: int, shape: str = "contig", cols: int = COLS) -> dict:
     from ignite_xdna.runtime.driver import XrtSiliconHarness
-    d = BUILD / name_of(k, q, shape)
+    d = BUILD / name_of(k, q, shape, cols)
     meta = json.loads((d / "meta.json").read_text(encoding="utf-8"))
     total = meta["total_bytes"]
     moved = meta.get("moved_bytes", total)   # builds before the shape axis moved their whole buffer
@@ -171,7 +174,7 @@ def time_one(k: int, q: int, iters: int, warmup: int, timeout_ms: int, shape: st
             if i >= warmup:
                 times.append(dt)
         del run, bo_in, bo_out, bo_instr
-    return {"k": k, "q": q, "shape": shape, "tasks": meta["tasks"], "mb": moved / 1e6,
+    return {"k": k, "q": q, "shape": shape, "cols": cols, "tasks": meta["tasks"], "mb": moved / 1e6,
             "insts_bytes": meta["insts_bytes"],
             "mean_ms": statistics.fmean(times), "median_ms": statistics.median(times), "min_ms": min(times),
             "times_ms": times}
@@ -190,7 +193,7 @@ def fit(rows):
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
-    points_help = ("comma list of shape:k:q points (shapes: " + ", ".join(SHAPES) + "); replaces the --ks x --qs "
+    points_help = ("comma list of shape:k:q[:cols] points (cols defaults to 4) (shapes: " + ", ".join(SHAPES) + "); replaces the --ks x --qs "
                    "grid of contiguous tasks, and skips the plane fit")
     b = sub.add_parser("build")
     b.add_argument("--ks", default=",".join(map(str, KS)))
@@ -200,6 +203,7 @@ def main():
     t.add_argument("k", type=int)
     t.add_argument("q", type=int)
     t.add_argument("--shape", default="contig", choices=sorted(SHAPES))
+    t.add_argument("--cols", type=int, default=COLS)
     t.add_argument("--iters", type=int, default=30)
     t.add_argument("--warmup", type=int, default=3)
     t.add_argument("--timeout-ms", type=int, default=5000)
@@ -213,21 +217,22 @@ def main():
     args = ap.parse_args()
 
     if args.cmd == "time":
-        print(json.dumps(time_one(args.k, args.q, args.iters, args.warmup, args.timeout_ms, args.shape)))
+        print(json.dumps(time_one(args.k, args.q, args.iters, args.warmup, args.timeout_ms, args.shape, args.cols)))
         return
     if args.points:
         combos = []
         for p in args.points.split(","):
-            shape, k, q = p.split(":")
+            shape, k, q, *rest = p.split(":")
             if shape not in SHAPES:
                 raise SystemExit(f"unknown shape {shape!r}")
-            combos.append((shape, int(k), int(q)))
+            combos.append((shape, int(k), int(q), int(rest[0]) if rest else COLS))
     else:
-        combos = [("contig", k, q) for q in map(int, args.qs.split(",")) for k in map(int, args.ks.split(","))]
+        combos = [("contig", k, q, COLS) for q in map(int, args.qs.split(","))
+                  for k in map(int, args.ks.split(","))]
     if args.cmd == "build":
-        for shape, k, q in combos:
+        for shape, k, q, cols in combos:
             t0 = time.perf_counter()
-            d = build_one(k, q, shape)
+            d = build_one(k, q, shape, cols)
             meta = json.loads((d / "meta.json").read_text(encoding="utf-8"))
             print(f"[build] {d.name}: {meta['tasks']} tasks, insts {meta['insts_bytes']:,} B "
                   f"in {time.perf_counter() - t0:.1f} s", flush=True)
@@ -238,8 +243,8 @@ def main():
         order = combos[rnd % len(combos):] + combos[:rnd % len(combos)]
         if rnd % 2:
             order = order[::-1]
-        for shape, k, q in order:
-            proc = subprocess.run([sys.executable, __file__, "time", str(k), str(q), "--shape", shape,
+        for shape, k, q, cols in order:
+            proc = subprocess.run([sys.executable, __file__, "time", str(k), str(q), "--shape", shape, "--cols", str(cols),
                                    "--iters", str(args.iters)], capture_output=True, text=True, timeout=300)
             if proc.returncode != 0:
                 print(proc.stdout[-2000:], proc.stderr[-2000:], sep="\n")
@@ -247,14 +252,14 @@ def main():
             rec = json.loads(proc.stdout.strip().splitlines()[-1])
             rec["round"] = rnd
             results.append(rec)
-            print(f"[sit] round {rnd} {shape:6s} k{k:<3} q{q:<5} {rec['tasks']:5d} tasks {rec['mb']:6.1f} MB: "
+            print(f"[sit] round {rnd} {shape:6s} k{k:<3} q{q:<5} c{cols} {rec['tasks']:5d} tasks {rec['mb']:6.1f} MB: "
                   f"mean {rec['mean_ms']:.3f} ms, min {rec['min_ms']:.3f}", flush=True)
     if args.points:
         by = {}
         for r in results:
-            by.setdefault((r["shape"], r["k"], r["q"]), []).append(r["mean_ms"])
-        for (shape, k, q), v in by.items():
-            print(f"[point] {shape:6s} k{k:<3} q{q:<5} mean of rounds {statistics.fmean(v):.3f} ms "
+            by.setdefault((r["shape"], r["k"], r["q"], r.get("cols", COLS)), []).append(r["mean_ms"])
+        for (shape, k, q, cols), v in by.items():
+            print(f"[point] {shape:6s} k{k:<3} q{q:<5} c{cols} mean of rounds {statistics.fmean(v):.3f} ms "
                   f"(round spread {(max(v) - min(v)) * 1e3:.0f} us)")
         Path(args.json).write_text(json.dumps({"results": results}, indent=1), encoding="utf-8")
         return

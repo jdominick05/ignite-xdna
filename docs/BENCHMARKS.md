@@ -16562,3 +16562,52 @@ under the second, it reaches every layer. Neither is a finding, and the engine-l
 window (Phase 0.4) has to give before stream-sharing code.
 
 Log: [shape sitting](../results/aie/task_shape_phoenix_desktop2_20261013T1306Z.log).
+
+**The small-task cost is one issue path for the whole array, not a per-channel cost (2026-10-13, Desktop 2).**
+On one column at Q = 1024, 1,024 one-quad tasks read **3.950 ms** against 3.989 ms for 512 two-quad tasks: k1 −
+k2 = −0.039 ms. The two pre-registered predictions (scratch sha256 `5541199b...`) were:
+- per channel: each column pays for its own tasks, so +1.58 ms;
+- shared: 1,024 × 1.42 µs of issue hides under about 3.8 ms of transport, so about 0.
+
+**Verdict SHARED.** The 4-column cost is therefore a serial issue throughput of about 1.42 µs per task (about
+142 instruction bytes each) over all four columns. A frame pays it only where issue outruns transport. That backs
+the `max(transport, issue)` reading of the engine's per-layer NOP times above (1.20 µs per task, 48 of 66 layers
+issue-bound), though it does not prove it. Under that reading:
+- transport savings (stream sharing) reach only the transport-bound layers;
+- issue savings (fewer tasks, fewer instruction bytes per task) reach the rest.
+
+**The retire cadence ships as a frame rule: 3 from 2,000 shim tasks per frame, else 2 (2026-10-13, Desktop 2).**
+One pre-registered sitting (same sha256) ran `tools/bench_dispatch_ab.py`: `engine_dispatch_floor.py` per run,
+300 real + 300 all-NOP dispatches, 4 rounds, order reversed on even rounds. Containers came from main `a51add3`
+source.
+
+| model | shim tasks / frame | real: rb2 → rb3 | rounds rb3 lower | verdict | NOP: rb2 → rb3 |
+|---|---:|---|---:|---|---|
+| SESR M7 | 1,007 | 4.165 → 4.774 (+0.609) | 0/4 | WORSE | 2.654 → 2.981 |
+| YOLOv8n | 2,896 | 7.123 → 7.095 (−0.027) | 3/4 | NULL | 5.335 → 5.174 (4/4 lower) |
+| YOLOv8n-pose | 2,931 | 7.524 → 7.517 (−0.007) | 2/4 | NULL | 5.474 → 5.351 (4/4 lower) |
+| YOLOv8s | 6,795 | 16.151 → 15.954 (**−0.196**) | **4/4** | **WIN** | 12.376 → 11.908 (−0.468) |
+
+All the pre-registered landing conditions held:
+- YOLOv8s wins again, its second WIN after −0.233 ms at 12:42Z;
+- YOLOv8n and pose are not worse;
+- SESR M7 does not win at 3.
+
+On YOLOv8n and pose, rb3 takes 0.12–0.16 ms off the data-movement floor in every round, but the real dispatch
+does not move; the floor saving hides under compute there.
+
+`compile_graph_container` now chooses the cadence with `engine_sequence.frame_retire_batch`. The manifest records
+`frame_shim_tasks`, and `--retire-batch` still overrides. The threshold is a **stand-in** that separates the
+measured models, not a mechanism. Unmeasured models above it now build at 3: YOLOv8m/x, and the host-segment and
+dense containers whose frames reach 2,000 tasks.
+
+Built by the rule with no flag, YOLOv8s, YOLOv8n and SESR M7 reproduce the timed rb3 / rb3 / rb2 containers'
+instruction streams and packets byte for byte. xclbins differ between any two builds, while their kernel source
+and object hashes match. On device, `verify_engine_container.py` passes both YOLO rule containers: 28/28 readable
+layers exact and 38/38 reused slots holding their planned final tenant, with YOLOv8s dispatch at 15.896 ms over 20.
+
+Logs:
+- [one-column sitting](../results/aie/task_cols_phoenix_desktop2_20261013T1318Z.log);
+- [cadence landing](../results/aie/engine_cadence_landing_phoenix_desktop2_20261013T1319Z.log);
+- verify: [YOLOv8s](../results/aie/engine_cadence_rule_verify_yolov8s_desktop2_20261013T1337Z.log),
+  [YOLOv8n](../results/aie/engine_cadence_rule_verify_yolov8n_desktop2_20261013T1337Z.log).

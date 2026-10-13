@@ -2017,6 +2017,14 @@ cached reference heads rather than `bo_out`.
   sitting. The same sitting refutes the instruction-byte model for this class: it predicted −0.59 and −1.11 ms,
   falling monotonically with bytes, and rb4 removed 69,168 B and got slower. The mechanism is unexplained.]*
   ([BENCHMARKS](BENCHMARKS.md#campaign-anchor-yolov8s-trails-amds-best-by-568-ms-on-the-device-and-276-ms-glass-to-glass-retiring-every-3rd-task-wins-023-ms-a-1-quad-task-costs-040-us-more-than-its-bytes-in-a-bigger-task-2026-10-13-desktop-2)).
+  *[Amended again 2026-10-13: the compiler's default is now a frame rule, `engine_sequence.frame_retire_batch`:
+  3 for a frame of at least 2,000 shim tasks, else 2. Its pre-registered landing sitting measured rb3 against rb2
+  on every shipped monolithic model: SESR M7 (1,007 tasks) +0.609 ms and worse in 4/4 rounds; YOLOv8n (2,896)
+  −0.027 and YOLOv8n-pose (2,931) −0.007, both null; YOLOv8s (6,795) −0.196 and lower in 4/4 rounds, its second
+  WIN. The threshold is a stand-in between measured models, not a mechanism, and the U-curve's moving minimum is
+  still unexplained. `run_column_programs` called directly still defaults to 2, and `--retire-batch` still
+  overrides. A container records `frame_shim_tasks` beside its `retire_batch`.]*
+  ([BENCHMARKS](BENCHMARKS.md#campaign-anchor-yolov8s-trails-amds-best-by-568-ms-on-the-device-and-276-ms-glass-to-glass-retiring-every-3rd-task-wins-023-ms-a-1-quad-task-costs-040-us-more-than-its-bytes-in-a-bigger-task-2026-10-13-desktop-2)).
 - **Rejected: three transport-shaped fixes to SESR's floor that the utilisation read made plausible (2026-09-19,
   measured offline on the emitted streams, no device).** The floor is not bandwidth: `tools/shim_channel_audit.py`
   decodes the shipped container's 1,007 tasks and 13,181,568 bytes to 1.25 GB/s per column, **18% of the
