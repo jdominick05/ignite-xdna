@@ -15717,9 +15717,51 @@ control. Each run was its own process, with `xrt-smi` idle before it, under
 - **On YOLOv8s, AMD's best known G2G is now 14.54 ms** (this sitting). The engine's merged YOLOv8s
   read 17.20 ms in the Block 3 sitting. That was a different sitting, so the two are not compared
   here as one result, but the gap the engine has to close is larger than it was.
-- **Untested:** whether the option helps YOLOv8n, where the engine leads (8.18 against 10.76 ms in
-  the Block 3 sitting); other models; and energy.
+- **Untested:** other models beyond YOLOv8n ([below](#on-yolov8n-the-option-buys-94-and-the-engine-keeps-its-lead-from-the-host-side-only-2026-10-13-desktop-2)), and energy.
 - **Whether future AMD arms should run with it** is a methodology decision, recorded here and not
   taken.
 
 Log: [amd_cost_model_tiling_yolov8s_desktop2_20261013T030644Z.log](../results/aie/amd_cost_model_tiling_yolov8s_desktop2_20261013T030644Z.log).
+
+### On YOLOv8n the option buys 9.4%, and the engine keeps its lead, from the host side only (2026-10-13, Desktop 2)
+
+**Setup.** This is the same method as the YOLOv8s sitting above, pre-registered (scratch sha256
+`5b5d4a57...`, with an amendment recorded before any run).
+- **The two AMD arms:** the EP's own config (root attributes equal to the default build's) and the
+  same config plus `enable_cost_model_tiling`. The option moved the root attribute 0 → 1 and grew
+  `mc_code` from 93,840 to 99,820 B. Both arms run with 922 nodes in one DPU subgraph.
+- **A third arm:** the engine's merged YOLOv8n container with `--silu-sigmoid`, from the
+  [Block 3 sitting](#with-the-shipped-silu-recipe-ptr-does-not-carry-yolov8s-past-amds-stack-1720-against-1706-ms-2026-10-13-desktop-2).
+- **Order and method:** AMD default, AMD option, engine, engine, AMD option, AMD default. Each run
+  is 50 + 500 frames on `bus.jpg` in its own process, with `xrt-smi` idle before it
+  (`timing_eligible: true`, no foreign context).
+
+| arm | G2G ms | `session.run` / dispatch ms | host-side ms |
+|---|---:|---:|---|
+| AMD default | 10.749 / 10.799 | 6.930 / 6.937 | letterbox 1.82, decode+NMS 2.00-2.03 |
+| AMD + `enable_cost_model_tiling` | 10.094 / 10.141 | 6.271 / 6.288 | letterbox 1.81-1.84, decode+NMS 2.01 |
+| engine (merged, `--silu-sigmoid`) | **8.206 / 8.212** | 7.306 / 7.320 (+ 0.41-0.43 readback) | preprocess 0.31, decode+NMS 0.16 |
+
+- **Gate X: passes.** The option arm's heads are bit-identical to the default arm's in all four AMD
+  runs.
+- **W: passes.** The option is faster in every pairing: −0.654 ms of `session.run` (0.906x,
+  −9.4%) and −0.657 ms G2G. That is half its YOLOv8s effect in relative terms.
+- **L (the engine keeps its lead): passes.** The engine's G2G is below the option arm's in all four
+  pairings: 8.21 against 10.12 ms, 1.23x.
+
+**Where the lead comes from.** The engine's dispatch alone (7.31 ms) is slower than AMD's whole
+`session.run` with the option (6.28 ms). AMD's figure even includes its CPU quantize and
+dequantize, so on the NPU side **AMD is already ahead on YOLOv8n** too.
+
+The engine's lead is host-side:
+- preprocessing 0.31 ms against a 1.82 ms letterbox;
+- fused decode 0.16 ms against 2.01 ms.
+
+A faster AMD host path would erase it.
+
+**Correctness.** The engine arm returned 5.00 detections per frame. Its YOLOv8n container was not
+verified layer by layer; only the YOLOv8s merged container was (66/66).
+
+Logs:
+- [amd_cost_model_tiling_yolov8n_desktop2_20261013T031649Z.log](../results/aie/amd_cost_model_tiling_yolov8n_desktop2_20261013T031649Z.log), the sitting;
+- [amd_cost_model_tiling_yolov8n_desktop2_20261013T031617Z.log](../results/aie/amd_cost_model_tiling_yolov8n_desktop2_20261013T031617Z.log), a first attempt that stopped at the engine arm because I passed the container path relative to the wrong working directory. Its two AMD runs (10.719 / 10.068 ms G2G) are not used.
