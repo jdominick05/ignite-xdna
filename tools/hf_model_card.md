@@ -15,38 +15,6 @@ tags:
 - yolo-world
 - super-resolution
 - portrait-matting
-model-index:
-- name: yolov8n_full.ignite (ignite-xdna, --silu-sigmoid)
-  results:
-  - task: {type: object-detection, name: Object Detection}
-    dataset: {name: COCO val2017 (all 5000 images), type: detection-datasets/coco, split: val}
-    metrics:
-    - {type: mAP, name: mAP@50-95, value: 34.12}
-    - {type: mAP, name: mAP@50, value: 48.78}
-- name: yolov8s.ignite (ignite-xdna, --silu-sigmoid)
-  results:
-  - task: {type: object-detection, name: Object Detection}
-    dataset: {name: COCO val2017 (all 5000 images), type: detection-datasets/coco, split: val}
-    metrics:
-    - {type: mAP, name: mAP@50-95, value: 42.37}
-    - {type: mAP, name: mAP@50, value: 58.70}
-- name: yolov8n_pose.ignite (ignite-xdna, --silu-sigmoid)
-  results:
-  - task: {type: keypoint-detection, name: Keypoint Detection}
-    dataset: {name: COCO val2017 person keypoints (all 5000 images), type: detection-datasets/coco, split: val}
-    metrics:
-    - {type: mAP, name: OKS mAP@50-95, value: 44.16}
-    - {type: mAP, name: OKS mAP@50, value: 76.39}
-- name: sesr_m7.ignite (ignite-xdna)
-  results:
-  - task: {type: image-to-image, name: Image Super-Resolution (x2)}
-    dataset: {name: Set5, type: eugenesiow/Set5}
-    metrics:
-    - {type: psnr, name: PSNR-Y (dB), value: 34.25}
-  - task: {type: image-to-image, name: Image Super-Resolution (x2)}
-    dataset: {name: Set14, type: eugenesiow/Set14}
-    metrics:
-    - {type: psnr, name: PSNR-Y (dB), value: 29.41}
 ---
 
 # ignite-xdna: models and NPU containers for AMD XDNA1
@@ -126,8 +94,7 @@ All on Desktop 2 (Ryzen 7 8700G, Phoenix NPU). COCO protocol: conf 0.001, IoU 0.
 | YOLO11n | mAP@50-95 / @50 | **34.63** / 49.59 ¹ | 25.82 / 38.76 | COCO val2017, 5,000 | `results/aie/epilogue_yolo11n_yolow_20260921.log`; AMD: `results/eval_yolo11n_cut_xint8_npu.log` |
 | SESR M7 (x2) | PSNR-Y, dB | **34.25** Set5 / **29.41** Set14 ² | 34.06 / 29.32 | Set5, Set14 | `results/aie/sesr_m7_bf16_silicon_desktop2_20260922.log`; AMD: `results/eval_sesr_m7_set{5,14}_npu.log` |
 
-¹ Copied into that log as a summary table of the full-set run. The raw pycocotools output is not in the log, so
-this figure is not in `model-index`.
+¹ Copied into that log as a summary table of the full-set run. The raw pycocotools output is not in the log.
 ² Identical to the same XINT8 model on ONNX Runtime CPU (34.2492 / 29.4098), as an exact engine should be.
 
 The engine reads higher than AMD's stack on the YOLO models mainly because of `--silu-sigmoid`. AMD's XINT8
@@ -137,10 +104,12 @@ pose 32.71, YOLO11n 25.80).
 
 **Which build was measured.** These figures were measured on earlier compiles of these same ONNX files with
 the same flags (YOLOv8n/s and pose at ignite-xdna `7700316` on 2026-09-17, YOLO11n on 2026-09-21), not on the
-files uploaded here. The uploaded files were checked layer-exact against the engine's integer reference (above),
-but the mAP was not re-run on them, and the compiler changed between the two builds.
+files uploaded here. The uploaded files were checked layer-exact against the engine's integer reference (above).
+But the compiler's IR and reference code changed between the two builds (`7700316..394fc3d`), and the mAP was
+not re-run on the uploaded files. That is why this card carries no `model-index` metadata: Hugging Face would
+present these figures as measurements of these files, and they are not.
 
-**Not in `model-index`, and why:**
+**Other families, and why they are not in the table:**
 - **ResNet50** (`resnet50_xint8_c64.onnx` on AMD's VitisAI EP): top-1 72.10 / top-5 88.10 on the repo's
   **1,000-image** ImageNet-val evaluation set, not the full 50,000 (`results/res/run_resnet50_npu.log`).
   `resnet50_head.ignite` has no accuracy figure.
