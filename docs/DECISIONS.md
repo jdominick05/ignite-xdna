@@ -1979,6 +1979,23 @@ cached reference heads rather than `bo_out`.
     of partial sums. It needs 72,064 B as the core is laid out today
     ([BENCHMARKS](BENCHMARKS.md#block-5-phase-1-single-buffering-the-cores-costs-270-ms-so-the-2-group-design-is-stopped-2026-10-13-desktop-2)).
 - **Rejected (sized, not built): splitting each activation fill by core across a column's two shim streams (2026-10-13, Block 5).** 4,774 of YOLOv8s's 5,509 fill tasks carry one quad, so a per-core split adds +5,621 tasks, about 2.0 ms at 0.36 µs per task (DERIVED), which is more than static halves save and nearly all that per-layer quarters save. Alternating whole quads between the streams, with stream 1 in packet mode, keeps the gain: its transport was measured at full rate (alt/base 0.846 on one column, 0.878 on all four) ([BENCHMARKS](BENCHMARKS.md#block-5-alternating-whole-quads-between-a-columns-two-streams-runs-at-full-rate-in-packet-mode-and-nets-06-19-ms-on-yolov8s-2026-10-13-desktop-2)).
+- **Rejected (built and measured): stream sharing as designed, quad position 3 of every 4 on the weight stream
+  (2026-10-13, Block 5 Phase 2).** It is exact on the device (YOLOv8s 28/28 readable layers, 38/38 slots), and it
+  lost its pre-registered sitting. Real dispatch was +0.926 ms (0/4 rounds) against a −0.5 ms kill line; the
+  prediction was −1.18 ms DERIVED. Transport did improve (NOP −0.475 ms, 4/4), but compute exposure grew 1.30 ms.
+  - **Ruled out as the main cause** by a per-layer diagnostic: a per-packet core or packet-mode cost (r 0.63), and
+    the per-round task count of the 14 per-round layers (44% of the loss).
+  - **Favoured, not established:** weights queued behind stream-1 quads that wait for buffer-B space under compute,
+    so weights arrive just in time instead of prefetched. The core trace window is what would settle it.
+  - **The design rejected:** static q = 1; buffers A = 6 and B = 8 slots; packet-routed weight fan-out; core parity
+    select; quads ahead of weight runs of more than 2 objects.
+  - **What stays:** the code on branch `block5-stream-share` (unmerged), with `--stream-share`,
+    `compiler/stream_share.py` and its checker and tests. Its transport pieces are proven exact on silicon:
+    free-running `BdIteration` MemTile chains, a packet-routed shim stream shared by the cores and a MemTile
+    buffer, and a raw core double buffer picked by a parity word.
+  - **What would reopen it:** a measured mechanism, then a new pre-registration for a variant that keeps weights
+    off the quads' path (a deeper B, another q, or weights on their own route). Not a rerun of this one
+    ([BENCHMARKS](BENCHMARKS.md#block-5-stream-sharing-built-exact-on-the-device-and-093-ms-slower-transport-gains-048-ms-but-compute-exposure-grows-130-ms-2026-10-13-desktop-2)).
 - **Rejected again, on the container it mattered most for: the activation ring on SESR M7 (2026-09-19, built and
   measured).** SESR is the one zoo model whose dispatch is demonstrably transport-bound (2.650 ms NOP floor for
   ~14 MB of per-frame fill and drain, 5.4 GB/s effective), so the ring's "fetch once, serve several output groups"

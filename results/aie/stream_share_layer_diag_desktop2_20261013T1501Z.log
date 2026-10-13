@@ -1,0 +1,593 @@
+RESEARCH_PLATFORM {"machine": "Desktop 2", "cpu": "AMD Ryzen 7 8700G w/ Radeon 780M Graphics", "os": "Windows-11-10.0.26200-SP0", "ram_bytes": 33381138432, "source_sha256": {"tools/research_process.py": "ffeb1857f190b482eed101b5f5a928f455de26bfa61d23f78a2eacec08e2663e", "tools/quant_calib_alphabet.py": "2dc0b2878c564853f340880209a425dfcf63b8536b2b8e9fd32344daade58d37", "tools/xint8_arithmetic_probe.py": "6aa3df08b9870c3c2264b868459d7ffbac3070dddc1349d7c6f3f480075f7041", "scripts/research-lowlevel.sh": "3455ad7933697936487712665505c216891865c6deada647302785f6e37020bd", "scripts/research-iron.sh": "4c863a262646ddab39b5005006ba8e03809895e6386c6310e2fd9d0a9e9609ee", "kernels/memory_placement/probe.py": "e8d990169ad6091fa1b53852e9f61eff495b5def72d35165a5c5cf1759e38898", "kernels/memory_placement/memory_kernels.cc": "182e7af7071a1e851afb4a7ca266069c489aea1fbaaa85eca129708daeba5ba6", "scripts/research-matrix.sh": "739254171629deae822b0ad7dabc875aee19ace56dde77d3e8aab61663f97516", "kernels/memory_placement/gemm.py": "17c905ad66110d3346bbf0db898dfc6b780df59fae1dfb0c1747057ce1e5844e", "kernels/memory_placement/gemm_placement.cc": "f21acf7250b12914ea30cc1f77613239dfa18421a85a1b9a5199017dd916278a", "tools/research_summary.py": "0c00dcceef07053d06731b41a1f1ed58d3ba4ea09f82497de354ce9cef17da20", "tools/research_toolchain.py": "f0a126a24ae213acfaa43460cfd9def0c86d9cb70cfee0228aa271688467b314"}, "commit": "11929af0a7eb15c7249e3066c22824656934dadd", "command": ["C:/Users/<user>/miniforge3/envs/mlir-aie-iron/python.exe", "scratch/b34/layer_diag.py", "--out-prefix", "results/aie/stream_share_layer_diag_desktop2_20261013T1501Z"], "seconds_limit": 3000.0, "rss_gib_limit": 8, "checks_only": false, "free_ram_bytes": 22684819456}
+HOST_LOAD busy_cores=0.32 logical_cores=16 free_ram_gb=21 sample_sec=1
+HOST_LOAD_TOP 0.14 dev-agent:39036 ws_mb=527
+HOST_LOAD_TOP 0.06 WindowsTerminal:12116 ws_mb=131
+HOST_LOAD_TOP 0.05 FanControl:15032 ws_mb=217
+HOST_LOAD_TOP 0.05 powershell:40364 ws_mb=80
+HOST_LOAD_TOP 0.02 conhost:34760 ws_mb=7
+HOST_LOAD_VERDICT CLEAR
+
+PRE_NPU_CONTEXT_WITNESS "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+[diag] run 1/4 control -> stream_share_layer_diag_desktop2_20261013T1501Z_run1_control.json
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [15340, 33244, 52156], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 3.485, "tree_rss_bytes": 160010240, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [15340, 33244, 52156], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 6.938, "tree_rss_bytes": 193552384, "foreign_peers": []}
+[layers] yolov8s_rule.ignite: 66 layer pieces, 933028 B stream, pieces sum 933028 B
+LAYER_TIME {"arm": "real", "index": 0, "name": "/model.0/conv/Conv", "ms": 0.6451, "net_ms": 0.5542, "spread_ms": 0.0286, "rounds_in_layer": 256, "packets": 1024, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 1, "name": "/model.1/conv/Conv", "ms": 0.8641, "net_ms": 0.7732, "spread_ms": 0.0303, "rounds_in_layer": 128, "packets": 2048, "w_fills": 8}
+LAYER_TIME {"arm": "real", "index": 2, "name": "/model.2/cv1/conv/Conv", "ms": 0.2912, "net_ms": 0.2003, "spread_ms": 0.0436, "rounds_in_layer": 128, "packets": 512, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 3, "name": "/model.2/m.0/cv1/conv/Conv", "ms": 0.3144, "net_ms": 0.2235, "spread_ms": 0.0236, "rounds_in_layer": 64, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 4, "name": "/model.2/m.0/cv2/conv/Conv", "ms": 0.344, "net_ms": 0.2531, "spread_ms": 0.0376, "rounds_in_layer": 64, "packets": 512, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 5, "name": "/model.2/cv2/conv/Conv", "ms": 0.4606, "net_ms": 0.3698, "spread_ms": 0.0355, "rounds_in_layer": 128, "packets": 1024, "w_fills": 8}
+LAYER_TIME {"arm": "real", "index": 6, "name": "/model.3/conv/Conv", "ms": 0.8257, "net_ms": 0.7348, "spread_ms": 0.0362, "rounds_in_layer": 64, "packets": 2048, "w_fills": 16}
+LAYER_TIME {"arm": "real", "index": 7, "name": "/model.4/cv1/conv/Conv", "ms": 0.2648, "net_ms": 0.1739, "spread_ms": 0.029, "rounds_in_layer": 64, "packets": 512, "w_fills": 16}
+LAYER_TIME {"arm": "real", "index": 8, "name": "/model.4/m.0/cv1/conv/Conv", "ms": 0.2849, "net_ms": 0.194, "spread_ms": 0.0341, "rounds_in_layer": 32, "packets": 256, "w_fills": 8}
+LAYER_TIME {"arm": "real", "index": 9, "name": "/model.4/m.0/cv2/conv/Conv", "ms": 0.3002, "net_ms": 0.2093, "spread_ms": 0.0242, "rounds_in_layer": 32, "packets": 384, "w_fills": 8}
+LAYER_TIME {"arm": "real", "index": 10, "name": "/model.4/m.1/cv1/conv/Conv", "ms": 0.2825, "net_ms": 0.1916, "spread_ms": 0.0167, "rounds_in_layer": 32, "packets": 256, "w_fills": 8}
+LAYER_TIME {"arm": "real", "index": 11, "name": "/model.4/m.1/cv2/conv/Conv", "ms": 0.2981, "net_ms": 0.2072, "spread_ms": 0.0355, "rounds_in_layer": 32, "packets": 384, "w_fills": 8}
+LAYER_TIME {"arm": "real", "index": 12, "name": "/model.4/cv2/conv/Conv", "ms": 0.4437, "net_ms": 0.3528, "spread_ms": 0.0288, "rounds_in_layer": 64, "packets": 1024, "w_fills": 16}
+LAYER_TIME {"arm": "real", "index": 13, "name": "/model.5/conv/Conv", "ms": 0.8118, "net_ms": 0.7209, "spread_ms": 0.0273, "rounds_in_layer": 32, "packets": 2048, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 14, "name": "/model.6/cv1/conv/Conv", "ms": 0.2508, "net_ms": 0.1599, "spread_ms": 0.0259, "rounds_in_layer": 32, "packets": 512, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 15, "name": "/model.6/m.0/cv1/conv/Conv", "ms": 0.2793, "net_ms": 0.1884, "spread_ms": 0.0416, "rounds_in_layer": 16, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 16, "name": "/model.6/m.0/cv2/conv/Conv", "ms": 0.2908, "net_ms": 0.1999, "spread_ms": 0.0359, "rounds_in_layer": 16, "packets": 320, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 17, "name": "/model.6/m.1/cv1/conv/Conv", "ms": 0.2811, "net_ms": 0.1903, "spread_ms": 0.0306, "rounds_in_layer": 16, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 18, "name": "/model.6/m.1/cv2/conv/Conv", "ms": 0.2851, "net_ms": 0.1942, "spread_ms": 0.0373, "rounds_in_layer": 16, "packets": 320, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 19, "name": "/model.6/cv2/conv/Conv", "ms": 0.4203, "net_ms": 0.3295, "spread_ms": 0.0278, "rounds_in_layer": 32, "packets": 1024, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 20, "name": "/model.7/conv/Conv", "ms": 0.7947, "net_ms": 0.7038, "spread_ms": 0.0169, "rounds_in_layer": 16, "packets": 2048, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 21, "name": "/model.8/cv1/conv/Conv", "ms": 0.2579, "net_ms": 0.1671, "spread_ms": 0.0396, "rounds_in_layer": 16, "packets": 512, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 22, "name": "/model.8/m.0/cv1/conv/Conv", "ms": 0.2747, "net_ms": 0.1838, "spread_ms": 0.0468, "rounds_in_layer": 8, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 23, "name": "/model.8/m.0/cv2/conv/Conv", "ms": 0.2813, "net_ms": 0.1904, "spread_ms": 0.0379, "rounds_in_layer": 8, "packets": 288, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 24, "name": "/model.8/cv2/conv/Conv", "ms": 0.3592, "net_ms": 0.2684, "spread_ms": 0.0399, "rounds_in_layer": 16, "packets": 768, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 25, "name": "/model.9/cv1/conv/Conv", "ms": 0.1964, "net_ms": 0.1055, "spread_ms": 0.0353, "rounds_in_layer": 8, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 26, "name": "/model.9/m/MaxPool", "ms": 0.1513, "net_ms": 0.0604, "spread_ms": 0.0249, "rounds_in_layer": 8, "packets": 64, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 27, "name": "/model.9/m_1/MaxPool", "ms": 0.1523, "net_ms": 0.0614, "spread_ms": 0.0257, "rounds_in_layer": 8, "packets": 64, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 28, "name": "/model.9/m_2/MaxPool", "ms": 0.1492, "net_ms": 0.0583, "spread_ms": 0.0189, "rounds_in_layer": 8, "packets": 64, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 29, "name": "/model.9/cv2/conv/Conv", "ms": 0.4178, "net_ms": 0.3269, "spread_ms": 0.0253, "rounds_in_layer": 16, "packets": 1024, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 30, "name": "/model.12/cv1/conv/Conv", "ms": 0.5271, "net_ms": 0.4363, "spread_ms": 0.0226, "rounds_in_layer": 32, "packets": 1536, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 31, "name": "/model.12/m.0/cv1/conv/Conv", "ms": 0.2729, "net_ms": 0.182, "spread_ms": 0.0379, "rounds_in_layer": 16, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 32, "name": "/model.12/m.0/cv2/conv/Conv", "ms": 0.2716, "net_ms": 0.1807, "spread_ms": 0.0252, "rounds_in_layer": 16, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 33, "name": "/model.12/cv2/conv/Conv", "ms": 0.3403, "net_ms": 0.2495, "spread_ms": 0.0296, "rounds_in_layer": 32, "packets": 768, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 34, "name": "/model.15/cv1/conv/Conv", "ms": 0.5986, "net_ms": 0.5077, "spread_ms": 0.0373, "rounds_in_layer": 64, "packets": 1536, "w_fills": 16}
+LAYER_TIME {"arm": "real", "index": 35, "name": "/model.15/m.0/cv1/conv/Conv", "ms": 0.282, "net_ms": 0.1912, "spread_ms": 0.028, "rounds_in_layer": 32, "packets": 256, "w_fills": 8}
+LAYER_TIME {"arm": "real", "index": 36, "name": "/model.15/m.0/cv2/conv/Conv", "ms": 0.2924, "net_ms": 0.2015, "spread_ms": 0.0252, "rounds_in_layer": 32, "packets": 256, "w_fills": 8}
+LAYER_TIME {"arm": "real", "index": 37, "name": "/model.15/cv2/conv/Conv", "ms": 0.3779, "net_ms": 0.287, "spread_ms": 0.0407, "rounds_in_layer": 64, "packets": 768, "w_fills": 16}
+LAYER_TIME {"arm": "real", "index": 38, "name": "/model.16/conv/Conv", "ms": 0.4753, "net_ms": 0.3844, "spread_ms": 0.0333, "rounds_in_layer": 16, "packets": 1024, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 39, "name": "/model.22/cv2.0/cv2.0.0/conv/Conv", "ms": 0.4176, "net_ms": 0.3267, "spread_ms": 0.0257, "rounds_in_layer": 32, "packets": 512, "w_fills": 8}
+LAYER_TIME {"arm": "real", "index": 40, "name": "/model.22/cv3.0/cv3.0.0/conv/Conv", "ms": 0.7059, "net_ms": 0.615, "spread_ms": 0.0244, "rounds_in_layer": 64, "packets": 1024, "w_fills": 16}
+LAYER_TIME {"arm": "real", "index": 41, "name": "/model.22/cv2.0/cv2.0.1/conv/Conv", "ms": 0.2917, "net_ms": 0.2009, "spread_ms": 0.0376, "rounds_in_layer": 32, "packets": 256, "w_fills": 8}
+LAYER_TIME {"arm": "real", "index": 42, "name": "/model.22/cv3.0/cv3.0.1/conv/Conv", "ms": 0.7132, "net_ms": 0.6223, "spread_ms": 0.0338, "rounds_in_layer": 64, "packets": 1024, "w_fills": 16}
+LAYER_TIME {"arm": "real", "index": 43, "name": "/model.18/cv1/conv/Conv", "ms": 0.3648, "net_ms": 0.2739, "spread_ms": 0.0448, "rounds_in_layer": 32, "packets": 768, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 44, "name": "/model.22/cv2.0/cv2.0.2/Conv", "ms": 0.1669, "net_ms": 0.076, "spread_ms": 0.0311, "rounds_in_layer": 32, "packets": 128, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 45, "name": "/model.22/cv3.0/cv3.0.2/Conv", "ms": 0.2149, "net_ms": 0.124, "spread_ms": 0.0299, "rounds_in_layer": 48, "packets": 384, "w_fills": 12}
+LAYER_TIME {"arm": "real", "index": 46, "name": "/model.18/m.0/cv1/conv/Conv", "ms": 0.2747, "net_ms": 0.1838, "spread_ms": 0.0358, "rounds_in_layer": 16, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 47, "name": "/model.18/m.0/cv2/conv/Conv", "ms": 0.2762, "net_ms": 0.1853, "spread_ms": 0.0323, "rounds_in_layer": 16, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 48, "name": "/model.18/cv2/conv/Conv", "ms": 0.3469, "net_ms": 0.256, "spread_ms": 0.0349, "rounds_in_layer": 32, "packets": 768, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 49, "name": "/model.19/conv/Conv", "ms": 0.4538, "net_ms": 0.3629, "spread_ms": 0.0287, "rounds_in_layer": 8, "packets": 1024, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 50, "name": "/model.22/cv2.1/cv2.1.0/conv/Conv", "ms": 0.2673, "net_ms": 0.1765, "spread_ms": 0.0322, "rounds_in_layer": 8, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 51, "name": "/model.22/cv3.1/cv3.1.0/conv/Conv", "ms": 0.4078, "net_ms": 0.3169, "spread_ms": 0.0325, "rounds_in_layer": 16, "packets": 512, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 52, "name": "/model.22/cv2.1/cv2.1.1/conv/Conv", "ms": 0.1681, "net_ms": 0.0773, "spread_ms": 0.0237, "rounds_in_layer": 8, "packets": 64, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 53, "name": "/model.22/cv3.1/cv3.1.1/conv/Conv", "ms": 0.2781, "net_ms": 0.1872, "spread_ms": 0.0416, "rounds_in_layer": 16, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 54, "name": "/model.21/cv1/conv/Conv", "ms": 0.3201, "net_ms": 0.2292, "spread_ms": 0.044, "rounds_in_layer": 16, "packets": 768, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 55, "name": "/model.22/cv2.1/cv2.1.2/Conv", "ms": 0.1373, "net_ms": 0.0465, "spread_ms": 0.0345, "rounds_in_layer": 8, "packets": 32, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 56, "name": "/model.22/cv3.1/cv3.1.2/Conv", "ms": 0.1402, "net_ms": 0.0494, "spread_ms": 0.0292, "rounds_in_layer": 12, "packets": 96, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 57, "name": "/model.21/m.0/cv1/conv/Conv", "ms": 0.2659, "net_ms": 0.1751, "spread_ms": 0.0317, "rounds_in_layer": 8, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 58, "name": "/model.21/m.0/cv2/conv/Conv", "ms": 0.2682, "net_ms": 0.1773, "spread_ms": 0.0233, "rounds_in_layer": 8, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 59, "name": "/model.21/cv2/conv/Conv", "ms": 0.3441, "net_ms": 0.2532, "spread_ms": 0.0275, "rounds_in_layer": 16, "packets": 768, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 60, "name": "/model.22/cv2.2/cv2.2.0/conv/Conv", "ms": 0.2606, "net_ms": 0.1697, "spread_ms": 0.0254, "rounds_in_layer": 2, "packets": 128, "w_fills": 2}
+LAYER_TIME {"arm": "real", "index": 61, "name": "/model.22/cv3.2/cv3.2.0/conv/Conv", "ms": 0.2687, "net_ms": 0.1778, "spread_ms": 0.0205, "rounds_in_layer": 4, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 62, "name": "/model.22/cv2.2/cv2.2.1/conv/Conv", "ms": 0.1316, "net_ms": 0.0407, "spread_ms": 0.0254, "rounds_in_layer": 2, "packets": 16, "w_fills": 2}
+LAYER_TIME {"arm": "real", "index": 63, "name": "/model.22/cv3.2/cv3.2.1/conv/Conv", "ms": 0.161, "net_ms": 0.0701, "spread_ms": 0.0319, "rounds_in_layer": 4, "packets": 64, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 64, "name": "/model.22/cv2.2/cv2.2.2/Conv", "ms": 0.1182, "net_ms": 0.0273, "spread_ms": 0.0242, "rounds_in_layer": 2, "packets": 8, "w_fills": 2}
+LAYER_TIME {"arm": "real", "index": 65, "name": "/model.22/cv3.2/cv3.2.2/Conv", "ms": 0.1343, "net_ms": 0.0434, "spread_ms": 0.019, "rounds_in_layer": 3, "packets": 24, "w_fills": 3}
+SUMMARY {"arm": "real", "whole_ms_median": 15.6387, "empty_ms_median": 0.0909, "empty_ms_p10_p90": [0.0781, 0.1148], "sum_layer_ms": 22.6095, "sum_net_ms": 16.6115, "whole_minus_empty_ms": 15.5478, "net_over_whole_less_empty": 1.0684, "mismatched_rounds": 0, "rounds_total": 25, "layers": 66}
+LAYER_TIME {"arm": "nop", "index": 0, "name": "/model.0/conv/Conv", "ms": 0.4959, "net_ms": 0.4019, "spread_ms": 0.0349, "rounds_in_layer": 256, "packets": 1024, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 1, "name": "/model.1/conv/Conv", "ms": 0.6658, "net_ms": 0.5718, "spread_ms": 0.0436, "rounds_in_layer": 128, "packets": 2048, "w_fills": 8}
+LAYER_TIME {"arm": "nop", "index": 2, "name": "/model.2/cv1/conv/Conv", "ms": 0.268, "net_ms": 0.174, "spread_ms": 0.0308, "rounds_in_layer": 128, "packets": 512, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 3, "name": "/model.2/m.0/cv1/conv/Conv", "ms": 0.1967, "net_ms": 0.1028, "spread_ms": 0.029, "rounds_in_layer": 64, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 4, "name": "/model.2/m.0/cv2/conv/Conv", "ms": 0.2771, "net_ms": 0.1831, "spread_ms": 0.0335, "rounds_in_layer": 64, "packets": 512, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 5, "name": "/model.2/cv2/conv/Conv", "ms": 0.4459, "net_ms": 0.352, "spread_ms": 0.0247, "rounds_in_layer": 128, "packets": 1024, "w_fills": 8}
+LAYER_TIME {"arm": "nop", "index": 6, "name": "/model.3/conv/Conv", "ms": 0.6033, "net_ms": 0.5094, "spread_ms": 0.0269, "rounds_in_layer": 64, "packets": 2048, "w_fills": 16}
+LAYER_TIME {"arm": "nop", "index": 7, "name": "/model.4/cv1/conv/Conv", "ms": 0.2466, "net_ms": 0.1527, "spread_ms": 0.0274, "rounds_in_layer": 64, "packets": 512, "w_fills": 16}
+LAYER_TIME {"arm": "nop", "index": 8, "name": "/model.4/m.0/cv1/conv/Conv", "ms": 0.1958, "net_ms": 0.1018, "spread_ms": 0.0249, "rounds_in_layer": 32, "packets": 256, "w_fills": 8}
+LAYER_TIME {"arm": "nop", "index": 9, "name": "/model.4/m.0/cv2/conv/Conv", "ms": 0.2372, "net_ms": 0.1432, "spread_ms": 0.0337, "rounds_in_layer": 32, "packets": 384, "w_fills": 8}
+LAYER_TIME {"arm": "nop", "index": 10, "name": "/model.4/m.1/cv1/conv/Conv", "ms": 0.2032, "net_ms": 0.1092, "spread_ms": 0.0455, "rounds_in_layer": 32, "packets": 256, "w_fills": 8}
+LAYER_TIME {"arm": "nop", "index": 11, "name": "/model.4/m.1/cv2/conv/Conv", "ms": 0.2468, "net_ms": 0.1528, "spread_ms": 0.0322, "rounds_in_layer": 32, "packets": 384, "w_fills": 8}
+LAYER_TIME {"arm": "nop", "index": 12, "name": "/model.4/cv2/conv/Conv", "ms": 0.4426, "net_ms": 0.3486, "spread_ms": 0.0311, "rounds_in_layer": 64, "packets": 1024, "w_fills": 16}
+LAYER_TIME {"arm": "nop", "index": 13, "name": "/model.5/conv/Conv", "ms": 0.5971, "net_ms": 0.5031, "spread_ms": 0.0285, "rounds_in_layer": 32, "packets": 2048, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 14, "name": "/model.6/cv1/conv/Conv", "ms": 0.2348, "net_ms": 0.1408, "spread_ms": 0.022, "rounds_in_layer": 32, "packets": 512, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 15, "name": "/model.6/m.0/cv1/conv/Conv", "ms": 0.1981, "net_ms": 0.1042, "spread_ms": 0.0158, "rounds_in_layer": 16, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 16, "name": "/model.6/m.0/cv2/conv/Conv", "ms": 0.2116, "net_ms": 0.1176, "spread_ms": 0.0279, "rounds_in_layer": 16, "packets": 320, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 17, "name": "/model.6/m.1/cv1/conv/Conv", "ms": 0.199, "net_ms": 0.1051, "spread_ms": 0.031, "rounds_in_layer": 16, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 18, "name": "/model.6/m.1/cv2/conv/Conv", "ms": 0.221, "net_ms": 0.127, "spread_ms": 0.0339, "rounds_in_layer": 16, "packets": 320, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 19, "name": "/model.6/cv2/conv/Conv", "ms": 0.4148, "net_ms": 0.3208, "spread_ms": 0.0253, "rounds_in_layer": 32, "packets": 1024, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 20, "name": "/model.7/conv/Conv", "ms": 0.6141, "net_ms": 0.5202, "spread_ms": 0.0247, "rounds_in_layer": 16, "packets": 2048, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 21, "name": "/model.8/cv1/conv/Conv", "ms": 0.2451, "net_ms": 0.1511, "spread_ms": 0.0206, "rounds_in_layer": 16, "packets": 512, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 22, "name": "/model.8/m.0/cv1/conv/Conv", "ms": 0.195, "net_ms": 0.101, "spread_ms": 0.0279, "rounds_in_layer": 8, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 23, "name": "/model.8/m.0/cv2/conv/Conv", "ms": 0.2051, "net_ms": 0.1112, "spread_ms": 0.0273, "rounds_in_layer": 8, "packets": 288, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 24, "name": "/model.8/cv2/conv/Conv", "ms": 0.341, "net_ms": 0.2471, "spread_ms": 0.0243, "rounds_in_layer": 16, "packets": 768, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 25, "name": "/model.9/cv1/conv/Conv", "ms": 0.1814, "net_ms": 0.0875, "spread_ms": 0.0145, "rounds_in_layer": 8, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 26, "name": "/model.9/m/MaxPool", "ms": 0.131, "net_ms": 0.0371, "spread_ms": 0.0269, "rounds_in_layer": 8, "packets": 64, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 27, "name": "/model.9/m_1/MaxPool", "ms": 0.1324, "net_ms": 0.0384, "spread_ms": 0.0329, "rounds_in_layer": 8, "packets": 64, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 28, "name": "/model.9/m_2/MaxPool", "ms": 0.1321, "net_ms": 0.0381, "spread_ms": 0.0205, "rounds_in_layer": 8, "packets": 64, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 29, "name": "/model.9/cv2/conv/Conv", "ms": 0.4078, "net_ms": 0.3138, "spread_ms": 0.0277, "rounds_in_layer": 16, "packets": 1024, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 30, "name": "/model.12/cv1/conv/Conv", "ms": 0.5234, "net_ms": 0.4294, "spread_ms": 0.0184, "rounds_in_layer": 32, "packets": 1536, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 31, "name": "/model.12/m.0/cv1/conv/Conv", "ms": 0.1953, "net_ms": 0.1013, "spread_ms": 0.0179, "rounds_in_layer": 16, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 32, "name": "/model.12/m.0/cv2/conv/Conv", "ms": 0.1946, "net_ms": 0.1007, "spread_ms": 0.0194, "rounds_in_layer": 16, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 33, "name": "/model.12/cv2/conv/Conv", "ms": 0.3329, "net_ms": 0.2389, "spread_ms": 0.0168, "rounds_in_layer": 32, "packets": 768, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 34, "name": "/model.15/cv1/conv/Conv", "ms": 0.5906, "net_ms": 0.4966, "spread_ms": 0.0303, "rounds_in_layer": 64, "packets": 1536, "w_fills": 16}
+LAYER_TIME {"arm": "nop", "index": 35, "name": "/model.15/m.0/cv1/conv/Conv", "ms": 0.1974, "net_ms": 0.1034, "spread_ms": 0.0258, "rounds_in_layer": 32, "packets": 256, "w_fills": 8}
+LAYER_TIME {"arm": "nop", "index": 36, "name": "/model.15/m.0/cv2/conv/Conv", "ms": 0.1919, "net_ms": 0.0979, "spread_ms": 0.0266, "rounds_in_layer": 32, "packets": 256, "w_fills": 8}
+LAYER_TIME {"arm": "nop", "index": 37, "name": "/model.15/cv2/conv/Conv", "ms": 0.3695, "net_ms": 0.2755, "spread_ms": 0.0186, "rounds_in_layer": 64, "packets": 768, "w_fills": 16}
+LAYER_TIME {"arm": "nop", "index": 38, "name": "/model.16/conv/Conv", "ms": 0.3632, "net_ms": 0.2692, "spread_ms": 0.019, "rounds_in_layer": 16, "packets": 1024, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 39, "name": "/model.22/cv2.0/cv2.0.0/conv/Conv", "ms": 0.2745, "net_ms": 0.1805, "spread_ms": 0.0339, "rounds_in_layer": 32, "packets": 512, "w_fills": 8}
+LAYER_TIME {"arm": "nop", "index": 40, "name": "/model.22/cv3.0/cv3.0.0/conv/Conv", "ms": 0.443, "net_ms": 0.349, "spread_ms": 0.0267, "rounds_in_layer": 64, "packets": 1024, "w_fills": 16}
+LAYER_TIME {"arm": "nop", "index": 41, "name": "/model.22/cv2.0/cv2.0.1/conv/Conv", "ms": 0.1992, "net_ms": 0.1052, "spread_ms": 0.0273, "rounds_in_layer": 32, "packets": 256, "w_fills": 8}
+LAYER_TIME {"arm": "nop", "index": 42, "name": "/model.22/cv3.0/cv3.0.1/conv/Conv", "ms": 0.4418, "net_ms": 0.3478, "spread_ms": 0.0216, "rounds_in_layer": 64, "packets": 1024, "w_fills": 16}
+LAYER_TIME {"arm": "nop", "index": 43, "name": "/model.18/cv1/conv/Conv", "ms": 0.3429, "net_ms": 0.249, "spread_ms": 0.0317, "rounds_in_layer": 32, "packets": 768, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 44, "name": "/model.22/cv2.0/cv2.0.2/Conv", "ms": 0.1657, "net_ms": 0.0717, "spread_ms": 0.0268, "rounds_in_layer": 32, "packets": 128, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 45, "name": "/model.22/cv3.0/cv3.0.2/Conv", "ms": 0.2084, "net_ms": 0.1144, "spread_ms": 0.0253, "rounds_in_layer": 48, "packets": 384, "w_fills": 12}
+LAYER_TIME {"arm": "nop", "index": 46, "name": "/model.18/m.0/cv1/conv/Conv", "ms": 0.1988, "net_ms": 0.1048, "spread_ms": 0.027, "rounds_in_layer": 16, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 47, "name": "/model.18/m.0/cv2/conv/Conv", "ms": 0.1953, "net_ms": 0.1014, "spread_ms": 0.0306, "rounds_in_layer": 16, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 48, "name": "/model.18/cv2/conv/Conv", "ms": 0.3331, "net_ms": 0.2391, "spread_ms": 0.0209, "rounds_in_layer": 32, "packets": 768, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 49, "name": "/model.19/conv/Conv", "ms": 0.3712, "net_ms": 0.2772, "spread_ms": 0.0284, "rounds_in_layer": 8, "packets": 1024, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 50, "name": "/model.22/cv2.1/cv2.1.0/conv/Conv", "ms": 0.1927, "net_ms": 0.0987, "spread_ms": 0.0285, "rounds_in_layer": 8, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 51, "name": "/model.22/cv3.1/cv3.1.0/conv/Conv", "ms": 0.2815, "net_ms": 0.1875, "spread_ms": 0.0252, "rounds_in_layer": 16, "packets": 512, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 52, "name": "/model.22/cv2.1/cv2.1.1/conv/Conv", "ms": 0.1333, "net_ms": 0.0393, "spread_ms": 0.021, "rounds_in_layer": 8, "packets": 64, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 53, "name": "/model.22/cv3.1/cv3.1.1/conv/Conv", "ms": 0.1932, "net_ms": 0.0992, "spread_ms": 0.0244, "rounds_in_layer": 16, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 54, "name": "/model.21/cv1/conv/Conv", "ms": 0.3061, "net_ms": 0.2122, "spread_ms": 0.027, "rounds_in_layer": 16, "packets": 768, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 55, "name": "/model.22/cv2.1/cv2.1.2/Conv", "ms": 0.1315, "net_ms": 0.0375, "spread_ms": 0.0222, "rounds_in_layer": 8, "packets": 32, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 56, "name": "/model.22/cv3.1/cv3.1.2/Conv", "ms": 0.1415, "net_ms": 0.0475, "spread_ms": 0.0287, "rounds_in_layer": 12, "packets": 96, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 57, "name": "/model.21/m.0/cv1/conv/Conv", "ms": 0.1969, "net_ms": 0.103, "spread_ms": 0.0305, "rounds_in_layer": 8, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 58, "name": "/model.21/m.0/cv2/conv/Conv", "ms": 0.1975, "net_ms": 0.1035, "spread_ms": 0.0288, "rounds_in_layer": 8, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 59, "name": "/model.21/cv2/conv/Conv", "ms": 0.3347, "net_ms": 0.2407, "spread_ms": 0.0192, "rounds_in_layer": 16, "packets": 768, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 60, "name": "/model.22/cv2.2/cv2.2.0/conv/Conv", "ms": 0.1766, "net_ms": 0.0826, "spread_ms": 0.0239, "rounds_in_layer": 2, "packets": 128, "w_fills": 2}
+LAYER_TIME {"arm": "nop", "index": 61, "name": "/model.22/cv3.2/cv3.2.0/conv/Conv", "ms": 0.1943, "net_ms": 0.1004, "spread_ms": 0.0175, "rounds_in_layer": 4, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 62, "name": "/model.22/cv2.2/cv2.2.1/conv/Conv", "ms": 0.116, "net_ms": 0.022, "spread_ms": 0.0353, "rounds_in_layer": 2, "packets": 16, "w_fills": 2}
+LAYER_TIME {"arm": "nop", "index": 63, "name": "/model.22/cv3.2/cv3.2.1/conv/Conv", "ms": 0.1301, "net_ms": 0.0361, "spread_ms": 0.0226, "rounds_in_layer": 4, "packets": 64, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 64, "name": "/model.22/cv2.2/cv2.2.2/Conv", "ms": 0.1115, "net_ms": 0.0175, "spread_ms": 0.0225, "rounds_in_layer": 2, "packets": 8, "w_fills": 2}
+LAYER_TIME {"arm": "nop", "index": 65, "name": "/model.22/cv3.2/cv3.2.2/Conv", "ms": 0.1304, "net_ms": 0.0364, "spread_ms": 0.0296, "rounds_in_layer": 3, "packets": 24, "w_fills": 3}
+SUMMARY {"arm": "nop", "whole_ms_median": 11.7522, "empty_ms_median": 0.094, "empty_ms_p10_p90": [0.0833, 0.1158], "sum_layer_ms": 18.2868, "sum_net_ms": 12.0845, "whole_minus_empty_ms": 11.6582, "net_over_whole_less_empty": 1.0366, "mismatched_rounds": 0, "rounds_total": 25, "layers": 66}
+HOST_TIMELINE {"elapsed_seconds": 10.25, "tree_rss_bytes": 295432192, "foreign_peers": []}
+[diag] run 2/4 test -> stream_share_layer_diag_desktop2_20261013T1501Z_run2_test.json
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [15340, 33244, 49812, 52156], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 13.516, "tree_rss_bytes": 153624576, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [15340, 33244, 49812, 52156], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 16.922, "tree_rss_bytes": 169533440, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 20.36, "tree_rss_bytes": 187068416, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [15340, 33244, 49812, 52156], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 23.641, "tree_rss_bytes": 204095488, "foreign_peers": []}
+[layers] yolov8s_share.ignite: 66 layer pieces, 1138292 B stream, pieces sum 1138292 B
+LAYER_TIME {"arm": "real", "index": 0, "name": "/model.0/conv/Conv", "ms": 0.6486, "net_ms": 0.5551, "spread_ms": 0.0279, "rounds_in_layer": 256, "packets": 1024, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 1, "name": "/model.1/conv/Conv", "ms": 0.9023, "net_ms": 0.8088, "spread_ms": 0.0306, "rounds_in_layer": 128, "packets": 2048, "w_fills": 128}
+LAYER_TIME {"arm": "real", "index": 2, "name": "/model.2/cv1/conv/Conv", "ms": 0.2892, "net_ms": 0.1957, "spread_ms": 0.026, "rounds_in_layer": 128, "packets": 512, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 3, "name": "/model.2/m.0/cv1/conv/Conv", "ms": 0.3073, "net_ms": 0.2138, "spread_ms": 0.0247, "rounds_in_layer": 64, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 4, "name": "/model.2/m.0/cv2/conv/Conv", "ms": 0.3703, "net_ms": 0.2767, "spread_ms": 0.024, "rounds_in_layer": 64, "packets": 512, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 5, "name": "/model.2/cv2/conv/Conv", "ms": 0.4213, "net_ms": 0.3277, "spread_ms": 0.0327, "rounds_in_layer": 128, "packets": 1024, "w_fills": 8}
+LAYER_TIME {"arm": "real", "index": 6, "name": "/model.3/conv/Conv", "ms": 0.9328, "net_ms": 0.8393, "spread_ms": 0.0242, "rounds_in_layer": 64, "packets": 2048, "w_fills": 16}
+LAYER_TIME {"arm": "real", "index": 7, "name": "/model.4/cv1/conv/Conv", "ms": 0.2834, "net_ms": 0.1898, "spread_ms": 0.0279, "rounds_in_layer": 64, "packets": 512, "w_fills": 16}
+LAYER_TIME {"arm": "real", "index": 8, "name": "/model.4/m.0/cv1/conv/Conv", "ms": 0.2986, "net_ms": 0.2051, "spread_ms": 0.029, "rounds_in_layer": 32, "packets": 256, "w_fills": 8}
+LAYER_TIME {"arm": "real", "index": 9, "name": "/model.4/m.0/cv2/conv/Conv", "ms": 0.3271, "net_ms": 0.2336, "spread_ms": 0.0397, "rounds_in_layer": 32, "packets": 384, "w_fills": 8}
+LAYER_TIME {"arm": "real", "index": 10, "name": "/model.4/m.1/cv1/conv/Conv", "ms": 0.3026, "net_ms": 0.2091, "spread_ms": 0.0428, "rounds_in_layer": 32, "packets": 256, "w_fills": 8}
+LAYER_TIME {"arm": "real", "index": 11, "name": "/model.4/m.1/cv2/conv/Conv", "ms": 0.3234, "net_ms": 0.2298, "spread_ms": 0.0227, "rounds_in_layer": 32, "packets": 384, "w_fills": 8}
+LAYER_TIME {"arm": "real", "index": 12, "name": "/model.4/cv2/conv/Conv", "ms": 0.4068, "net_ms": 0.3132, "spread_ms": 0.0304, "rounds_in_layer": 64, "packets": 1024, "w_fills": 16}
+LAYER_TIME {"arm": "real", "index": 13, "name": "/model.5/conv/Conv", "ms": 0.8758, "net_ms": 0.7823, "spread_ms": 0.0437, "rounds_in_layer": 32, "packets": 2048, "w_fills": 32}
+LAYER_TIME {"arm": "real", "index": 14, "name": "/model.6/cv1/conv/Conv", "ms": 0.2799, "net_ms": 0.1863, "spread_ms": 0.0321, "rounds_in_layer": 32, "packets": 512, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 15, "name": "/model.6/m.0/cv1/conv/Conv", "ms": 0.2935, "net_ms": 0.2, "spread_ms": 0.0302, "rounds_in_layer": 16, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 16, "name": "/model.6/m.0/cv2/conv/Conv", "ms": 0.3032, "net_ms": 0.2096, "spread_ms": 0.0154, "rounds_in_layer": 16, "packets": 320, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 17, "name": "/model.6/m.1/cv1/conv/Conv", "ms": 0.2977, "net_ms": 0.2042, "spread_ms": 0.0193, "rounds_in_layer": 16, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 18, "name": "/model.6/m.1/cv2/conv/Conv", "ms": 0.3065, "net_ms": 0.213, "spread_ms": 0.0342, "rounds_in_layer": 16, "packets": 320, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 19, "name": "/model.6/cv2/conv/Conv", "ms": 0.4576, "net_ms": 0.364, "spread_ms": 0.0264, "rounds_in_layer": 32, "packets": 1024, "w_fills": 32}
+LAYER_TIME {"arm": "real", "index": 20, "name": "/model.7/conv/Conv", "ms": 0.8928, "net_ms": 0.7993, "spread_ms": 0.0348, "rounds_in_layer": 16, "packets": 2048, "w_fills": 16}
+LAYER_TIME {"arm": "real", "index": 21, "name": "/model.8/cv1/conv/Conv", "ms": 0.2607, "net_ms": 0.1672, "spread_ms": 0.0423, "rounds_in_layer": 16, "packets": 512, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 22, "name": "/model.8/m.0/cv1/conv/Conv", "ms": 0.2955, "net_ms": 0.2019, "spread_ms": 0.028, "rounds_in_layer": 8, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 23, "name": "/model.8/m.0/cv2/conv/Conv", "ms": 0.3085, "net_ms": 0.215, "spread_ms": 0.041, "rounds_in_layer": 8, "packets": 288, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 24, "name": "/model.8/cv2/conv/Conv", "ms": 0.3536, "net_ms": 0.2601, "spread_ms": 0.0272, "rounds_in_layer": 16, "packets": 768, "w_fills": 16}
+LAYER_TIME {"arm": "real", "index": 25, "name": "/model.9/cv1/conv/Conv", "ms": 0.1885, "net_ms": 0.095, "spread_ms": 0.0244, "rounds_in_layer": 8, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 26, "name": "/model.9/m/MaxPool", "ms": 0.1502, "net_ms": 0.0567, "spread_ms": 0.0243, "rounds_in_layer": 8, "packets": 64, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 27, "name": "/model.9/m_1/MaxPool", "ms": 0.1517, "net_ms": 0.0581, "spread_ms": 0.0252, "rounds_in_layer": 8, "packets": 64, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 28, "name": "/model.9/m_2/MaxPool", "ms": 0.1548, "net_ms": 0.0613, "spread_ms": 0.0376, "rounds_in_layer": 8, "packets": 64, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 29, "name": "/model.9/cv2/conv/Conv", "ms": 0.4299, "net_ms": 0.3364, "spread_ms": 0.0315, "rounds_in_layer": 16, "packets": 1024, "w_fills": 16}
+LAYER_TIME {"arm": "real", "index": 30, "name": "/model.12/cv1/conv/Conv", "ms": 0.5682, "net_ms": 0.4746, "spread_ms": 0.0375, "rounds_in_layer": 32, "packets": 1536, "w_fills": 32}
+LAYER_TIME {"arm": "real", "index": 31, "name": "/model.12/m.0/cv1/conv/Conv", "ms": 0.2985, "net_ms": 0.2049, "spread_ms": 0.0395, "rounds_in_layer": 16, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 32, "name": "/model.12/m.0/cv2/conv/Conv", "ms": 0.2895, "net_ms": 0.196, "spread_ms": 0.0252, "rounds_in_layer": 16, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 33, "name": "/model.12/cv2/conv/Conv", "ms": 0.3643, "net_ms": 0.2708, "spread_ms": 0.0461, "rounds_in_layer": 32, "packets": 768, "w_fills": 32}
+LAYER_TIME {"arm": "real", "index": 34, "name": "/model.15/cv1/conv/Conv", "ms": 0.6114, "net_ms": 0.5178, "spread_ms": 0.0313, "rounds_in_layer": 64, "packets": 1536, "w_fills": 16}
+LAYER_TIME {"arm": "real", "index": 35, "name": "/model.15/m.0/cv1/conv/Conv", "ms": 0.2933, "net_ms": 0.1997, "spread_ms": 0.0373, "rounds_in_layer": 32, "packets": 256, "w_fills": 8}
+LAYER_TIME {"arm": "real", "index": 36, "name": "/model.15/m.0/cv2/conv/Conv", "ms": 0.2884, "net_ms": 0.1948, "spread_ms": 0.0209, "rounds_in_layer": 32, "packets": 256, "w_fills": 8}
+LAYER_TIME {"arm": "real", "index": 37, "name": "/model.15/cv2/conv/Conv", "ms": 0.3657, "net_ms": 0.2721, "spread_ms": 0.0205, "rounds_in_layer": 64, "packets": 768, "w_fills": 16}
+LAYER_TIME {"arm": "real", "index": 38, "name": "/model.16/conv/Conv", "ms": 0.5194, "net_ms": 0.4259, "spread_ms": 0.031, "rounds_in_layer": 16, "packets": 1024, "w_fills": 16}
+LAYER_TIME {"arm": "real", "index": 39, "name": "/model.22/cv2.0/cv2.0.0/conv/Conv", "ms": 0.4514, "net_ms": 0.3578, "spread_ms": 0.0551, "rounds_in_layer": 32, "packets": 512, "w_fills": 8}
+LAYER_TIME {"arm": "real", "index": 40, "name": "/model.22/cv3.0/cv3.0.0/conv/Conv", "ms": 0.7636, "net_ms": 0.6701, "spread_ms": 0.0193, "rounds_in_layer": 64, "packets": 1024, "w_fills": 16}
+LAYER_TIME {"arm": "real", "index": 41, "name": "/model.22/cv2.0/cv2.0.1/conv/Conv", "ms": 0.2954, "net_ms": 0.2019, "spread_ms": 0.0304, "rounds_in_layer": 32, "packets": 256, "w_fills": 8}
+LAYER_TIME {"arm": "real", "index": 42, "name": "/model.22/cv3.0/cv3.0.1/conv/Conv", "ms": 0.7656, "net_ms": 0.672, "spread_ms": 0.0438, "rounds_in_layer": 64, "packets": 1024, "w_fills": 16}
+LAYER_TIME {"arm": "real", "index": 43, "name": "/model.18/cv1/conv/Conv", "ms": 0.3888, "net_ms": 0.2953, "spread_ms": 0.0436, "rounds_in_layer": 32, "packets": 768, "w_fills": 32}
+LAYER_TIME {"arm": "real", "index": 44, "name": "/model.22/cv2.0/cv2.0.2/Conv", "ms": 0.1532, "net_ms": 0.0596, "spread_ms": 0.0391, "rounds_in_layer": 32, "packets": 128, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 45, "name": "/model.22/cv3.0/cv3.0.2/Conv", "ms": 0.1996, "net_ms": 0.106, "spread_ms": 0.0277, "rounds_in_layer": 48, "packets": 384, "w_fills": 12}
+LAYER_TIME {"arm": "real", "index": 46, "name": "/model.18/m.0/cv1/conv/Conv", "ms": 0.2997, "net_ms": 0.2061, "spread_ms": 0.0339, "rounds_in_layer": 16, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 47, "name": "/model.18/m.0/cv2/conv/Conv", "ms": 0.2929, "net_ms": 0.1994, "spread_ms": 0.0306, "rounds_in_layer": 16, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 48, "name": "/model.18/cv2/conv/Conv", "ms": 0.3639, "net_ms": 0.2704, "spread_ms": 0.0248, "rounds_in_layer": 32, "packets": 768, "w_fills": 32}
+LAYER_TIME {"arm": "real", "index": 49, "name": "/model.19/conv/Conv", "ms": 0.5226, "net_ms": 0.4291, "spread_ms": 0.0377, "rounds_in_layer": 8, "packets": 1024, "w_fills": 8}
+LAYER_TIME {"arm": "real", "index": 50, "name": "/model.22/cv2.1/cv2.1.0/conv/Conv", "ms": 0.2898, "net_ms": 0.1963, "spread_ms": 0.0227, "rounds_in_layer": 8, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 51, "name": "/model.22/cv3.1/cv3.1.0/conv/Conv", "ms": 0.4526, "net_ms": 0.359, "spread_ms": 0.0261, "rounds_in_layer": 16, "packets": 512, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 52, "name": "/model.22/cv2.1/cv2.1.1/conv/Conv", "ms": 0.1698, "net_ms": 0.0763, "spread_ms": 0.0255, "rounds_in_layer": 8, "packets": 64, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 53, "name": "/model.22/cv3.1/cv3.1.1/conv/Conv", "ms": 0.2975, "net_ms": 0.204, "spread_ms": 0.0328, "rounds_in_layer": 16, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 54, "name": "/model.21/cv1/conv/Conv", "ms": 0.3257, "net_ms": 0.2322, "spread_ms": 0.0466, "rounds_in_layer": 16, "packets": 768, "w_fills": 16}
+LAYER_TIME {"arm": "real", "index": 55, "name": "/model.22/cv2.1/cv2.1.2/Conv", "ms": 0.1327, "net_ms": 0.0391, "spread_ms": 0.0237, "rounds_in_layer": 8, "packets": 32, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 56, "name": "/model.22/cv3.1/cv3.1.2/Conv", "ms": 0.1451, "net_ms": 0.0515, "spread_ms": 0.036, "rounds_in_layer": 12, "packets": 96, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 57, "name": "/model.21/m.0/cv1/conv/Conv", "ms": 0.2919, "net_ms": 0.1983, "spread_ms": 0.0506, "rounds_in_layer": 8, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 58, "name": "/model.21/m.0/cv2/conv/Conv", "ms": 0.2877, "net_ms": 0.1942, "spread_ms": 0.0477, "rounds_in_layer": 8, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 59, "name": "/model.21/cv2/conv/Conv", "ms": 0.3567, "net_ms": 0.2631, "spread_ms": 0.0367, "rounds_in_layer": 16, "packets": 768, "w_fills": 16}
+LAYER_TIME {"arm": "real", "index": 60, "name": "/model.22/cv2.2/cv2.2.0/conv/Conv", "ms": 0.2795, "net_ms": 0.186, "spread_ms": 0.0224, "rounds_in_layer": 2, "packets": 128, "w_fills": 2}
+LAYER_TIME {"arm": "real", "index": 61, "name": "/model.22/cv3.2/cv3.2.0/conv/Conv", "ms": 0.2855, "net_ms": 0.192, "spread_ms": 0.0402, "rounds_in_layer": 4, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 62, "name": "/model.22/cv2.2/cv2.2.1/conv/Conv", "ms": 0.1373, "net_ms": 0.0438, "spread_ms": 0.0285, "rounds_in_layer": 2, "packets": 16, "w_fills": 2}
+LAYER_TIME {"arm": "real", "index": 63, "name": "/model.22/cv3.2/cv3.2.1/conv/Conv", "ms": 0.1626, "net_ms": 0.069, "spread_ms": 0.033, "rounds_in_layer": 4, "packets": 64, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 64, "name": "/model.22/cv2.2/cv2.2.2/Conv", "ms": 0.1116, "net_ms": 0.0181, "spread_ms": 0.0296, "rounds_in_layer": 2, "packets": 8, "w_fills": 2}
+LAYER_TIME {"arm": "real", "index": 65, "name": "/model.22/cv3.2/cv3.2.2/Conv", "ms": 0.1272, "net_ms": 0.0337, "spread_ms": 0.0272, "rounds_in_layer": 3, "packets": 24, "w_fills": 3}
+SUMMARY {"arm": "real", "whole_ms_median": 16.5984, "empty_ms_median": 0.0935, "empty_ms_p10_p90": [0.0786, 0.1123], "sum_layer_ms": 23.7627, "sum_net_ms": 17.589, "whole_minus_empty_ms": 16.5049, "net_over_whole_less_empty": 1.0657, "mismatched_rounds": 0, "rounds_total": 25, "layers": 66}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [15340, 33244, 49812, 50596, 52156], "foreign_pids": []}
+LAYER_TIME {"arm": "nop", "index": 0, "name": "/model.0/conv/Conv", "ms": 0.4541, "net_ms": 0.359, "spread_ms": 0.0472, "rounds_in_layer": 256, "packets": 1024, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 1, "name": "/model.1/conv/Conv", "ms": 0.6846, "net_ms": 0.5896, "spread_ms": 0.0315, "rounds_in_layer": 128, "packets": 2048, "w_fills": 128}
+LAYER_TIME {"arm": "nop", "index": 2, "name": "/model.2/cv1/conv/Conv", "ms": 0.2456, "net_ms": 0.1506, "spread_ms": 0.0319, "rounds_in_layer": 128, "packets": 512, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 3, "name": "/model.2/m.0/cv1/conv/Conv", "ms": 0.1972, "net_ms": 0.1022, "spread_ms": 0.0288, "rounds_in_layer": 64, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 4, "name": "/model.2/m.0/cv2/conv/Conv", "ms": 0.2827, "net_ms": 0.1877, "spread_ms": 0.0293, "rounds_in_layer": 64, "packets": 512, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 5, "name": "/model.2/cv2/conv/Conv", "ms": 0.3951, "net_ms": 0.3001, "spread_ms": 0.03, "rounds_in_layer": 128, "packets": 1024, "w_fills": 8}
+LAYER_TIME {"arm": "nop", "index": 6, "name": "/model.3/conv/Conv", "ms": 0.6125, "net_ms": 0.5175, "spread_ms": 0.0256, "rounds_in_layer": 64, "packets": 2048, "w_fills": 16}
+LAYER_TIME {"arm": "nop", "index": 7, "name": "/model.4/cv1/conv/Conv", "ms": 0.2507, "net_ms": 0.1556, "spread_ms": 0.0284, "rounds_in_layer": 64, "packets": 512, "w_fills": 16}
+LAYER_TIME {"arm": "nop", "index": 8, "name": "/model.4/m.0/cv1/conv/Conv", "ms": 0.1895, "net_ms": 0.0944, "spread_ms": 0.0216, "rounds_in_layer": 32, "packets": 256, "w_fills": 8}
+LAYER_TIME {"arm": "nop", "index": 9, "name": "/model.4/m.0/cv2/conv/Conv", "ms": 0.2249, "net_ms": 0.1298, "spread_ms": 0.0231, "rounds_in_layer": 32, "packets": 384, "w_fills": 8}
+LAYER_TIME {"arm": "nop", "index": 10, "name": "/model.4/m.1/cv1/conv/Conv", "ms": 0.1907, "net_ms": 0.0957, "spread_ms": 0.0253, "rounds_in_layer": 32, "packets": 256, "w_fills": 8}
+LAYER_TIME {"arm": "nop", "index": 11, "name": "/model.4/m.1/cv2/conv/Conv", "ms": 0.2267, "net_ms": 0.1317, "spread_ms": 0.0229, "rounds_in_layer": 32, "packets": 384, "w_fills": 8}
+LAYER_TIME {"arm": "nop", "index": 12, "name": "/model.4/cv2/conv/Conv", "ms": 0.3901, "net_ms": 0.2951, "spread_ms": 0.0333, "rounds_in_layer": 64, "packets": 1024, "w_fills": 16}
+LAYER_TIME {"arm": "nop", "index": 13, "name": "/model.5/conv/Conv", "ms": 0.523, "net_ms": 0.4279, "spread_ms": 0.0364, "rounds_in_layer": 32, "packets": 2048, "w_fills": 32}
+LAYER_TIME {"arm": "nop", "index": 14, "name": "/model.6/cv1/conv/Conv", "ms": 0.2514, "net_ms": 0.1564, "spread_ms": 0.0173, "rounds_in_layer": 32, "packets": 512, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 15, "name": "/model.6/m.0/cv1/conv/Conv", "ms": 0.1946, "net_ms": 0.0996, "spread_ms": 0.0299, "rounds_in_layer": 16, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 16, "name": "/model.6/m.0/cv2/conv/Conv", "ms": 0.207, "net_ms": 0.112, "spread_ms": 0.028, "rounds_in_layer": 16, "packets": 320, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 17, "name": "/model.6/m.1/cv1/conv/Conv", "ms": 0.1939, "net_ms": 0.0989, "spread_ms": 0.0314, "rounds_in_layer": 16, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 18, "name": "/model.6/m.1/cv2/conv/Conv", "ms": 0.2135, "net_ms": 0.1185, "spread_ms": 0.0259, "rounds_in_layer": 16, "packets": 320, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 19, "name": "/model.6/cv2/conv/Conv", "ms": 0.4461, "net_ms": 0.3511, "spread_ms": 0.031, "rounds_in_layer": 32, "packets": 1024, "w_fills": 32}
+LAYER_TIME {"arm": "nop", "index": 20, "name": "/model.7/conv/Conv", "ms": 0.5279, "net_ms": 0.4328, "spread_ms": 0.0222, "rounds_in_layer": 16, "packets": 2048, "w_fills": 16}
+LAYER_TIME {"arm": "nop", "index": 21, "name": "/model.8/cv1/conv/Conv", "ms": 0.2435, "net_ms": 0.1485, "spread_ms": 0.0336, "rounds_in_layer": 16, "packets": 512, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 22, "name": "/model.8/m.0/cv1/conv/Conv", "ms": 0.1961, "net_ms": 0.1011, "spread_ms": 0.0391, "rounds_in_layer": 8, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 23, "name": "/model.8/m.0/cv2/conv/Conv", "ms": 0.2146, "net_ms": 0.1196, "spread_ms": 0.0349, "rounds_in_layer": 8, "packets": 288, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 24, "name": "/model.8/cv2/conv/Conv", "ms": 0.3472, "net_ms": 0.2522, "spread_ms": 0.0439, "rounds_in_layer": 16, "packets": 768, "w_fills": 16}
+LAYER_TIME {"arm": "nop", "index": 25, "name": "/model.9/cv1/conv/Conv", "ms": 0.1758, "net_ms": 0.0807, "spread_ms": 0.0453, "rounds_in_layer": 8, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 26, "name": "/model.9/m/MaxPool", "ms": 0.1371, "net_ms": 0.042, "spread_ms": 0.0406, "rounds_in_layer": 8, "packets": 64, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 27, "name": "/model.9/m_1/MaxPool", "ms": 0.1345, "net_ms": 0.0394, "spread_ms": 0.0397, "rounds_in_layer": 8, "packets": 64, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 28, "name": "/model.9/m_2/MaxPool", "ms": 0.1286, "net_ms": 0.0335, "spread_ms": 0.0302, "rounds_in_layer": 8, "packets": 64, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 29, "name": "/model.9/cv2/conv/Conv", "ms": 0.4332, "net_ms": 0.3381, "spread_ms": 0.032, "rounds_in_layer": 16, "packets": 1024, "w_fills": 16}
+LAYER_TIME {"arm": "nop", "index": 30, "name": "/model.12/cv1/conv/Conv", "ms": 0.5452, "net_ms": 0.4501, "spread_ms": 0.0299, "rounds_in_layer": 32, "packets": 1536, "w_fills": 32}
+LAYER_TIME {"arm": "nop", "index": 31, "name": "/model.12/m.0/cv1/conv/Conv", "ms": 0.2004, "net_ms": 0.1053, "spread_ms": 0.0237, "rounds_in_layer": 16, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 32, "name": "/model.12/m.0/cv2/conv/Conv", "ms": 0.2028, "net_ms": 0.1077, "spread_ms": 0.0276, "rounds_in_layer": 16, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 33, "name": "/model.12/cv2/conv/Conv", "ms": 0.354, "net_ms": 0.2589, "spread_ms": 0.0352, "rounds_in_layer": 32, "packets": 768, "w_fills": 32}
+LAYER_TIME {"arm": "nop", "index": 34, "name": "/model.15/cv1/conv/Conv", "ms": 0.5967, "net_ms": 0.5017, "spread_ms": 0.0312, "rounds_in_layer": 64, "packets": 1536, "w_fills": 16}
+LAYER_TIME {"arm": "nop", "index": 35, "name": "/model.15/m.0/cv1/conv/Conv", "ms": 0.1982, "net_ms": 0.1032, "spread_ms": 0.0325, "rounds_in_layer": 32, "packets": 256, "w_fills": 8}
+LAYER_TIME {"arm": "nop", "index": 36, "name": "/model.15/m.0/cv2/conv/Conv", "ms": 0.1964, "net_ms": 0.1014, "spread_ms": 0.033, "rounds_in_layer": 32, "packets": 256, "w_fills": 8}
+LAYER_TIME {"arm": "nop", "index": 37, "name": "/model.15/cv2/conv/Conv", "ms": 0.3669, "net_ms": 0.2719, "spread_ms": 0.0273, "rounds_in_layer": 64, "packets": 768, "w_fills": 16}
+LAYER_TIME {"arm": "nop", "index": 38, "name": "/model.16/conv/Conv", "ms": 0.3284, "net_ms": 0.2333, "spread_ms": 0.0277, "rounds_in_layer": 16, "packets": 1024, "w_fills": 16}
+LAYER_TIME {"arm": "nop", "index": 39, "name": "/model.22/cv2.0/cv2.0.0/conv/Conv", "ms": 0.2845, "net_ms": 0.1894, "spread_ms": 0.027, "rounds_in_layer": 32, "packets": 512, "w_fills": 8}
+LAYER_TIME {"arm": "nop", "index": 40, "name": "/model.22/cv3.0/cv3.0.0/conv/Conv", "ms": 0.4448, "net_ms": 0.3498, "spread_ms": 0.0476, "rounds_in_layer": 64, "packets": 1024, "w_fills": 16}
+LAYER_TIME {"arm": "nop", "index": 41, "name": "/model.22/cv2.0/cv2.0.1/conv/Conv", "ms": 0.2026, "net_ms": 0.1075, "spread_ms": 0.0381, "rounds_in_layer": 32, "packets": 256, "w_fills": 8}
+LAYER_TIME {"arm": "nop", "index": 42, "name": "/model.22/cv3.0/cv3.0.1/conv/Conv", "ms": 0.4417, "net_ms": 0.3467, "spread_ms": 0.0188, "rounds_in_layer": 64, "packets": 1024, "w_fills": 16}
+LAYER_TIME {"arm": "nop", "index": 43, "name": "/model.18/cv1/conv/Conv", "ms": 0.3679, "net_ms": 0.2729, "spread_ms": 0.0232, "rounds_in_layer": 32, "packets": 768, "w_fills": 32}
+LAYER_TIME {"arm": "nop", "index": 44, "name": "/model.22/cv2.0/cv2.0.2/Conv", "ms": 0.1459, "net_ms": 0.0509, "spread_ms": 0.0273, "rounds_in_layer": 32, "packets": 128, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 45, "name": "/model.22/cv3.0/cv3.0.2/Conv", "ms": 0.1992, "net_ms": 0.1041, "spread_ms": 0.0258, "rounds_in_layer": 48, "packets": 384, "w_fills": 12}
+LAYER_TIME {"arm": "nop", "index": 46, "name": "/model.18/m.0/cv1/conv/Conv", "ms": 0.2025, "net_ms": 0.1074, "spread_ms": 0.028, "rounds_in_layer": 16, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 47, "name": "/model.18/m.0/cv2/conv/Conv", "ms": 0.2008, "net_ms": 0.1058, "spread_ms": 0.0359, "rounds_in_layer": 16, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 48, "name": "/model.18/cv2/conv/Conv", "ms": 0.3494, "net_ms": 0.2544, "spread_ms": 0.0356, "rounds_in_layer": 32, "packets": 768, "w_fills": 32}
+LAYER_TIME {"arm": "nop", "index": 49, "name": "/model.19/conv/Conv", "ms": 0.3275, "net_ms": 0.2324, "spread_ms": 0.0278, "rounds_in_layer": 8, "packets": 1024, "w_fills": 8}
+LAYER_TIME {"arm": "nop", "index": 50, "name": "/model.22/cv2.1/cv2.1.0/conv/Conv", "ms": 0.1978, "net_ms": 0.1028, "spread_ms": 0.0282, "rounds_in_layer": 8, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 51, "name": "/model.22/cv3.1/cv3.1.0/conv/Conv", "ms": 0.2753, "net_ms": 0.1803, "spread_ms": 0.0232, "rounds_in_layer": 16, "packets": 512, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 52, "name": "/model.22/cv2.1/cv2.1.1/conv/Conv", "ms": 0.1307, "net_ms": 0.0357, "spread_ms": 0.0241, "rounds_in_layer": 8, "packets": 64, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 53, "name": "/model.22/cv3.1/cv3.1.1/conv/Conv", "ms": 0.1985, "net_ms": 0.1035, "spread_ms": 0.0165, "rounds_in_layer": 16, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 54, "name": "/model.21/cv1/conv/Conv", "ms": 0.3073, "net_ms": 0.2122, "spread_ms": 0.0223, "rounds_in_layer": 16, "packets": 768, "w_fills": 16}
+LAYER_TIME {"arm": "nop", "index": 55, "name": "/model.22/cv2.1/cv2.1.2/Conv", "ms": 0.1289, "net_ms": 0.0339, "spread_ms": 0.0282, "rounds_in_layer": 8, "packets": 32, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 56, "name": "/model.22/cv3.1/cv3.1.2/Conv", "ms": 0.1369, "net_ms": 0.0418, "spread_ms": 0.0245, "rounds_in_layer": 12, "packets": 96, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 57, "name": "/model.21/m.0/cv1/conv/Conv", "ms": 0.2003, "net_ms": 0.1053, "spread_ms": 0.0262, "rounds_in_layer": 8, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 58, "name": "/model.21/m.0/cv2/conv/Conv", "ms": 0.1982, "net_ms": 0.1031, "spread_ms": 0.0343, "rounds_in_layer": 8, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 59, "name": "/model.21/cv2/conv/Conv", "ms": 0.3491, "net_ms": 0.2541, "spread_ms": 0.0289, "rounds_in_layer": 16, "packets": 768, "w_fills": 16}
+LAYER_TIME {"arm": "nop", "index": 60, "name": "/model.22/cv2.2/cv2.2.0/conv/Conv", "ms": 0.1846, "net_ms": 0.0896, "spread_ms": 0.0268, "rounds_in_layer": 2, "packets": 128, "w_fills": 2}
+LAYER_TIME {"arm": "nop", "index": 61, "name": "/model.22/cv3.2/cv3.2.0/conv/Conv", "ms": 0.1966, "net_ms": 0.1016, "spread_ms": 0.0208, "rounds_in_layer": 4, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 62, "name": "/model.22/cv2.2/cv2.2.1/conv/Conv", "ms": 0.1164, "net_ms": 0.0213, "spread_ms": 0.027, "rounds_in_layer": 2, "packets": 16, "w_fills": 2}
+LAYER_TIME {"arm": "nop", "index": 63, "name": "/model.22/cv3.2/cv3.2.1/conv/Conv", "ms": 0.1312, "net_ms": 0.0361, "spread_ms": 0.0274, "rounds_in_layer": 4, "packets": 64, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 64, "name": "/model.22/cv2.2/cv2.2.2/Conv", "ms": 0.1175, "net_ms": 0.0225, "spread_ms": 0.0256, "rounds_in_layer": 2, "packets": 8, "w_fills": 2}
+LAYER_TIME {"arm": "nop", "index": 65, "name": "/model.22/cv3.2/cv3.2.2/Conv", "ms": 0.1266, "net_ms": 0.0315, "spread_ms": 0.0384, "rounds_in_layer": 3, "packets": 24, "w_fills": 3}
+SUMMARY {"arm": "nop", "whole_ms_median": 11.3575, "empty_ms_median": 0.095, "empty_ms_p10_p90": [0.0832, 0.1178], "sum_layer_ms": 18.0641, "sum_net_ms": 11.7914, "whole_minus_empty_ms": 11.2625, "net_over_whole_less_empty": 1.047, "mismatched_rounds": 0, "rounds_total": 25, "layers": 66}
+[diag] run 3/4 test -> stream_share_layer_diag_desktop2_20261013T1501Z_run3_test.json
+HOST_TIMELINE {"elapsed_seconds": 27.0, "tree_rss_bytes": 63229952, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 30.407, "tree_rss_bytes": 153174016, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [15340, 33244, 49812, 50596, 52156], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 33.86, "tree_rss_bytes": 170807296, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [15340, 33244, 49812, 50596, 52156], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 37.297, "tree_rss_bytes": 188751872, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 40.563, "tree_rss_bytes": 209772544, "foreign_peers": []}
+[layers] yolov8s_share.ignite: 66 layer pieces, 1138292 B stream, pieces sum 1138292 B
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 112 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |50596               |125        |1626        |0           |0    |Normal   |\n      |python.exe          |Active     |1625        |0           |     |N/A      |\n      |112 MB              |4832 KB    |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [50596], "owned_pids": [15340, 33244, 49812, 50596, 52156], "foreign_pids": []}
+LAYER_TIME {"arm": "real", "index": 0, "name": "/model.0/conv/Conv", "ms": 0.6526, "net_ms": 0.556, "spread_ms": 0.0283, "rounds_in_layer": 256, "packets": 1024, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 1, "name": "/model.1/conv/Conv", "ms": 0.9159, "net_ms": 0.8193, "spread_ms": 0.0351, "rounds_in_layer": 128, "packets": 2048, "w_fills": 128}
+LAYER_TIME {"arm": "real", "index": 2, "name": "/model.2/cv1/conv/Conv", "ms": 0.2947, "net_ms": 0.198, "spread_ms": 0.0326, "rounds_in_layer": 128, "packets": 512, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 3, "name": "/model.2/m.0/cv1/conv/Conv", "ms": 0.3076, "net_ms": 0.211, "spread_ms": 0.049, "rounds_in_layer": 64, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 4, "name": "/model.2/m.0/cv2/conv/Conv", "ms": 0.372, "net_ms": 0.2754, "spread_ms": 0.0439, "rounds_in_layer": 64, "packets": 512, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 5, "name": "/model.2/cv2/conv/Conv", "ms": 0.4156, "net_ms": 0.3189, "spread_ms": 0.0265, "rounds_in_layer": 128, "packets": 1024, "w_fills": 8}
+LAYER_TIME {"arm": "real", "index": 6, "name": "/model.3/conv/Conv", "ms": 0.9283, "net_ms": 0.8316, "spread_ms": 0.0297, "rounds_in_layer": 64, "packets": 2048, "w_fills": 16}
+LAYER_TIME {"arm": "real", "index": 7, "name": "/model.4/cv1/conv/Conv", "ms": 0.2817, "net_ms": 0.185, "spread_ms": 0.0324, "rounds_in_layer": 64, "packets": 512, "w_fills": 16}
+LAYER_TIME {"arm": "real", "index": 8, "name": "/model.4/m.0/cv1/conv/Conv", "ms": 0.2903, "net_ms": 0.1937, "spread_ms": 0.0366, "rounds_in_layer": 32, "packets": 256, "w_fills": 8}
+LAYER_TIME {"arm": "real", "index": 9, "name": "/model.4/m.0/cv2/conv/Conv", "ms": 0.3191, "net_ms": 0.2224, "spread_ms": 0.0452, "rounds_in_layer": 32, "packets": 384, "w_fills": 8}
+LAYER_TIME {"arm": "real", "index": 10, "name": "/model.4/m.1/cv1/conv/Conv", "ms": 0.2913, "net_ms": 0.1947, "spread_ms": 0.0468, "rounds_in_layer": 32, "packets": 256, "w_fills": 8}
+LAYER_TIME {"arm": "real", "index": 11, "name": "/model.4/m.1/cv2/conv/Conv", "ms": 0.3267, "net_ms": 0.2301, "spread_ms": 0.0256, "rounds_in_layer": 32, "packets": 384, "w_fills": 8}
+LAYER_TIME {"arm": "real", "index": 12, "name": "/model.4/cv2/conv/Conv", "ms": 0.4106, "net_ms": 0.3139, "spread_ms": 0.0255, "rounds_in_layer": 64, "packets": 1024, "w_fills": 16}
+LAYER_TIME {"arm": "real", "index": 13, "name": "/model.5/conv/Conv", "ms": 0.884, "net_ms": 0.7873, "spread_ms": 0.0421, "rounds_in_layer": 32, "packets": 2048, "w_fills": 32}
+LAYER_TIME {"arm": "real", "index": 14, "name": "/model.6/cv1/conv/Conv", "ms": 0.2871, "net_ms": 0.1904, "spread_ms": 0.0269, "rounds_in_layer": 32, "packets": 512, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 15, "name": "/model.6/m.0/cv1/conv/Conv", "ms": 0.2941, "net_ms": 0.1975, "spread_ms": 0.0322, "rounds_in_layer": 16, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 16, "name": "/model.6/m.0/cv2/conv/Conv", "ms": 0.306, "net_ms": 0.2093, "spread_ms": 0.0352, "rounds_in_layer": 16, "packets": 320, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 17, "name": "/model.6/m.1/cv1/conv/Conv", "ms": 0.2991, "net_ms": 0.2024, "spread_ms": 0.0417, "rounds_in_layer": 16, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 18, "name": "/model.6/m.1/cv2/conv/Conv", "ms": 0.3066, "net_ms": 0.2099, "spread_ms": 0.0456, "rounds_in_layer": 16, "packets": 320, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 19, "name": "/model.6/cv2/conv/Conv", "ms": 0.4589, "net_ms": 0.3623, "spread_ms": 0.0403, "rounds_in_layer": 32, "packets": 1024, "w_fills": 32}
+LAYER_TIME {"arm": "real", "index": 20, "name": "/model.7/conv/Conv", "ms": 0.8882, "net_ms": 0.7915, "spread_ms": 0.0279, "rounds_in_layer": 16, "packets": 2048, "w_fills": 16}
+LAYER_TIME {"arm": "real", "index": 21, "name": "/model.8/cv1/conv/Conv", "ms": 0.2619, "net_ms": 0.1652, "spread_ms": 0.0216, "rounds_in_layer": 16, "packets": 512, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 22, "name": "/model.8/m.0/cv1/conv/Conv", "ms": 0.2946, "net_ms": 0.1979, "spread_ms": 0.0226, "rounds_in_layer": 8, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 23, "name": "/model.8/m.0/cv2/conv/Conv", "ms": 0.3068, "net_ms": 0.2102, "spread_ms": 0.0356, "rounds_in_layer": 8, "packets": 288, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 24, "name": "/model.8/cv2/conv/Conv", "ms": 0.3594, "net_ms": 0.2627, "spread_ms": 0.0354, "rounds_in_layer": 16, "packets": 768, "w_fills": 16}
+LAYER_TIME {"arm": "real", "index": 25, "name": "/model.9/cv1/conv/Conv", "ms": 0.1872, "net_ms": 0.0906, "spread_ms": 0.022, "rounds_in_layer": 8, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 26, "name": "/model.9/m/MaxPool", "ms": 0.1535, "net_ms": 0.0569, "spread_ms": 0.0289, "rounds_in_layer": 8, "packets": 64, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 27, "name": "/model.9/m_1/MaxPool", "ms": 0.1509, "net_ms": 0.0542, "spread_ms": 0.028, "rounds_in_layer": 8, "packets": 64, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 28, "name": "/model.9/m_2/MaxPool", "ms": 0.1484, "net_ms": 0.0517, "spread_ms": 0.0268, "rounds_in_layer": 8, "packets": 64, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 29, "name": "/model.9/cv2/conv/Conv", "ms": 0.4345, "net_ms": 0.3378, "spread_ms": 0.0249, "rounds_in_layer": 16, "packets": 1024, "w_fills": 16}
+LAYER_TIME {"arm": "real", "index": 30, "name": "/model.12/cv1/conv/Conv", "ms": 0.5647, "net_ms": 0.4681, "spread_ms": 0.0266, "rounds_in_layer": 32, "packets": 1536, "w_fills": 32}
+LAYER_TIME {"arm": "real", "index": 31, "name": "/model.12/m.0/cv1/conv/Conv", "ms": 0.2984, "net_ms": 0.2017, "spread_ms": 0.0221, "rounds_in_layer": 16, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 32, "name": "/model.12/m.0/cv2/conv/Conv", "ms": 0.2915, "net_ms": 0.1948, "spread_ms": 0.0177, "rounds_in_layer": 16, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 33, "name": "/model.12/cv2/conv/Conv", "ms": 0.3568, "net_ms": 0.2602, "spread_ms": 0.0329, "rounds_in_layer": 32, "packets": 768, "w_fills": 32}
+LAYER_TIME {"arm": "real", "index": 34, "name": "/model.15/cv1/conv/Conv", "ms": 0.6063, "net_ms": 0.5096, "spread_ms": 0.0431, "rounds_in_layer": 64, "packets": 1536, "w_fills": 16}
+LAYER_TIME {"arm": "real", "index": 35, "name": "/model.15/m.0/cv1/conv/Conv", "ms": 0.2931, "net_ms": 0.1965, "spread_ms": 0.0275, "rounds_in_layer": 32, "packets": 256, "w_fills": 8}
+LAYER_TIME {"arm": "real", "index": 36, "name": "/model.15/m.0/cv2/conv/Conv", "ms": 0.2974, "net_ms": 0.2007, "spread_ms": 0.0274, "rounds_in_layer": 32, "packets": 256, "w_fills": 8}
+LAYER_TIME {"arm": "real", "index": 37, "name": "/model.15/cv2/conv/Conv", "ms": 0.3709, "net_ms": 0.2743, "spread_ms": 0.0314, "rounds_in_layer": 64, "packets": 768, "w_fills": 16}
+LAYER_TIME {"arm": "real", "index": 38, "name": "/model.16/conv/Conv", "ms": 0.5136, "net_ms": 0.4169, "spread_ms": 0.031, "rounds_in_layer": 16, "packets": 1024, "w_fills": 16}
+LAYER_TIME {"arm": "real", "index": 39, "name": "/model.22/cv2.0/cv2.0.0/conv/Conv", "ms": 0.4507, "net_ms": 0.354, "spread_ms": 0.0253, "rounds_in_layer": 32, "packets": 512, "w_fills": 8}
+LAYER_TIME {"arm": "real", "index": 40, "name": "/model.22/cv3.0/cv3.0.0/conv/Conv", "ms": 0.7558, "net_ms": 0.6592, "spread_ms": 0.0138, "rounds_in_layer": 64, "packets": 1024, "w_fills": 16}
+LAYER_TIME {"arm": "real", "index": 41, "name": "/model.22/cv2.0/cv2.0.1/conv/Conv", "ms": 0.2975, "net_ms": 0.2008, "spread_ms": 0.0316, "rounds_in_layer": 32, "packets": 256, "w_fills": 8}
+LAYER_TIME {"arm": "real", "index": 42, "name": "/model.22/cv3.0/cv3.0.1/conv/Conv", "ms": 0.7621, "net_ms": 0.6654, "spread_ms": 0.0294, "rounds_in_layer": 64, "packets": 1024, "w_fills": 16}
+LAYER_TIME {"arm": "real", "index": 43, "name": "/model.18/cv1/conv/Conv", "ms": 0.3824, "net_ms": 0.2857, "spread_ms": 0.032, "rounds_in_layer": 32, "packets": 768, "w_fills": 32}
+LAYER_TIME {"arm": "real", "index": 44, "name": "/model.22/cv2.0/cv2.0.2/Conv", "ms": 0.1565, "net_ms": 0.0598, "spread_ms": 0.0315, "rounds_in_layer": 32, "packets": 128, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 45, "name": "/model.22/cv3.0/cv3.0.2/Conv", "ms": 0.2066, "net_ms": 0.1099, "spread_ms": 0.0204, "rounds_in_layer": 48, "packets": 384, "w_fills": 12}
+LAYER_TIME {"arm": "real", "index": 46, "name": "/model.18/m.0/cv1/conv/Conv", "ms": 0.2965, "net_ms": 0.1998, "spread_ms": 0.0318, "rounds_in_layer": 16, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 47, "name": "/model.18/m.0/cv2/conv/Conv", "ms": 0.2981, "net_ms": 0.2014, "spread_ms": 0.0475, "rounds_in_layer": 16, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 48, "name": "/model.18/cv2/conv/Conv", "ms": 0.3628, "net_ms": 0.2661, "spread_ms": 0.0358, "rounds_in_layer": 32, "packets": 768, "w_fills": 32}
+LAYER_TIME {"arm": "real", "index": 49, "name": "/model.19/conv/Conv", "ms": 0.5276, "net_ms": 0.431, "spread_ms": 0.0456, "rounds_in_layer": 8, "packets": 1024, "w_fills": 8}
+LAYER_TIME {"arm": "real", "index": 50, "name": "/model.22/cv2.1/cv2.1.0/conv/Conv", "ms": 0.2907, "net_ms": 0.194, "spread_ms": 0.0334, "rounds_in_layer": 8, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 51, "name": "/model.22/cv3.1/cv3.1.0/conv/Conv", "ms": 0.4476, "net_ms": 0.351, "spread_ms": 0.0275, "rounds_in_layer": 16, "packets": 512, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 52, "name": "/model.22/cv2.1/cv2.1.1/conv/Conv", "ms": 0.1725, "net_ms": 0.0759, "spread_ms": 0.0334, "rounds_in_layer": 8, "packets": 64, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 53, "name": "/model.22/cv3.1/cv3.1.1/conv/Conv", "ms": 0.2973, "net_ms": 0.2006, "spread_ms": 0.0299, "rounds_in_layer": 16, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 54, "name": "/model.21/cv1/conv/Conv", "ms": 0.3242, "net_ms": 0.2275, "spread_ms": 0.0283, "rounds_in_layer": 16, "packets": 768, "w_fills": 16}
+LAYER_TIME {"arm": "real", "index": 55, "name": "/model.22/cv2.1/cv2.1.2/Conv", "ms": 0.1359, "net_ms": 0.0393, "spread_ms": 0.0236, "rounds_in_layer": 8, "packets": 32, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 56, "name": "/model.22/cv3.1/cv3.1.2/Conv", "ms": 0.1394, "net_ms": 0.0428, "spread_ms": 0.0302, "rounds_in_layer": 12, "packets": 96, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 57, "name": "/model.21/m.0/cv1/conv/Conv", "ms": 0.2903, "net_ms": 0.1937, "spread_ms": 0.0203, "rounds_in_layer": 8, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 58, "name": "/model.21/m.0/cv2/conv/Conv", "ms": 0.2904, "net_ms": 0.1937, "spread_ms": 0.0277, "rounds_in_layer": 8, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 59, "name": "/model.21/cv2/conv/Conv", "ms": 0.3503, "net_ms": 0.2537, "spread_ms": 0.0261, "rounds_in_layer": 16, "packets": 768, "w_fills": 16}
+LAYER_TIME {"arm": "real", "index": 60, "name": "/model.22/cv2.2/cv2.2.0/conv/Conv", "ms": 0.2728, "net_ms": 0.1761, "spread_ms": 0.023, "rounds_in_layer": 2, "packets": 128, "w_fills": 2}
+LAYER_TIME {"arm": "real", "index": 61, "name": "/model.22/cv3.2/cv3.2.0/conv/Conv", "ms": 0.2834, "net_ms": 0.1867, "spread_ms": 0.0232, "rounds_in_layer": 4, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 62, "name": "/model.22/cv2.2/cv2.2.1/conv/Conv", "ms": 0.1381, "net_ms": 0.0415, "spread_ms": 0.0232, "rounds_in_layer": 2, "packets": 16, "w_fills": 2}
+LAYER_TIME {"arm": "real", "index": 63, "name": "/model.22/cv3.2/cv3.2.1/conv/Conv", "ms": 0.1609, "net_ms": 0.0642, "spread_ms": 0.025, "rounds_in_layer": 4, "packets": 64, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 64, "name": "/model.22/cv2.2/cv2.2.2/Conv", "ms": 0.1161, "net_ms": 0.0194, "spread_ms": 0.0176, "rounds_in_layer": 2, "packets": 8, "w_fills": 2}
+LAYER_TIME {"arm": "real", "index": 65, "name": "/model.22/cv3.2/cv3.2.2/Conv", "ms": 0.1261, "net_ms": 0.0294, "spread_ms": 0.0288, "rounds_in_layer": 3, "packets": 24, "w_fills": 3}
+SUMMARY {"arm": "real", "whole_ms_median": 16.6191, "empty_ms_median": 0.0967, "empty_ms_p10_p90": [0.0841, 0.1137], "sum_layer_ms": 23.7529, "sum_net_ms": 17.3732, "whole_minus_empty_ms": 16.5224, "net_over_whole_less_empty": 1.0515, "mismatched_rounds": 0, "rounds_total": 25, "layers": 66}
+LAYER_TIME {"arm": "nop", "index": 0, "name": "/model.0/conv/Conv", "ms": 0.4486, "net_ms": 0.3566, "spread_ms": 0.0365, "rounds_in_layer": 256, "packets": 1024, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 1, "name": "/model.1/conv/Conv", "ms": 0.6841, "net_ms": 0.5921, "spread_ms": 0.0321, "rounds_in_layer": 128, "packets": 2048, "w_fills": 128}
+LAYER_TIME {"arm": "nop", "index": 2, "name": "/model.2/cv1/conv/Conv", "ms": 0.2402, "net_ms": 0.1482, "spread_ms": 0.0246, "rounds_in_layer": 128, "packets": 512, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 3, "name": "/model.2/m.0/cv1/conv/Conv", "ms": 0.1908, "net_ms": 0.0988, "spread_ms": 0.0256, "rounds_in_layer": 64, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 4, "name": "/model.2/m.0/cv2/conv/Conv", "ms": 0.2828, "net_ms": 0.1908, "spread_ms": 0.023, "rounds_in_layer": 64, "packets": 512, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 5, "name": "/model.2/cv2/conv/Conv", "ms": 0.3939, "net_ms": 0.302, "spread_ms": 0.0341, "rounds_in_layer": 128, "packets": 1024, "w_fills": 8}
+LAYER_TIME {"arm": "nop", "index": 6, "name": "/model.3/conv/Conv", "ms": 0.6025, "net_ms": 0.5105, "spread_ms": 0.045, "rounds_in_layer": 64, "packets": 2048, "w_fills": 16}
+LAYER_TIME {"arm": "nop", "index": 7, "name": "/model.4/cv1/conv/Conv", "ms": 0.2426, "net_ms": 0.1506, "spread_ms": 0.0424, "rounds_in_layer": 64, "packets": 512, "w_fills": 16}
+LAYER_TIME {"arm": "nop", "index": 8, "name": "/model.4/m.0/cv1/conv/Conv", "ms": 0.19, "net_ms": 0.098, "spread_ms": 0.0278, "rounds_in_layer": 32, "packets": 256, "w_fills": 8}
+LAYER_TIME {"arm": "nop", "index": 9, "name": "/model.4/m.0/cv2/conv/Conv", "ms": 0.2246, "net_ms": 0.1326, "spread_ms": 0.043, "rounds_in_layer": 32, "packets": 384, "w_fills": 8}
+LAYER_TIME {"arm": "nop", "index": 10, "name": "/model.4/m.1/cv1/conv/Conv", "ms": 0.1835, "net_ms": 0.0916, "spread_ms": 0.0221, "rounds_in_layer": 32, "packets": 256, "w_fills": 8}
+LAYER_TIME {"arm": "nop", "index": 11, "name": "/model.4/m.1/cv2/conv/Conv", "ms": 0.2232, "net_ms": 0.1312, "spread_ms": 0.0322, "rounds_in_layer": 32, "packets": 384, "w_fills": 8}
+LAYER_TIME {"arm": "nop", "index": 12, "name": "/model.4/cv2/conv/Conv", "ms": 0.3818, "net_ms": 0.2898, "spread_ms": 0.0337, "rounds_in_layer": 64, "packets": 1024, "w_fills": 16}
+LAYER_TIME {"arm": "nop", "index": 13, "name": "/model.5/conv/Conv", "ms": 0.5216, "net_ms": 0.4296, "spread_ms": 0.0352, "rounds_in_layer": 32, "packets": 2048, "w_fills": 32}
+LAYER_TIME {"arm": "nop", "index": 14, "name": "/model.6/cv1/conv/Conv", "ms": 0.2445, "net_ms": 0.1525, "spread_ms": 0.018, "rounds_in_layer": 32, "packets": 512, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 15, "name": "/model.6/m.0/cv1/conv/Conv", "ms": 0.1934, "net_ms": 0.1014, "spread_ms": 0.0314, "rounds_in_layer": 16, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 16, "name": "/model.6/m.0/cv2/conv/Conv", "ms": 0.2109, "net_ms": 0.1189, "spread_ms": 0.0228, "rounds_in_layer": 16, "packets": 320, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 17, "name": "/model.6/m.1/cv1/conv/Conv", "ms": 0.1976, "net_ms": 0.1056, "spread_ms": 0.0404, "rounds_in_layer": 16, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 18, "name": "/model.6/m.1/cv2/conv/Conv", "ms": 0.2171, "net_ms": 0.1252, "spread_ms": 0.028, "rounds_in_layer": 16, "packets": 320, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 19, "name": "/model.6/cv2/conv/Conv", "ms": 0.4429, "net_ms": 0.351, "spread_ms": 0.0284, "rounds_in_layer": 32, "packets": 1024, "w_fills": 32}
+LAYER_TIME {"arm": "nop", "index": 20, "name": "/model.7/conv/Conv", "ms": 0.5336, "net_ms": 0.4416, "spread_ms": 0.0233, "rounds_in_layer": 16, "packets": 2048, "w_fills": 16}
+LAYER_TIME {"arm": "nop", "index": 21, "name": "/model.8/cv1/conv/Conv", "ms": 0.2355, "net_ms": 0.1436, "spread_ms": 0.0239, "rounds_in_layer": 16, "packets": 512, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 22, "name": "/model.8/m.0/cv1/conv/Conv", "ms": 0.1844, "net_ms": 0.0924, "spread_ms": 0.0276, "rounds_in_layer": 8, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 23, "name": "/model.8/m.0/cv2/conv/Conv", "ms": 0.2035, "net_ms": 0.1115, "spread_ms": 0.0227, "rounds_in_layer": 8, "packets": 288, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 24, "name": "/model.8/cv2/conv/Conv", "ms": 0.3411, "net_ms": 0.2492, "spread_ms": 0.0232, "rounds_in_layer": 16, "packets": 768, "w_fills": 16}
+LAYER_TIME {"arm": "nop", "index": 25, "name": "/model.9/cv1/conv/Conv", "ms": 0.1693, "net_ms": 0.0774, "spread_ms": 0.0297, "rounds_in_layer": 8, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 26, "name": "/model.9/m/MaxPool", "ms": 0.1368, "net_ms": 0.0449, "spread_ms": 0.0335, "rounds_in_layer": 8, "packets": 64, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 27, "name": "/model.9/m_1/MaxPool", "ms": 0.1292, "net_ms": 0.0373, "spread_ms": 0.0386, "rounds_in_layer": 8, "packets": 64, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 28, "name": "/model.9/m_2/MaxPool", "ms": 0.1283, "net_ms": 0.0363, "spread_ms": 0.0233, "rounds_in_layer": 8, "packets": 64, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 29, "name": "/model.9/cv2/conv/Conv", "ms": 0.4284, "net_ms": 0.3364, "spread_ms": 0.0185, "rounds_in_layer": 16, "packets": 1024, "w_fills": 16}
+LAYER_TIME {"arm": "nop", "index": 30, "name": "/model.12/cv1/conv/Conv", "ms": 0.536, "net_ms": 0.444, "spread_ms": 0.0102, "rounds_in_layer": 32, "packets": 1536, "w_fills": 32}
+LAYER_TIME {"arm": "nop", "index": 31, "name": "/model.12/m.0/cv1/conv/Conv", "ms": 0.199, "net_ms": 0.107, "spread_ms": 0.0332, "rounds_in_layer": 16, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 32, "name": "/model.12/m.0/cv2/conv/Conv", "ms": 0.2031, "net_ms": 0.1112, "spread_ms": 0.0238, "rounds_in_layer": 16, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 33, "name": "/model.12/cv2/conv/Conv", "ms": 0.3496, "net_ms": 0.2576, "spread_ms": 0.0272, "rounds_in_layer": 32, "packets": 768, "w_fills": 32}
+LAYER_TIME {"arm": "nop", "index": 34, "name": "/model.15/cv1/conv/Conv", "ms": 0.5971, "net_ms": 0.5051, "spread_ms": 0.0306, "rounds_in_layer": 64, "packets": 1536, "w_fills": 16}
+LAYER_TIME {"arm": "nop", "index": 35, "name": "/model.15/m.0/cv1/conv/Conv", "ms": 0.1971, "net_ms": 0.1051, "spread_ms": 0.0229, "rounds_in_layer": 32, "packets": 256, "w_fills": 8}
+LAYER_TIME {"arm": "nop", "index": 36, "name": "/model.15/m.0/cv2/conv/Conv", "ms": 0.1919, "net_ms": 0.0999, "spread_ms": 0.0193, "rounds_in_layer": 32, "packets": 256, "w_fills": 8}
+LAYER_TIME {"arm": "nop", "index": 37, "name": "/model.15/cv2/conv/Conv", "ms": 0.3636, "net_ms": 0.2716, "spread_ms": 0.0303, "rounds_in_layer": 64, "packets": 768, "w_fills": 16}
+LAYER_TIME {"arm": "nop", "index": 38, "name": "/model.16/conv/Conv", "ms": 0.3257, "net_ms": 0.2338, "spread_ms": 0.0301, "rounds_in_layer": 16, "packets": 1024, "w_fills": 16}
+LAYER_TIME {"arm": "nop", "index": 39, "name": "/model.22/cv2.0/cv2.0.0/conv/Conv", "ms": 0.2793, "net_ms": 0.1873, "spread_ms": 0.0225, "rounds_in_layer": 32, "packets": 512, "w_fills": 8}
+LAYER_TIME {"arm": "nop", "index": 40, "name": "/model.22/cv3.0/cv3.0.0/conv/Conv", "ms": 0.433, "net_ms": 0.341, "spread_ms": 0.0221, "rounds_in_layer": 64, "packets": 1024, "w_fills": 16}
+LAYER_TIME {"arm": "nop", "index": 41, "name": "/model.22/cv2.0/cv2.0.1/conv/Conv", "ms": 0.1904, "net_ms": 0.0985, "spread_ms": 0.0408, "rounds_in_layer": 32, "packets": 256, "w_fills": 8}
+LAYER_TIME {"arm": "nop", "index": 42, "name": "/model.22/cv3.0/cv3.0.1/conv/Conv", "ms": 0.4335, "net_ms": 0.3416, "spread_ms": 0.0224, "rounds_in_layer": 64, "packets": 1024, "w_fills": 16}
+LAYER_TIME {"arm": "nop", "index": 43, "name": "/model.18/cv1/conv/Conv", "ms": 0.3627, "net_ms": 0.2707, "spread_ms": 0.0312, "rounds_in_layer": 32, "packets": 768, "w_fills": 32}
+LAYER_TIME {"arm": "nop", "index": 44, "name": "/model.22/cv2.0/cv2.0.2/Conv", "ms": 0.1518, "net_ms": 0.0599, "spread_ms": 0.0352, "rounds_in_layer": 32, "packets": 128, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 45, "name": "/model.22/cv3.0/cv3.0.2/Conv", "ms": 0.198, "net_ms": 0.106, "spread_ms": 0.0339, "rounds_in_layer": 48, "packets": 384, "w_fills": 12}
+LAYER_TIME {"arm": "nop", "index": 46, "name": "/model.18/m.0/cv1/conv/Conv", "ms": 0.1988, "net_ms": 0.1068, "spread_ms": 0.0315, "rounds_in_layer": 16, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 47, "name": "/model.18/m.0/cv2/conv/Conv", "ms": 0.1933, "net_ms": 0.1013, "spread_ms": 0.0206, "rounds_in_layer": 16, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 48, "name": "/model.18/cv2/conv/Conv", "ms": 0.3463, "net_ms": 0.2543, "spread_ms": 0.0138, "rounds_in_layer": 32, "packets": 768, "w_fills": 32}
+LAYER_TIME {"arm": "nop", "index": 49, "name": "/model.19/conv/Conv", "ms": 0.3225, "net_ms": 0.2305, "spread_ms": 0.024, "rounds_in_layer": 8, "packets": 1024, "w_fills": 8}
+LAYER_TIME {"arm": "nop", "index": 50, "name": "/model.22/cv2.1/cv2.1.0/conv/Conv", "ms": 0.191, "net_ms": 0.099, "spread_ms": 0.0172, "rounds_in_layer": 8, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 51, "name": "/model.22/cv3.1/cv3.1.0/conv/Conv", "ms": 0.2664, "net_ms": 0.1744, "spread_ms": 0.0281, "rounds_in_layer": 16, "packets": 512, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 52, "name": "/model.22/cv2.1/cv2.1.1/conv/Conv", "ms": 0.1273, "net_ms": 0.0353, "spread_ms": 0.0158, "rounds_in_layer": 8, "packets": 64, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 53, "name": "/model.22/cv3.1/cv3.1.1/conv/Conv", "ms": 0.1948, "net_ms": 0.1028, "spread_ms": 0.0228, "rounds_in_layer": 16, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 54, "name": "/model.21/cv1/conv/Conv", "ms": 0.2945, "net_ms": 0.2025, "spread_ms": 0.0196, "rounds_in_layer": 16, "packets": 768, "w_fills": 16}
+LAYER_TIME {"arm": "nop", "index": 55, "name": "/model.22/cv2.1/cv2.1.2/Conv", "ms": 0.1232, "net_ms": 0.0312, "spread_ms": 0.0248, "rounds_in_layer": 8, "packets": 32, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 56, "name": "/model.22/cv3.1/cv3.1.2/Conv", "ms": 0.1321, "net_ms": 0.0401, "spread_ms": 0.0113, "rounds_in_layer": 12, "packets": 96, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 57, "name": "/model.21/m.0/cv1/conv/Conv", "ms": 0.1941, "net_ms": 0.1022, "spread_ms": 0.0196, "rounds_in_layer": 8, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 58, "name": "/model.21/m.0/cv2/conv/Conv", "ms": 0.2003, "net_ms": 0.1083, "spread_ms": 0.0273, "rounds_in_layer": 8, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 59, "name": "/model.21/cv2/conv/Conv", "ms": 0.3411, "net_ms": 0.2491, "spread_ms": 0.0218, "rounds_in_layer": 16, "packets": 768, "w_fills": 16}
+LAYER_TIME {"arm": "nop", "index": 60, "name": "/model.22/cv2.2/cv2.2.0/conv/Conv", "ms": 0.1767, "net_ms": 0.0847, "spread_ms": 0.0233, "rounds_in_layer": 2, "packets": 128, "w_fills": 2}
+LAYER_TIME {"arm": "nop", "index": 61, "name": "/model.22/cv3.2/cv3.2.0/conv/Conv", "ms": 0.1976, "net_ms": 0.1056, "spread_ms": 0.0306, "rounds_in_layer": 4, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 62, "name": "/model.22/cv2.2/cv2.2.1/conv/Conv", "ms": 0.1107, "net_ms": 0.0188, "spread_ms": 0.0398, "rounds_in_layer": 2, "packets": 16, "w_fills": 2}
+LAYER_TIME {"arm": "nop", "index": 63, "name": "/model.22/cv3.2/cv3.2.1/conv/Conv", "ms": 0.1264, "net_ms": 0.0344, "spread_ms": 0.0258, "rounds_in_layer": 4, "packets": 64, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 64, "name": "/model.22/cv2.2/cv2.2.2/Conv", "ms": 0.1095, "net_ms": 0.0175, "spread_ms": 0.0262, "rounds_in_layer": 2, "packets": 8, "w_fills": 2}
+LAYER_TIME {"arm": "nop", "index": 65, "name": "/model.22/cv3.2/cv3.2.2/Conv", "ms": 0.122, "net_ms": 0.03, "spread_ms": 0.054, "rounds_in_layer": 3, "packets": 24, "w_fills": 3}
+SUMMARY {"arm": "nop", "whole_ms_median": 11.2982, "empty_ms_median": 0.092, "empty_ms_p10_p90": [0.0791, 0.1169], "sum_layer_ms": 17.7871, "sum_net_ms": 11.7167, "whole_minus_empty_ms": 11.2062, "net_over_whole_less_empty": 1.0456, "mismatched_rounds": 0, "rounds_total": 25, "layers": 66}
+[diag] run 4/4 control -> stream_share_layer_diag_desktop2_20261013T1501Z_run4_control.json
+HOST_TIMELINE {"elapsed_seconds": 43.922, "tree_rss_bytes": 156549120, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 47.172, "tree_rss_bytes": 168136704, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [15340, 30444, 33244, 49812, 50596, 52156], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 50.469, "tree_rss_bytes": 199839744, "foreign_peers": []}
+[layers] yolov8s_rule.ignite: 66 layer pieces, 933028 B stream, pieces sum 933028 B
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 64 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |30444               |128        |0           |0           |0    |Normal   |\n      |python.exe          |Active     |0           |0           |     |N/A      |\n      |8 KB                |N/A        |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [30444], "owned_pids": [15340, 30444, 33244, 49812, 50596, 52156], "foreign_pids": []}
+LAYER_TIME {"arm": "real", "index": 0, "name": "/model.0/conv/Conv", "ms": 0.6424, "net_ms": 0.547, "spread_ms": 0.0195, "rounds_in_layer": 256, "packets": 1024, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 1, "name": "/model.1/conv/Conv", "ms": 0.8615, "net_ms": 0.7661, "spread_ms": 0.0256, "rounds_in_layer": 128, "packets": 2048, "w_fills": 8}
+LAYER_TIME {"arm": "real", "index": 2, "name": "/model.2/cv1/conv/Conv", "ms": 0.2949, "net_ms": 0.1995, "spread_ms": 0.0377, "rounds_in_layer": 128, "packets": 512, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 3, "name": "/model.2/m.0/cv1/conv/Conv", "ms": 0.3144, "net_ms": 0.2189, "spread_ms": 0.0407, "rounds_in_layer": 64, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 4, "name": "/model.2/m.0/cv2/conv/Conv", "ms": 0.3432, "net_ms": 0.2478, "spread_ms": 0.0329, "rounds_in_layer": 64, "packets": 512, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 5, "name": "/model.2/cv2/conv/Conv", "ms": 0.4616, "net_ms": 0.3662, "spread_ms": 0.0276, "rounds_in_layer": 128, "packets": 1024, "w_fills": 8}
+LAYER_TIME {"arm": "real", "index": 6, "name": "/model.3/conv/Conv", "ms": 0.8296, "net_ms": 0.7342, "spread_ms": 0.038, "rounds_in_layer": 64, "packets": 2048, "w_fills": 16}
+LAYER_TIME {"arm": "real", "index": 7, "name": "/model.4/cv1/conv/Conv", "ms": 0.2621, "net_ms": 0.1666, "spread_ms": 0.0211, "rounds_in_layer": 64, "packets": 512, "w_fills": 16}
+LAYER_TIME {"arm": "real", "index": 8, "name": "/model.4/m.0/cv1/conv/Conv", "ms": 0.2859, "net_ms": 0.1905, "spread_ms": 0.0552, "rounds_in_layer": 32, "packets": 256, "w_fills": 8}
+LAYER_TIME {"arm": "real", "index": 9, "name": "/model.4/m.0/cv2/conv/Conv", "ms": 0.2992, "net_ms": 0.2037, "spread_ms": 0.0333, "rounds_in_layer": 32, "packets": 384, "w_fills": 8}
+LAYER_TIME {"arm": "real", "index": 10, "name": "/model.4/m.1/cv1/conv/Conv", "ms": 0.2826, "net_ms": 0.1871, "spread_ms": 0.0302, "rounds_in_layer": 32, "packets": 256, "w_fills": 8}
+LAYER_TIME {"arm": "real", "index": 11, "name": "/model.4/m.1/cv2/conv/Conv", "ms": 0.3001, "net_ms": 0.2046, "spread_ms": 0.0263, "rounds_in_layer": 32, "packets": 384, "w_fills": 8}
+LAYER_TIME {"arm": "real", "index": 12, "name": "/model.4/cv2/conv/Conv", "ms": 0.4418, "net_ms": 0.3464, "spread_ms": 0.0464, "rounds_in_layer": 64, "packets": 1024, "w_fills": 16}
+LAYER_TIME {"arm": "real", "index": 13, "name": "/model.5/conv/Conv", "ms": 0.8033, "net_ms": 0.7078, "spread_ms": 0.0267, "rounds_in_layer": 32, "packets": 2048, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 14, "name": "/model.6/cv1/conv/Conv", "ms": 0.2488, "net_ms": 0.1533, "spread_ms": 0.0254, "rounds_in_layer": 32, "packets": 512, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 15, "name": "/model.6/m.0/cv1/conv/Conv", "ms": 0.2744, "net_ms": 0.179, "spread_ms": 0.0243, "rounds_in_layer": 16, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 16, "name": "/model.6/m.0/cv2/conv/Conv", "ms": 0.2888, "net_ms": 0.1933, "spread_ms": 0.0227, "rounds_in_layer": 16, "packets": 320, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 17, "name": "/model.6/m.1/cv1/conv/Conv", "ms": 0.2906, "net_ms": 0.1951, "spread_ms": 0.037, "rounds_in_layer": 16, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 18, "name": "/model.6/m.1/cv2/conv/Conv", "ms": 0.2964, "net_ms": 0.201, "spread_ms": 0.0246, "rounds_in_layer": 16, "packets": 320, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 19, "name": "/model.6/cv2/conv/Conv", "ms": 0.4201, "net_ms": 0.3246, "spread_ms": 0.0253, "rounds_in_layer": 32, "packets": 1024, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 20, "name": "/model.7/conv/Conv", "ms": 0.7921, "net_ms": 0.6967, "spread_ms": 0.0293, "rounds_in_layer": 16, "packets": 2048, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 21, "name": "/model.8/cv1/conv/Conv", "ms": 0.2565, "net_ms": 0.1611, "spread_ms": 0.0293, "rounds_in_layer": 16, "packets": 512, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 22, "name": "/model.8/m.0/cv1/conv/Conv", "ms": 0.2663, "net_ms": 0.1708, "spread_ms": 0.0355, "rounds_in_layer": 8, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 23, "name": "/model.8/m.0/cv2/conv/Conv", "ms": 0.278, "net_ms": 0.1826, "spread_ms": 0.0367, "rounds_in_layer": 8, "packets": 288, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 24, "name": "/model.8/cv2/conv/Conv", "ms": 0.3457, "net_ms": 0.2502, "spread_ms": 0.0267, "rounds_in_layer": 16, "packets": 768, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 25, "name": "/model.9/cv1/conv/Conv", "ms": 0.1912, "net_ms": 0.0957, "spread_ms": 0.0259, "rounds_in_layer": 8, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 26, "name": "/model.9/m/MaxPool", "ms": 0.148, "net_ms": 0.0525, "spread_ms": 0.0262, "rounds_in_layer": 8, "packets": 64, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 27, "name": "/model.9/m_1/MaxPool", "ms": 0.1536, "net_ms": 0.0581, "spread_ms": 0.0391, "rounds_in_layer": 8, "packets": 64, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 28, "name": "/model.9/m_2/MaxPool", "ms": 0.155, "net_ms": 0.0595, "spread_ms": 0.0383, "rounds_in_layer": 8, "packets": 64, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 29, "name": "/model.9/cv2/conv/Conv", "ms": 0.4109, "net_ms": 0.3155, "spread_ms": 0.0226, "rounds_in_layer": 16, "packets": 1024, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 30, "name": "/model.12/cv1/conv/Conv", "ms": 0.5222, "net_ms": 0.4268, "spread_ms": 0.024, "rounds_in_layer": 32, "packets": 1536, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 31, "name": "/model.12/m.0/cv1/conv/Conv", "ms": 0.2699, "net_ms": 0.1744, "spread_ms": 0.0235, "rounds_in_layer": 16, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 32, "name": "/model.12/m.0/cv2/conv/Conv", "ms": 0.2733, "net_ms": 0.1778, "spread_ms": 0.034, "rounds_in_layer": 16, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 33, "name": "/model.12/cv2/conv/Conv", "ms": 0.3492, "net_ms": 0.2537, "spread_ms": 0.0405, "rounds_in_layer": 32, "packets": 768, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 34, "name": "/model.15/cv1/conv/Conv", "ms": 0.5944, "net_ms": 0.4989, "spread_ms": 0.0476, "rounds_in_layer": 64, "packets": 1536, "w_fills": 16}
+LAYER_TIME {"arm": "real", "index": 35, "name": "/model.15/m.0/cv1/conv/Conv", "ms": 0.2842, "net_ms": 0.1887, "spread_ms": 0.0336, "rounds_in_layer": 32, "packets": 256, "w_fills": 8}
+LAYER_TIME {"arm": "real", "index": 36, "name": "/model.15/m.0/cv2/conv/Conv", "ms": 0.2911, "net_ms": 0.1956, "spread_ms": 0.0269, "rounds_in_layer": 32, "packets": 256, "w_fills": 8}
+LAYER_TIME {"arm": "real", "index": 37, "name": "/model.15/cv2/conv/Conv", "ms": 0.3788, "net_ms": 0.2833, "spread_ms": 0.0486, "rounds_in_layer": 64, "packets": 768, "w_fills": 16}
+LAYER_TIME {"arm": "real", "index": 38, "name": "/model.16/conv/Conv", "ms": 0.4767, "net_ms": 0.3812, "spread_ms": 0.0312, "rounds_in_layer": 16, "packets": 1024, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 39, "name": "/model.22/cv2.0/cv2.0.0/conv/Conv", "ms": 0.4146, "net_ms": 0.3191, "spread_ms": 0.0163, "rounds_in_layer": 32, "packets": 512, "w_fills": 8}
+LAYER_TIME {"arm": "real", "index": 40, "name": "/model.22/cv3.0/cv3.0.0/conv/Conv", "ms": 0.7037, "net_ms": 0.6082, "spread_ms": 0.0242, "rounds_in_layer": 64, "packets": 1024, "w_fills": 16}
+LAYER_TIME {"arm": "real", "index": 41, "name": "/model.22/cv2.0/cv2.0.1/conv/Conv", "ms": 0.2924, "net_ms": 0.1969, "spread_ms": 0.0271, "rounds_in_layer": 32, "packets": 256, "w_fills": 8}
+LAYER_TIME {"arm": "real", "index": 42, "name": "/model.22/cv3.0/cv3.0.1/conv/Conv", "ms": 0.7055, "net_ms": 0.6101, "spread_ms": 0.0393, "rounds_in_layer": 64, "packets": 1024, "w_fills": 16}
+LAYER_TIME {"arm": "real", "index": 43, "name": "/model.18/cv1/conv/Conv", "ms": 0.3562, "net_ms": 0.2607, "spread_ms": 0.0289, "rounds_in_layer": 32, "packets": 768, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 44, "name": "/model.22/cv2.0/cv2.0.2/Conv", "ms": 0.1636, "net_ms": 0.0681, "spread_ms": 0.0521, "rounds_in_layer": 32, "packets": 128, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 45, "name": "/model.22/cv3.0/cv3.0.2/Conv", "ms": 0.2109, "net_ms": 0.1154, "spread_ms": 0.0532, "rounds_in_layer": 48, "packets": 384, "w_fills": 12}
+LAYER_TIME {"arm": "real", "index": 46, "name": "/model.18/m.0/cv1/conv/Conv", "ms": 0.2772, "net_ms": 0.1818, "spread_ms": 0.0314, "rounds_in_layer": 16, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 47, "name": "/model.18/m.0/cv2/conv/Conv", "ms": 0.2743, "net_ms": 0.1788, "spread_ms": 0.027, "rounds_in_layer": 16, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 48, "name": "/model.18/cv2/conv/Conv", "ms": 0.3442, "net_ms": 0.2487, "spread_ms": 0.0236, "rounds_in_layer": 32, "packets": 768, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 49, "name": "/model.19/conv/Conv", "ms": 0.4504, "net_ms": 0.3549, "spread_ms": 0.0264, "rounds_in_layer": 8, "packets": 1024, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 50, "name": "/model.22/cv2.1/cv2.1.0/conv/Conv", "ms": 0.2666, "net_ms": 0.1711, "spread_ms": 0.0163, "rounds_in_layer": 8, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 51, "name": "/model.22/cv3.1/cv3.1.0/conv/Conv", "ms": 0.4096, "net_ms": 0.3141, "spread_ms": 0.026, "rounds_in_layer": 16, "packets": 512, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 52, "name": "/model.22/cv2.1/cv2.1.1/conv/Conv", "ms": 0.1631, "net_ms": 0.0676, "spread_ms": 0.038, "rounds_in_layer": 8, "packets": 64, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 53, "name": "/model.22/cv3.1/cv3.1.1/conv/Conv", "ms": 0.2711, "net_ms": 0.1757, "spread_ms": 0.0365, "rounds_in_layer": 16, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 54, "name": "/model.21/cv1/conv/Conv", "ms": 0.3183, "net_ms": 0.2228, "spread_ms": 0.0283, "rounds_in_layer": 16, "packets": 768, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 55, "name": "/model.22/cv2.1/cv2.1.2/Conv", "ms": 0.1367, "net_ms": 0.0412, "spread_ms": 0.0293, "rounds_in_layer": 8, "packets": 32, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 56, "name": "/model.22/cv3.1/cv3.1.2/Conv", "ms": 0.139, "net_ms": 0.0435, "spread_ms": 0.0245, "rounds_in_layer": 12, "packets": 96, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 57, "name": "/model.21/m.0/cv1/conv/Conv", "ms": 0.2663, "net_ms": 0.1708, "spread_ms": 0.0421, "rounds_in_layer": 8, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 58, "name": "/model.21/m.0/cv2/conv/Conv", "ms": 0.2637, "net_ms": 0.1682, "spread_ms": 0.027, "rounds_in_layer": 8, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 59, "name": "/model.21/cv2/conv/Conv", "ms": 0.3462, "net_ms": 0.2507, "spread_ms": 0.0219, "rounds_in_layer": 16, "packets": 768, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 60, "name": "/model.22/cv2.2/cv2.2.0/conv/Conv", "ms": 0.2621, "net_ms": 0.1667, "spread_ms": 0.0267, "rounds_in_layer": 2, "packets": 128, "w_fills": 2}
+LAYER_TIME {"arm": "real", "index": 61, "name": "/model.22/cv3.2/cv3.2.0/conv/Conv", "ms": 0.2652, "net_ms": 0.1697, "spread_ms": 0.0306, "rounds_in_layer": 4, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 62, "name": "/model.22/cv2.2/cv2.2.1/conv/Conv", "ms": 0.1333, "net_ms": 0.0378, "spread_ms": 0.0254, "rounds_in_layer": 2, "packets": 16, "w_fills": 2}
+LAYER_TIME {"arm": "real", "index": 63, "name": "/model.22/cv3.2/cv3.2.1/conv/Conv", "ms": 0.1576, "net_ms": 0.0622, "spread_ms": 0.0234, "rounds_in_layer": 4, "packets": 64, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 64, "name": "/model.22/cv2.2/cv2.2.2/Conv", "ms": 0.1136, "net_ms": 0.0182, "spread_ms": 0.0188, "rounds_in_layer": 2, "packets": 8, "w_fills": 2}
+LAYER_TIME {"arm": "real", "index": 65, "name": "/model.22/cv3.2/cv3.2.2/Conv", "ms": 0.1234, "net_ms": 0.0279, "spread_ms": 0.0301, "rounds_in_layer": 3, "packets": 24, "w_fills": 3}
+SUMMARY {"arm": "real", "whole_ms_median": 15.7565, "empty_ms_median": 0.0955, "empty_ms_p10_p90": [0.0816, 0.1212], "sum_layer_ms": 22.5076, "sum_net_ms": 16.2067, "whole_minus_empty_ms": 15.661, "net_over_whole_less_empty": 1.0348, "mismatched_rounds": 0, "rounds_total": 25, "layers": 66}
+LAYER_TIME {"arm": "nop", "index": 0, "name": "/model.0/conv/Conv", "ms": 0.495, "net_ms": 0.399, "spread_ms": 0.0416, "rounds_in_layer": 256, "packets": 1024, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 1, "name": "/model.1/conv/Conv", "ms": 0.6627, "net_ms": 0.5667, "spread_ms": 0.0201, "rounds_in_layer": 128, "packets": 2048, "w_fills": 8}
+LAYER_TIME {"arm": "nop", "index": 2, "name": "/model.2/cv1/conv/Conv", "ms": 0.2661, "net_ms": 0.1701, "spread_ms": 0.0321, "rounds_in_layer": 128, "packets": 512, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 3, "name": "/model.2/m.0/cv1/conv/Conv", "ms": 0.1967, "net_ms": 0.1007, "spread_ms": 0.0181, "rounds_in_layer": 64, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 4, "name": "/model.2/m.0/cv2/conv/Conv", "ms": 0.2775, "net_ms": 0.1815, "spread_ms": 0.0257, "rounds_in_layer": 64, "packets": 512, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 5, "name": "/model.2/cv2/conv/Conv", "ms": 0.4496, "net_ms": 0.3536, "spread_ms": 0.0325, "rounds_in_layer": 128, "packets": 1024, "w_fills": 8}
+LAYER_TIME {"arm": "nop", "index": 6, "name": "/model.3/conv/Conv", "ms": 0.6099, "net_ms": 0.5139, "spread_ms": 0.0455, "rounds_in_layer": 64, "packets": 2048, "w_fills": 16}
+LAYER_TIME {"arm": "nop", "index": 7, "name": "/model.4/cv1/conv/Conv", "ms": 0.2521, "net_ms": 0.1561, "spread_ms": 0.0266, "rounds_in_layer": 64, "packets": 512, "w_fills": 16}
+LAYER_TIME {"arm": "nop", "index": 8, "name": "/model.4/m.0/cv1/conv/Conv", "ms": 0.2016, "net_ms": 0.1056, "spread_ms": 0.0304, "rounds_in_layer": 32, "packets": 256, "w_fills": 8}
+LAYER_TIME {"arm": "nop", "index": 9, "name": "/model.4/m.0/cv2/conv/Conv", "ms": 0.2445, "net_ms": 0.1485, "spread_ms": 0.0304, "rounds_in_layer": 32, "packets": 384, "w_fills": 8}
+LAYER_TIME {"arm": "nop", "index": 10, "name": "/model.4/m.1/cv1/conv/Conv", "ms": 0.2015, "net_ms": 0.1055, "spread_ms": 0.0274, "rounds_in_layer": 32, "packets": 256, "w_fills": 8}
+LAYER_TIME {"arm": "nop", "index": 11, "name": "/model.4/m.1/cv2/conv/Conv", "ms": 0.2476, "net_ms": 0.1516, "spread_ms": 0.0244, "rounds_in_layer": 32, "packets": 384, "w_fills": 8}
+LAYER_TIME {"arm": "nop", "index": 12, "name": "/model.4/cv2/conv/Conv", "ms": 0.4398, "net_ms": 0.3437, "spread_ms": 0.0322, "rounds_in_layer": 64, "packets": 1024, "w_fills": 16}
+LAYER_TIME {"arm": "nop", "index": 13, "name": "/model.5/conv/Conv", "ms": 0.5968, "net_ms": 0.5008, "spread_ms": 0.014, "rounds_in_layer": 32, "packets": 2048, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 14, "name": "/model.6/cv1/conv/Conv", "ms": 0.2359, "net_ms": 0.1399, "spread_ms": 0.0241, "rounds_in_layer": 32, "packets": 512, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 15, "name": "/model.6/m.0/cv1/conv/Conv", "ms": 0.1945, "net_ms": 0.0984, "spread_ms": 0.0315, "rounds_in_layer": 16, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 16, "name": "/model.6/m.0/cv2/conv/Conv", "ms": 0.2118, "net_ms": 0.1158, "spread_ms": 0.0299, "rounds_in_layer": 16, "packets": 320, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 17, "name": "/model.6/m.1/cv1/conv/Conv", "ms": 0.1954, "net_ms": 0.0994, "spread_ms": 0.0306, "rounds_in_layer": 16, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 18, "name": "/model.6/m.1/cv2/conv/Conv", "ms": 0.2177, "net_ms": 0.1217, "spread_ms": 0.0348, "rounds_in_layer": 16, "packets": 320, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 19, "name": "/model.6/cv2/conv/Conv", "ms": 0.4125, "net_ms": 0.3165, "spread_ms": 0.028, "rounds_in_layer": 32, "packets": 1024, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 20, "name": "/model.7/conv/Conv", "ms": 0.6049, "net_ms": 0.5089, "spread_ms": 0.0314, "rounds_in_layer": 16, "packets": 2048, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 21, "name": "/model.8/cv1/conv/Conv", "ms": 0.2436, "net_ms": 0.1476, "spread_ms": 0.0159, "rounds_in_layer": 16, "packets": 512, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 22, "name": "/model.8/m.0/cv1/conv/Conv", "ms": 0.194, "net_ms": 0.0979, "spread_ms": 0.0198, "rounds_in_layer": 8, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 23, "name": "/model.8/m.0/cv2/conv/Conv", "ms": 0.2081, "net_ms": 0.112, "spread_ms": 0.0215, "rounds_in_layer": 8, "packets": 288, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 24, "name": "/model.8/cv2/conv/Conv", "ms": 0.3365, "net_ms": 0.2405, "spread_ms": 0.0342, "rounds_in_layer": 16, "packets": 768, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 25, "name": "/model.9/cv1/conv/Conv", "ms": 0.1792, "net_ms": 0.0832, "spread_ms": 0.0174, "rounds_in_layer": 8, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 26, "name": "/model.9/m/MaxPool", "ms": 0.1333, "net_ms": 0.0372, "spread_ms": 0.0259, "rounds_in_layer": 8, "packets": 64, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 27, "name": "/model.9/m_1/MaxPool", "ms": 0.1326, "net_ms": 0.0366, "spread_ms": 0.0313, "rounds_in_layer": 8, "packets": 64, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 28, "name": "/model.9/m_2/MaxPool", "ms": 0.1301, "net_ms": 0.0341, "spread_ms": 0.0292, "rounds_in_layer": 8, "packets": 64, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 29, "name": "/model.9/cv2/conv/Conv", "ms": 0.4001, "net_ms": 0.3041, "spread_ms": 0.0284, "rounds_in_layer": 16, "packets": 1024, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 30, "name": "/model.12/cv1/conv/Conv", "ms": 0.5188, "net_ms": 0.4228, "spread_ms": 0.0209, "rounds_in_layer": 32, "packets": 1536, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 31, "name": "/model.12/m.0/cv1/conv/Conv", "ms": 0.1935, "net_ms": 0.0975, "spread_ms": 0.0345, "rounds_in_layer": 16, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 32, "name": "/model.12/m.0/cv2/conv/Conv", "ms": 0.1934, "net_ms": 0.0973, "spread_ms": 0.0188, "rounds_in_layer": 16, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 33, "name": "/model.12/cv2/conv/Conv", "ms": 0.3214, "net_ms": 0.2254, "spread_ms": 0.0306, "rounds_in_layer": 32, "packets": 768, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 34, "name": "/model.15/cv1/conv/Conv", "ms": 0.5915, "net_ms": 0.4954, "spread_ms": 0.0276, "rounds_in_layer": 64, "packets": 1536, "w_fills": 16}
+LAYER_TIME {"arm": "nop", "index": 35, "name": "/model.15/m.0/cv1/conv/Conv", "ms": 0.195, "net_ms": 0.0989, "spread_ms": 0.0228, "rounds_in_layer": 32, "packets": 256, "w_fills": 8}
+LAYER_TIME {"arm": "nop", "index": 36, "name": "/model.15/m.0/cv2/conv/Conv", "ms": 0.1934, "net_ms": 0.0973, "spread_ms": 0.0184, "rounds_in_layer": 32, "packets": 256, "w_fills": 8}
+LAYER_TIME {"arm": "nop", "index": 37, "name": "/model.15/cv2/conv/Conv", "ms": 0.381, "net_ms": 0.285, "spread_ms": 0.0304, "rounds_in_layer": 64, "packets": 768, "w_fills": 16}
+LAYER_TIME {"arm": "nop", "index": 38, "name": "/model.16/conv/Conv", "ms": 0.3648, "net_ms": 0.2688, "spread_ms": 0.032, "rounds_in_layer": 16, "packets": 1024, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 39, "name": "/model.22/cv2.0/cv2.0.0/conv/Conv", "ms": 0.2764, "net_ms": 0.1804, "spread_ms": 0.0278, "rounds_in_layer": 32, "packets": 512, "w_fills": 8}
+LAYER_TIME {"arm": "nop", "index": 40, "name": "/model.22/cv3.0/cv3.0.0/conv/Conv", "ms": 0.4447, "net_ms": 0.3487, "spread_ms": 0.0289, "rounds_in_layer": 64, "packets": 1024, "w_fills": 16}
+LAYER_TIME {"arm": "nop", "index": 41, "name": "/model.22/cv2.0/cv2.0.1/conv/Conv", "ms": 0.1964, "net_ms": 0.1004, "spread_ms": 0.031, "rounds_in_layer": 32, "packets": 256, "w_fills": 8}
+LAYER_TIME {"arm": "nop", "index": 42, "name": "/model.22/cv3.0/cv3.0.1/conv/Conv", "ms": 0.444, "net_ms": 0.348, "spread_ms": 0.0224, "rounds_in_layer": 64, "packets": 1024, "w_fills": 16}
+LAYER_TIME {"arm": "nop", "index": 43, "name": "/model.18/cv1/conv/Conv", "ms": 0.3546, "net_ms": 0.2586, "spread_ms": 0.0289, "rounds_in_layer": 32, "packets": 768, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 44, "name": "/model.22/cv2.0/cv2.0.2/Conv", "ms": 0.1591, "net_ms": 0.0631, "spread_ms": 0.0252, "rounds_in_layer": 32, "packets": 128, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 45, "name": "/model.22/cv3.0/cv3.0.2/Conv", "ms": 0.2057, "net_ms": 0.1097, "spread_ms": 0.0242, "rounds_in_layer": 48, "packets": 384, "w_fills": 12}
+LAYER_TIME {"arm": "nop", "index": 46, "name": "/model.18/m.0/cv1/conv/Conv", "ms": 0.1974, "net_ms": 0.1014, "spread_ms": 0.0341, "rounds_in_layer": 16, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 47, "name": "/model.18/m.0/cv2/conv/Conv", "ms": 0.1944, "net_ms": 0.0983, "spread_ms": 0.0407, "rounds_in_layer": 16, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 48, "name": "/model.18/cv2/conv/Conv", "ms": 0.3286, "net_ms": 0.2326, "spread_ms": 0.0353, "rounds_in_layer": 32, "packets": 768, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 49, "name": "/model.19/conv/Conv", "ms": 0.3631, "net_ms": 0.2671, "spread_ms": 0.0293, "rounds_in_layer": 8, "packets": 1024, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 50, "name": "/model.22/cv2.1/cv2.1.0/conv/Conv", "ms": 0.1987, "net_ms": 0.1027, "spread_ms": 0.0286, "rounds_in_layer": 8, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 51, "name": "/model.22/cv3.1/cv3.1.0/conv/Conv", "ms": 0.2748, "net_ms": 0.1788, "spread_ms": 0.0239, "rounds_in_layer": 16, "packets": 512, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 52, "name": "/model.22/cv2.1/cv2.1.1/conv/Conv", "ms": 0.1248, "net_ms": 0.0288, "spread_ms": 0.0187, "rounds_in_layer": 8, "packets": 64, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 53, "name": "/model.22/cv3.1/cv3.1.1/conv/Conv", "ms": 0.1909, "net_ms": 0.0949, "spread_ms": 0.0248, "rounds_in_layer": 16, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 54, "name": "/model.21/cv1/conv/Conv", "ms": 0.295, "net_ms": 0.199, "spread_ms": 0.022, "rounds_in_layer": 16, "packets": 768, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 55, "name": "/model.22/cv2.1/cv2.1.2/Conv", "ms": 0.1347, "net_ms": 0.0387, "spread_ms": 0.0354, "rounds_in_layer": 8, "packets": 32, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 56, "name": "/model.22/cv3.1/cv3.1.2/Conv", "ms": 0.1356, "net_ms": 0.0396, "spread_ms": 0.0243, "rounds_in_layer": 12, "packets": 96, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 57, "name": "/model.21/m.0/cv1/conv/Conv", "ms": 0.1946, "net_ms": 0.0986, "spread_ms": 0.0241, "rounds_in_layer": 8, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 58, "name": "/model.21/m.0/cv2/conv/Conv", "ms": 0.1938, "net_ms": 0.0977, "spread_ms": 0.0129, "rounds_in_layer": 8, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 59, "name": "/model.21/cv2/conv/Conv", "ms": 0.3343, "net_ms": 0.2383, "spread_ms": 0.0346, "rounds_in_layer": 16, "packets": 768, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 60, "name": "/model.22/cv2.2/cv2.2.0/conv/Conv", "ms": 0.1742, "net_ms": 0.0782, "spread_ms": 0.0289, "rounds_in_layer": 2, "packets": 128, "w_fills": 2}
+LAYER_TIME {"arm": "nop", "index": 61, "name": "/model.22/cv3.2/cv3.2.0/conv/Conv", "ms": 0.1957, "net_ms": 0.0997, "spread_ms": 0.0181, "rounds_in_layer": 4, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 62, "name": "/model.22/cv2.2/cv2.2.1/conv/Conv", "ms": 0.1175, "net_ms": 0.0215, "spread_ms": 0.0222, "rounds_in_layer": 2, "packets": 16, "w_fills": 2}
+LAYER_TIME {"arm": "nop", "index": 63, "name": "/model.22/cv3.2/cv3.2.1/conv/Conv", "ms": 0.1297, "net_ms": 0.0337, "spread_ms": 0.0241, "rounds_in_layer": 4, "packets": 64, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 64, "name": "/model.22/cv2.2/cv2.2.2/Conv", "ms": 0.1108, "net_ms": 0.0148, "spread_ms": 0.0149, "rounds_in_layer": 2, "packets": 8, "w_fills": 2}
+LAYER_TIME {"arm": "nop", "index": 65, "name": "/model.22/cv3.2/cv3.2.2/Conv", "ms": 0.1225, "net_ms": 0.0265, "spread_ms": 0.0183, "rounds_in_layer": 3, "packets": 24, "w_fills": 3}
+SUMMARY {"arm": "nop", "whole_ms_median": 11.8227, "empty_ms_median": 0.096, "empty_ms_p10_p90": [0.0847, 0.1241], "sum_layer_ms": 18.2164, "sum_net_ms": 11.8793, "whole_minus_empty_ms": 11.7267, "net_over_whole_less_empty": 1.013, "mismatched_rounds": 0, "rounds_total": 25, "layers": 66}
+POST_NPU_CONTEXT_WITNESS "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+RESEARCH_PROCESS_RESULT {"exit_code": 0, "stop": null, "peak_tree_rss_bytes": 342073344, "rss_measurement": "maximum observed across sampled descendant working sets; zero observations reported as null", "elapsed_seconds": 53.34399999980815, "foreign_contention_observed": false, "timing_eligible": true}

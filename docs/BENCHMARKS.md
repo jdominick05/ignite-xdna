@@ -16652,3 +16652,80 @@ Logs:
 - [inertness check](../results/aie/issue_inject_verify_bw2_yolov8s_desktop2_20261013T1344Z.log);
 - [sitting](../results/aie/issue_inject_yolov8s_phoenix_desktop2_20261013T1345Z.log);
 - [per-class analysis](../results/aie/issue_inject_analysis_yolov8s_desktop2_20261013T1400Z.log).
+
+#### Block 5 stream sharing, built: exact on the device and 0.93 ms slower; transport gains 0.48 ms but compute exposure grows 1.30 ms (2026-10-13, Desktop 2)
+
+Phase 2 of the campaign built the design the probes above sized. It sits on branch `block5-stream-share`, which is not
+merged. That branch holds `compiler/stream_share.py`, the `--stream-share` compile flag, and `design.py`'s
+`_stream_shared` and `_core_fn_shared`.
+
+**The design under test:**
+- **Static q = 1.** Quad position 3 of every 4 in a column's consumption order goes on the weight stream; the rest
+  stay on stream 0.
+- **MemTile buffers.** Buffer A has 6 slots on S2MM 0; buffer B has 8 slots on S2MM 5 and takes packets. Core k's
+  MM2S chain reads positions 0–2 from A and 3 from B. All MemTile descriptors use `BdIteration` and pinned ids.
+- **Weights** fan out to the four cores by packet routing.
+- **Core side.** Both inputs are raw double buffers; a parity word in core memory picks the buffer (`arith.select`).
+  `engine.cc` is unchanged.
+- **Ordering.** A weight task of more than 2 objects is preceded by every stream-1 quad it serves. Weight tasks of
+  at most 2 objects hold 0, so the quads queued behind them cannot block the channel.
+- **Weight replays.** A layer keeps its stride-0 weight replays where each replay's stream-1 quads fit in buffer B.
+  Otherwise it takes per-round weights: 14 of YOLOv8s's 66 layers did. The frame is padded to whole periods with
+  a NOP weight object.
+- **Tasks.** YOLOv8s goes from 6,795 to 8,375 tasks per frame; its packets stay at 29.51 MB.
+
+**Offline gates (all pass):**
+- `tests/test_stream_share_offline.py` (7 tests): split exactness, the checker's invariants, three mutations it must
+  refuse, and a full YOLOv8n emulation byte-identical to the shipped schedule.
+- `test_emitter_offline.py::test_06` runs the emitter guard on both models' shared schedules at rb2 and rb3. The guard
+  caught one real defect before any build: a held 1-object weight task with `P` tasks behind it filled the 4-deep
+  start queue.
+- YOLOv8s also emulates byte-identical across all 66 layers. The emulator's treatment of shared items is a MODEL of
+  the MemTile chains; only the device tests the model.
+
+**On the device it is exact.** `tools/verify_engine_container.py` on the YOLOv8s container read 28/28 readable layers
+EXACT and 38/38 reused slots holding their planned tenant: PASS. So the free-running `BdIteration` chains, the
+packet-routed shim stream and the core parity select do what the emulator models. Its 3 timed dispatches read 16.716 ms
+mean. That figure was disclosed as smoke in the pre-registration because it pointed against the prediction.
+
+**Verdict sitting** (pre-registration sha256 `737d3b47…`; `tools/bench_dispatch_ab.py`, 4 rounds × 300 dispatches,
+order reversing; `timing_eligible` true, no foreign contention):
+
+| arm | control (main `43de352` rule container) | stream-shared | delta | rounds lower |
+|---|---|---|---|---|
+| real dispatch | 15.737 ms | 16.663 ms | **+0.926 ms** | 0/4 |
+| all-NOP (transport and issue) | 11.849 ms | 11.374 ms | −0.475 ms | 4/4 |
+
+**Verdict KILL** against the 0.5 ms kill line. The prediction was −1.18 ms (DERIVED from the `build_qf` transport ratio
+and the additive task fit); the device read +0.93 ms. The transport half alone also fell short:
+- **Gross transport gain** = −0.475 ms NOP plus 1,580 added tasks × 0.372 µs ≈ 1.06 ms, DERIVED, against the probe's
+  1.796 ms. The probe's regime (64-round tasks, quads first every round) did not transfer to the engine's task mix.
+- **The loss is under compute.** Real minus NOP grew from 3.89 to 5.29 ms.
+
+**Where the loss sits: per-layer diagnostic, non-verdict-bearing** (pre-registration sha256 `165f25f7…`).
+`tools/engine_layer_timing.py --nop` ran control, test, test, control in one sitting, 20 rounds each; `timing_eligible`
+true, no foreign contention, 0 mismatched rounds in every run. Summed over layers: dR (real) **+1.072 ms**, dN (NOP)
+−0.228 ms, dC = dR − dN **+1.300 ms**. Against the fingerprints written before the data:
+- **F1, a per-packet core or packet-mode cost:** not met. r(dC, packets) = 0.627 < 0.7.
+- **F2, the task count in the 14 per-round layers:** not met. They hold 44% of dR, against a 70% bar.
+- **F3, stream 1 waiting for buffer B under compute:** met at 96% of dC, but **near-vacuous**. 59 of 66 layers turned
+  out to have a quad issued ahead of a weight task, so the fingerprint barely discriminates. This is a defect of the
+  pre-registration, found after the data.
+- **Exploratory, not pre-registered:** the 7 layers with no quad ahead of a weight carry about 0.05 ms of dC, and two
+  of them (L5, L12) are the frame's largest per-layer gains (dR −0.045, −0.036).
+
+That is consistent with F3's mechanism. Under compute, buffer B frees a slot only when the cores consume position 3,
+and a weight queued behind waiting quads arrives just in time rather than prefetched. The NOP arm cannot show this:
+its cores drain B at once. **Attribution: favoured, not established.** The core trace window (Phase 0.4: LOCK_STALL
+on the weight input against the activation input) is the instrument that would settle it; it was not run. Ruled out
+as the main cause by the fingerprints: per-packet core overhead (F1) and the per-round task count (F2).
+
+**Scope of the rejection:** this design. A deeper B, another q, a different ordering argument, or weights on their
+own route are new levers, each needing its own pre-registration.
+
+Logs:
+- [verdict sitting](../results/aie/stream_share_yolov8s_sitting_desktop2_20261013T1456Z.log) and its
+  [JSON](../results/aie/stream_share_yolov8s_sitting_desktop2_20261013T1456Z.json);
+- [per-layer diagnostic](../results/aie/stream_share_layer_diag_desktop2_20261013T1501Z.log) and its four per-run
+  JSONs (`_run1_control` … `_run4_control`). Its driver was a git-ignored scratch file that runs the per-layer tool
+  four times in the order above.
