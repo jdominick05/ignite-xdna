@@ -14,7 +14,8 @@ the engine's (configure + patch + push, and an await every second task).
 
 Grid: k in 1, 2, 4, 16, 64 quads per task x Q in 512, 1024 quads per column. Fit over all points:
     dispatch ms = a + b * MB + c * tasks           (tasks = 4 columns x Q / k)
-c is the per-task cost; b the per-byte cost at this traffic. Each measurement runs in its own child process,
+c is the per-task cost; b the per-byte cost at this traffic. A fifth point field, abytes (contig:64:1024:4:800),
+cuts the same shim tasks into smaller core objects, so issue is fixed and only the object count changes. Each measurement runs in its own child process,
 the grid rotates across rounds. Written on Desktop 2 (Phoenix), 2026-10-13; what has been run is in its logs.
 """
 import argparse
@@ -59,14 +60,21 @@ SHAPES = {
 }
 
 
-def name_of(k, q, shape="contig", cols=COLS):
+def name_of(k, q, shape="contig", cols=COLS, abytes=A_BYTES):
     base = f"k{k}_q{q}" if shape == "contig" else f"{shape}_k{k}_q{q}"
-    return base if cols == COLS else f"{base}_c{cols}"
+    base = base if cols == COLS else f"{base}_c{cols}"
+    return base if abytes == A_BYTES else f"{base}_a{abytes}"
 
 
-def build_one(k: int, q: int, shape: str = "contig", cols: int = COLS) -> Path:
+def build_one(k: int, q: int, shape: str = "contig", cols: int = COLS, abytes: int = A_BYTES) -> Path:
     """One variant on columns 0..cols-1; ``cols`` < 4 asks whether the small-task cost is per channel (it then
-    reappears in full on one column) or one issue path shared by the array (it then hides under transport)."""
+    reappears in full on one column) or one issue path shared by the array (it then hides under transport).
+
+    ``abytes`` is the core object size. The shim tasks stay byte-for-byte the same (a quad is still 25,600 B of
+    DDR), so the instruction stream and issue count are fixed; only the MemTile split and the core fifos cut the
+    same stream into more, smaller objects. It asks whether delivering an object costs anything per object on the
+    lock-cycled MemTile -> core path, with issue held constant."""
+    assert QUAD % (4 * abytes) == 0, "a quad must hold a whole number of 4-core object groups"
     import aie.iron as iron
     from aie.dialects.aiex import dma_await_task, dma_free_task, dma_start_task, shim_dma_single_bd_task
     from aie.iron import ObjectFifo, Program, Runtime, Worker
@@ -76,14 +84,14 @@ def build_one(k: int, q: int, shape: str = "contig", cols: int = COLS) -> Path:
     assert q % k == 0 and k <= 64
     assert shape != "e4" or k == 1, "the engine's 4-D quad leaves no dimension for a second quad"
     foot, sizes, strides = SHAPES[shape](k)
-    out_dir = BUILD / name_of(k, q, shape, cols)
+    out_dir = BUILD / name_of(k, q, shape, cols, abytes)
     work = out_dir / "design.prj"
     if work.exists():
         shutil.rmtree(work)
     work.mkdir(parents=True, exist_ok=True)
     iron.set_current_device(NPU1())
-    obj_ty = np.ndarray[(A_BYTES,), np.dtype[np.uint8]]
-    quad_ty = np.ndarray[(QUAD,), np.dtype[np.uint8]]
+    obj_ty = np.ndarray[(abytes,), np.dtype[np.uint8]]
+    quad_ty = np.ndarray[(4 * abytes,), np.dtype[np.uint8]]   # the MemTile object: one object for each core
 
     def core_fn(i):
         i.acquire(1)
@@ -93,7 +101,7 @@ def build_one(k: int, q: int, shape: str = "contig", cols: int = COLS) -> Path:
     for c in range(cols):
         name = f"a{c}"
         f = ObjectFifo(quad_ty, name=name, depth=2)
-        parts = f.cons().split([j * A_BYTES for j in range(4)], tile=Tile(c, 1), depths=[2] * 4,
+        parts = f.cons().split([j * abytes for j in range(4)], tile=Tile(c, 1), depths=[2] * 4,
                                obj_types=[obj_ty] * 4, names=[f"{name}_{j}" for j in range(4)])
         for j, part in enumerate(parts):
             workers.append(Worker(core_fn, [part.cons()], tile=Tile(c, 2 + j)))
@@ -140,14 +148,16 @@ def build_one(k: int, q: int, shape: str = "contig", cols: int = COLS) -> Path:
     insts = (out_dir / "insts.bin").stat().st_size
     (out_dir / "meta.json").write_text(json.dumps({"k": k, "q": q, "shape": shape, "cols": cols, "sizes": list(sizes),
                                                    "strides": list(strides), "tasks": cols * ntasks,
+                                                   "abytes": abytes, "core_objects": moved // abytes,
                                                    "total_bytes": total, "moved_bytes": moved,
                                                    "insts_bytes": insts}), encoding="utf-8")
     return out_dir
 
 
-def time_one(k: int, q: int, iters: int, warmup: int, timeout_ms: int, shape: str = "contig", cols: int = COLS) -> dict:
+def time_one(k: int, q: int, iters: int, warmup: int, timeout_ms: int, shape: str = "contig", cols: int = COLS,
+             abytes: int = A_BYTES) -> dict:
     from ignite_xdna.runtime.driver import XrtSiliconHarness
-    d = BUILD / name_of(k, q, shape, cols)
+    d = BUILD / name_of(k, q, shape, cols, abytes)
     meta = json.loads((d / "meta.json").read_text(encoding="utf-8"))
     total = meta["total_bytes"]
     moved = meta.get("moved_bytes", total)   # builds before the shape axis moved their whole buffer
@@ -175,6 +185,7 @@ def time_one(k: int, q: int, iters: int, warmup: int, timeout_ms: int, shape: st
                 times.append(dt)
         del run, bo_in, bo_out, bo_instr
     return {"k": k, "q": q, "shape": shape, "cols": cols, "tasks": meta["tasks"], "mb": moved / 1e6,
+            "abytes": meta.get("abytes", A_BYTES), "core_objects": meta.get("core_objects", moved // A_BYTES),
             "insts_bytes": meta["insts_bytes"],
             "mean_ms": statistics.fmean(times), "median_ms": statistics.median(times), "min_ms": min(times),
             "times_ms": times}
@@ -193,7 +204,7 @@ def fit(rows):
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
-    points_help = ("comma list of shape:k:q[:cols] points (cols defaults to 4) (shapes: " + ", ".join(SHAPES) + "); replaces the --ks x --qs "
+    points_help = ("comma list of shape:k:q[:cols[:abytes]] points (cols defaults to 4, abytes to 6400) (shapes: " + ", ".join(SHAPES) + "); replaces the --ks x --qs "
                    "grid of contiguous tasks, and skips the plane fit")
     b = sub.add_parser("build")
     b.add_argument("--ks", default=",".join(map(str, KS)))
@@ -207,6 +218,7 @@ def main():
     t.add_argument("--iters", type=int, default=30)
     t.add_argument("--warmup", type=int, default=3)
     t.add_argument("--timeout-ms", type=int, default=5000)
+    t.add_argument("--abytes", type=int, default=A_BYTES)
     s = sub.add_parser("sit")
     s.add_argument("--ks", default=",".join(map(str, KS)))
     s.add_argument("--qs", default=",".join(map(str, QS)))
@@ -217,7 +229,8 @@ def main():
     args = ap.parse_args()
 
     if args.cmd == "time":
-        print(json.dumps(time_one(args.k, args.q, args.iters, args.warmup, args.timeout_ms, args.shape, args.cols)))
+        print(json.dumps(time_one(args.k, args.q, args.iters, args.warmup, args.timeout_ms, args.shape, args.cols,
+                                  args.abytes)))
         return
     if args.points:
         combos = []
@@ -225,14 +238,15 @@ def main():
             shape, k, q, *rest = p.split(":")
             if shape not in SHAPES:
                 raise SystemExit(f"unknown shape {shape!r}")
-            combos.append((shape, int(k), int(q), int(rest[0]) if rest else COLS))
+            combos.append((shape, int(k), int(q), int(rest[0]) if rest else COLS,
+                           int(rest[1]) if len(rest) > 1 else A_BYTES))
     else:
-        combos = [("contig", k, q, COLS) for q in map(int, args.qs.split(","))
+        combos = [("contig", k, q, COLS, A_BYTES) for q in map(int, args.qs.split(","))
                   for k in map(int, args.ks.split(","))]
     if args.cmd == "build":
-        for shape, k, q, cols in combos:
+        for shape, k, q, cols, ab in combos:
             t0 = time.perf_counter()
-            d = build_one(k, q, shape, cols)
+            d = build_one(k, q, shape, cols, ab)
             meta = json.loads((d / "meta.json").read_text(encoding="utf-8"))
             print(f"[build] {d.name}: {meta['tasks']} tasks, insts {meta['insts_bytes']:,} B "
                   f"in {time.perf_counter() - t0:.1f} s", flush=True)
@@ -243,23 +257,23 @@ def main():
         order = combos[rnd % len(combos):] + combos[:rnd % len(combos)]
         if rnd % 2:
             order = order[::-1]
-        for shape, k, q, cols in order:
+        for shape, k, q, cols, ab in order:
             proc = subprocess.run([sys.executable, __file__, "time", str(k), str(q), "--shape", shape, "--cols", str(cols),
-                                   "--iters", str(args.iters)], capture_output=True, text=True, timeout=300)
+                                   "--abytes", str(ab), "--iters", str(args.iters)], capture_output=True, text=True, timeout=300)
             if proc.returncode != 0:
                 print(proc.stdout[-2000:], proc.stderr[-2000:], sep="\n")
                 raise SystemExit(f"[sit] {shape} k{k} q{q} failed in round {rnd}; stopping - do not retry in a loop")
             rec = json.loads(proc.stdout.strip().splitlines()[-1])
             rec["round"] = rnd
             results.append(rec)
-            print(f"[sit] round {rnd} {shape:6s} k{k:<3} q{q:<5} c{cols} {rec['tasks']:5d} tasks {rec['mb']:6.1f} MB: "
+            print(f"[sit] round {rnd} {shape:6s} k{k:<3} q{q:<5} c{cols} a{ab} {rec['tasks']:5d} tasks {rec['core_objects']:7d} objects {rec['mb']:6.1f} MB: "
                   f"mean {rec['mean_ms']:.3f} ms, min {rec['min_ms']:.3f}", flush=True)
     if args.points:
         by = {}
         for r in results:
-            by.setdefault((r["shape"], r["k"], r["q"], r.get("cols", COLS)), []).append(r["mean_ms"])
-        for (shape, k, q, cols), v in by.items():
-            print(f"[point] {shape:6s} k{k:<3} q{q:<5} c{cols} mean of rounds {statistics.fmean(v):.3f} ms "
+            by.setdefault((r["shape"], r["k"], r["q"], r.get("cols", COLS), r.get("abytes", A_BYTES)), []).append(r["mean_ms"])
+        for (shape, k, q, cols, ab), v in by.items():
+            print(f"[point] {shape:6s} k{k:<3} q{q:<5} c{cols} a{ab} mean of rounds {statistics.fmean(v):.3f} ms "
                   f"(round spread {(max(v) - min(v)) * 1e3:.0f} us)")
         Path(args.json).write_text(json.dumps({"results": results}, indent=1), encoding="utf-8")
         return

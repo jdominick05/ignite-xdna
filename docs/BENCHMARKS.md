@@ -16843,3 +16843,61 @@ in the static program says how much DMA the cores overlap with compute.
 Log: [amd_code_decode_yolov8s_desktop2_20261013T194608Z.log](../results/aie/amd_code_decode_yolov8s_desktop2_20261013T194608Z.log)
 (both arms' per-segment totals, the joins, the side-by-side convolution table, push counts, and the full
 `model.7` and `model.3` decodes for columns 0 and 3).
+
+#### Smaller core objects cost nothing at fixed issue: the engine's per-packet term is not a MemTile or core per-object cost (2026-10-13, Desktop 2)
+
+**Question.** The decode above shows how AMD avoids per-round control. Its cores are re-fed each output group by
+MemTile hardware repeat. Whether that would pay on the engine depends on where the engine's 0.235 µs per packet
+([above](#what-sets-a-layers-time-activation-packets-not-instruction-ops-exploratory-offline)) is spent:
+- on issue, which the 12:47Z and 13:06Z sittings already price;
+- or per object on the lock-cycled MemTile → core path.
+
+That path had never been measured alone.
+
+**Method.** `tools/task_issue_probe.py` gained a core-object-size axis (`--points contig:64:1024:4:<bytes>`). The
+shim tasks stay byte-for-byte the same in every arm: 64 tasks of 64 quads, 104,857,600 B on four columns, and
+**identical `insts.bin`** in all six builds (checked by `cmp`). Only the MemTile split and the core fifos cut that
+stream into smaller objects:
+- from 6,400 B, the engine's size, down to 200 B;
+- from 1,024 to 32,768 objects per core.
+
+The cores only acquire and release. One sitting was pre-registered (scratch sha256 `e2e7a6a6...`): 4 rounds × 30
+dispatches per point, rotating and reversing order, `timing_eligible: true`, no foreign context.
+
+| core object | objects per core | transport per object (DERIVED, 6.9 GB/s per column) | mean of rounds ms | vs 6,400 B |
+|---:|---:|---:|---:|---:|
+| 6,400 B | 1,024 | 3.71 µs | 4.075 | - |
+| 3,200 B | 2,048 | 1.86 µs | 4.086 | +0.011 |
+| 1,600 B | 4,096 | 0.93 µs | 4.027 | −0.048 |
+| 800 B | 8,192 | 0.46 µs | 4.164 | +0.089 |
+| 400 B | 16,384 | 0.23 µs | 4.199 | +0.124 |
+| 200 B | 32,768 | 0.116 µs | 4.209 | +0.134 |
+
+- **Validity holds.** The control reads 4.075 ms, inside 4.10 ± 0.30 (the 12:47Z k=64 point was 4.104), and the
+  instruction streams are identical.
+- **Verdict FLAT.** Every point is within the 0.15 ms band. Round spreads are 62–219 µs.
+- **The expectation written beforehand was wrong.** It was a rise of 0.1–0.4 µs per object at 400 B or below, and
+  it did not appear.
+- **32× the objects add at most 0.13 ms.** A cost serialised per object would be under 0.005 µs. Any cost that
+  overlaps transport is under about 0.12 µs per object, or the 200 B point would have risen. Both bounds are far
+  below 0.235 µs. A small upward drift below 1,600 B sits inside the band and is not a finding.
+
+**What follows (DERIVED).**
+- **The engine's per-packet term is not a per-object cost on the MemTile → core path.** With the tasks-are-issue
+  result (13:06Z: one serial path of about 1.42 µs per task), the per-layer packet fit is best read as issue cost
+  carried by packets, because each packet needs control to deliver it.
+- **AMD's layout pays through the control it does not issue.** It re-delivers each tile once per output group by
+  MemTile hardware repeat, with no control per round. The cores take many small handoffs, and this sitting says
+  those are nearly free.
+- **This points back at the activation ring** ([2026-09-16](#memtile-residency-does-not-pay-on-the-graph-engine-and-the-yolov8s-gap-is-a-known-limitation-2026-09-16-desktop-2)).
+  That design had this residency, but it lost 3.40 ms by re-configuring and re-pushing per layer. The variant this
+  sitting supports holds the tile in the MemTile and re-sends it per output group from one push with a repeat
+  count. It is not built and not sized here.
+
+**Not established.**
+- The cores did no compute here. With real work, core-side handoffs could interact with the compute loop.
+- Small objects on the shim side were not tested: every arm's shim tasks were 1.6 MB.
+- MemTile repeat delivery to cores has not been measured against per-round pushes on the engine.
+
+Logs: [sitting](../results/aie/object_size_probe_phoenix_desktop2_20261013T1958Z.log) and its
+[JSON](../results/aie/object_size_probe_phoenix_desktop2_20261013T1958Z.json).
