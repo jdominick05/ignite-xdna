@@ -1,0 +1,18 @@
+# Block 5: shim tasks added by carrying YOLOv8s activations on both MM2S streams of a column. Offline, DERIVED. Desktop 2, 2026-10-13T06:36Z.
+# Schedule re-lowered from scratch/b3/build/yolov8s_merged_silu.ignite; each activation item's 6,400 B object stream refitted to the fewest legal shim tasks (<=4 dims, repeat <=64, wraps <=1023, steps < 2^20 words).
+# Per-core split = a fill's objects for some cores on each stream. Alternation = whole quads alternate streams by position; MemTile MM2S chains read both buffers in the same fixed pattern.
+# Costs: 0.36 us per extra task (4 ops x 0.09 us, efdaa4f fit); 8-stream cap = new transport x 54.34/50.36 (stream_ceiling a16x2 vs 2 x a16).
+
+item kinds seen: ['A', 'W', 'o', 'w']
+activation items: 'A' 5509 (37136 objects, 6.74 per task), 'a' 0 (4 tasks each)
+objects per 'A' task, histogram: {4: 4774, 8: 255, 16: 232, 32: 160, 64: 64, 128: 24}
+activation tasks per frame: today 5509, refit full set 5525 (sanity: <= today)
+halves: 11130 tasks, +5621, cost 2.024 ms at 0.36 us/task (DERIVED)
+quarters: 11130 tasks, +5621, cost 2.024 ms at 0.36 us/task (DERIVED)
+peak tasks issued in one round on one shim tile (all items): today 26, halves 50
+
+ALTERNATION (whole quads alternate streams; no fill split by core)
+  modelled transport ms: today 8.673, static alternate 7.389, per-layer q 6.402
+  static: activation tasks 6292 (+783), task+reconfig cost 0.282 ms; raw saving 1.285 ms, with the 8-stream cap 0.701 ms (before the 1.138 slope)
+  perlayer: activation tasks 6625 (+1116), task+reconfig cost 0.413 ms; raw saving 2.272 ms, with the 8-stream cap 1.766 ms (before the 1.138 slope)
+  q changes between layers: 5

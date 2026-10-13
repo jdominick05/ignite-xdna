@@ -1978,6 +1978,7 @@ cached reference heads rather than `bo_out`.
   - **What would reopen it:** a core memory layout that keeps the weights double-buffered alongside 64 channels
     of partial sums. It needs 72,064 B as the core is laid out today
     ([BENCHMARKS](BENCHMARKS.md#block-5-phase-1-single-buffering-the-cores-costs-270-ms-so-the-2-group-design-is-stopped-2026-10-13-desktop-2)).
+- **Rejected (sized, not built): splitting each activation fill by core across a column's two shim streams (2026-10-13, Block 5).** 4,774 of YOLOv8s's 5,509 fill tasks carry one quad, so a per-core split adds +5,621 tasks, about 2.0 ms at 0.36 µs per task (DERIVED), which is more than static halves save and nearly all that per-layer quarters save. Alternating whole quads between the streams, with stream 1 in packet mode, keeps the gain: its transport was measured at full rate (alt/base 0.846 on one column, 0.878 on all four) ([BENCHMARKS](BENCHMARKS.md#block-5-alternating-whole-quads-between-a-columns-two-streams-runs-at-full-rate-in-packet-mode-and-nets-06-19-ms-on-yolov8s-2026-10-13-desktop-2)).
 - **Rejected again, on the container it mattered most for: the activation ring on SESR M7 (2026-09-19, built and
   measured).** SESR is the one zoo model whose dispatch is demonstrably transport-bound (2.650 ms NOP floor for
   ~14 MB of per-frame fill and drain, 5.4 GB/s effective), so the ring's "fetch once, serve several output groups"

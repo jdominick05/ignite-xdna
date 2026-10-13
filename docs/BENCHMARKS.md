@@ -16223,7 +16223,7 @@ engine's data-movement time. Savings below are scaled by that slope; all are DER
   - **What changes:** the transport in `design.py`, and the emitter stamping a packet ID on each shim task and
     picking its stream.
   - **What does not change:** the core kernel `engine.cc`.
-- **The cost risk is task count.** Today a fill carries about four packets, set by the quad object. If carrying
+- **The cost risk is task count** (answered in the next subsection: splitting by core costs ~2.0 ms, alternating whole quads does not). Today a fill carries about four packets, set by the quad object. If carrying
   some cores' packets on another stream splits fills, each extra 1,000 tasks costs about 0.37 ms (the per-layer
   fit's 0.09 µs per op, 4 ops per task, DERIVED). A full doubling would erase the quarters' gain. Whether fills
   can stay at four packets with 1- or 2-packet objects is unchecked.
@@ -16234,3 +16234,107 @@ Before any engine work, the stream ceiling probe can add a packet-switched route
 mixed packet IDs to a MemTile split and to the cores. It would measure that rate directly.
 
 Log: [engine_stream_sharing_sizing_yolov8s_desktop2_20261013T070000Z.log](../results/aie/engine_stream_sharing_sizing_yolov8s_desktop2_20261013T070000Z.log).
+
+#### Block 5: alternating whole quads between a column's two streams runs at full rate in packet mode, and nets 0.6-1.9 ms on YOLOv8s (2026-10-13, Desktop 2)
+
+**Question.** The sizing above left two risks: extra shim tasks, and whether a stream keeps its rate in packet
+mode. Both are answered here. Task counts are offline and DERIVED; the transport is a pre-registered sitting
+(MEASURED).
+
+**Splitting a fill by core is too expensive.** YOLOv8s issues 5,509 activation tasks per frame, 6.74 objects
+each; 4,774 of them carry a single quad, meaning one 6,400 B object for each of the four cores. Every such task
+would become two, adding +5,621 tasks, about 2.02 ms at 0.36 µs per task (4 instruction ops at the per-layer
+fit's 0.09 µs).
+- Static halves would then net −0.56 ms.
+- Per-layer quarters would net +0.57 ms, and about zero once the array-wide cap below is applied.
+
+**Alternating whole quads instead.** Each quad goes to one stream or the other by its position in the column's
+quad sequence, and lands in one of two MemTile buffers. Each core's MemTile output reads the two buffers in the
+same fixed pattern, so every core still receives its packets in order. Only multi-quad fills split: +783 tasks
+for 1-in-2 alternation, +1,116 for a per-layer ratio.
+
+**The transport, measured** ([tools/stream_share_probe.py](../tools/stream_share_probe.py), pre-registered
+scratch sha256 `3fe02faf...` before any run of the tool; a hang-only smoke of the four routes ran after the
+hash, as the pre-registration declared). The setup:
+- Engine object sizes, no compute.
+- Per round and column: 4 quads plus 4 weight objects, 37,888 B. That is a weight-to-activation ratio of 0.37,
+  against YOLOv8s's 0.35.
+- `base` is today's layout: stream 0 carries the quads, stream 1 broadcasts the weights.
+- `alt` sends quads 0 and 2 on stream 0. Stream 1, in packet mode, carries the weights as one packet fanned out
+  to the four cores, then quads 1 and 3 as one packet each into the MemTile's second input.
+
+The sitting was `timing_eligible: true` with no foreign context, at 3 rounds × 30 dispatches and 64–256 rounds
+per dispatch:
+
+| route | µs per round (fit) | busier stream | alt/base, fit | alt/base by per-volume minima |
+|---|---:|---:|---:|---:|
+| base | 15.376 | 6.66 GB/s | | |
+| alt | 13.000 | 6.85 GB/s | **0.846** | 0.880–0.888 |
+| base4 (all columns) | 16.384 | 6.25 GB/s | | |
+| alt4 (all columns) | 14.388 | 6.19 GB/s | **0.878** | 0.876–0.891 |
+
+**Verdict: GO.** All three pre-registered criteria hold:
+- **Q1:** the packet-mode stream runs at 6.85 GB/s, against a bar of ≥ 6.19.
+- **Q2:** alt/base is 0.846, against a bar of ≤ 0.92.
+- **Q3:** the four-column ratio is 0.878, against a bar of ≤ 0.95.
+
+The prediction at one stream's rate was 0.870. Packet headers, the weight fan-out and the alternating MemTile
+chains cost nothing measurable, and no array-wide cap appeared at this mix.
+
+The alt fit is noisier: residuals reach ±117 µs, against ≤ 49 µs on the other routes, and its 128-round point
+has a wide spread across rounds. The per-volume minima are tight, and the verdict holds by fit, by medians and by
+minima ([points](../results/aie/stream_share_points_phoenix_desktop2_20261013T0915Z.log)). The source of the
+noise is unexplained.
+
+**Packet order forces one more rule, and sets the design.** A core consumes chunk by chunk: a weight packet,
+then that chunk's activation object, with weights 2 deep. On a shared stream, a weight task running ahead of
+the quads behind it deadlocks once the cores' weight buffer is full. YOLOv8s's weight tasks are long:
+- 362 of 389 carry more than 2 packets, and the longest carry 128;
+- 208 replay one run once per round.
+
+Two fixes don't fit:
+- Splitting every run per chunk would add +8,422 tasks, about 3.0 ms.
+- A MemTile FIFO for the longest run would need 1.18 MB against the MemTile's 512 KiB.
+
+The arrangement that fits: per round, stream 1 sends its quads first, into buffer B, then the round's weights.
+- Buffer B must hold one round's stream-1 quads. At 1-in-2 that is up to 16 quads (400 KiB).
+- Replayed weight tasks become one per round, +864 tasks.
+- 22 weight tasks that serve past their round need splitting.
+
+**Net on YOLOv8s (DERIVED)**:
+- **Static 1-in-2 alternation:** anchored on the measured four-column ratio, 0.878 × 8.673 ms modelled transport
+  saves 1.20 ms. Its tasks (+783 + 864 + 22) cost 0.60 ms, which nets **0.60 ms**. That is marginal, and close
+  to sitting-to-sitting noise.
+- **Per-layer ratio:** q of every 4 quads on stream 1, chosen per layer under buffer B's limit. The best is q = 1
+  on 62 layers and q = 2 on 4, with 5 changes between layers. Its largest round fits in 8 slots, so the limit
+  never binds. The model saves 2.59 ms against +2,002 tasks (0.73 ms), which nets **1.85 ms**.
+- **The array cap:** q = 1 loads all eight streams nearly evenly, the regime where the stream-ceiling probe read
+  50.36 GB/s rather than 2 × 27.17. Scaling for that leaves about **1.3 ms**.
+- **Not measured:**
+  - the q = 1 mix;
+  - the quads-first order;
+  - the deep buffer B;
+  - per-chunk weight and activation consumption.
+
+  The probe sent weights first, and its cores took all four weights before any activation.
+
+**What building it takes.**
+- **`design.py`:** each column's activation fifo becomes explicit MemTile DMA: two inputs, buffer A at 2 slots and
+  buffer B at 8–16 slots via `BdIteration`, and per-core output chains in the period-4 pattern. The weights become
+  a packet fan-out from stream 1. The core-side explicit buffer and lock pattern already exists in `design.py`
+  (`_weight_buffer`, the activation ring). `engine.cc` is unchanged.
+- **The emitter:**
+  - assign quads to streams by position;
+  - split multi-quad fills;
+  - stamp packet IDs on stream-1 tasks;
+  - reorder each round to quads-first, moving the `serves` await accounting with it;
+  - split replayed weight tasks per round;
+  - re-arm the MemTile pattern at the 5 changes of q.
+- **First milestone, before any engine code:** an `alt_qf` variant of the probe with quads first, buffer B
+  through iteration, cores consuming weight-activation pairs, and the q = 1 mix.
+
+Logs:
+- [sitting](../results/aie/stream_share_phoenix_desktop2_20261013T0900Z.log)
+- [per-volume points](../results/aie/stream_share_points_phoenix_desktop2_20261013T0915Z.log)
+- [task counts](../results/aie/engine_stream_split_tasks_yolov8s_desktop2_20261013T080000Z.log)
+- [packet order and per-layer ratio](../results/aie/engine_stream_share_order_yolov8s_desktop2_20261013T0930Z.log)

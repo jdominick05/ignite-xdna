@@ -1,0 +1,81 @@
+# Offline, from the sitting JSON of stream_share_phoenix_desktop2_20261013T0900Z.log. Desktop 2.
+# (1) per-route, per-volume medians of the three rounds' means, residuals from each route's fit, step slopes
+base: slope 15.376 us/round, intercept 0.083 ms
+    64 rounds: median 1.046 ms (rounds 1.035-1.061), residual   -21.5 us
+   128 rounds: median 2.013 ms (rounds 1.999-2.142), residual   -38.9 us  step  15.103 us/round
+   192 rounds: median 3.042 ms (rounds 3.000-3.248), residual    +6.1 us  step  16.078 us/round
+   256 rounds: median 3.998 ms (rounds 3.928-4.012), residual   -22.0 us  step  14.937 us/round
+alt: slope 13.000 us/round, intercept 0.222 ms
+    64 rounds: median 0.938 ms (rounds 0.920-1.243), residual  -116.7 us
+   128 rounds: median 2.002 ms (rounds 1.747-2.135), residual  +115.6 us  step  16.629 us/round
+   192 rounds: median 2.622 ms (rounds 2.603-2.669), residual   -96.4 us  step   9.688 us/round
+   256 rounds: median 3.548 ms (rounds 3.529-3.675), residual    -2.9 us  step  14.462 us/round
+base4: slope 16.384 us/round, intercept 0.100 ms
+    64 rounds: median 1.121 ms (rounds 1.119-1.126), residual   -27.6 us
+   128 rounds: median 2.246 ms (rounds 2.175-2.273), residual   +48.7 us  step  17.577 us/round
+   192 rounds: median 3.242 ms (rounds 3.203-3.329), residual    -3.9 us  step  15.562 us/round
+   256 rounds: median 4.262 ms (rounds 4.245-4.318), residual   -32.3 us  step  15.940 us/round
+alt4: slope 14.388 us/round, intercept 0.092 ms
+    64 rounds: median 1.012 ms (rounds 1.009-1.013), residual    -1.3 us
+   128 rounds: median 1.887 ms (rounds 1.875-2.018), residual   -47.6 us  step  13.665 us/round
+   192 rounds: median 2.874 ms (rounds 2.802-2.954), residual   +18.7 us  step  15.423 us/round
+   256 rounds: median 3.803 ms (rounds 3.679-3.809), residual   +27.7 us  step  14.528 us/round
+
+# (2) per-round dispatch distributions and alt/base ratios at each volume, by medians and by minima
+base   x  64 round 0: min 1.039 q1 1.040 med 1.042 q3 1.046 max 1.081  >1.1xmed: 0
+base   x 128 round 0: min 2.001 q1 2.018 med 2.040 q3 2.333 max 2.377  >1.1xmed: 10
+base   x 192 round 0: min 2.954 q1 3.076 med 3.260 q3 3.372 max 3.639  >1.1xmed: 1
+base   x 256 round 0: min 3.805 q1 3.854 med 3.887 q3 4.055 max 4.628  >1.1xmed: 5
+alt    x  64 round 0: min 1.036 q1 1.111 med 1.184 q3 1.390 max 1.585  >1.1xmed: 9
+alt    x 128 round 0: min 1.718 q1 1.735 med 1.742 q3 1.753 max 1.811  >1.1xmed: 0
+alt    x 192 round 0: min 2.538 q1 2.547 med 2.573 q3 2.644 max 2.899  >1.1xmed: 1
+alt    x 256 round 0: min 3.377 q1 3.415 med 3.450 q3 3.715 max 4.127  >1.1xmed: 6
+base4  x  64 round 0: min 1.104 q1 1.114 med 1.117 q3 1.125 max 1.152  >1.1xmed: 0
+base4  x 128 round 0: min 2.104 q1 2.123 med 2.138 q3 2.193 max 2.491  >1.1xmed: 1
+base4  x 192 round 0: min 3.102 q1 3.139 med 3.168 q3 3.191 max 3.690  >1.1xmed: 3
+base4  x 256 round 0: min 4.089 q1 4.134 med 4.160 q3 4.258 max 5.074  >1.1xmed: 2
+alt4   x  64 round 0: min 0.985 q1 0.993 med 0.996 q3 1.027 max 1.103  >1.1xmed: 1
+alt4   x 128 round 0: min 1.856 q1 1.869 med 1.883 q3 1.901 max 1.977  >1.1xmed: 0
+alt4   x 192 round 0: min 2.766 q1 2.790 med 2.887 q3 3.117 max 3.224  >1.1xmed: 5
+alt4   x 256 round 0: min 3.636 q1 3.660 med 3.674 q3 3.690 max 3.775  >1.1xmed: 0
+base   x  64 round 1: min 1.022 q1 1.024 med 1.029 q3 1.043 max 1.075  >1.1xmed: 0
+alt4   x 256 round 1: min 3.622 q1 3.696 med 3.719 q3 3.827 max 4.486  >1.1xmed: 4
+alt4   x 192 round 1: min 2.714 q1 2.739 med 2.755 q3 2.793 max 3.323  >1.1xmed: 2
+alt4   x 128 round 1: min 1.847 q1 1.858 med 1.868 q3 1.884 max 1.942  >1.1xmed: 0
+alt4   x  64 round 1: min 0.980 q1 0.989 med 0.995 q3 1.026 max 1.060  >1.1xmed: 0
+base4  x 256 round 1: min 4.059 q1 4.119 med 4.212 q3 4.408 max 4.621  >1.1xmed: 0
+base4  x 192 round 1: min 3.147 q1 3.176 med 3.257 q3 3.452 max 3.833  >1.1xmed: 4
+base4  x 128 round 1: min 2.124 q1 2.146 med 2.175 q3 2.376 max 2.891  >1.1xmed: 7
+base4  x  64 round 1: min 1.108 q1 1.110 med 1.116 q3 1.125 max 1.152  >1.1xmed: 0
+alt    x 256 round 1: min 3.387 q1 3.398 med 3.419 q3 3.625 max 4.024  >1.1xmed: 6
+alt    x 192 round 1: min 2.556 q1 2.584 med 2.598 q3 2.636 max 3.070  >1.1xmed: 1
+alt    x 128 round 1: min 1.844 q1 1.977 med 2.132 q3 2.306 max 2.539  >1.1xmed: 7
+alt    x  64 round 1: min 0.910 q1 0.920 med 0.941 q3 0.944 max 0.990  >1.1xmed: 0
+base   x 256 round 1: min 3.813 q1 3.845 med 3.894 q3 4.222 max 4.411  >1.1xmed: 2
+base   x 192 round 1: min 2.910 q1 2.930 med 2.964 q3 3.017 max 3.341  >1.1xmed: 1
+base   x 128 round 1: min 1.963 q1 1.976 med 2.002 q3 2.018 max 2.367  >1.1xmed: 1
+base   x 192 round 2: min 2.880 q1 2.939 med 2.959 q3 3.222 max 3.503  >1.1xmed: 5
+base   x 256 round 2: min 3.814 q1 3.833 med 3.851 q3 3.953 max 4.338  >1.1xmed: 2
+alt    x  64 round 2: min 0.907 q1 0.913 med 0.917 q3 0.922 max 0.961  >1.1xmed: 0
+alt    x 128 round 2: min 1.763 q1 1.772 med 1.903 q3 2.161 max 2.561  >1.1xmed: 11
+alt    x 192 round 2: min 2.540 q1 2.558 med 2.578 q3 2.712 max 3.071  >1.1xmed: 5
+alt    x 256 round 2: min 3.371 q1 3.483 med 3.744 q3 3.859 max 4.146  >1.1xmed: 1
+base4  x  64 round 2: min 1.101 q1 1.115 med 1.118 q3 1.131 max 1.194  >1.1xmed: 0
+base4  x 128 round 2: min 2.143 q1 2.163 med 2.193 q3 2.238 max 2.518  >1.1xmed: 6
+base4  x 192 round 2: min 3.098 q1 3.151 med 3.193 q3 3.250 max 3.603  >1.1xmed: 3
+base4  x 256 round 2: min 4.093 q1 4.193 med 4.241 q3 4.480 max 4.804  >1.1xmed: 1
+alt4   x  64 round 2: min 0.984 q1 0.997 med 1.003 q3 1.023 max 1.084  >1.1xmed: 0
+alt4   x 128 round 2: min 1.870 q1 1.900 med 1.930 q3 2.143 max 2.403  >1.1xmed: 8
+alt4   x 192 round 2: min 2.734 q1 2.780 med 2.826 q3 2.879 max 3.221  >1.1xmed: 5
+alt4   x 256 round 2: min 3.617 q1 3.683 med 3.715 q3 3.959 max 4.188  >1.1xmed: 2
+base   x  64 round 2: min 1.025 q1 1.040 med 1.056 q3 1.080 max 1.106  >1.1xmed: 0
+base   x 128 round 2: min 1.953 q1 1.981 med 1.995 q3 2.013 max 2.114  >1.1xmed: 0
+
+alt/base x64: median ratio 0.904, min ratio 0.888
+alt/base x128: median ratio 0.930, min ratio 0.880
+alt/base x192: median ratio 0.867, min ratio 0.881
+alt/base x256: median ratio 0.896, min ratio 0.886
+alt4/base4 x64: median ratio 0.895, min ratio 0.891
+alt4/base4 x128: median ratio 0.868, min ratio 0.878
+alt4/base4 x192: median ratio 0.879, min ratio 0.876
+alt4/base4 x256: median ratio 0.880, min ratio 0.891

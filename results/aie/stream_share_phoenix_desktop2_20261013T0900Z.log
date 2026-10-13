@@ -1,0 +1,85 @@
+RESEARCH_PLATFORM {"machine": "Desktop 2", "cpu": "AMD Ryzen 7 8700G w/ Radeon 780M Graphics", "os": "Windows-11-10.0.26200-SP0", "ram_bytes": 33381138432, "source_sha256": {"tools/research_process.py": "ffeb1857f190b482eed101b5f5a928f455de26bfa61d23f78a2eacec08e2663e", "tools/quant_calib_alphabet.py": "2dc0b2878c564853f340880209a425dfcf63b8536b2b8e9fd32344daade58d37", "tools/xint8_arithmetic_probe.py": "6aa3df08b9870c3c2264b868459d7ffbac3070dddc1349d7c6f3f480075f7041", "scripts/research-lowlevel.sh": "3455ad7933697936487712665505c216891865c6deada647302785f6e37020bd", "scripts/research-iron.sh": "4c863a262646ddab39b5005006ba8e03809895e6386c6310e2fd9d0a9e9609ee", "kernels/memory_placement/probe.py": "e8d990169ad6091fa1b53852e9f61eff495b5def72d35165a5c5cf1759e38898", "kernels/memory_placement/memory_kernels.cc": "182e7af7071a1e851afb4a7ca266069c489aea1fbaaa85eca129708daeba5ba6", "scripts/research-matrix.sh": "739254171629deae822b0ad7dabc875aee19ace56dde77d3e8aab61663f97516", "kernels/memory_placement/gemm.py": "17c905ad66110d3346bbf0db898dfc6b780df59fae1dfb0c1747057ce1e5844e", "kernels/memory_placement/gemm_placement.cc": "f21acf7250b12914ea30cc1f77613239dfa18421a85a1b9a5199017dd916278a", "tools/research_summary.py": "0c00dcceef07053d06731b41a1f1ed58d3ba4ea09f82497de354ce9cef17da20", "tools/research_toolchain.py": "f0a126a24ae213acfaa43460cfd9def0c86d9cb70cfee0228aa271688467b314"}, "commit": "be7ddbb6bcbdc99ccb6674545b70cfd0acb260c5", "command": ["C:/Users/<user>/miniforge3/envs/mlir-aie-iron/python.exe", "tools/stream_share_probe.py", "sit", "--rounds", "3", "--iters", "30", "--json", "scratch/b14/sit.json"], "seconds_limit": 1200.0, "rss_gib_limit": 8, "checks_only": false, "free_ram_bytes": 24833142784}
+HOST_LOAD busy_cores=0.24 logical_cores=16 free_ram_gb=23.1 sample_sec=1
+HOST_LOAD_TOP 0.09 dev-agent:39036 ws_mb=482
+HOST_LOAD_TOP 0.05 powershell:46912 ws_mb=79
+HOST_LOAD_TOP 0.02 FanControl:15032 ws_mb=216
+HOST_LOAD_TOP 0.02 python:43104 ws_mb=53
+HOST_LOAD_TOP 0.02 dev-agent:5088 ws_mb=97
+HOST_LOAD_VERDICT CLEAR
+
+PRE_NPU_CONTEXT_WITNESS "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+[sit] round 0 base   x  64     9.0 MB: mean 1.046 ms, min 1.039
+[sit] round 0 base   x 128    18.0 MB: mean 2.142 ms, min 2.001
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 4 KB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |48864               |219        |0           |0           |0    |Normal   |\n      |python.exe          |Active     |0           |0           |     |N/A      |\n      |4 KB                |N/A        |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [48864], "owned_pids": [46248, 47260, 48864], "foreign_pids": []}
+[sit] round 0 base   x 192    26.9 MB: mean 3.248 ms, min 2.954
+[sit] round 0 base   x 256    35.9 MB: mean 3.998 ms, min 3.805
+[sit] round 0 alt    x  64     9.0 MB: mean 1.243 ms, min 1.036
+[sit] round 0 alt    x 128    18.0 MB: mean 1.747 ms, min 1.718
+HOST_TIMELINE {"elapsed_seconds": 3.203, "tree_rss_bytes": 107749376, "foreign_peers": []}
+[sit] round 0 alt    x 192    26.9 MB: mean 2.603 ms, min 2.538
+[sit] round 0 alt    x 256    35.9 MB: mean 3.548 ms, min 3.377
+[sit] round 0 base4  x  64    35.9 MB: mean 1.121 ms, min 1.104
+[sit] round 0 base4  x 128    71.8 MB: mean 2.175 ms, min 2.104
+[sit] round 0 base4  x 192   107.7 MB: mean 3.203 ms, min 3.102
+[sit] round 0 base4  x 256   143.7 MB: mean 4.245 ms, min 4.089
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [10484, 15820, 25956, 36128, 41428, 43588, 44252, 44272, 46248, 47260, 48216, 48864], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 6.422, "tree_rss_bytes": 91303936, "foreign_peers": []}
+[sit] round 0 alt4   x  64    35.9 MB: mean 1.013 ms, min 0.985
+[sit] round 0 alt4   x 128    71.8 MB: mean 1.887 ms, min 1.856
+[sit] round 0 alt4   x 192   107.7 MB: mean 2.954 ms, min 2.766
+[sit] round 0 alt4   x 256   143.7 MB: mean 3.679 ms, min 3.636
+[sit] round 1 base   x  64     9.0 MB: mean 1.035 ms, min 1.022
+[sit] round 1 alt4   x 256   143.7 MB: mean 3.809 ms, min 3.622
+HOST_TIMELINE {"elapsed_seconds": 9.64, "tree_rss_bytes": 108068864, "foreign_peers": []}
+[sit] round 1 alt4   x 192   107.7 MB: mean 2.802 ms, min 2.714
+[sit] round 1 alt4   x 128    71.8 MB: mean 1.875 ms, min 1.847
+[sit] round 1 alt4   x  64    35.9 MB: mean 1.009 ms, min 0.980
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 201 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |40476               |238        |9           |0           |0    |Normal   |\n      |python.exe          |Active     |8           |0           |     |N/A      |\n      |201 MB              |64 KB      |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [40476], "owned_pids": [4020, 8092, 10484, 11680, 15820, 25956, 35720, 36128, 40476, 41428, 43588, 44252, 44272, 46248, 47260, 47320, 48216, 48520, 48864], "foreign_pids": []}
+[sit] round 1 base4  x 256   143.7 MB: mean 4.262 ms, min 4.059
+[sit] round 1 base4  x 192   107.7 MB: mean 3.329 ms, min 3.147
+[sit] round 1 base4  x 128    71.8 MB: mean 2.273 ms, min 2.124
+HOST_TIMELINE {"elapsed_seconds": 12.828, "tree_rss_bytes": 107503616, "foreign_peers": []}
+[sit] round 1 base4  x  64    35.9 MB: mean 1.119 ms, min 1.108
+[sit] round 1 alt    x 256    35.9 MB: mean 3.529 ms, min 3.387
+[sit] round 1 alt    x 192    26.9 MB: mean 2.622 ms, min 2.556
+[sit] round 1 alt    x 128    18.0 MB: mean 2.135 ms, min 1.844
+[sit] round 1 alt    x  64     9.0 MB: mean 0.938 ms, min 0.910
+[sit] round 1 base   x 256    35.9 MB: mean 4.012 ms, min 3.813
+[sit] round 1 base   x 192    26.9 MB: mean 3.000 ms, min 2.910
+HOST_TIMELINE {"elapsed_seconds": 16.015, "tree_rss_bytes": 73314304, "foreign_peers": []}
+[sit] round 1 base   x 128    18.0 MB: mean 2.013 ms, min 1.963
+[sit] round 2 base   x 192    26.9 MB: mean 3.042 ms, min 2.880
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 98 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |48060               |250        |19          |0           |0    |Normal   |\n      |python.exe          |Active     |18          |0           |     |N/A      |\n      |98 MB               |64 KB      |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [48060], "owned_pids": [4020, 5540, 8092, 8184, 10484, 11680, 12964, 15820, 25956, 28876, 34856, 35720, 36128, 38252, 40476, 41420, 41428, 43588, 44252, 44272, 44388, 46248, 47260, 47320, 48060, 48216, 48520, 48772, 48864], "foreign_pids": []}
+[sit] round 2 base   x 256    35.9 MB: mean 3.928 ms, min 3.814
+[sit] round 2 alt    x  64     9.0 MB: mean 0.920 ms, min 0.907
+[sit] round 2 alt    x 128    18.0 MB: mean 2.002 ms, min 1.763
+[sit] round 2 alt    x 192    26.9 MB: mean 2.669 ms, min 2.540
+[sit] round 2 alt    x 256    35.9 MB: mean 3.675 ms, min 3.371
+HOST_TIMELINE {"elapsed_seconds": 19.234, "tree_rss_bytes": 43450368, "foreign_peers": []}
+[sit] round 2 base4  x  64    35.9 MB: mean 1.126 ms, min 1.101
+[sit] round 2 base4  x 128    71.8 MB: mean 2.246 ms, min 2.143
+[sit] round 2 base4  x 192   107.7 MB: mean 3.242 ms, min 3.098
+[sit] round 2 base4  x 256   143.7 MB: mean 4.318 ms, min 4.093
+[sit] round 2 alt4   x  64    35.9 MB: mean 1.012 ms, min 0.984
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [524, 1052, 4020, 4668, 5288, 5540, 8092, 8184, 10484, 11680, 12964, 15820, 24736, 25956, 28876, 34856, 35720, 36128, 38252, 38844, 40476, 41420, 41428, 43588, 44252, 44272, 44388, 44436, 46076, 46248, 47260, 47320, 47904, 48060, 48216, 48520, 48772, 48864], "foreign_pids": []}
+[sit] round 2 alt4   x 128    71.8 MB: mean 2.018 ms, min 1.870
+HOST_TIMELINE {"elapsed_seconds": 22.515, "tree_rss_bytes": 90337280, "foreign_peers": []}
+[sit] round 2 alt4   x 192   107.7 MB: mean 2.874 ms, min 2.734
+[sit] round 2 alt4   x 256   143.7 MB: mean 3.803 ms, min 3.617
+[sit] round 2 base   x  64     9.0 MB: mean 1.061 ms, min 1.025
+[sit] round 2 base   x 128    18.0 MB: mean 1.999 ms, min 1.953
+
+[fit] dispatch ms = intercept + slope * rounds; busier-stream rate = its bytes per round / slope
+  base  :  15.376 us/round, intercept 0.083 ms; busier stream  6.66 GB/s; per column  9.12 GB/s
+  alt   :  13.000 us/round, intercept 0.222 ms; busier stream  6.85 GB/s; per column 10.79 GB/s
+  base4 :  16.384 us/round, intercept 0.100 ms; busier stream  6.25 GB/s; per column  8.56 GB/s
+  alt4  :  14.388 us/round, intercept 0.092 ms; busier stream  6.19 GB/s; per column  9.75 GB/s
+  alt/base round-time ratio: 0.846 (one-stream-rate prediction 0.870)
+  alt4/base4 round-time ratio: 0.878 (one-stream-rate prediction 0.870)
+POST_NPU_CONTEXT_WITNESS "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+RESEARCH_PROCESS_RESULT {"exit_code": 0, "stop": null, "peak_tree_rss_bytes": 1024987136, "rss_measurement": "maximum observed across sampled descendant working sets; zero observations reported as null", "elapsed_seconds": 24.57799999997951, "foreign_contention_observed": false, "timing_eligible": true}
