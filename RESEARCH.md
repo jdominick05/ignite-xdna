@@ -1381,6 +1381,8 @@ been closed:
   [`ptr` rewrite](docs/BENCHMARKS.md#the-ptr-loop-pattern-lands-in-the-int8-engine-and-yolov8s-overtakes-amds-stack-2026-09-22-desktop-2)
   took the stride-1 dual loop from 23 to 18 bundles per 8 `vmac`, byte-exact.
   It made the object 96 B smaller and moved a whole frame -2.8% (YOLOv8n) and -4.4% (YOLOv8s).
+  With the shipped `--silu-sigmoid` recipe it is -3.7% on YOLOv8s and still 0.13-0.15 ms behind AMD
+  ([2026-10-13](docs/BENCHMARKS.md#with-the-shipped-silu-recipe-ptr-does-not-carry-yolov8s-past-amds-stack-1720-against-1706-ms-2026-10-13-desktop-2)).
   The [dispatch gate](docs/BENCHMARKS.md#compiling-out-the-dispatch-no-container-reaches-frees-5408-b-and-costs-a-manifest-field-to-stay-honest-2026-09-22-desktop-2)
   leaves a shipped object 5,728 B free, not 224 B.
   The census behind the 17-35% above predates both.

@@ -12455,6 +12455,8 @@ and measured. The closure was correct about what it surveyed and wrong in its sc
 exhausted were all *transport*, and this one is in the core's addressing. The YOLOv8n margin needs
 no such care - 1.34x against the control's 1.30x.
 
+**Scope, added 2026-10-13:** these containers were built without `--silu-sigmoid`. With it, the recipe Ignition ships, the merged `ptr` YOLOv8s is 0.13-0.15 ms slower than AMD ([below](#with-the-shipped-silu-recipe-ptr-does-not-carry-yolov8s-past-amds-stack-1720-against-1706-ms-2026-10-13-desktop-2)). The win here holds for the HardSigmoid-form containers only.
+
 **One caveat that survives both sittings:** this is `bus.jpg`, one image, glass-to-glass. Nothing
 here says anything about other inputs, and nothing here measures energy.
 
@@ -15324,3 +15326,54 @@ Step 4a, the first item on step 3's list: remove the cost of switching between s
   - item 3: fold the bf16 rounding into the host op before each product;
   - item 4: split the host graph;
   - item 5: build the hybrid end to end, scored against step 2's bf16 emulation.
+
+## With the shipped SiLU recipe, `ptr` does not carry YOLOv8s past AMD's stack: 17.20 against 17.06 ms (2026-10-13, Desktop 2)
+
+The question for landing this branch on `main`: does the shipped YOLOv8s container beat AMD's
+Ryzen AI 1.7.1 stack once the `ptr` loop and the dispatch gate are in? The 2026-09-22 sittings
+([above](#the-ptr-loop-pattern-lands-in-the-int8-engine-and-yolov8s-overtakes-amds-stack-2026-09-22-desktop-2))
+said yes. Their containers were built without `--silu-sigmoid`, the recipe Ignition ships, and
+that flag costs 0.34–0.39 ms. This sitting rebuilt both arms with it. The criteria were
+pre-registered before any NPU run.
+
+**The two arms.** Each was built with `--silu-sigmoid` in its own process, kernel cache and
+fresh directory:
+- **main:** `main` `fa2db0e`'s own compiler and `engine.cc`, linking a 21,628 B object;
+- **merged:** merge `714943f`, which has `ptr` and the dispatch gate, linking a 13,608 B object.
+
+Both Ignition arms run through the merged runtime, so they differ by container.
+
+**Correctness.** The merged YOLOv8s, with workspace reuse off, reads **66/66 layers exact**
+against `silu_sigmoid.reference_model` ([log](../results/aie/b3_verify_yolov8s_merged_silu_noreuse_desktop2_20261013T015553Z.log)).
+
+**Latency.** `tools/bench_layout_ab.py`: AMD, main, then merged, twice. Each run is 50 warm-up
+frames plus 500 timed on `bus.jpg`, glass-to-glass. It was wrapped in `research-lowlevel.sh
+--npu` (`timing_eligible: true`) and saw no foreign context.
+
+| model | arm | round 1 | round 2 | dispatch (r1 / r2) |
+|---|---|---:|---:|---:|
+| YOLOv8s | AMD | **17.071** | **17.047** | `session.run` 13.133 / 13.161 |
+| YOLOv8s | main | 17.853 | 17.844 | 16.979 / 16.955 |
+| YOLOv8s | merged | 17.199 | 17.194 | 16.305 / 16.299 |
+| YOLOv8n | AMD | 10.727 | 10.790 | `session.run` 6.904 / 6.953 |
+| YOLOv8n | main | 8.390 | 8.445 | 7.522 / 7.572 |
+| YOLOv8n | merged | **8.199** | **8.163** | 7.314 / 7.290 |
+
+- **W (YOLOv8s beats AMD in both rounds): FAILS.** Merged is 0.128 and 0.147 ms slower than AMD,
+  about 0.8%. With the shipped recipe, AMD keeps YOLOv8s.
+- **R (YOLOv8n no slower than main): PASSES.** Merged is 0.191 and 0.282 ms faster.
+- **Reported, not gated:** merged is 0.654 and 0.650 ms faster than main on YOLOv8s (-3.7%),
+  close to the 2026-09-22 control-to-`ptr` delta (-4.4%, -4.3%) without the flag.
+
+**Where the gap is.** AMD's `session.run` (13.13 ms) is 3.2 ms faster than the merged
+dispatch (16.31 ms). Ignition wins most of that back on the host:
+- 0.31 ms of preprocess against AMD's 1.87 ms letterbox;
+- 0.17 ms of fused decode against AMD's 2.07 ms.
+
+So the remaining YOLOv8s lever is NPU time, the instruction-stream bound named in this branch's
+cost model, not host work.
+
+**Scope.** One image, one sitting, glass-to-glass; no energy, no accuracy rescore (the flag's
+accuracy is measured in its own section). Logs:
+- the A/B wrappers [b3_ab_yolov8s_silu_desktop2_20261013T015609Z.log](../results/aie/b3_ab_yolov8s_silu_desktop2_20261013T015609Z.log) and [b3_ab_yolov8n_silu_desktop2_20261013T015752Z.log](../results/aie/b3_ab_yolov8n_silu_desktop2_20261013T015752Z.log);
+- the tool's own logs [b3_ab_yolov8s_phoenix_20261013T0156Z.log](../results/aie/b3_ab_yolov8s_phoenix_20261013T0156Z.log) and [b3_ab_yolov8n_phoenix_20261013T0157Z.log](../results/aie/b3_ab_yolov8n_phoenix_20261013T0157Z.log).
