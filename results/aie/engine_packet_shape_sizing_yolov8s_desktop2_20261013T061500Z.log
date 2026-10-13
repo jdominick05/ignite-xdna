@@ -1,0 +1,22 @@
+# Block 5: sizing packet-shape options for the engine's YOLOv8s conv layers. Offline, DERIVED. Desktop 2, 2026-10-13T05:56Z.
+# Inputs: engine_layer_timing_yolov8s_desktop2_20261013T044249Z.log (packets, rounds), amd_tiling_decode_corrected_yolov8s_n_desktop2_20261013T041500Z.log (shapes, AMD i_rr).
+# Assumes activation BYTES are what costs, at the fitted 0.2346 us per 6,400 B packet (36.7 ps/B). That assumption is not established: every packet is 6,400 B.
+
+ALL convs: layers 63, now 236.4 MB | S no-slack 185.1 MB (saves 51.4 MB = 1.88 ms) | Q quad-halo 172.3 MB (saves 64.1 MB = 2.35 ms) | A AMD-level 53.1 MB (saves 183.3 MB = 6.72 ms)
+inputs >= 160: layers 7, now 47.5 MB | S no-slack 29.2 MB (saves 18.3 MB = 0.67 ms) | Q quad-halo 27.4 MB (saves 20.1 MB = 0.74 ms) | A AMD-level 13.9 MB (saves 33.6 MB = 1.23 ms)
+inputs 80: layers 18, now 77.0 MB | S no-slack 60.4 MB (saves 16.6 MB = 0.61 ms) | Q quad-halo 55.0 MB (saves 22.0 MB = 0.81 ms) | A AMD-level 18.6 MB (saves 58.4 MB = 2.14 ms)
+inputs <= 40: layers 38, now 111.9 MB | S no-slack 95.5 MB (saves 16.4 MB = 0.60 ms) | Q quad-halo 89.9 MB (saves 22.0 MB = 0.81 ms) | A AMD-level 20.6 MB (saves 91.3 MB = 3.35 ms)
+kind k1: layers 24, now 99.3 MB | S no-slack 97.7 MB (saves 1.6 MB = 0.06 ms) | Q quad-halo 97.7 MB (saves 1.6 MB = 0.06 ms) | A AMD-level 20.4 MB (saves 78.9 MB = 2.89 ms)
+kind k3s1: layers 32, now 65.0 MB | S no-slack 46.8 MB (saves 18.3 MB = 0.67 ms) | Q quad-halo 36.7 MB (saves 28.3 MB = 1.04 ms) | A AMD-level 17.7 MB (saves 47.3 MB = 1.73 ms)
+kind k3s2: layers 7, now 72.1 MB | S no-slack 40.6 MB (saves 31.4 MB = 1.15 ms) | Q quad-halo 37.9 MB (saves 34.2 MB = 1.25 ms) | A AMD-level 15.0 MB (saves 57.1 MB = 2.09 ms)
+LARGEST S savings (layer, kind, in, now MB, S MB, Q MB, AMD MB):
+  /model.1/conv/Conv                         k3s2   320  13.11   7.39   6.89   3.78
+  /model.3/conv/Conv                         k3s2   160  13.11   7.39   6.89   2.30
+  /model.5/conv/Conv                         k3s2    80  13.11   7.39   6.89   2.32
+  /model.7/conv/Conv                         k3s2    40  13.11   7.39   6.89   1.89
+  /model.0/conv/Conv                         k3s2   640   6.55   3.69   3.44   1.70
+  /model.16/conv/Conv                        k3s2    80   6.55   3.69   3.44   1.16
+  /model.19/conv/Conv                        k3s2    40   6.55   3.69   3.44   1.85
+  /model.2/m.0/cv2/conv/Conv                 k3s1   160   3.28   1.26   0.99   1.03
+  /model.2/cv2/conv/Conv                     k1     160   6.55   4.92   4.92   2.46
+  /model.22/cv3.0/cv3.0.0/conv/Conv          k3s1    80   6.55   5.05   3.96   1.13

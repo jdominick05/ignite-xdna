@@ -16090,3 +16090,48 @@ Python process with `xrt-smi` idle before it (`timing_eligible: true`).
 Log: [engine_core_depth_probe_yolov8s_desktop2_20261013T053413Z.log](../results/aie/engine_core_depth_probe_yolov8s_desktop2_20261013T053413Z.log),
 the sitting. The per-resolution table is computed in its companion analysis log,
 [engine_core_depth_penalty_yolov8s_desktop2_20261013T055500Z.log](../results/aie/engine_core_depth_penalty_yolov8s_desktop2_20261013T055500Z.log).
+
+#### Block 5: what a different packet shape could save (sized offline, 2026-10-13)
+
+**Question.** With the 2-group design stopped, the next candidate keeps 32-channel groups but carries less junk
+per packet. How much is that worth?
+
+**Method.** Offline sizing over the 63 YOLOv8s convolutions (log below). It assumes activation bytes are what
+costs, at the fitted 0.235 µs per 6,400 B packet. That assumption is untested, because every packet today is
+6,400 B. Each layer keeps today's 5×20 tile, chunks and groups. Three variants:
+- **S** carries exactly the kernel's extent per core (k1 5×20, k3s1 7×22, k3s2 11×41 per 8-channel block);
+- **Q** fetches each quad's extent once and splits it on chip, so the four stacked cores share their halo rows;
+- **A** is AMD's declared input bytes for the same layer.
+
+| layers | today | S (no slack) | Q (quad halo) | AMD |
+|---|---:|---:|---:|---:|
+| all 63 convs | 236.4 MB | 185.1 MB (−1.88 ms) | 172.3 MB (−2.35 ms) | 53.1 MB (−6.72 ms) |
+| 7 stride-2 3×3 | 72.1 MB | 40.6 MB (−1.15 ms) | 37.9 MB (−1.25 ms) | 15.0 MB |
+| 32 stride-1 3×3 | 65.0 MB | 46.8 MB (−0.67 ms) | 36.7 MB (−1.04 ms) | 17.7 MB |
+| 24 1×1 | 99.3 MB | 97.7 MB (−0.06 ms) | 97.7 MB | 20.4 MB (−2.89 ms) |
+| inputs ≥ 160×160 (7) | 47.5 MB | 29.2 MB (−0.67 ms) | 27.4 MB (−0.74 ms) | 13.9 MB |
+
+All savings are DERIVED.
+
+- **A different shape is worth at most about 2 ms on YOLOv8s.** Half of that is the seven stride-2
+  convolutions, whose 16×50 packet carries an 11×41 need.
+- **The 1×1 layers are out of its reach.** They are 99 MB and about 2.9 ms of the distance to AMD. They carry no
+  halo, so their excess is entirely the once-per-32-channels re-read, the lever phase 1 closed.
+- **There is a structural obstacle.** Every kind shares one activation object size, so a tighter k3s2 plane
+  needs either a per-kind object (more core buffers, against 6,144 B free) or a size every kind can use. The
+  2026-09-20 sweep priced every buildable size as a regression, but it priced them with the instruction-byte cost
+  model, which the per-layer fit above does not support at layer level. So that rejection rests on a model now
+  in question; it is not overturned.
+
+**The question this raises before anything is built.** The fit's 0.235 µs per packet is about 27 GB/s across
+the array, roughly 6.8 GB/s per column. That is close to one 32-bit stream at the 1.80 GHz core clock
+(7.2 GB/s), and to the 7 GB/s the one-core MemTile hop probe measured (0.143 ms per MB). That suggests a
+per-column ceiling: one shim-to-MemTile activation stream feeding four cores. This is DERIVED and untested.
+- **If it holds,** the lever is more activation streams per column, not packet shape. Each column's second
+  shim MM2S channel carries only weights, about 57 MB per frame against 237 MB of activations.
+- **If the ceiling is per core instead,** shape and bytes are the lever and the sizing above applies.
+
+A probe that drives one, two and four cores of one column from one shim channel, and four cores from two,
+would decide which.
+
+Log: [engine_packet_shape_sizing_yolov8s_desktop2_20261013T061500Z.log](../results/aie/engine_packet_shape_sizing_yolov8s_desktop2_20261013T061500Z.log).
