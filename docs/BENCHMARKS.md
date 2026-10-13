@@ -15484,3 +15484,92 @@ sitting by mtime (01:56Z and 01:58Z). Logs:
 - the dump run [amd_yolov8s_bo_dump_desktop2_20261013T021506Z.log](../results/aie/amd_yolov8s_bo_dump_desktop2_20261013T021506Z.log),
   whose 46 ms frames carry the dump's own cost and are not a timing, and its file list
   [amd_yolov8s_bo_dump_sizes_desktop2_20261013T021506Z.log](../results/aie/amd_yolov8s_bo_dump_sizes_desktop2_20261013T021506Z.log).
+
+## How AMD's overlay moves data and control: cores program their own DMAs, and a DDR stream reaches every tile's control port (2026-10-13, Desktop 2)
+
+**Question.** The [census above](#what-amds-compiled-yolov8-runs-its-control-barely-grows-while-its-work-doubles-2026-10-13-desktop-2)
+found that AMD's control program barely grows with the model, while the engine's grows with every
+round. How do AMD's commands become transfers, and who programs the DMAs?
+
+**Method.** This is read-only and static. `tools/overlay_dataflow_census.py` reads:
+- the 15 PDIs of the Phoenix DPU overlay (`phoenix\4x4.xclbin`), extracted by
+  `tools/xclbin_overlay_extract.py` on branch `dpu-isa-re`;
+- Peano's disassembly of their 240 core images.
+
+Register names and field layouts come from aie-rt's `xaiemlgbl_params.h` and `xaie_ss.c` (SPEC).
+The log carries counts and decoded register values only. The AMD binaries stay uncommitted.
+
+**1. The cores program and start their own tiles' DMAs** (decoded from the binaries).
+- **`st.tm` is common.** It appears 14,208 times across the 240 images, and in every one of
+  them. Lock operations are just as general: 832 `acq`, 1,360 `acq.cond`, 768 `rel` and 1,056
+  `rel.cond`.
+- **The addresses are tile registers.** Read as `0x80000 + offset`, the immediates feeding those
+  stores name memory-module registers. The `0x80000` base is SPEC (Peano): `aiev2intrin.h`
+  defines `write_tm(regVal, regAddr, TMAddrSpaceStart = 0x80000)`.
+- **Which registers:**
+  - `DMA_S2MM_0_START_QUEUE` 560;
+  - `LOCK0_VALUE` 256;
+  - `DMA_S2MM_1_CTRL` 240;
+  - `LOCK14_VALUE` 240;
+  - `LOCK12_VALUE` 208;
+  - `DMA_BD7_0` 208;
+  - `DMA_BD3_4` 208;
+  - `LOCK10_VALUE` 64;
+  - `LOCK8_VALUE` 16.
+- **What this establishes:** each core writes BDs into its own tile's DMA, pushes them onto the
+  start queue and manages its locks, with no host instruction per transfer.
+- **Coverage:** 2,000 of the 12,129 immediates in the 0x10000–0xFFFFF range resolve this
+  way. The bare base `0x80000` is excluded; the rest are not tile registers.
+
+**2. The PDI routes a DDR stream into every tile's control port** (decoded; identical in all 15
+PDIs).
+- **The routing:**
+  - every core, MemTile and shim configures `MASTER_CONFIG_TILE_CTRL`;
+  - no PDI writes a single DMA buffer descriptor on any tile;
+  - the shim mux sets `SOUTH3` and `SOUTH7` to 1, which aie-rt names
+    `XAIE_MUX_DEMUX_CONFIG_TYPE_DMA`, so both ports are fed by the shim's DMA reading DDR.
+- **Column 0 of the YOLOv8s PDI**, slots decoded as (id, msel, arbiter) against masters packed as
+  `msel_enable << 3 | arbiter` (aie-rt):
+
+  | from | packet ID | to |
+  |---|---|---|
+  | shim `SOUTH_3` (DDR) | 1 | shim `TILE_CTRL` |
+  | shim `SOUTH_3` (DDR) | 2 | MemTile `TILE_CTRL` |
+  | shim `SOUTH_3` (DDR) | 3 | `NORTH4` up the column: each core's `SOUTH_4`, which is circuit-routed to both that core's `TILE_CTRL` and the core above |
+  | shim `SOUTH_3` (DDR) | 0 | MemTile `DMA0` (S2MM), header dropped |
+  | MemTile `DMA_4` (MM2S) | 0 | `NORTH5` up the column: each core's `DMA1` (S2MM), header dropped |
+  | MemTile `DMA_4` (MM2S) | 1 | `SOUTH3` toward the shim, header dropped |
+  | shim `SOUTH_7` (DDR) | circuit | `NORTH5` |
+
+- **What this establishes:** a single DDR-fed shim DMA stream can write registers in the shim,
+  the MemTile and the cores, selected by packet ID. The cores' path is a broadcast: all four
+  cores in a column receive identical packets on `TILE_CTRL`, with no per-core addressing.
+- **mlir-aie supports this mechanism** upstream (`test/npu-xrt/ctrl_packet_reconfig*`,
+  `add_one_ctrl_packet*`). The engine has never used it: no file in `src/`, `kernels/` or
+  `tools/` mentions control packets.
+
+**What this does not establish.** Points 1 and 2 are two mechanisms, and neither shows what runs
+per frame.
+- **What fills the CODE register (REG_4, 1.59 MB) and who consumes it is unobserved.** The
+  shim's DDR-side stream into the control ports could carry it. The firmware's command processor
+  could equally write shim and MemTile BDs from the `instruct` buffer, with the control-port path
+  used only for part of the work (`enable_pad_control_packet = 1` names padding, not more). The
+  PDI's lack of static BDs fits both.
+- **One DERIVED bound.** At the engine's ~16 ns per instruction byte, 1.59 MB of transaction
+  would take about 25 ms, more than AMD's whole frame. So the CODE register is not consumed the
+  way the engine's stream is, whatever it holds.
+- **Unreconciled packet size:** the RE branch reads 40-byte instruction packets in the core
+  programs; the census finds 48-byte strides between `0x0B`-headed `mc_code` words.
+- **Which overlay ran:** these PDIs come from the installed `phoenix\4x4.xclbin`. The RE branch
+  found that the xclbin embedded in an xmodel differs from that file, so the run-time overlay's
+  routing is TO VERIFY. The 15 PDIs here agree with each other.
+- **Not priced.** No speedup or per-write cost is claimed for control packets.
+
+**What it says to measure next (Block 5, not run).** On Phoenix, in one sitting, time N register
+writes delivered as control packets from a DDR buffer through a shim DMA against the same N
+writes as `npu.write32` transaction ops. Use mlir-aie's own `ctrl_packet_reconfig` design (our
+artifact, not AMD's), with an exactness check on the written registers. If control packets cost
+much less than ~145 ns per write, the engine's per-round BD reprogramming has a cheaper channel.
+The control-stream lever named in the census above then has a concrete form.
+
+Log: [overlay_dataflow_census_phoenix4x4_desktop2_20261013T024655Z.log](../results/aie/overlay_dataflow_census_phoenix4x4_desktop2_20261013T024655Z.log).
