@@ -1,0 +1,37 @@
+RESEARCH_PLATFORM {"machine": "Desktop 2", "cpu": "AMD Ryzen 7 8700G w/ Radeon 780M Graphics", "os": "Windows-11-10.0.26200-SP0", "ram_bytes": 33381138432, "source_sha256": {"tools/research_process.py": "ffeb1857f190b482eed101b5f5a928f455de26bfa61d23f78a2eacec08e2663e", "tools/quant_calib_alphabet.py": "2dc0b2878c564853f340880209a425dfcf63b8536b2b8e9fd32344daade58d37", "tools/xint8_arithmetic_probe.py": "6aa3df08b9870c3c2264b868459d7ffbac3070dddc1349d7c6f3f480075f7041", "scripts/research-lowlevel.sh": "3455ad7933697936487712665505c216891865c6deada647302785f6e37020bd", "scripts/research-iron.sh": "4c863a262646ddab39b5005006ba8e03809895e6386c6310e2fd9d0a9e9609ee", "kernels/memory_placement/probe.py": "e8d990169ad6091fa1b53852e9f61eff495b5def72d35165a5c5cf1759e38898", "kernels/memory_placement/memory_kernels.cc": "182e7af7071a1e851afb4a7ca266069c489aea1fbaaa85eca129708daeba5ba6", "scripts/research-matrix.sh": "739254171629deae822b0ad7dabc875aee19ace56dde77d3e8aab61663f97516", "kernels/memory_placement/gemm.py": "17c905ad66110d3346bbf0db898dfc6b780df59fae1dfb0c1747057ce1e5844e", "kernels/memory_placement/gemm_placement.cc": "f21acf7250b12914ea30cc1f77613239dfa18421a85a1b9a5199017dd916278a", "tools/research_summary.py": "0c00dcceef07053d06731b41a1f1ed58d3ba4ea09f82497de354ce9cef17da20", "tools/research_toolchain.py": "f0a126a24ae213acfaa43460cfd9def0c86d9cb70cfee0228aa271688467b314"}, "commit": "a51add3d223bae3142473920daaac8aab21fa4d6", "command": ["C:/Users/<user>/miniforge3/envs/mlir-aie-iron/python.exe", "tools/task_issue_probe.py", "sit", "--points", "contig:1:1024,contig:2:1024,t3:1:1024,t3:2:1024,e4:1:1024", "--rounds", "3", "--iters", "30", "--json", "scratch/b16/shape_sit.json"], "seconds_limit": 1200.0, "rss_gib_limit": 8, "checks_only": false, "free_ram_bytes": 25457602560}
+HOST_LOAD busy_cores=0.17 logical_cores=16 free_ram_gb=23.7 sample_sec=1
+HOST_LOAD_TOP 0.08 dev-agent:39036 ws_mb=485
+HOST_LOAD_TOP 0.05 powershell:49552 ws_mb=79
+HOST_LOAD_TOP 0.02 dev-agent:5088 ws_mb=100
+HOST_LOAD_TOP 0.02 FanControl:15032 ws_mb=162
+HOST_LOAD_VERDICT CLEAR
+
+PRE_NPU_CONTEXT_WITNESS "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+[sit] round 0 contig k1   q1024   4096 tasks  104.9 MB: mean 5.670 ms, min 5.536
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [47568, 50268, 50600], "foreign_pids": []}
+[sit] round 0 contig k2   q1024   2048 tasks  104.9 MB: mean 4.006 ms, min 3.908
+[sit] round 0 t3     k1   q1024   4096 tasks  104.9 MB: mean 5.725 ms, min 5.603
+[sit] round 0 t3     k2   q1024   2048 tasks  104.9 MB: mean 4.211 ms, min 3.986
+HOST_TIMELINE {"elapsed_seconds": 3.234, "tree_rss_bytes": 297308160, "foreign_peers": []}
+[sit] round 0 e4     k1   q1024   4096 tasks  104.9 MB: mean 6.019 ms, min 5.705
+[sit] round 1 contig k1   q1024   4096 tasks  104.9 MB: mean 5.713 ms, min 5.528
+[sit] round 1 e4     k1   q1024   4096 tasks  104.9 MB: mean 5.821 ms, min 5.617
+[sit] round 1 t3     k2   q1024   2048 tasks  104.9 MB: mean 4.311 ms, min 4.018
+[sit] round 1 t3     k1   q1024   4096 tasks  104.9 MB: mean 5.895 ms, min 5.654
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [2308, 28296, 29664, 34784, 47568, 48804, 49208, 50268, 50600, 50868, 51196], "foreign_pids": []}
+[sit] round 1 contig k2   q1024   2048 tasks  104.9 MB: mean 4.218 ms, min 3.938
+HOST_TIMELINE {"elapsed_seconds": 6.516, "tree_rss_bytes": 77545472, "foreign_peers": []}
+[sit] round 2 t3     k1   q1024   4096 tasks  104.9 MB: mean 5.814 ms, min 5.578
+[sit] round 2 t3     k2   q1024   2048 tasks  104.9 MB: mean 4.167 ms, min 3.998
+[sit] round 2 e4     k1   q1024   4096 tasks  104.9 MB: mean 5.907 ms, min 5.620
+[sit] round 2 contig k1   q1024   4096 tasks  104.9 MB: mean 5.840 ms, min 5.572
+[sit] round 2 contig k2   q1024   2048 tasks  104.9 MB: mean 4.258 ms, min 3.951
+[point] contig k1   q1024  mean of rounds 5.741 ms (round spread 170 us)
+[point] contig k2   q1024  mean of rounds 4.161 ms (round spread 252 us)
+[point] t3     k1   q1024  mean of rounds 5.811 ms (round spread 170 us)
+[point] t3     k2   q1024  mean of rounds 4.230 ms (round spread 144 us)
+[point] e4     k1   q1024  mean of rounds 5.916 ms (round spread 198 us)
+POST_NPU_CONTEXT_WITNESS "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+RESEARCH_PROCESS_RESULT {"exit_code": 0, "stop": null, "peak_tree_rss_bytes": 735408128, "rss_measurement": "maximum observed across sampled descendant working sets; zero observations reported as null", "elapsed_seconds": 9.656000000191852, "foreign_contention_observed": false, "timing_eligible": true}

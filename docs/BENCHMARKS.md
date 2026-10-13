@@ -16521,3 +16521,44 @@ Logs:
 - Cadence: [bench](../results/aie/engine_cadence_yolov8s_phoenix_20261013T1242Z.log),
   [runner](../results/aie/engine_cadence_runner_yolov8s_desktop2_20261013T1242Z.log).
 - Task cost: [sitting](../results/aie/task_issue_phoenix_desktop2_20261013T1247Z.log).
+
+**The engine's own fill shape pays the same per-task cost (2026-10-13, Desktop 2).** Offline, 4,364 of YOLOv8s's
+4,774 one-quad fills carry the core index on the task's repeat. That shape is 6,400 B descriptors × 4, such as
+`(4, 4, 8, 200)`. A second quad would need a fifth dimension, so none of these fills can merge into a one-BD
+task. Nor can a chained-BD task help: the repeat would re-run the chain core by core and interleave the two quads.
+
+So the probe gained a shape axis, all at Q = 1024, run in one pre-registered sitting (scratch sha256 `02bc3e3e...`):
+- `t3`: a quad as one strided 3-D BD, 16 planes × 8 rows × 200 B;
+- `e4`: the engine's form, with the same bytes in the same order as `t3` k1, as 6,400 B BDs on repeat 4;
+- the `contig` controls.
+
+| point | mean ms (3 rounds) | vs its 2-quad reference |
+|---|---:|---:|
+| contig k1 / k2 | 5.741 / 4.161 | +1.580 ms |
+| t3 k1 / k2 | 5.811 / 4.230 | +1.581 ms |
+| e4 k1 | 5.916 | +1.686 ms (against t3 k2) |
+
+- **Verdict PAYS.** The engine-shaped 1-quad task costs 0.412 µs more than its bytes in a 2-quad task (contig
+  0.386, t3 0.386, per 1-quad task).
+- **The pre-registration had a units defect.** Its formula divides by the 2,048 added tasks, giving 0.771 /
+  0.772 / 0.823 µs. Its validity band (0.40–0.42 ± 0.10 µs) was written in per-1-quad-task units. Read
+  literally, the control "fails" validity. In consistent units the controls reproduce the 12:47Z sitting
+  (5.741 / 4.161 against 5.802 / 4.125, 0.771 against 0.819 µs per added task), and the verdict is PAYS under
+  either reading.
+- **`e4` and `t3` k1 are equal** (+0.026 µs per task, inside the 0.14–0.20 ms round spread). The cost is per
+  task, not per BD iteration, which rules out descriptor reload as its mechanism.
+- **`t3` k2 sits at the contiguous floor.** A strided 3-D quad merges free. Getting fewer engine fills therefore
+  needs a layout whose quad is at most 3-D.
+
+**Scope:** activation quads only. Weight runs and drains are small tasks too, and their cost is unmeasured.
+
+**Exploratory, post hoc, not separable on this data.** The engine's per-layer NOP times (66 layers, the
+`engine_layer_timing` sittings) fit two shapes about equally well:
+- `max(transport, 1.20 µs × tasks)`: R² 0.968, with 48 of 66 layers issue-bound;
+- `transport + 0.372 µs × tasks`: R² 0.979.
+
+They price Phase 2 differently. Under the first, a transport saving reaches only the 18 transport-bound layers;
+under the second, it reaches every layer. Neither is a finding, and the engine-level answer is what the trace
+window (Phase 0.4) has to give before stream-sharing code.
+
+Log: [shape sitting](../results/aie/task_shape_phoenix_desktop2_20261013T1306Z.log).
