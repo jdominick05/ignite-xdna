@@ -1,0 +1,262 @@
+# Laya step 4a: one hardware context for all six bf16 GEMM shapes. Desktop 2, 2026-10-13 UTC,
+# mlir-aie ironenv (Python 3.13, IRON v1.4.2 checkout), pyxrt from the XRT SDK. The NPU read idle before every run.
+# Tool: tools/gemm_generic_probe.py (sha256 47607bf7f6bc08a198b1365707f66f6f3aff46ae38888b55bf04ab0b729b149b, final).
+# Design: kernels/gemm_generic/whole_array_generic.py (sha256 3b341da92b3afaef454daa4df420de50bd2598e9e1e26e10ff7b8f35ed79d199, final).
+# Pre-registrations were written in order before each run they cover; each is reproduced with its sha256.
+
+# ===== pre-registration 1 (prereg.txt, sha256 e66648dfcaa52fe2e86410fe20c2e9fbfd8151be88ba52cfc79db4fb734703b7) =====
+#   written_utc 2026-10-13T01:01:07Z, Desktop 2, before any NPU run of this design. Laya step 4a.
+#   tool: tools/gemm_generic_probe.py (sha256 e5f99dfbd5b2419f02390f220bb3f21a42f8be7894291326779f50349d2dc4b3); design: kernels/gemm_generic/whole_array_generic.py (sha256 bfb581b40947b0929e0c7968b1056923beda2d5c0404a553f4dd66334d48b140); builds: scratch/gemm_generic/aot4 (g_* generic, p_* plain), all m=32 k=64 n=64, C single-buffered, bf16 in, f32 out.
+#   Offline result already in hand (not a device claim): the six generic xclbins differ only in bytes that also differ between two builds of the same shape (0x168, 0x19c, the UUID at 0xecc8).
+#   Command: python tools/gemm_generic_probe.py run --out scratch/gemm_generic/aot4 --blocks 6 --seqs 5 (30 timed sequences per arm, alternating blocks).
+#   G1: every shape, in each arm: max|NPU-numpy|/max|numpy| < 1e-3, padded columns 0, and two runs bit-equal.
+#   G2: every shape: the one-context generic output is bit-equal to the six-context plain output on the same inputs.
+#   G3: the one-context arm's 120-product sequence IQR lies wholly below the six-context arm's IQR. Kill line: G3 fails -> one context buys nothing beyond noise.
+#   Not a gate, stated now: the six-context arm should cost about 1-2 ms more per shape change than the one-context arm (step 3 measured 217.1 ms for Laya's order in IRON). Reported after: laya_npu_screen.py chain --tile best in the same sitting, as continuity with step 3's 556.9 ms; its tiles differ (m=64), so it is context, not a control.
+#   Stop rule: any dispatch timeout or non-COMPLETED state stops the run; it is logged and the user is told before any rerun.
+
+# ===== pre-registration 2 (prereg2.txt, sha256 768607bde6412619b608a2a780d2ca6b84d683596a15c64e166bf70e5df0b66f) =====
+#   written_utc 2026-10-13T01:09:23Z, after the 4a stop (K=2624 timed out on the generic design, one context) and before any further NPU run. The user approved this confirmation test and the padded rerun.
+#   tool sha256 9fd9ef7c6fe33d901b56808e33f51fb1d1e310caa23a6e125113eec9dd40adb7; design sha256 bfb581b40947b0929e0c7968b1056923beda2d5c0404a553f4dd66334d48b140 (unchanged). Builds: scratch/gemm_generic/aot5 (--even-k: K=2624 run as 2688), plus g_1088_1024 (17 k-tiles, odd).
+#   Hypothesis H_odd: the generic core hangs when the run-time K-tile count is odd.
+#   Confirmation test, in this order, each a fresh process on the generic xclbin g_1024_3072 of aot5: (1) single K=2624 --even-k (42 tiles) -> predicted PASS; (2) single K=1088 (17 tiles, odd) -> predicted TIMEOUT. H_odd survives only if both predictions hold. If (2) leaves the device refusing contexts, wait for xrt-smi idle and a successful context before going on.
+#   Then the padded rerun: python tools/gemm_generic_probe.py run --out scratch/gemm_generic/aot5 --even-k --blocks 6 --seqs 5, with gates G1-G3 as in prereg.txt (sha e66648df...), every shape at its run K (2688 for Wo2) in both arms.
+
+# ===== pre-registration 3 (prereg3.txt, sha256 2d6636fe72b8240b3dd50678ee3bb7de4a26fb38029a0ebd47791fbaaf4eadd5) =====
+#   written_utc 2026-10-13T01:09:59Z, AFTER the confirmation test's first results and before the runs below.
+#   Result so far: H_odd is REFUTED. single K=1088 (17 k-tiles, odd) COMPLETED and matched numpy (8.51e-07), where H_odd predicted a timeout. The K=2688 single did not run: a probe bug (w[:, :N] broadcast with K padded), now fixed to w[:K, :N]; tool sha256 c757c92c4a709e53b928f7da6787877c346ef9fc9e63303948829224dd6299af.
+#   Next, each in a fresh process on the generic design: (1) K=2624 --even-k on aot5 (run as 2688); (2) K=2624 unpadded on aot4's generic xclbin, alone. No prediction is made for (2): if it passes alone, the 4a hang depended on what ran before it in the same context; if it times out, it is the shape itself.
+#   Then the padded rerun as in prereg2.txt. A timeout in it stops it, as before.
+
+# ===== pre-registration 4 (prereg4.txt, sha256 81bdccbe6458f1db0dd46739eb2850326319fb46c4fec67b3deaea286d5285bc) =====
+#   written_utc 2026-10-13T01:16:29Z, after the padded rerun stopped (K=2624-as-2688 timed out after the three K=1024 shapes in one context) and before the bisection. The user approved the bisection.
+#   tool sha256 f4e52bd8ec618669e54e25f8dab4687a396b8a1d3b29ada8a99a52cbef1c34a2 (single now takes --seq); builds scratch/gemm_generic/aot4 (unpadded); design g_1024_3072.xclbin; each line a fresh process and context; a timeout ends only that line.
+#   Suspect S5248: the N=5248 (run 5376, 21 column tiles per core column, the only odd count) product leaves the context in a state where the next call hangs.
+#   B1 [5248, 2624]: S5248 predicts TIMEOUT at 2624. B2 [3072, 1024, 2624]: S5248 predicts PASS throughout. B3 [5248, 1024]: S5248 predicts TIMEOUT at 1024 (any shape after it). B4 [5248, 5248, 2624]: reported, no prediction (does a second 5248 restore parity?).
+#   If B1-B3 all hold, the planned fix is N=5248 padded to 6144 (24 column tiles per core column), to be built and tested before any rerun.
+
+# ===== pre-registration 5 (prereg5.txt, sha256 5f146c93f2d42805343aaf1b3e96921561b7d7e69ea6329c0a57bffa82555f44) =====
+#   written_utc 2026-10-13T01:20:05Z, after the bisection and before any run of the fixed build.
+#   Bisection result: B1/B2/B4 FAILED with wrong values (2624 after any K=1024 call), B3 PASSED: S5248 refuted. H_stale: the core runs each call after the first on the previous call's RTP values, because the barrier wait is an acquire-equal (llvm.aie2.acquire(54, 1)) that nothing consumes; upstream's epoch pattern ends with barrier.release_with_value(1).
+#   Fix: release_with_value(1) at the end of core_fn_generic; design sha256 3b341da92b3afaef454daa4df420de50bd2598e9e1e26e10ff7b8f35ed79d199; builds scratch/gemm_generic/aot6 (unpadded K); the core IR now has release(54, 1); the six g_* images still differ only in build-noise bytes.
+#   Test, each a fresh process on g_1024_3072.xclbin of aot6: B1 [5248,2624], B2 [3072,1024,2624], B3 [5248,1024], B4 [5248,5248,2624], B5 [2624,1024]. H_stale with the fix predicts PASS on every call. Any FAIL or timeout refutes the fix and stops.
+#   If all pass: the full sitting, python tools/gemm_generic_probe.py run --out scratch/gemm_generic/aot6 --blocks 6 --seqs 5, gates G1-G3 as in prereg.txt, unpadded K.
+
+# ===== pre-registration 6 (prereg6.txt, sha256 a34e7626dc98e494b199f6414e080bd537d3853cdb0767bfdd4f1812023b5e9b) =====
+#   written_utc 2026-10-13T01:21:21Z, after the full sitting on aot6 stopped and before any timing data exists.
+#   What happened: G1 PASSED for the one-context arm on all six shapes (relative error <= 1.94e-06, padded columns 0, repeats bit-equal). The six-context control could not be opened: hw_context creation failed with 0xc01e0009 (this device holds at most five), and the process segfaulted in teardown. No G2 or G3 data exists.
+#   Amended control, fixed now: the plain designs with at most 5 contexts resident and least-recently-used eviction, which is what IRON's npu1 runtime does at that ceiling (evict and retry). The probe counts context creations per block. tool sha256 00250dbe11cfe529cb1b70fd0d342f6ed42debe9d518e83b54ca1a309431bd54; design unchanged (sha256 3b341da92b3afaef454daa4df420de50bd2598e9e1e26e10ff7b8f35ed79d199).
+#   Gates as before: G1 both arms; G2 one-context output bit-equal to the per-shape plain output on all six shapes; G3 one-context IQR wholly below the per-shape IQR. Command: python tools/gemm_generic_probe.py run --out scratch/gemm_generic/aot6 --blocks 6 --seqs 5.
+#   amendment 2026-10-13T01:21:31Z: the first launch stopped before opening any context on a print bug (arm.ctx no longer exists); fixed the print only, tool sha256 47607bf7f6bc08a198b1365707f66f6f3aff46ae38888b55bf04ab0b729b149b.
+
+# ===== run 1, aot4 (no barrier release), the full sitting: STOPPED on a timeout =====
+RUN one-context arm: g_1024_3072.xclbin with six instruction streams; six-context arm: p_*.xclbin
+ARM one: 1 hardware context(s)
+  one 512x1024x3072: |NPU - numpy| / |numpy| 8.40e-07, padded columns zero True, repeat bit-equal True: PASS
+  one 512x1024x1024: |NPU - numpy| / |numpy| 6.33e-07, padded columns zero True, repeat bit-equal True: PASS
+  one 512x1024x5248: |NPU - numpy| / |numpy| 8.91e-07, padded columns zero True, repeat bit-equal True: PASS
+Traceback (most recent call last):
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\tools\gemm_generic_probe.py", line 275, in <module>
+    sys.exit(main())
+             ~~~~^^
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\tools\gemm_generic_probe.py", line 271, in main
+    return {"compile": cmd_compile, "compare": cmd_compare, "run": cmd_run}[a.cmd](a)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\tools\gemm_generic_probe.py", line 210, in cmd_run
+    arm.step(s)
+    ~~~~~~~~^^^
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\tools\gemm_generic_probe.py", line 176, in step
+    raise RuntimeError(f"{shape}: {st}")
+RuntimeError: (2624, 1024): ert_cmd_state.ERT_CMD_STATE_TIMEOUT
+
+# ===== confirmation test, part 1 (aot5 / aot5 g_1088_1024) =====
+Traceback (most recent call last):
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\tools\gemm_generic_probe.py", line 333, in <module>
+    sys.exit(main())
+             ~~~~^^
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\tools\gemm_generic_probe.py", line 329, in main
+    return {"compile": cmd_compile, "compare": cmd_compare, "run": cmd_run, "single": cmd_single}[a.cmd](a)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\tools\gemm_generic_probe.py", line 213, in cmd_single
+    d = Data(a.K, a.N, np.random.default_rng(3))
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\tools\gemm_generic_probe.py", line 159, in __init__
+    w[:, :N] = rng.standard_normal((K, N)) * 0.02
+    ~^^^^^^^
+ValueError: could not broadcast input array from shape (2624,1024) into shape (2688,1024)
+exit 1
+SINGLE 512x1088x1024 (K run as 1088, 17 k-tiles) on g_1024_3072.xclbin: COMPLETED, |NPU - numpy| / |numpy| 8.51e-07: PASS
+idle after: True
+exit 0
+
+# ===== confirmation test, part 2 =====
+SINGLE 512x2624x1024 (K run as 2688, 42 k-tiles) on g_1024_3072.xclbin: COMPLETED, |NPU - numpy| / |numpy| 1.23e-06: PASS
+idle after: True
+exit 0
+SINGLE 512x2624x1024 (K run as 2624, 41 k-tiles) on g_1024_3072.xclbin: COMPLETED, |NPU - numpy| / |numpy| 1.28e-06: PASS
+idle after: True
+exit 0
+
+# ===== run 2, aot5 (--even-k), the full sitting: STOPPED on a timeout =====
+RUN one-context arm: g_1024_3072.xclbin with six instruction streams; six-context arm: p_*.xclbin
+ARM one: 1 hardware context(s)
+  one 512x1024x3072: |NPU - numpy| / |numpy| 8.40e-07, padded columns zero True, repeat bit-equal True: PASS
+  one 512x1024x1024: |NPU - numpy| / |numpy| 6.33e-07, padded columns zero True, repeat bit-equal True: PASS
+  one 512x1024x5248: |NPU - numpy| / |numpy| 8.91e-07, padded columns zero True, repeat bit-equal True: PASS
+Traceback (most recent call last):
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\tools\gemm_generic_probe.py", line 333, in <module>
+    sys.exit(main())
+             ~~~~^^
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\tools\gemm_generic_probe.py", line 329, in main
+    return {"compile": cmd_compile, "compare": cmd_compare, "run": cmd_run, "single": cmd_single}[a.cmd](a)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\tools\gemm_generic_probe.py", line 256, in cmd_run
+    arm.step(s)
+    ~~~~~~~~^^^
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\tools\gemm_generic_probe.py", line 195, in step
+    raise RuntimeError(f"{shape}: {st}")
+RuntimeError: (2624, 1024): ert_cmd_state.ERT_CMD_STATE_TIMEOUT
+
+# ===== bisection, aot4 (no barrier release) =====
+SEQ on g_1024_3072.xclbin, one context: 1024x5248 -> 2624x1024
+  [1] 512x1024x5248 (K run as 1024, 16 k-tiles, N run as 5376): COMPLETED, |NPU - numpy| / |numpy| 8.63e-07: PASS
+  [2] 512x2624x1024 (K run as 2624, 41 k-tiles, N run as 1024): COMPLETED, |NPU - numpy| / |numpy| 1.21e+00: FAIL
+idle after: True
+exit 1
+SEQ on g_1024_3072.xclbin, one context: 1024x3072 -> 1024x1024 -> 2624x1024
+  [1] 512x1024x3072 (K run as 1024, 16 k-tiles, N run as 3072): COMPLETED, |NPU - numpy| / |numpy| 8.40e-07: PASS
+  [2] 512x1024x1024 (K run as 1024, 16 k-tiles, N run as 1024): COMPLETED, |NPU - numpy| / |numpy| 6.33e-07: PASS
+  [3] 512x2624x1024 (K run as 2624, 41 k-tiles, N run as 1024): COMPLETED, |NPU - numpy| / |numpy| 1.11e+00: FAIL
+idle after: True
+exit 1
+SEQ on g_1024_3072.xclbin, one context: 1024x5248 -> 1024x1024
+  [1] 512x1024x5248 (K run as 1024, 16 k-tiles, N run as 5376): COMPLETED, |NPU - numpy| / |numpy| 8.63e-07: PASS
+  [2] 512x1024x1024 (K run as 1024, 16 k-tiles, N run as 1024): COMPLETED, |NPU - numpy| / |numpy| 8.47e-07: PASS
+idle after: True
+exit 0
+SEQ on g_1024_3072.xclbin, one context: 1024x5248 -> 1024x5248 -> 2624x1024
+  [1] 512x1024x5248 (K run as 1024, 16 k-tiles, N run as 5376): COMPLETED, |NPU - numpy| / |numpy| 8.63e-07: PASS
+  [2] 512x1024x5248 (K run as 1024, 16 k-tiles, N run as 5376): COMPLETED, |NPU - numpy| / |numpy| 8.63e-07: PASS
+  [3] 512x2624x1024 (K run as 2624, 41 k-tiles, N run as 1024): COMPLETED, |NPU - numpy| / |numpy| 1.21e+00: FAIL
+idle after: True
+exit 1
+
+# ===== bisection repeated on aot6 (barrier released at the end of each call) =====
+SEQ on g_1024_3072.xclbin, one context: 1024x5248 -> 2624x1024
+  [1] 512x1024x5248 (K run as 1024, 16 k-tiles, N run as 5376): COMPLETED, |NPU - numpy| / |numpy| 8.63e-07: PASS
+  [2] 512x2624x1024 (K run as 2624, 41 k-tiles, N run as 1024): COMPLETED, |NPU - numpy| / |numpy| 1.35e-06: PASS
+idle after: True
+exit 0
+SEQ on g_1024_3072.xclbin, one context: 1024x3072 -> 1024x1024 -> 2624x1024
+  [1] 512x1024x3072 (K run as 1024, 16 k-tiles, N run as 3072): COMPLETED, |NPU - numpy| / |numpy| 8.40e-07: PASS
+  [2] 512x1024x1024 (K run as 1024, 16 k-tiles, N run as 1024): COMPLETED, |NPU - numpy| / |numpy| 6.33e-07: PASS
+  [3] 512x2624x1024 (K run as 2624, 41 k-tiles, N run as 1024): COMPLETED, |NPU - numpy| / |numpy| 1.23e-06: PASS
+idle after: True
+exit 0
+SEQ on g_1024_3072.xclbin, one context: 1024x5248 -> 1024x1024
+  [1] 512x1024x5248 (K run as 1024, 16 k-tiles, N run as 5376): COMPLETED, |NPU - numpy| / |numpy| 8.63e-07: PASS
+  [2] 512x1024x1024 (K run as 1024, 16 k-tiles, N run as 1024): COMPLETED, |NPU - numpy| / |numpy| 8.47e-07: PASS
+idle after: True
+exit 0
+SEQ on g_1024_3072.xclbin, one context: 1024x5248 -> 1024x5248 -> 2624x1024
+  [1] 512x1024x5248 (K run as 1024, 16 k-tiles, N run as 5376): COMPLETED, |NPU - numpy| / |numpy| 8.63e-07: PASS
+  [2] 512x1024x5248 (K run as 1024, 16 k-tiles, N run as 5376): COMPLETED, |NPU - numpy| / |numpy| 8.63e-07: PASS
+  [3] 512x2624x1024 (K run as 2624, 41 k-tiles, N run as 1024): COMPLETED, |NPU - numpy| / |numpy| 1.35e-06: PASS
+idle after: True
+exit 0
+SEQ on g_1024_3072.xclbin, one context: 2624x1024 -> 1024x1024
+  [1] 512x2624x1024 (K run as 2624, 41 k-tiles, N run as 1024): COMPLETED, |NPU - numpy| / |numpy| 1.28e-06: PASS
+  [2] 512x1024x1024 (K run as 1024, 16 k-tiles, N run as 1024): COMPLETED, |NPU - numpy| / |numpy| 8.13e-07: PASS
+idle after: True
+exit 0
+
+# ===== run 3, aot6, the full sitting with six contexts: the sixth context could not be created =====
+RUN one-context arm: g_1024_3072.xclbin with six instruction streams; six-context arm: p_*.xclbin
+ARM one: 1 hardware context(s)
+  one 512x1024x3072: |NPU - numpy| / |numpy| 8.40e-07, padded columns zero True, repeat bit-equal True: PASS
+  one 512x1024x1024: |NPU - numpy| / |numpy| 6.33e-07, padded columns zero True, repeat bit-equal True: PASS
+  one 512x1024x5248: |NPU - numpy| / |numpy| 8.91e-07, padded columns zero True, repeat bit-equal True: PASS
+  one 512x2624x1024: |NPU - numpy| / |numpy| 1.42e-06, padded columns zero True, repeat bit-equal True: PASS
+  one 512x1024x4096: |NPU - numpy| / |numpy| 9.64e-07, padded columns zero True, repeat bit-equal True: PASS
+  one 512x4096x1024: |NPU - numpy| / |numpy| 1.94e-06, padded columns zero True, repeat bit-equal True: PASS
+Traceback (most recent call last):
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\tools\gemm_generic_probe.py", line 340, in <module>
+    sys.exit(main())
+             ~~~~^^
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\tools\gemm_generic_probe.py", line 336, in main
+    return {"compile": cmd_compile, "compare": cmd_compare, "run": cmd_run, "single": cmd_single}[a.cmd](a)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\tools\gemm_generic_probe.py", line 259, in cmd_run
+    arm = Arm(pyxrt, dev, designs, data)
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\tools\gemm_generic_probe.py", line 176, in __init__
+    self.ctx[xclbin] = pyxrt.hw_context(dev, xb.get_uuid())
+                       ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+RuntimeError: Failed to create context virtual (0xc01e0009): There was an error while creating context 
+
+
+# ===== run 4, aot6, the full sitting with the amended control (started 20261013T012132Z) =====
+RUN one-context arm: g_1024_3072.xclbin with six instruction streams; per-shape arm: p_*.xclbin, at most 5 contexts resident (LRU)
+ARM one: 1 design(s), max resident contexts 1
+  one 512x1024x3072: |NPU - numpy| / |numpy| 8.40e-07, padded columns zero True, repeat bit-equal True: PASS
+  one 512x1024x1024: |NPU - numpy| / |numpy| 6.33e-07, padded columns zero True, repeat bit-equal True: PASS
+  one 512x1024x5248: |NPU - numpy| / |numpy| 8.91e-07, padded columns zero True, repeat bit-equal True: PASS
+  one 512x2624x1024: |NPU - numpy| / |numpy| 1.42e-06, padded columns zero True, repeat bit-equal True: PASS
+  one 512x1024x4096: |NPU - numpy| / |numpy| 9.64e-07, padded columns zero True, repeat bit-equal True: PASS
+  one 512x4096x1024: |NPU - numpy| / |numpy| 1.94e-06, padded columns zero True, repeat bit-equal True: PASS
+ARM six: 6 design(s), max resident contexts 5
+  six 512x1024x3072: |NPU - numpy| / |numpy| 8.40e-07, padded columns zero True, repeat bit-equal True: PASS
+  six 512x1024x1024: |NPU - numpy| / |numpy| 6.33e-07, padded columns zero True, repeat bit-equal True: PASS
+  six 512x1024x5248: |NPU - numpy| / |numpy| 8.91e-07, padded columns zero True, repeat bit-equal True: PASS
+  six 512x2624x1024: |NPU - numpy| / |numpy| 1.42e-06, padded columns zero True, repeat bit-equal True: PASS
+  six 512x1024x4096: |NPU - numpy| / |numpy| 9.64e-07, padded columns zero True, repeat bit-equal True: PASS
+  six 512x4096x1024: |NPU - numpy| / |numpy| 1.94e-06, padded columns zero True, repeat bit-equal True: PASS
+BITEQUAL 512x1024x3072: one-context generic == per-shape plain: True
+BITEQUAL 512x1024x1024: one-context generic == per-shape plain: True
+BITEQUAL 512x1024x5248: one-context generic == per-shape plain: True
+BITEQUAL 512x2624x1024: one-context generic == per-shape plain: True
+BITEQUAL 512x1024x4096: one-context generic == per-shape plain: True
+BITEQUAL 512x4096x1024: one-context generic == per-shape plain: True
+GATE G1+G2 (correct, repeatable, bit-equal on all six shapes): PASS
+CHAIN one: 30 sequences of 120 products, ms median 213.0, IQR 211.7-214.6, min 207.7, max 230.7; context creations per block (warm-up + 5 timed) [1, 1, 1, 1, 1, 1]
+CHAIN six: 30 sequences of 120 products, ms median 444.5, IQR 429.2-453.2, min 380.2, max 471.6; context creations per block (warm-up + 5 timed) [26, 26, 26, 26, 26, 26]
+GATE G3 (one-context IQR wholly below the per-shape IQR): PASS; median saving 231.5 ms per sequence (1.929 ms per product)
+idle after: True
+
+# ===== continuity: tools/laya_npu_screen.py chain --tile best --seconds 30 (IRON, started 20261013T012235Z) =====
+[summary] NPU whole_array.py sha256 92db1cad98aa2ec0670f0f39a3cd3e93d12ebe0d91ee0bc457adb16dbd51c01e; C single-buffer patch present; tile best; conversion threads 1; python 3.13.15, numpy 2.5.3
+[summary] NPU 512x1024x3072 tile m64 k64 n64 C single-buffered: first call 0.1 s; largest |NPU - numpy| / largest |numpy| 8.40e-07 (PASS)
+[summary] NPU 512x1024x1024 tile m64 k64 n64 C single-buffered: first call 0.0 s; largest |NPU - numpy| / largest |numpy| 6.33e-07 (PASS)
+[summary] NPU 512x1024x5248 run as N=5376 tile m32 k64 n64 C single-buffered: first call 0.1 s; largest |NPU - numpy| / largest |numpy| 8.91e-07 (PASS)
+[summary] NPU 512x2624x1024 tile m64 k64 n64 C single-buffered: first call 0.1 s; largest |NPU - numpy| / largest |numpy| 1.42e-06 (PASS)
+[summary] NPU 512x1024x4096 tile m64 k64 n64 C single-buffered: first call 0.1 s; largest |NPU - numpy| / largest |numpy| 9.64e-07 (PASS)
+[summary] NPU 512x4096x1024 tile m64 k64 n64 C single-buffered: first call 0.1 s; largest |NPU - numpy| / largest |numpy| 1.94e-06 (PASS)
+[summary] NPU 6 designs ready in 1 s
+[summary] CHAIN 42 sequences of 120 products in Laya's order, tile best: ms per sequence mean 730.2, median 734.3, min 667.1, max 753.0
+[summary] CHAIN per sequence, ms: convert-and-write 175.4, sync in 3.9, call 538.8 of which NPU bracket 402.9, sync out 9.3
+
+# ===== reading =====
+# 1. The offline result: with the K-tile and tile counts moved into a run-time parameter, the six shapes compile to
+#    device images that differ only in bytes that also differ between two builds of one shape (0x168, 0x19c, and
+#    the UUID at 0xecc8 of the AIE partition). One loaded design serves all six through their instruction streams.
+# 2. The first two sittings timed out at K=2624 after the K=1024 shapes. The odd-K-tile hypothesis was REFUTED
+#    (K=1088, 17 tiles, passed alone), and so was the N=5248 suspect (B2 failed without it). The bisection showed
+#    that a K change after the first call in a context gave wrong values (relative error 1.1-1.2).
+# 3. Cause, with the alternatives ruled out above: the core waits on the barrier with an acquire-equal
+#    (llvm.aie2.acquire(54, 1)), which does not consume it. Nothing in the first design handed it back, so
+#    from the second call on, the core read the run-time parameters before the call wrote them, and ran on the
+#    previous call's values. A larger stale tile count is harmless, which is why N changes passed.
+#    Ending each call with barrier.release_with_value(1), as upstream ml/mm_activation_epilogue does, fixed
+#    every failing sequence (5 of 5 pass).
+# 4. The control as first registered was infeasible: this device holds at most five of these hardware contexts
+#    (the sixth failed with 0xc01e0009, as this repo measured before). The amended control is IRON's own npu1
+#    behaviour at that ceiling: at most five resident, least recently used evicted. It made 26 context creations
+#    per block of 6 sequences.
+# 5. Result, run 4: G1 and G2 pass (all six shapes match numpy within 1.94e-06, and the one-context output is
+#    bit-equal to the per-shape output). G3 passes: 120 products in Laya's order take 213.0 ms (median; IQR
+#    211.7-214.6) on one context, against 444.5 ms (IQR 429.2-453.2) per shape. The saving is 231.5 ms per
+#    sequence, against step 3's 217.1 ms switching estimate.
+#    Both arms time the device side only (sync in, call, wait, sync out); conversion is excluded from both.
+# 6. Continuity: IRON's chain at the best tiles reads 734.3 ms per sequence (median), of which conversion is
+#    175.4 ms. Its device side, sync in + call + sync out = 552.0 ms, against 556.9 ms in step 3 (2026-09-26).
+#    The one-context path, raw pyxrt with no IRON wrapper, is 213.0 ms on that same device side. Its tile is m=32
+#    against IRON's m=64 for five shapes, and its relative errors equal IRON's at every shape.
+# Not measured here: energy; the host side of a sequence (step 3's hostshare); the hybrid end to end.

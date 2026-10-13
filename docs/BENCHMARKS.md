@@ -12533,3 +12533,60 @@ stop.
   shipped copy's, within 2.2e-6);
 - padded inputs beyond those 7 items;
 - the host share on the 780M.
+
+## Laya on the NPU, one context serves all six GEMM shapes and halves the device side (2026-10-13, Desktop 2)
+
+Step 4a, the first item on step 3's list: remove the cost of switching between six designs
+([previous section](#laya-on-the-npu-screened-the-floor-beats-the-cpu-and-the-780m-without-the-nan-guards-2026-09-26-desktop-2)).
+[Log](../results/laya/laya_gemm_onectx_desktop2_20261013T012132Z.log) with every pre-registration and every run, failed ones included.
+
+- **The change.** `kernels/gemm_generic/whole_array_generic.py` is a copy of mlir-aie's `whole_array` with
+  `--rtp-generic` added.
+  - The core reads its output-tile count and its K-tile count from a run-time parameter that the runtime
+    sequence writes. A `WorkerRuntimeBarrier` gates the read.
+  - So the six (K, N) shapes compile to device images that differ only in bytes that also differ between two
+    builds of one shape (a UUID and one build field). One loaded design runs all six; a shape is just its
+    instruction stream.
+  - All shapes use one tile: m=32, k=64, n=64, C single-buffered.
+- **How the first design failed, and why.** In the first two sittings the K=2624 product timed out after the
+  K=1024 shapes.
+  - **Two causes were refuted:**
+    - an odd K-tile count: K=1088, 17 tiles, passes alone;
+    - the N=5248 shape: the failure persists without it.
+  - **What the bisection showed:** any K change after a context's first call gave wrong values.
+  - **The cause:** the barrier wait is an acquire-equal (`llvm.aie2.acquire(54, 1)` in the core IR), and it does
+    not consume the lock. So from the second call on, the core read the parameters before the call wrote them,
+    and ran on the previous call's values. A stale tile count that is too large is harmless, which is why N
+    changes passed.
+  - **The fix:** end each call with `barrier.release_with_value(1)`, as upstream's `ml/mm_activation_epilogue`
+    does. It passes all five failing sequences.
+- **The control had to change.** Six resident contexts cannot be opened on this device; the sixth fails with
+  `0xc01e0009`. The control is therefore IRON's own npu1 behaviour at that ceiling: at most five resident, the
+  least recently used evicted. It made 26 context creations per block of six sequences.
+
+| 120 products in Laya's order, device side only | median | IQR | context creations / block |
+|---|---|---|---|
+| one context, generic design | **213.0 ms** | 211.7–214.6 | 1 |
+| per-shape designs, ≤5 resident (LRU) | 444.5 ms | 429.2–453.2 | 26 |
+
+- **The gates, all pre-registered, all PASS:**
+  - G1: every shape in both arms matches numpy within 1.94e-6, with padded columns 0 and repeats bit-equal.
+  - G2: the one-context output is bit-equal to the per-shape output.
+  - G3: the one-context IQR lies wholly below the control's.
+- **The saving is 231.5 ms per sequence,** 1.93 ms per product, against step 3's switching estimate of 217.1 ms.
+- **What both arms time:** the device side only (sync in, call, wait, sync out) through raw `pyxrt`, with no IRON
+  wrapper. The fp32→bf16 conversion is excluded from both.
+- **Continuity with step 3** (minutes later, so not the same sitting): IRON's own chain at the best tiles reads
+  734.3 ms per sequence, 175.4 ms of it conversion.
+  - Its device side is 552.0 ms, against step 3's 556.9 ms.
+  - On that like-for-like device side, the one-context path is **2.6× faster** (213.0 against 552.0 ms). That
+    combines two of step 3's levers, one context and no IRON per-call wrapper. The control arm separates them:
+    raw `pyxrt` with switching is 444.5 ms.
+- **Not measured:** energy; the host's side of a sequence; the hybrid end to end. So no new floor against the
+  780M is claimed here. Step 3's floor arithmetic used IRON's device side; with this one, the derived floor
+  would fall by the device-side saving, and that is still to be measured with the host work in place.
+- **Next on step 3's list:**
+  - item 2, the raw XRT host path, is now in hand for the device side;
+  - item 3: fold the bf16 rounding into the host op before each product;
+  - item 4: split the host graph;
+  - item 5: build the hybrid end to end, scored against step 2's bf16 emulation.
