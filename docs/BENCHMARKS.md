@@ -15377,3 +15377,87 @@ cost model, not host work.
 accuracy is measured in its own section). Logs:
 - the A/B wrappers [b3_ab_yolov8s_silu_desktop2_20261013T015609Z.log](../results/aie/b3_ab_yolov8s_silu_desktop2_20261013T015609Z.log) and [b3_ab_yolov8n_silu_desktop2_20261013T015752Z.log](../results/aie/b3_ab_yolov8n_silu_desktop2_20261013T015752Z.log);
 - the tool's own logs [b3_ab_yolov8s_phoenix_20261013T0156Z.log](../results/aie/b3_ab_yolov8s_phoenix_20261013T0156Z.log) and [b3_ab_yolov8n_phoenix_20261013T0157Z.log](../results/aie/b3_ab_yolov8n_phoenix_20261013T0157Z.log).
+
+## What AMD's compiled YOLOv8 runs: a near-constant 0.1 MB program while its bytes double (2026-10-13, Desktop 2)
+
+**Question.** With the shipped recipe, AMD keeps YOLOv8s:
+- AMD's `session.run` takes 13.13-13.16 ms;
+- the merged engine's dispatch takes 16.30-16.31 ms
+  ([above](#with-the-shipped-silu-recipe-ptr-does-not-carry-yolov8s-past-amds-stack-1720-against-1706-ms-2026-10-13-desktop-2)).
+
+What does AMD's stack do on the device that ours does not? This reads the artifacts AMD's
+compiler left from that sitting. Nothing was modified, and nothing modified was run.
+
+**Pre-registered** (scratch, sha256 `9688c826...`), before any AMD instruction-buffer size was read:
+- At the engine's own prices
+  ([cost model](#what-a-whole-frame-is-bound-by-the-instruction-stream-not-the-bytes-and-not-the-loop-derived-2026-09-22)),
+  3.2 ms is about 200 KB of instruction stream.
+- **H-count:** AMD's per-frame instruction (CODE) buffer is at least 200 KB smaller than our
+  969,812 B, so "fewer packets" is the gap.
+- **H-model:** AMD's CODE buffer is comparable or larger, so the gap is in the execution model.
+- AMD's bytes are reported as sizes only; our 16 ns per byte is not applied to them.
+
+**Where AMD's 13.13 ms goes.** The EP report places 922 of 929 nodes in one DPU subgraph. The 7 on
+CPU are the input `QuantizeLinear` (1x3x640x640 float) and the six output `DequantizeLinear`s.
+Both sit inside `session.run`, so AMD's on-device time is below 13.13 ms. The on-device gap is
+therefore at least 3.2 ms.
+
+**What the xmodel declares.** `tools/amd_xmodel_census.py` reads the compiled `.xmodel` (an XIR
+protobuf) without a vendor library, alongside the engine containers' manifests from the same
+sitting. Every row is a static declaration by its compiler, not a measurement.
+
+| | AMD YOLOv8n | AMD YOLOv8s | engine YOLOv8n | engine YOLOv8s |
+|---|---:|---:|---:|---:|
+| control program | `mc_code` 93,840 B | `mc_code` 106,168 B | insts 419,476 B | insts 969,812 B |
+| CODE register (REG_4) | 1,473,536 B | 1,593,408 B | - | - |
+| `0x0B`-headed words in `mc_code` | 1,520 | 1,757 | - | - |
+| activation reads | 69.4 MB | 138.1 MB | 83.1 MB | 237.7 MB |
+| activation writes | 44.8 MB | 73.0 MB | not declared | not declared |
+| weight reads | 26.2 MB (8.0x REG_0) | 87.9 MB (7.5x REG_0) | 8.2 MB | 29.5 MB |
+| workspace | 23.0 MB | 40.6 MB | 14.9 MB | 20.8 MB |
+| NPU time (sitting above) | 6.90 / 6.95 `session.run` | 13.13 / 13.16 `session.run` | 7.31 / 7.29 dispatch | 16.31 / 16.30 dispatch |
+
+Sources:
+- AMD's activation and weight rows are its own `input_feature_load_size`,
+  `output_feature_save_size` and `const_data_load_size`.
+- The engine's activation reads are its 6,400 B activation packets; weights are `wpackets_bytes`.
+- A buffer dump from AMD's own runner (`XLNX_ENABLE_DUMP_BO=1`, unmodified xmodel) confirms the
+  three data registers byte for byte: input 1,638,400, workspace 40,576,896, output 1,209,792. It
+  writes no instruction buffer, so the CODE register's contents at run time were not observed.
+
+**Verdict: H-model.** The CODE register is 1.59 MB, not 200 KB smaller than ours. Both readings
+of AMD's program give the same result: from n to s, `mc_code` grows 13% and the CODE register 8%.
+AMD's declared bytes double and its time doubles (1.90x). So AMD's frame time follows the bytes it
+moves, not the size of its program.
+
+Ours follows the instruction stream:
+- the stream grows 2.31x;
+- dispatch grows 2.23x;
+- the cost model's ~16 ns per instruction byte holds on these containers too.
+
+`mc_code` is a stream of records. Many begin with a `0x0B0000xx` word, 48 bytes apart on
+YOLOv8s. About 1.8k such commands describe a YOLOv8s frame; roughly 107k register-level shim ops
+describe ours (DERIVED, at the cost model's ~9 B per op). No field meaning is claimed for any
+record. 1,551 words per model are printable ASCII.
+
+**What this says to build (DERIVED, not a prediction).**
+- **Bytes are not where AMD wins.** It declares more traffic than the engine reads: 299 MB
+  against 267 MB plus our unlisted writes. It moves them at an implied 22.8 GB/s on YOLOv8s and
+  20.3 GB/s on YOLOv8n. That rate is a lower bound, since `session.run` includes the CPU QDQ. The
+  engine's implied rate is 16.4 and 12.5 GB/s.
+- **At AMD's rate, the engine's declared reads alone take 11.7 ms.** That is below AMD's 13.13,
+  but writes are uncounted and this is not a latency prediction.
+- **The lever is the per-frame control stream, not the activation re-fetch factor.** The aim is
+  a frame whose control does not grow with the packet count: coarser shim tasks (one BD op
+  covering many packets through repeat and iteration dimensions), or a resident schedule. The
+  "fewer packets" lever in the cost-model section is one route to that; this result says it is
+  not the only one.
+- **Unexplained:** how AMD's 48-byte commands become transfers, and whether its cores or the
+  shim's command processor drive them. That is the next question for the RE tools, read-only.
+
+**Scope.** Two models, one sitting's artifacts, static declarations. The xmodels match that
+sitting by mtime (01:56Z and 01:58Z). Logs:
+- the census [amd_xmodel_census_yolov8n_s_desktop2_20261013T021744Z.log](../results/aie/amd_xmodel_census_yolov8n_s_desktop2_20261013T021744Z.log);
+- the dump run [amd_yolov8s_bo_dump_desktop2_20261013T021506Z.log](../results/aie/amd_yolov8s_bo_dump_desktop2_20261013T021506Z.log),
+  whose 46 ms frames carry the dump's own cost and are not a timing, and its file list
+  [amd_yolov8s_bo_dump_sizes_desktop2_20261013T021506Z.log](../results/aie/amd_yolov8s_bo_dump_sizes_desktop2_20261013T021506Z.log).
