@@ -138,11 +138,16 @@ def main():
                         arm['verdict'] = 'same' if diff == 0 else 'changed'
                     del s
                 except Exception as e:  # noqa: BLE001 -- an error is the finding, and it stops the sweep
-                    arm['verdict'] = 'ERROR: %s: %s' % (type(e).__name__, str(e)[:300])
+                    # The whole text: vaip prefixes every error with a long frame signature, so a short
+                    # cut keeps only that and loses the cause (the 2026-10-12 220151Z/221209Z stops).
+                    arm['verdict'] = 'ERROR: %s' % type(e).__name__
+                    arm['error_text'] = str(e)
                 gc.collect()
                 report['arms'].append(arm)
                 print('0x%02x ^ 0x%02x (%02x->%02x): %s%s' % (off, m, arm['orig'], arm['new'], arm['verdict'],
                       (' (%d codes)' % arm['diff_codes']) if arm.get('verdict') == 'changed' else ''), flush=True)
+                if 'error_text' in arm:
+                    print('  full error text:\n' + arm['error_text'], flush=True)
                 if arm['verdict'].startswith(('ERROR', 'REJECTED')):
                     report['stopped'] = 'stop rule at 0x%02x ^ 0x%02x: %s' % (off, m, arm['verdict'])
                     raise StopIteration

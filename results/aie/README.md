@@ -1082,6 +1082,10 @@ shape.
 **`xdp_profile_attach_desktop2_20261012T215835Z.log`** — B-0: XRT's AIE profile plugin in the EP process, configuration only. It configures all 16 cores and reads 64 counters back through `XDP_KERNEL`, but **every value is 0** (FAIL as pre-registered; the cause is unexplained among three candidates). Outputs stayed bit-equal. [BENCHMARKS](../../docs/BENCHMARKS.md#the-aie2-shifter-reads-a-6-bit-code-so-theorem-1s-5-bit-shifter-is-not-the-bound-2026-10-12-desktop-2).
 
 **`dpu_reg0_sensitivity_desktop2_20261012T220151Z.log`** — Route C, the `REG_0` sensitivity sweep: **stopped at its first arm** by its pre-registered stop rule. The error was host-side: `REG_0`'s value is a nested protobuf whose 3-byte header was flipped. No sensitivity result yet. [BENCHMARKS](../../docs/BENCHMARKS.md#the-aie2-shifter-reads-a-6-bit-code-so-theorem-1s-5-bit-shifter-is-not-the-bound-2026-10-12-desktop-2).
+
+**`dpu_reg0_sensitivity_desktop2_20261012T221209Z.log`** — Route C resumed at `REG_0` offset 3: **stopped at arm 4** (`0x04 ^ 0x80`, an error in `session.run`, cause not recorded). Flips of `0x03`–`0x04` changed 47,507 of 57,344 output codes. [BENCHMARKS](../../docs/BENCHMARKS.md#the-aie2-shifter-reads-a-6-bit-code-so-theorem-1s-5-bit-shifter-is-not-the-bound-2026-10-12-desktop-2).
+
+**`dpu_reg0_sensitivity_narrow_desktop2_20261013T001705Z.log`** — Route C, narrow sweep `0x58`–`0x90`, with full error text: **stopped at arm 23** (`0x63 ^ 0x01`, nondeterministic repeated output). `0x58`–`0x62` change nothing. T1/T2 were not reached (the scorer's "HOLDS" is about untested bytes). [BENCHMARKS](../../docs/BENCHMARKS.md#the-aie2-shifter-reads-a-6-bit-code-so-theorem-1s-5-bit-shifter-is-not-the-bound-2026-10-12-desktop-2).
 ot-the-bound-2026-10-12-desktop-2).
 
 ## Windows local memory placement

@@ -7731,6 +7731,19 @@ metadata** (2026-10-12, Desktop 2, [log](../results/aie/xdp_trace_attach_desktop
   parameter payload therefore starts at `REG_0` offset 3. The offsets quoted in this section (0x7B, 0x7C,
   base 0x5B) are all in the same `REG_0`-value coordinates, so they stand.
 - **No sensitivity result yet.** Resuming at offset 3 waits for the user's OK, as pre-registered.
+- **Resumed at offset 3, it stopped at its 4th arm** ([log](../results/aie/dpu_reg0_sensitivity_desktop2_20261012T221209Z.log)). The error was
+  in `session.run` at `0x04 ^ 0x80`. The tool kept only 300 characters, so host- versus device-side is not
+  recorded. Before the stop, flips of bytes `0x03`–`0x04` changed 47,507 of the 57,344 output codes.
+- **A narrower sweep of the located struct, `0x58`–`0x90`** (2026-10-13, [log](../results/aie/dpu_reg0_sensitivity_narrow_desktop2_20261013T001705Z.log)),
+  now keeps the full error text.
+  - It stopped at arm 23, `0x63 ^ 0x01`, with "nondeterministic repeated output": the same input gave two
+    different outputs. `0x63` is +0x08 from base 0x5B, a byte handler B reads.
+  - Every arm over `0x58`–`0x62` left the outputs unchanged, although both handlers read some of those
+    bytes at base 0x5B.
+  - The pre-registered tests T1/T2 were **not reached**. The scorer's "HOLDS" line is about untested bytes,
+    because it does not check coverage.
+  - `REG_0` is byte-identical across the three compiles, so the offsets compare. No sensitivity map exists
+    yet; going past `0x63` waits for the user.
 
 ---
 

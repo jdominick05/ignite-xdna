@@ -1,0 +1,108 @@
+# Route C, REG_0 sensitivity sweep, resumed from offset 0x03, Desktop 2 (DESKTOP-CBL5NUA), started 20261012T221209Z UTC,
+# resnet_env17, per-run keep-awake. Tool: tools/dpu_reg0_sensitivity.py (sha256 e4ac4f6ef520bc6fec95db0949047ee769cf5d9eb77e29925332085e2733b79d), unchanged from the
+# pre-registration. It follows results/aie/dpu_reg0_sensitivity_desktop2_20261012T220151Z.log (stopped at 0x00).
+#
+# Pre-registration (sha256 29780ee01191ea21033cf48184f8f955e66b10148da9578b42e3c8f55f9e8164):
+#   written_utc 2026-10-12T22:01:24Z, before the Route C sweep.
+#   tool: tools/dpu_reg0_sensitivity.py (sha256 e4ac4f6ef520bc6fec95db0949047ee769cf5d9eb77e29925332085e2733b79d); scorer: scratch c_score.py (sha256 663adf5007d67eb818fec872fe46e60bfb330bb72aa916a0d78196c5015cd83e), fixed now.
+#   sweep: REG_0[0x00..0xFF] x masks {0x01, 0x80} = 512 arms on the 32-channel sc8/sb0 fixture, 7 cases each; 'sensitive' = any mask changes any output code. Stop rule: first ERROR or REJECTED arm stops, restores the xmodel, and waits for the user's OK.
+#   T1 control: 0x7C (shift_cut) is sensitive. (0x7B is reported, not predicted: which masks move the bias is what runs 5-6 mapped.)
+#   T2 H_notA (from the 2d801d1/802352b inference that the 0x24d0 handler does not run the bias): the bytes ONLY handler A reads at struct base REG_0+0x5B, i.e. 0x70 (+0x15) and 0x87, 0x88 (+0x2c u16), are NOT sensitive. Any of them sensitive refutes it.
+#   T3 (descriptive, rule fixed now): for handlers A and B, slide the static read set over every base whose bytes were all tested; rank by coverage = sensitive/read bytes, then hits; report the top 5 and base 0x5B.
+#   Evidence, not a witness: a union of handlers; a read byte need not change these outputs.
+#
+# Resume note (sha256 534319380402a3df8a4e9a6adaca1aef67a6c2d7c18f272dc7abd378e24a0360):
+#   written_utc 2026-10-12T22:11:44Z: resume of the Route C sweep on the user's OK (after c101800), from REG_0 offset 0x03 to 0xFF, same masks, same tool and scorer (sha256 checked equal to the pre-registration above), same tests T1-T3 and stop rule. Offsets 0x00-0x02 are the nested protobuf header and are not part of the payload.
+
+# ===== run (the tool's stdout, verbatim) =====
+deleted stale cache C:\Users\<user>\PycharmProjects\ignite-xdna\.claude\worktrees\dpu-isa-re\modelcachekey
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\PycharmProjects\ignite-xdna\.claude\worktrees\dpu-isa-re\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+BASE: NPU:Conv 1, REG_0 1891 B at xmodel offset 4238057
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\PycharmProjects\ignite-xdna\.claude\worktrees\dpu-isa-re\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+0x03 ^ 0x01 (07->06): changed (47507 codes)
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\PycharmProjects\ignite-xdna\.claude\worktrees\dpu-isa-re\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+0x03 ^ 0x80 (07->87): changed (47507 codes)
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\PycharmProjects\ignite-xdna\.claude\worktrees\dpu-isa-re\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+0x04 ^ 0x01 (8c->8d): changed (47507 codes)
+WARNING: Logging before InitGoogleLogging() is written to STDERR
+F20261012 18:12:24.075178 13060 DpuKernelRunner.cpp:1918] DPU timeout: (Exception type: class xrt::run::aie_error), Timeout layer name:[subgraph_(bias_DequantizeLinear_Output_vaip_6)], Command failed to complete successfully (ERT_CMD_STATE_TIMEOUT)
+txn_op_idx = 0x00000000
+ctx_pc = 0x00000000
+fatal_error_type = 0x00000000
+fatal_error_exception_type = 0x00000000
+fatal_error_exception_pc = 0x00000000
+fatal_error_app_module = 0x00000000
+[1;31m2026-10-12 18:12:26.5288755 [E:onnxruntime:, sequential_executor.cc:572 onnxruntime::ExecuteKernel] Non-zero status code returned while running vitis_ai_ep_5 node. Name:'VitisAIExecutionProvider_vitis_ai_ep_5_0' Status Message: public: int __cdecl vaip_core::TarWriter::write(class vaip_core::IStreamReader const & __ptr64,class std::basic_string<char,struct std::char_traits<char>,class std::allocator<char> > const & __ptr64) __ptr64
+xir_deserialize_cif
+xir_deserialize_cif
+xir_deserialize_cif
+RtlCaptureContext2
+vaiml_register_dynamic_custom_op_by_schema
+vaiml_register_dynamic_custom_op_by_schema
+vaiml_register_dynamic_custom_op_by_schema
+vaiml_register_dynamic_custom_op_by_schema
+vaiml_register_dynamic_custom_op_by_schema
+public: class vaip_core::TryFuseProto * __ptr64 __cdecl vaip_core::DpuSubgraphEntryProto::mutable_try_fuse(void) __ptr64
+public: class vaip_core::TryFuseProto * __ptr64 __cdecl vaip_core::DpuSubgraphEntryProto::mutable_try_fuse(void) __ptr64
+(unknown)
+PyInit_onnxruntime_pybind11_state
+PyInit_onnxruntime_pybind11_state
+PyInit_onnxruntime_pybind11_state
+PyInit_onnxruntime_pybind11_state
+PyInit_onnxruntime_pybind11_state
+PyInit_onnxruntime_pybind11_state
+PyInit_onnxruntime_pybind11_state
+PyInit_onnxruntime_pybind11_state
+PyInit_onnxruntime_pybind11_state
+PyInit_onnxruntime_pybind11_state
+PyInit_onnxruntime_pybind11_state
+PyInit_onnxruntime_pybind11_state
+PyInit_onnxruntime_pybind11_state
+PyInit_onnxruntime_pybind11_state
+PyInit_onnxruntime_pybind11_state
+(unknown)
+PyCFunction_GetFlags
+_PyObject_MakeTpCall
+PyObject_Vectorcall
+[m
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\PycharmProjects\ignite-xdna\.claude\worktrees\dpu-isa-re\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+0x04 ^ 0x80 (8c->0c): ERROR: RuntimeException: [ONNXRuntimeError] : 6 : RUNTIME_EXCEPTION : Non-zero status code returned while running vitis_ai_ep_5 node. Name:'VitisAIExecutionProvider_vitis_ai_ep_5_0' Status Message: public: int __cdecl vaip_core::TarWriter::write(class vaip_core::IStreamReader const & __ptr64,class std::basic_string<char,str
+arms 4, stopped: stop rule at 0x04 ^ 0x80: ERROR: RuntimeException: [ONNXRuntimeError] : 6 : RUNTIME_EXCEPTION : Non-zero status code returned while running vitis_ai_ep_5 node. Name:'VitisAIExecutionProvider_vitis_ai_ep_5_0' Status Message: public: int __cdecl vaip_core::TarWriter::write(class vaip_core::IStreamReader const & __ptr64,class std::basic_string<char,str, restored True, idle after True, 13 s
+
+# ===== state =====
+base: NPU:Conv 1 (5 of 7 nodes on NPU); xmodel sha256 68cc20375da1a15df1e90adc7dbd4d0c81fa98b3da4879bd7facc460d7194e57
+arms run 4; xmodel restored True; device idle after True
+REG_0 value, first 48 bytes: 0a e0 0e 07 8c 04 00 01 04 01 00 01 01 01 01 00 00 00 00 01 00 01 00 04 00 04 00 20 00 20 00 20 00 01 00 04 00 02 00 01 00 04 00 00 38 80 00 00
+
+# ===== reading =====
+# STOPPED at the 4th arm, 0x04 ^ 0x80 (8c -> 0c), by the pre-registered stop rule.
+# - The error came from session.run (EP node vitis_ai_ep_5), not from loading.
+# - The tool kept only 300 characters of the exception, and that span ends inside the vaip frame prefix.
+#   So whether the cause was host-side or device-side is NOT recorded.
+# - There was no timeout (13 s for the whole run). The xmodel was restored and the device was idle after.
+# Before the stop, 0x03 ^ 0x01, 0x03 ^ 0x80 and 0x04 ^ 0x01 each changed 47,507 of the 57,344 output codes
+# (7 cases x 32 x 256). The device ran with those perturbed values and returned outputs.
+# Bytes 03..04 read 07 8c; 8c 04 as a little-endian u16 is 0x048c = 1164. That is consistent with a size or
+# geometry field, but not established.
+# The next attempt, on the user's instruction: keep the full error text and sweep only the located struct
+# region (REG_0 0x58..0x90). It is pre-registered separately.
