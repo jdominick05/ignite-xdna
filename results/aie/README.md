@@ -1086,6 +1086,8 @@ shape.
 **`dpu_reg0_sensitivity_desktop2_20261012T221209Z.log`** — Route C resumed at `REG_0` offset 3: **stopped at arm 4** (`0x04 ^ 0x80`, an error in `session.run`, cause not recorded). Flips of `0x03`–`0x04` changed 47,507 of 57,344 output codes. [BENCHMARKS](../../docs/BENCHMARKS.md#the-aie2-shifter-reads-a-6-bit-code-so-theorem-1s-5-bit-shifter-is-not-the-bound-2026-10-12-desktop-2).
 
 **`dpu_reg0_sensitivity_narrow_desktop2_20261013T001705Z.log`** — Route C, narrow sweep `0x58`–`0x90`, with full error text: **stopped at arm 23** (`0x63 ^ 0x01`, nondeterministic repeated output). `0x58`–`0x62` change nothing. T1/T2 were not reached (the scorer's "HOLDS" is about untested bytes). [BENCHMARKS](../../docs/BENCHMARKS.md#the-aie2-shifter-reads-a-6-bit-code-so-theorem-1s-5-bit-shifter-is-not-the-bound-2026-10-12-desktop-2).
+
+**`dpu_reg0_sensitivity_narrow_desktop2_20261013T002237Z.log`** — Route C narrow sweep resumed at `0x64`, scored by the corrected, coverage-checking scorer: **stopped at arm 2 on a device timeout** (`0x64 ^ 0x80`, `ERT_CMD_STATE_TIMEOUT`). `0x64 ^ 0x01` changed 25,021 codes. T1-T3 not reached. [BENCHMARKS](../../docs/BENCHMARKS.md#the-aie2-shifter-reads-a-6-bit-code-so-theorem-1s-5-bit-shifter-is-not-the-bound-2026-10-12-desktop-2).
 ot-the-bound-2026-10-12-desktop-2).
 
 ## Windows local memory placement

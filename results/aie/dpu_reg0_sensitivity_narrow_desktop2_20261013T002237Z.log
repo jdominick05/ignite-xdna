@@ -1,0 +1,124 @@
+# Route C, narrow sweep resumed from REG_0 0x64, Desktop 2 (DESKTOP-CBL5NUA), started 20261013T002237Z UTC, resnet_env17,
+# per-run keep-awake; NPU idle, CPU load 1 %, no llama-quantize running before the start.
+# Tool: tools/dpu_reg0_sensitivity.py (sha256 66b235f3f17958ba9f40c6f6e217263ab04c56c3dc965961cce5f1e625ebb7c7), unchanged since the narrow pre-registration.
+# It follows results/aie/dpu_reg0_sensitivity_narrow_desktop2_20261013T001705Z.log, which stopped at 0x63.
+#
+# Narrow pre-registration (sha256 f0d4403dbf748023098cc1f4c4bb0ed94d39c7fcce8c3c549008f4f27ac92ea7):
+#   written_utc 2026-10-13T00:16:52Z, before the narrow sweep, on the user's instruction (after the 221209Z stop).
+#   tool: tools/dpu_reg0_sensitivity.py (sha256 66b235f3f17958ba9f40c6f6e217263ab04c56c3dc965961cce5f1e625ebb7c7); its one change since the first pre-registration keeps the full exception text. Scorer unchanged: scratch c_score.py (sha256 663adf5007d67eb818fec872fe46e60bfb330bb72aa916a0d78196c5015cd83e).
+#   sweep: REG_0[0x58..0x90] x masks {0x01, 0x80} = 114 arms on the 32-channel sc8/sb0 fixture, 7 cases each. This region holds the struct both static handlers read at base 0x5B (+0x00..+0x2f = 0x5B..0x8A) plus margins. 'sensitive' = any mask changes any output code.
+#   Stop rule unchanged: the first ERROR or REJECTED arm stops the sweep, restores the xmodel, records the full error text, and waits for the user's OK. Handler B reads +0x04..+0x0a (0x5F..0x65) and +0x24 u32 (0x7F..0x82), which may be sizes or addresses.
+#   T1 control: 0x7C (shift_cut) is sensitive.
+#   T2 H_notA: 0x70 (+0x15) and 0x87, 0x88 (+0x2c u16), the bytes ONLY handler A reads at base 0x5B, are NOT sensitive. Any of them sensitive refutes it.
+#   T3 (descriptive, the rule fixed in c_score.py): slide each handler's read set over every base whose bytes were all tested; rank by coverage, then hits. Inside this window only bases 0x58..0x61 (A) and 0x58..0x63 (B) are fully tested.
+#   Evidence, not a witness.
+#
+# Resume note with the scorer correction, written before this run (sha256 0d8cb7eb987e5f1f149c52fec1e4c7de9cec657b653c18949ebb77aa92378b73):
+#   written_utc 2026-10-13T00:22:24Z, before the resume from 0x64 (user's instruction after 12cca24).
+#   Scorer correction, fixed now and before any new arm: scratch c_score2.py (sha256 6ff3780adf7ce0266e0701b0d3b5ce47f223b03d0657adefbd36433c51ad3895) replaces c_score.py for scoring. Same tests and T3 rule; it merges the stopped run and the resume, and prints NOT REACHED for any test whose bytes were not all tested (c_score.py printed 'T2 HOLDS' for untested bytes).
+#   Resume: tools/dpu_reg0_sensitivity.py (sha256 66b235f3f17958ba9f40c6f6e217263ab04c56c3dc965961cce5f1e625ebb7c7, unchanged since the narrow pre-registration) --lo 0x64 --hi 0x90 --masks 0x01,0x80, fresh compile and fresh --out. 0x63 is skipped (its 0x01 arm was the stop). The tests T1-T3 and the stop rule are as in prereg.txt; scoring merges c3/run and c3/run2.
+
+# ===== run (the tool's stdout and stderr) =====
+deleted stale cache C:\Users\<user>\PycharmProjects\ignite-xdna\.claude\worktrees\dpu-isa-re\modelcachekey
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\PycharmProjects\ignite-xdna\.claude\worktrees\dpu-isa-re\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+BASE: NPU:Conv 1, REG_0 1891 B at xmodel offset 4177337
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\PycharmProjects\ignite-xdna\.claude\worktrees\dpu-isa-re\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+0x64 ^ 0x01 (9e->9f): changed (25021 codes)
+WARNING: Logging before InitGoogleLogging() is written to STDERR
+F20261012 20:22:45.806243 36256 DpuKernelRunner.cpp:1918] DPU timeout: (Exception type: class xrt::run::aie_error), Timeout layer name:[subgraph_(bias_DequantizeLinear_Output_vaip_6)], Command failed to complete successfully (ERT_CMD_STATE_TIMEOUT)
+txn_op_idx = 0x00000000
+ctx_pc = 0x00000000
+fatal_error_type = 0x00000000
+fatal_error_exception_type = 0x00000000
+fatal_error_exception_pc = 0x00000000
+fatal_error_app_module = 0x00000000
+[1;31m2026-10-12 20:22:47.9700853 [E:onnxruntime:, sequential_executor.cc:572 onnxruntime::ExecuteKernel] Non-zero status code returned while running vitis_ai_ep_3 node. Name:'VitisAIExecutionProvider_vitis_ai_ep_3_0' Status Message: public: int __cdecl vaip_core::TarWriter::write(class vaip_core::IStreamReader const & __ptr64,class std::basic_string<char,struct std::char_traits<char>,class std::allocator<char> > const & __ptr64) __ptr64
+xir_deserialize_cif
+xir_deserialize_cif
+xir_deserialize_cif
+RtlCaptureContext2
+vaiml_register_dynamic_custom_op_by_schema
+vaiml_register_dynamic_custom_op_by_schema
+vaiml_register_dynamic_custom_op_by_schema
+vaiml_register_dynamic_custom_op_by_schema
+vaiml_register_dynamic_custom_op_by_schema
+public: class vaip_core::TryFuseProto * __ptr64 __cdecl vaip_core::DpuSubgraphEntryProto::mutable_try_fuse(void) __ptr64
+public: class vaip_core::TryFuseProto * __ptr64 __cdecl vaip_core::DpuSubgraphEntryProto::mutable_try_fuse(void) __ptr64
+(unknown)
+PyInit_onnxruntime_pybind11_state
+    [... native Python/pybind frames elided ...]
+0x64 ^ 0x80 (9e->1e): ERROR: RuntimeException
+  full error text:
+[ONNXRuntimeError] : 6 : RUNTIME_EXCEPTION : Non-zero status code returned while running vitis_ai_ep_3 node. Name:'VitisAIExecutionProvider_vitis_ai_ep_3_0' Status Message: public: int __cdecl vaip_core::TarWriter::write(class vaip_core::IStreamReader const & __ptr64,class std::basic_string<char,struct std::char_traits<char>,class std::allocator<char> > const & __ptr64) __ptr64
+xir_deserialize_cif
+xir_deserialize_cif
+xir_deserialize_cif
+RtlCaptureContext2
+vaiml_register_dynamic_custom_op_by_schema
+vaiml_register_dynamic_custom_op_by_schema
+vaiml_register_dynamic_custom_op_by_schema
+vaiml_register_dynamic_custom_op_by_schema
+vaiml_register_dynamic_custom_op_by_schema
+public: class vaip_core::TryFuseProto * __ptr64 __cdecl vaip_core::DpuSubgraphEntryProto::mutable_try_fuse(void) __ptr64
+public: class vaip_core::TryFuseProto * __ptr64 __cdecl vaip_core::DpuSubgraphEntryProto::mutable_try_fuse(void) __ptr64
+(unknown)
+PyInit_onnxruntime_pybind11_state
+PyInit_onnxruntime_pybind11_state
+PyInit_onnxruntime_pybind11_state
+PyInit_onnxruntime_pybind11_state
+PyInit_onnxruntime_pybind11_state
+PyInit_onnxruntime_pybind11_state
+PyInit_onnxruntime_pybind11_state
+PyInit_onnxruntime_pybind11_state
+PyInit_onnxruntime_pybind11_state
+PyInit_onnxruntime_pybind11_state
+PyInit_onnxruntime_pybind11_state
+PyInit_onnxruntime_pybind11_state
+PyInit_onnxruntime_pybind11_state
+PyInit_onnxruntime_pybind11_state
+PyInit_onnxruntime_pybind11_state
+(unknown)
+PyCFunction_GetFlags
+_PyObject_MakeTpCall
+PyObject_Vectorcall
+
+arms 2, stopped: stop rule at 0x64 ^ 0x80: ERROR: RuntimeException, restored True, idle after True, 10 s
+
+# ===== state =====
+arms run 2; xmodel restored True; device idle at the tool's exit True; xrt-smi idle afterwards.
+Windows System event log, the 15 minutes around the run: no kipu/amd/ipu/npu/Display/WHEA events.
+
+# ===== scorer c_score2.py (pre-registered correction), merging this run with the 0x58..0x63 run =====
+    reports 2, arms 25, masks [1, 128], stops: ['stop rule at 0x63 ^ 0x01: ERROR: RuntimeError', 'stop rule at 0x64 ^ 0x80: ERROR: RuntimeException']
+    tested offsets (11): 58 59 5a 5b 5c 5d 5e 5f 60 61 62
+    sensitive offsets (1): 64
+    error arms: 63^01 ERROR: RuntimeError, 64^80 ERROR: RuntimeException
+    
+    T1 control 0x7C sensitive: NOT REACHED
+       (0x7B reported, not predicted: not tested)
+    T2 H_notA, bytes only handler A reads at base 0x5B (70 87 88): NOT REACHED (untested: 70 87 88)
+    T3 handler A, 0 fully tested bases; best (coverage, hits, base): none
+       at base 0x5B: NOT fully tested
+    T3 handler B, 0 fully tested bases; best (coverage, hits, base): none
+       at base 0x5B: NOT fully tested
+
+# ===== reading =====
+# STOPPED at the 2nd arm, 0x64 ^ 0x80 (9e -> 1e), by the stop rule, on a DEVICE TIMEOUT:
+# DpuKernelRunner "DPU timeout ... ERT_CMD_STATE_TIMEOUT", layer subgraph_(bias_DequantizeLinear_Output_vaip_6).
+# Before it, 0x64 ^ 0x01 (9e -> 9f) changed 25,021 of the 57,344 output codes.
+# T1, T2 and T3 are NOT REACHED.
+# Post hoc, NOT pre-registered: the only live bytes so far are 0x63 (+0x08 from base 0x5B; its flip gave
+# nondeterministic output) and 0x64 (+0x09; changed output, then a timeout). Only static handler B reads +0x08
+# and +0x09. Every byte both handlers read in 0x5D..0x62 (+0x02..+0x07) was dead on these inputs.
+# That is consistent with handler B's struct at base 0x5B being on the executed path, but it is not a test.
+# Two caveats: a dead byte may simply not matter for these inputs, and a live byte may be read by code
+# outside the two handlers.
+# Resuming (0x65..0x90, with 0x7F..0x82 possibly an address or size) waits for the user's OK.

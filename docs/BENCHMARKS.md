@@ -7744,6 +7744,14 @@ metadata** (2026-10-12, Desktop 2, [log](../results/aie/xdp_trace_attach_desktop
     because it does not check coverage.
   - `REG_0` is byte-identical across the three compiles, so the offsets compare. No sensitivity map exists
     yet; going past `0x63` waits for the user.
+- **Resumed at `0x64`, it stopped on its 2nd arm with a device timeout** ([log](../results/aie/dpu_reg0_sensitivity_narrow_desktop2_20261013T002237Z.log)).
+  - The scorer was corrected first and pre-registered: it now prints NOT REACHED for any test whose bytes were
+    not all tested.
+  - `0x64 ^ 0x01` changed 25,021 output codes. `0x64 ^ 0x80` timed out on the device (`ERT_CMD_STATE_TIMEOUT`).
+    The xmodel was restored and the NPU read idle afterwards.
+  - T1, T2 and T3 are still **not reached**.
+  - Post hoc, not a test: the only live bytes so far, `0x63` and `0x64` (+0x08, +0x09 from base 0x5B), are
+    ones only handler B reads. The bytes both handlers read at +0x02..+0x07 were dead on these inputs.
 
 ---
 
