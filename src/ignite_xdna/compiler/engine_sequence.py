@@ -798,6 +798,7 @@ class SequenceEmitter:
             # Measured U-curve, 2026-09-18, dispatch mean of the same container at each cadence:
             #   SESR M7   rb 1 4.573 | 2 4.311 | 3 4.964 | 4 5.254 ms   (all of it non-compute floor)
             #   YOLOv8n   rb 2 7.336 | 3 7.175 | 4 7.278 ms
+            #   YOLOv8s   rb 2 16.380 | 3 16.147 | 4 16.441 ms   (2026-10-13, pre-registered, rb3 lower 4/4)
             # so 2 is the safe default - best on the thin 9-layer container by ~1 ms, inside sitting drift on
             # YOLOv8n (whose own optimum read 3, by 0.10-0.16 ms). rb >= 5 cannot be emitted at all: a token
             # every rb-th task leaves runs of rb-1 untokened tasks, and ensure() demands a retirement once a

@@ -1,0 +1,56 @@
+RESEARCH_PLATFORM {"machine": "Desktop 2", "cpu": "AMD Ryzen 7 8700G w/ Radeon 780M Graphics", "os": "Windows-11-10.0.26200-SP0", "ram_bytes": 33381138432, "source_sha256": {"tools/research_process.py": "ffeb1857f190b482eed101b5f5a928f455de26bfa61d23f78a2eacec08e2663e", "tools/quant_calib_alphabet.py": "2dc0b2878c564853f340880209a425dfcf63b8536b2b8e9fd32344daade58d37", "tools/xint8_arithmetic_probe.py": "6aa3df08b9870c3c2264b868459d7ffbac3070dddc1349d7c6f3f480075f7041", "scripts/research-lowlevel.sh": "3455ad7933697936487712665505c216891865c6deada647302785f6e37020bd", "scripts/research-iron.sh": "4c863a262646ddab39b5005006ba8e03809895e6386c6310e2fd9d0a9e9609ee", "kernels/memory_placement/probe.py": "e8d990169ad6091fa1b53852e9f61eff495b5def72d35165a5c5cf1759e38898", "kernels/memory_placement/memory_kernels.cc": "182e7af7071a1e851afb4a7ca266069c489aea1fbaaa85eca129708daeba5ba6", "scripts/research-matrix.sh": "739254171629deae822b0ad7dabc875aee19ace56dde77d3e8aab61663f97516", "kernels/memory_placement/gemm.py": "17c905ad66110d3346bbf0db898dfc6b780df59fae1dfb0c1747057ce1e5844e", "kernels/memory_placement/gemm_placement.cc": "f21acf7250b12914ea30cc1f77613239dfa18421a85a1b9a5199017dd916278a", "tools/research_summary.py": "0c00dcceef07053d06731b41a1f1ed58d3ba4ea09f82497de354ce9cef17da20", "tools/research_toolchain.py": "f0a126a24ae213acfaa43460cfd9def0c86d9cb70cfee0228aa271688467b314"}, "commit": "744909b7c592105e18fda3ddf0e0d2377ac93b14", "command": ["C:/Users/<user>/miniforge3/envs/mlir-aie-iron/python.exe", "tools/task_issue_probe.py", "sit", "--rounds", "3", "--iters", "30", "--json", "scratch/b16/tasks_sit.json"], "seconds_limit": 1200.0, "rss_gib_limit": 8, "checks_only": false, "free_ram_bytes": 25667190784}
+HOST_LOAD busy_cores=0.21 logical_cores=16 free_ram_gb=23.9 sample_sec=1
+HOST_LOAD_TOP 0.05 powershell:49000 ws_mb=79
+HOST_LOAD_TOP 0.03 dev-agent:39036 ws_mb=496
+HOST_LOAD_TOP 0.03 FanControl:15032 ws_mb=162
+HOST_LOAD_TOP 0.02 WindowsTerminal:12116 ws_mb=43
+HOST_LOAD_TOP 0.02 tee:46220 ws_mb=5
+HOST_LOAD_VERDICT CLEAR
+
+PRE_NPU_CONTEXT_WITNESS "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+[sit] round 0 k1   q512    2048 tasks   52.4 MB: mean 2.992 ms, min 2.840
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [29248, 43728, 49280, 49628], "foreign_pids": []}
+[sit] round 0 k2   q512    1024 tasks   52.4 MB: mean 2.049 ms, min 2.011
+[sit] round 0 k4   q512     512 tasks   52.4 MB: mean 2.398 ms, min 2.117
+[sit] round 0 k16  q512     128 tasks   52.4 MB: mean 2.104 ms, min 2.045
+[sit] round 0 k64  q512      32 tasks   52.4 MB: mean 2.241 ms, min 2.048
+HOST_TIMELINE {"elapsed_seconds": 3.235, "tree_rss_bytes": 279724032, "foreign_peers": []}
+[sit] round 0 k1   q1024   4096 tasks  104.9 MB: mean 5.784 ms, min 5.573
+[sit] round 0 k2   q1024   2048 tasks  104.9 MB: mean 3.992 ms, min 3.908
+[sit] round 0 k4   q1024   1024 tasks  104.9 MB: mean 4.198 ms, min 3.950
+[sit] round 0 k16  q1024    256 tasks  104.9 MB: mean 4.243 ms, min 3.945
+[sit] round 0 k64  q1024     64 tasks  104.9 MB: mean 4.169 ms, min 3.948
+[sit] round 1 k1   q512    2048 tasks   52.4 MB: mean 3.037 ms, min 2.843
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [2060, 29248, 31032, 32704, 40048, 43728, 48696, 49280, 49304, 49380, 49628, 49744], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 6.469, "tree_rss_bytes": 106352640, "foreign_peers": []}
+[sit] round 1 k64  q1024     64 tasks  104.9 MB: mean 4.062 ms, min 3.955
+[sit] round 1 k16  q1024    256 tasks  104.9 MB: mean 4.191 ms, min 3.951
+[sit] round 1 k4   q1024   1024 tasks  104.9 MB: mean 4.148 ms, min 3.970
+[sit] round 1 k2   q1024   2048 tasks  104.9 MB: mean 4.187 ms, min 3.945
+[sit] round 1 k1   q1024   4096 tasks  104.9 MB: mean 5.828 ms, min 5.584
+[sit] round 1 k64  q512      32 tasks   52.4 MB: mean 2.251 ms, min 2.043
+HOST_TIMELINE {"elapsed_seconds": 9.75, "tree_rss_bytes": 72364032, "foreign_peers": []}
+[sit] round 1 k16  q512     128 tasks   52.4 MB: mean 2.278 ms, min 2.090
+[sit] round 1 k4   q512     512 tasks   52.4 MB: mean 2.063 ms, min 2.034
+[sit] round 1 k2   q512    1024 tasks   52.4 MB: mean 2.125 ms, min 2.008
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [2060, 4180, 11620, 29248, 31032, 31340, 32704, 40048, 43728, 44756, 48124, 48696, 49280, 49304, 49380, 49396, 49476, 49628, 49744], "foreign_pids": []}
+[sit] round 2 k4   q512     512 tasks   52.4 MB: mean 2.128 ms, min 2.011
+[sit] round 2 k16  q512     128 tasks   52.4 MB: mean 2.071 ms, min 2.002
+[sit] round 2 k64  q512      32 tasks   52.4 MB: mean 2.153 ms, min 2.037
+HOST_TIMELINE {"elapsed_seconds": 12.969, "tree_rss_bytes": 279805952, "foreign_peers": []}
+[sit] round 2 k1   q1024   4096 tasks  104.9 MB: mean 5.794 ms, min 5.579
+[sit] round 2 k2   q1024   2048 tasks  104.9 MB: mean 4.197 ms, min 3.952
+[sit] round 2 k4   q1024   1024 tasks  104.9 MB: mean 4.106 ms, min 3.945
+[sit] round 2 k16  q1024    256 tasks  104.9 MB: mean 4.155 ms, min 3.942
+[sit] round 2 k64  q1024     64 tasks  104.9 MB: mean 4.082 ms, min 3.942
+[sit] round 2 k1   q512    2048 tasks   52.4 MB: mean 3.061 ms, min 2.802
+HOST_TIMELINE {"elapsed_seconds": 16.297, "tree_rss_bytes": 226975744, "foreign_peers": []}
+[sit] round 2 k2   q512    1024 tasks   52.4 MB: mean 2.108 ms, min 2.017
+
+[fit] dispatch ms = 0.1987 + 0.03516 * MB + 0.3941 us * tasks   (R2 0.9476, 30 points, max |residual| 700.8 us)
+[fit] per task 0.394 us; per-byte rate 28.44 GB/s across the array
+POST_NPU_CONTEXT_WITNESS "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+RESEARCH_PROCESS_RESULT {"exit_code": 0, "stop": null, "peak_tree_rss_bytes": 779878400, "rss_measurement": "maximum observed across sampled descendant working sets; zero observations reported as null", "elapsed_seconds": 17.515999999828637, "foreign_contention_observed": false, "timing_eligible": true}

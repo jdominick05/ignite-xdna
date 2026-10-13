@@ -2009,6 +2009,14 @@ cached reference heads rather than `bo_out`.
   `graph_engine.retire_batch` records what a container was built with; YOLOv8n's own optimum is 3 and costs
   0.058 ms at 2, inside sitting drift, so 2 is the default until a per-model cadence is measured, not guessed
   ([BENCHMARKS](BENCHMARKS.md#the-retirement-cadence-was-the-sesr-dispatch-regression-6a620f0s-retire_batch4-costs-a-thin-container-094-ms-and-the-engine-now-retires-every-2nd-task-2026-09-19-desktop-2)).
+  *[Amended 2026-10-13: YOLOv8s now has a measured cadence, and its optimum is 3, not 2. In a pre-registered
+  sitting of three byte-identical containers (main `744909b`, `--silu-sigmoid`), dispatch read 16.380 / 16.147 /
+  16.441 ms at rb 2/3/4. rb3 is lower in 4 of 4 rounds (−0.233 ms dispatch, −0.223 ms G2G), and rb4 is higher in
+  4 of 4. The U-curve now holds on three models, and the default stays 2 only because SESR M7 pays 0.65 ms at
+  rb3. A per-model or per-layer rule that ships rb3 must carry SESR M7 and YOLOv8n as regression arms in the same
+  sitting. The same sitting refutes the instruction-byte model for this class: it predicted −0.59 and −1.11 ms,
+  falling monotonically with bytes, and rb4 removed 69,168 B and got slower. The mechanism is unexplained.]*
+  ([BENCHMARKS](BENCHMARKS.md#campaign-anchor-yolov8s-trails-amds-best-by-568-ms-on-the-device-and-276-ms-glass-to-glass-retiring-every-3rd-task-wins-023-ms-a-1-quad-task-costs-040-us-more-than-its-bytes-in-a-bigger-task-2026-10-13-desktop-2)).
 - **Rejected: three transport-shaped fixes to SESR's floor that the utilisation read made plausible (2026-09-19,
   measured offline on the emitted streams, no device).** The floor is not bandwidth: `tools/shim_channel_audit.py`
   decodes the shipped container's 1,007 tasks and 13,181,568 bytes to 1.25 GB/s per column, **18% of the

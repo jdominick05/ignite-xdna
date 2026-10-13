@@ -495,9 +495,10 @@ def compile_graph_container(onnx_path, output_path, build_dir: Optional[Path] = 
 
     ``retire_batch`` is how many shim tasks the emitter lets pile up on one DMA channel before it retires a
     group (``engine_sequence.run_column_programs``). Bigger retires fewer completion tokens; it also moves
-    the await onto a later, slower-to-complete task. None derives it from the schedule's thinnest channel,
-    which is the default and the measured-best cadence on both a thin (SESR M7) and a wide (YOLOv8n) stream.
-    The effective value is recorded in the manifest, so a container declares the schedule it was built with.
+    the await onto a later, slower-to-complete task. None takes the fixed default of 2: the best measured cadence
+    on SESR M7, while YOLOv8n and YOLOv8s measure best at 3 (docs/DECISIONS.md, the cadence lock). The
+    thinnest channel's task count is computed and recorded alongside, but it does not choose the value. The
+    effective value is recorded in the manifest, so a container declares the schedule it was built with.
 
     ``core_depths`` = (weight, activation, output) core-side fifo depths, int8 engine only. None is (2, 2, 2),
     the shipped double-buffered design. Anything else is the Block 5 single-buffering experiment, recorded in

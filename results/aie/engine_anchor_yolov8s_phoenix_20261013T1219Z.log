@@ -1,0 +1,152 @@
+# Interleaved same-sitting A/B: an activation layout, its control, and AMD's stack
+# Host DESKTOP-CBL5NUA (Desktop 2, Ryzen 7 8700G, XDNA1 Phoenix), balanced default mode
+# 50 warm-up + 500 timed frames per run, 4 rounds
+# control  <ignite-xdna worktree>\build\anchor\yolov8s_silu.ignite
+# amd_cfg  <ignite-xdna worktree>\scratch\b8\cfg\cmt.json
+# arm order reversed on even rounds
+# Start 2026-10-13T12:19:11Z
+[xrt-smi before start] No hardware contexts running on device
+[cpu] CPU 4.0 % over 3 s
+
+[xrt-smi before amd #1] No hardware contexts running on device
+
+== 2026-10-13T12:19:14Z [amd yolov8s #1]
+[run] frame 100 | G2G 16.61 ms | 5 objects
+[run] frame 200 | G2G 17.04 ms | 5 objects
+[run] frame 300 | G2G 16.90 ms | 5 objects
+[run] frame 400 | G2G 16.69 ms | 5 objects
+[run] frame 500 | G2G 17.07 ms | 5 objects
+[amd] G2G mean 16.966 ms | P50 16.911 | P95 17.533 | P99 18.014 | max 18.599 | over 500 timed frames after 50 warm-up
+[amd] stage means (ms): letterbox 1.809 | session.run 13.159 | decode+NMS 1.998
+== [amd yolov8s #1] exit 0
+
+[xrt-smi before amd_cfg #1] No hardware contexts running on device
+
+== 2026-10-13T12:19:41Z [amd_cfg yolov8s #1]
+[run] frame 100 | G2G 14.12 ms | 5 objects
+[run] frame 200 | G2G 14.41 ms | 5 objects
+[run] frame 300 | G2G 14.32 ms | 5 objects
+[run] frame 400 | G2G 14.22 ms | 5 objects
+[run] frame 500 | G2G 14.84 ms | 5 objects
+[amd] G2G mean 14.503 ms | P50 14.455 | P95 15.063 | P99 15.536 | max 15.741 | over 500 timed frames after 50 warm-up
+[amd] stage means (ms): letterbox 1.841 | session.run 10.671 | decode+NMS 1.991
+== [amd_cfg yolov8s #1] exit 0
+[xrt-smi before ignition control #1] No hardware contexts running on device
+
+== 2026-10-13T12:20:05Z [ignition control yolov8s #1]
+[summary] stop: frame limit | 550 frames processed (50 warm-up, 500 timed) | 1 distinct source frames | image bus.jpg 810x1080
+[summary] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+[summary] G2G mean 17.224 ms | P50 17.240 | P95 17.483 | P99 17.609 | max 17.861 | over the last 500 timed frames; cold first frame 19.88 ms
+[summary] stage means (ms): preprocess 0.306 | NPU forward 16.742 (dispatch 16.327, readback 0.414) | decode+NMS 0.168
+[summary] boxes from NPU heads on 500/500 timed frames | 5.00 detections per frame
+[summary] RSS 231.8 MB at the first timed frame, 231.8 MB at the end (+0.00 MB over 500 frames)
+[summary] wrote <scratch>\ign_control_1.json
+== [ignition control yolov8s #1] exit 0
+[xrt-smi before ignition control #2] No hardware contexts running on device
+
+== 2026-10-13T12:20:18Z [ignition control yolov8s #2]
+[summary] stop: frame limit | 550 frames processed (50 warm-up, 500 timed) | 1 distinct source frames | image bus.jpg 810x1080
+[summary] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+[summary] G2G mean 17.237 ms | P50 17.252 | P95 17.510 | P99 17.736 | max 17.859 | over the last 500 timed frames; cold first frame 19.57 ms
+[summary] stage means (ms): preprocess 0.307 | NPU forward 16.756 (dispatch 16.333, readback 0.423) | decode+NMS 0.166
+[summary] boxes from NPU heads on 500/500 timed frames | 5.00 detections per frame
+[summary] RSS 232.0 MB at the first timed frame, 232.0 MB at the end (+0.00 MB over 500 frames)
+[summary] wrote <scratch>\ign_control_2.json
+== [ignition control yolov8s #2] exit 0
+
+[xrt-smi before amd_cfg #2] No hardware contexts running on device
+
+== 2026-10-13T12:20:31Z [amd_cfg yolov8s #2]
+[run] frame 100 | G2G 14.44 ms | 5 objects
+[run] frame 200 | G2G 14.21 ms | 5 objects
+[run] frame 300 | G2G 14.73 ms | 5 objects
+[run] frame 400 | G2G 14.46 ms | 5 objects
+[run] frame 500 | G2G 14.40 ms | 5 objects
+[amd] G2G mean 14.407 ms | P50 14.401 | P95 14.840 | P99 15.368 | max 15.857 | over 500 timed frames after 50 warm-up
+[amd] stage means (ms): letterbox 1.791 | session.run 10.622 | decode+NMS 1.995
+== [amd_cfg yolov8s #2] exit 0
+
+[xrt-smi before amd #2] No hardware contexts running on device
+
+== 2026-10-13T12:20:42Z [amd yolov8s #2]
+[run] frame 100 | G2G 16.75 ms | 5 objects
+[run] frame 200 | G2G 17.38 ms | 5 objects
+[run] frame 300 | G2G 16.82 ms | 5 objects
+[run] frame 400 | G2G 16.94 ms | 5 objects
+[run] frame 500 | G2G 16.94 ms | 5 objects
+[amd] G2G mean 16.934 ms | P50 16.892 | P95 17.526 | P99 17.948 | max 18.154 | over 500 timed frames after 50 warm-up
+[amd] stage means (ms): letterbox 1.799 | session.run 13.142 | decode+NMS 1.994
+== [amd yolov8s #2] exit 0
+
+[xrt-smi before amd #3] No hardware contexts running on device
+
+== 2026-10-13T12:20:54Z [amd yolov8s #3]
+[run] frame 100 | G2G 16.85 ms | 5 objects
+[run] frame 200 | G2G 17.22 ms | 5 objects
+[run] frame 300 | G2G 16.68 ms | 5 objects
+[run] frame 400 | G2G 17.16 ms | 5 objects
+[run] frame 500 | G2G 17.01 ms | 5 objects
+[amd] G2G mean 17.004 ms | P50 16.952 | P95 17.584 | P99 17.944 | max 18.525 | over 500 timed frames after 50 warm-up
+[amd] stage means (ms): letterbox 1.806 | session.run 13.140 | decode+NMS 2.058
+== [amd yolov8s #3] exit 0
+
+[xrt-smi before amd_cfg #3] No hardware contexts running on device
+
+== 2026-10-13T12:21:06Z [amd_cfg yolov8s #3]
+[run] frame 100 | G2G 14.19 ms | 5 objects
+[run] frame 200 | G2G 14.56 ms | 5 objects
+[run] frame 300 | G2G 14.18 ms | 5 objects
+[run] frame 400 | G2G 14.36 ms | 5 objects
+[run] frame 500 | G2G 14.43 ms | 5 objects
+[amd] G2G mean 14.457 ms | P50 14.411 | P95 14.959 | P99 15.691 | max 16.201 | over 500 timed frames after 50 warm-up
+[amd] stage means (ms): letterbox 1.810 | session.run 10.634 | decode+NMS 2.013
+== [amd_cfg yolov8s #3] exit 0
+[xrt-smi before ignition control #3] No hardware contexts running on device
+
+== 2026-10-13T12:21:17Z [ignition control yolov8s #3]
+[summary] stop: frame limit | 550 frames processed (50 warm-up, 500 timed) | 1 distinct source frames | image bus.jpg 810x1080
+[summary] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+[summary] G2G mean 17.252 ms | P50 17.283 | P95 17.609 | P99 17.690 | max 18.038 | over the last 500 timed frames; cold first frame 19.58 ms
+[summary] stage means (ms): preprocess 0.308 | NPU forward 16.770 (dispatch 16.359, readback 0.412) | decode+NMS 0.165
+[summary] boxes from NPU heads on 500/500 timed frames | 5.00 detections per frame
+[summary] RSS 232.1 MB at the first timed frame, 232.1 MB at the end (+0.00 MB over 500 frames)
+[summary] wrote <scratch>\ign_control_3.json
+== [ignition control yolov8s #3] exit 0
+[xrt-smi before ignition control #4] No hardware contexts running on device
+
+== 2026-10-13T12:21:30Z [ignition control yolov8s #4]
+[summary] stop: frame limit | 550 frames processed (50 warm-up, 500 timed) | 1 distinct source frames | image bus.jpg 810x1080
+[summary] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+[summary] G2G mean 17.208 ms | P50 17.219 | P95 17.522 | P99 17.617 | max 17.853 | over the last 500 timed frames; cold first frame 20.42 ms
+[summary] stage means (ms): preprocess 0.304 | NPU forward 16.729 (dispatch 16.326, readback 0.403) | decode+NMS 0.166
+[summary] boxes from NPU heads on 500/500 timed frames | 5.00 detections per frame
+[summary] RSS 231.8 MB at the first timed frame, 231.8 MB at the end (+0.00 MB over 500 frames)
+[summary] wrote <scratch>\ign_control_4.json
+== [ignition control yolov8s #4] exit 0
+
+[xrt-smi before amd_cfg #4] No hardware contexts running on device
+
+== 2026-10-13T12:21:43Z [amd_cfg yolov8s #4]
+[run] frame 100 | G2G 14.39 ms | 5 objects
+[run] frame 200 | G2G 14.45 ms | 5 objects
+[run] frame 300 | G2G 13.83 ms | 5 objects
+[run] frame 400 | G2G 14.30 ms | 5 objects
+[run] frame 500 | G2G 14.53 ms | 5 objects
+[amd] G2G mean 14.506 ms | P50 14.456 | P95 15.152 | P99 15.464 | max 16.324 | over 500 timed frames after 50 warm-up
+[amd] stage means (ms): letterbox 1.830 | session.run 10.687 | decode+NMS 1.990
+== [amd_cfg yolov8s #4] exit 0
+
+[xrt-smi before amd #4] No hardware contexts running on device
+
+== 2026-10-13T12:21:53Z [amd yolov8s #4]
+[run] frame 100 | G2G 17.56 ms | 5 objects
+[run] frame 200 | G2G 16.91 ms | 5 objects
+[run] frame 300 | G2G 16.70 ms | 5 objects
+[run] frame 400 | G2G 17.84 ms | 5 objects
+[run] frame 500 | G2G 17.49 ms | 5 objects
+[amd] G2G mean 16.898 ms | P50 16.865 | P95 17.482 | P99 17.842 | max 18.249 | over 500 timed frames after 50 warm-up
+[amd] stage means (ms): letterbox 1.780 | session.run 13.099 | decode+NMS 2.018
+== [amd yolov8s #4] exit 0
+
+[xrt-smi after] No hardware contexts running on device
+[cpu] CPU 5.0 % over 3 s

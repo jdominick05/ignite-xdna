@@ -12,6 +12,13 @@ The Ignition arms both run through PYTHONPATH pointed at this worktree's src, so
 the one under test and the only difference between them is the container.
 
 Glass-to-glass, not dispatch: this measures a whole frame, ingress through decode.
+
+Anchor form (2026-10-13): --amd-config-file adds a second AMD arm built from a VitisAI EP config_file (e.g.
+enable_cost_model_tiling, from tools/amd_xcompiler_config.py), --no-test runs the control container alone, and
+--alternate reverses the arm order on every second round so each arm runs both early and late:
+
+    python tools/bench_layout_ab.py --label yolov8s --control <c.ignite> --no-test \\
+        --amd-config-file <cmt.json> --alternate --rounds 4 --prefix engine_anchor
 """
 import argparse
 import os
@@ -101,14 +108,26 @@ def main():
     ap.add_argument("--warmup", type=int, default=50)
     ap.add_argument("--note", default=None)
     ap.add_argument("--prefix", default="layout_ab")
+    ap.add_argument("--amd-config-file", default=None,
+                    help="add a second AMD arm built from this VitisAI EP config_file (tools/amd_xcompiler_config.py),"
+                         " cached under its own key")
+    ap.add_argument("--no-test", action="store_true", help="run the control container only (an anchor sitting)")
+    ap.add_argument("--alternate", action="store_true",
+                    help="reverse the arm order on every second round, so each arm runs early and late")
     args = ap.parse_args()
     # The Ignition arms run with cwd set to the Ignition repo, so a relative container path
     # resolves there and the run exits 2 before printing anything the filter keeps.
-    for name in ("onnx", "control", "test"):
-        setattr(args, name, str(Path(getattr(args, name)).resolve()))
-    for name in ("control", "test"):
-        if not Path(getattr(args, name)).exists():
-            raise SystemExit(f"{name} container not found: {getattr(args, name)}")
+    args.onnx = str(Path(args.onnx).resolve())
+    args.control = str(Path(args.control).resolve())
+    # --test takes one container or several, comma-separated; each becomes its own arm (test, test2, ...).
+    args.tests = [] if args.no_test else [str(Path(t).resolve()) for t in args.test.split(",")]
+    for path in [args.control] + args.tests:
+        if not Path(path).exists():
+            raise SystemExit(f"container not found: {path}")
+    if args.amd_config_file:
+        args.amd_config_file = str(Path(args.amd_config_file).resolve())
+        if not Path(args.amd_config_file).exists():
+            raise SystemExit(f"AMD config file not found: {args.amd_config_file}")
 
     iron = os.environ.copy()
     iron["PYTHONPATH"] = str(REPO_ROOT / "src")
@@ -127,25 +146,41 @@ def main():
         f.write(f"# {args.warmup} warm-up + {args.frames} timed frames per run, {args.rounds} rounds\n")
         if args.note:
             f.write(f"# Note: {args.note}\n")
-        f.write(scrub(f"# control  {args.control}\n# test     {args.test}\n"))
+        f.write(scrub(f"# control  {args.control}\n"))
+        for i, path in enumerate(args.tests):
+            f.write(scrub(f"# {'test' if i == 0 else f'test{i + 1}':8s} {path}\n"))
+        if args.amd_config_file:
+            f.write(scrub(f"# amd_cfg  {args.amd_config_file}\n"))
+        f.write(f"# arm order {'reversed on even rounds' if args.alternate else 'fixed'}\n")
         f.write(f"# Start {datetime.now(timezone.utc):%Y-%m-%dT%H:%M:%SZ}\n")
         f.write(f"[xrt-smi before start] {smi()}\n[cpu] {cpu(3.0)}\n")
-        for r in range(1, args.rounds + 1):
-            f.write(f"\n[xrt-smi before amd #{r}] {smi()}\n")
-            run(f"amd {args.label} #{r}",
+
+        def amd_arm(r, tag, extra):
+            f.write(f"\n[xrt-smi before {tag} #{r}] {smi()}\n")
+            run(f"{tag} {args.label} #{r}",
                 [PY_RESNET17, REPO_ROOT / "tools" / "amd_vitisai_yolo.py", "--model", args.onnx,
                  "--image", BUS_JPG, "--ignition-src", IGNITION_REPO / "src",
-                 "--cache-dir", SCRATCH / "cache", "--cache-key", f"{args.label}_ab",
+                 "--cache-dir", SCRATCH / "cache", "--cache-key", f"{args.label}_{tag}_ab",
                  "--xclbin", XCLBIN_4X4, "--warmup", args.warmup, "--iterations", args.frames,
-                 "--json", SCRATCH / f"amd_{r}.json"], amd, f, keep_amd)
-            time.sleep(2)
-            for tag, container in (("control", args.control), ("test", args.test)):
-                f.write(f"[xrt-smi before ignition {tag} #{r}] {smi()}\n")
-                run(f"ignition {tag} {args.label} #{r}",
-                    [PY_IRON, IGNITION_REPO / "live_ignition.py", "--model", container,
-                     "--source", BUS_JPG, "--headless", "--warmup", args.warmup,
-                     "--frames", args.frames, "--json", SCRATCH / f"ign_{tag}_{r}.json"],
-                    iron, f, keep_ign)
+                 "--json", SCRATCH / f"{tag}_{r}.json"] + extra, amd, f, keep_amd)
+
+        def ign_arm(r, tag, container):
+            f.write(f"[xrt-smi before ignition {tag} #{r}] {smi()}\n")
+            run(f"ignition {tag} {args.label} #{r}",
+                [PY_IRON, IGNITION_REPO / "live_ignition.py", "--model", container,
+                 "--source", BUS_JPG, "--headless", "--warmup", args.warmup,
+                 "--frames", args.frames, "--json", SCRATCH / f"ign_{tag}_{r}.json"],
+                iron, f, keep_ign)
+
+        arms = [lambda r: amd_arm(r, "amd", [])]
+        if args.amd_config_file:
+            arms.append(lambda r: amd_arm(r, "amd_cfg", ["--config-file", args.amd_config_file]))
+        arms.append(lambda r: ign_arm(r, "control", args.control))
+        for i, path in enumerate(args.tests):
+            arms.append(lambda r, tag="test" if i == 0 else f"test{i + 1}", path=path: ign_arm(r, tag, path))
+        for r in range(1, args.rounds + 1):
+            for arm in (arms[::-1] if args.alternate and r % 2 == 0 else arms):
+                arm(r)
                 time.sleep(2)
         f.write(f"\n[xrt-smi after] {smi()}\n[cpu] {cpu(3.0)}\n")
     print(f"\nwrote {out}")

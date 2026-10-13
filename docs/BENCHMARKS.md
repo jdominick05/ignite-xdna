@@ -16404,3 +16404,120 @@ modelled transport, at slope 1.138, less the counted task cost:
 
 Logs: [sitting](../results/aie/stream_share_qf_phoenix_desktop2_20261013T1000Z.log),
 [per-volume points and the derived nets](../results/aie/stream_share_qf_points_phoenix_desktop2_20261013T1015Z.log).
+
+#### Campaign anchor: YOLOv8s trails AMD's best by 5.68 ms on the device and 2.76 ms glass to glass; retiring every 3rd task wins 0.23 ms; a 1-quad task costs 0.40 us more than its bytes in a bigger task (2026-10-13, Desktop 2)
+
+These three sittings open the low-level optimisation campaign. They measure the bar, the first emitter knob, and
+the per-task cost every Block 5 sizing had borrowed from a fit.
+
+Containers: main `744909b`, `--engine graph --silu-sigmoid`. YOLOv8s carries 969,812 instruction bytes, with
+0 host layers. Arms in every sitting:
+- `tools/bench_layout_ab.py --alternate --rounds 4`, which reverses the arm order on even rounds;
+- 50 warm-up + 500 timed frames per run on `bus.jpg`, with `xrt-smi` idle before every run;
+- AMD's default build, and AMD with `enable_cost_model_tiling` (`amd_cfg`);
+- all under `research-lowlevel.sh --npu`.
+
+Every sitting was `timing_eligible: true`, with no foreign context, and every engine run read 5.00 detections per
+frame.
+
+**The anchor.** All values are ms over 4 runs per arm. Engine "device" is dispatch; AMD's is `session.run`.
+
+| model | arm | G2G | device |
+|---|---|---:|---:|
+| YOLOv8s | engine | 17.208–17.252 | 16.326–16.359 |
+| YOLOv8s | AMD default | 16.898–17.004 | 13.099–13.159 |
+| YOLOv8s | AMD `amd_cfg` | **14.407–14.506** | **10.622–10.687** |
+| YOLOv8n | engine | **7.618–8.132** | 6.929–7.274 |
+| YOLOv8n | AMD default | 10.932–11.577 | 6.463–6.915 |
+| YOLOv8n | AMD `amd_cfg` | 10.072–10.831 | **5.854–6.263** |
+
+- **YOLOv8s against AMD's best:** the engine trails by **5.68 ms on the device** and **2.76 ms glass to glass**
+  (means). It is the campaign's target, and it reproduces cd3c996's 17.20 against 14.54 ms.
+- **YOLOv8n:** the engine leads glass to glass by 2.52 ms and trails by 1.04 ms on the device. Its lead is all
+  host side, as before.
+- **YOLOv8n drift:** the YOLOv8n sitting stepped within itself. Engine rounds 1–2 dispatched in 6.93 ms and
+  rounds 3–4 in 7.24–7.27, and AMD's arms moved the same way. Read it as a range, not one number.
+
+**Retire cadence (YOLOv8s).** These three containers are byte-identical apart from the token cadence:
+- rb2 is the anchor container, 969,812 instruction bytes;
+- rb3 retires every 3rd task, 933,028 B;
+- rb4 retires every 4th, 900,644 B.
+
+Pre-registered before any run (scratch sha256 `5c4e2fff...`): a WIN must be lower in all 4 rounds on both
+dispatch and G2G, by at least 0.10 ms.
+
+| cadence | dispatch, 4 rounds | mean | G2G mean | vs rb2 |
+|---|---|---:|---:|---|
+| rb2 (control) | 16.374 / 16.390 / 16.400 / 16.355 | 16.380 | 17.266 | |
+| **rb3** | 16.155 / 16.130 / 16.151 / 16.153 | **16.147** | **17.043** | **−0.233 / −0.223 ms, lower 4/4: WIN** |
+| rb4 | 16.419 / 16.448 / 16.458 / 16.437 | 16.441 | 17.342 | +0.061 / +0.076 ms, higher 4/4: worse |
+
+- **AMD's arms in the same sitting:** default 17.173–17.689 G2G (`session.run` 13.141–13.236), `amd_cfg`
+  14.555–15.295 G2G (10.640–10.702).
+- **The control reproduces the anchor:** dispatch 16.36–16.40 against 16.33–16.36.
+
+**Attribution.** The instruction-byte model (16.08 ns per byte, `f7e75ec`) predicted −0.59 ms for rb3 and
+−1.11 ms for rb4, falling monotonically with the bytes removed. rb3 saved less than half its prediction, and rb4
+removed 69,168 B and got slower. Bytes removed therefore do not set the cost of this class of instruction.
+`f7e75ec`'s fit was cross-model and correlational; this is the first controlled test of it inside one model.
+
+The U-curve now holds on three models: SESR M7's minimum is at 2, and YOLOv8n's and YOLOv8s's at 3. The
+mechanism is **unexplained**. The default stays 2, because SESR M7 pays 0.65 ms at rb3 (see the cadence lock in
+DECISIONS). Any rule that ships rb3 must carry SESR M7 and YOLOv8n in the same sitting.
+
+**Per-task issue cost (`tools/task_issue_probe.py`).**
+
+The probe's design:
+- the engine's activation path: 4 columns, ObjectFifo split, fills only, with no weights and no drains;
+- tasks of k contiguous quads, retired engine-style (a token every 2nd task, ≤ 4 pending per channel);
+- the grid is k ∈ {1, 2, 4, 16, 64} × Q ∈ {512, 1024} quads per column;
+- 3 rotated rounds × 30 dispatches, each in its own child process.
+
+Pre-registered (sha256 `f24a76de...`): fit `ms = a + b·MB + c·tasks`; R² < 0.95 means c is reported as
+unexplained. An attempt that crashed in argument parsing before any dispatch was fixed and re-run; it produced no
+measurement.
+
+| Q | k | tasks | MB | mean ms | vs k=64, same bytes |
+|---|---:|---:|---:|---:|---|
+| 512 | 1 | 2,048 | 52.4 | 3.030 | **+0.815 ms = +0.404 µs per extra task** |
+| 512 | 2 | 1,024 | 52.4 | 2.094 | −0.121 |
+| 512 | 4 / 16 / 64 | 512 / 128 / 32 | 52.4 | 2.196 / 2.151 / 2.215 | −0.019 / −0.064 / 0 |
+| 1024 | 1 | 4,096 | 104.9 | 5.802 | **+1.698 ms = +0.421 µs per extra task** |
+| 1024 | 2 | 2,048 | 104.9 | 4.125 | +0.021 |
+| 1024 | 4 / 16 / 64 | 1,024 / 256 / 64 | 104.9 | 4.151 / 4.196 / 4.104 | +0.046 / +0.092 / 0 |
+
+- **The plane fails its bar.** R² is 0.9476, so the fitted c (0.394 µs) is not used, per the pre-registration.
+- **The shape is a step, not a slope.** Tasks of 2 or more quads are indistinguishable from 64-quad tasks at both
+  volumes: −0.12 to +0.09 ms across 128–2,048 extra tasks, under 0.1 µs each. Single-quad tasks cost
+  0.40–0.42 µs more each. Two independent volumes agree, so merging two 1-quad tasks into one 2-quad task saves
+  0.82–0.91 µs.
+- **A defect in the pre-registration:** its nonlinearity clause (k=1 residuals above 3× the median) could not
+  fire as written. The plane absorbed the k=1 excess into c, so the k=1 residuals (143–329 µs) sit under the
+  561 µs bar. The step above is read from the per-k table, which was not pre-registered.
+- **The rate checks out:** b gives 28.4 GB/s across the array, 7.1 GB/s per column, consistent with the measured
+  6.9 GB/s per-stream ceiling.
+- **Mechanism unexplained:** why a 25.6 KB task falls behind its transfer while a 51.2 KB task does not.
+
+**Consequences, all DERIVED:**
+- **YOLOv8s's dominant task is the expensive one.** 4,774 of its 5,509 activation tasks carry 1 quad. If every
+  one paired with a neighbour, the upper bound is about 2 ms. The achievable share is whatever an offline count of
+  same-channel, same-tile neighbours says, and that count comes before any code. The probe's k=2 was contiguous;
+  a paired engine fill would be strided.
+- **The stream-sharing net becomes a range.** Its 1.07 ms used 0.36 µs per added task.
+  - If the 2,002 added tasks are single-quad, the per-layer design nets about **0.96 ms** and static 1-in-2
+    about **0.54 ms**, right at Phase 2's 0.5 ms kill line.
+  - If they are 2 quads or more, it nets about 1.79 / 1.22 ms.
+
+  Which of the two applies is settled offline before Phase 2 code.
+
+Two YOLOv8n attempts ran under a foreign 12–15-core `llama-quantize.exe` and were flagged `timing_eligible:
+false`. They are not used and not committed; the sitting above waited for 5 quiet minutes.
+
+Logs:
+- YOLOv8s anchor: [bench](../results/aie/engine_anchor_yolov8s_phoenix_20261013T1219Z.log),
+  [runner](../results/aie/engine_anchor_runner_yolov8s_desktop2_20261013T1219Z.log).
+- YOLOv8n anchor: [bench](../results/aie/engine_anchor_yolov8n_phoenix_20261013T1240Z.log),
+  [runner](../results/aie/engine_anchor_runner_yolov8n_desktop2_20261013T1240Z.log).
+- Cadence: [bench](../results/aie/engine_cadence_yolov8s_phoenix_20261013T1242Z.log),
+  [runner](../results/aie/engine_cadence_runner_yolov8s_desktop2_20261013T1242Z.log).
+- Task cost: [sitting](../results/aie/task_issue_phoenix_desktop2_20261013T1247Z.log).

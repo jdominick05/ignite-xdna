@@ -1,0 +1,194 @@
+RESEARCH_PLATFORM {"machine": "Desktop 2", "cpu": "AMD Ryzen 7 8700G w/ Radeon 780M Graphics", "os": "Windows-11-10.0.26200-SP0", "ram_bytes": 33381138432, "source_sha256": {"tools/research_process.py": "ffeb1857f190b482eed101b5f5a928f455de26bfa61d23f78a2eacec08e2663e", "tools/quant_calib_alphabet.py": "2dc0b2878c564853f340880209a425dfcf63b8536b2b8e9fd32344daade58d37", "tools/xint8_arithmetic_probe.py": "6aa3df08b9870c3c2264b868459d7ffbac3070dddc1349d7c6f3f480075f7041", "scripts/research-lowlevel.sh": "3455ad7933697936487712665505c216891865c6deada647302785f6e37020bd", "scripts/research-iron.sh": "4c863a262646ddab39b5005006ba8e03809895e6386c6310e2fd9d0a9e9609ee", "kernels/memory_placement/probe.py": "e8d990169ad6091fa1b53852e9f61eff495b5def72d35165a5c5cf1759e38898", "kernels/memory_placement/memory_kernels.cc": "182e7af7071a1e851afb4a7ca266069c489aea1fbaaa85eca129708daeba5ba6", "scripts/research-matrix.sh": "739254171629deae822b0ad7dabc875aee19ace56dde77d3e8aab61663f97516", "kernels/memory_placement/gemm.py": "17c905ad66110d3346bbf0db898dfc6b780df59fae1dfb0c1747057ce1e5844e", "kernels/memory_placement/gemm_placement.cc": "f21acf7250b12914ea30cc1f77613239dfa18421a85a1b9a5199017dd916278a", "tools/research_summary.py": "0c00dcceef07053d06731b41a1f1ed58d3ba4ea09f82497de354ce9cef17da20", "tools/research_toolchain.py": "f0a126a24ae213acfaa43460cfd9def0c86d9cb70cfee0228aa271688467b314"}, "commit": "744909b7c592105e18fda3ddf0e0d2377ac93b14", "command": ["C:/Users/<user>/miniforge3/envs/resnet_env17/python.exe", "tools/bench_layout_ab.py", "--label", "yolov8n", "--onnx", "models/yolov8n_cut_xint8.onnx", "--control", "build/anchor/yolov8n_silu.ignite", "--no-test", "--amd-config-file", "scratch/b8/cfg/n_cmt.json", "--alternate", "--rounds", "4", "--prefix", "engine_anchor"], "seconds_limit": 3600.0, "rss_gib_limit": 8, "checks_only": false, "free_ram_bytes": 25723916288}
+HOST_LOAD busy_cores=0.08 logical_cores=16 free_ram_gb=23.9 sample_sec=1
+HOST_LOAD_TOP 0.03 dev-agent:39036 ws_mb=486
+HOST_LOAD_TOP 0.03 dev-agent:6508 ws_mb=168
+HOST_LOAD_TOP 0.02 powershell:5588 ws_mb=80
+HOST_LOAD_VERDICT CLEAR
+
+PRE_NPU_CONTEXT_WITNESS "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [11576, 45628], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 3.218, "tree_rss_bytes": 31854592, "foreign_peers": []}
+
+== 2026-10-13T12:40:38Z [amd yolov8n #1]
+[run] frame 100 | G2G 10.56 ms | 5 objects
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 93 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |48264               |141        |179         |0           |0    |Normal   |\n      |python.exe          |Active     |179         |0           |     |9        |\n      |93 MB               |4 MB       |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [48264], "owned_pids": [11576, 45628, 48204, 48264], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 6.453, "tree_rss_bytes": 342913024, "foreign_peers": []}
+[run] frame 200 | G2G 11.16 ms | 5 objects
+[run] frame 300 | G2G 10.88 ms | 5 objects
+[run] frame 400 | G2G 11.12 ms | 5 objects
+HOST_TIMELINE {"elapsed_seconds": 9.843, "tree_rss_bytes": 343212032, "foreign_peers": []}
+[run] frame 500 | G2G 11.05 ms | 5 objects
+[amd] G2G mean 11.075 ms | P50 11.038 | P95 11.708 | P99 11.962 | max 12.319 | over 500 timed frames after 50 warm-up
+[amd] stage means (ms): letterbox 2.336 | session.run 6.463 | decode+NMS 2.276
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [11576, 45628, 48204, 48264], "foreign_pids": []}
+
+== 2026-10-13T12:40:48Z [amd_cfg yolov8n #1]
+HOST_TIMELINE {"elapsed_seconds": 13.156, "tree_rss_bytes": 204058624, "foreign_peers": []}
+[run] frame 100 | G2G 10.00 ms | 5 objects
+[run] frame 200 | G2G 10.48 ms | 5 objects
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 93 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |36500               |142        |304         |0           |0    |Normal   |\n      |python.exe          |Active     |303         |0           |     |9        |\n      |93 MB               |4128 KB    |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [36500], "owned_pids": [11576, 36500, 45628, 48204, 48264], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 16.562, "tree_rss_bytes": 340684800, "foreign_peers": []}
+[run] frame 300 | G2G 11.65 ms | 5 objects
+[run] frame 400 | G2G 10.69 ms | 5 objects
+[run] frame 500 | G2G 9.92 ms | 5 objects
+[amd] G2G mean 10.392 ms | P50 10.351 | P95 10.965 | P99 11.301 | max 11.889 | over 500 timed frames after 50 warm-up
+[amd] stage means (ms): letterbox 2.282 | session.run 5.886 | decode+NMS 2.225
+HOST_TIMELINE {"elapsed_seconds": 19.89, "tree_rss_bytes": 21147648, "foreign_peers": []}
+
+== 2026-10-13T12:40:56Z [ignition control yolov8n #1]
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 4 KB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |33960               |143        |0           |0           |0    |Normal   |\n      |python.exe          |Active     |0           |0           |     |N/A      |\n      |4 KB                |N/A        |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [33960], "owned_pids": [11576, 33960, 36288, 36500, 45628, 48204, 48264], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 23.093, "tree_rss_bytes": 214360064, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 26.562, "tree_rss_bytes": 214360064, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [11576, 33960, 36288, 36500, 45628, 48204, 48264], "foreign_pids": []}
+[summary] stop: frame limit | 550 frames processed (50 warm-up, 500 timed) | 1 distinct source frames | image bus.jpg 810x1080
+[summary] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+[summary] G2G mean 7.650 ms | P50 7.642 | P95 7.824 | P99 7.897 | max 8.019 | over the last 500 timed frames; cold first frame 11.01 ms
+[summary] stage means (ms): preprocess 0.284 | NPU forward 7.241 (dispatch 6.936, readback 0.305) | decode+NMS 0.119
+[summary] boxes from NPU heads on 500/500 timed frames | 5.00 detections per frame
+[summary] RSS 184.2 MB at the first timed frame, 184.2 MB at the end (+0.00 MB over 500 frames)
+[summary] wrote <scratch>\ign_control_1.json
+
+== 2026-10-13T12:41:04Z [ignition control yolov8n #2]
+HOST_TIMELINE {"elapsed_seconds": 29.843, "tree_rss_bytes": 209907712, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 85 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |47448               |144        |188         |0           |0    |Normal   |\n      |python.exe          |Active     |187         |0           |     |N/A      |\n      |85 MB               |640 KB     |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [47448], "owned_pids": [11576, 33960, 36288, 36500, 38036, 45628, 47448, 48204, 48264], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 33.171, "tree_rss_bytes": 215175168, "foreign_peers": []}
+[summary] stop: frame limit | 550 frames processed (50 warm-up, 500 timed) | 1 distinct source frames | image bus.jpg 810x1080
+[summary] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+[summary] G2G mean 7.618 ms | P50 7.616 | P95 7.784 | P99 7.873 | max 8.070 | over the last 500 timed frames; cold first frame 10.47 ms
+[summary] stage means (ms): preprocess 0.278 | NPU forward 7.220 (dispatch 6.929, readback 0.292) | decode+NMS 0.115
+[summary] boxes from NPU heads on 500/500 timed frames | 5.00 detections per frame
+[summary] RSS 185.0 MB at the first timed frame, 185.0 MB at the end (+0.00 MB over 500 frames)
+[summary] wrote <scratch>\ign_control_2.json
+HOST_TIMELINE {"elapsed_seconds": 36.5, "tree_rss_bytes": 21237760, "foreign_peers": []}
+
+== 2026-10-13T12:41:12Z [amd_cfg yolov8n #2]
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 93 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |49788               |145        |61          |0           |0    |Normal   |\n      |python.exe          |Active     |61          |0           |     |9        |\n      |93 MB               |4128 KB    |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [49788], "owned_pids": [11576, 33960, 36288, 36500, 38036, 45628, 47448, 48204, 48264, 49788], "foreign_pids": []}
+[run] frame 100 | G2G 9.97 ms | 5 objects
+[run] frame 200 | G2G 9.89 ms | 5 objects
+HOST_TIMELINE {"elapsed_seconds": 39.921, "tree_rss_bytes": 341422080, "foreign_peers": []}
+[run] frame 300 | G2G 10.43 ms | 5 objects
+[run] frame 400 | G2G 10.02 ms | 5 objects
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [11576, 33960, 36288, 36500, 38036, 45628, 47448, 48204, 48264, 49788], "foreign_pids": []}
+[run] frame 500 | G2G 10.18 ms | 5 objects
+[amd] G2G mean 10.282 ms | P50 10.240 | P95 10.960 | P99 11.301 | max 11.835 | over 500 timed frames after 50 warm-up
+[amd] stage means (ms): letterbox 2.257 | session.run 5.854 | decode+NMS 2.172
+HOST_TIMELINE {"elapsed_seconds": 43.328, "tree_rss_bytes": 21291008, "foreign_peers": []}
+
+== 2026-10-13T12:41:20Z [amd yolov8n #2]
+HOST_TIMELINE {"elapsed_seconds": 46.484, "tree_rss_bytes": 348876800, "foreign_peers": []}
+[run] frame 100 | G2G 11.28 ms | 5 objects
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 93 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |46268               |146        |207         |0           |0    |Normal   |\n      |python.exe          |Active     |206         |0           |     |9        |\n      |93 MB               |4 MB       |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [46268], "owned_pids": [11576, 33960, 36288, 36500, 38036, 45628, 45964, 46268, 47448, 48204, 48264, 49788], "foreign_pids": []}
+[run] frame 200 | G2G 10.65 ms | 5 objects
+[run] frame 300 | G2G 11.83 ms | 5 objects
+HOST_TIMELINE {"elapsed_seconds": 49.796, "tree_rss_bytes": 343654400, "foreign_peers": []}
+[run] frame 400 | G2G 11.48 ms | 5 objects
+[run] frame 500 | G2G 10.60 ms | 5 objects
+[amd] G2G mean 10.932 ms | P50 10.903 | P95 11.502 | P99 11.821 | max 12.076 | over 500 timed frames after 50 warm-up
+[amd] stage means (ms): letterbox 2.267 | session.run 6.488 | decode+NMS 2.177
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [11576, 33960, 36288, 36500, 38036, 45628, 45964, 46268, 47448, 48204, 48264, 49788], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 53.234, "tree_rss_bytes": 21291008, "foreign_peers": []}
+
+== 2026-10-13T12:41:29Z [amd yolov8n #3]
+[run] frame 100 | G2G 11.99 ms | 5 objects
+HOST_TIMELINE {"elapsed_seconds": 56.453, "tree_rss_bytes": 342212608, "foreign_peers": []}
+[run] frame 200 | G2G 11.06 ms | 5 objects
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 93 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |50000               |147        |319         |0           |0    |Normal   |\n      |python.exe          |Active     |319         |0           |     |9        |\n      |93 MB               |4 MB       |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [50000], "owned_pids": [11576, 33960, 36288, 36500, 38036, 45628, 45964, 46268, 47448, 48204, 48264, 49788, 50000], "foreign_pids": []}
+[run] frame 300 | G2G 11.58 ms | 5 objects
+[run] frame 400 | G2G 10.55 ms | 5 objects
+HOST_TIMELINE {"elapsed_seconds": 59.859, "tree_rss_bytes": 345436160, "foreign_peers": []}
+[run] frame 500 | G2G 11.10 ms | 5 objects
+[amd] G2G mean 11.014 ms | P50 10.945 | P95 11.912 | P99 12.073 | max 12.688 | over 500 timed frames after 50 warm-up
+[amd] stage means (ms): letterbox 2.297 | session.run 6.497 | decode+NMS 2.219
+
+== 2026-10-13T12:41:38Z [amd_cfg yolov8n #3]
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [11576, 33960, 36288, 36500, 38036, 45628, 45964, 46268, 47360, 47448, 48204, 48264, 49788, 50000], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 63.328, "tree_rss_bytes": 203878400, "foreign_peers": []}
+[run] frame 100 | G2G 9.81 ms | 5 objects
+[run] frame 200 | G2G 10.17 ms | 5 objects
+HOST_TIMELINE {"elapsed_seconds": 66.593, "tree_rss_bytes": 341164032, "foreign_peers": []}
+[run] frame 300 | G2G 9.86 ms | 5 objects
+[run] frame 400 | G2G 9.72 ms | 5 objects
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 93 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |47360               |148        |469         |0           |0    |Normal   |\n      |python.exe          |Active     |469         |0           |     |9        |\n      |93 MB               |4128 KB    |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [47360], "owned_pids": [11576, 33960, 36288, 36500, 38036, 45628, 45964, 46268, 47360, 47448, 48204, 48264, 49788, 50000], "foreign_pids": []}
+[run] frame 500 | G2G 9.99 ms | 5 objects
+[amd] G2G mean 10.072 ms | P50 10.061 | P95 10.552 | P99 10.706 | max 11.028 | over 500 timed frames after 50 warm-up
+[amd] stage means (ms): letterbox 1.782 | session.run 6.263 | decode+NMS 2.028
+HOST_TIMELINE {"elapsed_seconds": 69.859, "tree_rss_bytes": 21229568, "foreign_peers": []}
+
+== 2026-10-13T12:41:46Z [ignition control yolov8n #3]
+HOST_TIMELINE {"elapsed_seconds": 72.953, "tree_rss_bytes": 214777856, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 85 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |49844               |149        |231         |0           |0    |Normal   |\n      |python.exe          |Active     |230         |0           |     |N/A      |\n      |85 MB               |640 KB     |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [49844], "owned_pids": [11576, 33960, 36288, 36500, 38036, 45628, 45964, 46268, 47360, 47448, 48204, 48264, 49788, 49844, 50000], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 76.187, "tree_rss_bytes": 214777856, "foreign_peers": []}
+[summary] stop: frame limit | 550 frames processed (50 warm-up, 500 timed) | 1 distinct source frames | image bus.jpg 810x1080
+[summary] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+[summary] G2G mean 8.132 ms | P50 8.113 | P95 8.519 | P99 8.676 | max 8.762 | over the last 500 timed frames; cold first frame 10.69 ms
+[summary] stage means (ms): preprocess 0.298 | NPU forward 7.671 (dispatch 7.274, readback 0.398) | decode+NMS 0.155
+[summary] boxes from NPU heads on 500/500 timed frames | 5.00 detections per frame
+[summary] RSS 184.6 MB at the first timed frame, 184.6 MB at the end (+0.00 MB over 500 frames)
+[summary] wrote <scratch>\ign_control_3.json
+
+== 2026-10-13T12:41:54Z [ignition control yolov8n #4]
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [11576, 33960, 36288, 36500, 38036, 45628, 45964, 46268, 47360, 47448, 48204, 48264, 49436, 49788, 49844, 50000, 50040], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 79.5, "tree_rss_bytes": 209633280, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 82.609, "tree_rss_bytes": 215117824, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 85 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |49436               |150        |497         |0           |0    |Normal   |\n      |python.exe          |Active     |496         |0           |     |N/A      |\n      |85 MB               |640 KB     |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [49436], "owned_pids": [11576, 33960, 36288, 36500, 38036, 45628, 45964, 46268, 47360, 47448, 48204, 48264, 49436, 49788, 49844, 50000, 50040], "foreign_pids": []}
+[summary] stop: frame limit | 550 frames processed (50 warm-up, 500 timed) | 1 distinct source frames | image bus.jpg 810x1080
+[summary] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+[summary] G2G mean 8.105 ms | P50 8.083 | P95 8.495 | P99 8.645 | max 8.761 | over the last 500 timed frames; cold first frame 10.30 ms
+[summary] stage means (ms): preprocess 0.300 | NPU forward 7.640 (dispatch 7.241, readback 0.399) | decode+NMS 0.157
+[summary] boxes from NPU heads on 500/500 timed frames | 5.00 detections per frame
+[summary] RSS 184.9 MB at the first timed frame, 184.9 MB at the end (+0.00 MB over 500 frames)
+[summary] wrote <scratch>\ign_control_4.json
+HOST_TIMELINE {"elapsed_seconds": 85.812, "tree_rss_bytes": 21229568, "foreign_peers": []}
+
+== 2026-10-13T12:42:02Z [amd_cfg yolov8n #4]
+HOST_TIMELINE {"elapsed_seconds": 88.953, "tree_rss_bytes": 342953984, "foreign_peers": []}
+[run] frame 100 | G2G 11.02 ms | 5 objects
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 93 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |46336               |151        |248         |0           |0    |Normal   |\n      |python.exe          |Active     |248         |0           |     |9        |\n      |93 MB               |4128 KB    |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [46336], "owned_pids": [11576, 33960, 36288, 36500, 38036, 45628, 45964, 46268, 46336, 47360, 47448, 48204, 48264, 49436, 49788, 49844, 50000, 50040], "foreign_pids": []}
+[run] frame 200 | G2G 10.43 ms | 5 objects
+[run] frame 300 | G2G 10.77 ms | 5 objects
+HOST_TIMELINE {"elapsed_seconds": 92.234, "tree_rss_bytes": 343035904, "foreign_peers": []}
+[run] frame 400 | G2G 10.80 ms | 5 objects
+[run] frame 500 | G2G 10.61 ms | 5 objects
+[amd] G2G mean 10.831 ms | P50 10.816 | P95 11.331 | P99 11.692 | max 12.572 | over 500 timed frames after 50 warm-up
+[amd] stage means (ms): letterbox 2.237 | session.run 6.216 | decode+NMS 2.379
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [11576, 33960, 36288, 36500, 38036, 45628, 45964, 46268, 46336, 47360, 47448, 48204, 48264, 49436, 49788, 49844, 50000, 50040], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 95.546, "tree_rss_bytes": 21245952, "foreign_peers": []}
+
+== 2026-10-13T12:42:11Z [amd yolov8n #4]
+[run] frame 100 | G2G 12.16 ms | 5 objects
+HOST_TIMELINE {"elapsed_seconds": 98.812, "tree_rss_bytes": 342171648, "foreign_peers": []}
+[run] frame 200 | G2G 11.43 ms | 5 objects
+[run] frame 300 | G2G 11.58 ms | 5 objects
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 93 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |16076               |152        |357         |0           |0    |Normal   |\n      |python.exe          |Active     |356         |0           |     |9        |\n      |93 MB               |4 MB       |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [16076], "owned_pids": [11576, 16076, 33960, 36288, 36500, 38036, 45628, 45964, 46268, 46336, 47360, 47448, 48204, 48264, 49436, 49788, 49844, 50000, 50040], "foreign_pids": []}
+[run] frame 400 | G2G 11.00 ms | 5 objects
+HOST_TIMELINE {"elapsed_seconds": 102.062, "tree_rss_bytes": 342343680, "foreign_peers": []}
+[run] frame 500 | G2G 11.62 ms | 5 objects
+[amd] G2G mean 11.577 ms | P50 11.563 | P95 12.142 | P99 12.649 | max 12.982 | over 500 timed frames after 50 warm-up
+[amd] stage means (ms): letterbox 2.320 | session.run 6.915 | decode+NMS 2.342
+HOST_TIMELINE {"elapsed_seconds": 105.265, "tree_rss_bytes": 21303296, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [11576, 13152, 16076, 33960, 36288, 36500, 38036, 45628, 45964, 46268, 46336, 47360, 47448, 48204, 48264, 49436, 49788, 49844, 50000, 50040], "foreign_pids": []}
+
+wrote C:\Users\<user>\PycharmProjects\ignite-xdna\results\aie\engine_anchor_yolov8n_phoenix_20261013T1240Z.log
+POST_NPU_CONTEXT_WITNESS "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+RESEARCH_PROCESS_RESULT {"exit_code": 0, "stop": null, "peak_tree_rss_bytes": 349360128, "rss_measurement": "maximum observed across sampled descendant working sets; zero observations reported as null", "elapsed_seconds": 108.15599999995902, "foreign_contention_observed": false, "timing_eligible": true}
