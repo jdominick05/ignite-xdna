@@ -1389,6 +1389,19 @@ been closed:
   Untested: whether a rewritten inner loop (no realignment `vshift`s, overlapped iterations,
   separated banks) fits the 224 B of `.text` headroom, and what it buys per frame once dispatch
   and DMA are counted. A kernel-rate gain is not a frame-rate gain until the frame is measured.
+- **Open (2026-10-13): why transport savings do not reach a computing frame.** The engine trails AMD's best
+  YOLOv8s by 5.68 ms on the device, and 76% of its frame is data movement, so using both of a column's shim
+  streams for activations looked like the next lever.
+  - **Sized:** two independent models (the stream probe's transport ratio and the additive task-cost fit)
+    predicted −1.18 ms.
+  - **Built:** exact on silicon. Measured +0.93 ms. Transport alone improved (NOP −0.48 ms), and the cores' exposed
+    compute grew 1.30 ms
+    ([BENCHMARKS](docs/BENCHMARKS.md#block-5-stream-sharing-built-exact-on-the-device-and-093-ms-slower-transport-gains-048-ms-but-compute-exposure-grows-130-ms-2026-10-13-desktop-2)).
+  - **The lesson that generalises:** an all-NOP measurement prices transport with the cores draining instantly. Any
+    design that couples a stream to consumption (a shared stream, a bounded MemTile buffer) can win on NOP and lose
+    under compute.
+  - **Unanswered:** which input the cores stall on. A core lock-stall trace (weights against activations) answers
+    it, and it is the next measurement this project needs before another transport lever is sized.
 
 ## Future pipeline test plans (Categories A through E)
 
