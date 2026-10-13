@@ -15573,3 +15573,80 @@ much less than ~145 ns per write, the engine's per-round BD reprogramming has a 
 The control-stream lever named in the census above then has a concrete form.
 
 Log: [overlay_dataflow_census_phoenix4x4_desktop2_20261013T024655Z.log](../results/aie/overlay_dataflow_census_phoenix4x4_desktop2_20261013T024655Z.log).
+
+## Control packets are not a cheaper write channel on Phoenix: the cost is per packet, and packing 4 words buys 3x (2026-10-13, Desktop 2)
+
+**Question.** AMD's overlay routes a DDR stream into every tile's control port
+([above](#how-amds-overlay-moves-data-and-control-cores-program-their-own-dmas-and-a-ddr-stream-reaches-every-tiles-control-port-2026-10-13-desktop-2)).
+Is a register write cheaper sent as a control packet than as an `npu.write32` op in the
+instruction stream? If so, the engine's per-round BD reprogramming would have a cheaper channel.
+
+**Design** (`kernels/ctrl_packet_probe/`, ours, not AMD's).
+- **What it writes:** N words into tile (0,2)'s data memory, cycling over a 1,024-word buffer,
+  then a lock release. The tile's DMA then streams the buffer to DDR, so every run is checked
+  exactly against the expected words.
+- **Arms:**
+  - `write32`: N ops in the instruction stream.
+  - Control packets of 1 or 4 words, each its own stream packet: the shim BD's repeat dimension,
+    at most 64 packets per task, then a `dma_wait`.
+- **Routing:** aiecc's `--generate-ctrl-pkt-overlay` routes shim MM2S 0, packet ID 27, to the
+  tile's `TileControl`. The header layout is from mlir-aie's `add_one_ctrl_packet_col_overlay`
+  test.
+
+**Pre-registered** (scratch, sha256 `ee7aed0c...` with its amendment), before any timed run:
+- the metric is the least-squares slope, in ns per written word, of the median dispatch time
+  over N ∈ {64, 256, 1024, 4096, 16384};
+- each (arm, N) runs in its own process: 20 warm-up, 200 timed runs, and an exactness check
+  before and after;
+- the sweep runs forward, then in reverse;
+- **H1:** the 4-word arm's slope is at most 0.2x `write32`'s in both orders;
+- **H0:** it is at least 0.5x in either order.
+
+| N | `write32` ms | 1-word packets ms | 4-word packets ms | `write32` insts B | 4-word insts B |
+|---:|---:|---:|---:|---:|---:|
+| 64 | 0.1416 / 0.1418 | 0.1439 / 0.1449 | 0.1414 / 0.1441 | 1,764 | 532 |
+| 256 | 0.1514 / 0.1506 | 0.1581 / 0.1592 | 0.1440 / 0.1450 | 6,372 | 532 |
+| 1,024 | 0.2083 / 0.2070 | 0.2362 / 0.2315 | 0.1577 / 0.1590 | 24,804 | 1,024 |
+| 4,096 | 0.4408 / 0.4424 | 0.5263 / 0.5221 | 0.2379 / 0.2374 | 98,532 | 2,992 |
+| 16,384 | 1.3285 / 1.3373 | 1.6572 / 1.6200 | 0.5372 / 0.5446 | 393,444 | 10,864 |
+| **slope, ns/word** | **72.9 / 73.5** | **92.7 / 90.4** | **24.4 / 24.8** | | |
+
+Each cell gives median dispatch time, forward / reverse. All 30 runs are exact, first and last.
+The sweep was `timing_eligible: true` with no foreign process on the NPU.
+
+**Verdict: Between.** The 4-word arm runs at 0.335x / 0.337x `write32`, inside neither line.
+
+**What the numbers say** (MEASURED):
+- **Control packets are not cheaper per write.** A 1-word packet costs 90-93 ns, more than a
+  `write32` op at 73 ns.
+- **Packing pays.** A 4-word packet costs about 98 ns, 24.6 ns per word, so the cost is per
+  packet.
+- **Instruction bytes do not track time across channels.** At N = 16,384 the 4-word arm carries
+  36x fewer instruction bytes (10,864 against 393,444) but is only 2.5x faster.
+- **Unexplained:** whether the ~95 ns per packet is the shim BD repeat, the stream or the tile's
+  control port. This sitting does not separate them.
+
+**What it means for the engine** (DERIVED, not measured on the engine):
+- **BD rewrites gain nothing.** A shim or MemTile BD is 8 words, so as control packets it is two
+  4-word packets, about 196 ns. That is no better than the ~145 ns per op the cost model priced
+  for appended BD writes.
+- **The cheaper half of AMD's mechanism is the other one:** cores writing their own tile DMAs
+  with `st.tm`, a core instruction rather than any DDR-borne packet. The engine's per-round
+  packets are shim and MemTile tasks, which no core can reach with `st.tm`, so that is a design
+  question, not a port.
+- **Not tested:** whether control packets can be pipelined so their cost overlaps compute. That
+  would change the conclusion, and a dispatch-time slope cannot show it.
+
+**Two findings from building it** (each observed once):
+- **One control packet per stream packet.** All control packets sent inside one stream packet
+  timed out at N = 4: the control port took the first one only, so the lock release never
+  arrived. That matches the upstream test's one-transfer-per-write shape. The same writes, one
+  stream packet each, were exact.
+- **A first sweep stopped on its first design** with an ERT timeout. My design released lock 1
+  on every run with nothing to acquire it, and the lock saturates. One `write32` resetting it per
+  dispatch, identical in every arm, fixed it: 300 consecutive exact runs. The amendment was
+  recorded before any timing was read.
+
+Logs:
+- [ctrl_packet_vs_write32_phoenix_desktop2_20261013T025614Z.log](../results/aie/ctrl_packet_vs_write32_phoenix_desktop2_20261013T025614Z.log), the sweep;
+- [ctrl_packet_vs_write32_phoenix_desktop2_20261013T025452Z.log](../results/aie/ctrl_packet_vs_write32_phoenix_desktop2_20261013T025452Z.log), the stopped first sweep, with no timing.
