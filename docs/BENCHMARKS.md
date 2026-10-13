@@ -15454,6 +15454,13 @@ weights and 2.6x the writes. The implied rates differ: AMD's is at least 22.8 GB
 includes the CPU QDQ), the engine's 18.1 GB/s. At equal rates the two frames would take about the
 same time. This is DERIVED and not a latency prediction.
 
+> **Basis caveat, found 2026-10-13** ([below](#what-the-cost-model-tiler-changes-and-where-its-23-ms-comes-from-2026-10-13-desktop-2)). AMD's subgraph-level byte fields, which
+> this table uses, are exactly 2x the sum of its per-layer records. This holds in all four xmodels
+> checked (YOLOv8s and YOLOv8n, default and cost-model tiling), while the op counts agree 1x. Which
+> level is per frame is not established. If the per-layer sum is, AMD's YOLOv8s declares 149.5 MB,
+> the engine moves about twice AMD's bytes, and the paragraph above does not hold. The figures
+> stand as declared; only their per-frame reading is in question.
+
 **What this says to build.**
 - **Not coarser shim tasks.** That lever is spent: the coarse schedule already merges fills and
   repeats weight runs (`docs/DECISIONS.md`, 2,972 tasks per frame). YOLOv8s's fill tasks sit at
@@ -15705,7 +15712,8 @@ control. Each run was its own process, with `xrt-smi` idle before it, under
 **What changed underneath** (static declarations, census):
 - `mc_code` grew 106,168 → 119,676 B, and its `0x0B`-headed words 1,757 → 1,772.
 - **Declared traffic barely moved:** weight reads 87.9 → 82.7 MB, activation reads 138.1 → 144.3
-  MB, writes 73.0 → 73.4 MB, a total of 299.0 → 300.4 MB.
+  MB, writes 73.0 → 73.4 MB, a total of 299.0 → 300.4 MB (subgraph-level fields; see the
+  basis caveat in the census section).
 - **So AMD's time is not set by its declared bytes.** 19% less time for 0.5% more declared
   traffic answers the bytes-or-compute question the census left open, on the bytes side.
 - **Unexplained here:** what the cost-model tiler chose differently. Decoded
@@ -15771,7 +15779,17 @@ Logs:
 **Question.** The YOLOv8s section above left open what `enable_cost_model_tiling` does
 differently. Declared traffic barely moved, so where does the 19% come from?
 
-**1. Static decode: per-layer re-read factors.** `tools/amd_xmodel_census.py --layers` prints
+**1. Static decode: per-layer re-read factors.** All factors here use AMD's per-layer records.
+Its subgraph-level byte fields are exactly 2x their sum in all four xmodels, while the op counts
+agree 1x. Two candidates, neither ruled out:
+- the subgraph counts each byte over two hops (DDR to MemTile, then MemTile to core);
+- the subgraph roll-up duplicates the records.
+
+The per-layer level is the one whose numbers match tensor sizes. `model.0`'s 1,700,352 B input is
+a channel-padded 640×640 plus halo. That makes it the plausible per-frame level; it is a check,
+not a verdict.
+
+The decode itself: `tools/amd_xmodel_census.py --layers` prints
 every per-layer record in AMD's compiled program. `tools/amd_layer_tiling_diff.py` joins each
 convolution to its ONNX node. It then divides the declared bytes by the size of the tensor they
 move, which gives a weight re-read factor `w_rr` and an input re-read factor `i_rr`. Its join
@@ -15804,12 +15822,18 @@ idle before it (`timing_eligible: true`).
 |---|---|---|
 | H | heads bit-identical across the 4 runs and to the unprofiled default build | **pass** (max diff 0) |
 | R | each arm's two frame-span medians within 2% | **pass** (0.53%, 1.34%) |
-| T | timer unit: the span at 1.80 GHz is below `session.run`, and at the header's declared 1000 MHz it is above | **pass** (12.15 ms < 13.20 ms < 21.87 ms) |
+| T (a check, not blind) | timer unit: the span at 1.80 GHz is below `session.run`, and at the header's declared 1000 MHz it is above | **pass** (12.15 ms < 13.20 ms < 21.87 ms) |
 | A | per-layer deltas sum to within 20% of the frame-span delta | **pass** (101.9%) |
 
 - **The timer runs at the core clock.** The record header declares 1000 MHz, which would make
-  the device span longer than the whole `session.run`. The measured 1.80 GHz core clock
-  ([SILICON](SILICON.md)) fits, so this section converts at 1.80 GHz (DERIVED).
+  the device span longer than the whole `session.run`. Gate T was written after a smoke run had
+  shown a 22.4M-cycle span, so it is a check, and it only bounds the clock from below: anything
+  above about 1.66 GHz passes, and the 1.6 GHz nameplate figure fails.
+- **What pins 1.80 GHz is the delta.** The span falls by 4.18M cycles, which at the measured
+  1.80 GHz core clock ([SILICON](SILICON.md)) is 2.32 ms, against a 2.30 ms `session.run` drop in
+  the same sitting, within 1%. This section converts at 1.80 GHz (DERIVED). The remaining
+  1.05 ms of `session.run` (13.20 − 12.15) fits the CPU quantize and dequantize inside it, but it
+  is not measured.
 - **The profiled sitting reproduces the effect.** At 1.80 GHz the device span falls 12.15 →
   9.83 ms (−2.32 ms). In the same sitting `session.run` fell 13.20 → 10.90 ms (−2.30 ms).
 - **Instrumentation does not change the outcome:** the profiled builds' `session.run` (13.32 /
@@ -15846,11 +15870,16 @@ padding) divided by the input tensor give the engine's input re-read factor (DER
 
 | conv input bytes per frame (MB) | AMD default | AMD option | engine |
 |---|---:|---:|---:|
-| YOLOv8s | 57.9 | 61.0 | 279.0 |
-| YOLOv8n | 26.7 | 28.4 | 93.9 |
+| YOLOv8s | 57.9 | 61.0 | 236.4 |
+| YOLOv8n | 26.7 | 28.4 | 82.5 |
 
-- **The engine reads each convolution's input far more often.** It reads it 4.6 times as often
-  as AMD on YOLOv8s, and 3.3 times on YOLOv8n.
+- **The engine reads each convolution's input far more often:** 3.9 times as often as AMD's
+  option arm on YOLOv8s, and 2.9 times on YOLOv8n.
+- **Corrected figure.** A first version of this analysis
+  ([amd_tiling_decode_yolov8s_n_desktop2_20261013T034053Z.log](../results/aie/amd_tiling_decode_yolov8s_n_desktop2_20261013T034053Z.log)) counted the engine's 8 C2f `cv1` convolutions twice, once
+  per AMD `Split` half. It read 279.0 / 93.9 MB and 4.6x / 3.3x, which is superseded. AMD's own
+  rows were right, because each half declares its own bytes. The per-resolution medians did not
+  move.
 - **The gap is widest at 20×20.** There, the engine's median `i_rr` is 16 on YOLOv8s against
   AMD's 1.7, and 8 against 1.0–1.1 on YOLOv8n.
 - **This sizes the "fewer packets" lever, but it does not show it costs time.** The engine's
@@ -15862,4 +15891,6 @@ padding) divided by the input tensor give the engine's input re-read factor (DER
 
 Logs:
 - [amd_dpu_layer_profile_yolov8s_desktop2_20261013T034000Z.log](../results/aie/amd_dpu_layer_profile_yolov8s_desktop2_20261013T034000Z.log), the profiled sitting;
-- [amd_tiling_decode_yolov8s_n_desktop2_20261013T034053Z.log](../results/aie/amd_tiling_decode_yolov8s_n_desktop2_20261013T034053Z.log), the static decode for both models and the per-layer timing analysis.
+- [amd_tiling_decode_corrected_yolov8s_n_desktop2_20261013T041500Z.log](../results/aie/amd_tiling_decode_corrected_yolov8s_n_desktop2_20261013T041500Z.log), the static decode with the engine counted once per node, the
+  subgraph-vs-layer check, and the per-layer timing analysis;
+- [amd_tiling_decode_yolov8s_n_desktop2_20261013T034053Z.log](../results/aie/amd_tiling_decode_yolov8s_n_desktop2_20261013T034053Z.log), the first version, superseded on the engine totals only.

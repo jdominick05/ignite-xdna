@@ -24,7 +24,13 @@ is printed as unjoined rather than guessed.
 `--engine` adds the engine's own per-layer manifest record for the same Conv node: its activation
 packets as an input factor (packets * 6400 B / (Hin * Win * Cin), DERIVED: the 6,400 B packet includes
 halo and channel padding) and its weight-fill count, which the manifest does not size per layer, so it is
-reported as a count.
+reported as a count. AMD splits each C2f cv1 into two merged Split halves that share one ONNX Conv;
+both rows carry the same engine record, and `engine_counted_here` is true on the first only, so an engine
+total sums each node once (node_rows says how many AMD rows share it).
+
+AMD's DPU subgraph declares const/input/output bytes at exactly 2x the sum of its per-layer records (all
+four xmodels checked, 2026-10-13), while its op counts agree 1x. Which level is per frame is not
+established; the factors here use the per-layer records.
 
 Run so far on YOLOv8s and YOLOv8n, AMD default config vs enable_cost_model_tiling (Desktop 2, 2026-10-13).
 """
@@ -123,6 +129,16 @@ def main() -> int:
             rec["engine"] = {"i_rr": round(e["packets"] * 6400 / (hin * win * cin), 3), "w_fills": e["w_fills"],
                              "rounds": e["rounds"]}
         per.append(rec)
+    # AMD splits a C2f cv1 into two merged Split halves, each with its own declared bytes; the engine runs that
+    # Conv once. Mark the halves so an engine total counts the node once.
+    seen = {}
+    for rec in per:
+        seen[rec["node"]] = seen.get(rec["node"], 0) + 1
+    first = set()
+    for rec in per:
+        rec["node_rows"] = seen[rec["node"]]
+        rec["engine_counted_here"] = "engine" in rec and rec["node"] not in first
+        first.add(rec["node"])
         print("LAYER " + json.dumps(rec), flush=True)
     a0, *rest = [an for an, _ in arms]
     summ = {"conv_layers_joined": len(per), "workload_equal_all": all(r["workload_equal"] for r in per),
@@ -142,6 +158,8 @@ def main() -> int:
         }
     if eng:
         summ["engine_joined"] = sum("engine" in r for r in per)
+        summ["engine_nodes"] = sum(r["engine_counted_here"] for r in per)
+        summ["shared_node_rows"] = sum(r["node_rows"] > 1 for r in per)
     print("SUMMARY " + json.dumps(summ), flush=True)
     return 0
 
