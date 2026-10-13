@@ -199,7 +199,7 @@ def main():
     print()
     print("  Note: these numbers are from a single session. Latency drifts across")
     print("  sessions on this hardware; always compare within a run, not against logs")
-    print("  from a different day. (CLAUDE.md invariant)")
+    print("  from a different day.")
     print()
 
     # List what each model found

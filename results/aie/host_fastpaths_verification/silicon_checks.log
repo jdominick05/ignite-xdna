@@ -1,4 +1,4 @@
-$ PYTHONPATH=<worktree>/src python gemini_runtime_silicon.py --n 100  (Device 0; containers: today = main c714629 HardSigmoid, *_new_sigmoid = 7700316 --silu-sigmoid; SESR M7 = the main checkout's build/sesr_m7.ignite)
+$ PYTHONPATH=<worktree>/src python <tool>_runtime_silicon.py --n 100  (Device 0; containers: today = main c714629 HardSigmoid, *_new_sigmoid = 7700316 --silu-sigmoid; SESR M7 = the main checkout's build/sesr_m7.ignite)
 Silicon checks of the consolidated head readback, the C8 decode and SESR's native host paths (Device 0).
 
 Run in mlir-aie-iron with the worktree's src first on PYTHONPATH.
@@ -15,7 +15,7 @@ Run in mlir-aie-iron with the worktree's src first on PYTHONPATH.
    DepthToSpace) against the reference path (cv2 resize + numpy DepthToSpace): DepthToSpace alone exact on the same
    output blocks; whole images compared (differing bytes, max difference, PSNR), since the resize is not OpenCV's.
 
-    python gemini_runtime_silicon.py [--n 100]
+    python <tool>_runtime_silicon.py [--n 100]
 
 host DESKTOP-CBL5NUA, 2026-09-17T15:21:08Z, 101 frames per detect container
 yolov8n_today: 101 frames, 634 detections; NCHW heads != read_tensor: 0; C8 views != read_tensor: 0; C8 decode != NCHW decode: 0 frames; predict_sync != NCHW decode: 0 frames; predict_sync with the ONNX Runtime oracle != NPU decode: 0 frames -> PASS

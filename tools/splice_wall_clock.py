@@ -139,7 +139,7 @@ def run_attention_numpy(work):
 def make_torch_attention(work):
     """Same nine blocks under torch's multithreaded BLAS + fused softmax.
 
-    Returns None when torch is absent. CLAUDE.md says not to install torch into
+    Returns None when torch is absent. The project does not install torch into
     resnet_env17; if it is not there, the numpy number is all this script can
     report and the log says so explicitly rather than silently downgrading.
     """

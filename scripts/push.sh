@@ -18,7 +18,7 @@
 # Never force-pushes. Fails loudly (and keeps going to try the other remote)
 # if either push is rejected -- e.g. another machine pushed to origin first,
 # in which case `git pull --rebase` (or a fetch + merge) on origin comes
-# before retrying, per CLAUDE.md's "sync at the edges of a session" rule.
+# before retrying: sync at the start and end of every session.
 
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 

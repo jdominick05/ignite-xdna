@@ -208,8 +208,8 @@ def scrub_commits(commits: list[str], branch: str | None = None) -> int:
     return len(to_modify)
 
 
-def find_remote_base(remote: str, branch: str) -> str | None:
-    """Find the tracking base commit on remote for branch."""
+def find_remote_base(remote: str, branch: str, head: str = "HEAD") -> str | None:
+    """Find the tracking base commit on remote for branch, whose tip is head."""
     # 1. Exact remote branch ref
     res = subprocess.run(
         ["git", "rev-parse", "--verify", f"{remote}/{branch}"],
@@ -222,16 +222,16 @@ def find_remote_base(remote: str, branch: str) -> str | None:
     # 2. Merge-base with remote tracking branches (e.g. origin/main, origin/HEAD)
     for fallback in [f"{remote}/main", f"{remote}/master", f"{remote}/HEAD"]:
         mb = subprocess.run(
-            ["git", "merge-base", "HEAD", fallback],
+            ["git", "merge-base", head, fallback],
             capture_output=True,
             text=True,
         )
         if mb.returncode == 0 and mb.stdout.strip():
             return mb.stdout.strip()
 
-    # 3. Fallback to HEAD~1 to avoid touching full history on untracked branches
+    # 3. Fallback to head~1 to avoid touching full history on untracked branches
     res = subprocess.run(
-        ["git", "rev-parse", "--verify", "HEAD~1"],
+        ["git", "rev-parse", "--verify", f"{head}~1"],
         capture_output=True,
         text=True,
     )
@@ -266,17 +266,36 @@ def main() -> int:
         return 0
 
     # Get current branch if not provided
-    branch = args.branch
-    if not branch:
-        branch = subprocess.check_output(
-            ["git", "rev-parse", "--abbrev-ref", "HEAD"], text=True
-        ).strip()
+    here = subprocess.check_output(
+        ["git", "rev-parse", "--abbrev-ref", "HEAD"], text=True
+    ).strip()
+    branch = args.branch or here
+
+    # The commits checked are the named branch's, not whatever this checkout has out
+    head = "HEAD" if branch == "HEAD" else f"refs/heads/{branch}"
+    if subprocess.run(["git", "rev-parse", "-q", "--verify", head], capture_output=True).returncode != 0:
+        print(f"ERROR: no local branch {branch!r}.")
+        return 1
 
     base = args.base
     if not base:
-        base = find_remote_base(args.remote, branch)
+        base = find_remote_base(args.remote, branch, head)
 
-    commits = get_unpushed_commits(base=base, head="HEAD")
+    commits = get_unpushed_commits(base=base, head=head)
+
+    # scrub_commits moves the branch and hard-resets this checkout onto it, so from a checkout
+    # of another branch it would carry this checkout's branch onto the rewritten commits
+    if (args.scrub or not args.check) and commits and branch != here:
+        violations = check_commits(commits)
+        if violations:
+            print(f"ERROR: {len(violations)} commit(s) on {branch!r} contain AI assistant links, and "
+                  f"this checkout has {here!r} out. Run --scrub from a checkout of {branch!r}:")
+            for c, subj, off in violations:
+                print(f"  {c[:8]} {subj} ({off})")
+            return 1
+
+    if branch == "HEAD":
+        branch = None  # detached: nothing to update-ref
 
     if args.scrub:
         if not commits:
@@ -308,7 +327,7 @@ def main() -> int:
         count = scrub_commits(commits, branch=branch)
         if count > 0:
             print(f"Scrubbed AI assistant links from {count} commit(s).")
-        violations = check_commits(get_unpushed_commits(base=base, head="HEAD"))
+        violations = check_commits(get_unpushed_commits(base=base, head=head))
         if violations:
             print(f"ERROR: {len(violations)} commit(s) still contain AI assistant links:")
             for c, subj, off in violations:

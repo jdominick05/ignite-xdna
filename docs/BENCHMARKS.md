@@ -40,13 +40,13 @@ gap couldn't be extra CPU fallback, and nothing else explained it. A same-sittin
 node-for-node, op-type-for-op-type, device-for-device identical (`results/
 adaround_latency_diff_diag_xint8.log`, `results/adaround_latency_diff_diag_adaround.log`).
 No log in this repo now reproduces the original 5.63/6.93 ms pair; the leading suspect is
-the log-name collision this project has been burned by before (`CLAUDE.md`, "Never let two
-machines silently overwrite the same result-log name") — `results/bench_xint8_npu.log` and
+the log-name collision this project has been burned by before (two machines writing
+the same result-log name) — `results/bench_xint8_npu.log` and
 `results/bench_xint8_adaround_npu.log` exist today at only 100 images, not the 1000 the
 headline table cites, meaning a smaller probe run reused those names after the original.
 Treat 5.63/6.93 ms as unverified, not as the number to plan around; the accuracy figures
 (71.70/79.80%) do still match a current log and stand. Latency also drifts session to
-session on this shared machine (`CLAUDE.md`), so the fair comparison is always the
+session on this shared machine, so the fair comparison is always the
 back-to-back pair above, not either number in isolation.
 See `results/adaround_latency_diff_xint8_npu.log`,
 `results/adaround_latency_diff_adaround_npu.log`.
@@ -1240,9 +1240,11 @@ The same `n=64` in bf16 needs 68,864 B against a 65,536 B tile: it misses by exa
 
 **The verdict, by this repo's mean-based convention: with `n=64`, NPU int8 beats the CPU's
 best int8 kernel 1.10×–1.83× at every shape with M ≥ 512 and N ≥ 2048**, and still loses at
-512³, 512×512×1024 and short prefill (M=128: 2.6×, M=256: 1.5×). 4607 GOPS is the highest
-ops rate any single dispatch has reached in this project (28.8% of the 16 TOPS nameplate;
-the 39.3% above is a whole-graph figure across four columns), and 2.5× the bf16 rate of the
+512³, 512×512×1024 and short prefill (M=128: 2.6×, M=256: 1.5×). 4607 GOPS was, at this
+sitting, the highest ops rate any single dispatch had reached in this project (28.8% of the 16 TOPS nameplate;
+the 39.3% above is a whole-graph figure across four columns; later, with the C tile
+single-buffered by a local patch, 64/128/64 reached 4,852.06 GOPS at 2048³, and int4 weights
+at that tile 6,195.33 — [W4A8 on the whole array](#w4a8-on-the-whole-array-int4-weights-pay-at-the-best-int8-tile-and-not-through-the-core)), and 2.5× the bf16 rate of the
 same sitting at 2048³ — the 2× the MAC count promised, but only once the tile bf16 cannot
 have. **The margin is thin at the largest shapes:** torch's kernel has a large mean/min
 spread there (2048³: 7.08 ms mean, 4.09 ms min), and read against its best case the
@@ -1423,7 +1425,8 @@ derived from a clock: the 16 TOPS nameplate is what 20 cores do at 1.6 GHz, and 
 `default` this part runs at 1.80 — 18.4 TOPS for the full array, 14.7 for the 16 cores the
 `4x4` overlay reaches, so that overlay's physical ceiling is 92% of nameplate, not 82%; a
 column is 3.69 int8 TOPS, the vendor DPU's measured 1.650 is 44.8% of it; the 16-core bf16
-peak is 7.37 TFLOPS and the best GEMM here (2072.54 GFLOPS) is 28.1% of it. The
+peak is 7.37 TFLOPS; the best upstream-design bf16 GEMM (2072.54 GFLOPS) is 28.1% of it, and
+the best with the C tile single-buffered by a local patch (2700.44, above) is 36.6%. The
 conversion from any figure quoted "at 1.6 GHz" is the ratio 1.6 ÷ 1.8 = 0.889; the old
 columns stay in that file beside the new one. Power mode is a **2.25× lever on the clock**
 (0.80 → 1.80 GHz) that no log in this repo recorded: any future comparison across sessions
@@ -1830,6 +1833,15 @@ Three hypotheses:
   path, and the per-buffer floor now rests on an intervention large enough that its absence is
   the evidence. Keep the two lines — they are free and strictly better — but stop expecting
   wall clock from inner-loop work on this design.
+  **Qualified 2026-09-10 (one core, a local copy):** "strictly better" does not hold on the
+  core. A re-typed copy of the 2×2 template, statically identical to the figures above, ties
+  the 4×2 in the k loop on silicon and is slower per call at every K tested, because its loop
+  carries two same-buffer paired loads to the 4×2's one — see
+  [int8×int4 is a native `vmac`](#int8int4-is-a-native-vmac-on-aie2-and-int4-weights-cost-nothing-to-store).
+  **Confirmed a second way, 2026-09-10 (the array):** a *measured* one-core gain — the int8 k
+  loop unrolled twice, 176 cycles per call faster — vanishes at the array too (0.995× at
+  64/128/64), and so does int8×int4's doubled MAC rate over the unpack arm there — see
+  [W4A8 on the whole array](#w4a8-on-the-whole-array-int4-weights-pay-at-the-best-int8-tile-and-not-through-the-core).
 
 **What this does not show.** Nothing here was measured on hardware; the issuing-cycle figures
 are computed from object code and the microseconds come from a run two days earlier. "Not
@@ -1890,6 +1902,15 @@ exposure is worse than the count suggests, too: both kernels have exactly one pa
 in their steady-state loop, but that is 3.1% of the bf16 loop's 32 bundles and 11.1% of the
 int8 loop's 9.
 
+**Which pair it is — corrected 2026-09-10.** The int8 row's hazard verdict stands; the reading of
+it does not. That loop's one paired load is `vlda [p4], #0x20 | vldb [p3], #0x20`: both pointers
+advance by one A tile, where every B pointer in this kernel advances by 0x200, so it reads **two
+rows of A** and collides in whatever bank A sits, whether or not B shares it. A probe with A and B
+in separate banks pays exactly that one cycle per iteration on silicon
+([int8×int4 is a native `vmac`](#int8int4-is-a-native-vmac-on-aie2-and-int4-weights-cost-nothing-to-store)).
+The paragraph above explains why A and B share bank 2 in that build; it is not what the loop's
+pair pays for. The bf16 row's pair was not re-read.
+
 **The check predicts a number someone else measured, exactly.** That branch left both build
 caches on disk — one placement with the operands sharing a bank, one without, from a single
 kernel source whose compiled object hash is identical in both. Given nothing but the cache
@@ -1944,6 +1965,9 @@ nothing about data movement: same bytes, same DMA, same fifo depth, same functio
   neither confirmed nor refuted.** Backing log `results/aie/bank_ab_h12_npu.log`; harness
   `kernels/bank_placement/`. A peer session held about a core throughout, and this should be
   repeated on a quiet machine.
+  **A second reason for the null, 2026-09-10:** the hardware loop's paired load reads two rows
+  of A, not A and B (the correction under the bank table), so moving A away from B could not
+  remove it. That is independent of H11's reason, and nothing here says which dominates.
   **What would settle it is an instrument this branch already has.** Wall time is the wrong
   observable for a 3% core-side change on a shared machine; the trace unit is not. Pointing
   `kernels/pmu_probe/`'s event routing at one core of this design reads `ACTIVE` against
@@ -2055,7 +2079,382 @@ a given paired load reads, so it is certain only inside the hardware loop where 
 the `mmul` tiles. Whether the penalty composes linearly for several paired loads per iteration
 is untested. The bank map is read from the first of 16 core ELFs and allocation is per core. The
 conv kernels have no surviving build cache, so this repo's most-lost op class was **not**
-surveyed.
+surveyed. *(2026-09-10: inside that hardware loop the pair is two A tiles, not the two `mmul`
+operands — see the correction under the bank table above.)*
+
+### int8×int4 is a native `vmac` on AIE2, and int4 weights cost nothing to store
+
+2026-09-10, Desktop 2, one core. Backing log `results/aie/w4a8_probe_npu.log`; kernels and
+tools `kernels/w4a8_probe/`; every call's cycle count in `results/aie/w4a8_probe_raw.jsonl`.
+
+The W4A8 item in the backlog assumed Phoenix has no int4 multiply — `docs/SILICON.md` listed
+int8×int4 as AIE2p only, from `device.yaml`'s AIE2 MAC table, which has no such row — so its
+first step was an int4→int8 unpack. Both halves came out differently. *(Added 2026-09-23: the
+assumption was this repo's reading of one table, not the state of AMD's documentation.
+AIE-API 2024.1 lists AIE-ML's `8b x 4b: 4x16x8` as a native `mmul` shape, and Riallto states
+512 int4×int8 MAC per cycle per core — SPEC, both fetched by the 2026-09-23 cross-audit, its
+ledger row D11 on `main`. What follows is prior art confirmed on Phoenix silicon
+through Peano, bit-exact, not a discovery.)* `aie_api` defines
+`aie::mmul<4,16,8,int8,int4>` for AIE2 (`detail/aie2/mmul_8_4.hpp`), and Peano lowers it to the
+same `vmac` builtin int8×int8 uses, with the B-mode field of the MAC configuration word cleared.
+On this core that instruction:
+
+- **computes exactly.** 9 builds × 2 processes, each checked at its first and last timed call
+  against an int64 reference: 0 mismatches of 4,096. B is packed two per byte, element 2i in the
+  low nibble, two's complement — measured, with the verifier ready to report a nibble-swapped
+  or unsigned reading, and none was needed.
+- **can issue back to back, 512 MACs each** against int8's 256. The 512 is the 4×16×8 shape
+  (SPEC), not a count. Back-to-back issue is DERIVED from measured cycles: a loop whose 8 int4
+  `vmac`s sit in 8 consecutive bundles runs 17.03 cycles per 16-bundle execution, and a
+  multiplier held two cycles per `vmac` would need at least 24. No loop here sustains one per
+  cycle: the best measured k loop runs 0.73–0.75 `vmac` per cycle (372.4 MAC/cycle two-point,
+  383.7 fit; the table below). The latency is covered too: the compiler hides latency
+  behind explicit nops rather than an interlock ([AIE2 machine code](#aie2-machine-code-the-bundle-count-of-a-loop-is-its-cycle-count)),
+  so an int4 mode slower than Peano's model would have produced wrong answers, not slow ones.
+
+| k loop, K = 128 → 256, one core, 64×K×64 | Cycles per unit K | MAC per cycle | vs control | Static | Extra |
+|---|---|---|---|---|---|
+| int8 control: upstream's kernel, re-typed | 20.0 | 204.8 | 1.00× | 18.0 | 2.0 |
+| int8, the same loop unrolled twice (best int8 here) | 18.0 | 227.6 | 1.11× | 16.0 | 2.0 |
+| int4 stored, widened on load, k loop kept a loop | 18.0 | 227.5 | 1.11× | 18.0 | 0.0 |
+| int8×int4 native, as IRON builds it | 17.0 | 240.5 | 1.17× | 16.0 | 1.0 |
+| **int8×int4 native, k loop unrolled twice** | **11.0** | **372.4** | **1.82×** | 10.0 | 1.0 |
+
+In the k loop that is 1.82× the int8 control and 1.64× the best int8 schedule (two-point; the
+fit over K = 64/128/256 gives 1.88× and 1.69×, `int4_demo_npu_desktop2_20260923.log` F1).
+Per call, the int8×int4 kernel takes 4,199 cycles at 64×256×64 against the control's 6,295
+(1.50×) and the best int8's 5,863 (1.40×); at 64×64×64, where a call is mostly C going in and
+out, 2,160 against 2,447 (1.13×). "Static" is the IRON object's own loop, assuming every `vmac`
+issues inside it; "extra" is what the silicon spent beyond it. The control is upstream
+`mm.cc`'s int8 kernel re-typed in the probe's own file, so all three B policies share one
+template: Peano gives it upstream's loop length, 8 `vmac`s and one same-buffer pair in a
+different order. Upstream's own object was compiled and read, not timed.
+
+- **The unpack is free, and buys only bytes.** AIE2's second load unit widens int4 to int8
+  inside the load (`vldb.unpack.s8.s4`), so a standalone unpack loop runs at a plain copy's 2
+  cycles per 64 elements, and in the int8 k loop the unpacking build is the same 9 bundles and 8
+  `vmac`s as int8 and ran exactly its schedule. It halves B's bytes; it adds no MACs.
+- **The native loop needs one pragma.** Built the way IRON builds it, the native loop never
+  overlaps its loads with its `vmac`s — 0.5 `vmac` per cycle statically — because its 4×16 A
+  operand is 512 bits, twice int8's, and the 4×2 expansion's six operands fill the vector file.
+  Unrolling the k loop twice gives the scheduler two iterations to interleave: 0.8 `vmac` per
+  cycle, 409.6 MAC per cycle static, 372.4 measured. That is one `AIE_LOOP_UNROLL(2)` on the k
+  loop — Peano predefines `__AIECC__`, so an IRON build turns it into
+  `clang loop unroll_count(2)`, byte-identical to the pragma the probe spells directly — and
+  upstream's k loop carries no hint Peano reads (its only one, `AIE_LOOP_FLATTEN`, is
+  chess-only).
+
+**How it was checked.** `static_probe.py` compiles with IRON's exact Peano command and
+reproduces 10 of 10 IRON-built `matmul_i8_i32` objects bundle for bundle; with the same flags,
+`clang++ -dM -E` shows `__AIECC__` predefined, and `AIE_LOOP_UNROLL(2)` builds the same object
+as the probe's pragma (log section H); the IRON object each
+hardware process ran matched the static compile in all 54 processes; one Worker brackets exactly
+one kernel call with trace events, with no DMA or lock inside; `pmu_probe --calibrate` passed
+(2.0003 and 9.0001 cycles per iteration); `xrt-smi` was clean before, at the start and at the
+end; the 1 s witness saw at most one hardware context in 798 samples, power mode Default. Every
+(arm, K) cell returned one cycle count across 2 processes × 20 calls.
+
+**The extra cycles are paired loads from one buffer — which changes the reading of H12.** A, B
+and C sit in three different banks in every build, so a paired load of A with B is cross-bank
+and free — yet the control's single paired load costs exactly one cycle per iteration. It is
+therefore not A with B, and the loop's pointer increments name it: both loads advance by one A
+tile, two rows of A in one bank. The unpacking build is the positive control — the same 9
+bundles, its one pair an A with a B, and it pays 0.0. Where every pointer resolves (6 builds)
+the same-buffer pair count equals the extra cycles per loop execution exactly; the three native
+builds sit inside their unresolved bounds. **Upstream `mm.cc`'s own int8 loop has exactly that
+pair** — `vlda [p4], #0x20 | vldb [p3], #0x20`, and at 64/64/64 its object is bundle for bundle
+the 4607.05 GOPS build's — so it is predicted, not measured here, to run 10 cycles per 9-bundle
+iteration. That is the pair the bank table above reads as A colliding with B, and it is why
+H12's move of A into the empty bank could not have removed it: a reason for H12's null that is
+independent of H11's, which does not say which one dominates. No contradiction with the bank
+validation above, where separating A from B removed 1,024 cycles per panel — that kernel's pair
+read A and B.
+
+**It also qualifies H11.** This probe's re-typed copy of the 2×2 template statically matches
+H11's figures — 8 bundles, 8 `vmac`s, 1.000 per cycle — but carries two same-buffer pairs per
+execution to the 4×2's one. On one core it ties the 4×2 in the k loop (20.008 against 20.000
+cycles per unit K) and is slower per call at every K: 2,717 / 3,998 / 6,559 against 2,447 /
+3,735 / 6,295. "Strictly better" does not hold on this core, and a loss that size sits inside
+the array's ±2%. That is a local copy on one core at M = N = 64 — not upstream's own 2×2 build,
+and not the array.
+
+**What this does not establish.** One core, M = N = 64, K ≤ 256, one buffer placement — not the
+array. The `whole_array` int8 GEMM's best tile, 64/128/64 at 2048³ over 16 cores (4852.06
+GOPS, 3,540.7 µs NPU bracket), spends about 6,224 cycles per tile call per core (DERIVED at
+1.80 GHz), of which this probe's control kernel is 3,735; the native kernel's saving at that
+tile, 944 cycles, would be at most ~1.18× if nothing else moved (DERIVED). *(Superseded the
+same day, in the wrong direction: at that tile the kernel is not on the array's critical path,
+and packed int4 B alone gives 1.23–1.26× — see
+[W4A8 on the whole array](#w4a8-on-the-whole-array-int4-weights-pay-at-the-best-int8-tile-and-not-through-the-core).)*
+The other half of W4A8 — B at half the bytes through the shim and mem tile — was not measured
+here; the next section does. The paired-load attribution reads pointer roles from
+post-increments, not resolved addresses. int16×int4 has no AIE2 `mmul` in `aie_api` and was not
+tried. Nothing here touches the accuracy of a W4 network.
+
+### W4A8 on the whole array: int4 weights pay at the best int8 tile, and not through the core
+
+2026-09-10, Desktop 2, `whole_array`'s 4 × 4 cores. Backing log `results/aie/w4a8_array_npu.log`;
+design and tools `kernels/w4a8_array/`; every run in `results/aie/w4a8_array_raw.jsonl`.
+
+`whole_array_w4a8.py` is upstream's `whole_array.py` (by way of the bank-placement copy) with
+two things varied: the kernel every core links, and whether B travels as int8 or as packed
+int4 — K × N/2 bytes, low nibble first, at half the bytes through shim, memtile and core DMA.
+The **unpack** arm stores int4 but multiplies at int8's rate, so it isolates the bytes; the
+**native** arm adds the doubled MAC rate. Every arm draws the same A and B, and all 49 runs
+matched numpy exactly and returned the same C.
+
+| 2048³, one sitting, time vs the same tile's upstream | upstream int8 | int8, re-typed | int4, unpack | int4, native (k loop ×2) |
+|---|---|---|---|---|
+| 64/128/64 — the int8 GEMM's best tile | 4,906.23 GOPS | 1.008× | 1.241× | **1.263× — 6,195.33 GOPS** |
+| 64/64/64 | 4,395.14 GOPS | 1.015× | 1.057× | 1.127× |
+| 128/64/64 | 4,753.23 GOPS | 1.016× | 0.971× | 1.015× (not resolved) |
+
+GOPS = 2MKN over the NPU-bracket average, 3 processes × 10 iterations per arm, as the tile sweep
+ran; the upstream arm reproduces that sweep's 4,852.06 and 4,683.89 within this machine's
+day-to-day drift.
+
+- **At 64/128/64 the gain comes from packing B, not from the MAC rate.** Every int4 arm lands at
+  1.23–1.26× — the unpack arms included — with ranges that overlap each other and clear every
+  int8 run, while a faster int8 kernel (`i8:unroll2`, 176 fewer cycles per call on one core)
+  runs 0.995×. The kernel is not on the critical path there. Mean int4 time is 0.8035 of
+  upstream's, against 0.800 from packing B's 40% share of the design's 80 MiB of L3 traffic —
+  a prediction written before the run. That makes **6,195.33 GOPS the fastest `whole_array`
+  rate in this repo** (42% of the 16-core int8 peak at 1.80 GHz; the op count is the same 2MKN,
+  the operands int8 × int4).
+- **It is not a bytes law.** At 64/64/64 the MAC rate shows: native beats unpack by 6.7%, ranges
+  disjoint. At 128/64/64 int4 buys nothing, and all three unpack runs sit above every int8 run
+  there — observed, not explained.
+- **The mechanism is unexplained, with three candidates ruled out.** Not the kernel (above).
+  Not total L3 bytes at a fixed bandwidth: the int4 arms at 64/128/64 and upstream int8 at
+  128/64/64 both move 64 MiB, in 2,773–2,846 µs against 3,614 µs, and upstream int8 alone runs
+  23.96 / 21.46 / 18.57 GB/s of L3 traffic at the three tiles. Not bytes into each core per call
+  ([SILICON 3.1](SILICON.md#31-gemm-the-tile-decides-whether-the-core-is-fed)'s bytes-per-MAC
+  model): those same two configurations deliver 8 KB of A and 4 KB of B per call and take
+  4,874–5,002 against 6,353 cycles (DERIVED at 1.80 GHz). That pair also differs in k, in A's
+  and B's DMA run lengths and in B's L3 re-stream count, and 64/64/64 lands between the two, so
+  the effect tracks neither m nor k alone.
+- **The capacity half bought nothing here.** Halving B lets 64/128/64 double-buffer C (60,672 B;
+  the allocator refused int8's 68,864 B, as the L1 arithmetic predicted): 1.255× against 1.263×
+  single-buffered.
+
+**How it was checked.** Compile-only builds of every arm before any device use: the packed-B
+transform lowers with an innermost dimension of one 32-bit word (int8's is two), and all nine
+compile outcomes match the L1 arithmetic, the refused build to the byte. `object_check.py`
+shows every array kernel identical, bundle for bundle, to the one-core probe's compile and to
+the object each run linked, so the probe's loop table describes what ran. One pilot of the
+riskiest arm before the sweep; predictions written down before each block; `xrt-smi` clean at
+the start and end of every block, host load clear, and a 1 s witness that never saw more than
+one context — the runs are short, so it caught one in 10 of its 526 samples.
+
+**What this does not establish.** One shape, three tiles, 3 processes per arm; the spread of
+per-process averages is 2–4%, and every arm whose range overlaps upstream's is reported as
+unresolved. Cycles per call are DERIVED from the NPU bracket, not traced. The tile pair that
+would separate k from DMA run length from B's re-stream count was not run. Nothing here says a
+W4 network keeps its accuracy.
+
+### INT4 on Phoenix, gates first: the chip runs the engine's uint8 × int4, and on paper the current weight packets leave int4 little to save (2026-09-23, Desktop 2)
+
+The question: AMD's shipped XDNA1 runtime exposes no int4. `device.yaml`'s AIE2 MAC table has
+no int4 row, and at this repo's opset 17 Quark routes 16-bit and 4-bit Q/DQ through the
+`com.microsoft` domain, where the VitisAI EP took zero nodes for INT16 (measured, DECISIONS
+A16W8; for int4 that is DERIVED from the same quantizer warning, not run). Use the documentation
+this repo already has either to demonstrate int4 on the chip or to kill it before any engine
+work. int4 on this silicon is not new: AIE-API 2024.1 lists AIE-ML's `8b x 4b: 4x16x8` as a
+native `mmul`, and Riallto states 512 int4×int8 MAC per cycle per core (SPEC; cross-audit ledger
+D11, on `main`). What is new here is the measurement on Phoenix through Peano,
+bit-exact, and the pricing against this engine. There are three gates, and each was written
+into its log before it ran. None of it touches `src/`. Two gates are compile-only or
+schedule-only, and one runs on silicon.
+
+**Gate A: which int4 operand pairs the toolchain can lower.** Compile only;
+`kernels/int4_study/isa_gate.py`, `results/aie/int4_isa_gate_desktop2_20260923.log`. It
+compiles one `aie::mmul` per operand pair with IRON's exact Peano command. Each pair also gets a
+harness control with the same loads and casts and no mmul. It also parses every MAC intrinsic
+in Peano's `aiev2_vmult.h` / `aie2p_vmult.h` for the control word it builds. That word has a
+2-bit `amode` and a 2-bit `bmode` field, so it records every operand-width pair the toolchain
+can issue.
+
+- **Lowers to one `vmul` on aie2:** int8 × int4, uint8 × int4 (the engine's operand pair),
+  uint8 × uint4, and int8 × int4 at 8×16×8.
+- **Fails as undefined `aie::detail::mmul` templates:** int4 × int8, int4 × int4 (4×16×8 and
+  4×32×8), and int16 × int4 (acc32 and acc64). Every harness control compiles, so the failures
+  come from missing mmul definitions. 16 cases, 0 departures from the pre-registered
+  expectations.
+- **In the control word,** aie2's only 4-bit code is bmode 0, always paired with an 8-bit A. No
+  intrinsic takes a 4-bit A, and 8 of the 16 (amode, bmode) codes are never emitted.
+- **The verdict is about the toolchain.** On AIE2 its only dense int4 is W4A8. Whether the
+  silicon decodes the unused codes is untested, and the 2026-09-10 lesson above (`device.yaml`'s
+  silence about int8 × int4 was not the chip's) is the reason not to say more.
+- **Unexpected, not pre-registered, and compile-only: on aie2p (Strix), int8 × int4 compiles to
+  `vldb.unpack` plus 8-bit MACs.** All 88 4-bit-operand intrinsics in `aie2p_vmult.h` are
+  wrappers that widen B to int8 first. So in this toolchain Peano's aie2 intrinsics reach a
+  native 4-bit-B MAC mode and its aie2p intrinsics do not. That is a reading of Peano's headers
+  and objects, not of Strix silicon, which nothing here touched.
+
+**Gate B: the most int4 could save the graph engine.** Schedule only, no device;
+`tools/int4_bytes_gate.py`, `results/aie/int4_engine_bytes_gate_desktop2_20260923.log`.
+
+- **What it prices.** It rebuilds each container's default schedule and walks every weight
+  packet one frame streams. Its totals must equal `engine_stream_report`'s, commit 5162671's
+  corrected YOLOv8n and YOLOv8s figures, and every shipped container manifest's
+  `wpackets_bytes` / `weight_fills`; all do. Then it prices three changes at the 26.8 GB/s fill
+  transport, as if the frame were purely transport-bound. That is the best case for any byte
+  saving, so every figure below is DERIVED.
+- **Int4 needs variable-size packets.** A weight packet is a fixed 9,472 B object, so int4
+  inside it saves exactly nothing. The comparison is therefore against trimming that same packet
+  to its declared layout.
+- **The kill line** is 5% of the model's smallest measured dispatch. That is the size of effect
+  H12 found inseparable from this machine's drift.
+
+| Container | weight bytes / frame | declared-layout fill | trim, % of dispatch | int4, % of dispatch | int4 ceiling* |
+|---|---:|---:|---:|---:|---:|
+| YOLOv8n (7.161 ms) | 26,303,744 B | 40.9% | 7.7% | **2.8%** | 4.2% |
+| YOLOv8s (16.609 ms) | 83,618,816 B | 41.5% | 10.5% | **3.9%** | 4.8% |
+| YOLOv8n-pose (7.548 ms) | 25,697,536 B | 43.5% | 6.8% | **2.8%** | 4.2% |
+| SESR-M7 (4.208 ms) | 6,668,288 B | 46.2% | 3.0% | **1.4%** | 1.7% |
+| resnet50_head (1.142 ms) | 9,699,328 B | 21.6% | 24.0% | **3.4%** | 4.0% |
+
+\* The ceiling is int4 plus half of each conv packet's header and bias, as if two int4 packets
+merged, plus half the weight DMA tasks' issue time.
+
+- **On paper, under the current packet format, int4-in-engine is killed at gate B:** every
+  model's best case sits under the line. The narrowest is YOLOv8s's ceiling, 4.8% against 5%,
+  0.2 points under. The verdict rests on three assumptions it did not test: a frame bound
+  purely by the 26.8 GB/s transport, the fixed 9,472 B packet as today's engine builds it, and
+  no accuracy data (no W4 model existed here then; gate D below measured it, and accuracy alone
+  kills int4 at round-to-nearest).
+- **A separate constraint, static:** the newest engine core ELF (56 builds, 2026-09-18 to 09-21,
+  `sesr_m7` among them) uses 16,160 of its 16,384 B of program memory, 224 B free; one variant
+  (`yolov8n_stride2ctrl`) has 16 B free. An int4 path is a second k loop in that core. The
+  older ELF behind `yolov8n_full`, `yolov8s_opt` and `resnet50_head` has 5,680 B free.
+  `results/aie/engine_core_issue_census_desktop2_20260923.log` on `main`
+  (cross-audit ledger A11).
+- **The lever that survives costs no accuracy:** the engine streams 2.2–4.6× more weight bytes
+  than the layouts it declares. The trim is still a DERIVED best case until someone builds it.
+- **Reopen int4 only with a new mechanism:** activations that stop round-tripping DDR, a
+  weight-bound model, or a slower measured transport. Pricing the same bytes again is not one.
+
+**Gate C: the silicon demo.** `results/aie/int4_demo_npu_desktop2_20260923.log`, with raw JSONL
+per sweep and a 1 s witness. The NPU ran 05:06–05:16Z. The driver, XRT and toolchain match the
+2026-09-10 logs.
+
+| Check | Result |
+|---|---|
+| 3a. The one-core W4A8 probe of 2026-09-10, repeated (`kernels/w4a8_probe/sweep.py`, 54 processes) | **All 27 (kernel, mode, K) cells give the same median trace cycles as on 2026-09-10.** 54 of 54 processes are bit-exact, and every IRON object is identical to its static compile. The native k loop fits 10.674 cycles per unit K again: 383.7 MAC/cycle, 1.88× the int8 control (`i8i8:default`, 204.4) and 1.69× the best int8 schedule (`i8i8:unroll2`, 227.1). |
+| 3b. **uint8 × int4**, the engine's operand pair (`kernels/int4_study/u8i4_probe.py`, 24 processes) | **Bit-exact in all 12 cells** (2 arms × 2 modes × K = 64/128/256), with half of A at or above the zero point of 128. **Every cell's cycles equal its int8 twin's**: uint8 A is only the MAC's sign bit. The engine's own `mmul<4,8,8,uint8,int8>` equals int8 × int8 the same way. |
+| 3c. The array's best tile, repeated (2048³, 64/128/64, 3 runs a side) | Native int4 runs **6,206.73 GOPS against upstream int8's 4,821.17, 1.287×** (2026-09-10: 1.263×). The run ranges are disjoint, and every run is bit-exact with the same output hash as every 2026-09-10 arm. |
+
+The witness saw at most one hardware context in 562 samples, and no sample with two processes on
+the NPU.
+
+**The verdict of all three gates:**
+- **The demo runs.** int4 weights compute exactly on this chip, including the uint8 × int4 pair
+  the engine would need, confirming on Phoenix what AMD documents for AIE-ML. The best int4 k
+  loop runs 1.88× the int8 control's and 1.69× the best int8 schedule's (fit, one core).
+- **On paper, the graph engine as built has little use for them.** Inside today's fixed 9,472 B
+  packets int4 saves nothing; with variable-size packets it is worth at most 4.8% of a dispatch
+  (DERIVED, transport-bound, no accuracy data), and the same packet change spent on trimming is
+  worth more. The engine core also has 224 B of program memory left for a second k loop. None of
+  this was built or measured on the engine. *(Since then, gate D below measured the accuracy: at
+  round-to-nearest, the 4-bit weights alone kill int4 for the engine.)*
+- **What this does not establish:**
+  - no W4 network on the NPU (gate D below measures W4 accuracy on the CPU);
+  - the array ratio's move from 1.263× to 1.287× lies inside this machine's day-to-day drift
+    (upstream int8 averaged 1.7% slower in this sitting) and is not attributed to anything;
+  - identical cycle counts on a statically scheduled core running byte-identical objects say
+    nothing about wall-clock stability.
+
+**Gate D: accuracy, emulated on the CPU, killed at round-to-nearest (2026-09-23, Desktop 2).**
+`tools/w4a8_emulate.py`, `tools/w4a8_engine_gate.py`, `tools/w4a8_verdict.py`,
+`scripts/w4a8-eval.sh`; every log in `results/int4/`. The NPU was not used.
+
+- **The question, pre-registered.** Does W4A8 lose more than 1.0 point of mAP@50-95 against the
+  shipped W8A8 YOLOv8n and YOLOv8s? The kill line, the decision rule and a written prediction
+  were committed (3c683ee, `w4a8_accuracy_prereg_desktop2_20260923.log`) before any evaluation,
+  smoke runs included. The decision arm is the better of E1 (one pow2 weight scale per tensor,
+  which today's engine lowers unchanged) and E2 (one per 32-output-channel packet group, a
+  compiler change). PASS needed both models within the line.
+- **The variants.** Every Conv weight is re-quantized from the float model: round-to-nearest on
+  [-7, 7], pow2 scales by Quark's MinMSE. Every activation Q/DQ, bias and other scale stays as
+  shipped. The 4-bit value is stored as q4 · 2^k under the shipped 8-bit scale (k = pos8 − pos4
+  in 0..4), so the file is a plain XINT8 file that the engine lowers.
+  - A group whose k falls outside 0..4 cannot be stored that way. Either it wants a finer scale
+    than the shipped one (k < 0), or a scale so coarse that q4 · 2^k leaves int8 (k = 5). Such a
+    conv gets a per-channel scale vector instead, and the file is named `*_ortonly.onnx`.
+  - That happened to E2 on both models (one 32-channel group each at k = −1).
+  - It also happened to U, one pow2 scale per output channel: 6 convs on YOLOv8n and 11 on
+    YOLOv8s. Four of them reach form a through k = 5 alone: `/model.21/cv1` on both models,
+    and `/model.9/cv2` and `/model.21/cv2` on YOLOv8s.
+  - It is a limit of the int8 container, not of a per-group engine shift.
+  - E1h is E1 with the stem and the 6 head-output convs kept W8: 1.01% and 0.39% of the weights.
+- **Controls, all before any mAP (`w4a8_controls_*`, `w4a8_engine_gate_*`).**
+  - The 8-bit path of the same code rebuilds both shipped files exactly: empty `graph_diff`,
+    bit-identical outputs on 16 images.
+  - Only the intended initializers change. The float identity stored · scale = q4 · 2^−pos4
+    holds on every group, and form a matches form b bit for bit.
+  - A negative control shows the comparison can see a difference.
+  - The engine's integer oracle equals ONNX Runtime (ORT_DISABLE_ALL) on all 66 layers for B8,
+    E1 and E1h, both models, on 6 inputs each.
+- **The setup.** CPU EP with ORT_DISABLE_ALL, 8 pinned threads, resnet_env17, all 5,000 val2017
+  images, one sitting. The host was clear before 11 of the 12 rows. YOLOv8s E1 started with
+  4.5 busy cores, which moves wall time only: the arithmetic is fixed-thread. The smoke rows first
+  reproduced the committed 500-image figures exactly, 30.25 and 40.77.
+
+| mAP@50-95, all 5,000 images | YOLOv8n | YOLOv8s |
+|---|---:|---:|
+| B8, the shipped W8A8 file | **27.10** | **37.21** |
+| E1, W4 per tensor (decides) | 0.06 | 2.76 |
+| E2, W4 per 32-channel group (decides) | 0.02 | 2.76 |
+| E1h, E1 with the stem and heads at W8 (context) | 0.08 | 7.87 |
+| U, W4 per output channel (context) | 1.58 | 2.47 |
+| B8 with ONNX Runtime's optimizations (context) | 27.10 | 37.21 |
+| **Delta, B8 − the better decision arm** | **27.04** | **34.45** |
+
+- **Verdict: KILL** (`w4a8_accuracy_verdict_desktop2_20260923.log`, printed mechanically from
+  the pre-registered constants). int4-in-engine is killed at round-to-nearest (pow2 scales,
+  this dialect). GPTQ, AdaRound and every other recovery method are untested. It is not a
+  narrow miss: the pre-registered expectation of "several points" was wrong by an order of
+  magnitude, and no arm keeps even a tenth of the baseline except E1h on YOLOv8s.
+- **The prediction held:** B8 with ONNX Runtime's optimizations equals B8 without them to 0.00 on
+  both models. So the optimized-CPU mAPs in this file stand for these shipped XINT8 files.
+- **The baseline agrees with an earlier NPU sitting.** 27.10 and 37.21 equal the HardSigmoid-form
+  graph-engine containers (main `c714629`), measured on the NPU on 2026-09-17 over the same 5,000
+  images
+  ([accuracy against AMD's stack](#the-sigmoid-silu-containers-against-amds-stack-more-accurate-on-all-5000-coco-images-faster-on-yolov8n-and-yolov8n-pose-slower-on-yolov8s-2026-09-17-desktop-2)).
+  Those containers compute this XINT8 file exactly, as the engine's bit-exactness with
+  ORT_DISABLE_ALL predicts. AMD's stack scores 26.68 and 37.31 on the same files.
+  - They are not what Ignition ships. The shipped `--silu-sigmoid` containers score 34.12 /
+    42.37, because they replace the file's HardSigmoid with a sigmoid.
+  - The diagnostic below runs the real Sigmoid, and W4 collapses there too, so the verdict does
+    not move.
+- **Where the loss is, from the sidecars.** Median per-conv weight SQNR is 31.5 / 30.1 dB at W8,
+  13.1 / 13.1 dB for E1 and 14.7 / 14.5 dB for U (YOLOv8n / YOLOv8s). E1's worst conv is a 3×3
+  in the class branch at 4.4 / 4.3 dB. Per-channel pow2 scales buy about 1.5 dB at the median.
+- **A post-hoc diagnostic, not pre-registered, that decides nothing** (`diag_*`, 500 images,
+  `scripts/w4a8-eval.sh diag`). The same dequantized weights go into the float model, which keeps
+  float activations and the real Sigmoid SiLU:
+
+| mAP@50-95, first 500 images | YOLOv8n | YOLOv8s |
+|---|---:|---:|
+| FP32 | 39.95 | 48.52 |
+| FP32 with the W8 weights | 38.54 | 47.65 |
+| FP32 with the W4 E1 weights | 0.00 | 2.89 |
+| FP32 with the W4 U weights | 1.67 | 1.85 |
+
+  - The collapse is in the 4-bit weights as quantized here (RTN, pow2 scales). Float
+    activations and the real sigmoid do not rescue it, so the frozen W8A8 activation scales and
+    the HardSigmoid form are not the cause.
+  - The same code at 8 bits costs 1.41 / 0.87 points and rebuilds the shipped files exactly,
+    which argues against an emulation fault. At 4 bits only the bounds and the MinMSE window
+    change.
+- **What this does not establish:**
+  - whether float (non-pow2) per-channel scales survive; no such arm ran, so the cost of pow2
+    scales is unmeasured;
+  - any recovery method: GPTQ, AdaRound, bias correction, BN re-estimation or QAT;
+  - mixed precision beyond E1h's seven convs;
+  - E2's "compiler-only" label, which is on paper: no int4-packed engine lowering exists.
+- **Reopen int4-in-engine only** with a recovery method that brings a W4 model within 1.0 point,
+  measured the same way. Byte savings and silicon speed are settled above; accuracy is the gate.
 
 ### MobileViT-XXS does not survive per-tensor INT8, and AdaRound cannot save it
 
@@ -3234,6 +3633,13 @@ pattern that AdaRound has less room to recover as width increases.
 > plain-XINT8 row — the exact "a model can arrive with no log explaining it" risk this
 > repo's own machine notes warn about.
 
+> **In-sample check (2026-09-25).** Every calibration image here is a val2017 image, so each
+> is also among the 5000 scored ([pitfall](DECISIONS.md#rejected-approaches-and-known-pitfalls)).
+> Rescored from the saved detections on the other 4,700: yolov8s AdaRound 39.95; yolov8m
+> AdaRound 45.38 against plain XINT8's 43.58 (+1.80, against +1.83 on all 5000); and
+> yolov8n-pose's recovery (next section) +1.71 against +1.68
+> (`results/bench/coco_heldout_rescore_desktop2_20260925.log`).
+
 ### yolov8n-pose end to end on the NPU
 
 Head-cut partitions 1015/1025 (99.0%), ~9.1–9.4 ms/frame, same clean pattern as detect:
@@ -3350,6 +3756,11 @@ Three findings:
    distributions would degrade INT8 PTQ "beyond the recovery capacity of AdaRound" —
    measured, they don't: the same AdaRound recipe used elsewhere in this repo, with no
    yolov6n-specific tuning, recovers the large majority of the plain-XINT8 loss.
+
+Checked 2026-09-25: the 300 calibration images are among the 5000 scored
+([pitfall](DECISIONS.md#rejected-approaches-and-known-pitfalls)). On the 4,700 others the
+recovery is +10.68 points (33.55 against 22.87; FP32 36.88), so finding 3 does not rest on them
+(`results/bench/coco_heldout_rescore_desktop2_20260925.log`).
 
 ### Category C, second candidate: YOLOv11n (C2PSA Attention Block & Decoupled DWConv Head)
 
@@ -4880,13 +5291,13 @@ timing and a GPU oracle are still open.
 
 A GPU AdaRound run with its adapter on record and a same-env CPU baseline beside it:
 Ignition's transcription (`python -m quant adaround`) on ResNet50's c64 CLE base, on
-**Desktop 1** (`JORDAN-PC`, Ryzen 7 7800X3D, RX 7900 XTX, gfx1100, 24 GB). It is not
+**Desktop 1** (Ryzen 7 7800X3D, RX 7900 XTX, gfx1100, 24 GB). It is not
 Quark's FastFinetune on a GPU, and it makes no accuracy claim: Desktop 1 has no NPU, so
 full-set top-1 and EP placement for the new artifacts are Desktop 2's to run, with
 `--fresh`.
 
 It is not the first GPU request here.
-[`yolo8m_adaround_gpu_compile.log`](../results/yolo8m_adaround_gpu_compile.log) (JORDAN-PC,
+[`yolo8m_adaround_gpu_compile.log`](../results/yolo8m_adaround_gpu_compile.log) (Desktop 1,
 `resnet_env_rocm`) shows Quark's own FastFinetune reporting "optimized by adaround on
 cuda" for yolov8m, with its ORT half falling back to the CPU. That log names no adapter
 and has no CPU arm beside it, yet RESEARCH credits yolov8m to "GPU-accelerated
@@ -4983,7 +5394,7 @@ the GPU.
 
 ### Ignition: a GPU-built AdaRound file on the NPU (2026-09-10, Desktop 2)
 
-Desktop 1 (`JORDAN-PC`, RX 7900 XTX) built two AdaRound files from the same CLE c64 base,
+Desktop 1 (RX 7900 XTX) built two AdaRound files from the same CLE c64 base,
 `models/resnet50_ignition_cle_c64.onnx`, in one conda env (`resnet_env_rocm`: torch
 `2.9.1+rocm7.2.1`, ONNX Runtime 1.29.0). The only difference between them is `--device`:
 - `cuda` wrote `resnet50_ignition_cle_adaround_c64_gpu_desktop1.onnx` (`811a699e…`), with
@@ -9044,6 +9455,10 @@ recover the accuracy. GPTQ rounding with an int32 bias does, and needs no core p
 with its command. Code: `ca5b6cd` (HardSwish after the residual add, `pipelines/yolow/3a_split_attn_conv.py`) and
 `80ca69e` (int32 biases, `pipelines/yolow/3c_gptq_cv2.py`). Accuracy is COCO val2017 mAP@50-95 on the **first 300
 images**, the subset of variant D's rows above.
+Not held out: GPTQ's 64 statistics images are the first 64 of `data/coco_calib`, which are val2017 images,
+and 19 of them are among these 300. Their effect here is unmeasured, since the detections were not kept;
+where it was measured, on AdaRound and plain XINT8 files, it stayed within 0.07 points
+([pitfall](DECISIONS.md#rejected-approaches-and-known-pitfalls)).
 
 **Accuracy** (MEASURED; ONNX Runtime CPU unless the row says otherwise):
 
@@ -14610,3 +15025,302 @@ The consequences:
 - **Turbo pmode.**
 - **Trace-timer cycle counts.** Every cycle figure here is a wall-clock slope × the measured 1.80 GHz.
 - **Moving the loops' same-bank pair apart.** Impossible without changing the kernel.
+
+## Laya on the CPU and the 780M: the bar an NPU build has to beat (2026-09-26, Desktop 2)
+
+Laya (Convai Innovations, Apache 2.0) is a typed-decision model: ModernBERT-large plus a decision head, 421M
+parameters, one forward pass per question and no text generated. This sitting measures what an NPU build of it would
+have to beat. The NPU was not run.
+
+- **Model:** receptron/laya-onnx at revision `68f27dfe`, the English checkpoint in fp32 (`laya.onnx` `a874eb25`,
+  weights `48774636`).
+- **Inputs:** synthetic and full length: fixed-seed token ids, the whole attention mask set, four option markers,
+  question type choice. Latency depends on the shape, not the words, and no decision is judged here.
+- **Stack:** ONNX Runtime 1.27.0, CPU with 8 intra-op threads, DirectML on the Radeon 780M (driver 32.0.31041.1004),
+  Balanced power scheme.
+- **Energy:** `tools/energy_sitting.py`, package power minus each arm's own 30 s idle (17.4-20.1 W), over a 60 s
+  window.
+- **Tool:** `tools/laya_baseline.py`.
+- **Evidence:** `results/laya/laya_baseline_desktop2_20260926.log` and its JSON. The preparation steps are in
+  `laya_prep_desktop2_20260926.log`: DirectML failing on the unmodified export, `dmlcopy`, and the int8 file re-made
+  byte-identical.
+
+| Per sequence, mean | CPU fp32 | CPU int8 (dynamic) | 780M DirectML fp32 |
+|---|---|---|---|
+| 512 tokens: latency | 1112.4 ms | 638.8 ms | **632.8 ms** |
+| 512 tokens: package above idle; energy | +59.0 W; 65.5 J | +58.4 W; 37.4 J | +54.1 W; **34.2 J** |
+| 512 tokens: CPU load | 52.2% | 52.1% | **8.3%** |
+| 1,024 tokens: latency; energy | 2912.9 ms; 170.8 J | **2061.3 ms**; 115.1 J | 2191.1 ms; **106.2 J** |
+| 4 × 512 in one call: latency; energy | 1070.7 ms; 64.2 J | **668.3 ms**; **37.7 J** | 881.0 ms; 43.0 J |
+
+- **At 512 tokens the 780M and CPU int8 tie on latency** (within 1%). The 780M spends 8.4% less energy and leaves the
+  CPU at 8% load, against 52%. CPU fp32 is 1.74-1.76× slower and spends 1.91× the 780M's energy.
+  - CPU int8 is not accuracy-equivalent
+    ([next section](#laya-in-bf16-and-int8-bf16-keeps-its-decisions-orts-dynamic-int8-does-not-2026-09-26-desktop-2)),
+    so at equal accuracy the 780M's fp32 figures are the bar.
+- **At 1,024 tokens CPU int8 is 6% faster** than the 780M, which spends 7.7% less energy.
+- **Batching buys nothing.** Four sequences per call cost the 780M 28% per sequence. The CPU moves by less than 5%
+  either way.
+- **Effective rate** (DERIVED; 409 GOP per 512-token sequence by the tool's shape-inference count): 0.37 TOPS CPU
+  fp32, 0.64 CPU int8, 0.65 on the 780M.
+  - For scale only, not a prediction: the NPU's best measured single-GEMM rates here are 4,906 GOPS int8 and
+    2,700 GFLOPS bf16, at 2048-class shapes. Laya's GEMMs are 512 rows.
+- **DirectML needed one graph change.** 77 of the export's 138 Reshape nodes carry `allowzero=1`, which this ORT's
+  DirectML rejects (0x80070057 at `node_view`). The tool's `dmlcopy` clears it (`laya_az0.onnx`, `fd35271c`).
+  - That is equivalent here: none of the 69 run-time Reshape targets holds a 0 at 512 or 1,024 tokens, and the CPU
+    outputs are bit-identical.
+  - The copy's DirectML logits are within 2.2e-6 of the CPU's, with 98% of kernel time on DirectML.
+- **The int8 file is ORT dynamic quantization.** Its weights are per-channel int8, on MatMuls with constant weights
+  only. On the synthetic input its logits move up to 0.141 from fp32's, with the same top option.
+  - On labelled tasks it fails the accuracy gate: 7.96 pt below fp32, pooled
+    ([next section](#laya-in-bf16-and-int8-bf16-keeps-its-decisions-orts-dynamic-int8-does-not-2026-09-26-desktop-2)).
+- **Superseded log lines.** The log's "MACs per call" lines come from an earlier counter: fp32 188.0 G, int8 0.0 G
+  (it missed `MatMulInteger`). The committed tool gives both 188.6 G weight + 16.1 G attention at 512 tokens.
+  - The committed tool postdates the sitting. Re-run, its `run` output differs only in that line.
+  - The prep log re-ran `dmlcopy` and `quantize` with the committed version.
+
+**Not run:**
+- the NPU (screened in
+  [step 3](#laya-on-the-npu-screened-the-floor-beats-the-cpu-and-the-780m-without-the-nan-guards-2026-09-26-desktop-2));
+- DirectML fp16 (no converter in the environment);
+- the multilingual and 1,024-token checkpoints (no ONNX export);
+- shorter real inputs, which the CPU and the 780M run faster while a fixed-shape NPU build pays for all 512 tokens;
+- decision accuracy (run in the [next section](#laya-in-bf16-and-int8-bf16-keeps-its-decisions-orts-dynamic-int8-does-not-2026-09-26-desktop-2)).
+
+## Laya in bf16 and int8: bf16 keeps its decisions, ORT's dynamic int8 does not (2026-09-26, Desktop 2)
+
+An NPU build of Laya would run its weight products in bf16 or int8. This checks both against fp32 on the CPU, on the
+public tasks the model card reports, before anything is built for the NPU. The criteria were committed (`465a1fd`)
+before either arm was scored.
+
+- **Items:** 2,400 labelled questions, pinned by hash.
+  - The first test rows of AG News, Emotion and Banking77 (400 each), MASSIVE-en and XNLI-en (300 each), and SST-5
+    (600), built as the card's two published runs built them.
+  - Also receptron's reference support ticket: 3 questions, no gold, and the only noul question here.
+- **Reference:** the fp32 ONNX, step 1's `laya.onnx`, at batch 1. It reproduces the card:
+  - accuracy on all six tasks, to the item;
+  - ECE and confidence to 4 decimals against the card's CPU fp32 run;
+  - within 0.0004 of its T4 fp16 run, and exactly at T=1;
+  - the reference ticket to 4 decimals, 267 tokens.
+- **bf16 arm (emulated):** all 124 MatMul/Gemm with constant weights take bf16 operands and accumulate in fp32 with
+  fp32 out, as the NPU's bf16 GEMM can.
+  - The weights are rounded to nearest-even, and a Cast pair rounds each activation input.
+  - ORT 1.27.0's Cast matches numpy's round-to-nearest-even bit for bit on 119,808 values.
+  - Attention products, norms and embeddings stay fp32.
+- **int8 arm (ORT dynamic):** step 1's copy, a proxy for an NPU build whose host computes the activation scale.
+  - Per-channel int8 weights on the 120 MatMuls; the 4 head Gemms stay fp32.
+  - Activations take one scale per call over the whole tensor, which is why every arm runs at batch 1: padding would
+    change that scale.
+- **Stack:** ONNX Runtime 1.27.0, CPU with 8 intra-op threads.
+- **Criteria:** an arm passes only if all hold.
+  - The same top option as fp32 on at least 97.0% of the items, pooled, so up to 72 of 2,400 may differ. The rule,
+    fixed before the fp32 report, allowed as many as the authors' own bf16 shift (0.024) could flip on these items.
+  - Accuracy at most 0.5 pt below fp32 pooled, and at most 1.5 pt below on each task.
+  - ECE at T=1 at most 0.010 above fp32's pooled, and at most 0.020 above on each task. Calibration is judged at
+    T=1 because the shipped 11+-option temperature (0.1006) multiplies logit shifts about 10×.
+- **Tool:** `tools/laya_accuracy.py`.
+- **Evidence:** in `results/laya/`, run the evening of 2026-09-26 local time (the logs stamp 09-27, UTC):
+  - `laya_accuracy_prereg_desktop2_20260926.json`, the criteria;
+  - `laya_accuracy_prep_desktop2_20260926.log`: the rounding and ticket checks, the items, and the bf16 model;
+  - `laya_accuracy_fp32_desktop2_20260926.log`;
+  - `laya_accuracy_arms_desktop2_20260926.log`.
+
+| Against fp32 | bf16 (emulated) | int8 (ORT dynamic) |
+|---|---|---|
+| Same top option, pooled | **2,395 / 2,400 (99.79%)** | 1,667 / 2,400 (69.46%) |
+| Accuracy, pooled (fp32 0.6267) | **0.6258 (−0.08 pt)** | 0.5471 (−7.96 pt) |
+| Worst task's accuracy | Banking77 −0.25 pt, MASSIVE −0.33 pt (1 item each) | Banking77 0.135 (fp32 0.425, −29.0 pt) |
+| T=1 ECE, pooled (fp32 0.1924) | 0.1921 | 0.1902 |
+| Worst task's T=1 ECE rise | +0.0055 (MASSIVE) | +0.0536 (SST-5) |
+| Reference ticket, largest probability shift | 0.0024 | 0.278 (billing 0.9415 → 0.6635) |
+| Verdict | **PASS** | FAIL: same top option, pooled and per-task accuracy, per-task ECE |
+
+- **bf16 keeps Laya's decisions.**
+  - 5 of 2,400 top options change, for a net 2 fewer correct.
+  - At T=1 the largest task's 99th-percentile probability shift is 0.0193 (XNLI).
+  - SST-5's score answer moves 0.0041 on average (at most 0.043).
+  - The largest single shift at the shipped temperatures, 0.226, is on a MASSIVE item, where the 0.1006 temperature
+    magnifies a small logit change.
+  - For scale: the authors report 0.024 (choice), 0.058 (noul) and 0.017 (score) for their torch bf16 against fp32.
+- **ORT's dynamic int8 does not.**
+  - 733 of 2,400 top options change, and accuracy falls on all six tasks. The worst is Banking77, 77 options at
+    once, which keeps only 110 of 400 decisions.
+  - Then MASSIVE (−7.33 pt), SST-5 (−6.17), AG News (−2.00), Emotion (−1.25) and XNLI (−1.00).
+  - Pooled T=1 ECE is the one criterion it meets.
+  - The cause was not probed.
+  - Step 1's synthetic check (the same top option, logits within 0.141) did not show this.
+- **For an NPU build:**
+  - bf16 operands with fp32 accumulation, as emulated here, are accuracy-equivalent to fp32 on these tasks. What
+    passed is the 124 weight products in bf16 with fp32 GEMM output; attention, norms and embeddings stayed fp32.
+    Step 3 can build exactly that
+    ([screened](#laya-on-the-npu-screened-the-floor-beats-the-cpu-and-the-780m-without-the-nan-guards-2026-09-26-desktop-2)).
+  - This int8 scheme is out.
+  - Step 1's CPU int8 figure (638.8 ms, 37.4 J at 512 tokens) comes with 8 pt less accuracy. At equal accuracy the
+    bar is the 780M in fp32: 632.8 ms and 34.2 J.
+    - Its logits were within 2.2e-6 of the CPU's in step 1, on synthetic input; it was not scored on the items.
+
+**Not run:**
+- int8 with static, per-token or per-channel activation scales, or outlier handling;
+- bf16 GEMM output (the arm keeps fp32 out);
+- attention products, norms or embeddings in bf16;
+- the NPU, and any timing
+  ([step 3](#laya-on-the-npu-screened-the-floor-beats-the-cpu-and-the-780m-without-the-nan-guards-2026-09-26-desktop-2));
+- noul questions beyond the ticket's one;
+- the multilingual checkpoint, the other MASSIVE and XNLI languages, and the card's typed-decisions benchmark, which
+  is not public.
+
+## Laya on the NPU, screened: the floor beats the CPU, and the 780M without the NaN guards (2026-09-26, Desktop 2)
+
+Step 3 bounds a hybrid build before building it. The 124 weight products that passed in bf16
+([previous section](#laya-in-bf16-and-int8-bf16-keeps-its-decisions-orts-dynamic-int8-does-not-2026-09-26-desktop-2))
+would run on the NPU, everything else on the host. The two sides were run apart. No hybrid exists, and no decision
+came from the NPU. The rule, stated before any NPU run but not committed: build if the floor beats the 780M in fp32
+on latency or energy, or if it beats CPU fp32 only (the NPU then frees the GPU rather than beating it); otherwise
+stop.
+
+- **NPU side:** mlir-aie's `whole_array` GEMM (IRON, 4 columns, bf16 in, fp32 accumulation and output,
+  `whole_array.py` `92db1cad`), at n=64 with the C tile single-buffered (`kernels/gemm_tile_sweep/`).
+  - The 120 products with 512 rows come in six shapes, one design each; 1024→5248 runs as 5,376 columns, the extra
+    128 zero. Each design matches numpy on the same bf16 operands within 1.94e-6 of the largest output.
+  - Weights are written once and stay resident. Per product: the fp32 activation rounded to bf16 into the input
+    buffer (8 threads), sync in, the call, sync out of the fp32 result.
+  - `shapes` repeats each shape alone. `chain` runs the 120 in Laya's order, the designs alternating, on random
+    activations with no host compute between. A sequence cannot batch its calls: each waits on host work.
+- **Host side:** an ONNX Runtime CPU profile of the whole fp32 model (8 threads, 512 tokens): kernel time outside
+  the 124 weight products, plus time outside kernels. Profiled calls run 3.7-7.4% slower than unprofiled, so it is
+  an upper figure.
+- **Energy:** `tools/energy_sitting.py`, one sitting of five arms: the NPU chain, and the CPU and the 780M on both
+  exports. The machine was not quiet: 3 of the 5 idles stayed disturbed after three tries, and the 780M ran the
+  shipped export 13.8% slower than in step 1. Every energy figure from this sitting is against its median
+  undisturbed idle, 18.5 W. Tctl peaked at 81.9 °C.
+- **Tool:** `tools/laya_npu_screen.py`.
+- **Evidence:** in `results/laya/`, run the evening of 2026-09-26 local time (the logs stamp 09-27, UTC):
+  - `laya_npu_screen_desktop2_20260926.log`: both host shares, the guard-free copy and its checks, the NPU runs;
+  - `laya_npu_screen_energy_desktop2_20260926.log` and its JSON.
+
+| Per 512-token sequence, ms | NPU, each shape alone | NPU, Laya's order |
+|---|---|---|
+| Round to bf16 and write | 67.6 | 82.3 |
+| Sync in and out | 11.1 | 12.6 |
+| Calls | 261.1 | 460.2 |
+| of which in the NPU bracket | **191.6** | 331.8 |
+| Total | 339.8 | 556.9 (mean of 108; 1.8 in the loop) |
+
+| Per 512-token sequence, CPU, ms | Shipped export | Guard-free copy |
+|---|---|---|
+| Host share | 607.2 | **269.3** |
+| of which the Softmax NaN guards | 325.9 | 0 |
+| The weight products, not in the host share | 651.8 | 669.2 |
+| Whole model, unprofiled | 1172.7 | 905.5 |
+
+| Per 512-token sequence | Shipped export: latency; energy | Guard-free copy: latency; energy |
+|---|---|---|
+| Host share + NPU in Laya's order (DERIVED) | 1,164 ms; 48.0 J | 826 ms; 28.5 J |
+| Host share + NPU, one design (DERIVED) | 947 ms; 43.1 J | 609 ms; 23.6 J |
+| Host share + NPU floor: bracket and syncs, 202.7 ms (DERIVED) | 810 ms; 40.0 J | **472 ms; 20.5 J** |
+| 780M DirectML fp32, this sitting | 719.9 ms; 38.3 J | 688.1 ms; 36.5 J |
+| 780M DirectML fp32, step 1 | 632.8 ms; 34.2 J | not run |
+| CPU fp32, this sitting | 1121.3 ms; 65.6 J | 834.2 ms; 49.5 J |
+
+- **By the rule as stated, build.** The shipped export's floor, 810 ms and 40.0 J, beats CPU fp32 by 28% and 39%.
+  It loses to the 780M on both, so on this export the NPU would take Laya off the GPU, not beat it.
+- **Without the NaN guards the floor beats the 780M:** 472 ms and 20.5 J, 31% faster and 44% less energy than the
+  780M running the same copy. It also clears step 1's quieter 780M figures (632.8 ms, 34.2 J). The copy came out of
+  this screen; the rule did not name it.
+- **As built, neither export beats the 780M.** Laya's order costs 217.1 ms more than the same products repeated
+  alone: 140.2 ms more in the NPU bracket and 58.9 ms more outside it, the cost of alternating among six designs.
+  - Guard-free as built: 826 ms, slower than the 780M's 688.1 and level with the CPU's 834.2, at 28.5 J against
+    36.5 and 49.5 J.
+- **What the floor leaves out.** Measured: rounding and writing the activations (67.6 ms), IRON's call outside the
+  bracket (69.5 ms, 0.58 ms per call), and the switching (217.1 ms). Not measured: splitting the host graph around
+  120 products. The four head products with 1-4 rows (4.5 M MACs) and the head Gemms' bias adds stay on the host,
+  inside the profile's weight-product time. The floor is this design's; faster GEMMs would lower it.
+- **The energy sums rest on two assumptions.** The NPU side draws the chain's +22.3 W, which includes rounding on 8
+  threads. The host share draws the whole-model CPU arm's +58.5 W (+59.4 W guard-free).
+  - Against each arm's own idle instead, the shipped floor ties the 780M at 38.6 J, the guard-free floor is 19.8 J
+    against 34.6, and the CPU bars are 63.2 and 47.7 J. The verdicts stand.
+- **In its bracket the NPU runs the 120 products at 1.97 TFLOPS** (DERIVED: 377.2 GFLOP in 191.6 ms), 1,731-2,352
+  GFLOPS by shape, and 1.14 TFLOPS in Laya's order. The CPU's profile gives the 124 weight products 651.8 ms in fp32.
+- **The shipped export spends 326 ms of CPU per call on NaN guards.** torch's safe softmax exports as
+  `Where(IsNaN(s), 0, s)` over each layer's [1, 16, 512, 512] attention probabilities: IsNaN 140.5 ms and Where
+  185.4 ms, 54% of the host share. Without them the CPU runs the whole model in 834.2 ms against 1121.3 (−25.6%,
+  same sitting) and the 780M in 688.1 against 719.9 ms (−4.4%). Step 1's figures stand for the export as shipped;
+  this is a variant of it.
+  - `noguard` removes all 28, from step 1's `laya_az0.onnx` (whose CPU outputs match `laya.onnx`'s bit for bit).
+    On all 2,403 of step 2's items the logits stay bit-identical to its fp32 reference, and so does every decision
+    and calibration figure.
+  - The first item of each task padded to 512 tokens, as a fixed-512 build would pad it (46-313 real tokens), comes
+    out finite and bit-identical to the guarded export (7 of 7), and bit-identical to the same items unpadded.
+- **Next, in order:**
+  1. one hardware context serving all six shapes, to remove the switching;
+  2. a raw XRT host path in place of IRON's per-call overhead;
+  3. rounding folded into the host op before each product;
+  4. the host graph split;
+  5. then the hybrid end to end, scored against step 2's bf16 emulation, and run beside an LLM on the 780M.
+
+**Not run:**
+- the hybrid, so no decision came from the NPU (its GEMMs match numpy; step 2's emulation is the accuracy evidence);
+- a raw XRT path, one context across shapes, and int8 on the NPU;
+- two sequences in flight, the NPU on one while the host runs the other (throughput, not latency);
+- lengths other than 512 tokens, and batch above 1;
+- the guard-free copy on the 780M in a quiet sitting, and its logits there (timed only here; step 1 checked the
+  shipped copy's, within 2.2e-6);
+- padded inputs beyond those 7 items;
+- the host share on the 780M.
+
+## Laya on the NPU, one context serves all six GEMM shapes and halves the device side (2026-10-13, Desktop 2)
+
+Step 4a, the first item on step 3's list: remove the cost of switching between six designs
+([previous section](#laya-on-the-npu-screened-the-floor-beats-the-cpu-and-the-780m-without-the-nan-guards-2026-09-26-desktop-2)).
+[Log](../results/laya/laya_gemm_onectx_desktop2_20261013T012132Z.log) with every pre-registration and every run, failed ones included.
+
+- **The change.** `kernels/gemm_generic/whole_array_generic.py` is a copy of mlir-aie's `whole_array` with
+  `--rtp-generic` added.
+  - The core reads its output-tile count and its K-tile count from a run-time parameter that the runtime
+    sequence writes. A `WorkerRuntimeBarrier` gates the read.
+  - So the six (K, N) shapes compile to device images that differ only in bytes that also differ between two
+    builds of one shape (a UUID and one build field). One loaded design runs all six; a shape is just its
+    instruction stream.
+  - All shapes use one tile: m=32, k=64, n=64, C single-buffered.
+- **How the first design failed, and why.** In the first two sittings the K=2624 product timed out after the
+  K=1024 shapes.
+  - **Two causes were refuted:**
+    - an odd K-tile count: K=1088, 17 tiles, passes alone;
+    - the N=5248 shape: the failure persists without it.
+  - **What the bisection showed:** any K change after a context's first call gave wrong values.
+  - **The cause:** the barrier wait is an acquire-equal (`llvm.aie2.acquire(54, 1)` in the core IR), and it does
+    not consume the lock. So from the second call on, the core read the parameters before the call wrote them,
+    and ran on the previous call's values. A stale tile count that is too large is harmless, which is why N
+    changes passed.
+  - **The fix:** end each call with `barrier.release_with_value(1)`, as upstream's `ml/mm_activation_epilogue`
+    does. It passes all five failing sequences.
+- **The control had to change.** Six resident contexts cannot be opened on this device; the sixth fails with
+  `0xc01e0009`. The control is therefore IRON's own npu1 behaviour at that ceiling: at most five resident, the
+  least recently used evicted. It made 26 context creations per block of six sequences.
+
+| 120 products in Laya's order, device side only | median | IQR | context creations / block |
+|---|---|---|---|
+| one context, generic design | **213.0 ms** | 211.7–214.6 | 1 |
+| per-shape designs, ≤5 resident (LRU) | 444.5 ms | 429.2–453.2 | 26 |
+
+- **The gates, all pre-registered, all PASS:**
+  - G1: every shape in both arms matches numpy within 1.94e-6, with padded columns 0 and repeats bit-equal.
+  - G2: the one-context output is bit-equal to the per-shape output.
+  - G3: the one-context IQR lies wholly below the control's.
+- **The saving is 231.5 ms per sequence,** 1.93 ms per product, against step 3's switching estimate of 217.1 ms.
+- **What both arms time:** the device side only (sync in, call, wait, sync out) through raw `pyxrt`, with no IRON
+  wrapper. The fp32→bf16 conversion is excluded from both.
+- **Continuity with step 3** (minutes later, so not the same sitting): IRON's own chain at the best tiles reads
+  734.3 ms per sequence, 175.4 ms of it conversion.
+  - Its device side is 552.0 ms, against step 3's 556.9 ms.
+  - On that like-for-like device side, the one-context path is **2.6× faster** (213.0 against 552.0 ms). That
+    combines two of step 3's levers, one context and no IRON per-call wrapper. The control arm separates them:
+    raw `pyxrt` with switching is 444.5 ms.
+- **Not measured:** energy; the host's side of a sequence; the hybrid end to end. So no new floor against the
+  780M is claimed here. Step 3's floor arithmetic used IRON's device side; with this one, the derived floor
+  would fall by the device-side saving, and that is still to be measured with the host work in place.
+- **Next on step 3's list:**
+  - item 2, the raw XRT host path, is now in hand for the device side;
+  - item 3: fold the bf16 rounding into the host op before each product;
+  - item 4: split the host graph;
+  - item 5: build the hybrid end to end, scored against step 2's bf16 emulation.

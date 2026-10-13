@@ -35,7 +35,7 @@ Full environment split, install steps and footguns: [`docs/SETUP.md`](docs/SETUP
 | `pipelines/yolow` | YOLO-World v2 open-vocabulary (cross-attention) | **Fractured on AMD's stack (48/1081 nodes, 103.31 ms)** due to 5D Einsum/ReduceMax; ablated backbone runs at 15.89 ms (946/953 nodes). On the graph engine everything but the four text attention blocks runs on the NPU (63 of 67 convolutions), at 24.7% mAP on the first 300 val images after GPTQ on four convolutions, with class names chosen at run time ([how](docs/BENCHMARKS.md#yolo-world-v2-with-only-its-text-attention-on-the-cpu-gptq-and-an-int32-bias-recover-the-four-output-convolutions-2026-09-16-desktop-2)); frame to detections that is 2.75× AMD's stack at equal accuracy, and against the iGPU running FP32 at 43.0% faster with 80 classes but slower with five ([sitting](docs/BENCHMARKS.md#yolo-world-v2-glass-to-glass-275-times-amds-stack-and-against-the-igpu-it-depends-on-the-vocabulary-2026-09-16-desktop-2)), at 4.3–5.0× less energy per frame than AMD's stack flat out and 3.7× at 5 fps ([energy](docs/BENCHMARKS.md#yolo-world-v2-energy-per-frame-43-50-times-less-than-amds-stack-and-the-igpu-spends-less-at-5-fps-2026-09-17-desktop-2)) |
 | `pipelines/{midas,fastdepth}` | MiDaS / FastDepth (monocular depth) | **Working** — FastDepth 2.87 ms (beats 3.02 ms iGPU, r=0.9383); MiDaS 10.81 ms (1.53x CPU, r=0.8706) |
 | `pipelines/{sesr,realesrgan}` | SESR / Real-ESRGAN (super-resolution) | **Working** — SESR-M7 1.48 ms (beats 4.48 ms iGPU); Real-ESRGAN 14.02 ms (beats 18.34 ms iGPU) |
-| `pipelines/bisenetv2` | BiSeNetV2 (bilateral segmentation) | **Working** — 13.12 ms (beats 14.25 ms iGPU, monolithic 402/404 nodes, 76.2 fps) |
+| `pipelines/bisenetv2` | BiSeNetV2 (bilateral segmentation) | **Fast, but the NPU's output diverges** — 13.12 ms (beats 14.25 ms iGPU, monolithic 402/404 nodes, 76.2 fps), yet on the same INT8 file its softmax error is 4.13x the CPU's. The error appears only in compiled context and points at a long-lived 512 KB activation, not the operator or its scales ([why](docs/BENCHMARKS.md#the-mul-is-not-the-fault-a-long-lived-activation-is-2026-09-09-desktop-2)); no real accuracy number exists without Cityscapes |
 | `pipelines/mobilevit` | MobileViT-XXS (hybrid CNN/transformer) | **Does not survive INT8** — 0.00% top-1, kept as the negative result |
 | `quant/` (Ignition Alpha, not the SDK below) | Folded ResNet, head-cut YOLOv8n and MODNet, with or without CLE, plus AdaRound on all three | **Alpha 0.1.0a1** — independent calibration/emission without Quark or torch; `--cle` reproduces the repo's plain-XINT8 ResNet50 to the integer and a fresh yolov8n-cut oracle position for position, and `adaround` reproduces Quark's `XINT8_ADAROUND` byte for byte on both graphs on the same machine (the layer order is the vendor's topological sort, not the file's). MODNet matches a fresh oracle to the integer too, with identical matte error on both providers, and its AdaRound — the first family here where a finetuned layer carries an activation, so the first to need the vendor's `Clip` module rather than the `ReLU6` that names the same curve — is byte-identical as well, cutting matte error 45 percent on CPU and 47 percent on the NPU against the same listing quantized plain. [Quickstart](quant/README.md), [todo list](quant/TODO.md), [validation](docs/BENCHMARKS.md#ignition-alpha-release-validation), [CLE parity](docs/BENCHMARKS.md#ignition-cle-parity-and-the-default-xint8-preset), [AdaRound parity](docs/BENCHMARKS.md#ignition-adaround-parity), [YOLO preparation](docs/BENCHMARKS.md#ignition-yolov8n-cut-preparation-parity), [YOLO AdaRound](docs/BENCHMARKS.md#ignition-yolov8n-cut-adaround-parity), [MODNet](docs/BENCHMARKS.md#ignition-modnet-independent-calibration-and-paired-matte-evaluation), [MODNet AdaRound](docs/BENCHMARKS.md#ignition-modnet-adaround-parity), [acceptance findings](docs/BENCHMARKS.md#ignition-controlled-resnet-qdq-acceptance) |
 
@@ -54,7 +54,7 @@ Detection width sweep, head-cut plain XINT8, full 5000-image val2017 mAP
 > (~1–1.5 GB activations/image at 640²), so l (32) and x (24) are calibrated thinner than
 > n/s/m (200). Width dominates accuracy: yolov8m shifted mAP by only -0.11 (43.49 → 43.38)
 > vs calib 64. l's full eval is flaky (two of three attempts hit hardware `DPU timeout`).
-> Working: [Model size: n vs s](docs/BENCHMARKS.md#model-size-n-vs-s-measured-together).
+> Calibration images are val2017's own, so they are among the 5000 scored; rescored on the other 4,700, no quantized file checked moved more than 0.07 points beyond the float model's own shift ([pitfall](docs/DECISIONS.md#rejected-approaches-and-known-pitfalls)). Working: [Model size: n vs s](docs/BENCHMARKS.md#model-size-n-vs-s-measured-together).
 
 ## Headline findings
 
@@ -174,12 +174,12 @@ checks every stage against serial execution. [Scope, measurements and usage](doc
 
 ## Hand-written AIE kernels
 
-The XINT8-only ceiling above is the *shipped runtime's*, not the silicon's. AMD's own
-`device.yaml` (bundled with the same 1.7.1 install) gives Phoenix's AIE2 tile spec directly:
-`bfloat16xbfloat16: 128` MACs/cycle, `int16xint8: 128`, `int8xint8: 256`. The array natively does
-bf16; Quark and the VitisAI EP just don't expose it. The open-source `mlir-aie`/Peano toolchain
-does, natively on Windows, with no gated access — so `kernels/` holds bf16 and int8 kernels
-written against the bare array. Outcomes, mostly negative and all measured:
+The XINT8-only ceiling above is the *shipped runtime's*, not the silicon's. AMD's `device.yaml`
+(same 1.7.1 install) gives Phoenix's AIE2 MACs/cycle — `bfloat16xbfloat16: 128`, `int16xint8: 128`,
+`int8xint8: 256` — and omits the **int8×int4 `vmac`** AMD's AIE-API documents for AIE-ML, measured
+bit-exact here: int4 weights take the array GEMM to **6,195 GOPS**, 1.26× int8 at its best tile,
+less or nothing at others, and not through the core. Quark and the VitisAI EP expose none of it;
+`mlir-aie`/Peano does, on Windows. Outcomes in `kernels/`, mostly negative, all measured:
 
 - **bf16 GEMM is the first genuine NPU win in this project.** 2072.5 GFLOPS at 1024³
   against CPU bf16's 1161.2 — the NPU wins 1.18×–1.78× once M/N ≥ 1024, and loses at

@@ -1,0 +1,100 @@
+Laya step 2, the int8 and bf16 arms, Desktop 2; python is the ryzen-ai-1.8.0 environment. Scored after the pre-registration was committed (465a1fd): int8 2026-09-27T00:54:59Z to 00:59:09Z, bf16 00:59:42Z to 01:10:12Z. The report below is the one pre-registered run over both arms. Each run's CPU temperature and package power come from a read-only watch of the HWiNFO CSV (alert at Tctl >= 90 C; STOP at 95 C or a thermal-throttle flag held 60 s).
+1. The int8 arm:
+$ python tools/laya_accuracy.py score --model scratch/laya/laya-int8-dyn/laya_int8.onnx --items scratch/laya/step2/items.jsonl --out scratch/laya/step2/int8_dyn.npz
+  SCORE laya_int8.onnx: onnxruntime 1.27.0, providers ['CPUExecutionProvider'], 8 threads, batch 1, session load 0.8 s; items items.jsonl sha256 138b8a76ce66af5e838e2558832be3f0d33b8740c326ba35616185d079f33f59; laya_int8.onnx sha256 160eafa3438597ab4717d970bcc63cbaa1beab3e16eb3045f97d4920bfb141c7; laya_int8.onnx.data sha256 3f49bc9627f31a65833189522355134c30101aec2b7805c33f0006120a21af6b
+  KEEPAWAKE HOLD True
+  [score] 200/2403 items, 15 s
+  [score] 400/2403 items, 29 s
+  [score] 600/2403 items, 36 s
+  [score] 800/2403 items, 44 s
+  [score] 1000/2403 items, 100 s
+  [score] 1200/2403 items, 158 s
+  [score] 1400/2403 items, 184 s
+  [score] 1600/2403 items, 205 s
+  [score] 1800/2403 items, 217 s
+  [score] 2000/2403 items, 227 s
+  [score] 2200/2403 items, 237 s
+  [score] 2400/2403 items, 247 s
+  [score] 2403/2403 items, 247 s
+  KEEPAWAKE RELEASE
+  SCORE laya_int8.onnx: 2403 items in 246 s of calls (median 61 ms per item; batch 1 on shared hardware, not a timing measurement); logits finite True; int8_dyn.npz sha256 d78bce49b6b4a5f82ebfa22f3e020013779f4535d3d542af960ff4f111305f0a
+  00:54:59Z WATCH START score_int8.log
+  00:54:59Z STATUS Tctl max 51.4 C, pkg max 19.0 W; seq: -
+  00:56:34Z ALERT Tctl 90.0 C
+  00:57:59Z STATUS Tctl max 92.2 C, pkg max 86.9 W; seq: [score] 1200/2403 items, 158 s
+  00:59:09Z END seq: SCORE laya_int8.onnx: 2403 items in 246 s of calls (median 61 ms per item; batch 1 on shared hardware, not a timing meas; Tctl max 92.9 C, pkg max 86.9 W
+2. Cooldown before the next arm (HWiNFO CSV, read-only):
+  COOLDOWN Tctl 57.8 C after 10 s (under 60 C)
+3. The bf16 arm:
+$ python tools/laya_accuracy.py score --model scratch/laya/laya-bf16-emul/laya_bf16emu.onnx --items scratch/laya/step2/items.jsonl --out scratch/laya/step2/bf16_emul.npz
+  SCORE laya_bf16emu.onnx: onnxruntime 1.27.0, providers ['CPUExecutionProvider'], 8 threads, batch 1, session load 1.2 s; items items.jsonl sha256 138b8a76ce66af5e838e2558832be3f0d33b8740c326ba35616185d079f33f59; laya_bf16emu.onnx sha256 f033cb924cd05702a7998f6d6c19240daa6e80fa0a07e65b478415543e0f4251; laya_bf16emu.onnx.data sha256 7774073883bd0ac4eff10d66a6a235dd4dc4853776a2347d8001ea5286de3f28
+  KEEPAWAKE HOLD True
+  [score] 200/2403 items, 41 s
+  [score] 400/2403 items, 79 s
+  [score] 600/2403 items, 100 s
+  [score] 800/2403 items, 121 s
+  [score] 1000/2403 items, 250 s
+  [score] 1200/2403 items, 381 s
+  [score] 1400/2403 items, 453 s
+  [score] 1600/2403 items, 508 s
+  [score] 1800/2403 items, 544 s
+  [score] 2000/2403 items, 572 s
+  [score] 2200/2403 items, 599 s
+  [score] 2400/2403 items, 627 s
+  [score] 2403/2403 items, 627 s
+  KEEPAWAKE RELEASE
+  SCORE laya_bf16emu.onnx: 2403 items in 626 s of calls (median 172 ms per item; batch 1 on shared hardware, not a timing measurement); logits finite True; bf16_emul.npz sha256 121b5a224062af1ae6fc4af3574b7829bee2e9bbee37a9e9417c2f3b7a2f47ef
+  00:59:42Z WATCH START score_bf16.log
+  00:59:42Z STATUS Tctl max 55.6 C, pkg max 19.3 W; seq: -
+  01:01:27Z ALERT Tctl 90.1 C
+  01:02:42Z STATUS Tctl max 93.1 C, pkg max 87.1 W; seq: [score] 800/2403 items, 121 s
+  01:05:42Z STATUS Tctl max 93.5 C, pkg max 87.1 W; seq: [score] 1000/2403 items, 250 s
+  01:06:27Z ALERT Tctl 92.9 C
+  01:08:42Z STATUS Tctl max 93.6 C, pkg max 87.2 W; seq: [score] 1600/2403 items, 508 s
+  01:10:12Z END seq: SCORE laya_bf16emu.onnx: 2403 items in 626 s of calls (median 172 ms per item; batch 1 on shared hardware, not a timing ; Tctl max 93.6 C, pkg max 87.2 W
+4. Both arms against fp32 and the pre-registered criteria:
+$ python tools/laya_accuracy.py report --model-dir scratch/laya/laya-onnx --items scratch/laya/step2/items.jsonl --ref scratch/laya/step2/fp32.npz --arm scratch/laya/step2/int8_dyn.npz --arm scratch/laya/step2/bf16_emul.npz --prereg results/laya/laya_accuracy_prereg_desktop2_20260926.json
+  REPORT items items.jsonl sha256 138b8a76ce66af5e838e2558832be3f0d33b8740c326ba35616185d079f33f59; reference laya.onnx (fp32.npz sha256 417f7007214b3319a77d3006b9f494f4ac116b4b6c76800bb8b5b6092dfcf896)
+  REF ag_news: n 400, accuracy 0.9500 (published 0.9500, CPU fp32, first 400 test rows); shipped temperature: ECE 0.0316, confidence 0.9220 (published 0.0316, 0.9220); T=1: ECE 0.0274, confidence 0.9712
+  REF emotion: n 400, accuracy 0.5950 (published 0.5950, CPU fp32, first 400 test rows); shipped temperature: ECE 0.3063, confidence 0.9013 (published 0.3063, 0.9013); T=1: ECE 0.3063, confidence 0.9013
+  REF banking77: n 400, accuracy 0.4250 (published 0.4250, CPU fp32, first 400 test rows); shipped temperature: ECE 0.5397, confidence 0.9616 (published 0.5397, 0.9616); T=1: ECE 0.2077, confidence 0.5785
+  REF massive_en: n 300, accuracy 0.7833 (published 0.7833, T4 fp16, first 300 test rows); shipped temperature: ECE 0.2144, confidence 0.9946 (published 0.2143, 0.9942); T=1: ECE 0.1264, confidence 0.9068; published at T=1: ECE 0.1263, confidence 0.9067
+  REF xnli_en: n 300, accuracy 0.8600 (published 0.8600, T4 fp16, first 300 test rows); shipped temperature: ECE 0.0685, confidence 0.9208 (published 0.0685, 0.9208); T=1: ECE 0.1174, confidence 0.9737; published at T=1: ECE 0.1174, confidence 0.9737
+  REF sst5: n 600, accuracy 0.3717 (published 0.3717, T4 fp16, first 600 test rows); shipped temperature: ECE 0.2478, confidence 0.6195 (published 0.2478, 0.6194); T=1: ECE 0.3006, confidence 0.6723; published at T=1: ECE 0.3006, confidence 0.6723
+  REF pooled 2400 labelled items: accuracy 0.6267, T=1 ECE 0.1924
+  REF near ties: top-two gap under 0.048 (twice the authors' largest bf16 choice shift, 0.024) on 65 items at the shipped temperatures and 111 at T=1, of 2400
+  REPORT pre-registration laya_accuracy_prereg_desktop2_20260926.json sha256 73fbf6bd6519be6d015c794d8382f7ebfe597eedd28824ecd2cbb2bc7e6fc6af
+  ARM laya_int8.onnx ag_news: same decision 385/400; accuracy 0.9300 (fp32 0.9500, -2.00 pt); T=1 ECE 0.0484 (fp32 0.0274, +0.0210); shipped-temperature ECE 0.0447 (+0.0131); |dp| at T=1 max 0.9895, p99 0.6252, mean 0.02608; at the shipped temperature max 0.9009, p99 0.4698
+  ARM laya_int8.onnx emotion: same decision 321/400; accuracy 0.5825 (fp32 0.5950, -1.25 pt); T=1 ECE 0.2978 (fp32 0.3063, -0.0085); shipped-temperature ECE 0.2978 (-0.0085); |dp| at T=1 max 0.9935, p99 0.8530, mean 0.07040; at the shipped temperature max 0.9935, p99 0.8530
+  ARM laya_int8.onnx banking77: same decision 110/400; accuracy 0.1350 (fp32 0.4250, -29.00 pt); T=1 ECE 0.0998 (fp32 0.2077, -0.1079); shipped-temperature ECE 0.6607 (+0.1210); |dp| at T=1 max 0.9949, p99 0.2293, mean 0.01635; at the shipped temperature max 1.0000, p99 0.9453
+  ARM laya_int8.onnx massive_en: same decision 230/300; accuracy 0.7100 (fp32 0.7833, -7.33 pt); T=1 ECE 0.1453 (fp32 0.1264, +0.0189); shipped-temperature ECE 0.2707 (+0.0563); |dp| at T=1 max 0.9999, p99 0.7182, mean 0.02366; at the shipped temperature max 1.0000, p99 1.0000
+  ARM laya_int8.onnx xnli_en: same decision 268/300; accuracy 0.8500 (fp32 0.8600, -1.00 pt); T=1 ECE 0.1163 (fp32 0.1174, -0.0012); shipped-temperature ECE 0.0623 (-0.0063); |dp| at T=1 max 0.9954, p99 0.9749, mean 0.07706; at the shipped temperature max 0.9286, p99 0.8385
+  ARM laya_int8.onnx sst5: same decision 353/600; accuracy 0.3100 (fp32 0.3717, -6.17 pt); T=1 ECE 0.3542 (fp32 0.3006, +0.0536); shipped-temperature ECE 0.2987 (+0.0509); |dp| at T=1 max 0.9191, p99 0.6810, mean 0.12038; at the shipped temperature max 0.8626, p99 0.5898; score answer shift max 2.6488, mean 0.3965
+  ARM laya_int8.onnx pooled 2400: same decision 1667/2400 (69.46%); accuracy 0.5471 (fp32 0.6267, -7.96 pt); T=1 ECE 0.1902 (fp32 0.1924, -0.0023); int8_dyn.npz sha256 d78bce49b6b4a5f82ebfa22f3e020013779f4535d3d542af960ff4f111305f0a
+  ARM laya_int8.onnx fixture department: shipped-temperature probabilities [0.6635, 0.215, 0.1215] (fp32 [0.9415, 0.031, 0.0275]), max |dp| 0.2780
+  ARM laya_int8.onnx fixture urgency: shipped-temperature probabilities [0.3556, 0.3865, 0.2248, 0.0331] (fp32 [0.1752, 0.2947, 0.4962, 0.0338]), max |dp| 0.2715
+  ARM laya_int8.onnx fixture churn_risk: shipped-temperature probabilities [0.9523, 0.0477] (fp32 [0.9012, 0.0988]), max |dp| 0.0512
+  CRITERION laya_int8.onnx C0 the arm is a pre-registered file: PASS
+  CRITERION laya_int8.onnx C1 pooled same decision >= 0.97: FAIL
+  CRITERION laya_int8.onnx C2 pooled accuracy change >= -0.005: FAIL
+  CRITERION laya_int8.onnx C3 each task's accuracy change >= -0.015: FAIL
+  CRITERION laya_int8.onnx C4 pooled T=1 ECE change <= 0.01: PASS
+  CRITERION laya_int8.onnx C5 each task's T=1 ECE change <= 0.02: FAIL
+  VERDICT laya_int8.onnx (int8_dyn): FAIL
+  ARM laya_bf16emu.onnx ag_news: same decision 400/400; accuracy 0.9500 (fp32 0.9500, +0.00 pt); T=1 ECE 0.0275 (fp32 0.0274, +0.0001); shipped-temperature ECE 0.0308 (-0.0008); |dp| at T=1 max 0.0153, p99 0.0052, mean 0.00022; at the shipped temperature max 0.0097, p99 0.0044
+  ARM laya_bf16emu.onnx emotion: same decision 400/400; accuracy 0.5950 (fp32 0.5950, +0.00 pt); T=1 ECE 0.3059 (fp32 0.3063, -0.0004); shipped-temperature ECE 0.3059 (-0.0004); |dp| at T=1 max 0.0440, p99 0.0131, mean 0.00079; at the shipped temperature max 0.0440, p99 0.0131
+  ARM laya_bf16emu.onnx banking77: same decision 397/400; accuracy 0.4225 (fp32 0.4250, -0.25 pt); T=1 ECE 0.2056 (fp32 0.2077, -0.0021); shipped-temperature ECE 0.5388 (-0.0009); |dp| at T=1 max 0.1086, p99 0.0021, mean 0.00014; at the shipped temperature max 0.2115, p99 0.0001
+  ARM laya_bf16emu.onnx massive_en: same decision 299/300; accuracy 0.7800 (fp32 0.7833, -0.33 pt); T=1 ECE 0.1319 (fp32 0.1264, +0.0055); shipped-temperature ECE 0.2140 (-0.0005); |dp| at T=1 max 0.0419, p99 0.0078, mean 0.00027; at the shipped temperature max 0.2259, p99 0.0000
+  ARM laya_bf16emu.onnx xnli_en: same decision 300/300; accuracy 0.8600 (fp32 0.8600, +0.00 pt); T=1 ECE 0.1195 (fp32 0.1174, +0.0020); shipped-temperature ECE 0.0673 (-0.0013); |dp| at T=1 max 0.0297, p99 0.0193, mean 0.00080; at the shipped temperature max 0.0258, p99 0.0123
+  ARM laya_bf16emu.onnx sst5: same decision 599/600; accuracy 0.3717 (fp32 0.3717, +0.00 pt); T=1 ECE 0.3002 (fp32 0.3006, -0.0004); shipped-temperature ECE 0.2474 (-0.0004); |dp| at T=1 max 0.0424, p99 0.0106, mean 0.00139; at the shipped temperature max 0.0339, p99 0.0088; score answer shift max 0.0433, mean 0.0041
+  ARM laya_bf16emu.onnx pooled 2400: same decision 2395/2400 (99.79%); accuracy 0.6258 (fp32 0.6267, -0.08 pt); T=1 ECE 0.1921 (fp32 0.1924, -0.0003); bf16_emul.npz sha256 121b5a224062af1ae6fc4af3574b7829bee2e9bbee37a9e9417c2f3b7a2f47ef
+  ARM laya_bf16emu.onnx fixture department: shipped-temperature probabilities [0.9408, 0.0314, 0.0279] (fp32 [0.9415, 0.031, 0.0275]), max |dp| 0.0007
+  ARM laya_bf16emu.onnx fixture urgency: shipped-temperature probabilities [0.1775, 0.2924, 0.4966, 0.0335] (fp32 [0.1752, 0.2947, 0.4962, 0.0338]), max |dp| 0.0024
+  ARM laya_bf16emu.onnx fixture churn_risk: shipped-temperature probabilities [0.903, 0.097] (fp32 [0.9012, 0.0988]), max |dp| 0.0019
+  CRITERION laya_bf16emu.onnx C0 the arm is a pre-registered file: PASS
+  CRITERION laya_bf16emu.onnx C1 pooled same decision >= 0.97: PASS
+  CRITERION laya_bf16emu.onnx C2 pooled accuracy change >= -0.005: PASS
+  CRITERION laya_bf16emu.onnx C3 each task's accuracy change >= -0.015: PASS
+  CRITERION laya_bf16emu.onnx C4 pooled T=1 ECE change <= 0.01: PASS
+  CRITERION laya_bf16emu.onnx C5 each task's T=1 ECE change <= 0.02: PASS
+  VERDICT laya_bf16emu.onnx (bf16_emul): PASS

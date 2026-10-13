@@ -122,7 +122,7 @@ range [Q] `quant_utils.py:364-379, 527-535`; the model audit confirms those extr
   quantizable tensor exposed as an output; each tensor's samples are cast to `float16`
   and concatenated across all images ("All" mode) [Q] `calibration/calibrators.py:540+`
   `PowOfTwoCalibrater`. With `optimize_mem` they spool to `%TEMP%` — that is the
-  ~105 MB/image (yolov8n at 640²) spool `CLAUDE.md` guards against.
+  ~105 MB/image (yolov8n at 640²) spool `scripts/yolo-cut.sh` guards against.
 - **MinMSE:** from the min/max position, try `pos-1 … pos+3` (five candidates) and keep
   the one with the smallest summed squared dequantization error over all samples [Q]
   `calibration/collectors.py:259-381` `compute_minmse_worker`, `:473`;
@@ -370,7 +370,7 @@ to the EP, the xclbin or `npu/session.py`; QAT beyond a hook; a second copy of a
 preprocessing transform. Per-channel weights and `int32` bias exist **only as Phase 4
 probe mutations**, never as a default, until placement and numerical execution are validated.
 
-**Invariants inherited from `CLAUDE.md`, plus three new ones:**
+**Invariants inherited from the rest of the repository, plus three new ones:**
 
 - Nothing under `quant/` imports Quark. Nothing under `npu/` imports `quant/`.
   `quant/` may import `npu/` (for the preprocessing sources and `build_session`).
@@ -379,10 +379,10 @@ probe mutations**, never as a default, until placement and numerical execution a
 - The quantizer runs in `resnet_env` (onnx 1.19, torch present). Its core — everything but
   `adaround.py` — needs only numpy, onnx and onnxruntime and must also import in
   `resnet_env17`, so `verify.py` can run beside an NPU session. (Observed, not acted on:
-  `resnet_env17` on Desktop 2 has `torch 2.4.1+cpu` installed, contrary to `CLAUDE.md`'s
+  `resnet_env17` on Desktop 2 has `torch 2.4.1+cpu` installed, contrary to the project's
   "do not install torch into resnet_env17". This design does not rely on it.)
 - When code lands, every `quant/*` module joins the `PIPELINE CHECKS` import list in
-  `CLAUDE.md` and `CONTRIBUTING.md`.
+  `CONTRIBUTING.md`.
 - No new compile-cache key. Emitted models reuse the key of the pipeline whose graph they
   share (`modelcachekey`, `yolocutcachekey`, …) and every run passes `--fresh`, because
   the keys are names, not hashes.
@@ -887,7 +887,7 @@ both show the EP failing with a believable latency; a probe that reads only
 ## 5. Gates
 
 A phase is done when its log exists under `results/quant/` and says what was run on which
-machine. Log names carry model and variant, never a bare name (`CLAUDE.md`).
+machine. Log names carry model and variant, never a bare name.
 
 | Phase | Log(s) | What must be true |
 |---|---|---|
@@ -898,7 +898,7 @@ machine. Log names carry model and variant, never a bare name (`CLAUDE.md`).
 | 4 | `probe_resnet50_<mutation>.log` per mutation, plus `probe_resnet50_summary.log` | For every mutation: EP node split, NPU-vs-CPU output agreement on N images, same-sitting latency; foreign-context check before each. The A8W8 attribution in DECISIONS #3 rewritten from the single-variable result — kept beside the old wording, not replacing it |
 | 5 | one log per item | Each item measured and folded like any other experiment |
 
-Machine routing follows `CLAUDE.md`'s table: quantization and the Quark comparison on
+Machine routing: quantization and the Quark comparison on
 Desktop 1 or Desktop 2 (the comparison needs Quark *and* the NPU for its `diag_*`, so
 Desktop 2 is the only box where Phases 1–2 close in one sitting); NPU gates on the laptop
 or Desktop 2; wide/large variants never on the laptop. Before every NPU number:
@@ -916,7 +916,7 @@ as a witness and the log says so.
 | 2 | Calibrate | `sources.py`, `calib.py` (exact store), `weights.py`, `cle.py`, `passes.simplify`/`passes.prepare`, `3c_quantize_own.py` ×2, `scripts/quant-own.sh` | position-for-position equal to Quark on resnet50, yolov8n-cut and modnet_cut, same machine + listing; full-set top-1, full-5000 mAP and 50-image matte error paired. ResNet and yolov8n-cut closed 2026-09-08, MODNet 2026-09-09 | Desktop 2 |
 | 3 | AdaRound | `adaround.py`, `FastFinetuneConfig`, RSS logging | accuracy parity with `XINT8_ADAROUND`; RSS beside Quark's. ResNet and yolov8n-cut: byte-identical on Desktop 2 (2026-09-08) | D1/D2, then the laptop as the stretch |
 | 4 | Acceptance map | `probe.py`, `tools/quant_probe.py`, `scripts/quant-probe.sh` | every mutation in §4.2 measured with output check; new BENCHMARKS section; DECISIONS #3 amended | L/D2 |
-| 5 | Beyond Quark | per-layer error budget in the sidecar → a BENCHMARKS table; MODNet re-calibrated through `npu.modnet` (closes the RESEARCH open item); `calib_store="hist"` with its accuracy cost measured; MobileViT per-channel **only if** Phase 4 admits it; QAT hook (`sources` + `pow2` reused from torch) | each a logged, folded experiment | per `CLAUDE.md` routing |
+| 5 | Beyond Quark | per-layer error budget in the sidecar → a BENCHMARKS table; MODNet re-calibrated through `npu.modnet` (closes the RESEARCH open item); `calib_store="hist"` with its accuracy cost measured; MobileViT per-channel **only if** Phase 4 admits it; QAT hook (`sources` + `pow2` reused from torch) | each a logged, folded experiment | per the routing above |
 
 The first ResNet slice of Phase 4 ran after Phase 1 and independent no-CLE calibration
 passed: resolving the confounded acceptance rules was the next useful research task.

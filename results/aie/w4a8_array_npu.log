@@ -1,0 +1,409 @@
+W4A8 on the whole array: int4 weights make the int8 GEMM 1.23-1.26x faster at its best tile -- through bytes, not MACs
+=========================================================================================================
+
+Desktop 2 (DESKTOP-CBL5NUA; Ryzen 7 8700G, Phoenix XDNA1, Windows 11), 2026-09-10: compile-only
+builds from 14:07, NPU runs 14:11:51-14:19:47,
+mlir-aie v1.4.2 ironenv (Peano llvm-aie 22), XRT 2.21.0, NPU driver 32.0.20101.3760, power mode
+Default. whole_array's 4 x 4 cores (4 columns). Design, kernels and tools: kernels/w4a8_array/.
+Raw rows: results/aie/w4a8_array_raw.jsonl. Witness: results/aie/witness_w4a8_array.jsonl.
+
+QUESTION
+--------
+The one-core probe (results/aie/w4a8_probe_npu.log) found int8 x int4 to be a native AIE2 vmac
+(a k loop 1.82x int8's on one core) and int4->int8 widening on load to be free but MAC-neutral.
+It left the array open: does W4A8 speed up whole_array's int8 GEMM, and through which half --
+the MACs (the native kernel) or the bytes (B at half the size through shim, memtile and core
+DMA)? It bounded the MAC half at <= ~1.18x (DERIVED), assuming everything outside the kernel
+stayed fixed.
+
+ANSWER
+------
+1. At the int8 GEMM's best tile -- 64/128/64 at 2048^3, C single-buffered, the tile behind the
+   repo's 4852.06 GOPS -- int4 B makes the array 1.23-1.26x faster, bit-exact. native:unroll2
+   runs 6,195.33 GOPS (mean of 3 processes) against this sitting's upstream int8 4,906.23: the
+   highest whole_array rate measured in this repo (op count 2MKN as for every other row; the
+   operands are int8 x int4). Every int4 arm lands in the same place -- unpack:unroll2 1.241x,
+   unpack:no-unroll 1.234x, native:default 1.231x, native:unroll2 1.263x -- and the int4 arms'
+   ranges overlap each other while each is disjoint from every int8 run.
+
+2. At that tile the gain is B's bytes, not the MAC rate. The unpack arms multiply at int8's
+   rate and gain as much as the native ones. A faster int8 kernel gains nothing: i8:unroll2,
+   176 fewer cycles per call than i8:default on one core, runs 0.995x. So the kernel is not on
+   the critical path there, and the probe's "<= ~1.18x" -- a bound on the kernel half -- is
+   SUPERSEDED in the wrong direction: the kernel half is ~0 and the bytes half is ~1.24x. Mean
+   int4 time is 0.8035 of upstream's; packing B removes 20 % of the design's L3 bytes
+   (80 -> 64 MiB), a 0.800 prediction written before the run (below).
+
+3. The gain depends on the tile, and "time follows L3 bytes" does not generalize:
+     tile        unpack     native     int8 re-typed   (x upstream, same tile, same sitting)
+     64/128/64   1.241x     1.263x     1.008x
+     64/64/64    1.057x     1.127x     1.015x
+     128/64/64   0.971x     1.015x     1.016x
+   At 64/64/64 native beats unpack by 6.7 % with disjoint ranges: there the MAC rate shows. At
+   128/64/64 native's 1.015x is inside upstream's own spread (not resolved), and unpack's 0.971x
+   is resolved -- all three unpack runs sit above every upstream and i8 run -- observed, not
+   explained.
+
+4. The mechanism is UNEXPLAINED. Ruled out, each by a pair of measured rows:
+   - the core kernel: i8:unroll2 does not move at 64/128/64, and native's doubled MAC rate adds
+     nothing over unpack there;
+   - total L3 bytes at a fixed bandwidth: the int4 arms at 64/128/64 and upstream int8 at
+     128/64/64 both move 64 MiB, in 2,773-2,846 us against 3,614 us; upstream int8 alone runs
+     23.96 / 21.46 / 18.57 GB/s of L3 traffic at 64/128/64 / 64/64/64 / 128/64/64;
+   - bytes into each core per call (docs/SILICON.md 3.1's bytes-per-MAC model): those same two
+     configurations deliver 8 KB of A and 4 KB of B per 524,288-MAC call, the same 0.0234 B/MAC,
+     and take 4,874-5,002 against 6,353 cycles per call (DERIVED at 1.80 GHz).
+   That pair also differs in k (128 vs 64), A's contiguous DMA run (128 vs 64 B), B's run
+   (32 vs 64 B) and B's L3 re-stream count (8 vs 4), so it does not say which of those carries
+   the effect, and 64/64/64 (m as the first tile, k as the second) lands in between: the effect
+   tracks neither m nor k alone.
+
+5. The capacity half bought nothing here. Halving B lets 64/128/64 double-buffer C (L1 60,672 B;
+   int8 needs 68,864 B and the allocator refused it, section A): native:unroll2 C x2 runs 1.255x
+   against 1.263x single-buffered, ranges overlapping.
+
+6. The data path itself works: B packed two per byte through shim -> memtile -> core, with the
+   memtile->core transform's innermost dimension one 32-bit word (int8's is two), lowered,
+   ran, and matched numpy exactly at all three tiles -- all 49 runs (the pilot and the three
+   sweeps' 48), every one returning the same C (sha256 e426d437887b5f12).
+
+7. H11's reading gets a second, independent confirmation: the core is not the critical path of
+   this design at its best tile. H11 saw a 12.5 % static kernel improvement vanish; here a
+   measured 4.7 % per-call improvement (i8:unroll2's 3,559 against 3,735 cycles) vanishes too.
+
+WHAT THIS DOES NOT ESTABLISH
+----------------------------
+- One shape (2048^3), three tiles, whole_array's 4 x 4 cores, 3 processes per arm x 10 timed
+  iterations (3 warm-up), as the tile sweep ran. Run-to-run spread of the per-process averages
+  is 2-4 %; the table marks as unresolved every arm whose range overlaps upstream's.
+- Nothing about a W4 network's accuracy: this is the GEMM, not a quantization recipe.
+- The cycles per call are DERIVED at 1.80 GHz from the NPU bracket; nothing was traced here.
+- The unexplained mechanism in 4 is not a claim that no model fits: only that the three
+  obvious ones do not, and that the tile pair which would separate the rest was not run.
+- The upstream arm reproduces its tile-sweep anchors within the day-to-day drift this machine
+  shows (4,906.23 against 4,852.06 at 64/128/64; 4,753.23 against 4,683.89 at 128/64/64), but
+  every ratio above is against this sitting's upstream, never the anchor.
+- The witness samples once a second and each run holds a context for well under a second of
+  NPU time, so 10 of its 526 samples caught one; a foreign context shorter than a second could
+  slip between samples. xrt-smi read "No hardware contexts running" at the start and the end
+  of every block, and the one other session using the NPU today had confirmed its block over.
+
+METHOD
+------
+Design: kernels/w4a8_array/whole_array_w4a8.py, a copy of mlir-aie v1.4.2's whole_array.py by
+way of kernels/bank_placement/whole_array_bankpad.py (--c-single-buffer, --stack-size), cut to
+int8 A / int32 C / row-major B and C. The fifo topology, core loop, tensor tilers and runtime
+sequence are upstream's; only the kernel and B's byte geometry vary per arm:
+  upstream  kernels.mm(): upstream mm.cc's matmul_i8_i32 + zero_i32 -- whole_array as built
+  i8        mm_i8i8_local (upstream's kernel re-typed; the one-core probe's control), B int8
+  unpack    mm_i8i4_unpack, B packed int4 widened on load, int8 mmul
+  native    mm_i8i4_native, B packed int4, aie::mmul<4,16,8,int8,int4>
+The last three come from kernels/w4a8_array/w4a8_array_kernels.cc, which #includes the probe's
+kernels/w4a8_probe/w4a8_kernels.cc unchanged and takes zero_i32 from upstream's own zero.cc.
+Packed B is K x N/2 bytes, two's complement, column 2j in the low nibble -- the layout the probe
+verified -- and every B dimension of the design is in bytes (the memtile->core transform emits
+s x t int4 blocks as s rows of t/2 bytes). Every arm draws the same A (int8, full range, seed
+1726250518) and the same B values (in [-8, 7], for the int8 arms too), so every arm must
+return the same C; each run checks it against a float64 numpy product (exact here) and prints
+its sha256. Timing is whole_array's own: aie.utils.benchmark.run_iters around the design, the
+NPU bracket from the runtime's timer around kernel.wait(), --warmup 3 --iters 10, GOPS = 2MKN
+over the average. kernels/w4a8_array/sweep.py runs one fresh process per (arm, repetition),
+rotating the arm order by one place per repetition; table.py builds section G from the raw rows.
+
+Checks, in order: compile-only (AOT) builds of every arm to test the packed-B lowering and the
+L1 arithmetic before any device use (section A); object_check.py (section B) compiles each
+arm's kernel with IRON's exact Peano command and compares the function, bundle for bundle, with
+(i) the one-core probe's compile of the same source and defines and (ii) the object the IRON
+JIT actually linked -- identical everywhere, so the probe's loop table and section B describe
+what ran; one pilot run of the riskiest arm (packed B through the new 4-byte transform) before
+the sweep, since overlapping memtile patterns have hung this device before
+(results/aie/im2col_bd_probe_npu.log); the predictions written down before each block.
+
+Gates: xrt-smi "No hardware contexts running on device" before the block and at the start and
+end of each sweep; tools/host_load.ps1 CLEAR (0.26 busy cores of 16, 17.3 GB free); the other
+session that had used the NPU earlier today confirmed its block over before this one began.
+
+PREDICTION (written 2026-09-10, before any NPU run of this design)
+-----------------------------------------------------------------
+Geometry: 2048^3, tile m/k/n = 64/128/64, 4 x 4 cores, C single-buffered unless marked.
+
+L3 traffic per GEMM, from the design's own tilers (DERIVED): A's 64 x 2048 row strips are
+streamed once per column block of the array, N/(4n) = 8 times, so A = 32 MiB; B's column
+strips once per row block, M/(4m) = 8 times, so B = 32 MiB int8 / 16 MiB int4; C = 16 MiB
+(int32, once). Total 80 MiB int8, 64 MiB int4: B is 40 % of the bytes, and packing it saves
+20 % of all L3 traffic. At the anchor's 3,540.7 us that is 23.7 GB/s of L3 traffic.
+
+Per core call (DERIVED from the anchor, results/aie/gemm_tile_sweep_c_single_buffer_npu.log):
+3,540.7 us x 1.80 GHz / 1,024 calls per core = 6,224 cycles. One-core kernel cycles per
+call at 64/128/64 (MEASURED, results/aie/w4a8_probe_npu.log section E): i8:default 3,735,
+i8:unroll2 3,559, unpack:unroll2 3,749, unpack:no-unroll 3,509, native:default 3,202,
+native:unroll2 2,791. Upstream's own matmul_i8_i32 was never timed alone; its loop is
+i8:default's length, 8 vmacs and one A&A pair, so take 3,735 for it. That leaves 2,489
+cycles per call outside the kernel.
+
+Three models of that 2,489, and what each predicts (speedup over upstream, same sitting):
+
+  arm                  kernel   (a) fixed      (b) additive, non-kernel   (c) overlapped:
+                       cyc/call     non-kernel     x bytes (0.8 for int4)     max(kernel, DMA)
+  upstream / i8:default  3,735     1.000          1.000                      1.000
+  i8:unroll2             3,559     1.029          1.029                      1.000
+  unpack:unroll2         3,749     0.998          1.084                      1.250
+  unpack:no-unroll       3,509     1.038          1.132                      1.250
+  native:default         3,202     1.094          1.199                      1.250
+  native:unroll2         2,791     1.179          1.302                      1.250
+
+  (c) assumes the anchor is DMA-bound at 6,224 cycles per call, so int8 arms all tie and
+  every int4 arm lands at 6,224 x 0.8 = 4,979 cycles whatever its kernel.
+
+What separates them: i8:unroll2 vs i8:default (does a faster int8 kernel show at all?
+yes under a/b, no under c); unpack vs its int8 partner (bytes only: nothing under a, 8-13 %
+under b, 25 % under c); native vs unpack (the MAC effect: present under a/b, absent under
+c). native:unroll2 with C double-buffered (L1 60,672 B, which int8 cannot fit: 68,864 B,
+confirmed by the allocator in the compile-only pass) tests whether the single-buffered C
+tile's drain -- 16 KB per output tile, about 256 cycles per call at 4 B/cycle if it
+serializes -- is part of the 2,489.
+
+None of these is a measurement. The anchor is from 2026-09-07/08; this sitting's upstream
+arm replaces it as the denominator.
+
+ADDENDUM, written after the 64/128/64 sweep and before any 128/64/64 run
+-------------------------------------------------------------------------
+The 64/128/64 sweep came out as model (c) predicted in shape: no int8 kernel change showed
+(i8:unroll2 0.995x), and every int4 arm, unpack included, landed at 1.23-1.26x, mean int4 time
+0.8035 of upstream's against the 0.800 the L3 byte count gives. A second tile tests whether
+"time follows L3 bytes" is a law or a coincidence of one geometry.
+
+At 128/64/64, 2048^3 (DERIVED from the same tilers): A row strips streamed N/(4n) = 8 times
+= 32 MiB; B column strips streamed M/(4m) = 4 times = 16 MiB int8 / 8 MiB int4; C 16 MiB.
+Total 64 MiB int8, 56 MiB int4. Predictions for int4 over int8 at this tile:
+  time follows total L3 bytes (reads + writes)   0.875 -> 1.143x
+  time follows L3 input bytes only (A + B)       0.833 -> 1.200x
+  a per-call cost that halving B alone removes   ~1.24x again (what 64/128/64 showed)
+Caution already visible in the anchors: 128/64/64 moved 64 MiB in 3,667.9 us (18.3 GB/s)
+where 64/128/64 moved 80 MiB in 3,540.7 us (23.7 GB/s), so a single fixed L3 bandwidth does
+not describe both tiles even for int8. Arms: upstream, i8:default, unpack:unroll2,
+native:unroll2, C single-buffered (L1 60,672 B int8 / 56,576 B int4, both predicted to fit).
+
+ADDENDUM 2, written after the 128/64/64 sweep and before any 64/64/64 run
+--------------------------------------------------------------------------
+128/64/64 gave int4 nothing (unpack 0.971x, native 1.015x, i8:default 1.016x): none of the
+three predictions above held. The two tiles differ in both m and k, so 64/64/64 completes
+the 2 x 2. At 64/64/64, 2048^3: B re-streamed M/(4m) = 8 times as at 64/128/64 (A 32 MiB,
+B 32 MiB int8 / 16 MiB int4, C 16 MiB: total bytes 0.800 again), while per call B is 4 KB
+int8 / 2 KB int4 and A's rows are 64 B contiguous, as at 128/64/64. So:
+  int4 gains ~1.24x  -> the effect follows m (B's L3 re-stream count), not k
+  int4 gains nothing -> the effect follows k (calls per output tile, A's 128 B rows), not m
+L1 (C single): 35,712 B int8, 31,616 B int4 -- both fit. Same four arms, 3 reps.
+
+(Note added after the runs: addendum 2's L1 figures, 35,712 / 31,616 B, are a hand-arithmetic
+slip. The design's own l1_estimate printed 36,096 / 32,000 B -- 2 x 4,096 A + 2 x 4,096 (int8)
+or 2 x 2,048 (int4) B + 16,384 C + 3,328 stack -- and both fit either way.)
+==========================================================================================
+A. COMPILE-ONLY BUILDS, no device -- 14:07, before any NPU run
+==========================================================================================
+python kernels/w4a8_array/whole_array_w4a8.py --dev npu -M 2048 -K 2048 -N 2048 -m 64 -k 128 -n 64
+    --arm <arm> --mode <mode> --c-single-buffer <0|1>
+    --xclbin-path <job-tmp>/<tag>.xclbin --insts-path <job-tmp>/<tag>.bin
+
+  arm:mode:c_single      L1 est (B)   predicted          outcome
+  native:unroll2:1           44,288   fits               exit 0, 6.8 s (xclbin 66,744 B, insts 10,320 B)
+  upstream:default:1         52,480   fits               exit 0, 4.8 s
+  i8:default:1               52,480   fits               exit 0, 4.9 s
+  i8:unroll2:1               52,480   fits               exit 0, 4.8 s
+  unpack:no-unroll:1         44,288   fits               exit 0, 4.8 s
+  unpack:unroll2:1           44,288   fits               exit 0, 4.9 s
+  native:default:1           44,288   fits               exit 0, 4.9 s
+  native:unroll2:0           60,672   fits               exit 0, 4.9 s
+  i8:unroll2:0               68,864   OVER by 3,328      exit 1, 3.5 s: 'aie.tile' op Basic sequential allocation failed
+     its allocator dump for tile (3,5): C_L1L2 buff_0 0xD00-0x4CFF and buff_1 0x4D00-0x8CFF (16,384 B
+     each), B 0x8D00-0xACFF / 0xAD00-0xCCFF (8,192 B each), A 0xCD00-0xECFF / 0xED00-0x10CFF (8,192 B
+     each): the last A byte is at 68,863, i.e. the predicted 68,864 B.
+
+The packed-B descriptors as lowered (native:unroll2:1, <job-tmp>/native_unroll2_csb1.prj/
+input_with_addresses.mlir), sizes and strides in bytes:
+  memtile B -> core  aie.dma_bd(%B_L3L2_0_cons_buff_0 : memref<4096xi8> offset = 0 len = 4096
+                     sizes = [8, 8, 16, 4] strides = [512, 4, 32, 1])
+  memtile A -> core  aie.dma_bd(%A_L3L2_0_cons_buff_0 : memref<8192xi8> offset = 0 len = 8192
+                     sizes = [16, 8, 4, 16] strides = [512, 16, 128, 1])
+  core B buffer      aie.dma_bd(%B_L2L1_0_0_cons_buff_0 : memref<128x32xi8> offset = 0 len = 4096)
+B's transform is [(k/s, s*n/2), (n/t, t/2), (s, n/2), (t/2, 1)] = 16 x 8 int4 blocks as 16 rows of
+4 bytes: an innermost dimension of one 32-bit word, where the int8 design's is two.
+
+==========================================================================================
+B. OBJECT CHECK -- python kernels/w4a8_array/object_check.py --tile <m>x<k>x<n> [--arms ...]
+==========================================================================================
+"= probe": the arm's function compiled from w4a8_array_kernels.cc against the same function
+compiled from the one-core probe's w4a8_kernels.cc with the same defines. "= IRON cache object":
+against the object the IRON JIT built and the runs linked (~/.npu/cache); for the upstream arm,
+any cached matmul_i8_i32 object with that function body. Run after the sweeps:
+
+W4A8 array object check, tile 64x128x64 (Peano, IRON's compile command)
+  flags -std=c++20 -Wno-parentheses -Wno-attributes -Wno-macro-redefined -Wno-empty-body -O2 -DNDEBUG -D__AIE_API_AIE_ADF_HPP__ --target=aie2-none-unknown-elf
+  arm      mode      function         bundles vmacs  MAC/cyc frame  = probe    = IRON cache object
+  upstream default   matmul_i8_i32          9     8    227.6   416  n/a        identical (03b6312069a328d77e348b90)
+  i8       default   mm_i8i8_local          9     8    227.6   160  identical  identical (d0cf16b3532ac4a73f5673b6)
+  i8       unroll2   mm_i8i8_local         16    16    256.0   288  identical  identical (cf63a66b38365c2db48471b1)
+  unpack   no-unroll mm_i8i4_unpack         9     8    227.6    32  identical  identical (a7f28f9ea85d4f99358e987e)
+  unpack   unroll2   mm_i8i4_unpack        17    16    240.9   160  identical  identical (f56b2eff73f4a6a570905f58)
+  native   default   mm_i8i4_native        16     8    256.0    64  identical  identical (d74f6cc1b4c4d2fb7a490189)
+  native   unroll2   mm_i8i4_native        20    16    409.6   160  identical  identical (a78b866fe49314ee9655b5fa)
+
+The 64x128x64 rows are section A of results/aie/w4a8_probe_npu.log line for line (same bundles,
+vmacs and frames), so the one-core cycles in the PREDICTION are the cycles of the loops that ran.
+
+W4A8 array object check, tile 128x64x64 (Peano, IRON's compile command)
+  flags -std=c++20 -Wno-parentheses -Wno-attributes -Wno-macro-redefined -Wno-empty-body -O2 -DNDEBUG -D__AIE_API_AIE_ADF_HPP__ --target=aie2-none-unknown-elf
+  arm      mode      function         bundles vmacs  MAC/cyc frame  = probe    = IRON cache object
+  upstream default   matmul_i8_i32          9     8    227.6   416  n/a        identical (6f18abce184538a30f23c01e)
+  i8       default   mm_i8i8_local          9     8    227.6   160  identical  identical (d36c990f8c7a516a8e047abd)
+  unpack   unroll2   mm_i8i4_unpack        17    16    240.9   160  identical  identical (cda368855cca2444c171e205)
+  native   unroll2   mm_i8i4_native        18    16    455.1   160  identical  identical (cf118429ac9edba9a66ad6fa)
+W4A8 array object check, tile 64x64x64 (Peano, IRON's compile command)
+  flags -std=c++20 -Wno-parentheses -Wno-attributes -Wno-macro-redefined -Wno-empty-body -O2 -DNDEBUG -D__AIE_API_AIE_ADF_HPP__ --target=aie2-none-unknown-elf
+  arm      mode      function         bundles vmacs  MAC/cyc frame  = probe    = IRON cache object
+  upstream default   matmul_i8_i32          9     8    227.6   416  n/a        identical (ac9d575dded55c934ee9d901)
+  i8       default   mm_i8i8_local          9     8    227.6   160  identical  identical (fa0842579beb43ac3a77ab8b)
+  unpack   unroll2   mm_i8i4_unpack        17    16    240.9   160  identical  identical (adb5925e677d10f39770ee67)
+  native   unroll2   mm_i8i4_native        18    16    455.1   160  identical  identical (3c94328f6604760af086b2f9)
+
+==========================================================================================
+C. PILOT -- sweep.py --arms native:unroll2:1 --reps 1 --tag pilot-20260910 (14:11:51)
+==========================================================================================
+rep0 native:unroll2:1  exit 0   5.2s  PASS  NPU avg/min/max 2845.9/2683.9/3177.9 us  6036.69 GOPS  mism 0  C e426d437887b5f12
+
+SUMMARY  2048x2048x2048  tile 64/128/64  cols 4  iters 10 warmup 3  reps 1
+  C sha256 across all passing runs: ['e426d437887b5f12'] (one value: every arm computed the same C)
+  arm                      B      L1 est runs NPU avg us (per run)               mean     GOPS vs upstream
+  native:unroll2:1         int4   44,288    1 2845.9                           2845.9  6036.69        nanx
+done; 0 failed runs: []
+
+==========================================================================================
+D. SWEEP 64/128/64 -- sweep.py --reps 3 --tag main-20260910 (default arms; 14:12:05-14:12:50)
+==========================================================================================
+rep0 upstream:default:1  exit 0   4.9s  PASS  NPU avg/min/max 3534.8/3377.6/4242.3 us  4860.18 GOPS  mism 0  C e426d437887b5f12
+rep0 i8:default:1  exit 0   5.1s  PASS  NPU avg/min/max 3476.9/3379.5/3753.5 us  4941.19 GOPS  mism 0  C e426d437887b5f12
+rep0 i8:unroll2:1  exit 0   5.0s  PASS  NPU avg/min/max 3483.1/3438.3/3551.7 us  4932.34 GOPS  mism 0  C e426d437887b5f12
+rep0 unpack:unroll2:1  exit 0   5.1s  PASS  NPU avg/min/max 2780.7/2732.6/2867.9 us  6178.23 GOPS  mism 0  C e426d437887b5f12
+rep0 unpack:no-unroll:1  exit 0   5.1s  PASS  NPU avg/min/max 2839.1/2711.2/3276.4 us  6051.27 GOPS  mism 0  C e426d437887b5f12
+rep0 native:default:1  exit 0   5.1s  PASS  NPU avg/min/max 2903.1/2727.7/3193.1 us  5917.75 GOPS  mism 0  C e426d437887b5f12
+rep0 native:unroll2:1  exit 0   0.6s  PASS  NPU avg/min/max 2810.3/2679.9/3023.3 us  6113.27 GOPS  mism 0  C e426d437887b5f12
+rep0 native:unroll2:0  exit 0   5.1s  PASS  NPU avg/min/max 2809.8/2662.7/3125.7 us  6114.29 GOPS  mism 0  C e426d437887b5f12
+rep1 i8:default:1  exit 0   0.5s  PASS  NPU avg/min/max 3541.0/3395.6/3789.3 us  4851.70 GOPS  mism 0  C e426d437887b5f12
+rep1 i8:unroll2:1  exit 0   0.6s  PASS  NPU avg/min/max 3568.2/3421.7/3884.0 us  4814.74 GOPS  mism 0  C e426d437887b5f12
+rep1 unpack:unroll2:1  exit 0   0.5s  PASS  NPU avg/min/max 2858.3/2820.8/3102.7 us  6010.50 GOPS  mism 0  C e426d437887b5f12
+rep1 unpack:no-unroll:1  exit 0   0.5s  PASS  NPU avg/min/max 2851.6/2740.0/3092.2 us  6024.75 GOPS  mism 0  C e426d437887b5f12
+rep1 native:default:1  exit 0   0.5s  PASS  NPU avg/min/max 2745.8/2686.1/3005.3 us  6256.69 GOPS  mism 0  C e426d437887b5f12
+rep1 native:unroll2:1  exit 0   0.5s  PASS  NPU avg/min/max 2820.6/2707.6/3397.6 us  6090.86 GOPS  mism 0  C e426d437887b5f12
+rep1 native:unroll2:0  exit 0   0.5s  PASS  NPU avg/min/max 2838.5/2697.8/3325.7 us  6052.38 GOPS  mism 0  C e426d437887b5f12
+rep1 upstream:default:1  exit 0   0.5s  PASS  NPU avg/min/max 3468.4/3339.6/3755.3 us  4953.30 GOPS  mism 0  C e426d437887b5f12
+rep2 i8:unroll2:1  exit 0   0.5s  PASS  NPU avg/min/max 3503.8/3331.5/3813.7 us  4903.15 GOPS  mism 0  C e426d437887b5f12
+rep2 unpack:unroll2:1  exit 0   0.5s  PASS  NPU avg/min/max 2822.6/2795.9/2853.8 us  6086.54 GOPS  mism 0  C e426d437887b5f12
+rep2 unpack:no-unroll:1  exit 0   0.5s  PASS  NPU avg/min/max 2823.9/2753.3/3187.7 us  6083.76 GOPS  mism 0  C e426d437887b5f12
+rep2 native:default:1  exit 0   0.6s  PASS  NPU avg/min/max 2887.7/2767.3/3164.1 us  5949.35 GOPS  mism 0  C e426d437887b5f12
+rep2 native:unroll2:1  exit 0   0.6s  PASS  NPU avg/min/max 2688.2/2653.0/2758.3 us  6390.73 GOPS  mism 0  C e426d437887b5f12
+rep2 native:unroll2:0  exit 0   0.6s  PASS  NPU avg/min/max 2722.5/2653.2/2975.3 us  6310.24 GOPS  mism 0  C e426d437887b5f12
+rep2 upstream:default:1  exit 0   0.5s  PASS  NPU avg/min/max 3501.7/3343.5/3813.0 us  4906.10 GOPS  mism 0  C e426d437887b5f12
+rep2 i8:default:1  exit 0   0.5s  PASS  NPU avg/min/max 3398.7/3343.4/3445.2 us  5054.82 GOPS  mism 0  C e426d437887b5f12
+
+SUMMARY  2048x2048x2048  tile 64/128/64  cols 4  iters 10 warmup 3  reps 3
+  C sha256 across all passing runs: ['e426d437887b5f12'] (one value: every arm computed the same C)
+  arm                      B      L1 est runs NPU avg us (per run)               mean     GOPS vs upstream
+  upstream:default:1       int8   52,480    3 3534.8 3468.4 3501.7             3501.6  4906.23      1.000x
+  i8:default:1             int8   52,480    3 3476.9 3541.0 3398.7             3472.2  4947.84      1.008x
+  i8:unroll2:1             int8   52,480    3 3483.1 3568.2 3503.8             3518.4  4882.90      0.995x
+  unpack:unroll2:1         int4   44,288    3 2780.7 2858.3 2822.6             2820.5  6090.99      1.241x
+  unpack:no-unroll:1       int4   44,288    3 2839.1 2851.6 2823.9             2838.2  6053.16      1.234x
+  native:default:1         int4   44,288    3 2903.1 2745.8 2887.7             2845.5  6037.46      1.231x
+  native:unroll2:1         int4   44,288    3 2810.3 2820.6 2688.2             2773.0  6195.33      1.263x
+  native:unroll2:0         int4   60,672    3 2809.8 2838.5 2722.5             2790.3  6157.03      1.255x
+done; 0 failed runs: []
+
+==========================================================================================
+E. SWEEP 128/64/64 -- sweep.py --tile 128x64x64 --arms upstream:default:1,i8:default:1,unpack:unroll2:1,native:unroll2:1 (14:15:30-14:15:55)
+==========================================================================================
+rep0 upstream:default:1  exit 0   4.9s  PASS  NPU avg/min/max 3521.3/3480.6/3608.8 us  4878.84 GOPS  mism 0  C e426d437887b5f12
+rep0 i8:default:1  exit 0   6.2s  PASS  NPU avg/min/max 3512.5/3427.7/3727.0 us  4891.09 GOPS  mism 0  C e426d437887b5f12
+rep0 unpack:unroll2:1  exit 0   5.0s  PASS  NPU avg/min/max 3695.1/3651.9/3746.5 us  4649.42 GOPS  mism 0  C e426d437887b5f12
+rep0 native:unroll2:1  exit 0   5.0s  PASS  NPU avg/min/max 3578.6/3446.9/3988.1 us  4800.76 GOPS  mism 0  C e426d437887b5f12
+rep1 i8:default:1  exit 0   0.6s  PASS  NPU avg/min/max 3621.5/3473.8/3886.0 us  4743.84 GOPS  mism 0  C e426d437887b5f12
+rep1 unpack:unroll2:1  exit 0   0.5s  PASS  NPU avg/min/max 3767.4/3588.3/4130.3 us  4560.15 GOPS  mism 0  C e426d437887b5f12
+rep1 native:unroll2:1  exit 0   0.6s  PASS  NPU avg/min/max 3565.8/3412.2/4092.3 us  4817.93 GOPS  mism 0  C e426d437887b5f12
+rep1 upstream:default:1  exit 0   0.6s  PASS  NPU avg/min/max 3657.6/3544.9/3881.7 us  4697.06 GOPS  mism 0  C e426d437887b5f12
+rep2 unpack:unroll2:1  exit 0   0.6s  PASS  NPU avg/min/max 3699.6/3654.0/3799.2 us  4643.71 GOPS  mism 0  C e426d437887b5f12
+rep2 native:unroll2:1  exit 0   0.5s  PASS  NPU avg/min/max 3535.3/3430.2/3874.1 us  4859.54 GOPS  mism 0  C e426d437887b5f12
+rep2 upstream:default:1  exit 0   0.5s  PASS  NPU avg/min/max 3664.2/3528.1/4377.2 us  4688.60 GOPS  mism 0  C e426d437887b5f12
+rep2 i8:default:1  exit 0   0.5s  PASS  NPU avg/min/max 3539.8/3462.1/3595.5 us  4853.33 GOPS  mism 0  C e426d437887b5f12
+
+SUMMARY  2048x2048x2048  tile 128/64/64  cols 4  iters 10 warmup 3  reps 3
+  C sha256 across all passing runs: ['e426d437887b5f12'] (one value: every arm computed the same C)
+  arm                      B      L1 est runs NPU avg us (per run)               mean     GOPS vs upstream
+  upstream:default:1       int8   60,672    3 3521.3 3657.6 3664.2             3614.4  4753.23      1.000x
+  i8:default:1             int8   60,672    3 3512.5 3621.5 3539.8             3557.9  4828.61      1.016x
+  unpack:unroll2:1         int4   56,576    3 3695.1 3767.4 3699.6             3720.7  4617.40      0.971x
+  native:unroll2:1         int4   56,576    3 3578.6 3565.8 3535.3             3559.9  4825.95      1.015x
+done; 0 failed runs: []
+
+==========================================================================================
+F. SWEEP 64/64/64 -- sweep.py --tile 64x64x64 --arms upstream:default:1,i8:default:1,unpack:unroll2:1,native:unroll2:1 (14:19:22-14:19:47)
+==========================================================================================
+rep0 upstream:default:1  exit 0   4.9s  PASS  NPU avg/min/max 3901.4/3811.4/4214.9 us  4403.47 GOPS  mism 0  C e426d437887b5f12
+rep0 i8:default:1  exit 0   6.4s  PASS  NPU avg/min/max 3813.0/3751.8/3954.3 us  4505.62 GOPS  mism 0  C e426d437887b5f12
+rep0 unpack:unroll2:1  exit 0   5.1s  PASS  NPU avg/min/max 3775.4/3658.5/4104.0 us  4550.44 GOPS  mism 0  C e426d437887b5f12
+rep0 native:unroll2:1  exit 0   5.1s  PASS  NPU avg/min/max 3400.4/3306.6/3688.3 us  5052.28 GOPS  mism 0  C e426d437887b5f12
+rep1 i8:default:1  exit 0   0.5s  PASS  NPU avg/min/max 3795.7/3748.8/3865.2 us  4526.16 GOPS  mism 0  C e426d437887b5f12
+rep1 unpack:unroll2:1  exit 0   0.6s  PASS  NPU avg/min/max 3664.0/3639.3/3692.9 us  4688.82 GOPS  mism 0  C e426d437887b5f12
+rep1 native:unroll2:1  exit 0   0.6s  PASS  NPU avg/min/max 3423.9/3373.1/3709.3 us  5017.62 GOPS  mism 0  C e426d437887b5f12
+rep1 upstream:default:1  exit 0   0.5s  PASS  NPU avg/min/max 3845.7/3761.1/4069.8 us  4467.32 GOPS  mism 0  C e426d437887b5f12
+rep2 unpack:unroll2:1  exit 0   0.6s  PASS  NPU avg/min/max 3656.4/3606.8/3691.6 us  4698.51 GOPS  mism 0  C e426d437887b5f12
+rep2 native:unroll2:1  exit 0   0.5s  PASS  NPU avg/min/max 3577.4/3355.2/3824.6 us  4802.37 GOPS  mism 0  C e426d437887b5f12
+rep2 upstream:default:1  exit 0   0.5s  PASS  NPU avg/min/max 3979.4/3826.4/4292.8 us  4317.23 GOPS  mism 0  C e426d437887b5f12
+rep2 i8:default:1  exit 0   0.5s  PASS  NPU avg/min/max 3944.0/3715.5/4264.2 us  4355.91 GOPS  mism 0  C e426d437887b5f12
+
+SUMMARY  2048x2048x2048  tile 64/64/64  cols 4  iters 10 warmup 3  reps 3
+  C sha256 across all passing runs: ['e426d437887b5f12'] (one value: every arm computed the same C)
+  arm                      B      L1 est runs NPU avg us (per run)               mean     GOPS vs upstream
+  upstream:default:1       int8   36,096    3 3901.4 3845.7 3979.4             3908.8  4395.14      1.000x
+  i8:default:1             int8   36,096    3 3813.0 3795.7 3944.0             3850.9  4461.26      1.015x
+  unpack:unroll2:1         int4   32,000    3 3775.4 3664.0 3656.4             3698.6  4644.93      1.057x
+  native:unroll2:1         int4   32,000    3 3400.4 3423.9 3577.4             3467.2  4954.92      1.127x
+done; 0 failed runs: []
+
+==========================================================================================
+G. CROSS-TILE TABLE -- python kernels/w4a8_array/table.py results/aie/w4a8_array_raw.jsonl --tags main,tile128,tile64
+==========================================================================================
+48 passing runs; C sha256 values: ['e426d437887b5f12']
+
+2048x2048x2048  tile 64/128/64  (1,024 kernel calls per core)
+  arm                  B    runs  run averages (us)           mean     GOPS  vs up cyc/call  resolved
+  upstream:default     int8    3  3534.8 3468.4 3501.7      3501.6  4906.23 1.000x    6,155  -
+  i8:default           int8    3  3476.9 3541.0 3398.7      3472.2  4947.84 1.008x    6,103  no (overlaps upstream)
+  i8:unroll2           int8    3  3483.1 3568.2 3503.8      3518.4  4882.90 0.995x    6,185  no (overlaps upstream)
+  unpack:no-unroll     int4    3  2839.1 2851.6 2823.9      2838.2  6053.16 1.234x    4,989  yes
+  unpack:unroll2       int4    3  2780.7 2858.3 2822.6      2820.5  6090.99 1.241x    4,958  yes
+  native:default       int4    3  2903.1 2745.8 2887.7      2845.5  6037.46 1.231x    5,002  yes
+  native:unroll2       int4    3  2810.3 2820.6 2688.2      2773.0  6195.33 1.263x    4,874  yes
+  native:unroll2 C x2  int4    3  2809.8 2838.5 2722.5      2790.3  6157.03 1.255x    4,905  yes
+
+2048x2048x2048  tile 128/64/64  (1,024 kernel calls per core)
+  arm                  B    runs  run averages (us)           mean     GOPS  vs up cyc/call  resolved
+  upstream:default     int8    3  3521.3 3657.6 3664.2      3614.4  4753.23 1.000x    6,353  -
+  i8:default           int8    3  3512.5 3621.5 3539.8      3557.9  4828.61 1.016x    6,254  no (overlaps upstream)
+  unpack:unroll2       int4    3  3695.1 3767.4 3699.6      3720.7  4617.40 0.971x    6,540  yes
+  native:unroll2       int4    3  3578.6 3565.8 3535.3      3559.9  4825.95 1.015x    6,258  no (overlaps upstream)
+
+2048x2048x2048  tile 64/64/64  (2,048 kernel calls per core)
+  arm                  B    runs  run averages (us)           mean     GOPS  vs up cyc/call  resolved
+  upstream:default     int8    3  3901.4 3845.7 3979.4      3908.8  4395.14 1.000x    3,435  -
+  i8:default           int8    3  3813.0 3795.7 3944.0      3850.9  4461.26 1.015x    3,385  no (overlaps upstream)
+  unpack:unroll2       int4    3  3775.4 3664.0 3656.4      3698.6  4644.93 1.057x    3,251  yes
+  native:unroll2       int4    3  3400.4 3423.9 3577.4      3467.2  4954.92 1.127x    3,047  yes
+
+==========================================================================================
+H. WITNESS SUMMARY -- results/aie/witness_w4a8_array.jsonl (hwinfo_npu_bridge --json --no-hwinfo --interval 1 --smi-interval 1)
+==========================================================================================
+samples 526 (unparsed 0), 14:11:28.727 .. 14:20:13.669
+max hardware contexts in one sample: 1; samples with a context: 10
+context owners (pid -> samples): {'29500': 1, '18364': 1, '7536': 1, '5500': 1, '16504': 1, '27488': 1, '15364': 1, '17848': 2, '29472': 1}
+power modes: {'Default': 526}
+XRT clock readback while a context was up (MHz -> samples): {1800.0: 3, 800.0: 7}
+first context record: {"completions": -1.0, "completions_per_s": -1.0, "context_id": -1, "egops": -1.0, "engine_pct": 4.225653154537194, "errors": -1.0, "fps": -1.0, "gops": -1.0, "instr_bo_mb": -1.0, "latency": -1.0, "listed_by_xrt_smi": false, "memory_mb": -1.0, "migrations": -1.0, "num_cols": 0, "partition": 0, "pid":

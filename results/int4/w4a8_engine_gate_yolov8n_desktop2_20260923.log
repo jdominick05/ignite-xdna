@@ -1,0 +1,40 @@
+
+### engine gate yolov8n b8
+[gate] models/yolov8n_cut_xint8.onnx  sha256 f02e86ba1bf61ff3fdc159e29b15259567e279df06f68c6d9adeb966fe56c885
+[gate] 63 Convs, every weight DQ per-tensor; lowered to 66 layers (shift_out 5..9 over 63 ConvLayers) in 0.0 s
+[gate] bus.jpg: run_direct == ONNX Runtime (ORT_DISABLE_ALL) for 66/66 layers
+[gate] 000000000139.jpg: run_direct == ONNX Runtime (ORT_DISABLE_ALL) for 66/66 layers
+[gate] 000000000285.jpg: run_direct == ONNX Runtime (ORT_DISABLE_ALL) for 66/66 layers
+[gate] 000000000632.jpg: run_direct == ONNX Runtime (ORT_DISABLE_ALL) for 66/66 layers
+[gate] 000000000724.jpg: run_direct == ONNX Runtime (ORT_DISABLE_ALL) for 66/66 layers
+[gate] uniform random: run_direct == ONNX Runtime (ORT_DISABLE_ALL) for 66/66 layers
+[gate] PASS
+
+### engine gate yolov8n e1
+[gate] scratch/int4_w4a8/yolov8n_w4a8_e1.onnx  sha256 4b0c957edb101091d28c02bbc544a8c980fedec9e4d6ca25c1136322b9f96733
+[gate] 63 Convs, every weight DQ per-tensor; lowered to 66 layers (shift_out 5..9 over 63 ConvLayers) in 0.0 s
+[gate] bus.jpg: run_direct == ONNX Runtime (ORT_DISABLE_ALL) for 66/66 layers
+[gate] 000000000139.jpg: run_direct == ONNX Runtime (ORT_DISABLE_ALL) for 66/66 layers
+[gate] 000000000285.jpg: run_direct == ONNX Runtime (ORT_DISABLE_ALL) for 66/66 layers
+[gate] 000000000632.jpg: run_direct == ONNX Runtime (ORT_DISABLE_ALL) for 66/66 layers
+[gate] 000000000724.jpg: run_direct == ONNX Runtime (ORT_DISABLE_ALL) for 66/66 layers
+[gate] uniform random: run_direct == ONNX Runtime (ORT_DISABLE_ALL) for 66/66 layers
+[gate] PASS
+
+### engine gate yolov8n e1h
+[gate] scratch/int4_w4a8/yolov8n_w4a8_e1h.onnx  sha256 f600d16e19fd13639071afa4d9de1da759af7cfba7332e48d3316a1edbc70a4b
+[gate] 63 Convs, every weight DQ per-tensor; lowered to 66 layers (shift_out 5..9 over 63 ConvLayers) in 0.1 s
+[gate] bus.jpg: run_direct == ONNX Runtime (ORT_DISABLE_ALL) for 66/66 layers
+[gate] 000000000139.jpg: run_direct == ONNX Runtime (ORT_DISABLE_ALL) for 66/66 layers
+[gate] 000000000285.jpg: run_direct == ONNX Runtime (ORT_DISABLE_ALL) for 66/66 layers
+[gate] 000000000632.jpg: run_direct == ONNX Runtime (ORT_DISABLE_ALL) for 66/66 layers
+[gate] 000000000724.jpg: run_direct == ONNX Runtime (ORT_DISABLE_ALL) for 66/66 layers
+[gate] uniform random: run_direct == ONNX Runtime (ORT_DISABLE_ALL) for 66/66 layers
+[gate] PASS
+
+### engine gate yolov8n e2
+[gate] scratch/int4_w4a8/yolov8n_w4a8_e2_ortonly.onnx holds a per-channel (form-a) conv: no engine lowering, no gate row
+
+### engine gate yolov8n u
+[gate] scratch/int4_w4a8/yolov8n_w4a8_u_ortonly.onnx holds a per-channel (form-a) conv: no engine lowering, no gate row
+[gate] every form-b file PASS

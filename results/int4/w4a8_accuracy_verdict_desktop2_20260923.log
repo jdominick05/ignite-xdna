@@ -1,0 +1,24 @@
+model    arm  ORT    mAP@50-95 delta vs B8  log
+yolov8n  B8   unopt      27.10              eval_yolov8n_b8_cpu_unopt_desktop2_20260923.log
+yolov8n  B8   opt        27.10       +0.00  eval_yolov8n_b8_cpu_opt_desktop2_20260923.log
+yolov8n  E1   unopt       0.06      +27.04  eval_yolov8n_e1_cpu_unopt_desktop2_20260923.log
+yolov8n  E2   unopt       0.02      +27.08  eval_yolov8n_e2_cpu_unopt_desktop2_20260923.log
+yolov8n  E1H  unopt       0.08      +27.02  eval_yolov8n_e1h_cpu_unopt_desktop2_20260923.log
+yolov8n  U    unopt       1.58      +25.52  eval_yolov8n_u_cpu_unopt_desktop2_20260923.log
+yolov8s  B8   unopt      37.21              eval_yolov8s_b8_cpu_unopt_desktop2_20260923.log
+yolov8s  B8   opt        37.21       +0.00  eval_yolov8s_b8_cpu_opt_desktop2_20260923.log
+yolov8s  E1   unopt       2.76      +34.45  eval_yolov8s_e1_cpu_unopt_desktop2_20260923.log
+yolov8s  E2   unopt       2.76      +34.45  eval_yolov8s_e2_cpu_unopt_desktop2_20260923.log
+yolov8s  E1H  unopt       7.87      +29.34  eval_yolov8s_e1h_cpu_unopt_desktop2_20260923.log
+yolov8s  U    unopt       2.47      +34.74  eval_yolov8s_u_cpu_unopt_desktop2_20260923.log
+
+yolov8n: B8 27.10; E1 0.06 (delta 27.04); E2 0.02 (delta 27.08); decision arm E1, delta 27.04 > 1.0; passing arms: none
+yolov8n: context E1H 0.08 (delta 27.02; does not decide)
+yolov8n: context U 1.58 (delta 25.52; does not decide)
+yolov8n: B8o - B8 = +0.00 (predicted ~0.00; prediction holds)
+yolov8s: B8 37.21; E1 2.76 (delta 34.45); E2 2.76 (delta 34.45); decision arm E1, delta 34.45 > 1.0; passing arms: none
+yolov8s: context E1H 7.87 (delta 29.34; does not decide)
+yolov8s: context U 2.47 (delta 34.74; does not decide)
+yolov8s: B8o - B8 = +0.00 (predicted ~0.00; prediction holds)
+
+VERDICT KILL: int4-in-engine killed at RTN (pow2 scales, this dialect); GPTQ/AdaRound untested. yolov8n delta 27.04 (E1); yolov8s delta 34.45 (E1)

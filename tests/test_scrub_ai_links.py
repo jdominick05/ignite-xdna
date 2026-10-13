@@ -1,5 +1,8 @@
 """Unit tests for tools/scrub_ai_links.py."""
 
+import subprocess
+import sys
+
 import pytest
 from tools.scrub_ai_links import clean_commit_message, has_ai_links
 
@@ -104,4 +107,70 @@ def test_clean_file(tmp_path):
         assert content.strip() == "feat: test"
     finally:
         sys.argv = old_argv
+
+
+def _git(repo, *args):
+    return subprocess.run(
+        ["git", "-c", "user.name=T", "-c", "user.email=t@example.com", "-c", "commit.gpgsign=false", *args],
+        cwd=repo, check=True, capture_output=True, text=True,
+    ).stdout.strip()
+
+
+def _run_main(*argv):
+    from tools.scrub_ai_links import main
+
+    old_argv = sys.argv
+    try:
+        sys.argv = ["scrub_ai_links", *argv]
+        return main()
+    finally:
+        sys.argv = old_argv
+
+
+@pytest.fixture
+def side_repo(tmp_path, monkeypatch):
+    """main checked out; branch `side` carries one commit with a session URL. Returns the base."""
+    _git(tmp_path, "init", "-q", "-b", "main")
+    _git(tmp_path, "commit", "-q", "--allow-empty", "-m", "base")
+    base = _git(tmp_path, "rev-parse", "HEAD")
+    _git(tmp_path, "checkout", "-q", "-b", "side")
+    _git(tmp_path, "commit", "-q", "--allow-empty", "-m",
+         "side: linked\n\nClaude-Session: https://claude.ai/code/session_12345")
+    _git(tmp_path, "checkout", "-q", "main")
+    _git(tmp_path, "commit", "-q", "--allow-empty", "-m", "main: clean")
+    monkeypatch.chdir(tmp_path)
+    return base
+
+
+def test_check_reads_the_named_branch_not_head(side_repo, capsys):
+    # push.sh --branch side from a checkout of main: the range is base..side, not base..HEAD
+    assert _run_main("--check", "--branch", "side", "--base", side_repo) == 1
+    assert "side: linked" in capsys.readouterr().out
+
+
+def test_scrub_refuses_a_branch_not_checked_out_here(side_repo, capsys):
+    side, main_ = _git(".", "rev-parse", "side"), _git(".", "rev-parse", "main")
+    assert _run_main("--branch", "side", "--base", side_repo) == 1
+    assert "Run --scrub from a checkout of 'side'" in capsys.readouterr().out
+    assert _git(".", "rev-parse", "side") == side
+    assert _git(".", "rev-parse", "main") == main_
+    assert _git(".", "rev-parse", "--abbrev-ref", "HEAD") == "main"
+
+
+def test_clean_branch_not_checked_out_here_passes(side_repo):
+    # the gate's case: push.sh --branch main from a checkout of another branch, nothing to scrub
+    _git(".", "checkout", "-q", "side")
+    main_, side = _git(".", "rev-parse", "main"), _git(".", "rev-parse", "side")
+    assert _run_main("--branch", "main", "--base", side_repo) == 0
+    assert _git(".", "rev-parse", "main") == main_
+    assert _git(".", "rev-parse", "side") == side
+
+
+def test_scrub_rewrites_the_checked_out_branch(side_repo):
+    _git(".", "checkout", "-q", "side")
+    tree = _git(".", "rev-parse", "side^{tree}")
+    assert _run_main("--scrub", "--branch", "side", "--base", side_repo) == 0
+    assert "claude.ai" not in _git(".", "log", "-1", "--format=%B", "side")
+    assert _git(".", "rev-parse", "side^{tree}") == tree
+    assert _git(".", "rev-parse", "side~1") == side_repo
 

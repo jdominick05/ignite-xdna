@@ -1,0 +1,30 @@
+Laya step 2 preparation, Desktop 2; python is the ryzen-ai-1.8.0 environment (onnxruntime 1.27.0). Steps 1-2 re-run 2026-09-27T00:54:09Z with the committed tool; steps 3-4 are the output of their runs.
+1. ORT's fp32->bf16->fp32 Cast against numpy's round-to-nearest-even:
+$ python tools/laya_accuracy.py rne --out-dir <job-tmp>
+  RNE onnxruntime 1.27.0: Cast pair on 119808 values (40000 exact ties, both signs): 0 differ from numpy round-to-nearest-even; the same pair into a MatMul by the identity: 0 differ; 57140 differ from truncation, so the pair is not a no-op and does not truncate
+  RNE PASS
+2. receptron's reference ticket on the fp32 model:
+$ python tools/laya_accuracy.py golden --model-dir scratch/laya/laya-onnx --model scratch/laya/laya-onnx/laya.onnx
+  GOLDEN laya.onnx: {"input_tokens": 267, "department": [0.9415, 0.031, 0.0275], "department_confidence": 0.7603, "urgency_score": 1.3886, "urgency": [0.1752, 0.2947, 0.4962, 0.0338], "churn_risk": 0.0988}
+  GOLDEN expected (receptron test_model.ts @ fbe9ed68): {"input_tokens": 267, "department": [0.9415, 0.031, 0.0275], "department_confidence": 0.7603, "urgency_score": 1.3886, "urgency": [0.1752, 0.2947, 0.4962, 0.0338], "churn_risk": 0.0988}
+  GOLDEN largest unrounded difference 4.48e-05; a second call bit-identical True; PASS (all equal after rounding to 4 decimals, as the reference rounds)
+3. The labelled items (written 2026-09-27T00:41:27Z; the datasets' own progress output went to stderr and is not kept):
+$ python tools/laya_accuracy.py items --model-dir scratch/laya/laya-onnx --out scratch/laya/step2/items.jsonl
+  ITEMS fixture: 3 questions (receptron test_model.ts @ fbe9ed68), 267 tokens in all; sha256 7e30c62e1c1e34433062e2804381d2a03d0fd3efd0bc4f0dd3e98655a0307af1
+  ITEMS ag_news: fancyzhx/ag_news @ eb185aade064, test split of 7600, first 400 rows; 400 items, 0 dropped; 4 options; tokens mean 105, max 232; gold spread [103, 123, 72, 102]; sha256 ba7c0141d5f8deca1344cc702175cd97d280d0fa08bf6caad0fa73c4cd8e7e10
+  ITEMS ag_news: dataset label names ['World', 'Sports', 'Business', 'Sci/Tech'] against options ['world: world news and international politics', 'sports: sports', 'business: business and economy', 'sci_tech: science and technology']
+  ITEMS emotion: dair-ai/emotion/split @ cab853a1dbdf, test split of 2000, first 400 rows; 400 items, 0 dropped; 6 options; tokens mean 54, max 97; gold spread [119, 118, 37, 64, 52, 10]; sha256 e3e398c6e3014be19f39b866278bbf099551282ef04d5b9ad7497a2c1191e89f
+  ITEMS emotion: dataset label names ['sadness', 'joy', 'love', 'anger', 'fear', 'surprise'] against options ['sadness', 'joy', 'love', 'anger', 'fear', 'surprise']
+  ITEMS banking77: mteb/banking77 @ 18072d2685ea, test split of 3076, first 400 rows; 400 items, 0 dropped; 77 options; tokens mean 318, max 362; gold spread -; sha256 8110983e312074855e8440688c8fe1bd5e2a3aa0e0b24e2bd5c63929807a67e5
+  ITEMS massive_en: mteb/amazon_massive_intent/en @ 940fd47a81ea, test split of 2974, first 300 rows; 300 items, 0 dropped; 20 options; tokens mean 190, max 218; gold spread -; sha256 5e99c129b045c4521911e9e0495532c2df1fac9ce41107e0363f4800315ce728
+  ITEMS xnli_en: facebook/xnli/en @ b8dd5d7af511, test split of 5010, first 300 rows; 300 items, 0 dropped; 3 options; tokens mean 98, max 131; gold spread [100, 100, 100]; sha256 a6a8503d40657a10af45824d32d0965c9571894fc50a9b30f04a6d8baa51a5ff
+  ITEMS xnli_en: dataset label names ['entailment', 'neutral', 'contradiction'] against options ['entailment: the premise implies the hypothesis is true', 'neutral: the premise neither implies nor contradicts the hypothesis', 'contradiction: the premise implies the hypothesis is false']
+  ITEMS sst5: SetFit/sst5 @ e51bdcd8cd3a, test split of 2210, first 600 rows; 600 items, 0 dropped; 5 options; tokens mean 72, max 111; gold spread [78, 164, 94, 141, 123]; sha256 fe88b8d765e63dc3c984952d68ee4990b17635a8973883c8e6ad8f455a320b45
+  ITEMS sst5: dataset label names ['very negative', 'negative', 'neutral', 'positive', 'very positive'] against options ['level 0: very negative', 'level 1: negative', 'level 2: neutral', 'level 3: positive', 'level 4: very positive']
+  ITEMS items.jsonl: 2403 items (2400 labelled), sha256 138b8a76ce66af5e838e2558832be3f0d33b8740c326ba35616185d079f33f59
+4. The bf16 arm's model (written 2026-09-27T00:42:34Z; its check ran one call, the fixture's department question, to see the Cast nodes execute; that call's output was not read):
+$ python tools/laya_accuracy.py bf16copy --model scratch/laya/laya-onnx/laya.onnx --model-dir scratch/laya/laya-onnx --out scratch/laya/laya-bf16-emul/laya_bf16emu.onnx
+  BF16COPY laya_bf16emu.onnx from laya.onnx in 13 s: 124 Gemm/MatMul with constant 2-D weights (4 Gemm), 124 weights, 369625600 values rounded to bf16 (nearest, ties to even), 323283893 of them changed; a Cast pair (fp32->bf16->fp32) on each product's activation input; attention products, norms, embeddings and the rest stay fp32
+  BF16COPY checks: weight MACs per 512-token call 188.580 G, fp32 graph 188.580 G (tools/laya_baseline.py); rounded weights with low bits set on disk 0; inserted Cast nodes executed in one profiled call 248 of 248; PASS
+  BF16COPY file laya_bf16emu.onnx sha256 f033cb924cd05702a7998f6d6c19240daa6e80fa0a07e65b478415543e0f4251
+  BF16COPY file laya_bf16emu.onnx.data sha256 7774073883bd0ac4eff10d66a6a235dd4dc4853776a2347d8001ea5286de3f28

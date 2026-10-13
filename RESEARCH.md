@@ -637,6 +637,57 @@ been closed:
   Strix's `AIE2p` block, for contrast, adds `bfp16` and `int16xint16`/`int8xint4`
   combinations AIE2 lacks and roughly doubles most throughput figures — an asymmetry
   that is itself evidence this is a real per-chip table, not a copy-pasted default.
+  **Measured follow-up (2026-09-10): the missing `int8xint4` row is a cost-model gap, not a
+  missing instruction** — and a gap in that one table only: AMD documents int8×int4 for AIE-ML
+  elsewhere (AIE-API 2024.1's native `8b x 4b: 4x16x8`, Riallto's 512 int4×int8 MAC per cycle
+  per core; SPEC, cross-audit ledger D11), so what follows confirms prior art on Phoenix rather
+  than discovering it. `aie::mmul<4,16,8,int8,int4>` compiles for Phoenix to the same
+  `vmac` builtin int8×int8 uses with one configuration field changed and runs bit-exact on one
+  core (0 of 4,096 mismatches against an int64 reference). Each `vmac` is 512 MACs by its shape
+  (SPEC), twice int8's; the best k loop sustains 372.4 MAC/cycle two-point, 383.7 fit — 0.73–0.75
+  `vmac` per cycle, MEASURED — against int8's 204.8–227.6 (`results/aie/w4a8_probe_npu.log`,
+  [BENCHMARKS](docs/BENCHMARKS.md#int8int4-is-a-native-vmac-on-aie2-and-int4-weights-cost-nothing-to-store)).
+  So the table overstates what AIE2 lacks: W4A8 here is a native multiply, not an unpack.
+  **At the array (measured the same day) it helps, and not through the core.** Packed int4 B
+  makes `whole_array`'s int8 GEMM 1.23–1.26× faster at its best tile (6,195 GOPS, the best
+  `whole_array` rate in this repo) whether the core multiplies natively or widens to int8,
+  while a faster int8 kernel gains nothing: the core is not the critical path there. The gain
+  is tile-dependent (1.06–1.13× at 64/64/64, none at 128/64/64), and what sets it is open —
+  neither the kernel, nor total L3 bytes at a fixed bandwidth, nor bytes per MAC into the core
+  explains all three tiles (`results/aie/w4a8_array_npu.log`,
+  [BENCHMARKS](docs/BENCHMARKS.md#w4a8-on-the-whole-array-int4-weights-pay-at-the-best-int8-tile-and-not-through-the-core)).
+  **Gated follow-up (2026-09-23): int4 runs on this chip, and on paper the engine's current
+  weight packets leave it little to save.**
+  - **The silicon (measured):** uint8 × int4, the graph engine's own operand pair, is bit-exact
+    on silicon at int8 × int4's exact cycles. The 2026-09-10 probe re-ran cycle-identical in all
+    27 cells, and the array's best tile reproduced at 1.287×.
+  - **The toolchain (a toolchain fact, not a silicon one):** its only dense int4 on AIE2 is
+    W4A8. It has no path for int4 activations, W4A4 or W16A4.
+  - **The engine (derived, on paper, under the current packet format):** priced over every
+    weight packet it streams, with the frame assumed purely transport-bound at 26.8 GB/s, int4
+    could save at most 1.4–3.9% of any container's dispatch (a 4.8% ceiling, YOLOv8s, against a
+    5% line). Its fixed 9,472 B packets make the real saving zero, and trimming them is the
+    larger lever, with no accuracy cost. Separately, the newest engine core has 224 B of its
+    16,384 B program memory free for a second k loop (cross-audit ledger A11).
+  - **Accuracy (measured on the CPU, pre-registered, 2026-09-23): W4A8 at round-to-nearest
+    collapses YOLOv8n and YOLOv8s.**
+    - The kill line was 1.0 mAP@50-95 point against W8A8, on all 5,000 COCO images. The loss is
+      27.04 and 34.45 points: 27.10 → 0.06 and 37.21 → 2.76, with pow2 scales per tensor or per
+      packet group.
+    - Per-channel pow2 scales and a W8 stem and heads do not rescue it, and neither do float
+      activations (a post-hoc diagnostic).
+    - So int4-in-engine is killed at RTN independently of the byte gate. GPTQ, AdaRound and float
+      per-channel scales are untested.
+  - **Open, and now well-posed:**
+    - Does the hardware decode the 8 MAC control-word codes Peano never emits, i.e. is there a
+      4-bit-A mode the toolchain does not expose? That needs a hand-built control word on
+      silicon.
+    - Does int4 pay where weights dominate, as in M = 1 GEMV (LLM decode)? No design in this repo
+      can express M < 32, so the note's "~2×" there is DERIVED and untested.
+
+  Evidence: `results/aie/int4_{isa_gate,engine_bytes_gate,demo_npu}_desktop2_20260923.log`,
+  `results/int4/w4a8_accuracy_{prereg,verdict}_desktop2_20260923.log`,
+  [BENCHMARKS](docs/BENCHMARKS.md#int4-on-phoenix-gates-first-the-chip-runs-the-engines-uint8--int4-and-on-paper-the-current-weight-packets-leave-int4-little-to-save-2026-09-23-desktop-2).
   **Checked whether an actual custom kernel could be built and run on Phoenix from
   material already in this install — a real dead end, confirmed rather than assumed.**
   The same `waic` wheel also bundles `aie4_models/`, a large internal AMD kernel-source
@@ -1378,7 +1429,7 @@ Matting and bilateral segmentation provide zero-trimap background separation for
   2. Evaluate alpha matte boundary fidelity: Mean Absolute Difference (MAD), Sum of Absolute Differences (SAD), and Mean Squared Error (MSE) relative to FP32 reference.
   3. Deploy in an interactive video pipeline (`pipelines/modnet/4_matte.py`) under `resnet_env17` to measure end-to-end webcam frame latency, alpha composition overhead, and NPU utilization.
 - **Falsification criteria:** If depthwise separable layers in MODNet's backbone exhibit the Delta=1.0 scale grid collapse observed in MobileViT, or if multi-scale feature fusion forces CPU round-trips, the model requires backbone replacement (e.g. standard ResNet/BiSeNet detail branch).
-- **BiSeNetV2 result:** Bilateral Guided Aggregation (BGA) with nearest-neighbor upsampling compiles natively into **1 monolithic DPU subgraph of 402 / 404 nodes (99.5%)** with 0 internal CPU fallbacks (`subgraphStat: [{'device': 'DPU', 'count': 1}]`). All 57 Convs, 40 Relus, 10 Adds, 5 Muls, 3 nearest-neighbor Resizes, and both HardSigmoid gating activations execute natively on AIE. Runs in **13.12 ms (76.2 fps)** on Phoenix XDNA1 — **4.43× faster than 8-core Zen 4 CPU (58.07 ms)** and **1.09× faster than Radeon 780M iGPU DML FP32 (14.25 ms)**, and 2.17× faster than MODNet Cut (28.45 ms). Bilinear upsampling at the head triggers host CPU fallback on 1 Resize (399/404 on NPU, +0.26 ms). Under CPU floating-point QDQ simulation, XINT8 maintains good fidelity (59.47% Pixel Accuracy, 25.72% mIoU against FP32 across 50 scenes); however, on physical DPU hardware, fixed-point dynamic range truncation across the elementwise bilateral multiplication (`left * HardSigmoid(right)`) attenuates minority class activations (15.33% Pixel Accuracy, 2.44% mIoU), confirming that multi-branch bilateral gating requires fine-tuning or AdaRound to balance inter-branch scale grids on physical systolic hardware. Full working: [docs/BENCHMARKS.md](docs/BENCHMARKS.md#category-b-second-candidate-bisenetv2-bilateral-segmentation-network).
+- **BiSeNetV2 result:** Bilateral Guided Aggregation (BGA) with nearest-neighbor upsampling compiles natively into **1 monolithic DPU subgraph of 402 / 404 nodes (99.5%)** with 0 internal CPU fallbacks (`subgraphStat: [{'device': 'DPU', 'count': 1}]`). All 57 Convs, 40 Relus, 10 Adds, 5 Muls, 3 nearest-neighbor Resizes, and both HardSigmoid gating activations execute natively on AIE. Runs in **13.12 ms (76.2 fps)** on Phoenix XDNA1 — **4.43× faster than 8-core Zen 4 CPU (58.07 ms)** and **1.09× faster than Radeon 780M iGPU DML FP32 (14.25 ms)**, and 2.17× faster than MODNet Cut (28.45 ms). Bilinear upsampling at the head triggers host CPU fallback on 1 Resize (399/404 on NPU, +0.26 ms). On the same XINT8 file the NPU's output diverges from the CPU's: against FP32 across 50 out-of-domain COCO scenes, 59.47% / 25.72% pixel accuracy / mIoU on the CPU falls to 15.33% / 2.44% on the NPU, which measures disagreement, not segmentation accuracy (that needs Cityscapes). The Mul and its inputs are clean and no scale choice fixes it; the error points at a 512 KB activation held live across ~280 nodes, a compiler behaviour AdaRound cannot reach ([why](docs/BENCHMARKS.md#the-mul-is-not-the-fault-a-long-lived-activation-is-2026-09-09-desktop-2)). Full working: [docs/BENCHMARKS.md](docs/BENCHMARKS.md#category-b-second-candidate-bisenetv2-bilateral-segmentation-network).
 
 ### Category C: Advanced Detection and RepVGG Backbones
 
@@ -1698,10 +1749,11 @@ sections above.
   compiles into a **single monolithic DPU subgraph (402/404 nodes, 99.5%)** executing in **13.12 ms on
   Phoenix XDNA1 (76.2 fps)** — **4.43× faster than 8-core Zen 4 CPU (58.07 ms)** and **1.09× faster than
   Radeon 780M iGPU DML FP32 (14.25 ms)**. Bilinear head upsampling causes CPU fallback on 1 Resize (+0.26 ms).
-  Under CPU QDQ simulation, XINT8 maintains good fidelity (59.47% Pixel Accuracy, 25.72% mIoU); on physical
-  DPU hardware, fixed-point dynamic range truncation across the elementwise bilateral multiplication
-  attenuates minority classes (15.33% Pixel Accuracy, 2.44% mIoU), confirming that multi-branch bilateral
-  gating requires fine-tuning or AdaRound for physical systolic hardware. All Category B candidate hypotheses
+  On the same XINT8 file the NPU's output diverges from the CPU's (softmax error 4.13x; 59.47% / 25.72% pixel
+  accuracy / mIoU on the CPU against 15.33% / 2.44% on the NPU, over 50 out-of-domain scenes, so disagreement,
+  not segmentation accuracy). It points at a 512 KB activation held live across ~280 nodes, not the Mul or its
+  scales, so AdaRound cannot reach it
+  ([why](docs/BENCHMARKS.md#the-mul-is-not-the-fault-a-long-lived-activation-is-2026-09-09-desktop-2)). All Category B candidate hypotheses
   are closed. [Working](docs/BENCHMARKS.md#category-b-second-candidate-bisenetv2-bilateral-segmentation-network).
 
 **Still open.**
@@ -1868,9 +1920,11 @@ sections above.
   mixed-precision API shapes now have [measured verdicts](docs/BENCHMARKS.md#four-silicon-levers-measured-2026-09-19-desktop-2).
   Open from it: S0's concurrent-VitisAI-EP leg; S1's attribution of the shared bandwidth
   cap to DRAM, NoC or channel count; and S2's
-  full trace, whose upstream parser mis-times gaps over 2^18 cycles; and S4, the
-  package-power delta that would let a work-per-watt verdict exist at all — nothing here
-  has ever measured a watt, and no per-NPU rail is exposed to read one from.
+  full trace, whose upstream parser mis-times gaps over 2^18 cycles; and S4's NPU share. The
+  package-power delta itself has been measured since 2026-09-16 (`tools/power_probe.py`, RAPL
+  through Windows PDH; [energy per frame](docs/BENCHMARKS.md#energy-per-frame-against-amds-stack-and-power-modes-2026-09-16-desktop-2)),
+  but no per-NPU rail is exposed to read the NPU's share from, and no GEMM or single kernel
+  has had its energy measured.
 - **The cycles themselves, read off the machine code.** Peano's `llvm-objdump` disassembles
   AIE2, so a kernel's inner-loop cost is readable without hardware: the core is a statically
   scheduled VLIW that covers operand latency with explicit nop bundles, and a hardware loop's
@@ -2059,7 +2113,7 @@ sections above.
 - **Candidate model pipelines (Categories A, B, C, D, E).** Test plans, target shapes, and falsification criteria:
   - **Category A:** Image Super-Resolution — SESR-M7 (placement, 1.48 ms latency, 3.02x iGPU win,
     70% AdaRound recovery) and Real-ESRGAN Compact (activation memory spill) closed above.
-  - **Category B:** Real-Time Portrait Matting and Semantic Segmentation — MODNet (zero-concat trade-off, calibration fix) and BiSeNetV2 (13.12 ms, 1.09x iGPU win, monolithic DPU subgraph, fixed-point bilateral gating distortion) closed above.
+  - **Category B:** Real-Time Portrait Matting and Semantic Segmentation — MODNet (zero-concat trade-off, calibration fix) and BiSeNetV2 (13.12 ms, 1.09x iGPU win, monolithic DPU subgraph, the NPU's output diverging from the CPU's) closed above.
   - **Category C:** Advanced Detection and RepVGG Backbones — YOLOv6n, YOLOv11n, and
     YOLO-World v2 closed above for AMD's stack; YOLO-World v2 reopened and answered on the graph engine (2026-09-16).
   - **Category D:** Monocular Depth Estimation — MiDaS v2.1 Small (bilinear vs nearest fusion,

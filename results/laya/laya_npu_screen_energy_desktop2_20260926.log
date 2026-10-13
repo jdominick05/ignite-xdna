@@ -1,0 +1,70 @@
+Energy sitting on <host>, started 2026-09-27T02:38:35Z
+Package power: typeperf '\Energy Meter(RAPL_Package0_PKG)\Power', 1 s samples, milliwatts. Idle 30 s before each arm; window from progress line 2 to the last.
+== 2026-09-27T02:38:35Z [cpu fp32 seq512 b1]
+  idle      29 samples, mean 21.568 W, stdev 5.017 W, CPU 3.6 %
+  idle      disturbed (CPU 3.6 % > 12.0 or stdev 5.017 W > 2.5); retaking
+  idle      29 samples, mean 20.012 W, stdev 4.242 W, CPU 2.6 %
+  idle      disturbed (CPU 2.6 % > 12.0 or stdev 4.242 W > 2.5); retaking
+  idle      29 samples, mean 20.629 W, stdev 5.151 W, CPU 3.6 %
+  idle      disturbed (CPU 3.6 % > 12.0 or stdev 5.151 W > 2.5); giving up, arm flagged
+  $ C:\Users\<user>/miniforge3/envs/ryzen-ai-1.8.0/python.exe tools/laya_baseline.py run --ep cpu --model scratch/laya/laya-onnx/laya.onnx --seq 512 --batch 1 --seconds 60
+    [summary] cpu laya.onnx seq 512 batch 1: providers ['CPUExecutionProvider'], threads 8, session load 1.3 s
+    [summary] latency ms over 54 calls after 5 warm-up: mean 1121.28, median 1116.05, min 1009.11, p90 1169.26, max 1275.00; 0.89 sequences/s, 457 tokens/s
+    [summary] MACs per call (DERIVED from the graph): weight MatMuls 188.6 G, attention 16.1 G; 0.365 TOPS effective at the mean
+    [summary] memory: process peak working set 1.70 GB, lowest available 19.0 GB; outputs [(1, 4), (1, 2)], logits finite True
+  window    51 frames in 57.2 s = 0.89 fps, 56 power samples, CPU 52.9 %
+  energy    package 76.982 W - idle 20.629 W = +56.353 W -> 63221.86 mJ per frame
+== 2026-09-27T02:41:22Z [dml fp32 seq512 b1]
+  idle      29 samples, mean 25.753 W, stdev 9.195 W, CPU 5.6 %
+  idle      disturbed (CPU 5.6 % > 12.0 or stdev 9.195 W > 2.5); retaking
+  idle      29 samples, mean 22.953 W, stdev 8.177 W, CPU 4.7 %
+  idle      disturbed (CPU 4.7 % > 12.0 or stdev 8.177 W > 2.5); retaking
+  idle      29 samples, mean 17.980 W, stdev 0.871 W, CPU 2.0 %
+  $ C:\Users\<user>/miniforge3/envs/ryzen-ai-1.8.0/python.exe tools/laya_baseline.py run --ep dml --model scratch/laya/laya-onnx/laya_az0.onnx --seq 512 --batch 1 --seconds 60 --warmup 10
+    [summary] dml laya_az0.onnx seq 512 batch 1: providers ['DmlExecutionProvider', 'CPUExecutionProvider'], threads -, session load 1.4 s
+    [summary] latency ms over 84 calls after 10 warm-up: mean 719.85, median 717.97, min 696.59, p90 731.65, max 767.20; 1.39 sequences/s, 711 tokens/s
+    [summary] MACs per call (DERIVED from the graph): weight MatMuls 188.6 G, attention 16.1 G; 0.569 TOPS effective at the mean
+    [summary] memory: process peak working set 2.03 GB, lowest available 18.8 GB; outputs [(1, 4), (1, 2)], logits finite True
+  window    81 frames in 58.3 s = 1.39 fps, 57 power samples, CPU 9.7 %
+  energy    package 71.639 W - idle 17.980 W = +53.659 W -> 38648.15 mJ per frame
+== 2026-09-27T02:44:11Z [npu chain bf16 best tile]
+  idle      29 samples, mean 19.050 W, stdev 1.867 W, CPU 2.3 %
+  $ C:\Users\<user>/miniforge3/python.exe <job-tmp>/run_iron.py tools/laya_npu_screen.py chain --tile best --conv-threads 8 --seconds 60
+  window    105 frames in 58.8 s = 1.78 fps, 57 power samples, CPU 9.4 %
+  energy    package 40.785 W - idle 19.050 W = +21.736 W -> 12179.47 mJ per frame
+== 2026-09-27T02:45:50Z [cpu fp32 noguard seq512 b1]
+  idle      29 samples, mean 26.394 W, stdev 6.597 W, CPU 6.1 %
+  idle      disturbed (CPU 6.1 % > 12.0 or stdev 6.597 W > 2.5); retaking
+  idle      29 samples, mean 21.106 W, stdev 4.343 W, CPU 4.2 %
+  idle      disturbed (CPU 4.2 % > 12.0 or stdev 4.343 W > 2.5); retaking
+  idle      29 samples, mean 20.695 W, stdev 2.815 W, CPU 3.5 %
+  idle      disturbed (CPU 3.5 % > 12.0 or stdev 2.815 W > 2.5); giving up, arm flagged
+  $ C:\Users\<user>/miniforge3/envs/ryzen-ai-1.8.0/python.exe tools/laya_baseline.py run --ep cpu --model scratch/laya/laya-onnx/laya_az0_noguard.onnx --seq 512 --batch 1 --seconds 60
+    [summary] cpu laya_az0_noguard.onnx seq 512 batch 1: providers ['CPUExecutionProvider'], threads 8, session load 1.4 s
+    [summary] latency ms over 72 calls after 5 warm-up: mean 834.15, median 835.58, min 713.27, p90 896.08, max 991.14; 1.20 sequences/s, 614 tokens/s
+    [summary] MACs per call (DERIVED from the graph): weight MatMuls 188.6 G, attention 16.1 G; 0.491 TOPS effective at the mean
+    [summary] memory: process peak working set 1.68 GB, lowest available 19.0 GB; outputs [(1, 4), (1, 2)], logits finite True
+  window    69 frames in 57.6 s = 1.20 fps, 56 power samples, CPU 53.2 %
+  energy    package 77.877 W - idle 20.695 W = +57.181 W -> 47697.89 mJ per frame
+== 2026-09-27T02:48:34Z [dml fp32 noguard seq512 b1]
+  idle      29 samples, mean 21.345 W, stdev 4.159 W, CPU 3.5 %
+  idle      disturbed (CPU 3.5 % > 12.0 or stdev 4.159 W > 2.5); retaking
+  idle      29 samples, mean 21.344 W, stdev 3.389 W, CPU 4.3 %
+  idle      disturbed (CPU 4.3 % > 12.0 or stdev 3.389 W > 2.5); retaking
+  idle      29 samples, mean 21.286 W, stdev 4.048 W, CPU 4.1 %
+  idle      disturbed (CPU 4.1 % > 12.0 or stdev 4.048 W > 2.5); giving up, arm flagged
+  $ C:\Users\<user>/miniforge3/envs/ryzen-ai-1.8.0/python.exe tools/laya_baseline.py run --ep dml --model scratch/laya/laya-onnx/laya_az0_noguard.onnx --seq 512 --batch 1 --seconds 60 --warmup 10
+    [summary] dml laya_az0_noguard.onnx seq 512 batch 1: providers ['DmlExecutionProvider', 'CPUExecutionProvider'], threads -, session load 1.3 s
+    [summary] latency ms over 88 calls after 10 warm-up: mean 688.10, median 687.80, min 668.06, p90 697.48, max 738.26; 1.45 sequences/s, 744 tokens/s
+    [summary] MACs per call (DERIVED from the graph): weight MatMuls 188.6 G, attention 16.1 G; 0.595 TOPS effective at the mean
+    [summary] memory: process peak working set 2.05 GB, lowest available 18.7 GB; outputs [(1, 4), (1, 2)], logits finite True
+  window    85 frames in 58.5 s = 1.45 fps, 58 power samples, CPU 10.2 %
+  energy    package 71.521 W - idle 21.286 W = +50.235 W -> 34582.53 mJ per frame
+
+Median idle over 2 undisturbed baselines: 18.515 W
+arm                                           fps  CPU %  +W own idle  mJ/frame  mJ vs median idle
+cpu fp32 seq512 b1                           0.89   52.9       56.353  63221.86           65593.26  idle disturbed
+dml fp32 seq512 b1                           1.39    9.7       53.659  38648.15           38262.99
+npu chain bf16 best tile                     1.78    9.4       21.736  12179.47           12479.12
+cpu fp32 noguard seq512 b1                   1.20   53.2       57.181  47697.89           49516.83  idle disturbed
+dml fp32 noguard seq512 b1                   1.45   10.2       50.235  34582.53           36490.28  idle disturbed

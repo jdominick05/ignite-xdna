@@ -1,0 +1,17 @@
+Laya preparation steps, Desktop 2, 2026-09-26T16:08:40Z; the sitting is laya_baseline_desktop2_20260926.log
+1. DirectML on the unmodified export (expected to fail):
+$ python tools/laya_baseline.py check --ep dml --model scratch/laya/laya-onnx/laya.onnx --ref scratch/laya/laya-onnx/laya.onnx --seq 512
+  2026-09-26 12:08:44.3496305 [E:onnxruntime:, sequential_executor.cc:620 onnxruntime::ExecuteKernel] Non-zero status code returned while running Reshape node. Name:'node_view' Status Message: G:\xmc\third-party\onnxruntime\onnxruntime\core\providers\dml\DmlExecutionProvider\src\MLOperatorAuthorImpl.cpp(2879)\onnxruntime_pybind11_state.pyd!00007FF9E2543F77: (caller: 00007FF9E2543CE5) Exception(1) tid(37a8) 80070057 The parameter is incorrect.
+  
+  onnxruntime.capi.onnxruntime_pybind11_state.RuntimeException: [ONNXRuntimeError] : 6 : RUNTIME_EXCEPTION : Non-zero status code returned while running Reshape node. Name:'node_view' Status Message: G:\xmc\third-party\onnxruntime\onnxruntime\core\providers\dml\DmlExecutionProvider\src\MLOperatorAuthorImpl.cpp(2879)\onnxruntime_pybind11_state.pyd!00007FF9E2543F77: (caller: 00007FF9E2543CE5) Exception(1) tid(37a8) 80070057 The parameter is incorrect.
+  exit 1
+2. dmlcopy (the sitting used laya_az0.onnx sha256 fd35271c6e5c5083cdb50b8b35f358d5174ac37a7dc81c4507a613d34fd46580):
+$ python tools/laya_baseline.py dmlcopy --model scratch/laya/laya-onnx/laya.onnx
+  DMLCOPY laya_az0.onnx: allowzero cleared on 77 Reshape nodes; 69 run-time targets, 0 holding a 0 at seq [512, 1024]; CPU outputs identical to laya.onnx: True; sha256 fd35271c6e5c5083cdb50b8b35f358d5174ac37a7dc81c4507a613d34fd46580
+  exit 0
+3. quantize again into a separate directory, compared with the sitting's int8 files:
+$ python tools/laya_baseline.py quantize --model scratch/laya/laya-onnx/laya.onnx --out scratch/laya/laya-int8-dyn-repro/laya_int8.onnx
+  QUANTIZED laya_int8.onnx in 17 s from laya.onnx without its 2111 value_info entries: dynamic, per-channel QInt8 weights, MatMuls with constant weights only; accuracy unchecked
+  exit 0
+  laya_int8.onnx: sitting 160eafa3438597ab4717d970bcc63cbaa1beab3e16eb3045f97d4920bfb141c7, again 160eafa3438597ab4717d970bcc63cbaa1beab3e16eb3045f97d4920bfb141c7, identical True
+  laya_int8.onnx.data: sitting 3f49bc9627f31a65833189522355134c30101aec2b7805c33f0006120a21af6b, again 3f49bc9627f31a65833189522355134c30101aec2b7805c33f0006120a21af6b, identical True

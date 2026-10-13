@@ -23,6 +23,23 @@ class BlockProducerImports(importlib.abc.MetaPathFinder):
         return None
 
 
+def dist_version(name):
+    """Version of the installed distribution that provides import package `name`.
+
+    Ryzen AI's resnet_env17 ships onnxruntime as the onnxruntime-vitisai distribution,
+    where metadata.version("onnxruntime") raises PackageNotFoundError. A plugin
+    (onnxruntime_providers_ryzenai) also installs files under onnxruntime/, so the
+    owner is the distribution that installs the package's own __init__.py."""
+    try:
+        return metadata.version(name)
+    except metadata.PackageNotFoundError:
+        init = f"{name}/__init__.py"
+        for dist in metadata.packages_distributions().get(name, []):
+            if any(str(f).replace("\\", "/") == init for f in metadata.distribution(dist).files or []):
+                return metadata.version(dist)
+        raise
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(prog="python -m quant", description=__doc__)
     parser.add_argument("--version", action="version", version=f"Ignition {__version__} (Alpha)")
@@ -229,7 +246,7 @@ def main(argv=None):
                     # This family's prepared graph is onnxslim's output, so which version
                     # simplified the float reference is part of the artifact's provenance.
                     packages.append("onnxslim")
-                report["versions"] = {p: metadata.version(p) for p in packages}
+                report["versions"] = {p: dist_version(p) for p in packages}
                 Path(str(args.out) + ".quant.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
                 layers = asdict(adaround_report)["layers"]
                 print("ADAROUND_REPORT", json.dumps({k: v for k, v in asdict(adaround_report).items() if k != "layers"}, indent=2))

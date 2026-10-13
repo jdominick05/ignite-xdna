@@ -1,0 +1,24 @@
+
+### emit-float yolov8n w8check
+[emit-float] variant w8check  grid [-127, 127]  window (-1, 3)  (weight-only, float activations)
+[emit-float] float  models/yolov8n_cut.onnx  sha256 11b52c2530def3c99bccc4bee39a40683aab8619d4278a334b5f0f78c43fd0a1
+[emit-float] xint8  models/yolov8n_cut_xint8.onnx  sha256 f02e86ba1bf61ff3fdc159e29b15259567e279df06f68c6d9adeb966fe56c885
+[check] 63/63 Conv weights equal the variant's q * 2**-pos; 68/68 other initializers byte-identical to the float model; 0 added
+[emit-float] wrote scratch/int4_w4a8/yolov8n_fp32w_w8check.onnx  sha256 d31ffba15404b1774742be879ff59e9f56d23018549f6c6a46076bbb72f62abd
+[emit-float] PASS
+
+### emit-float yolov8n e1
+[emit-float] variant e1  grid [-7, 7]  window (-1, 5)  (weight-only, float activations)
+[emit-float] float  models/yolov8n_cut.onnx  sha256 11b52c2530def3c99bccc4bee39a40683aab8619d4278a334b5f0f78c43fd0a1
+[emit-float] xint8  models/yolov8n_cut_xint8.onnx  sha256 f02e86ba1bf61ff3fdc159e29b15259567e279df06f68c6d9adeb966fe56c885
+[check] 63/63 Conv weights equal the variant's q * 2**-pos; 68/68 other initializers byte-identical to the float model; 0 added
+[emit-float] wrote scratch/int4_w4a8/yolov8n_fp32w_e1.onnx  sha256 6c9be5e7c64318b8c676c7d1b2ea9142c19ca01fa5a47cb4b5d8bb44a6335f52
+[emit-float] PASS
+
+### emit-float yolov8n u
+[emit-float] variant u  grid [-7, 7]  window (-1, 5)  (weight-only, float activations)
+[emit-float] float  models/yolov8n_cut.onnx  sha256 11b52c2530def3c99bccc4bee39a40683aab8619d4278a334b5f0f78c43fd0a1
+[emit-float] xint8  models/yolov8n_cut_xint8.onnx  sha256 f02e86ba1bf61ff3fdc159e29b15259567e279df06f68c6d9adeb966fe56c885
+[check] 63/63 Conv weights equal the variant's q * 2**-pos; 68/68 other initializers byte-identical to the float model; 0 added
+[emit-float] wrote scratch/int4_w4a8/yolov8n_fp32w_u.onnx  sha256 d6e1cc1034e525b0b0b86be2b60d5fcaae218871e1ab93609b9e6cbd264b3fee
+[emit-float] PASS

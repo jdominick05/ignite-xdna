@@ -2,7 +2,7 @@
 Confidence threshold sweep: run one model at conf 0.001 (mAP eval) through
 conf 0.90, show which detections survive at each level, and quantify what
 'demo conf 0.25 deletes the tail of the precision-recall curve that AP
-integrates' (CLAUDE.md invariant) looks like on a real image.
+integrates' (CONTRIBUTING.md, Making changes) looks like on a real image.
 
 Saves a vertically-stacked composite JPEG — one annotated strip per threshold.
 

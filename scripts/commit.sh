@@ -15,15 +15,14 @@
 # to a raw ID so that no links for AI assistants are ever committed or pushed.
 #
 # Checks before committing, all restricted to files under results/ (where
-# CLAUDE.md's Files section states the rule):
+# results/README.md states the rule):
 #   - no embedded NUL bytes -- PowerShell's `*>` writes UTF-16, which makes
 #     every later grep/rg silently match nothing
 #   - no literal local profile path -- replace with C:\Users\<user> by hand
 #     before staging, this script only detects it, it does not rewrite logs
 #   - staging a new/changed results/*.log without README.md in the same
 #     commit prints a warning (not a block -- a rerun confirming an existing
-#     number doesn't need one), per CLAUDE.md's "update README.md before
-#     every commit" rule
+#     number doesn't need one), so a new finding reaches README.md in its commit
 #
 # Positional args (if any) are `git add`-ed by name -- never -A, never `.`.
 # With none, whatever is already staged is committed as-is.
@@ -99,7 +98,7 @@ if git diff --cached --name-only | grep -q '^results/.*\.log$'; then
     if ! git diff --cached --name-only | grep -qx 'README.md'; then
         warn "staging a results/*.log without README.md in this commit -- if this is" \
              "a new finding, retraction, or number that supersedes one already in the" \
-             "README, fold it in before committing (CLAUDE.md's maintenance rule)."
+             "README, fold it in before committing."
     fi
 fi
 

@@ -76,7 +76,7 @@ def check_xrt_smi() -> str:
 
 def run_amd_vitisai(model_path: str) -> Dict[str, Any]:
     """Test AMD Vitis AI EP behavior on the classification head in resnet_env17."""
-    py_exe = r"C:\Users\Ignis\miniforge3\envs\resnet_env17\python.exe"
+    py_exe = str(Path.home() / "miniforge3" / "envs" / "resnet_env17" / "python.exe")
     code = (
         "import os, sys, onnxruntime as ort, numpy as np; "
         "os.environ['RYZEN_AI_INSTALLATION_PATH'] = r'C:\\Program Files\\RyzenAI\\1.7.1'; "

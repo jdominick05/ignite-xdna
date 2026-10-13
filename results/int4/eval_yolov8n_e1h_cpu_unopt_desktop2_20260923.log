@@ -1,0 +1,50 @@
+loading annotations into memory...
+Done (t=0.26s)
+creating index...
+index created!
+onnxruntime 1.23.3.dev20260320
+ort-opt : disable_all   ort-threads : 8
+model sha256 f600d16e19fd13639071afa4d9de1da759af7cfba7332e48d3316a1edbc70a4b
+model: head-cut (6 outputs), numpy decode, shapes order, input 640x640
+eval : 5000 images, conf 0.001, iou 0.7, max_det 300, per-class NMS
+  500/5000  (53870 detections so far)
+  1000/5000  (107295 detections so far)
+  1500/5000  (160916 detections so far)
+  2000/5000  (212547 detections so far)
+  2500/5000  (267511 detections so far)
+  3000/5000  (323022 detections so far)
+  3500/5000  (375873 detections so far)
+  4000/5000  (430912 detections so far)
+  4500/5000  (483750 detections so far)
+  5000/5000  (533460 detections so far)
+
+533460 detections over 5000 images in 269s
+inference  mean 45.55 ms   median 45.26 ms
+wrote results/dets_yolov8n_e1h_cpu_unopt.json
+Loading and preparing results...
+DONE (t=1.55s)
+creating index...
+index created!
+Running per image evaluation...
+Evaluate annotation type *bbox*
+DONE (t=12.32s).
+Accumulating evaluation results...
+DONE (t=6.03s).
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.001
+ Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.001
+ Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.001
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.001
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.001
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.001
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=  1 ] = 0.005
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 10 ] = 0.011
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.012
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.006
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.013
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.011
+
+=== yolov8n_w4a8_e1h | CPU | 640px | 5000 images ===
+mAP@50-95  0.08
+mAP@50     0.15
+mAP small / medium / large   0.08 / 0.12 / 0.05
+latency    45.55 ms
