@@ -35,6 +35,11 @@ ap.add_argument("--max-fps", type=float, default=0.0,
                 help="pace timed frames to at most this rate, like a camera (0 = as fast as possible); frames start on "
                      "a fixed schedule and the wait is outside each frame's G2G time")
 ap.add_argument("--json", type=Path, default=None)
+ap.add_argument("--config-file", type=Path, default=None,
+                help="VitisAI EP config_file provider option, e.g. from tools/amd_xcompiler_config.py; "
+                     "omitted, the EP uses its built-in config")
+ap.add_argument("--dump-heads", type=Path, default=None,
+                help="write the last frame's raw session outputs here (.npz), for a bit-exact comparison of arms")
 ap.add_argument("--decoder", default="ignition.pipelines.yolo:decode_heads",
                 help="module:function decoding the head-cut outputs, the same contract as "
                      "bench_container_vs_amd.py and 5_eval_map.py. The default is Ignition's DFL decode, "
@@ -59,6 +64,8 @@ decode_heads = getattr(importlib.import_module(_mod), _fn or "decode_heads")
 proc = psutil.Process()
 opts = {"cacheDir": str(args.cache_dir), "cacheKey": args.cache_key, "enable_cache_file_io_in_mem": "0",
         "target": "X1", "xlnx_enable_py3_round": "0", "xclbin": str(args.xclbin)}
+if args.config_file:
+    opts["config_file"] = str(args.config_file)
 t0 = time.perf_counter()
 sess = ort.InferenceSession(str(args.model), providers=["VitisAIExecutionProvider"], provider_options=[opts])
 load_s = time.perf_counter() - t0
@@ -115,6 +122,8 @@ print(f"[amd] G2G mean {v.mean():.3f} ms | P50 {p50:.3f} | P95 {p95:.3f} | P99 {
 print(f"[amd] stage means (ms): letterbox {np.mean(pre):.3f} | session.run {np.mean(run):.3f} | decode+NMS "
       f"{np.mean(post):.3f}", flush=True)
 print(f"[amd] detections on the last frame: {len(dets)} {dict(names)} | RSS {rss:.1f} MB", flush=True)
+if args.dump_heads:
+    np.savez(args.dump_heads, **{f"out{k}": np.asarray(o) for k, o in enumerate(outs)})
 if args.json:
     args.json.write_text(json.dumps({
         "engine": "ONNX Runtime + Vitis AI EP (Ryzen AI 1.7.1)", "model": args.model.name, "cache_key": args.cache_key,

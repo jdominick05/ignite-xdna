@@ -15650,3 +15650,76 @@ The sweep was `timing_eligible: true` with no foreign process on the NPU.
 Logs:
 - [ctrl_packet_vs_write32_phoenix_desktop2_20261013T025614Z.log](../results/aie/ctrl_packet_vs_write32_phoenix_desktop2_20261013T025614Z.log), the sweep;
 - [ctrl_packet_vs_write32_phoenix_desktop2_20261013T025452Z.log](../results/aie/ctrl_packet_vs_write32_phoenix_desktop2_20261013T025452Z.log), the stopped first sweep, with no timing.
+
+## AMD's own stack runs YOLOv8s 19% faster with one compiler option its default leaves off: `enable_cost_model_tiling` (2026-10-13, Desktop 2)
+
+**Question.** AMD's compiled xmodel records 119 compile options
+([census](#what-amds-compiled-yolov8-runs-its-control-barely-grows-while-its-work-doubles-2026-10-13-desktop-2)),
+and several that sound like speed levers are off in Ryzen AI 1.7.1's default X1 config. Does
+turning one on make AMD's YOLOv8s faster at identical output?
+
+**How the options were set.** The EP's `config_file` provider option takes a config file.
+`tools/amd_xcompiler_config.py` writes one from the config the EP itself recorded in a compiled
+cache (`context.json`). It sets each override in both places the EP keeps `xcompilerAttrs`: the
+X1 target and the `fuse_DPU` pass. `tools/amd_vitisai_yolo.py` gained `--config-file` and
+`--dump-heads`. Each arm compiled into its own fresh cache.
+
+Three checks per arm:
+- **Did the option reach the compiler?** The xmodel's root attribute must move
+  (`amd_xmodel_census.py --root-attrs`).
+- **Did placement change?** `context.json` must still list 922 nodes in one DPU subgraph. With a
+  `config_file`, the EP writes no `vitisai_ep_report.json`.
+- **Did the output change?** The raw heads must match the control's bit for bit.
+
+**The control.** The EP's own config passed unchanged as `config_file` reproduces the default
+build exactly: all 119 root attributes and the `mc_code` sha256 `2171462474654362`. So the
+`config_file` path itself changes nothing.
+
+**Smoke, 20 frames per arm** (screening only):
+
+| option set to true | root attribute | `mc_code` | placement | heads vs control |
+|---|---|---|---|---|
+| `enable_weights_prefetch` | 0 → 1 | byte-identical | 922 / 1 | identical |
+| `enable_ifm_stationary` | 0 → 1 | byte-identical | 922 / 1 | identical |
+| `enable_weights_stationary` | 0 → 1 | byte-identical | 922 / 1 | identical |
+| `enable_cost_model_tiling` | 0 → 1 | **106,168 → 119,676 B** | 922 / 1 | identical |
+
+The first three reach the compiler but leave the compiled program byte-identical, so on YOLOv8s
+they change nothing that runs. They were not timed.
+
+**The sitting** (pre-registered, scratch sha256 `9c7c7dce...`). `amd_vitisai_yolo.py` ran on
+`bus.jpg`, 50 warm-up and 500 timed frames per run, in the order control, option, option,
+control. Each run was its own process, with `xrt-smi` idle before it, under
+`research-lowlevel --npu` (`timing_eligible: true`, no foreign context).
+
+| arm | `session.run` ms | G2G ms |
+|---|---:|---:|
+| control (AMD default) | 13.273 / 13.235 | 17.146 / 17.100 |
+| `enable_cost_model_tiling` | **10.697 / 10.738** | **14.513 / 14.572** |
+
+- **Gate X: passes.** All four runs' last-frame heads are bit-identical (max abs diff 0 over 6
+  outputs).
+- **W: passes.** The option is faster in every pairing.
+- **Effect:** −2.537 ms of `session.run` (0.809x, −19.1%) and −2.581 ms G2G (MEASURED).
+
+**What changed underneath** (static declarations, census):
+- `mc_code` grew 106,168 → 119,676 B, and its `0x0B`-headed words 1,757 → 1,772.
+- **Declared traffic barely moved:** weight reads 87.9 → 82.7 MB, activation reads 138.1 → 144.3
+  MB, writes 73.0 → 73.4 MB, a total of 299.0 → 300.4 MB.
+- **So AMD's time is not set by its declared bytes.** 19% less time for 0.5% more declared
+  traffic answers the bytes-or-compute question the census left open, on the bytes side.
+- **Unexplained:** what the cost-model tiler chose differently (tile shapes, overlap, column
+  balance). It is not decoded here.
+
+**What it means for the comparisons in this file.**
+- **AMD's default is not AMD's best.** Every AMD figure on this page used the EP's default config,
+  and each stays correct for that config.
+- **On YOLOv8s, AMD's best known G2G is now 14.54 ms** (this sitting). The engine's merged YOLOv8s
+  read 17.20 ms in the Block 3 sitting. That was a different sitting, so the two are not compared
+  here as one result, but the gap the engine has to close is larger than it was.
+- **Untested:** whether the option helps YOLOv8n, where the engine leads (8.18 against 10.76 ms in
+  the Block 3 sitting); other models; and energy.
+- **Whether future AMD arms should run with it** is a methodology decision, recorded here and not
+  taken.
+
+Log: [amd_cost_model_tiling_yolov8s_desktop2_20261013T030644Z.log](../results/aie/amd_cost_model_tiling_yolov8s_desktop2_20261013T030644Z.log).
