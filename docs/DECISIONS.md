@@ -1965,6 +1965,19 @@ cached reference heads rather than `bo_out`.
   refused together with host regions, because their configuration writes carry no shim task and
   `split_instruction_stream` counts WRITE ops as task pushes
   ([BENCHMARKS](BENCHMARKS.md#memtile-residency-does-not-pay-on-the-graph-engine-and-the-yolov8s-gap-is-a-known-limitation-2026-09-16-desktop-2)).
+- **Stopped before building: two output groups (64 channels) per core pass (2026-10-13, Block 5, probe
+  measured).** It would cut YOLOv8s activation packets by 17,492, which is 4.10 ms at the fitted 0.235 µs per
+  packet (DERIVED). But the second group's partial sums need 12,800 B against 6,144 B of free core memory, which
+  forces single-buffered core fifos.
+  - **The probe:** the shipped schedule with `core_depths=(1, 1, 1)`, everything else unchanged. It ran +2.70 ms
+    on YOLOv8s, past the pre-registered 2.0 ms kill line. With weights still double-buffered, `(2, 1, 1)` ran
+    +1.07 ms.
+  - **Net:** at best about +1.1 ms (DERIVED), and nothing on the ≥160×160 inputs where the engine trails AMD
+    most.
+  - **What stays:** `core_depths` remains a `compile_graph_container` parameter, off by default.
+  - **What would reopen it:** a core memory layout that keeps the weights double-buffered alongside 64 channels
+    of partial sums. It needs 72,064 B as the core is laid out today
+    ([BENCHMARKS](BENCHMARKS.md#block-5-phase-1-single-buffering-the-cores-costs-270-ms-so-the-2-group-design-is-stopped-2026-10-13-desktop-2)).
 - **Rejected again, on the container it mattered most for: the activation ring on SESR M7 (2026-09-19, built and
   measured).** SESR is the one zoo model whose dispatch is demonstrably transport-bound (2.650 ms NOP floor for
   ~14 MB of per-frame fill and drain, 5.4 GB/s effective), so the ring's "fetch once, serve several output groups"

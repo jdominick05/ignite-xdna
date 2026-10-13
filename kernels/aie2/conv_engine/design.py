@@ -434,12 +434,17 @@ def _activation_ring(col, name, slots):
 
 
 def build_program(device, sequence_body, w_depth=2, ws_bytes=WS_BYTES, wp_bytes=WP_BYTES, a_ring: int = 0,
-                  w_buf: bool = False, ops=None):
+                  w_buf: bool = False, ops=None, a_depth: int = 2, o_depth: int = 2):
     """Return an IRON Program for the engine with ``sequence_body(ws, wp)``.
 
     The body emits raw shim DMA tasks against the FIFO allocation symbols
     ``fifo_names(c)`` (see ``ignite_xdna.compiler.engine_sequence``). ``ws_bytes`` and
     ``wp_bytes`` are the declared DDR extents every task must stay inside (``ddr_extents``).
+
+    ``w_depth``, ``a_depth`` and ``o_depth`` are the CORE-side object counts of the weight, activation and
+    output fifos (the MemTile-side split and join buffers stay at depth 2). 2 is double-buffered and the
+    default; 1 frees core data memory (9,472 / 6,400 / 3,200 B per core) at the cost of overlap between
+    transfer and compute. Depth 1 is an experiment (Block 5: what single-buffering costs), not a shipped mode.
     """
     engine = ExternalFunction(
         "engine",
@@ -473,7 +478,7 @@ def build_program(device, sequence_body, w_depth=2, ws_bytes=WS_BYTES, wp_bytes=
             a_split = a_col.cons().split(
                 [r * A_BYTES for r in range(ROWS)],
                 tile=Tile(c, 1),
-                depths=[2] * ROWS,
+                depths=[a_depth] * ROWS,
                 obj_types=[a_ty] * ROWS,
                 names=[f"a{c}_{r}" for r in range(ROWS)],
             )
@@ -481,7 +486,7 @@ def build_program(device, sequence_body, w_depth=2, ws_bytes=WS_BYTES, wp_bytes=
         o_join = o_col.prod().join(
             [r * O_BYTES for r in range(ROWS)],
             tile=Tile(c, 1),
-            depths=[2] * ROWS,
+            depths=[o_depth] * ROWS,
             obj_types=[o_ty] * ROWS,
             names=[f"o{c}_{r}" for r in range(ROWS)],
         )

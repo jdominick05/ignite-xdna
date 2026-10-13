@@ -16030,3 +16030,63 @@ the 6,400 B activation and 3,200 B output objects, plus a 2 KB stack. A second g
 - **The two weight objects would then hold both groups' weights,** leaving none prefetching.
 
 How much that lost overlap costs is unmeasured. It decides whether the 4.1 ms is reachable.
+
+#### Block 5, phase 1: single-buffering the cores costs 2.70 ms, so the 2-group design is stopped (2026-10-13, Desktop 2)
+
+**Question.** Serving 2 output groups per input fetch was sized above at 4.10 ms saved (DERIVED). It needs
+12,800 B more core data memory than the 6,144 B free, which forces single-buffered core fifos. What does
+single-buffering cost on its own?
+
+**Method.** `compile_graph_container(core_depths=(w, a, o))` sets the core-side object counts of the weight,
+activation and output fifos; the MemTile side stays at 2. It is new on branch `block5-two-groups`, recorded in
+the manifest when not (2, 2, 2), and the offline tests cover its validation. Three YOLOv8s containers with
+`--silu-sigmoid` were built:
+- **`d222`:** the shipped depths, rebuilt as the control;
+- **`d111`:** every core fifo at depth 1. This is the 2-group design's buffering, since its two weight objects
+  would hold both groups' weights at once;
+- **`d211`:** weights still double-buffered.
+
+All three have the same instruction stream and weight packets. The generated MLIR shows the core-side
+activation fifos at depth 1 in `d111` and `d211`.
+
+**The sitting** (pre-registered, scratch sha256 `6386039c...`). `tools/engine_layer_timing.py` ran 10 warm-up
++ 100 rounds per container, in the order `d222`, `d111`, `d211`, `d211`, `d111`, `d222`. Each run was its own
+Python process with `xrt-smi` idle before it (`timing_eligible: true`).
+
+| container | whole stream ms (two runs) | vs `d222` |
+|---|---:|---:|
+| `d222` (shipped) | 16.142 / 16.153 | - |
+| `d211` | 17.180 / 17.251 | +1.068 |
+| `d111` | 18.770 / 18.930 | **+2.703** |
+
+- **Gate X: passes.** The raw heads of `d111` and `d211` are byte-equal to `d222`'s.
+- **Every per-layer sequence was exact:** 0 mismatches in 660 rounds.
+- **Kill line K was "`d111` more than 2.0 ms slower", and it triggers.** The 2-group design is stopped.
+
+**Per input resolution** (ms; the saving is the 2-group prediction at 0.235 µs per packet, DERIVED):
+
+| conv input | `d111` penalty | `d211` penalty | predicted saving | net if the design paid `d111`'s penalty |
+|---|---:|---:|---:|---:|
+| 640×640 | +0.079 | +0.064 | 0.000 | −0.079 |
+| 320×320 | +0.201 | +0.146 | 0.240 | +0.039 |
+| 160×160 | +0.435 | +0.226 | 0.420 | −0.014 |
+| 80×80 | +0.854 | +0.350 | 1.396 | +0.543 |
+| 40×40 | +0.954 | +0.238 | 1.385 | +0.431 |
+| 20×20 | +0.422 | +0.049 | 0.662 | +0.239 |
+| **all (incl. 3 pools)** | **+2.987** | **+1.077** | **4.104** | **+1.117** |
+
+- **Overlap is worth about 3 ms.** With nothing double-buffered, the cores lose 2.7–3.0 ms of overlap between
+  transfer and compute. Weights alone account for about two-thirds of it (`d111` against `d211`).
+- **The design would net about 1.1 ms (DERIVED),** and only if it paid no more than `d111`'s penalty. Twice the
+  arithmetic per held object would plausibly cost more overlap, not less. That is below the line set before the
+  run, so phase 2 was not started.
+- **On the highest-resolution layers it would gain nothing.** The 640, 320 and 160 inputs net −0.05 ms
+  together, though they are where the engine trails AMD most. Their packets come from a single group (G = 1–2)
+  and from over-read, which more output channels per pass cannot touch.
+- **What would reopen it:** core memory that keeps the weights double-buffered, which the `d211` row prices at
+  +1.08 ms. The arithmetic: 49,792 B after single-buffering activations and outputs, plus 12,800 B of partial
+  sums, plus a third 9,472 B weight object, is 72,064 B against a 65,536 B core. It does not fit as laid out.
+
+Log: [engine_core_depth_probe_yolov8s_desktop2_20261013T053413Z.log](../results/aie/engine_core_depth_probe_yolov8s_desktop2_20261013T053413Z.log),
+the sitting. The per-resolution table is computed in its companion analysis log,
+[engine_core_depth_penalty_yolov8s_desktop2_20261013T055500Z.log](../results/aie/engine_core_depth_penalty_yolov8s_desktop2_20261013T055500Z.log).

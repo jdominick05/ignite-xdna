@@ -1,0 +1,13 @@
+# Block 5 phase 1 analysis: per-layer single-buffering penalty vs the 2-group saving. Offline. Desktop 2, 2026-10-13T05:40Z.
+# Inputs: engine_core_depth_probe_yolov8s_desktop2_20261013T053413Z.log runs (t0..t5 JSON), re-read factors from amd_tiling_decode_corrected_yolov8s_n_desktop2_20261013T041500Z.log. Saving DERIVED at 0.2346 us/packet.
+
+WHOLE (mean of two runs' medians): d222 16.147  d111 18.850 (+2.703)  d211 17.216 (+1.068)
+BY INPUT RESOLUTION: d111 penalty, d211 penalty, predicted 2-group saving (DERIVED), net if 2-group pays d111's penalty
+  in 640: n= 1 d111 +0.079  d211 +0.064  saving 0.000  net -0.079 ms
+  in 320: n= 1 d111 +0.201  d211 +0.146  saving 0.240  net +0.039 ms
+  in 160: n= 5 d111 +0.435  d211 +0.226  saving 0.420  net -0.014 ms
+  in 80: n=18 d111 +0.854  d211 +0.350  saving 1.396  net +0.543 ms
+  in 40: n=22 d111 +0.954  d211 +0.238  saving 1.385  net +0.431 ms
+  in 20: n=16 d111 +0.422  d211 +0.049  saving 0.662  net +0.239 ms
+  in pool: n= 3 d111 +0.041  d211 +0.005  saving 0.000  net -0.041 ms
+  TOTAL: d111 +2.987  d211 +1.077  saving 4.104  net +1.117 ms

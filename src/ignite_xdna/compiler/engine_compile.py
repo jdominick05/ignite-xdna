@@ -475,6 +475,7 @@ def compile_graph_container(onnx_path, output_path, build_dir: Optional[Path] = 
                             task: Optional[str] = None,
                             dense_recipe: Optional[str] = None,
                             engine: Any = "int8",
+                            core_depths: Optional[Sequence[int]] = None,
                             **kwargs) -> Dict[str, Any]:
     """Lower, schedule, build the device binaries and write the container. Returns the manifest.
 
@@ -497,7 +498,17 @@ def compile_graph_container(onnx_path, output_path, build_dir: Optional[Path] = 
     the await onto a later, slower-to-complete task. None derives it from the schedule's thinnest channel,
     which is the default and the measured-best cadence on both a thin (SESR M7) and a wide (YOLOv8n) stream.
     The effective value is recorded in the manifest, so a container declares the schedule it was built with.
+
+    ``core_depths`` = (weight, activation, output) core-side fifo depths, int8 engine only. None is (2, 2, 2),
+    the shipped double-buffered design. Anything else is the Block 5 single-buffering experiment, recorded in
+    the manifest as ``graph_engine.core_depths``.
     """
+    if core_depths is not None:
+        core_depths = tuple(int(d) for d in core_depths)
+        if len(core_depths) != 3 or any(d not in (1, 2) for d in core_depths):
+            raise ValueError(f"core_depths must be three of 1 or 2 (weight, activation, output), got {core_depths}")
+        if core_depths == (2, 2, 2):
+            core_depths = None
     if host_regions and (activation_ring or weight_buffer):
         # ``split_instruction_stream`` cuts a host-segment stream by counting WRITE ops as task pushes, and
         # both MemTile structures emit configuration WRITEs that belong to no shim task, so the cut would land
@@ -578,6 +589,10 @@ def compile_graph_container(onnx_path, output_path, build_dir: Optional[Path] = 
     iron.set_current_device(NPU1())
     build_kwargs = (dict(a_ring=activation_ring, w_buf=weight_buffer, ops=kernel_ops)
                     if profile.transport_options else {})
+    if core_depths is not None:
+        if not profile.transport_options:
+            raise ValueError(f"core_depths is an int8-engine experiment; the {profile.name} design does not take it")
+        build_kwargs.update(w_depth=core_depths[0], a_depth=core_depths[1], o_depth=core_depths[2])
     program = eng.build_program(iron.get_current_device(), body, ws_bytes=ws_extent, wp_bytes=wp_extent,
                                 **build_kwargs)
     module = program.resolve_program()
@@ -619,6 +634,8 @@ def compile_graph_container(onnx_path, output_path, build_dir: Optional[Path] = 
         manifest["graph_engine"]["silu"] = "sigmoid4"
     if not workspace_reuse:   # absent means reuse on: co-tenant tensors share a workspace slot
         manifest["graph_engine"]["workspace_reuse"] = False
+    if core_depths is not None:   # absent means the shipped (2, 2, 2)
+        manifest["graph_engine"]["core_depths"] = list(core_depths)
     if cadence:
         # What the emitter retired on, per shim DMA channel: derived from the schedule's thinnest channel
         # unless --retire-batch forced it. Dispatch time is a property of this number (SESR M7: 4.31 ms at 2,

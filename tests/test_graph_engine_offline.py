@@ -886,6 +886,24 @@ class TestDispatchGate(unittest.TestCase):
         check_kernel_covers_packets({"kernel_ops": ["CONV"]}, self._wpackets([em.OP_NOP] * 4))
 
 
+class TestCoreDepths(unittest.TestCase):
+    """``core_depths`` is refused before any lowering or toolchain import when it is malformed, and the shipped
+    (2, 2, 2) stays the default; the design takes the three depths as keywords."""
+
+    def test_malformed_depths_are_refused_up_front(self):
+        from ignite_xdna.compiler.engine_compile import compile_graph_container
+        for bad in ((1, 1), (0, 2, 2), (3, 2, 2), (2, 2, 2, 2)):
+            with self.assertRaises(ValueError):
+                compile_graph_container("does_not_exist.onnx", "unused.ignite", core_depths=bad)
+
+    def test_design_takes_the_three_depths(self):
+        # design.py imports IRON, which this offline suite does not load; read its source instead.
+        src = (Path(__file__).resolve().parents[1] / "kernels" / "aie2" / "conv_engine" / "design.py").read_text(encoding="utf-8")
+        self.assertIn("a_depth: int = 2, o_depth: int = 2", src)
+        self.assertIn("depths=[a_depth] * ROWS", src)
+        self.assertIn("depths=[o_depth] * ROWS", src)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
 
