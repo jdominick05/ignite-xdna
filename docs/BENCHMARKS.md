@@ -7752,6 +7752,16 @@ metadata** (2026-10-12, Desktop 2, [log](../results/aie/xdp_trace_attach_desktop
   - T1, T2 and T3 are still **not reached**.
   - Post hoc, not a test: the only live bytes so far, `0x63` and `0x64` (+0x08, +0x09 from base 0x5B), are
     ones only handler B reads. The bytes both handlers read at +0x02..+0x07 were dead on these inputs.
+- **A targeted sweep of the test bytes answers T1 and T2** (2026-10-13, [log](../results/aie/dpu_reg0_sensitivity_targeted_desktop2_20261013T002753Z.log)). It ran
+  10 arms with no error.
+  - **T1 passes:** `0x7C` (shift_cut) is sensitive.
+  - **T2 holds:** `0x70`, `0x87` and `0x88`, the bytes only handler A reads at base 0x5B, change nothing under
+    either flip. That is consistent with the 0x24d0 handler not running the fixture's bias, but it is
+    evidence, not a witness.
+  - Post hoc and consistent with earlier findings, not tests: `0x7C ^ 0x80` (8 -> 0x88) changes nothing,
+    as the 6-bit shift code predicts (0x88 & 63 = 8). `0x7B`'s flips of bits 0 and 7 change nothing, as
+    the `(b >> 2) & 15` decode predicts.
+  - T3, the per-handler fit, still needs the full region.
 
 ---
 

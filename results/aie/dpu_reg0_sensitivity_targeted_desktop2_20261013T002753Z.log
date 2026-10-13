@@ -1,0 +1,133 @@
+# Route C, targeted REG_0 sweep (the pre-registered test bytes), Desktop 2 (DESKTOP-CBL5NUA), started 20261013T002753Z UTC,
+# resnet_env17, per-run keep-awake; the NPU was idle before. This was the user's option 2 after 12123a6.
+# Tool: tools/dpu_reg0_sensitivity.py (sha256 66b235f3f17958ba9f40c6f6e217263ab04c56c3dc965961cce5f1e625ebb7c7), unchanged.
+# Scorer: scratch c_score2.py (sha256 6ff3780adf7ce0266e0701b0d3b5ce47f223b03d0657adefbd36433c51ad3895), unchanged.
+#
+# Pre-registration (sha256 aa4911927285632da8f55a8a21744ba9830f374354be18f1228f12c3c8ee2988):
+#   written_utc 2026-10-13T00:27:43Z, before the targeted sweep (user's option 2 after 12123a6).
+#   Tool unchanged: tools/dpu_reg0_sensitivity.py (sha256 66b235f3f17958ba9f40c6f6e217263ab04c56c3dc965961cce5f1e625ebb7c7). Scorer: scratch c_score2.py (sha256 6ff3780adf7ce0266e0701b0d3b5ce47f223b03d0657adefbd36433c51ad3895), unchanged.
+#   Arms: REG_0 offsets 0x70, 0x7B, 0x7C, 0x87, 0x88 x masks {0x01, 0x80} = 10 arms, as three runs in order: --lo 0x70 --hi 0x70; --lo 0x7b --hi 0x7c; --lo 0x87 --hi 0x88. Each run compiles fresh. If any run stops (ERROR, REJECTED, timeout), the later runs are NOT started and the user is asked.
+#   T1: 0x7C (shift_cut) is sensitive. T2 H_notA: 0x70, 0x87 and 0x88 are all NOT sensitive (HOLDS), any sensitive refutes it; scored by c_score2.py over these runs. 0x7B is reported, not predicted. T3 is out of scope (needs the full region).
+
+# ===== run 1 (the tool's stdout and stderr) =====
+deleted stale cache C:\Users\<user>\PycharmProjects\ignite-xdna\.claude\worktrees\dpu-isa-re\modelcachekey
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\PycharmProjects\ignite-xdna\.claude\worktrees\dpu-isa-re\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+BASE: NPU:Conv 1, REG_0 1891 B at xmodel offset 9921
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\PycharmProjects\ignite-xdna\.claude\worktrees\dpu-isa-re\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+0x70 ^ 0x01 (04->05): same
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\PycharmProjects\ignite-xdna\.claude\worktrees\dpu-isa-re\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+0x70 ^ 0x80 (04->84): same
+arms 2, stopped: None, restored True, idle after True, 0 s
+state: NPU:Conv 1 (5 of 7 nodes on NPU); REG_0 head 0ae00e078c040001; xmodel restored True; idle after True
+
+# ===== run 2 (the tool's stdout and stderr) =====
+deleted stale cache C:\Users\<user>\PycharmProjects\ignite-xdna\.claude\worktrees\dpu-isa-re\modelcachekey
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\PycharmProjects\ignite-xdna\.claude\worktrees\dpu-isa-re\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+BASE: NPU:Conv 1, REG_0 1891 B at xmodel offset 74705
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\PycharmProjects\ignite-xdna\.claude\worktrees\dpu-isa-re\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+0x7b ^ 0x01 (01->00): same
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\PycharmProjects\ignite-xdna\.claude\worktrees\dpu-isa-re\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+0x7b ^ 0x80 (01->81): same
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\PycharmProjects\ignite-xdna\.claude\worktrees\dpu-isa-re\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+0x7c ^ 0x01 (08->09): changed (17253 codes)
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\PycharmProjects\ignite-xdna\.claude\worktrees\dpu-isa-re\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+0x7c ^ 0x80 (08->88): same
+arms 4, stopped: None, restored True, idle after True, 1 s
+state: NPU:Conv 1 (5 of 7 nodes on NPU); REG_0 head 0ae00e078c040001; xmodel restored True; idle after True
+
+# ===== run 3 (the tool's stdout and stderr) =====
+deleted stale cache C:\Users\<user>\PycharmProjects\ignite-xdna\.claude\worktrees\dpu-isa-re\modelcachekey
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\PycharmProjects\ignite-xdna\.claude\worktrees\dpu-isa-re\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+BASE: NPU:Conv 1, REG_0 1891 B at xmodel offset 4238440
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\PycharmProjects\ignite-xdna\.claude\worktrees\dpu-isa-re\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+0x87 ^ 0x01 (00->01): same
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\PycharmProjects\ignite-xdna\.claude\worktrees\dpu-isa-re\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+0x87 ^ 0x80 (00->80): same
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\PycharmProjects\ignite-xdna\.claude\worktrees\dpu-isa-re\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+0x88 ^ 0x01 (00->01): same
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\PycharmProjects\ignite-xdna\.claude\worktrees\dpu-isa-re\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+0x88 ^ 0x80 (00->80): same
+arms 4, stopped: None, restored True, idle after True, 1 s
+state: NPU:Conv 1 (5 of 7 nodes on NPU); REG_0 head 0ae00e078c040001; xmodel restored True; idle after True
+xrt-smi after the last run: No hardware contexts running on device.
+
+# ===== pre-registered scorer output (c_score2.py over runs 1-3) =====
+    reports 3, arms 10, masks [1, 128], stops: [None, None, None]
+    tested offsets (5): 70 7b 7c 87 88
+    sensitive offsets (1): 7c
+    error arms: none
+    
+    T1 control 0x7C sensitive: True
+       (0x7B reported, not predicted: False)
+    T2 H_notA, bytes only handler A reads at base 0x5B (70 87 88): HOLDS
+    T3 handler A, 0 fully tested bases; best (coverage, hits, base): none
+       at base 0x5B: NOT fully tested
+    T3 handler B, 0 fully tested bases; best (coverage, hits, base): none
+       at base 0x5B: NOT fully tested
+
+# ===== reading =====
+# T1 PASSES: 0x7C (shift_cut) is sensitive (0x7C ^ 0x01, 08 -> 09, changed 17,253 of 57,344 codes).
+# T2 (H_notA) HOLDS: 0x70, 0x87 and 0x88, the bytes only static handler A reads at struct base 0x5B, change
+# nothing under either mask.
+# Scope of T2: it is evidence that handler A's unique fields at that base do not affect these 7 outputs. It is
+# consistent with the 2d801d1/802352b inference that the 0x24d0 handler does not run the fixture's bias. It is
+# not a witness: a byte can be read without changing these outputs.
+# 0x7B (reported, not predicted) is insensitive under both masks. T3 is out of scope here (it needs the full
+# region).
+# Post hoc, NOT pre-registered (both consistent with earlier findings, neither a test):
+#   - 0x7C ^ 0x80 (08 -> 88) changes nothing: 0x88 & 63 = 8, matching the 6-bit shift code (k = s & 63) of
+#     2d801d1.
+#   - 0x7B's two flips touch bits 0 and 7 only, outside the (b >> 2) & 15 shift_bias field, so leaving the
+#     outputs unchanged is what that decode predicts.
