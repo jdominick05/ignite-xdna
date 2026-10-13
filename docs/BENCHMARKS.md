@@ -16279,7 +16279,12 @@ per dispatch:
 - **Q3:** the four-column ratio is 0.878, against a bar of ≤ 0.95.
 
 The prediction at one stream's rate was 0.870. Packet headers, the weight fan-out and the alternating MemTile
-chains cost nothing measurable, and no array-wide cap appeared at this mix.
+chains cost nothing measurable.
+
+The array-wide cap is present, though. At four columns every stream slows: base 6.66 → 6.25 GB/s (−6%) and
+alt 6.85 → 6.19 GB/s (−10%), the same few-percent cap the stream-ceiling probe saw (50.36 vs 2 × 27.17).
+The ratio survives because both routes pay it. The engine runs all four columns, where alt's packet-mode
+stream reads 6.19 GB/s, exactly Q1's bar.
 
 The alt fit is noisier: residuals reach ±117 µs, against ≤ 49 µs on the other routes, and its 128-round point
 has a wide spread across rounds. The per-volume minima are tight, and the verdict holds by fit, by medians and by
@@ -16290,7 +16295,8 @@ noise is unexplained.
 then that chunk's activation object, with weights 2 deep. On a shared stream, a weight task running ahead of
 the quads behind it deadlocks once the cores' weight buffer is full. YOLOv8s's weight tasks are long:
 - 362 of 389 carry more than 2 packets, and the longest carry 128;
-- 208 replay one run once per round.
+- 208 replay one run once per round, as an outer stride-0 dimension spanning rounds. The log's first
+  section counts 352, because it includes any zero stride.
 
 Two fixes don't fit:
 - Splitting every run per chunk would add +8,422 tasks, about 3.0 ms.
@@ -16305,11 +16311,13 @@ The arrangement that fits: per round, stream 1 sends its quads first, into buffe
 - **Static 1-in-2 alternation:** anchored on the measured four-column ratio, 0.878 × 8.673 ms modelled transport
   saves 1.20 ms. Its tasks (+783 + 864 + 22) cost 0.60 ms, which nets **0.60 ms**. That is marginal, and close
   to sitting-to-sitting noise.
-- **Per-layer ratio:** q of every 4 quads on stream 1, chosen per layer under buffer B's limit. The best is q = 1
-  on 62 layers and q = 2 on 4, with 5 changes between layers. Its largest round fits in 8 slots, so the limit
-  never binds. The model saves 2.59 ms against +2,002 tasks (0.73 ms), which nets **1.85 ms**.
-- **The array cap:** q = 1 loads all eight streams nearly evenly, the regime where the stream-ceiling probe read
-  50.36 GB/s rather than 2 × 27.17. Scaling for that leaves about **1.3 ms**.
+- **Per-layer ratio: about 1.3 ms realistic, 1.85 ms upper bound.** q of every 4 quads goes on stream 1, chosen
+  per layer under buffer B's limit. The best is q = 1 on 62 layers and q = 2 on 4, with 5 changes between
+  layers. Its largest round fits in 8 slots, so the limit never binds.
+  - **Uncapped:** the model saves 2.59 ms against +2,002 tasks (0.73 ms), which nets 1.85 ms.
+  - **With the cap:** q = 1 loads all eight streams nearly evenly, the regime where the cap measured above
+    binds (50.36 GB/s rather than 2 × 27.17). Scaling for it leaves about **1.3 ms**, the figure the
+    measurements support.
 - **Not measured:**
   - the q = 1 mix;
   - the quads-first order;
