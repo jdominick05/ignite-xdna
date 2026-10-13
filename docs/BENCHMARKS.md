@@ -16463,7 +16463,9 @@ removed 69,168 B and got slower. Bytes removed therefore do not set the cost of 
 
 The U-curve now holds on three models: SESR M7's minimum is at 2, and YOLOv8n's and YOLOv8s's at 3. The
 mechanism is **unexplained**. The default stays 2, because SESR M7 pays 0.65 ms at rb3 (see the cadence lock in
-DECISIONS). Any rule that ships rb3 must carry SESR M7 and YOLOv8n in the same sitting.
+DECISIONS). Any rule that ships rb3 must carry SESR M7 and YOLOv8n in the same sitting. *[Superseded the same
+day: the frame rule below (rb3 from 2,000 shim tasks per frame) shipped after a sitting that carried SESR M7,
+YOLOv8n, YOLOv8n-pose and YOLOv8s; the default is no longer a flat 2.]*
 
 **Per-task issue cost (`tools/task_issue_probe.py`).**
 
@@ -16611,3 +16613,42 @@ Logs:
 - [cadence landing](../results/aie/engine_cadence_landing_phoenix_desktop2_20261013T1319Z.log);
 - verify: [YOLOv8s](../results/aie/engine_cadence_rule_verify_yolov8s_desktop2_20261013T1337Z.log),
   [YOLOv8n](../results/aie/engine_cadence_rule_verify_yolov8n_desktop2_20261013T1337Z.log).
+
+**Injected issue work slows every YOLOv8s layer, not only the issue-bound ones: the data movement is additive
+(2026-10-13, Desktop 2).** `tools/issue_inject_probe.py` copies the rule container (`43de352`, rb3) and puts
+inert ops before every one of its 6,795 shim tasks' BD writes, all aimed at shim BD 15, which the stream never
+uses:
+- `bw1`: one 8-word BLOCKWRITE, 48 B;
+- `bw2`: two of them;
+- `mw1`: one mask-0 MASKWRITE, 28 B.
+
+Nothing else changes. `bw2` stays byte-exact on device (28/28 readable layers, 38/38 slots).
+
+The sitting was pre-registered (scratch sha256 `853eb975...`). Before it, one whole-stream figure had been seen and
+was disclosed: bw2's verify run read 16.634 ms. The sitting ran `engine_layer_timing.py --nop --rounds 200` per
+container, 2 passes in reversed order, with 0 mismatched rounds anywhere. The per-layer classification was fixed
+beforehand: 48 layers (5,699 tasks) are issue-bound under the `max` fit's 1.20 µs per task, and 18 layers (1,096
+tasks) are transport-bound.
+
+| variant | NOP: issue-bound, µs per task | NOP: transport-bound | ratio TB/IB | NOP frame total | real frame total |
+|---|---:|---:|---:|---:|---:|
+| bw1 (+1 op, 48 B) | +0.065 | +0.057 | 0.87 | +0.433 ms | +0.248 ms |
+| bw2 (+2 ops, 96 B) | +0.255 | +0.202 | **0.79** | +1.673 ms | +1.046 ms |
+| mw1 (+1 op, 28 B) | +0.055 | +0.054 | 0.99 | +0.370 ms | +0.341 ms |
+
+- **Verdict ADDITIVE** (pre-registered bar: R > 0.70 on bw2). Added issue work reaches transport-bound layers
+  at 0.79–0.99 of its rate on issue-bound ones. The `max(transport, issue)` reading is rejected, and with it the
+  worry that a transport saving would reach only 18 layers. Phase 2's sizing stands. Priced at the engine fit's
+  0.372 µs per added task (the additive shape this sitting supports, not the probe's 1-quad regime), stream
+  sharing nets about **1.04 ms** (DERIVED), above its 0.5 ms kill line.
+- **Plain ops are cheap.** One injected op costs 0.055–0.065 µs, and mw1/bw1 = 0.85, so the cost is per op. A
+  task's ~0.37 µs is therefore not its BLOCKWRITE or MASKWRITE. Its DDR_PATCH, its queue push and the blocking
+  TCT waits are the candidates, none measured yet.
+- **Not linear:** bw2/bw1 = 3.9, against 1.6–2.4 expected. A second op per task costs about 0.19 µs more than the
+  first. The stream also grows from 933 KB to 1.59 MB. Which of the two, or neither, sets that is unexplained.
+- **Under compute,** 57–92% of the added NOP time reaches the real dispatch.
+
+Logs:
+- [inertness check](../results/aie/issue_inject_verify_bw2_yolov8s_desktop2_20261013T1344Z.log);
+- [sitting](../results/aie/issue_inject_yolov8s_phoenix_desktop2_20261013T1345Z.log);
+- [per-class analysis](../results/aie/issue_inject_analysis_yolov8s_desktop2_20261013T1400Z.log).

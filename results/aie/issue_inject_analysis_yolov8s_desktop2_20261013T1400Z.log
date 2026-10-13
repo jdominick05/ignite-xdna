@@ -1,0 +1,12 @@
+# Issue-injection analysis, YOLOv8s rule container (main 43de352, rb3), Desktop 2 (DESKTOP-CBL5NUA, Phoenix), 2026-10-13.
+# Offline, from the per-layer JSONs of the sitting in issue_inject_yolov8s_phoenix_desktop2_20261013T1345Z.log (2 passes each, averaged).
+# Pre-registered (scratch sha256 853eb975...). Command:
+#   python tools/issue_inject_probe.py classify --container build/anchor/yolov8s_rule.ignite --onnx models/yolov8s_cut_xint8.onnx --json cls.json
+#   python tools/issue_inject_probe.py analyse --cls cls.json --base base_p1.json+base_p2.json --variant bw1=... --variant bw2=... --variant mw1=...
+[classify] 66 layers, 48 issue-bound at 1.20 us/task; tasks 5699 issue-bound, 1096 transport-bound
+[nop] bw1: issue-bound   +370.4 us over 5699 tasks = +0.065 us/task (+0.065 us per added op); transport-bound    +62.3 us over 1096 tasks = +0.057 us/task; ratio TB/IB 0.87; total +432.8 us
+[nop] bw2: issue-bound  +1451.4 us over 5699 tasks = +0.255 us/task (+0.127 us per added op); transport-bound   +221.1 us over 1096 tasks = +0.202 us/task; ratio TB/IB 0.79; total +1672.5 us
+[nop] mw1: issue-bound   +311.3 us over 5699 tasks = +0.055 us/task (+0.055 us per added op); transport-bound    +59.0 us over 1096 tasks = +0.054 us/task; ratio TB/IB 0.99; total +370.3 us
+[real] bw1: issue-bound   +216.5 us over 5699 tasks = +0.038 us/task (+0.038 us per added op); transport-bound    +31.1 us over 1096 tasks = +0.028 us/task; ratio TB/IB 0.75; total +247.5 us
+[real] bw2: issue-bound   +858.3 us over 5699 tasks = +0.151 us/task (+0.075 us per added op); transport-bound   +187.4 us over 1096 tasks = +0.171 us/task; ratio TB/IB 1.13; total +1045.7 us
+[real] mw1: issue-bound   +299.8 us over 5699 tasks = +0.053 us/task (+0.053 us per added op); transport-bound    +41.2 us over 1096 tasks = +0.038 us/task; ratio TB/IB 0.71; total +341.0 us
