@@ -16135,3 +16135,61 @@ A probe that drives one, two and four cores of one column from one shim channel,
 would decide which.
 
 Log: [engine_packet_shape_sizing_yolov8s_desktop2_20261013T061500Z.log](../results/aie/engine_packet_shape_sizing_yolov8s_desktop2_20261013T061500Z.log).
+
+#### The engine's activations are capped at one shim stream per column, and a second stream doubles the rate (2026-10-13, Desktop 2)
+
+**Question.** The per-layer fit put the engine's data movement at about 27 GB/s, 6.8 GB/s per column. Is that
+one shim-to-MemTile stream per column, or a per-core limit?
+
+**Method.** `tools/stream_ceiling_probe.py` moves input only, in the engine's 6,400 B objects, through the
+MemTile as the engine does, with no compute. It varies two things:
+- how many cores one shim MM2S stream feeds: 1 (MemTile forward), 2 or 4 (MemTile split);
+- whether a column's four cores are fed by one shim stream or by two.
+
+It runs these on one column and on all four. There are 256 to 2,048 objects per core, 3 rotated rounds × 30
+dispatches, and each measurement is its own process. The rate is 1 / slope of time against MB.
+
+**The sitting** (pre-registered, scratch sha256 `3a6df6b4...`). A 5-iteration smoke run of four routes was
+seen before the criteria were written, and the pre-registration says so. The sitting read `timing_eligible:
+true`.
+
+| route | cores | rate (MEASURED) | intercept |
+|---|---:|---:|---:|
+| one shim stream → 1 core | 1 | 6.57 GB/s | 0.081 ms |
+| one shim stream → 2 cores | 2 | 6.82 GB/s | 0.096 ms |
+| one shim stream → 4 cores (the engine's layout) | 4 | 6.88 GB/s | 0.124 ms |
+| two shim streams → 2 + 2 cores | 4 | **13.37 GB/s** | 0.083 ms |
+| all 4 columns, one stream each | 16 | 27.17 GB/s | 0.172 ms |
+| all 4 columns, two streams each | 16 | **50.36 GB/s** | 0.100 ms |
+
+**Verdict: COLUMN.** The pre-registered test needed both parts:
+- **Four cores on one stream are no faster than one:** 1.05x, against a limit of ≤ 1.25x.
+- **A second stream nearly doubles a column:** 1.94x, against a requirement of ≥ 1.6x.
+
+The four columns are independent (3.95x one column).
+
+**Checks.**
+- **Time is linear in volume on every route** ([per-volume points](../results/aie/stream_ceiling_points_phoenix_desktop2_20261013T063000Z.log)), up to 52 MB per channel. A truncated
+  descriptor would show as large volumes finishing too fast.
+- **The shim can only complete once the cores have taken all but a few objects,** so the bytes arrived.
+- **The 50.36 GB/s read rate on eight channels contradicts** the 26–28 GB/s shared cap that
+  [SILICON 1.6](SILICON.md) inferred from GroupNorm and memcpy. That inference is now marked there as not holding
+  for reads alone. Both earlier readings were confounded by concurrent writes or limited to four channels each
+  way.
+
+**What this explains.**
+- **The engine runs at the ceiling.** The single-stream rate is close to one 32-bit stream at the 1.80 GHz core
+  clock (7.2 GB/s, DERIVED). The engine's fitted 0.235 µs per 6,400 B packet is 27.2 GB/s, the same as the
+  all-columns, one-stream route. So the engine's YOLOv8s activation transport runs at this ceiling (the match is
+  DERIVED; the ceiling is MEASURED).
+- **It explains why earlier transport experiments could not win.** The MemTile hop costs nothing, the ring and
+  the weight buffer moved bytes around the same single stream, and packet shape only trims bytes on it.
+- **The lever is a second stream per column.** Today each column's second shim MM2S channel carries only
+  weights: about 57 MB per YOLOv8s frame (29.5 MB of packets plus the stride-0 replay), against 237 MB of
+  activations.
+
+At the measured rates, the activations alone take about 8.7 ms per frame at 27.17 GB/s and about 4.7 ms at
+50.36 GB/s. That is up to ~4 ms (DERIVED), if the weights can share the streams without their own channel.
+How to carry them is the open design question.
+
+Log: [stream_ceiling_phoenix_desktop2_20261013T060213Z.log](../results/aie/stream_ceiling_phoenix_desktop2_20261013T060213Z.log).

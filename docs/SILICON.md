@@ -159,6 +159,25 @@ clock ([log](../results/aie/silicon_stream_width_desktop2_20260919.log)). Those 
 submit/wait slopes across payload sizes, below the on-chip rate; they do not identify
 the resource responsible for the earlier shared cap.
 
+**Reads alone are not capped at 26–28 GB/s** (2026-10-13). `tools/stream_ceiling_probe.py` reads from DDR with
+nothing written back and no compute. It uses the graph engine's 6,400 B objects through the mem tile into cores
+([log](../results/aie/stream_ceiling_phoenix_desktop2_20261013T060213Z.log)). All MEASURED, as slopes over
+volume, with time linear up to 52 MB per channel:
+
+| shim MM2S channels | rate |
+|---:|---:|
+| 1 | 6.57–6.88 GB/s (whether it feeds 1, 2 or 4 cores) |
+| 2 in one column | 13.37 GB/s |
+| 4 (one per column) | 27.17 GB/s |
+| 8 (two per column) | **50.36 GB/s** |
+
+- **The cap is the channel, not a shared limit.** Each shim channel is one ~7 GB/s stream. Eight channels reach
+  1.85x four, so the 26–28 GB/s "shared cap above roughly four channels" inferred above does **not** hold for
+  reads alone.
+- **The two earlier readings are confounded.** GroupNorm's 25.9 GB/s ran with 13.0 GB/s of concurrent writes and
+  compute. memcpy's 28.1 GB/s per direction used only four channels each way. Whether reads and writes share a
+  cap is still open.
+
 A fourth design isolates the mem tile hop rather than a rate. `tools/memtile_hop_probe.py` sends the graph engine's
 6,400 B input and 3,200 B output objects through one core with no compute, on four routes that differ only in
 whether each direction passes through a mem tile ObjectFIFO `forward`. Dispatch time against megabytes in (3.3 to
