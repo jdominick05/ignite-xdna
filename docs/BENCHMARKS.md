@@ -15894,3 +15894,93 @@ Logs:
 - [amd_tiling_decode_corrected_yolov8s_n_desktop2_20261013T041500Z.log](../results/aie/amd_tiling_decode_corrected_yolov8s_n_desktop2_20261013T041500Z.log), the static decode with the engine counted once per node, the
   subgraph-vs-layer check, and the per-layer timing analysis;
 - [amd_tiling_decode_yolov8s_n_desktop2_20261013T034053Z.log](../results/aie/amd_tiling_decode_yolov8s_n_desktop2_20261013T034053Z.log), the first version, superseded on the engine totals only.
+
+### The engine's YOLOv8s, layer by layer, against AMD's (2026-10-13, Desktop 2)
+
+**Question.** AMD's per-layer device times are measured above. Where does the engine's YOLOv8s
+NPU time go, layer by layer, and how does each convolution compare with AMD's?
+
+**Method.** `tools/engine_layer_timing.py` times one layer at a time.
+- **How it splits the stream.** It lowers the container's ONNX again and refuses unless that
+  reproduces the container's workspace and every weight-packet byte. It then cuts `insts.bin`
+  at each layer barrier, using each layer's task count. The emitter retires every task at a
+  barrier, so the 66 pieces add up byte for byte to the 969,812 B stream.
+- **How it times.** Each piece, the whole stream and an empty stream (header only) get one
+  pre-built XRT run, the same start/wait path `GraphSession.dispatch` uses. One round is the
+  whole stream, then every layer in order, then five empty dispatches, all on one staged frame.
+- **The NOP copy.** `--nop` repeats all of this on a copy whose weight packets are NOP. That
+  copy moves the same data and skips the arithmetic, so real minus NOP is a layer's core
+  compute.
+
+A layer's time is its dispatch median less the empty-dispatch median (DERIVED: this assumes
+every dispatch pays the empty one's fixed cost once).
+
+**The sitting** (pre-registered, scratch sha256 `605c89c3...`). The container is
+`yolov8s_merged_silu`, main's engine with `--silu-sigmoid`. Two back-to-back invocations, each
+real then NOP, 10 warm-up + 200 rounds.
+- **A first attempt was not usable.** It read `timing_eligible: false`. The runner saw an NPU
+  context it did not own, because it never saw the Python process that Git Bash launched (its
+  tree peaked at 10.9 MB). The context's PID changed exactly at the run boundary, which
+  suggests it was this tool's own process, but that is not established.
+- **The rerun.** I launched Python directly, logged an amendment before running it, and the
+  runner then owned every context (`timing_eligible: true`).
+
+| gate | criterion | result |
+|---|---|---|
+| E | heads after the per-layer sequence equal to the whole stream's, every round | **pass**: 0 mismatches in 840 rounds (both arms, both runs) |
+| C | net layer times sum to within 10% of the whole stream less one empty dispatch | **pass**: 103.7–104.7% |
+| R | each arm's whole-stream medians in the two runs within 2% | **pass**: 16.144 / 16.136 ms real, 12.289 / 12.278 ms NOP |
+
+- **The fixed cost per dispatch:** the empty dispatch costs 0.096–0.100 ms.
+- **The split is exact.** The per-layer sequence produces the same heads as the whole stream,
+  so the layer times describe the same computation.
+
+**Engine against AMD, the 63 convolutions** (AMD's two `Split` halves summed per node; the engine's 3
+MaxPools take 0.18 ms more):
+
+| conv input | n | engine | engine NOP | engine compute | AMD default | AMD + option | engine / AMD option |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| 640×640 | 1 | 0.597 | 0.414 | 0.183 | 0.169 | 0.169 | 3.53x |
+| 320×320 | 1 | 0.796 | 0.587 | 0.209 | 0.380 | 0.213 | 3.73x |
+| 160×160 | 5 | 1.849 | 1.361 | 0.488 | 0.867 | 0.802 | 2.30x |
+| 80×80 | 18 | 5.597 | 4.183 | 1.414 | 3.059 | 2.464 | 2.27x |
+| 40×40 | 22 | 5.143 | 4.045 | 1.098 | 3.657 | 2.750 | 1.87x |
+| 20×20 | 16 | 2.505 | 2.002 | 0.503 | 2.395 | 1.746 | 1.44x |
+| **all** | **63** | **16.488** | **12.593** | **3.895** | **10.527** | **8.144** | **2.02x** |
+
+The scopes differ. The engine column is host-timed dispatches less a fixed cost; AMD's are device
+timestamps at 1.80 GHz. Both are DERIVED, and the comparison is per layer, not per frame.
+
+- **The engine's convolutions take twice AMD's best:** 16.49 ms against 8.14 ms. The engine is
+  faster on only 4 of 63, all of them small.
+- **The engine's arithmetic is not the problem.** Its core compute is 3.90 ms, less than half
+  of AMD's entire convolution time. The other 12.59 ms is what the NOP copy also spends: moving
+  activations and weights and running the tasks. On the median convolution that is 70% of the
+  layer's time.
+- **The gap is largest where the tensors are largest, not where the re-read factor is.** The
+  three layers at 160×160 and above run 3.4–3.7x AMD. The 20×20 layers, where the engine re-reads
+  its input 16 times against AMD's 1.7, run only 1.44x. Their tensors are small, so even 16x
+  re-reads move little.
+- **The ten largest gaps** are mostly 3×3 convolutions at 80×80 and above, plus 1×1
+  convolutions over wide inputs (384 or 768 channels). On the 1×1s, real equals NOP to within
+  0.02 ms, so they are pure data movement. The full list is in the analysis log.
+
+**What sets the data-movement time (exploratory, not pre-registered).** A least-squares fit of
+each layer's NOP time:
+- **Activation packets alone explain most of it:** about 0.26 µs per 6,400 B packet plus 44 µs
+  per layer, R² 0.94.
+- **Rounds alone do not:** R² 0.28.
+
+Every packet is the same size, so this cannot separate a per-packet cost from a byte-rate limit.
+The earlier instruction-stream model also grows with packets. Which of the three sets the time is
+unexplained.
+
+Either way, packet count is the variable that tracks the engine's non-compute time. AMD's
+re-read factors (above) show how many packets the same convolutions can be done with: 3.9x fewer
+input bytes on YOLOv8s. That makes the high-resolution layers, not the 20×20 ones, the first
+target for Block 5.
+
+Logs:
+- [engine_layer_timing_yolov8s_desktop2_20261013T044249Z.log](../results/aie/engine_layer_timing_yolov8s_desktop2_20261013T044249Z.log), the sitting;
+- [engine_vs_amd_layer_times_yolov8s_desktop2_20261013T045000Z.log](../results/aie/engine_vs_amd_layer_times_yolov8s_desktop2_20261013T045000Z.log), the join, the per-resolution table, the ranked gaps and the fit;
+- [engine_layer_timing_yolov8s_desktop2_20261013T044118Z.log](../results/aie/engine_layer_timing_yolov8s_desktop2_20261013T044118Z.log), the attempt the runner marked ineligible; its numbers are not used.

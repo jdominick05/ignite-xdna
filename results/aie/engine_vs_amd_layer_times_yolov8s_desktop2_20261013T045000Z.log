@@ -1,0 +1,39 @@
+# Engine per-layer NPU time vs AMD per-layer device time, YOLOv8s. Desktop 2, 2026-10-13T04:44Z.
+# Engine: engine_layer_timing_yolov8s_desktop2_20261013T044249Z.log (pre-registered, scratch sha256 605c89c3..., amended after the stopped attempt ...044118Z).
+# AMD: amd_dpu_layer_profile_yolov8s_desktop2_20261013T034000Z.log via the corrected decode's layer->node join; cycles at 1.80 GHz (DERIVED).
+# Engine ms = host-timed per-layer dispatch minus the empty-dispatch median (DERIVED), mean of the two sitting runs.
+
+## 1. Join and comparison (scratch eng_vs_amd)
+engine layers 66, conv nodes joined to AMD 63, engine layers without an AMD conv: 3 ['/model.9/m/MaxPool', '/model.9/m_1/MaxPool', '/model.9/m_2/MaxPool']
+TOTAL joined convs (ms): engine real 16.488 (nop 12.593, compute 3.895) | AMD default 10.527 | AMD cmt 8.144
+TOTAL engine non-conv layers: real 0.180, nop 0.141
+ENGINE all layers: real 16.668, nop 12.734
+BY INPUT RESOLUTION (ms): engine real / nop / compute | AMD default | AMD cmt | engine/AMD-cmt
+  in 640x640 n= 1:  0.597 /  0.414 /  0.183 |  0.169 |  0.169 |  3.53x
+  in 320x320 n= 1:  0.796 /  0.587 /  0.209 |  0.380 |  0.213 |  3.73x
+  in 160x160 n= 5:  1.849 /  1.361 /  0.488 |  0.867 |  0.802 |  2.30x
+  in  80x80  n=18:  5.597 /  4.183 /  1.414 |  3.059 |  2.464 |  2.27x
+  in  40x40  n=22:  5.143 /  4.045 /  1.098 |  3.657 |  2.750 |  1.87x
+  in  20x20  n=16:  2.505 /  2.002 /  0.503 |  2.395 |  1.746 |  1.44x
+TOP 12 engine-minus-AMD-cmt gaps (ms): gap, engine real, nop, compute, AMD cmt, ratio | engine i_rr, AMD cmt i_rr | in -> out, k
+  +0.583 0.796 0.587 +0.209 0.213  3.73x | i  4.00 vs  1.15 | [32, 320, 320] -> [64, 160, 160] k3 /model.1/conv/Conv
+  +0.517 0.732 0.505 +0.227 0.215  3.41x | i  8.00 vs  1.41 | [64, 160, 160] -> [128, 80, 80] k3 /model.3/conv/Conv
+  +0.428 0.597 0.414 +0.183 0.169  3.53x | i  5.33 vs  1.38 | [3, 640, 640] -> [32, 320, 320] k3 /model.0/conv/Conv
+  +0.390 0.713 0.500 +0.213 0.323  2.21x | i 16.00 vs  2.83 | [128, 80, 80] -> [256, 40, 40] k3 /model.5/conv/Conv
+  +0.366 0.613 0.383 +0.230 0.247  2.48x | i  8.00 vs  1.38 | [128, 80, 80] -> [128, 80, 80] k3 /model.22/cv3.0/cv3.0.1/conv/Conv
+  +0.362 0.610 0.385 +0.225 0.248  2.46x | i  8.00 vs  1.38 | [128, 80, 80] -> [128, 80, 80] k3 /model.22/cv3.0/cv3.0.0/conv/Conv
+  +0.352 0.697 0.509 +0.188 0.345  2.02x | i 32.00 vs  4.61 | [256, 40, 40] -> [512, 20, 20] k3 /model.7/conv/Conv
+  +0.308 0.551 0.553 -0.003 0.243  2.27x | i  4.00 vs  1.05 | [384, 80, 80] -> [128, 80, 80] k1 /model.15/cv1/conv/Conv
+  +0.259 0.383 0.379 +0.004 0.124  3.10x | i  4.00 vs  1.05 | [256, 80, 80] -> [128, 80, 80] k1 /model.4/cv2/conv/Conv
+  +0.250 0.388 0.371 +0.016 0.138  2.82x | i  2.67 vs  1.00 | [96, 160, 160] -> [64, 160, 160] k1 /model.2/cv2/conv/Conv
+  +0.236 0.437 0.441 -0.004 0.201  2.17x | i  8.00 vs  1.00 | [768, 40, 40] -> [256, 40, 40] k1 /model.12/cv1/conv/Conv
+  +0.226 0.386 0.269 +0.117 0.160  2.42x | i  8.00 vs  1.42 | [128, 80, 80] -> [128, 40, 40] k3 /model.16/conv/Conv
+engine faster than AMD cmt on 4 of 63 convs: [('/model.2/cv1/conv/Conv', 0.232, 0.255), ('/model.22/cv3.2/cv3.2.0/conv/Conv', 0.17, 0.188), ('/model.22/cv2.2/cv2.2.2/Conv', 0.018, 0.033), ('/model.22/cv3.2/cv3.2.2/Conv', 0.033, 0.038)]
+NOP share of engine real time over convs > 0.05 ms: median 0.70, min 0.44, max 1.03
+
+## 2. Exploratory, not pre-registered: engine NOP time per layer vs packets/rounds/w_fills (scratch nop_fit)
+FIT nop_ms ~ packets: coef [0.264, 44.486] (us per unit; last = intercept), R2 0.943, max abs resid 0.104 ms
+FIT nop_ms ~ rounds: coef [1.905, 130.216] (us per unit; last = intercept), R2 0.283, max abs resid 0.349 ms
+FIT nop_ms ~ packets+rounds: coef [0.247, 0.526, 36.689] (us per unit; last = intercept), R2 0.960, max abs resid 0.104 ms
+FIT nop_ms ~ packets+rounds+w_fills: coef [0.241, 0.461, 2.708, 25.937] (us per unit; last = intercept), R2 0.965, max abs resid 0.088 ms
+total packets 37136, NOP total 12.734 ms -> 342.9 ns per packet overall

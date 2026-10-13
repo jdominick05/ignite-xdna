@@ -1,0 +1,316 @@
+RESEARCH_PLATFORM {"machine": "Desktop 2", "cpu": "AMD Ryzen 7 8700G w/ Radeon 780M Graphics", "os": "Windows-11-10.0.26200-SP0", "ram_bytes": 33381138432, "source_sha256": {"tools/research_process.py": "ffeb1857f190b482eed101b5f5a928f455de26bfa61d23f78a2eacec08e2663e", "tools/quant_calib_alphabet.py": "2dc0b2878c564853f340880209a425dfcf63b8536b2b8e9fd32344daade58d37", "tools/xint8_arithmetic_probe.py": "6aa3df08b9870c3c2264b868459d7ffbac3070dddc1349d7c6f3f480075f7041", "scripts/research-lowlevel.sh": "3455ad7933697936487712665505c216891865c6deada647302785f6e37020bd", "scripts/research-iron.sh": "4c863a262646ddab39b5005006ba8e03809895e6386c6310e2fd9d0a9e9609ee", "kernels/memory_placement/probe.py": "e8d990169ad6091fa1b53852e9f61eff495b5def72d35165a5c5cf1759e38898", "kernels/memory_placement/memory_kernels.cc": "182e7af7071a1e851afb4a7ca266069c489aea1fbaaa85eca129708daeba5ba6", "scripts/research-matrix.sh": "739254171629deae822b0ad7dabc875aee19ace56dde77d3e8aab61663f97516", "kernels/memory_placement/gemm.py": "17c905ad66110d3346bbf0db898dfc6b780df59fae1dfb0c1747057ce1e5844e", "kernels/memory_placement/gemm_placement.cc": "f21acf7250b12914ea30cc1f77613239dfa18421a85a1b9a5199017dd916278a", "tools/research_summary.py": "0c00dcceef07053d06731b41a1f1ed58d3ba4ea09f82497de354ce9cef17da20", "tools/research_toolchain.py": "f0a126a24ae213acfaa43460cfd9def0c86d9cb70cfee0228aa271688467b314"}, "commit": "f5e67ddc840255477743e98f3ab35d6e714a8e36", "command": ["C:/Users/<user>/miniforge3/envs/mlir-aie-iron/python.exe", "scratch/b9/eng_sitting.py"], "seconds_limit": 1200.0, "rss_gib_limit": 8, "checks_only": false, "free_ram_bytes": 22216728576}
+HOST_LOAD busy_cores=0.47 logical_cores=16 free_ram_gb=20.6 sample_sec=1
+HOST_LOAD_TOP 0.09 Taskmgr:26156 ws_mb=158
+HOST_LOAD_TOP 0.08 powershell:29548 ws_mb=80
+HOST_LOAD_TOP 0.08 WindowsTerminal:12116 ws_mb=105
+HOST_LOAD_TOP 0.03 dev-agent:39036 ws_mb=492
+HOST_LOAD_TOP 0.03 FanControl:15032 ws_mb=190
+HOST_LOAD_VERDICT CLEAR
+
+PRE_NPU_CONTEXT_WITNESS "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+=== SITTING_RUN 1
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [19612, 47672, 47964], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 3.14, "tree_rss_bytes": 162336768, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [19612, 47672, 47964], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 6.39, "tree_rss_bytes": 199708672, "foreign_peers": []}
+[layers] yolov8s_merged_silu.ignite: 66 layer pieces, 969812 B stream, pieces sum 969812 B
+HOST_TIMELINE {"elapsed_seconds": 9.531, "tree_rss_bytes": 269766656, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 112 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |47672               |88         |7051        |0           |0    |Normal   |\n      |python.exe          |Active     |7051        |0           |     |N/A      |\n      |112 MB              |4480 KB    |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [47672], "owned_pids": [19612, 47672, 47964], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 12.656, "tree_rss_bytes": 269864960, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 15.859, "tree_rss_bytes": 269905920, "foreign_peers": []}
+LAYER_TIME {"arm": "real", "index": 0, "name": "/model.0/conv/Conv", "ms": 0.6953, "net_ms": 0.5958, "spread_ms": 0.5128, "rounds_in_layer": 256, "packets": 1024, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 1, "name": "/model.1/conv/Conv", "ms": 0.8911, "net_ms": 0.7916, "spread_ms": 0.3983, "rounds_in_layer": 128, "packets": 2048, "w_fills": 8}
+LAYER_TIME {"arm": "real", "index": 2, "name": "/model.2/cv1/conv/Conv", "ms": 0.3303, "net_ms": 0.2307, "spread_ms": 0.1569, "rounds_in_layer": 128, "packets": 512, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 3, "name": "/model.2/m.0/cv1/conv/Conv", "ms": 0.3434, "net_ms": 0.2439, "spread_ms": 0.1439, "rounds_in_layer": 64, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 4, "name": "/model.2/m.0/cv2/conv/Conv", "ms": 0.3488, "net_ms": 0.2492, "spread_ms": 0.1353, "rounds_in_layer": 64, "packets": 512, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 5, "name": "/model.2/cv2/conv/Conv", "ms": 0.4857, "net_ms": 0.3862, "spread_ms": 0.0844, "rounds_in_layer": 128, "packets": 1024, "w_fills": 8}
+LAYER_TIME {"arm": "real", "index": 6, "name": "/model.3/conv/Conv", "ms": 0.8341, "net_ms": 0.7345, "spread_ms": 0.0853, "rounds_in_layer": 64, "packets": 2048, "w_fills": 16}
+LAYER_TIME {"arm": "real", "index": 7, "name": "/model.4/cv1/conv/Conv", "ms": 0.2669, "net_ms": 0.1674, "spread_ms": 0.0557, "rounds_in_layer": 64, "packets": 512, "w_fills": 16}
+LAYER_TIME {"arm": "real", "index": 8, "name": "/model.4/m.0/cv1/conv/Conv", "ms": 0.2897, "net_ms": 0.1902, "spread_ms": 0.055, "rounds_in_layer": 32, "packets": 256, "w_fills": 8}
+LAYER_TIME {"arm": "real", "index": 9, "name": "/model.4/m.0/cv2/conv/Conv", "ms": 0.3004, "net_ms": 0.2008, "spread_ms": 0.0606, "rounds_in_layer": 32, "packets": 384, "w_fills": 8}
+LAYER_TIME {"arm": "real", "index": 10, "name": "/model.4/m.1/cv1/conv/Conv", "ms": 0.2874, "net_ms": 0.1878, "spread_ms": 0.0497, "rounds_in_layer": 32, "packets": 256, "w_fills": 8}
+LAYER_TIME {"arm": "real", "index": 11, "name": "/model.4/m.1/cv2/conv/Conv", "ms": 0.3042, "net_ms": 0.2047, "spread_ms": 0.0464, "rounds_in_layer": 32, "packets": 384, "w_fills": 8}
+LAYER_TIME {"arm": "real", "index": 12, "name": "/model.4/cv2/conv/Conv", "ms": 0.4828, "net_ms": 0.3832, "spread_ms": 0.041, "rounds_in_layer": 64, "packets": 1024, "w_fills": 16}
+LAYER_TIME {"arm": "real", "index": 13, "name": "/model.5/conv/Conv", "ms": 0.8106, "net_ms": 0.7111, "spread_ms": 0.0478, "rounds_in_layer": 32, "packets": 2048, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 14, "name": "/model.6/cv1/conv/Conv", "ms": 0.2624, "net_ms": 0.1629, "spread_ms": 0.0412, "rounds_in_layer": 32, "packets": 512, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 15, "name": "/model.6/m.0/cv1/conv/Conv", "ms": 0.2857, "net_ms": 0.1862, "spread_ms": 0.0372, "rounds_in_layer": 16, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 16, "name": "/model.6/m.0/cv2/conv/Conv", "ms": 0.3003, "net_ms": 0.2008, "spread_ms": 0.0377, "rounds_in_layer": 16, "packets": 320, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 17, "name": "/model.6/m.1/cv1/conv/Conv", "ms": 0.2869, "net_ms": 0.1873, "spread_ms": 0.0314, "rounds_in_layer": 16, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 18, "name": "/model.6/m.1/cv2/conv/Conv", "ms": 0.2945, "net_ms": 0.195, "spread_ms": 0.0347, "rounds_in_layer": 16, "packets": 320, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 19, "name": "/model.6/cv2/conv/Conv", "ms": 0.4501, "net_ms": 0.3506, "spread_ms": 0.0355, "rounds_in_layer": 32, "packets": 1024, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 20, "name": "/model.7/conv/Conv", "ms": 0.7968, "net_ms": 0.6973, "spread_ms": 0.0373, "rounds_in_layer": 16, "packets": 2048, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 21, "name": "/model.8/cv1/conv/Conv", "ms": 0.26, "net_ms": 0.1604, "spread_ms": 0.0337, "rounds_in_layer": 16, "packets": 512, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 22, "name": "/model.8/m.0/cv1/conv/Conv", "ms": 0.2757, "net_ms": 0.1762, "spread_ms": 0.0261, "rounds_in_layer": 8, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 23, "name": "/model.8/m.0/cv2/conv/Conv", "ms": 0.2882, "net_ms": 0.1887, "spread_ms": 0.0218, "rounds_in_layer": 8, "packets": 288, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 24, "name": "/model.8/cv2/conv/Conv", "ms": 0.3513, "net_ms": 0.2518, "spread_ms": 0.0271, "rounds_in_layer": 16, "packets": 768, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 25, "name": "/model.9/cv1/conv/Conv", "ms": 0.1974, "net_ms": 0.0978, "spread_ms": 0.0261, "rounds_in_layer": 8, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 26, "name": "/model.9/m/MaxPool", "ms": 0.1599, "net_ms": 0.0604, "spread_ms": 0.0241, "rounds_in_layer": 8, "packets": 64, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 27, "name": "/model.9/m_1/MaxPool", "ms": 0.1598, "net_ms": 0.0603, "spread_ms": 0.0177, "rounds_in_layer": 8, "packets": 64, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 28, "name": "/model.9/m_2/MaxPool", "ms": 0.1581, "net_ms": 0.0586, "spread_ms": 0.0141, "rounds_in_layer": 8, "packets": 64, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 29, "name": "/model.9/cv2/conv/Conv", "ms": 0.4205, "net_ms": 0.3209, "spread_ms": 0.0176, "rounds_in_layer": 16, "packets": 1024, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 30, "name": "/model.12/cv1/conv/Conv", "ms": 0.5363, "net_ms": 0.4368, "spread_ms": 0.019, "rounds_in_layer": 32, "packets": 1536, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 31, "name": "/model.12/m.0/cv1/conv/Conv", "ms": 0.2763, "net_ms": 0.1768, "spread_ms": 0.0203, "rounds_in_layer": 16, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 32, "name": "/model.12/m.0/cv2/conv/Conv", "ms": 0.275, "net_ms": 0.1755, "spread_ms": 0.0171, "rounds_in_layer": 16, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 33, "name": "/model.12/cv2/conv/Conv", "ms": 0.3591, "net_ms": 0.2596, "spread_ms": 0.0215, "rounds_in_layer": 32, "packets": 768, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 34, "name": "/model.15/cv1/conv/Conv", "ms": 0.6499, "net_ms": 0.5504, "spread_ms": 0.02, "rounds_in_layer": 64, "packets": 1536, "w_fills": 16}
+LAYER_TIME {"arm": "real", "index": 35, "name": "/model.15/m.0/cv1/conv/Conv", "ms": 0.2885, "net_ms": 0.189, "spread_ms": 0.0187, "rounds_in_layer": 32, "packets": 256, "w_fills": 8}
+LAYER_TIME {"arm": "real", "index": 36, "name": "/model.15/m.0/cv2/conv/Conv", "ms": 0.2919, "net_ms": 0.1924, "spread_ms": 0.0211, "rounds_in_layer": 32, "packets": 256, "w_fills": 8}
+LAYER_TIME {"arm": "real", "index": 37, "name": "/model.15/cv2/conv/Conv", "ms": 0.3989, "net_ms": 0.2994, "spread_ms": 0.0164, "rounds_in_layer": 64, "packets": 768, "w_fills": 16}
+LAYER_TIME {"arm": "real", "index": 38, "name": "/model.16/conv/Conv", "ms": 0.4837, "net_ms": 0.3842, "spread_ms": 0.0239, "rounds_in_layer": 16, "packets": 1024, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 39, "name": "/model.22/cv2.0/cv2.0.0/conv/Conv", "ms": 0.4192, "net_ms": 0.3197, "spread_ms": 0.0233, "rounds_in_layer": 32, "packets": 512, "w_fills": 8}
+LAYER_TIME {"arm": "real", "index": 40, "name": "/model.22/cv3.0/cv3.0.0/conv/Conv", "ms": 0.7099, "net_ms": 0.6104, "spread_ms": 0.0186, "rounds_in_layer": 64, "packets": 1024, "w_fills": 16}
+LAYER_TIME {"arm": "real", "index": 41, "name": "/model.22/cv2.0/cv2.0.1/conv/Conv", "ms": 0.2904, "net_ms": 0.1909, "spread_ms": 0.0258, "rounds_in_layer": 32, "packets": 256, "w_fills": 8}
+LAYER_TIME {"arm": "real", "index": 42, "name": "/model.22/cv3.0/cv3.0.1/conv/Conv", "ms": 0.7131, "net_ms": 0.6136, "spread_ms": 0.0216, "rounds_in_layer": 64, "packets": 1024, "w_fills": 16}
+LAYER_TIME {"arm": "real", "index": 43, "name": "/model.18/cv1/conv/Conv", "ms": 0.3772, "net_ms": 0.2776, "spread_ms": 0.0275, "rounds_in_layer": 32, "packets": 768, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 44, "name": "/model.22/cv2.0/cv2.0.2/Conv", "ms": 0.1684, "net_ms": 0.0689, "spread_ms": 0.0211, "rounds_in_layer": 32, "packets": 128, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 45, "name": "/model.22/cv3.0/cv3.0.2/Conv", "ms": 0.22, "net_ms": 0.1205, "spread_ms": 0.0192, "rounds_in_layer": 48, "packets": 384, "w_fills": 12}
+LAYER_TIME {"arm": "real", "index": 46, "name": "/model.18/m.0/cv1/conv/Conv", "ms": 0.2873, "net_ms": 0.1878, "spread_ms": 0.018, "rounds_in_layer": 16, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 47, "name": "/model.18/m.0/cv2/conv/Conv", "ms": 0.2843, "net_ms": 0.1847, "spread_ms": 0.0163, "rounds_in_layer": 16, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 48, "name": "/model.18/cv2/conv/Conv", "ms": 0.3593, "net_ms": 0.2598, "spread_ms": 0.0224, "rounds_in_layer": 32, "packets": 768, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 49, "name": "/model.19/conv/Conv", "ms": 0.4536, "net_ms": 0.3541, "spread_ms": 0.0181, "rounds_in_layer": 8, "packets": 1024, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 50, "name": "/model.22/cv2.1/cv2.1.0/conv/Conv", "ms": 0.2752, "net_ms": 0.1756, "spread_ms": 0.0172, "rounds_in_layer": 8, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 51, "name": "/model.22/cv3.1/cv3.1.0/conv/Conv", "ms": 0.4167, "net_ms": 0.3172, "spread_ms": 0.0205, "rounds_in_layer": 16, "packets": 512, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 52, "name": "/model.22/cv2.1/cv2.1.1/conv/Conv", "ms": 0.1731, "net_ms": 0.0736, "spread_ms": 0.0177, "rounds_in_layer": 8, "packets": 64, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 53, "name": "/model.22/cv3.1/cv3.1.1/conv/Conv", "ms": 0.2808, "net_ms": 0.1813, "spread_ms": 0.0153, "rounds_in_layer": 16, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 54, "name": "/model.21/cv1/conv/Conv", "ms": 0.3233, "net_ms": 0.2238, "spread_ms": 0.0211, "rounds_in_layer": 16, "packets": 768, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 55, "name": "/model.22/cv2.1/cv2.1.2/Conv", "ms": 0.1467, "net_ms": 0.0471, "spread_ms": 0.0162, "rounds_in_layer": 8, "packets": 32, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 56, "name": "/model.22/cv3.1/cv3.1.2/Conv", "ms": 0.152, "net_ms": 0.0525, "spread_ms": 0.0156, "rounds_in_layer": 12, "packets": 96, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 57, "name": "/model.21/m.0/cv1/conv/Conv", "ms": 0.2795, "net_ms": 0.18, "spread_ms": 0.0179, "rounds_in_layer": 8, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 58, "name": "/model.21/m.0/cv2/conv/Conv", "ms": 0.2736, "net_ms": 0.1741, "spread_ms": 0.0221, "rounds_in_layer": 8, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 59, "name": "/model.21/cv2/conv/Conv", "ms": 0.3469, "net_ms": 0.2474, "spread_ms": 0.0184, "rounds_in_layer": 16, "packets": 768, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 60, "name": "/model.22/cv2.2/cv2.2.0/conv/Conv", "ms": 0.2617, "net_ms": 0.1622, "spread_ms": 0.0167, "rounds_in_layer": 2, "packets": 128, "w_fills": 2}
+LAYER_TIME {"arm": "real", "index": 61, "name": "/model.22/cv3.2/cv3.2.0/conv/Conv", "ms": 0.2687, "net_ms": 0.1692, "spread_ms": 0.0161, "rounds_in_layer": 4, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 62, "name": "/model.22/cv2.2/cv2.2.1/conv/Conv", "ms": 0.1377, "net_ms": 0.0382, "spread_ms": 0.0145, "rounds_in_layer": 2, "packets": 16, "w_fills": 2}
+LAYER_TIME {"arm": "real", "index": 63, "name": "/model.22/cv3.2/cv3.2.1/conv/Conv", "ms": 0.1628, "net_ms": 0.0633, "spread_ms": 0.0148, "rounds_in_layer": 4, "packets": 64, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 64, "name": "/model.22/cv2.2/cv2.2.2/Conv", "ms": 0.1167, "net_ms": 0.0172, "spread_ms": 0.0143, "rounds_in_layer": 2, "packets": 8, "w_fills": 2}
+LAYER_TIME {"arm": "real", "index": 65, "name": "/model.22/cv3.2/cv3.2.2/Conv", "ms": 0.127, "net_ms": 0.0275, "spread_ms": 0.016, "rounds_in_layer": 3, "packets": 24, "w_fills": 3}
+SUMMARY {"arm": "real", "whole_ms_median": 16.1437, "empty_ms_median": 0.0995, "empty_ms_p10_p90": [0.0883, 0.1339], "sum_layer_ms": 23.203, "sum_net_ms": 16.6346, "whole_minus_empty_ms": 16.0442, "net_over_whole_less_empty": 1.0368, "mismatched_rounds": 0, "rounds_total": 210, "layers": 66}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 112 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |47672               |89         |1823        |0           |0    |Normal   |\n      |python.exe          |Active     |1823        |0           |     |N/A      |\n      |112 MB              |4480 KB    |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [47672], "owned_pids": [19612, 47672, 47964], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 19.031, "tree_rss_bytes": 338149376, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 112 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |47672               |89         |12404       |0           |0    |Normal   |\n      |python.exe          |Active     |12403       |0           |     |N/A      |\n      |112 MB              |4480 KB    |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [47672], "owned_pids": [19612, 47672, 47964], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 22.187, "tree_rss_bytes": 271089664, "foreign_peers": []}
+LAYER_TIME {"arm": "nop", "index": 0, "name": "/model.0/conv/Conv", "ms": 0.5139, "net_ms": 0.4177, "spread_ms": 0.093, "rounds_in_layer": 256, "packets": 1024, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 1, "name": "/model.1/conv/Conv", "ms": 0.6843, "net_ms": 0.5881, "spread_ms": 0.0879, "rounds_in_layer": 128, "packets": 2048, "w_fills": 8}
+LAYER_TIME {"arm": "nop", "index": 2, "name": "/model.2/cv1/conv/Conv", "ms": 0.2771, "net_ms": 0.1809, "spread_ms": 0.0967, "rounds_in_layer": 128, "packets": 512, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 3, "name": "/model.2/m.0/cv1/conv/Conv", "ms": 0.205, "net_ms": 0.1089, "spread_ms": 0.0769, "rounds_in_layer": 64, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 4, "name": "/model.2/m.0/cv2/conv/Conv", "ms": 0.2904, "net_ms": 0.1942, "spread_ms": 0.0628, "rounds_in_layer": 64, "packets": 512, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 5, "name": "/model.2/cv2/conv/Conv", "ms": 0.4675, "net_ms": 0.3713, "spread_ms": 0.0566, "rounds_in_layer": 128, "packets": 1024, "w_fills": 8}
+LAYER_TIME {"arm": "nop", "index": 6, "name": "/model.3/conv/Conv", "ms": 0.6015, "net_ms": 0.5053, "spread_ms": 0.0461, "rounds_in_layer": 64, "packets": 2048, "w_fills": 16}
+LAYER_TIME {"arm": "nop", "index": 7, "name": "/model.4/cv1/conv/Conv", "ms": 0.247, "net_ms": 0.1508, "spread_ms": 0.0385, "rounds_in_layer": 64, "packets": 512, "w_fills": 16}
+LAYER_TIME {"arm": "nop", "index": 8, "name": "/model.4/m.0/cv1/conv/Conv", "ms": 0.2066, "net_ms": 0.1104, "spread_ms": 0.0298, "rounds_in_layer": 32, "packets": 256, "w_fills": 8}
+LAYER_TIME {"arm": "nop", "index": 9, "name": "/model.4/m.0/cv2/conv/Conv", "ms": 0.2461, "net_ms": 0.1499, "spread_ms": 0.0282, "rounds_in_layer": 32, "packets": 384, "w_fills": 8}
+LAYER_TIME {"arm": "nop", "index": 10, "name": "/model.4/m.1/cv1/conv/Conv", "ms": 0.2109, "net_ms": 0.1147, "spread_ms": 0.0292, "rounds_in_layer": 32, "packets": 256, "w_fills": 8}
+LAYER_TIME {"arm": "nop", "index": 11, "name": "/model.4/m.1/cv2/conv/Conv", "ms": 0.2459, "net_ms": 0.1497, "spread_ms": 0.0306, "rounds_in_layer": 32, "packets": 384, "w_fills": 8}
+LAYER_TIME {"arm": "nop", "index": 12, "name": "/model.4/cv2/conv/Conv", "ms": 0.4764, "net_ms": 0.3802, "spread_ms": 0.0288, "rounds_in_layer": 64, "packets": 1024, "w_fills": 16}
+LAYER_TIME {"arm": "nop", "index": 13, "name": "/model.5/conv/Conv", "ms": 0.5959, "net_ms": 0.4997, "spread_ms": 0.0276, "rounds_in_layer": 32, "packets": 2048, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 14, "name": "/model.6/cv1/conv/Conv", "ms": 0.2455, "net_ms": 0.1493, "spread_ms": 0.0257, "rounds_in_layer": 32, "packets": 512, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 15, "name": "/model.6/m.0/cv1/conv/Conv", "ms": 0.2131, "net_ms": 0.1169, "spread_ms": 0.0307, "rounds_in_layer": 16, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 16, "name": "/model.6/m.0/cv2/conv/Conv", "ms": 0.2346, "net_ms": 0.1385, "spread_ms": 0.0252, "rounds_in_layer": 16, "packets": 320, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 17, "name": "/model.6/m.1/cv1/conv/Conv", "ms": 0.2147, "net_ms": 0.1185, "spread_ms": 0.0214, "rounds_in_layer": 16, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 18, "name": "/model.6/m.1/cv2/conv/Conv", "ms": 0.2382, "net_ms": 0.142, "spread_ms": 0.0194, "rounds_in_layer": 16, "packets": 320, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 19, "name": "/model.6/cv2/conv/Conv", "ms": 0.4453, "net_ms": 0.3491, "spread_ms": 0.0199, "rounds_in_layer": 32, "packets": 1024, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 20, "name": "/model.7/conv/Conv", "ms": 0.6064, "net_ms": 0.5102, "spread_ms": 0.0286, "rounds_in_layer": 16, "packets": 2048, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 21, "name": "/model.8/cv1/conv/Conv", "ms": 0.2425, "net_ms": 0.1463, "spread_ms": 0.0191, "rounds_in_layer": 16, "packets": 512, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 22, "name": "/model.8/m.0/cv1/conv/Conv", "ms": 0.2051, "net_ms": 0.1089, "spread_ms": 0.017, "rounds_in_layer": 8, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 23, "name": "/model.8/m.0/cv2/conv/Conv", "ms": 0.2149, "net_ms": 0.1187, "spread_ms": 0.0188, "rounds_in_layer": 8, "packets": 288, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 24, "name": "/model.8/cv2/conv/Conv", "ms": 0.3494, "net_ms": 0.2532, "spread_ms": 0.0258, "rounds_in_layer": 16, "packets": 768, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 25, "name": "/model.9/cv1/conv/Conv", "ms": 0.1851, "net_ms": 0.089, "spread_ms": 0.0268, "rounds_in_layer": 8, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 26, "name": "/model.9/m/MaxPool", "ms": 0.1432, "net_ms": 0.047, "spread_ms": 0.0224, "rounds_in_layer": 8, "packets": 64, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 27, "name": "/model.9/m_1/MaxPool", "ms": 0.1424, "net_ms": 0.0463, "spread_ms": 0.0199, "rounds_in_layer": 8, "packets": 64, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 28, "name": "/model.9/m_2/MaxPool", "ms": 0.1416, "net_ms": 0.0454, "spread_ms": 0.0145, "rounds_in_layer": 8, "packets": 64, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 29, "name": "/model.9/cv2/conv/Conv", "ms": 0.4175, "net_ms": 0.3213, "spread_ms": 0.0175, "rounds_in_layer": 16, "packets": 1024, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 30, "name": "/model.12/cv1/conv/Conv", "ms": 0.5373, "net_ms": 0.4411, "spread_ms": 0.0195, "rounds_in_layer": 32, "packets": 1536, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 31, "name": "/model.12/m.0/cv1/conv/Conv", "ms": 0.2073, "net_ms": 0.1111, "spread_ms": 0.0181, "rounds_in_layer": 16, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 32, "name": "/model.12/m.0/cv2/conv/Conv", "ms": 0.2058, "net_ms": 0.1096, "spread_ms": 0.0164, "rounds_in_layer": 16, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 33, "name": "/model.12/cv2/conv/Conv", "ms": 0.3575, "net_ms": 0.2614, "spread_ms": 0.0175, "rounds_in_layer": 32, "packets": 768, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 34, "name": "/model.15/cv1/conv/Conv", "ms": 0.6486, "net_ms": 0.5525, "spread_ms": 0.0203, "rounds_in_layer": 64, "packets": 1536, "w_fills": 16}
+LAYER_TIME {"arm": "nop", "index": 35, "name": "/model.15/m.0/cv1/conv/Conv", "ms": 0.2096, "net_ms": 0.1134, "spread_ms": 0.0194, "rounds_in_layer": 32, "packets": 256, "w_fills": 8}
+LAYER_TIME {"arm": "nop", "index": 36, "name": "/model.15/m.0/cv2/conv/Conv", "ms": 0.2088, "net_ms": 0.1126, "spread_ms": 0.0189, "rounds_in_layer": 32, "packets": 256, "w_fills": 8}
+LAYER_TIME {"arm": "nop", "index": 37, "name": "/model.15/cv2/conv/Conv", "ms": 0.3882, "net_ms": 0.292, "spread_ms": 0.0173, "rounds_in_layer": 64, "packets": 768, "w_fills": 16}
+LAYER_TIME {"arm": "nop", "index": 38, "name": "/model.16/conv/Conv", "ms": 0.3639, "net_ms": 0.2677, "spread_ms": 0.0234, "rounds_in_layer": 16, "packets": 1024, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 39, "name": "/model.22/cv2.0/cv2.0.0/conv/Conv", "ms": 0.2976, "net_ms": 0.2014, "spread_ms": 0.0163, "rounds_in_layer": 32, "packets": 512, "w_fills": 8}
+LAYER_TIME {"arm": "nop", "index": 40, "name": "/model.22/cv3.0/cv3.0.0/conv/Conv", "ms": 0.4813, "net_ms": 0.3852, "spread_ms": 0.0156, "rounds_in_layer": 64, "packets": 1024, "w_fills": 16}
+LAYER_TIME {"arm": "nop", "index": 41, "name": "/model.22/cv2.0/cv2.0.1/conv/Conv", "ms": 0.2118, "net_ms": 0.1156, "spread_ms": 0.018, "rounds_in_layer": 32, "packets": 256, "w_fills": 8}
+LAYER_TIME {"arm": "nop", "index": 42, "name": "/model.22/cv3.0/cv3.0.1/conv/Conv", "ms": 0.4792, "net_ms": 0.383, "spread_ms": 0.0186, "rounds_in_layer": 64, "packets": 1024, "w_fills": 16}
+LAYER_TIME {"arm": "nop", "index": 43, "name": "/model.18/cv1/conv/Conv", "ms": 0.3648, "net_ms": 0.2686, "spread_ms": 0.0175, "rounds_in_layer": 32, "packets": 768, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 44, "name": "/model.22/cv2.0/cv2.0.2/Conv", "ms": 0.1674, "net_ms": 0.0712, "spread_ms": 0.0196, "rounds_in_layer": 32, "packets": 128, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 45, "name": "/model.22/cv3.0/cv3.0.2/Conv", "ms": 0.2168, "net_ms": 0.1207, "spread_ms": 0.0174, "rounds_in_layer": 48, "packets": 384, "w_fills": 12}
+LAYER_TIME {"arm": "nop", "index": 46, "name": "/model.18/m.0/cv1/conv/Conv", "ms": 0.213, "net_ms": 0.1168, "spread_ms": 0.0166, "rounds_in_layer": 16, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 47, "name": "/model.18/m.0/cv2/conv/Conv", "ms": 0.2122, "net_ms": 0.116, "spread_ms": 0.0136, "rounds_in_layer": 16, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 48, "name": "/model.18/cv2/conv/Conv", "ms": 0.3568, "net_ms": 0.2607, "spread_ms": 0.0185, "rounds_in_layer": 32, "packets": 768, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 49, "name": "/model.19/conv/Conv", "ms": 0.3682, "net_ms": 0.2721, "spread_ms": 0.0287, "rounds_in_layer": 8, "packets": 1024, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 50, "name": "/model.22/cv2.1/cv2.1.0/conv/Conv", "ms": 0.2046, "net_ms": 0.1084, "spread_ms": 0.0247, "rounds_in_layer": 8, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 51, "name": "/model.22/cv3.1/cv3.1.0/conv/Conv", "ms": 0.3011, "net_ms": 0.2049, "spread_ms": 0.0212, "rounds_in_layer": 16, "packets": 512, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 52, "name": "/model.22/cv2.1/cv2.1.1/conv/Conv", "ms": 0.1383, "net_ms": 0.0421, "spread_ms": 0.0189, "rounds_in_layer": 8, "packets": 64, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 53, "name": "/model.22/cv3.1/cv3.1.1/conv/Conv", "ms": 0.2099, "net_ms": 0.1137, "spread_ms": 0.0155, "rounds_in_layer": 16, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 54, "name": "/model.21/cv1/conv/Conv", "ms": 0.3055, "net_ms": 0.2093, "spread_ms": 0.0178, "rounds_in_layer": 16, "packets": 768, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 55, "name": "/model.22/cv2.1/cv2.1.2/Conv", "ms": 0.1431, "net_ms": 0.047, "spread_ms": 0.0182, "rounds_in_layer": 8, "packets": 32, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 56, "name": "/model.22/cv3.1/cv3.1.2/Conv", "ms": 0.1482, "net_ms": 0.052, "spread_ms": 0.0163, "rounds_in_layer": 12, "packets": 96, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 57, "name": "/model.21/m.0/cv1/conv/Conv", "ms": 0.2083, "net_ms": 0.1121, "spread_ms": 0.0203, "rounds_in_layer": 8, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 58, "name": "/model.21/m.0/cv2/conv/Conv", "ms": 0.2027, "net_ms": 0.1065, "spread_ms": 0.0173, "rounds_in_layer": 8, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 59, "name": "/model.21/cv2/conv/Conv", "ms": 0.3438, "net_ms": 0.2476, "spread_ms": 0.0174, "rounds_in_layer": 16, "packets": 768, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 60, "name": "/model.22/cv2.2/cv2.2.0/conv/Conv", "ms": 0.1707, "net_ms": 0.0745, "spread_ms": 0.0153, "rounds_in_layer": 2, "packets": 128, "w_fills": 2}
+LAYER_TIME {"arm": "nop", "index": 61, "name": "/model.22/cv3.2/cv3.2.0/conv/Conv", "ms": 0.1992, "net_ms": 0.103, "spread_ms": 0.0177, "rounds_in_layer": 4, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 62, "name": "/model.22/cv2.2/cv2.2.1/conv/Conv", "ms": 0.1179, "net_ms": 0.0217, "spread_ms": 0.0137, "rounds_in_layer": 2, "packets": 16, "w_fills": 2}
+LAYER_TIME {"arm": "nop", "index": 63, "name": "/model.22/cv3.2/cv3.2.1/conv/Conv", "ms": 0.1334, "net_ms": 0.0372, "spread_ms": 0.0135, "rounds_in_layer": 4, "packets": 64, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 64, "name": "/model.22/cv2.2/cv2.2.2/Conv", "ms": 0.1136, "net_ms": 0.0174, "spread_ms": 0.0139, "rounds_in_layer": 2, "packets": 8, "w_fills": 2}
+LAYER_TIME {"arm": "nop", "index": 65, "name": "/model.22/cv3.2/cv3.2.2/Conv", "ms": 0.124, "net_ms": 0.0279, "spread_ms": 0.0161, "rounds_in_layer": 3, "packets": 24, "w_fills": 3}
+SUMMARY {"arm": "nop", "whole_ms_median": 12.2892, "empty_ms_median": 0.0962, "empty_ms_p10_p90": [0.0883, 0.1266], "sum_layer_ms": 19.0684, "sum_net_ms": 12.7204, "whole_minus_empty_ms": 12.193, "net_over_whole_less_empty": 1.0433, "mismatched_rounds": 0, "rounds_total": 210, "layers": 66}
+=== SITTING_RUN 2
+HOST_TIMELINE {"elapsed_seconds": 25.328, "tree_rss_bytes": 150695936, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [19612, 47672, 47964, 48784], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 28.609, "tree_rss_bytes": 186400768, "foreign_peers": []}
+[layers] yolov8s_merged_silu.ignite: 66 layer pieces, 969812 B stream, pieces sum 969812 B
+HOST_TIMELINE {"elapsed_seconds": 31.671, "tree_rss_bytes": 269479936, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 112 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |48784               |90         |4321        |0           |0    |Normal   |\n      |python.exe          |Active     |4320        |0           |     |N/A      |\n      |112 MB              |4480 KB    |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [48784], "owned_pids": [19612, 47672, 47964, 48784], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 34.781, "tree_rss_bytes": 269578240, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 37.843, "tree_rss_bytes": 269463552, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 112 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |48784               |90         |14473       |0           |0    |Normal   |\n      |python.exe          |Active     |14472       |0           |     |N/A      |\n      |112 MB              |4480 KB    |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [48784], "owned_pids": [19612, 47672, 47964, 48784], "foreign_pids": []}
+LAYER_TIME {"arm": "real", "index": 0, "name": "/model.0/conv/Conv", "ms": 0.6974, "net_ms": 0.5986, "spread_ms": 0.613, "rounds_in_layer": 256, "packets": 1024, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 1, "name": "/model.1/conv/Conv", "ms": 0.8994, "net_ms": 0.8006, "spread_ms": 0.4895, "rounds_in_layer": 128, "packets": 2048, "w_fills": 8}
+LAYER_TIME {"arm": "real", "index": 2, "name": "/model.2/cv1/conv/Conv", "ms": 0.3329, "net_ms": 0.2341, "spread_ms": 0.2408, "rounds_in_layer": 128, "packets": 512, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 3, "name": "/model.2/m.0/cv1/conv/Conv", "ms": 0.346, "net_ms": 0.2471, "spread_ms": 0.256, "rounds_in_layer": 64, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 4, "name": "/model.2/m.0/cv2/conv/Conv", "ms": 0.3523, "net_ms": 0.2535, "spread_ms": 0.2333, "rounds_in_layer": 64, "packets": 512, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 5, "name": "/model.2/cv2/conv/Conv", "ms": 0.488, "net_ms": 0.3891, "spread_ms": 0.3152, "rounds_in_layer": 128, "packets": 1024, "w_fills": 8}
+LAYER_TIME {"arm": "real", "index": 6, "name": "/model.3/conv/Conv", "ms": 0.8286, "net_ms": 0.7298, "spread_ms": 0.3452, "rounds_in_layer": 64, "packets": 2048, "w_fills": 16}
+LAYER_TIME {"arm": "real", "index": 7, "name": "/model.4/cv1/conv/Conv", "ms": 0.2696, "net_ms": 0.1708, "spread_ms": 0.1097, "rounds_in_layer": 64, "packets": 512, "w_fills": 16}
+LAYER_TIME {"arm": "real", "index": 8, "name": "/model.4/m.0/cv1/conv/Conv", "ms": 0.2909, "net_ms": 0.1921, "spread_ms": 0.0833, "rounds_in_layer": 32, "packets": 256, "w_fills": 8}
+LAYER_TIME {"arm": "real", "index": 9, "name": "/model.4/m.0/cv2/conv/Conv", "ms": 0.3007, "net_ms": 0.2019, "spread_ms": 0.1093, "rounds_in_layer": 32, "packets": 384, "w_fills": 8}
+LAYER_TIME {"arm": "real", "index": 10, "name": "/model.4/m.1/cv1/conv/Conv", "ms": 0.2893, "net_ms": 0.1904, "spread_ms": 0.0893, "rounds_in_layer": 32, "packets": 256, "w_fills": 8}
+LAYER_TIME {"arm": "real", "index": 11, "name": "/model.4/m.1/cv2/conv/Conv", "ms": 0.3046, "net_ms": 0.2058, "spread_ms": 0.055, "rounds_in_layer": 32, "packets": 384, "w_fills": 8}
+LAYER_TIME {"arm": "real", "index": 12, "name": "/model.4/cv2/conv/Conv", "ms": 0.4822, "net_ms": 0.3834, "spread_ms": 0.0488, "rounds_in_layer": 64, "packets": 1024, "w_fills": 16}
+LAYER_TIME {"arm": "real", "index": 13, "name": "/model.5/conv/Conv", "ms": 0.8142, "net_ms": 0.7154, "spread_ms": 0.0515, "rounds_in_layer": 32, "packets": 2048, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 14, "name": "/model.6/cv1/conv/Conv", "ms": 0.2625, "net_ms": 0.1637, "spread_ms": 0.0506, "rounds_in_layer": 32, "packets": 512, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 15, "name": "/model.6/m.0/cv1/conv/Conv", "ms": 0.2849, "net_ms": 0.186, "spread_ms": 0.0462, "rounds_in_layer": 16, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 16, "name": "/model.6/m.0/cv2/conv/Conv", "ms": 0.2986, "net_ms": 0.1998, "spread_ms": 0.0375, "rounds_in_layer": 16, "packets": 320, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 17, "name": "/model.6/m.1/cv1/conv/Conv", "ms": 0.2816, "net_ms": 0.1828, "spread_ms": 0.0396, "rounds_in_layer": 16, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 18, "name": "/model.6/m.1/cv2/conv/Conv", "ms": 0.2944, "net_ms": 0.1956, "spread_ms": 0.0355, "rounds_in_layer": 16, "packets": 320, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 19, "name": "/model.6/cv2/conv/Conv", "ms": 0.4447, "net_ms": 0.3459, "spread_ms": 0.0377, "rounds_in_layer": 32, "packets": 1024, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 20, "name": "/model.7/conv/Conv", "ms": 0.7961, "net_ms": 0.6973, "spread_ms": 0.0446, "rounds_in_layer": 16, "packets": 2048, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 21, "name": "/model.8/cv1/conv/Conv", "ms": 0.2616, "net_ms": 0.1628, "spread_ms": 0.0428, "rounds_in_layer": 16, "packets": 512, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 22, "name": "/model.8/m.0/cv1/conv/Conv", "ms": 0.2749, "net_ms": 0.1761, "spread_ms": 0.038, "rounds_in_layer": 8, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 23, "name": "/model.8/m.0/cv2/conv/Conv", "ms": 0.2857, "net_ms": 0.1869, "spread_ms": 0.0373, "rounds_in_layer": 8, "packets": 288, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 24, "name": "/model.8/cv2/conv/Conv", "ms": 0.3533, "net_ms": 0.2545, "spread_ms": 0.0303, "rounds_in_layer": 16, "packets": 768, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 25, "name": "/model.9/cv1/conv/Conv", "ms": 0.195, "net_ms": 0.0962, "spread_ms": 0.0323, "rounds_in_layer": 8, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 26, "name": "/model.9/m/MaxPool", "ms": 0.1594, "net_ms": 0.0606, "spread_ms": 0.0203, "rounds_in_layer": 8, "packets": 64, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 27, "name": "/model.9/m_1/MaxPool", "ms": 0.1596, "net_ms": 0.0608, "spread_ms": 0.0208, "rounds_in_layer": 8, "packets": 64, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 28, "name": "/model.9/m_2/MaxPool", "ms": 0.1574, "net_ms": 0.0586, "spread_ms": 0.0169, "rounds_in_layer": 8, "packets": 64, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 29, "name": "/model.9/cv2/conv/Conv", "ms": 0.4189, "net_ms": 0.3201, "spread_ms": 0.0168, "rounds_in_layer": 16, "packets": 1024, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 30, "name": "/model.12/cv1/conv/Conv", "ms": 0.5365, "net_ms": 0.4377, "spread_ms": 0.0169, "rounds_in_layer": 32, "packets": 1536, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 31, "name": "/model.12/m.0/cv1/conv/Conv", "ms": 0.2767, "net_ms": 0.1779, "spread_ms": 0.0146, "rounds_in_layer": 16, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 32, "name": "/model.12/m.0/cv2/conv/Conv", "ms": 0.2744, "net_ms": 0.1756, "spread_ms": 0.0146, "rounds_in_layer": 16, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 33, "name": "/model.12/cv2/conv/Conv", "ms": 0.3576, "net_ms": 0.2588, "spread_ms": 0.019, "rounds_in_layer": 32, "packets": 768, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 34, "name": "/model.15/cv1/conv/Conv", "ms": 0.6499, "net_ms": 0.5511, "spread_ms": 0.019, "rounds_in_layer": 64, "packets": 1536, "w_fills": 16}
+LAYER_TIME {"arm": "real", "index": 35, "name": "/model.15/m.0/cv1/conv/Conv", "ms": 0.2897, "net_ms": 0.1909, "spread_ms": 0.0214, "rounds_in_layer": 32, "packets": 256, "w_fills": 8}
+LAYER_TIME {"arm": "real", "index": 36, "name": "/model.15/m.0/cv2/conv/Conv", "ms": 0.2905, "net_ms": 0.1917, "spread_ms": 0.0187, "rounds_in_layer": 32, "packets": 256, "w_fills": 8}
+LAYER_TIME {"arm": "real", "index": 37, "name": "/model.15/cv2/conv/Conv", "ms": 0.3991, "net_ms": 0.3003, "spread_ms": 0.0197, "rounds_in_layer": 64, "packets": 768, "w_fills": 16}
+LAYER_TIME {"arm": "real", "index": 38, "name": "/model.16/conv/Conv", "ms": 0.4866, "net_ms": 0.3878, "spread_ms": 0.027, "rounds_in_layer": 16, "packets": 1024, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 39, "name": "/model.22/cv2.0/cv2.0.0/conv/Conv", "ms": 0.4203, "net_ms": 0.3215, "spread_ms": 0.023, "rounds_in_layer": 32, "packets": 512, "w_fills": 8}
+LAYER_TIME {"arm": "real", "index": 40, "name": "/model.22/cv3.0/cv3.0.0/conv/Conv", "ms": 0.7076, "net_ms": 0.6088, "spread_ms": 0.0283, "rounds_in_layer": 64, "packets": 1024, "w_fills": 16}
+LAYER_TIME {"arm": "real", "index": 41, "name": "/model.22/cv2.0/cv2.0.1/conv/Conv", "ms": 0.2916, "net_ms": 0.1928, "spread_ms": 0.0247, "rounds_in_layer": 32, "packets": 256, "w_fills": 8}
+LAYER_TIME {"arm": "real", "index": 42, "name": "/model.22/cv3.0/cv3.0.1/conv/Conv", "ms": 0.7119, "net_ms": 0.6131, "spread_ms": 0.0271, "rounds_in_layer": 64, "packets": 1024, "w_fills": 16}
+LAYER_TIME {"arm": "real", "index": 43, "name": "/model.18/cv1/conv/Conv", "ms": 0.3735, "net_ms": 0.2747, "spread_ms": 0.028, "rounds_in_layer": 32, "packets": 768, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 44, "name": "/model.22/cv2.0/cv2.0.2/Conv", "ms": 0.1697, "net_ms": 0.0709, "spread_ms": 0.0185, "rounds_in_layer": 32, "packets": 128, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 45, "name": "/model.22/cv3.0/cv3.0.2/Conv", "ms": 0.2203, "net_ms": 0.1215, "spread_ms": 0.0154, "rounds_in_layer": 48, "packets": 384, "w_fills": 12}
+LAYER_TIME {"arm": "real", "index": 46, "name": "/model.18/m.0/cv1/conv/Conv", "ms": 0.2873, "net_ms": 0.1885, "spread_ms": 0.0169, "rounds_in_layer": 16, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 47, "name": "/model.18/m.0/cv2/conv/Conv", "ms": 0.2811, "net_ms": 0.1823, "spread_ms": 0.0239, "rounds_in_layer": 16, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 48, "name": "/model.18/cv2/conv/Conv", "ms": 0.3587, "net_ms": 0.2599, "spread_ms": 0.0284, "rounds_in_layer": 32, "packets": 768, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 49, "name": "/model.19/conv/Conv", "ms": 0.4674, "net_ms": 0.3686, "spread_ms": 0.0244, "rounds_in_layer": 8, "packets": 1024, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 50, "name": "/model.22/cv2.1/cv2.1.0/conv/Conv", "ms": 0.2749, "net_ms": 0.1761, "spread_ms": 0.0206, "rounds_in_layer": 8, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 51, "name": "/model.22/cv3.1/cv3.1.0/conv/Conv", "ms": 0.4165, "net_ms": 0.3177, "spread_ms": 0.0231, "rounds_in_layer": 16, "packets": 512, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 52, "name": "/model.22/cv2.1/cv2.1.1/conv/Conv", "ms": 0.1745, "net_ms": 0.0757, "spread_ms": 0.0241, "rounds_in_layer": 8, "packets": 64, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 53, "name": "/model.22/cv3.1/cv3.1.1/conv/Conv", "ms": 0.2818, "net_ms": 0.183, "spread_ms": 0.0266, "rounds_in_layer": 16, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 54, "name": "/model.21/cv1/conv/Conv", "ms": 0.3227, "net_ms": 0.2239, "spread_ms": 0.0216, "rounds_in_layer": 16, "packets": 768, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 55, "name": "/model.22/cv2.1/cv2.1.2/Conv", "ms": 0.1464, "net_ms": 0.0476, "spread_ms": 0.0179, "rounds_in_layer": 8, "packets": 32, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 56, "name": "/model.22/cv3.1/cv3.1.2/Conv", "ms": 0.15, "net_ms": 0.0512, "spread_ms": 0.0203, "rounds_in_layer": 12, "packets": 96, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 57, "name": "/model.21/m.0/cv1/conv/Conv", "ms": 0.2771, "net_ms": 0.1783, "spread_ms": 0.0193, "rounds_in_layer": 8, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 58, "name": "/model.21/m.0/cv2/conv/Conv", "ms": 0.269, "net_ms": 0.1702, "spread_ms": 0.0197, "rounds_in_layer": 8, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 59, "name": "/model.21/cv2/conv/Conv", "ms": 0.3472, "net_ms": 0.2484, "spread_ms": 0.0179, "rounds_in_layer": 16, "packets": 768, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 60, "name": "/model.22/cv2.2/cv2.2.0/conv/Conv", "ms": 0.2625, "net_ms": 0.1637, "spread_ms": 0.0167, "rounds_in_layer": 2, "packets": 128, "w_fills": 2}
+LAYER_TIME {"arm": "real", "index": 61, "name": "/model.22/cv3.2/cv3.2.0/conv/Conv", "ms": 0.2688, "net_ms": 0.17, "spread_ms": 0.0154, "rounds_in_layer": 4, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 62, "name": "/model.22/cv2.2/cv2.2.1/conv/Conv", "ms": 0.1377, "net_ms": 0.0389, "spread_ms": 0.0151, "rounds_in_layer": 2, "packets": 16, "w_fills": 2}
+LAYER_TIME {"arm": "real", "index": 63, "name": "/model.22/cv3.2/cv3.2.1/conv/Conv", "ms": 0.1631, "net_ms": 0.0643, "spread_ms": 0.0157, "rounds_in_layer": 4, "packets": 64, "w_fills": 4}
+LAYER_TIME {"arm": "real", "index": 64, "name": "/model.22/cv2.2/cv2.2.2/Conv", "ms": 0.1178, "net_ms": 0.019, "spread_ms": 0.0158, "rounds_in_layer": 2, "packets": 8, "w_fills": 2}
+LAYER_TIME {"arm": "real", "index": 65, "name": "/model.22/cv3.2/cv3.2.2/Conv", "ms": 0.1373, "net_ms": 0.0385, "spread_ms": 0.0232, "rounds_in_layer": 3, "packets": 24, "w_fills": 3}
+SUMMARY {"arm": "real", "whole_ms_median": 16.1359, "empty_ms_median": 0.0988, "empty_ms_p10_p90": [0.0887, 0.1339], "sum_layer_ms": 23.2224, "sum_net_ms": 16.7012, "whole_minus_empty_ms": 16.0371, "net_over_whole_less_empty": 1.0414, "mismatched_rounds": 0, "rounds_total": 210, "layers": 66}
+HOST_TIMELINE {"elapsed_seconds": 40.984, "tree_rss_bytes": 338006016, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 112 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |48784               |91         |7524        |0           |0    |Normal   |\n      |python.exe          |Active     |7523        |0           |     |N/A      |\n      |112 MB              |4480 KB    |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [48784], "owned_pids": [19612, 47672, 47964, 48784], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 44.125, "tree_rss_bytes": 338038784, "foreign_peers": []}
+LAYER_TIME {"arm": "nop", "index": 0, "name": "/model.0/conv/Conv", "ms": 0.5065, "net_ms": 0.4107, "spread_ms": 0.1434, "rounds_in_layer": 256, "packets": 1024, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 1, "name": "/model.1/conv/Conv", "ms": 0.6822, "net_ms": 0.5864, "spread_ms": 0.0974, "rounds_in_layer": 128, "packets": 2048, "w_fills": 8}
+LAYER_TIME {"arm": "nop", "index": 2, "name": "/model.2/cv1/conv/Conv", "ms": 0.2772, "net_ms": 0.1814, "spread_ms": 0.0937, "rounds_in_layer": 128, "packets": 512, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 3, "name": "/model.2/m.0/cv1/conv/Conv", "ms": 0.2022, "net_ms": 0.1064, "spread_ms": 0.079, "rounds_in_layer": 64, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 4, "name": "/model.2/m.0/cv2/conv/Conv", "ms": 0.2931, "net_ms": 0.1973, "spread_ms": 0.0824, "rounds_in_layer": 64, "packets": 512, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 5, "name": "/model.2/cv2/conv/Conv", "ms": 0.4673, "net_ms": 0.3715, "spread_ms": 0.0629, "rounds_in_layer": 128, "packets": 1024, "w_fills": 8}
+LAYER_TIME {"arm": "nop", "index": 6, "name": "/model.3/conv/Conv", "ms": 0.6005, "net_ms": 0.5047, "spread_ms": 0.0615, "rounds_in_layer": 64, "packets": 2048, "w_fills": 16}
+LAYER_TIME {"arm": "nop", "index": 7, "name": "/model.4/cv1/conv/Conv", "ms": 0.2498, "net_ms": 0.154, "spread_ms": 0.0433, "rounds_in_layer": 64, "packets": 512, "w_fills": 16}
+LAYER_TIME {"arm": "nop", "index": 8, "name": "/model.4/m.0/cv1/conv/Conv", "ms": 0.2085, "net_ms": 0.1127, "spread_ms": 0.0428, "rounds_in_layer": 32, "packets": 256, "w_fills": 8}
+LAYER_TIME {"arm": "nop", "index": 9, "name": "/model.4/m.0/cv2/conv/Conv", "ms": 0.2488, "net_ms": 0.153, "spread_ms": 0.0373, "rounds_in_layer": 32, "packets": 384, "w_fills": 8}
+LAYER_TIME {"arm": "nop", "index": 10, "name": "/model.4/m.1/cv1/conv/Conv", "ms": 0.2116, "net_ms": 0.1158, "spread_ms": 0.0412, "rounds_in_layer": 32, "packets": 256, "w_fills": 8}
+LAYER_TIME {"arm": "nop", "index": 11, "name": "/model.4/m.1/cv2/conv/Conv", "ms": 0.2489, "net_ms": 0.1532, "spread_ms": 0.0277, "rounds_in_layer": 32, "packets": 384, "w_fills": 8}
+LAYER_TIME {"arm": "nop", "index": 12, "name": "/model.4/cv2/conv/Conv", "ms": 0.4733, "net_ms": 0.3776, "spread_ms": 0.0359, "rounds_in_layer": 64, "packets": 1024, "w_fills": 16}
+LAYER_TIME {"arm": "nop", "index": 13, "name": "/model.5/conv/Conv", "ms": 0.5965, "net_ms": 0.5007, "spread_ms": 0.0275, "rounds_in_layer": 32, "packets": 2048, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 14, "name": "/model.6/cv1/conv/Conv", "ms": 0.2435, "net_ms": 0.1477, "spread_ms": 0.0304, "rounds_in_layer": 32, "packets": 512, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 15, "name": "/model.6/m.0/cv1/conv/Conv", "ms": 0.213, "net_ms": 0.1172, "spread_ms": 0.0293, "rounds_in_layer": 16, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 16, "name": "/model.6/m.0/cv2/conv/Conv", "ms": 0.2335, "net_ms": 0.1377, "spread_ms": 0.0203, "rounds_in_layer": 16, "packets": 320, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 17, "name": "/model.6/m.1/cv1/conv/Conv", "ms": 0.2146, "net_ms": 0.1188, "spread_ms": 0.0272, "rounds_in_layer": 16, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 18, "name": "/model.6/m.1/cv2/conv/Conv", "ms": 0.2378, "net_ms": 0.142, "spread_ms": 0.0212, "rounds_in_layer": 16, "packets": 320, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 19, "name": "/model.6/cv2/conv/Conv", "ms": 0.4461, "net_ms": 0.3503, "spread_ms": 0.0207, "rounds_in_layer": 32, "packets": 1024, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 20, "name": "/model.7/conv/Conv", "ms": 0.6041, "net_ms": 0.5083, "spread_ms": 0.0205, "rounds_in_layer": 16, "packets": 2048, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 21, "name": "/model.8/cv1/conv/Conv", "ms": 0.2403, "net_ms": 0.1445, "spread_ms": 0.0213, "rounds_in_layer": 16, "packets": 512, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 22, "name": "/model.8/m.0/cv1/conv/Conv", "ms": 0.2051, "net_ms": 0.1093, "spread_ms": 0.021, "rounds_in_layer": 8, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 23, "name": "/model.8/m.0/cv2/conv/Conv", "ms": 0.215, "net_ms": 0.1192, "spread_ms": 0.0221, "rounds_in_layer": 8, "packets": 288, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 24, "name": "/model.8/cv2/conv/Conv", "ms": 0.3469, "net_ms": 0.2511, "spread_ms": 0.0215, "rounds_in_layer": 16, "packets": 768, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 25, "name": "/model.9/cv1/conv/Conv", "ms": 0.1853, "net_ms": 0.0895, "spread_ms": 0.0159, "rounds_in_layer": 8, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 26, "name": "/model.9/m/MaxPool", "ms": 0.1443, "net_ms": 0.0485, "spread_ms": 0.0139, "rounds_in_layer": 8, "packets": 64, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 27, "name": "/model.9/m_1/MaxPool", "ms": 0.1441, "net_ms": 0.0484, "spread_ms": 0.0153, "rounds_in_layer": 8, "packets": 64, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 28, "name": "/model.9/m_2/MaxPool", "ms": 0.1431, "net_ms": 0.0473, "spread_ms": 0.0134, "rounds_in_layer": 8, "packets": 64, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 29, "name": "/model.9/cv2/conv/Conv", "ms": 0.4186, "net_ms": 0.3228, "spread_ms": 0.0167, "rounds_in_layer": 16, "packets": 1024, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 30, "name": "/model.12/cv1/conv/Conv", "ms": 0.5366, "net_ms": 0.4409, "spread_ms": 0.0204, "rounds_in_layer": 32, "packets": 1536, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 31, "name": "/model.12/m.0/cv1/conv/Conv", "ms": 0.2055, "net_ms": 0.1097, "spread_ms": 0.0143, "rounds_in_layer": 16, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 32, "name": "/model.12/m.0/cv2/conv/Conv", "ms": 0.2067, "net_ms": 0.1109, "spread_ms": 0.0153, "rounds_in_layer": 16, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 33, "name": "/model.12/cv2/conv/Conv", "ms": 0.3555, "net_ms": 0.2598, "spread_ms": 0.0198, "rounds_in_layer": 32, "packets": 768, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 34, "name": "/model.15/cv1/conv/Conv", "ms": 0.6502, "net_ms": 0.5544, "spread_ms": 0.0202, "rounds_in_layer": 64, "packets": 1536, "w_fills": 16}
+LAYER_TIME {"arm": "nop", "index": 35, "name": "/model.15/m.0/cv1/conv/Conv", "ms": 0.2106, "net_ms": 0.1148, "spread_ms": 0.0182, "rounds_in_layer": 32, "packets": 256, "w_fills": 8}
+LAYER_TIME {"arm": "nop", "index": 36, "name": "/model.15/m.0/cv2/conv/Conv", "ms": 0.2106, "net_ms": 0.1148, "spread_ms": 0.0174, "rounds_in_layer": 32, "packets": 256, "w_fills": 8}
+LAYER_TIME {"arm": "nop", "index": 37, "name": "/model.15/cv2/conv/Conv", "ms": 0.39, "net_ms": 0.2942, "spread_ms": 0.0206, "rounds_in_layer": 64, "packets": 768, "w_fills": 16}
+LAYER_TIME {"arm": "nop", "index": 38, "name": "/model.16/conv/Conv", "ms": 0.3656, "net_ms": 0.2698, "spread_ms": 0.0213, "rounds_in_layer": 16, "packets": 1024, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 39, "name": "/model.22/cv2.0/cv2.0.0/conv/Conv", "ms": 0.2987, "net_ms": 0.2029, "spread_ms": 0.0205, "rounds_in_layer": 32, "packets": 512, "w_fills": 8}
+LAYER_TIME {"arm": "nop", "index": 40, "name": "/model.22/cv3.0/cv3.0.0/conv/Conv", "ms": 0.4807, "net_ms": 0.3849, "spread_ms": 0.0158, "rounds_in_layer": 64, "packets": 1024, "w_fills": 16}
+LAYER_TIME {"arm": "nop", "index": 41, "name": "/model.22/cv2.0/cv2.0.1/conv/Conv", "ms": 0.2091, "net_ms": 0.1133, "spread_ms": 0.0171, "rounds_in_layer": 32, "packets": 256, "w_fills": 8}
+LAYER_TIME {"arm": "nop", "index": 42, "name": "/model.22/cv3.0/cv3.0.1/conv/Conv", "ms": 0.4796, "net_ms": 0.3838, "spread_ms": 0.0209, "rounds_in_layer": 64, "packets": 1024, "w_fills": 16}
+LAYER_TIME {"arm": "nop", "index": 43, "name": "/model.18/cv1/conv/Conv", "ms": 0.364, "net_ms": 0.2682, "spread_ms": 0.025, "rounds_in_layer": 32, "packets": 768, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 44, "name": "/model.22/cv2.0/cv2.0.2/Conv", "ms": 0.1687, "net_ms": 0.0729, "spread_ms": 0.0181, "rounds_in_layer": 32, "packets": 128, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 45, "name": "/model.22/cv3.0/cv3.0.2/Conv", "ms": 0.2182, "net_ms": 0.1224, "spread_ms": 0.0173, "rounds_in_layer": 48, "packets": 384, "w_fills": 12}
+LAYER_TIME {"arm": "nop", "index": 46, "name": "/model.18/m.0/cv1/conv/Conv", "ms": 0.214, "net_ms": 0.1183, "spread_ms": 0.0163, "rounds_in_layer": 16, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 47, "name": "/model.18/m.0/cv2/conv/Conv", "ms": 0.2137, "net_ms": 0.118, "spread_ms": 0.0233, "rounds_in_layer": 16, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 48, "name": "/model.18/cv2/conv/Conv", "ms": 0.3573, "net_ms": 0.2615, "spread_ms": 0.0189, "rounds_in_layer": 32, "packets": 768, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 49, "name": "/model.19/conv/Conv", "ms": 0.3665, "net_ms": 0.2707, "spread_ms": 0.0261, "rounds_in_layer": 8, "packets": 1024, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 50, "name": "/model.22/cv2.1/cv2.1.0/conv/Conv", "ms": 0.2042, "net_ms": 0.1085, "spread_ms": 0.0189, "rounds_in_layer": 8, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 51, "name": "/model.22/cv3.1/cv3.1.0/conv/Conv", "ms": 0.2964, "net_ms": 0.2006, "spread_ms": 0.0195, "rounds_in_layer": 16, "packets": 512, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 52, "name": "/model.22/cv2.1/cv2.1.1/conv/Conv", "ms": 0.1355, "net_ms": 0.0398, "spread_ms": 0.0155, "rounds_in_layer": 8, "packets": 64, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 53, "name": "/model.22/cv3.1/cv3.1.1/conv/Conv", "ms": 0.2084, "net_ms": 0.1126, "spread_ms": 0.0167, "rounds_in_layer": 16, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 54, "name": "/model.21/cv1/conv/Conv", "ms": 0.3038, "net_ms": 0.208, "spread_ms": 0.0202, "rounds_in_layer": 16, "packets": 768, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 55, "name": "/model.22/cv2.1/cv2.1.2/Conv", "ms": 0.1427, "net_ms": 0.0469, "spread_ms": 0.0163, "rounds_in_layer": 8, "packets": 32, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 56, "name": "/model.22/cv3.1/cv3.1.2/Conv", "ms": 0.1481, "net_ms": 0.0523, "spread_ms": 0.0152, "rounds_in_layer": 12, "packets": 96, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 57, "name": "/model.21/m.0/cv1/conv/Conv", "ms": 0.2088, "net_ms": 0.113, "spread_ms": 0.0185, "rounds_in_layer": 8, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 58, "name": "/model.21/m.0/cv2/conv/Conv", "ms": 0.2066, "net_ms": 0.1108, "spread_ms": 0.0186, "rounds_in_layer": 8, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 59, "name": "/model.21/cv2/conv/Conv", "ms": 0.3436, "net_ms": 0.2478, "spread_ms": 0.0179, "rounds_in_layer": 16, "packets": 768, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 60, "name": "/model.22/cv2.2/cv2.2.0/conv/Conv", "ms": 0.1708, "net_ms": 0.075, "spread_ms": 0.017, "rounds_in_layer": 2, "packets": 128, "w_fills": 2}
+LAYER_TIME {"arm": "nop", "index": 61, "name": "/model.22/cv3.2/cv3.2.0/conv/Conv", "ms": 0.2015, "net_ms": 0.1058, "spread_ms": 0.0189, "rounds_in_layer": 4, "packets": 256, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 62, "name": "/model.22/cv2.2/cv2.2.1/conv/Conv", "ms": 0.1185, "net_ms": 0.0227, "spread_ms": 0.0161, "rounds_in_layer": 2, "packets": 16, "w_fills": 2}
+LAYER_TIME {"arm": "nop", "index": 63, "name": "/model.22/cv3.2/cv3.2.1/conv/Conv", "ms": 0.1332, "net_ms": 0.0374, "spread_ms": 0.0151, "rounds_in_layer": 4, "packets": 64, "w_fills": 4}
+LAYER_TIME {"arm": "nop", "index": 64, "name": "/model.22/cv2.2/cv2.2.2/Conv", "ms": 0.1134, "net_ms": 0.0176, "spread_ms": 0.0166, "rounds_in_layer": 2, "packets": 8, "w_fills": 2}
+LAYER_TIME {"arm": "nop", "index": 65, "name": "/model.22/cv3.2/cv3.2.2/Conv", "ms": 0.1311, "net_ms": 0.0353, "spread_ms": 0.0247, "rounds_in_layer": 3, "packets": 24, "w_fills": 3}
+SUMMARY {"arm": "nop", "whole_ms_median": 12.2776, "empty_ms_median": 0.0958, "empty_ms_p10_p90": [0.0887, 0.1245], "sum_layer_ms": 19.0701, "sum_net_ms": 12.7483, "whole_minus_empty_ms": 12.1818, "net_over_whole_less_empty": 1.0465, "mismatched_rounds": 0, "rounds_total": 210, "layers": 66}
+POST_NPU_CONTEXT_WITNESS "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+RESEARCH_PROCESS_RESULT {"exit_code": 0, "stop": null, "peak_tree_rss_bytes": 338808832, "rss_measurement": "maximum observed across sampled descendant working sets; zero observations reported as null", "elapsed_seconds": 46.85899999993853, "foreign_contention_observed": false, "timing_eligible": true}
