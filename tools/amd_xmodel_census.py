@@ -177,6 +177,31 @@ def root_attrs(path: Path) -> dict:
     return out
 
 
+def layer_attrs(path: Path):
+    """(name, {attr: value}) for every child of the PDI subgraph(s): the compiler's per-layer records."""
+    b = path.read_bytes()
+    top = [v for f, wt, v in fields(b, 0, len(b)) if f == 10 and wt == 2]
+    in_pdi, pdi_depth = False, None
+    for depth, name, attrs in subgraphs(b, top[0]):
+        if name and name.startswith("pdi_subgraph"):
+            in_pdi, pdi_depth = True, depth
+            continue
+        if in_pdi and depth <= pdi_depth:
+            in_pdi = False
+        if not in_pdi or depth != pdi_depth + 1:
+            continue
+        out = {}
+        for k, span in sorted(attrs.items()):
+            try:
+                v = attr_value(b, span)
+            except (ValueError, KeyError):
+                v = "unparsed"
+            if isinstance(v, dict) and isinstance(v.get("bytes"), tuple):
+                v = {"bytes": v["bytes"][1] - v["bytes"][0]}
+            out[k] = v
+        yield name, out
+
+
 def census_container(path: Path) -> dict:
     from ignite_xdna.compiler.serializer import IgniteModelReader
     m = IgniteModelReader(str(path)).manifest
@@ -206,6 +231,8 @@ def main() -> int:
     ap.add_argument("--container", action="append", default=None, metavar="NAME=PATH")
     ap.add_argument("--root-attrs", action="store_true",
                     help="also print every root-subgraph attribute: the compiler options AMD's build ran with")
+    ap.add_argument("--layers", action="store_true",
+                    help="also print every per-layer subgraph under the PDI subgraph with all its attributes")
     a = ap.parse_args()
     for name, p in pairs(a.xmodel):
         print(f"AMD_XMODEL {name} {p.name} {p.stat().st_size} B sha256 "
@@ -215,6 +242,9 @@ def main() -> int:
         if a.root_attrs:
             for k, v in root_attrs(p).items():
                 print(f"AMD_ROOT_ATTR {name} {k} = {json.dumps(v, sort_keys=True)}", flush=True)
+        if a.layers:
+            for i, (ln, la) in enumerate(layer_attrs(p)):
+                print("AMD_LAYER " + json.dumps({"model": name, "i": i, "layer": ln, **la}, sort_keys=True), flush=True)
     for name, p in pairs(a.container):
         print("ENGINE_CONTAINER " + json.dumps({"model": name, "container": p.name, **census_container(p)},
                                                sort_keys=True), flush=True)

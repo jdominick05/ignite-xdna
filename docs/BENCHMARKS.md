@@ -15708,8 +15708,8 @@ control. Each run was its own process, with `xrt-smi` idle before it, under
   MB, writes 73.0 → 73.4 MB, a total of 299.0 → 300.4 MB.
 - **So AMD's time is not set by its declared bytes.** 19% less time for 0.5% more declared
   traffic answers the bytes-or-compute question the census left open, on the bytes side.
-- **Unexplained:** what the cost-model tiler chose differently (tile shapes, overlap, column
-  balance). It is not decoded here.
+- **Unexplained here:** what the cost-model tiler chose differently. Decoded
+  [below](#what-the-cost-model-tiler-changes-and-where-its-23-ms-comes-from-2026-10-13-desktop-2), with per-layer device timings.
 
 **What it means for the comparisons in this file.**
 - **AMD's default is not AMD's best.** Every AMD figure on this page used the EP's default config,
@@ -15765,3 +15765,101 @@ verified layer by layer; only the YOLOv8s merged container was (66/66).
 Logs:
 - [amd_cost_model_tiling_yolov8n_desktop2_20261013T031649Z.log](../results/aie/amd_cost_model_tiling_yolov8n_desktop2_20261013T031649Z.log), the sitting;
 - [amd_cost_model_tiling_yolov8n_desktop2_20261013T031617Z.log](../results/aie/amd_cost_model_tiling_yolov8n_desktop2_20261013T031617Z.log), a first attempt that stopped at the engine arm because I passed the container path relative to the wrong working directory. Its two AMD runs (10.719 / 10.068 ms G2G) are not used.
+
+### What the cost-model tiler changes, and where its 2.3 ms comes from (2026-10-13, Desktop 2)
+
+**Question.** The YOLOv8s section above left open what `enable_cost_model_tiling` does
+differently. Declared traffic barely moved, so where does the 19% come from?
+
+**1. Static decode: per-layer re-read factors.** `tools/amd_xmodel_census.py --layers` prints
+every per-layer record in AMD's compiled program. `tools/amd_layer_tiling_diff.py` joins each
+convolution to its ONNX node. It then divides the declared bytes by the size of the tensor they
+move, which gives a weight re-read factor `w_rr` and an input re-read factor `i_rr`. Its join
+check holds on all 71 convolutions of each model: the declared op count equals the ONNX conv's
+exactly, or half of it for a merged `Split` half. That count is also identical between the two
+arms. Both models, both arms:
+- **AMD's default reads nearly every convolution's weights about 4 times.** `w_rr` is 4.1–4.3
+  on 68 of 71 layers, in both YOLOv8s and YOLOv8n. Four is the number of reachable columns
+  ([SILICON](SILICON.md)), so the likely reading is that each column fetches the whole weight
+  tensor and the columns split the image. That reading is DERIVED; it was not observed.
+- **The option changes the split on a few layers, not everywhere.** On YOLOv8s, 10 layers change
+  their weight re-read class; on YOLOv8n, 3. For example, the four 256-channel 20×20 bottleneck
+  convolutions go from `w_rr` 4.2 / `i_rr` 3.4 to `w_rr` 2.0 / `i_rr` 6.2. On most of the other
+  layers the factors shift by a few percent.
+- **The tiler minimizes neither bytes nor padded work.** On YOLOv8s, `w_rr` falls on 54 layers
+  and rises on 6, and `i_rr` rises on 35. Array utilization (`workload / workload_on_arch`) rises
+  on 7 layers and falls on 7.
+
+**2. AMD's own per-layer device timestamps.** The xcompiler attribute `profile` (uint 1) adds
+about 720 B of `mc_code`. With `DEEPHI_PROFILING=1` set, XRT then writes two files: per-layer
+start and end events, and their timer cycles. `tools/amd_dpu_layer_profile.py` parses them. Of
+109 layer records, 89 are timestamped per frame.
+
+**The sitting** (pre-registered, scratch sha256 `9405c2b4...`). Both arms were compiled with
+`profile=1`: the default config, and the default plus the option. Order: default, option,
+option, default. Each run was 5 warm-up + 50 timed frames in its own process, with `xrt-smi`
+idle before it (`timing_eligible: true`).
+
+| gate | criterion | result |
+|---|---|---|
+| H | heads bit-identical across the 4 runs and to the unprofiled default build | **pass** (max diff 0) |
+| R | each arm's two frame-span medians within 2% | **pass** (0.53%, 1.34%) |
+| T | timer unit: the span at 1.80 GHz is below `session.run`, and at the header's declared 1000 MHz it is above | **pass** (12.15 ms < 13.20 ms < 21.87 ms) |
+| A | per-layer deltas sum to within 20% of the frame-span delta | **pass** (101.9%) |
+
+- **The timer runs at the core clock.** The record header declares 1000 MHz, which would make
+  the device span longer than the whole `session.run`. The measured 1.80 GHz core clock
+  ([SILICON](SILICON.md)) fits, so this section converts at 1.80 GHz (DERIVED).
+- **The profiled sitting reproduces the effect.** At 1.80 GHz the device span falls 12.15 →
+  9.83 ms (−2.32 ms). In the same sitting `session.run` fell 13.20 → 10.90 ms (−2.30 ms).
+- **Instrumentation does not change the outcome:** the profiled builds' `session.run` (13.32 /
+  13.08 and 10.84 / 10.97 ms) is within 0.2 ms of the unprofiled sitting above.
+
+**Where the 2.32 ms comes from:**
+
+| layers (by conv input size) | default ms | option ms |
+|---|---:|---:|
+| conv, 20×20 (18) | 2.395 | 1.746 |
+| conv, 40×40 (25) | 3.657 | 2.750 |
+| conv, 80×80 (20) | 3.059 | 2.464 |
+| conv, 160×160 (6) | 0.867 | 0.802 |
+| conv, 320×320 (1) | 0.380 | 0.213 |
+| conv, 640×640 (1) | 0.169 | 0.169 |
+| transpose, eltwise, pool, upsample (18) | 1.512 | 1.531 |
+
+- **Only convolutions get faster.** 73 layers are faster and 16 slower; the gains sum to
+  2.437 ms and the losses to 0.074 ms. Non-convolution layers are unchanged (+0.02 ms). The gap
+  between layers grows by 0.04 ms.
+- **The largest single gain is `model.7`,** the stride-2 3×3 convolution from 256 to 512
+  channels. It goes from 0.757 to 0.345 ms, 17% of the whole gain. Its declared input re-read
+  falls from 10.9× to 4.6×, and its utilization rises from 0.625 to 1.0.
+- **The four 20×20 bottleneck convolutions** each save 0.08–0.10 ms. They trade weight re-reads
+  for input re-reads (above), and their utilization rises from 0.625 to 0.833.
+- **Unexplained.** `model.1` and `model.3` get faster (−0.17 and −0.06 ms) although their
+  declared bytes rise and their utilization falls (1.0 → 0.75 and 0.625). Neither declared
+  traffic nor utilization predicts their gain. How the columns overlap DMA with compute is not
+  in the static record.
+
+**3. Set against the engine (Block 5 input).** The same tool reads the engine's merged
+container. Per layer, the engine's activation packets (6,400 B each, with halo and channel
+padding) divided by the input tensor give the engine's input re-read factor (DERIVED):
+
+| conv input bytes per frame (MB) | AMD default | AMD option | engine |
+|---|---:|---:|---:|
+| YOLOv8s | 57.9 | 61.0 | 279.0 |
+| YOLOv8n | 26.7 | 28.4 | 93.9 |
+
+- **The engine reads each convolution's input far more often.** It reads it 4.6 times as often
+  as AMD on YOLOv8s, and 3.3 times on YOLOv8n.
+- **The gap is widest at 20×20.** There, the engine's median `i_rr` is 16 on YOLOv8s against
+  AMD's 1.7, and 8 against 1.0–1.1 on YOLOv8n.
+- **This sizes the "fewer packets" lever, but it does not show it costs time.** The engine's
+  YOLOv8s frame is instruction-stream bound, and how much of its time its packet count sets is
+  not measured here. The manifest does not size the engine's weight reads per layer, so no
+  engine `w_rr` is given.
+- **What it does give Block 5:** a per-layer list of where the engine re-reads activations most,
+  and AMD's own per-layer timings to compare a re-tiled engine layer against.
+
+Logs:
+- [amd_dpu_layer_profile_yolov8s_desktop2_20261013T034000Z.log](../results/aie/amd_dpu_layer_profile_yolov8s_desktop2_20261013T034000Z.log), the profiled sitting;
+- [amd_tiling_decode_yolov8s_n_desktop2_20261013T034053Z.log](../results/aie/amd_tiling_decode_yolov8s_n_desktop2_20261013T034053Z.log), the static decode for both models and the per-layer timing analysis.
