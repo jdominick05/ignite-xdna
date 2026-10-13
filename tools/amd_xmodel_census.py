@@ -23,7 +23,8 @@ not a decode.
 
 --container (needs ignite_xdna importable, e.g. the mlir-aie-iron env) prints the engine
 container's manifest counts beside it: activation packets (6,400 B each), weight-packet bytes,
-instruction-stream bytes and rounds. Both sides are static declarations; neither is a timing.
+instruction-stream bytes and rounds, and a DERIVED write estimate (each layer's output once,
+interior H x W x C). Both sides are static declarations; neither is a timing.
 Run so far on YOLOv8n and YOLOv8s only (Desktop 2, 2026-10-13).
 """
 from __future__ import annotations
@@ -159,6 +160,23 @@ def census_xmodel(path: Path) -> list[dict]:
     return rows
 
 
+def root_attrs(path: Path) -> dict:
+    """Every attribute of the root subgraph (the compiler's options), decoded where the layout allows."""
+    b = path.read_bytes()
+    top = [v for f, wt, v in fields(b, 0, len(b)) if f == 10 and wt == 2]
+    _, _, attrs = next(subgraphs(b, top[0]))
+    out = {}
+    for k, span in sorted(attrs.items()):
+        try:
+            v = attr_value(b, span)
+        except (ValueError, KeyError):
+            v = "unparsed"
+        if isinstance(v, dict) and isinstance(v.get("bytes"), tuple):
+            v = {"bytes": v["bytes"][1] - v["bytes"][0]}
+        out[k] = v
+    return out
+
+
 def census_container(path: Path) -> dict:
     from ignite_xdna.compiler.serializer import IgniteModelReader
     m = IgniteModelReader(str(path)).manifest
@@ -166,6 +184,11 @@ def census_container(path: Path) -> dict:
     out = {k: ge.get(k) for k in ("activation_packets", "wpackets_bytes", "insts_bytes", "rounds",
                                   "workspace_bytes", "weight_fills", "silu")}
     out["activation_bytes"] = int(ge["activation_packets"]) * 6400
+    # DERIVED: each layer's output written once, interior H x W x C uint8 (a drain's halo or channel
+    # padding, if any, is not counted).
+    pl = ge["placements"]
+    outs = {L["output"] for L in ge["layers"]}
+    out["write_bytes_derived"] = sum(pl[o]["height"] * pl[o]["width"] * pl[o]["channels"] for o in outs)
     return out
 
 
@@ -181,12 +204,17 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--xmodel", action="append", required=True, metavar="NAME=PATH")
     ap.add_argument("--container", action="append", default=None, metavar="NAME=PATH")
+    ap.add_argument("--root-attrs", action="store_true",
+                    help="also print every root-subgraph attribute: the compiler options AMD's build ran with")
     a = ap.parse_args()
     for name, p in pairs(a.xmodel):
         print(f"AMD_XMODEL {name} {p.name} {p.stat().st_size} B sha256 "
               f"{hashlib.sha256(p.read_bytes()).hexdigest()[:16]}", flush=True)
         for row in census_xmodel(p):
             print("AMD_SUBGRAPH " + json.dumps({"model": name, **row}, sort_keys=True), flush=True)
+        if a.root_attrs:
+            for k, v in root_attrs(p).items():
+                print(f"AMD_ROOT_ATTR {name} {k} = {json.dumps(v, sort_keys=True)}", flush=True)
     for name, p in pairs(a.container):
         print("ENGINE_CONTAINER " + json.dumps({"model": name, "container": p.name, **census_container(p)},
                                                sort_keys=True), flush=True)

@@ -15378,7 +15378,7 @@ accuracy is measured in its own section). Logs:
 - the A/B wrappers [b3_ab_yolov8s_silu_desktop2_20261013T015609Z.log](../results/aie/b3_ab_yolov8s_silu_desktop2_20261013T015609Z.log) and [b3_ab_yolov8n_silu_desktop2_20261013T015752Z.log](../results/aie/b3_ab_yolov8n_silu_desktop2_20261013T015752Z.log);
 - the tool's own logs [b3_ab_yolov8s_phoenix_20261013T0156Z.log](../results/aie/b3_ab_yolov8s_phoenix_20261013T0156Z.log) and [b3_ab_yolov8n_phoenix_20261013T0157Z.log](../results/aie/b3_ab_yolov8n_phoenix_20261013T0157Z.log).
 
-## What AMD's compiled YOLOv8 runs: a near-constant 0.1 MB program while its bytes double (2026-10-13, Desktop 2)
+## What AMD's compiled YOLOv8 runs: its control barely grows while its work doubles (2026-10-13, Desktop 2)
 
 **Question.** With the shipped recipe, AMD keeps YOLOv8s:
 - AMD's `session.run` takes 13.13-13.16 ms;
@@ -15395,6 +15395,7 @@ compiler left from that sitting. Nothing was modified, and nothing modified was 
 - **H-count:** AMD's per-frame instruction (CODE) buffer is at least 200 KB smaller than our
   969,812 B, so "fewer packets" is the gap.
 - **H-model:** AMD's CODE buffer is comparable or larger, so the gap is in the execution model.
+- **Between:** neither clearly holds.
 - AMD's bytes are reported as sizes only; our 16 ns per byte is not applied to them.
 
 **Where AMD's 13.13 ms goes.** The EP report places 922 of 929 nodes in one DPU subgraph. The 7 on
@@ -15402,62 +15403,84 @@ CPU are the input `QuantizeLinear` (1x3x640x640 float) and the six output `Dequa
 Both sit inside `session.run`, so AMD's on-device time is below 13.13 ms. The on-device gap is
 therefore at least 3.2 ms.
 
-**What the xmodel declares.** `tools/amd_xmodel_census.py` reads the compiled `.xmodel` (an XIR
+**What each compiler declares.** `tools/amd_xmodel_census.py` reads the compiled `.xmodel` (an XIR
 protobuf) without a vendor library, alongside the engine containers' manifests from the same
-sitting. Every row is a static declaration by its compiler, not a measurement.
+sitting. Every row is a static declaration, not a measurement.
 
 | | AMD YOLOv8n | AMD YOLOv8s | engine YOLOv8n | engine YOLOv8s |
 |---|---:|---:|---:|---:|
-| control program | `mc_code` 93,840 B | `mc_code` 106,168 B | insts 419,476 B | insts 969,812 B |
+| `mc_code` / instruction stream | 93,840 B | 106,168 B | 419,476 B | 969,812 B |
 | CODE register (REG_4) | 1,473,536 B | 1,593,408 B | - | - |
 | `0x0B`-headed words in `mc_code` | 1,520 | 1,757 | - | - |
 | activation reads | 69.4 MB | 138.1 MB | 83.1 MB | 237.7 MB |
-| activation writes | 44.8 MB | 73.0 MB | not declared | not declared |
+| activation writes | 44.8 MB | 73.0 MB | 15.3 MB (DERIVED) | 27.7 MB (DERIVED) |
 | weight reads | 26.2 MB (8.0x REG_0) | 87.9 MB (7.5x REG_0) | 8.2 MB | 29.5 MB |
-| workspace | 23.0 MB | 40.6 MB | 14.9 MB | 20.8 MB |
+| **total** | **140.4 MB** | **299.0 MB** | **106.5 MB** | **294.9 MB** |
+| workload (`workload_on_arch`) | 11.97 G | 38.99 G | - | - |
 | NPU time (sitting above) | 6.90 / 6.95 `session.run` | 13.13 / 13.16 `session.run` | 7.31 / 7.29 dispatch | 16.31 / 16.30 dispatch |
 
 Sources:
-- AMD's activation and weight rows are its own `input_feature_load_size`,
+- **AMD:** the activation and weight rows are its own `input_feature_load_size`,
   `output_feature_save_size` and `const_data_load_size`.
-- The engine's activation reads are its 6,400 B activation packets; weights are `wpackets_bytes`.
-- A buffer dump from AMD's own runner (`XLNX_ENABLE_DUMP_BO=1`, unmodified xmodel) confirms the
+- **Engine reads:** its 6,400 B activation packets. The compiler counts input fills only;
+  drains are scheduled separately (`compiler/engine_schedule.py`). Weights are `wpackets_bytes`.
+- **Engine writes:** DERIVED, each layer's output written once (interior H x W x C).
+- **Buffer dump:** AMD's own runner (`XLNX_ENABLE_DUMP_BO=1`, unmodified xmodel) confirms the
   three data registers byte for byte: input 1,638,400, workspace 40,576,896, output 1,209,792. It
-  writes no instruction buffer, so the CODE register's contents at run time were not observed.
+  writes no instruction buffer, so neither candidate program buffer was observed at run time.
 
-**Verdict: H-model.** The CODE register is 1.59 MB, not 200 KB smaller than ours. Both readings
-of AMD's program give the same result: from n to s, `mc_code` grows 13% and the CODE register 8%.
-AMD's declared bytes double and its time doubles (1.90x). So AMD's frame time follows the bytes it
-moves, not the size of its program.
+**Verdict on the size test: Between.** The pre-registered criterion depends on which buffer counts
+as AMD's program:
+- `mc_code`, at 106 KB, is 864 KB smaller than our stream, which reads H-count;
+- the CODE register, at 1.59 MB, is larger, which reads H-model.
 
-Ours follows the instruction stream:
-- the stream grows 2.31x;
-- dispatch grows 2.23x;
-- the cost model's ~16 ns per instruction byte holds on these containers too.
+**What does not depend on that choice is scaling.** From YOLOv8n to YOLOv8s:
+- AMD's control grows 13% (`mc_code`) or 8% (CODE);
+- its declared bytes grow 2.13x, its workload 3.26x and its `session.run` 1.90x;
+- our instruction stream grows 2.31x and our dispatch 2.23x, matching the cost model's ~16 ns per
+  instruction byte on these containers too.
 
-`mc_code` is a stream of records. Many begin with a `0x0B0000xx` word, 48 bytes apart on
-YOLOv8s. About 1.8k such commands describe a YOLOv8s frame; roughly 107k register-level shim ops
-describe ours (DERIVED, at the cost model's ~9 B per op). No field meaning is claimed for any
-record. 1,551 words per model are printable ASCII.
+So the measured claim is a negative one: **AMD's frame time is insensitive to the size of its
+control program, and ours is not.** What AMD's time does follow, bytes or compute, cannot be
+separated from two models, because both grow together.
 
-**What this says to build (DERIVED, not a prediction).**
-- **Bytes are not where AMD wins.** It declares more traffic than the engine reads: 299 MB
-  against 267 MB plus our unlisted writes. It moves them at an implied 22.8 GB/s on YOLOv8s and
-  20.3 GB/s on YOLOv8n. That rate is a lower bound, since `session.run` includes the CPU QDQ. The
-  engine's implied rate is 16.4 and 12.5 GB/s.
-- **At AMD's rate, the engine's declared reads alone take 11.7 ms.** That is below AMD's 13.13,
-  but writes are uncounted and this is not a latency prediction.
-- **The lever is the per-frame control stream, not the activation re-fetch factor.** The aim is
-  a frame whose control does not grow with the packet count: coarser shim tasks (one BD op
-  covering many packets through repeat and iteration dimensions), or a resident schedule. The
-  "fewer packets" lever in the cost-model section is one route to that; this result says it is
-  not the only one.
+`mc_code` is a stream of records. Many begin with a `0x0B0000xx` word, 48 bytes apart on YOLOv8s,
+and about 1.8k of them describe a frame. No field meaning is claimed for any record; 1,551 words per
+model are printable ASCII. The per-frame program does not unroll with the work, whoever expands it.
+
+**Bytes are not where AMD wins.** The two YOLOv8s frames declare nearly the same traffic, 299.0 MB
+against the engine's 294.9 MB. The engine moves 1.7x the activation reads; AMD moves 3.0x the
+weights and 2.6x the writes. The implied rates differ: AMD's is at least 22.8 GB/s (`session.run`
+includes the CPU QDQ), the engine's 18.1 GB/s. At equal rates the two frames would take about the
+same time. This is DERIVED and not a latency prediction.
+
+**What this says to build.**
+- **Not coarser shim tasks.** That lever is spent: the coarse schedule already merges fills and
+  repeats weight runs (`docs/DECISIONS.md`, 2,972 tasks per frame). YOLOv8s's fill tasks sit at
+  their structural floor, 37,136 packets in 5,857 tasks
+  ([2026-09-16](#memtile-residency-does-not-pay-on-the-graph-engine-and-the-yolov8s-gap-is-a-known-limitation-2026-09-16-desktop-2)).
+  The shim's repeat dimension also caps at 64.
+- **The open lever is a control stream that does not unroll per round,** as AMD's does not. Two
+  routes; neither is sized yet:
+  - a looping or resident schedule;
+  - fewer rounds, through less activation re-fetch: the "fewer packets" lever in the cost-model
+    section.
 - **Unexplained:** how AMD's 48-byte commands become transfers, and whether its cores or the
-  shim's command processor drive them. That is the next question for the RE tools, read-only.
+  shim's command processor drive them. That is the next read-only question for the RE tools.
+
+**AMD's compile options, as recorded** (`--root-attrs`, 119 per model). These include:
+- `tiling_algorithm = "high_throughput"`;
+- `prefetch_lp = 8`, `prefetch_lp_warm_start = 1`, `prefetch_lp_reorder_load = 1`;
+- `enable_control_optimization = 1`, `mergesync_column_as_all = 1`, `enable_ddr_memory_planner = 1`.
+
+Off in this build: `enable_weights_prefetch`, `enable_ifm_stationary`, `enable_weights_stationary`
+and `enable_cost_model_tiling`. Whether any of those makes AMD's own stack faster is untested.
 
 **Scope.** Two models, one sitting's artifacts, static declarations. The xmodels match that
 sitting by mtime (01:56Z and 01:58Z). Logs:
 - the census [amd_xmodel_census_yolov8n_s_desktop2_20261013T021744Z.log](../results/aie/amd_xmodel_census_yolov8n_s_desktop2_20261013T021744Z.log);
+- the census with the root attributes and the derived writes
+  [amd_xmodel_census_root_yolov8n_s_desktop2_20261013T022314Z.log](../results/aie/amd_xmodel_census_root_yolov8n_s_desktop2_20261013T022314Z.log);
 - the dump run [amd_yolov8s_bo_dump_desktop2_20261013T021506Z.log](../results/aie/amd_yolov8s_bo_dump_desktop2_20261013T021506Z.log),
   whose 46 ms frames carry the dump's own cost and are not a timing, and its file list
   [amd_yolov8s_bo_dump_sizes_desktop2_20261013T021506Z.log](../results/aie/amd_yolov8s_bo_dump_sizes_desktop2_20261013T021506Z.log).
