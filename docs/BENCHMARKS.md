@@ -16193,3 +16193,44 @@ At the measured rates, the activations alone take about 8.7 ms per frame at 27.1
 How to carry them is the open design question.
 
 Log: [stream_ceiling_phoenix_desktop2_20261013T060213Z.log](../results/aie/stream_ceiling_phoenix_desktop2_20261013T060213Z.log).
+
+#### Block 5: what letting weights share the second stream could save (sized offline, 2026-10-13)
+
+**Question.** Each column has two shim MM2S streams, one carrying only activations and one only weights. If both
+streams could carry a mix, how much faster would YOLOv8s's data movement get, and which designs reach how much
+of that?
+
+**Model.** The YOLOv8s schedule was lowered again from the container, giving each layer's activation and weight
+bytes per column: 237.7 MB and 83.6 MB per frame, plus 27.8 MB of drains on the other direction. Each layer's
+transport time is taken as the busier channel's bytes in the slowest column at 6.88 GB/s per stream, the probe's
+rate. Against the measured per-layer NOP times this model fits R² 0.941 with slope 1.138, so it explains the
+engine's data-movement time. Savings below are scaled by that slope; all are DERIVED.
+
+| design | per-layer channel use | modelled transport | saving |
+|---|---|---:|---:|
+| today | activations on stream 0, weights on stream 1 | 8.673 ms | - |
+| two halves, static | cores 0–1's activations on stream 0, cores 2–3's and all weights on stream 1 | 7.389 ms | 1.46 ms |
+| per-layer quarters | weights plus the activations of k of 4 cores on stream 1, k chosen per layer | 6.402 ms | 2.59 ms |
+| ideal balance | both streams carry any mix | 5.863 ms | 3.20 ms |
+
+- **Packet order bounds what is reachable.** A core must receive its packets in order. Within a layer, each core's
+  activations and all of a column's weights therefore have to stay on one stream, which rules out the ideal.
+  Per-layer quarters keep that order and reach 81% of the ideal. Choosing halves per layer gains nothing over the
+  static split.
+- **What it takes to build:** packet-switched routes. In this mlir-aie, that means `PacketFlow` with explicit
+  tile DMA programs, buffers and locks, after upstream's `packet_switch` example, since `ObjectFifo` does not
+  route by packet ID.
+  - **What changes:** the transport in `design.py`, and the emitter stamping a packet ID on each shim task and
+    picking its stream.
+  - **What does not change:** the core kernel `engine.cc`.
+- **The cost risk is task count.** Today a fill carries about four packets, set by the quad object. If carrying
+  some cores' packets on another stream splits fills, each extra 1,000 tasks costs about 0.37 ms (the per-layer
+  fit's 0.09 µs per op, 4 ops per task, DERIVED). A full doubling would erase the quarters' gain. Whether fills
+  can stay at four packets with 1- or 2-packet objects is unchecked.
+- **Packet mode itself is unmeasured.** It is untested whether a stream keeps its ~6.9 GB/s with packet headers
+  and two sources merging at one destination.
+
+Before any engine work, the stream ceiling probe can add a packet-switched route: two shim streams each carrying
+mixed packet IDs to a MemTile split and to the cores. It would measure that rate directly.
+
+Log: [engine_stream_sharing_sizing_yolov8s_desktop2_20261013T070000Z.log](../results/aie/engine_stream_sharing_sizing_yolov8s_desktop2_20261013T070000Z.log).
