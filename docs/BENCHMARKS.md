@@ -15984,3 +15984,49 @@ Logs:
 - [engine_layer_timing_yolov8s_desktop2_20261013T044249Z.log](../results/aie/engine_layer_timing_yolov8s_desktop2_20261013T044249Z.log), the sitting;
 - [engine_vs_amd_layer_times_yolov8s_desktop2_20261013T045000Z.log](../results/aie/engine_vs_amd_layer_times_yolov8s_desktop2_20261013T045000Z.log), the join, the per-resolution table, the ranked gaps and the fit;
 - [engine_layer_timing_yolov8s_desktop2_20261013T044118Z.log](../results/aie/engine_layer_timing_yolov8s_desktop2_20261013T044118Z.log), the attempt the runner marked ineligible; its numbers are not used.
+
+#### What sets a layer's time: activation packets, not instruction ops (exploratory, offline)
+
+The per-layer sitting above makes it possible to separate two things that grow together over whole
+frames: activation packets and the instruction stream. I re-split the same container's stream into its 66
+layer pieces and counted each piece's ops and bytes. Across layers they correlate with packets at only 0.49,
+so the two are separable here. Fit of each layer's NOP time ([log](../results/aie/engine_layer_cost_drivers_yolov8s_desktop2_20261013T051500Z.log)):
+
+| model | R² | rms |
+|---|---:|---:|
+| packets alone (0.264 µs each + 44 µs) | 0.943 | 34 µs |
+| instruction ops or bytes alone | 0.414 | 109 µs |
+| packets + ops (0.235 µs per packet, 0.09 µs per op) | 0.979 | 21 µs |
+
+- **What a layer costs, outside its arithmetic, is the activation packets delivered to the cores.** It is not
+  the length of the control stream that delivers them.
+- **This narrows the whole-frame cost model.** That model's ~16 ns per instruction byte is still the right
+  per-frame fit, but across layers it is packets that track time.
+- **It is consistent with the activation ring result.** The ring cut DDR traffic 38%, but every core still
+  received one packet per chunk per group. Its time rose with its instruction stream.
+- **Still open:** whether the cost is per packet or per byte (every packet is 6,400 B), and which stage of
+  the path (shim, MemTile, core DMA, lock handshake) sets it.
+
+**Lever sizes (DERIVED, at 0.235 µs per packet).** A layer's packet count is 4 × G × T × C:
+- G = ceil(Cout / 32), the output-channel groups;
+- T is the spatial quads;
+- C is the input chunks.
+
+A core holds partial sums for 32 output channels only, so each extra group re-reads the whole input. Of
+37,136 packets per YOLOv8s frame, 34,984 belong to the 57 multi-chunk layers.
+
+| change | packets saved | DERIVED ms |
+|---|---:|---:|
+| loop all groups in-core while an input packet stays resident (only possible when C = 1) | 340 | 0.08 |
+| each input fetch serves 2 groups (64 output channels per core pass) | 17,492 | 4.10 (2.06 from inputs ≥ 80×80) |
+| bound: every layer at AMD's input re-read | 28,641 | 6.72 |
+
+**What blocks the 2-group change is core memory.** Each core uses 59,392 of 65,536 B (MODEL_ZOO), leaving
+6,144 B. That is 16,000 B of partial sums, a 3,200 B scratch tile, two 9,472 B weight objects, and two each of
+the 6,400 B activation and 3,200 B output objects, plus a 2 KB stack. A second group's partial sums need
+12,800 B more.
+- **To make room,** something has to give up double-buffering. For example, activation and output depth 1
+  frees 9,600 B.
+- **The two weight objects would then hold both groups' weights,** leaving none prefetching.
+
+How much that lost overlap costs is unmeasured. It decides whether the 4.1 ms is reachable.

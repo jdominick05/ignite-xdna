@@ -1,0 +1,94 @@
+# What sets the engine's per-layer time: activation packets vs instruction ops, and Block 5 lever sizes. Offline, no device. Desktop 2, 2026-10-13T05:03Z.
+# Inputs: per-layer times from engine_layer_timing_yolov8s_desktop2_20261013T044249Z.log (both runs averaged); pieces re-split from scratch/b3/build/yolov8s_merged_silu.ignite; re-read factors from amd_tiling_decode_corrected_yolov8s_n_desktop2_20261013T041500Z.log.
+# Exploratory, not pre-registered. Savings in ms are DERIVED from the packets+ops fit (0.2346 us per packet).
+
+## 1. Fits (scratch op_fit)
+op kinds total: {'BLOCKWRITE': 6795, 'DDR_PATCH': 6795, 'MASKWRITE': 3509, 'WRITE': 6795, 'TCT': 3509}
+corr(packets, bytes) 0.492, corr(packets, ops) 0.492, bytes/packet range 2.5..123.0
+FIT nop ~ packets       : coef(us/unit) [0.2638, 44.4859] R2 0.943 rms 34.1 us
+FIT nop ~ insts bytes   : coef(us/unit) [0.0076, 81.1731] R2 0.414 rms 108.7 us
+FIT nop ~ ops           : coef(us/unit) [0.2703, 80.7317] R2 0.414 rms 108.8 us
+FIT nop ~ packets+bytes : coef(us/unit) [0.2346, 0.0026, 22.9155] R2 0.979 rms 20.6 us
+FIT nop ~ packets+ops   : coef(us/unit) [0.2346, 0.092, 22.7496] R2 0.979 rms 20.6 us
+FIT real ~ packets       : coef(us/unit) [0.322, 71.3383] R2 0.874 rms 64.0 us
+FIT real ~ insts bytes   : coef(us/unit) [0.0076, 140.8705] R2 0.257 rms 155.3 us
+FIT real ~ ops           : coef(us/unit) [0.2699, 140.4995] R2 0.257 rms 155.3 us
+FIT real ~ packets+bytes : coef(us/unit) [0.3114, 0.0009, 63.5196] R2 0.877 rms 63.3 us
+FIT real ~ packets+ops   : coef(us/unit) [0.3115, 0.0332, 63.506] R2 0.877 rms 63.3 us
+PER LAYER name, packets, ops, bytes, bytes/packet, nop ms, real ms
+  /model.0/conv/Conv                            1024   148   5200    5.1 0.414 0.597
+  /model.1/conv/Conv                            2048   608  21584   10.5 0.587 0.796
+  /model.2/cv1/conv/Conv                         512   148   5200   10.2 0.181 0.232
+  /model.2/m.0/cv1/conv/Conv                     256    84   2928   11.4 0.108 0.245
+  /model.2/m.0/cv2/conv/Conv                     512   564  19968   39.0 0.196 0.251
+  /model.2/cv2/conv/Conv                        1024  1120  39760   38.8 0.371 0.388
+  /model.3/conv/Conv                            2048   384  13632    6.7 0.505 0.732
+  /model.4/cv1/conv/Conv                         512   384  13632   26.6 0.152 0.169
+  /model.4/m.0/cv1/conv/Conv                     256   320  11360   44.4 0.112 0.191
+  /model.4/m.0/cv2/conv/Conv                     384   448  15904   41.4 0.151 0.201
+  /model.4/m.1/cv1/conv/Conv                     256   320  11360   44.4 0.115 0.189
+  /model.4/m.1/cv2/conv/Conv                     384   448  15904   41.4 0.151 0.205
+  /model.4/cv2/conv/Conv                        1024  1152  40896   39.9 0.379 0.383
+  /model.5/conv/Conv                            2048   276   9744    4.8 0.500 0.713
+  /model.6/cv1/conv/Conv                         512   276   9744   19.0 0.148 0.163
+  /model.6/m.0/cv1/conv/Conv                     256   340  12016   46.9 0.117 0.186
+  /model.6/m.0/cv2/conv/Conv                     320   404  14288   44.6 0.138 0.200
+  /model.6/m.1/cv1/conv/Conv                     256   340  12016   46.9 0.119 0.185
+  /model.6/m.1/cv2/conv/Conv                     320   404  14288   44.6 0.142 0.195
+  /model.6/cv2/conv/Conv                        1024  1044  37008   36.1 0.350 0.348
+  /model.7/conv/Conv                            2048   148   5200    2.5 0.509 0.697
+  /model.8/cv1/conv/Conv                         512   148   5200   10.2 0.145 0.162
+  /model.8/m.0/cv1/conv/Conv                     256   308  10880   42.5 0.109 0.176
+  /model.8/m.0/cv2/conv/Conv                     288   340  12016   41.7 0.119 0.188
+  /model.8/cv2/conv/Conv                         768   660  23376   30.4 0.252 0.253
+  /model.9/cv1/conv/Conv                         256    84   2928   11.4 0.089 0.097
+  /model.9/m/MaxPool                              64   116   4064   63.5 0.048 0.060
+  /model.9/m_1/MaxPool                            64   116   4064   63.5 0.047 0.061
+  /model.9/m_2/MaxPool                            64   116   4064   63.5 0.046 0.059
+  /model.9/cv2/conv/Conv                        1024   916  32464   31.7 0.322 0.321
+  /model.12/cv1/conv/Conv                       1536   788  27920   18.2 0.441 0.437
+  /model.12/m.0/cv1/conv/Conv                    256   340  12016   46.9 0.110 0.177
+  /model.12/m.0/cv2/conv/Conv                    256   340  12016   46.9 0.110 0.176
+  /model.12/cv2/conv/Conv                        768   788  27920   36.4 0.261 0.259
+  /model.15/cv1/conv/Conv                       1536  1664  59072   38.5 0.553 0.551
+  /model.15/m.0/cv1/conv/Conv                    256   320  11360   44.4 0.114 0.190
+  /model.15/m.0/cv2/conv/Conv                    256   320  11360   44.4 0.114 0.192
+  /model.15/cv2/conv/Conv                        768   896  31808   41.4 0.293 0.300
+  /model.16/conv/Conv                           1024   148   5200    5.1 0.269 0.386
+  /model.22/cv2.0/cv2.0.0/conv/Conv              512   576  20448   39.9 0.202 0.321
+  /model.22/cv3.0/cv3.0.0/conv/Conv             1024  1152  40896   39.9 0.385 0.610
+  /model.22/cv2.0/cv2.0.1/conv/Conv              256   320  11360   44.4 0.114 0.192
+  /model.22/cv3.0/cv3.0.1/conv/Conv             1024  1152  40896   39.9 0.383 0.613
+  /model.18/cv1/conv/Conv                        768   788  27920   36.4 0.268 0.276
+  /model.22/cv2.0/cv2.0.2/Conv                   128    84   2928   22.9 0.072 0.070
+  /model.22/cv3.0/cv3.0.2/Conv                   384   296  10400   27.1 0.122 0.121
+  /model.18/m.0/cv1/conv/Conv                    256   340  12016   46.9 0.118 0.188
+  /model.18/m.0/cv2/conv/Conv                    256   340  12016   46.9 0.117 0.183
+  /model.18/cv2/conv/Conv                        768   788  27920   36.4 0.261 0.260
+  /model.19/conv/Conv                           1024    84   2928    2.9 0.271 0.361
+  /model.22/cv2.1/cv2.1.0/conv/Conv              256   308  10880   42.5 0.108 0.176
+  /model.22/cv3.1/cv3.1.0/conv/Conv              512   596  21104   41.2 0.203 0.317
+  /model.22/cv2.1/cv2.1.1/conv/Conv               64   116   4064   63.5 0.041 0.075
+  /model.22/cv3.1/cv3.1.1/conv/Conv              256   340  12016   46.9 0.113 0.182
+  /model.21/cv1/conv/Conv                        768   212   7472    9.7 0.209 0.224
+  /model.22/cv2.1/cv2.1.2/Conv                    32    84   2928   91.5 0.047 0.047
+  /model.22/cv3.1/cv3.1.2/Conv                    96   124   4240   44.2 0.052 0.052
+  /model.21/m.0/cv1/conv/Conv                    256   308  10880   42.5 0.113 0.179
+  /model.21/m.0/cv2/conv/Conv                    256   308  10880   42.5 0.109 0.172
+  /model.21/cv2/conv/Conv                        768   660  23376   30.4 0.248 0.248
+  /model.22/cv2.2/cv2.2.0/conv/Conv              128   148   5200   40.6 0.075 0.163
+  /model.22/cv3.2/cv3.2.0/conv/Conv              256   296  10400   40.6 0.104 0.170
+  /model.22/cv2.2/cv2.2.1/conv/Conv               16    36   1224   76.5 0.022 0.039
+  /model.22/cv3.2/cv3.2.1/conv/Conv               64   104   3584   56.0 0.037 0.064
+  /model.22/cv2.2/cv2.2.2/Conv                     8    30    984  123.0 0.018 0.018
+  /model.22/cv3.2/cv3.2.2/Conv                    24    45   1476   61.5 0.032 0.033
+
+## 2. Lever sizes (scratch lever_size): packets = 4*G*T*C, G = ceil(Cout/32)
+total packets 37136; L1 (group loop, C==1) saves 340 packets = 0.08 ms DERIVED; bound at AMD-option re-read saves 28641 = 6.72 ms DERIVED
+L1 layers (save, packets, G, C, T, i_rr eng, i_rr amd, name, in, out, k):
+   256 512 2 1.0 64.0 2.0 1.0 /model.2/cv1/conv/Conv [64, 160, 160] [64, 160, 160] 1
+   64 128 2 1.0 16.0 2.0 1.05 /model.22/cv2.0/cv2.0.2/Conv [64, 80, 80] [64, 80, 80] 1
+   16 32 2 1.0 4.0 2.0 1.0 /model.22/cv2.1/cv2.1.2/Conv [64, 40, 40] [64, 40, 40] 1
+   4 8 2 1.0 1.0 2.0 1.2 /model.22/cv2.2/cv2.2.2/Conv [64, 20, 20] [64, 20, 20] 1
+multi-chunk layers: 57, their packets 34984; C histogram: [2.0, 3.0, 4.0, 5.0, 6.0, 8.0, 9.0, 12.0, 16.0, 32.0]
+L2 (2 groups per fetch, all layers) saves 17492 packets = 4.10 ms DERIVED; of which inputs >= 80x80: 8768 = 2.06 ms
