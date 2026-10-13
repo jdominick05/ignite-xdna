@@ -16883,7 +16883,8 @@ dispatches per point, rotating and reversing order, `timing_eligible: true`, no 
   below 0.235 µs. A small upward drift below 1,600 B sits inside the band and is not a finding.
 
 **What follows (DERIVED).**
-- **The engine's per-packet term is not a per-object cost on the MemTile → core path.** With the tasks-are-issue
+- **The engine's per-packet term is not a per-object cost on the MemTile → core path.** *(The rest of this bullet
+  and the next are superseded the same day; see the correction below.)* With the tasks-are-issue
   result (13:06Z: one serial path of about 1.42 µs per task), the per-layer packet fit is best read as issue cost
   carried by packets, because each packet needs control to deliver it.
 - **AMD's layout pays through the control it does not issue.** It re-delivers each tile once per output group by
@@ -16901,3 +16902,33 @@ dispatches per point, rotating and reversing order, `timing_eligible: true`, no 
 
 Logs: [sitting](../results/aie/object_size_probe_phoenix_desktop2_20261013T1958Z.log) and its
 [JSON](../results/aie/object_size_probe_phoenix_desktop2_20261013T1958Z.json).
+
+**Correction (2026-10-13, Desktop 2): the per-packet term is transport, not issue.** The reading above went
+beyond this sitting. Because bytes were held fixed, FLAT rules out a per-object cost and says nothing about what
+the remaining time is. Three independent measurements put that time at the shim stream rate:
+
+| source | rate |
+|---|---:|
+| the per-layer fit, 0.2346 µs per 6,400 B packet | 27.3 GB/s |
+| the task-issue probe's per-byte term `b` | 28.4 GB/s across the array (7.1 GB/s per column, against the 6.9 GB/s per-stream ceiling) |
+| this sitting, 104.9 MB in 4.075 ms | 25.7 GB/s |
+
+They agree within 10%.
+
+**Per layer, issue does not fit and transport does.** `model.3`'s 2,048 packets are 13.1 MB, which at 27.3 GB/s is
+0.48 ms; its NOP time is 0.505 ms. Its 384 instruction ops (about 96 tasks × 1.42 µs) give 0.14 ms. Across layers,
+ops alone fit NOP time at R² 0.41
+([cost drivers](#what-sets-a-layers-time-activation-packets-not-instruction-ops-exploratory-offline)).
+
+**So the open "per packet or per byte" question is answered: per byte,** at the per-column shim stream rate. The
+issue path (about 1.42 µs per task) is a separate bound that runs in parallel, not the same term.
+
+**What this changes:**
+- **The lever is per-column shim bytes, with tasks held at or below today's.** Replaying a tile from the MemTile
+  relieves the shim stream, because the MemTile fans out to four core channels. The hop probe already priced the
+  hop itself as free.
+- **The activation ring fits this.** It cut activation bytes 38% but raised tasks: on YOLOv8s it went from
+  6,795 to 8,347, with weights 389 → 2,173 and drains 897 → 2,173. Under `max(transport, issue)`, layers turn
+  issue-bound as their bytes fall, so the saving does not convert.
+
+The measurement above stands. Only its "therefore issue" reading is withdrawn.
