@@ -1,0 +1,1146 @@
+# AMD CODE (REG_4) decode: shim + MemTile DMA programs of YOLOv8s, default (ctl) vs enable_cost_model_tiling (cmt)
+# host: DESKTOP-CBL5NUA (Desktop 2); UTC: 2026-10-13T19:46:08Z; offline, no device opened
+# tool: tools/amd_code_decode.py; xmodels: scratch/b8/cache/{ctl,cmt}/compiled.0x800020500148acb.xmodel
+# sha256 ctl: abddc9b7717a744df410c7eb6c25bc379a9cda0f2d20dcf884410faec31802f4
+# sha256 cmt: d398259169d50989c452a82eab8c8e9bceda47444158e0003a2e84c1032fcbe6
+
+## Pre-registration (scratch sha256 4041e8477ac33ce3ff307f9b71864a49abebef6979fa15418961f5563911c8c8), written before the cmt run:
+#   Pre-registration, 2026-10-13, Desktop 2, before running amd_code_decode.py --totals on the cost-model (cmt) xmodel.
+#   Claim under test: the mc_code segment that begins at the name marker of a layer's input tensor is that layer,
+#   and the decoded shim pushes of columns 0-2 equal 3/4 of the xmodel's declared per-layer loads.
+#   Prediction for the segment named model_6_cv2_act... (model.7), cmt arm:
+#     shim_mm2s = (1,889,280 + 5,980,416) x 3/4 = 5,902,272 B
+#     shim_s2mm = 204,800 x 3/4 = 153,600 B
+#   PASS: both equal exactly. Any other value: FAIL, and the cmt record types (0x5a, 0x37-0x3e) are the first suspect.
+
+## --totals, ctl (per segment; push-derived shim bytes cover columns 0-2 only, column 3 has no start-queue writes)
+[decode] scratch\b8\cache\ctl\compiled.0x800020500148acb.xmodel: mc_code 106168 B, CODE 1593408 B, 90 segments
+SEGMENT {"segment": 0, "name": "<prologue>", "shim_mm2s": 1228992, "shim_s2mm": 1228800, "unresolved": 0, "mm2s_by_tag": {"0x1000": 192, "0x0": 1228800}, "push_bytes_by_col": [819264, 819264, 819264, 0], "bd_bytes_by_col": [20544, 20544, 20544, 20544], "repeats": 351, "same_across_columns": {"0x1000": true, "0x0": false}}
+SEGMENT {"segment": 1, "name": "images_DequantizeLinear_Output_vaip_1", "shim_mm2s": 1280448, "shim_s2mm": 2457600, "unresolved": 0, "mm2s_by_tag": {"0x1000": 5184, "0x3000": 1275264}, "push_bytes_by_col": [1246016, 1246016, 1246016, 0], "bd_bytes_by_col": [157264, 157264, 157264, 157264], "repeats": 63, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 2, "name": "model_0_act_Mul_output_0_DequantizeLinear_Output_vaip_207", "shim_mm2s": 2671296, "shim_s2mm": 1228800, "unresolved": 0, "mm2s_by_tag": {"0x1000": 58560, "0x3000": 2612736}, "push_bytes_by_col": [1300032, 1300032, 1300032, 0], "bd_bytes_by_col": [179584, 179584, 179584, 179584], "repeats": 63, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 3, "name": "model_1_act_Mul_output_0_DequantizeLinear_Output_vaip_215", "shim_mm2s": 1235520, "shim_s2mm": 614400, "unresolved": 0, "mm2s_by_tag": {"0x1000": 6720, "0x3000": 1228800}, "push_bytes_by_col": [616640, 616640, 616640, 0], "bd_bytes_by_col": [79040, 79040, 79040, 79040], "repeats": 63, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 4, "name": "model_2_Split_output_1_DequantizeLinear_Output_duplicated_token_0_vaip_225", "shim_mm2s": 738240, "shim_s2mm": 614400, "unresolved": 0, "mm2s_by_tag": {"0x1000": 28608, "0x3000": 709632}, "push_bytes_by_col": [450880, 450880, 450880, 0], "bd_bytes_by_col": [119872, 119872, 119872, 119872], "repeats": 27, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 5, "name": "model_2_m_0_cv1_act_Mul_output_0_DequantizeLinear_Output_vaip_235", "shim_mm2s": 738240, "shim_s2mm": 614400, "unresolved": 0, "mm2s_by_tag": {"0x1000": 28608, "0x3000": 709632}, "push_bytes_by_col": [450880, 450880, 450880, 0], "bd_bytes_by_col": [119872, 119872, 119872, 119872], "repeats": 27, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 6, "name": "model_2_m_0_cv2_act_Mul_output_0_DequantizeLinear_Output_vaip_243", "shim_mm2s": 1290432, "shim_s2mm": 645120, "unresolved": 0, "mm2s_by_tag": {"0x1000": 192, "0x3000": 1290240}, "push_bytes_by_col": [645184, 645184, 645184, 0], "bd_bytes_by_col": [92224, 92224, 92224, 92224], "repeats": 54, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 7, "name": "model_2_m_0_Add_output_0_DequantizeLinear_Output_vaip_245", "shim_mm2s": 1235520, "shim_s2mm": 614400, "unresolved": 0, "mm2s_by_tag": {"0x1000": 6720, "0x3000": 1228800}, "push_bytes_by_col": [616640, 616640, 616640, 0], "bd_bytes_by_col": [79040, 79040, 79040, 79040], "repeats": 63, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 8, "name": "model_2_Split_output_0_DequantizeLinear_Output_vaip_248", "shim_mm2s": 1862592, "shim_s2mm": 1228800, "unresolved": 0, "mm2s_by_tag": {"0x1000": 19392, "0x3000": 1843200}, "push_bytes_by_col": [1030464, 1030464, 1030464, 0], "bd_bytes_by_col": [262464, 262464, 262464, 262464], "repeats": 27, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 9, "name": "model_2_cv2_act_Mul_output_0_DequantizeLinear_Output_vaip_258", "shim_mm2s": 1550016, "shim_s2mm": 614400, "unresolved": 0, "mm2s_by_tag": {"0x1000": 227520, "0x3000": 1322496}, "push_bytes_by_col": [721472, 721472, 721472, 0], "bd_bytes_by_col": [237248, 237248, 237248, 237248], "repeats": 27, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 10, "name": "model_3_act_Mul_output_0_DequantizeLinear_Output_vaip_266", "shim_mm2s": 670656, "shim_s2mm": 322560, "unresolved": 0, "mm2s_by_tag": {"0x1000": 25536, "0x3000": 645120}, "push_bytes_by_col": [331072, 331072, 331072, 0], "bd_bytes_by_col": [73024, 73024, 73024, 73024], "repeats": 36, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 11, "name": "model_4_Split_output_1_DequantizeLinear_Output_duplicated_token_2_vaip_296", "shim_mm2s": 505536, "shim_s2mm": 322560, "unresolved": 0, "mm2s_by_tag": {"0x1000": 116928, "0x3000": 388608}, "push_bytes_by_col": [276032, 276032, 276032, 0], "bd_bytes_by_col": [157504, 157504, 157504, 157504], "repeats": 9, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 12, "name": "model_4_m_0_cv1_act_Mul_output_0_DequantizeLinear_Output_vaip_285", "shim_mm2s": 505536, "shim_s2mm": 322560, "unresolved": 0, "mm2s_by_tag": {"0x1000": 116928, "0x3000": 388608}, "push_bytes_by_col": [276032, 276032, 276032, 0], "bd_bytes_by_col": [157504, 157504, 157504, 157504], "repeats": 9, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 13, "name": "model_4_m_0_cv2_act_Mul_output_0_DequantizeLinear_Output_vaip_293", "shim_mm2s": 737472, "shim_s2mm": 368640, "unresolved": 0, "mm2s_by_tag": {"0x1000": 192, "0x3000": 737280}, "push_bytes_by_col": [368704, 368704, 368704, 0], "bd_bytes_by_col": [184384, 184384, 184384, 184384], "repeats": 9, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 14, "name": "model_4_m_0_Add_output_0_DequantizeLinear_Output_duplicated_token_4_vaip_295", "shim_mm2s": 505536, "shim_s2mm": 322560, "unresolved": 0, "mm2s_by_tag": {"0x1000": 116928, "0x3000": 388608}, "push_bytes_by_col": [276032, 276032, 276032, 0], "bd_bytes_by_col": [157504, 157504, 157504, 157504], "repeats": 9, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 15, "name": "model_4_m_1_cv1_act_Mul_output_0_DequantizeLinear_Output_vaip_306", "shim_mm2s": 505536, "shim_s2mm": 322560, "unresolved": 0, "mm2s_by_tag": {"0x1000": 116928, "0x3000": 388608}, "push_bytes_by_col": [276032, 276032, 276032, 0], "bd_bytes_by_col": [157504, 157504, 157504, 157504], "repeats": 9, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 16, "name": "model_4_m_1_cv2_act_Mul_output_0_DequantizeLinear_Output_vaip_314", "shim_mm2s": 737472, "shim_s2mm": 368640, "unresolved": 0, "mm2s_by_tag": {"0x1000": 192, "0x3000": 737280}, "push_bytes_by_col": [368704, 368704, 368704, 0], "bd_bytes_by_col": [184384, 184384, 184384, 184384], "repeats": 9, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 17, "name": "model_4_m_1_Add_output_0_DequantizeLinear_Output_vaip_316", "shim_mm2s": 670656, "shim_s2mm": 322560, "unresolved": 0, "mm2s_by_tag": {"0x1000": 25536, "0x3000": 645120}, "push_bytes_by_col": [331072, 331072, 331072, 0], "bd_bytes_by_col": [73024, 73024, 73024, 73024], "repeats": 36, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 18, "name": "model_4_Split_output_0_DequantizeLinear_Output_vaip_319", "shim_mm2s": 1394880, "shim_s2mm": 645120, "unresolved": 0, "mm2s_by_tag": {"0x1000": 104640, "0x3000": 1290240}, "push_bytes_by_col": [680000, 680000, 680000, 0], "bd_bytes_by_col": [163904, 163904, 163904, 163904], "repeats": 36, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 19, "name": "model_4_cv2_act_Mul_output_0_DequantizeLinear_Output_duplicated_vaip_521", "shim_mm2s": 1798080, "shim_s2mm": 368640, "unresolved": 0, "mm2s_by_tag": {"0x1000": 934080, "0x3000": 864000}, "push_bytes_by_col": [722240, 722240, 722240, 0], "bd_bytes_by_col": [393536, 393536, 393536, 393536], "repeats": 36, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 20, "name": "model_5_act_Mul_output_0_DequantizeLinear_Output_vaip_337", "shim_mm2s": 411840, "shim_s2mm": 153600, "unresolved": 0, "mm2s_by_tag": {"0x1000": 104640, "0x3000": 307200}, "push_bytes_by_col": [188480, 188480, 188480, 0], "bd_bytes_by_col": [162880, 162880, 162880, 162880], "repeats": 3, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 21, "name": "model_6_Split_output_1_DequantizeLinear_Output_duplicated_token_6_vaip_367", "shim_mm2s": 657600, "shim_s2mm": 153600, "unresolved": 0, "mm2s_by_tag": {"0x1000": 454848, "0x3000": 202752}, "push_bytes_by_col": [270400, 270400, 270400, 0], "bd_bytes_by_col": [270400, 270400, 270400, 270400], "repeats": 0, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 22, "name": "model_6_m_0_cv1_act_Mul_output_0_DequantizeLinear_Output_vaip_356", "shim_mm2s": 657600, "shim_s2mm": 153600, "unresolved": 0, "mm2s_by_tag": {"0x1000": 454848, "0x3000": 202752}, "push_bytes_by_col": [270400, 270400, 270400, 0], "bd_bytes_by_col": [270400, 270400, 270400, 270400], "repeats": 0, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 23, "name": "model_6_m_0_cv2_act_Mul_output_0_DequantizeLinear_Output_vaip_364", "shim_mm2s": 307392, "shim_s2mm": 153600, "unresolved": 0, "mm2s_by_tag": {"0x1000": 192, "0x3000": 307200}, "push_bytes_by_col": [153664, 153664, 153664, 0], "bd_bytes_by_col": [153664, 153664, 153664, 153664], "repeats": 0, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 24, "name": "model_6_m_0_Add_output_0_DequantizeLinear_Output_duplicated_token_8_vaip_366", "shim_mm2s": 657600, "shim_s2mm": 153600, "unresolved": 0, "mm2s_by_tag": {"0x1000": 454848, "0x3000": 202752}, "push_bytes_by_col": [270400, 270400, 270400, 0], "bd_bytes_by_col": [270400, 270400, 270400, 270400], "repeats": 0, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 25, "name": "model_6_m_1_cv1_act_Mul_output_0_DequantizeLinear_Output_vaip_377", "shim_mm2s": 657600, "shim_s2mm": 153600, "unresolved": 0, "mm2s_by_tag": {"0x1000": 454848, "0x3000": 202752}, "push_bytes_by_col": [270400, 270400, 270400, 0], "bd_bytes_by_col": [270400, 270400, 270400, 270400], "repeats": 0, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 26, "name": "model_6_m_1_cv2_act_Mul_output_0_DequantizeLinear_Output_vaip_385", "shim_mm2s": 307392, "shim_s2mm": 153600, "unresolved": 0, "mm2s_by_tag": {"0x1000": 192, "0x3000": 307200}, "push_bytes_by_col": [153664, 153664, 153664, 0], "bd_bytes_by_col": [153664, 153664, 153664, 153664], "repeats": 0, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 27, "name": "model_6_m_1_Add_output_0_DequantizeLinear_Output_vaip_387", "shim_mm2s": 411840, "shim_s2mm": 153600, "unresolved": 0, "mm2s_by_tag": {"0x1000": 104640, "0x3000": 307200}, "push_bytes_by_col": [188480, 188480, 188480, 0], "bd_bytes_by_col": [162880, 162880, 162880, 162880], "repeats": 3, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 28, "name": "model_6_Split_output_0_DequantizeLinear_Output_vaip_390", "shim_mm2s": 1032384, "shim_s2mm": 307200, "unresolved": 0, "mm2s_by_tag": {"0x1000": 417984, "0x3000": 614400}, "push_bytes_by_col": [446528, 446528, 446528, 0], "bd_bytes_by_col": [395328, 395328, 395328, 395328], "repeats": 3, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 29, "name": "model_6_cv2_act_Mul_output_0_DequantizeLinear_Output_duplicated_vaip_476", "shim_mm2s": 6992064, "shim_s2mm": 184320, "unresolved": 0, "mm2s_by_tag": {"0x1000": 3637440, "0x3000": 3354624}, "push_bytes_by_col": [2392128, 2392128, 2392128, 0], "bd_bytes_by_col": [1413696, 1413696, 1413696, 1413696], "repeats": 0, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 30, "name": "model_7_act_Mul_output_0_DequantizeLinear_Output_vaip_408", "shim_mm2s": 571584, "shim_s2mm": 76800, "unresolved": 0, "mm2s_by_tag": {"0x1000": 417984, "0x3000": 153600}, "push_bytes_by_col": [216128, 216128, 216128, 0], "bd_bytes_by_col": [216128, 216128, 216128, 216128], "repeats": 0, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 31, "name": "model_8_Split_output_1_DequantizeLinear_Output_duplicated_token_10_vaip_418", "shim_mm2s": 2126016, "shim_s2mm": 76800, "unresolved": 0, "mm2s_by_tag": {"0x1000": 1867968, "0x3000": 258048}, "push_bytes_by_col": [734272, 734272, 734272, 0], "bd_bytes_by_col": [691264, 691264, 691264, 691264], "repeats": 0, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 32, "name": "model_8_m_0_cv1_act_Mul_output_0_DequantizeLinear_Output_vaip_428", "shim_mm2s": 2126016, "shim_s2mm": 76800, "unresolved": 0, "mm2s_by_tag": {"0x1000": 1867968, "0x3000": 258048}, "push_bytes_by_col": [734272, 734272, 734272, 0], "bd_bytes_by_col": [691264, 691264, 691264, 691264], "repeats": 0, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 33, "name": "model_8_m_0_cv2_act_Mul_output_0_DequantizeLinear_Output_vaip_436", "shim_mm2s": 153792, "shim_s2mm": 76800, "unresolved": 0, "mm2s_by_tag": {"0x1000": 192, "0x3000": 153600}, "push_bytes_by_col": [76864, 76864, 76864, 0], "bd_bytes_by_col": [76864, 76864, 76864, 76864], "repeats": 0, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 34, "name": "model_8_m_0_Add_output_0_DequantizeLinear_Output_vaip_438", "shim_mm2s": 571584, "shim_s2mm": 76800, "unresolved": 0, "mm2s_by_tag": {"0x1000": 417984, "0x3000": 153600}, "push_bytes_by_col": [216128, 216128, 216128, 0], "bd_bytes_by_col": [216128, 216128, 216128, 216128], "repeats": 0, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 35, "name": "model_8_Split_output_0_DequantizeLinear_Output_vaip_441", "shim_mm2s": 1714368, "shim_s2mm": 153600, "unresolved": 0, "mm2s_by_tag": {"0x1000": 1253568, "0x3000": 460800}, "push_bytes_by_col": [622656, 622656, 622656, 0], "bd_bytes_by_col": [545856, 545856, 545856, 545856], "repeats": 0, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 36, "name": "model_8_cv2_act_Mul_output_0_DequantizeLinear_Output_vaip_451", "shim_mm2s": 571584, "shim_s2mm": 76800, "unresolved": 0, "mm2s_by_tag": {"0x1000": 417984, "0x3000": 153600}, "push_bytes_by_col": [216128, 216128, 216128, 0], "bd_bytes_by_col": [216128, 216128, 216128, 216128], "repeats": 0, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 37, "name": "model_9_cv1_act_Mul_output_0_DequantizeLinear_Output_duplicated_vaip_463", "shim_mm2s": 166080, "shim_s2mm": 76800, "unresolved": 0, "mm2s_by_tag": {"0x1000": 192, "0x3000": 165888}, "push_bytes_by_col": [80960, 80960, 80960, 0], "bd_bytes_by_col": [80960, 80960, 80960, 80960], "repeats": 0, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 38, "name": "model_9_m_MaxPool_output_0_DequantizeLinear_Output_duplicated_vaip_462", "shim_mm2s": 166080, "shim_s2mm": 76800, "unresolved": 0, "mm2s_by_tag": {"0x1000": 192, "0x3000": 165888}, "push_bytes_by_col": [80960, 80960, 80960, 0], "bd_bytes_by_col": [80960, 80960, 80960, 80960], "repeats": 0, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 39, "name": "model_9_m_1_MaxPool_output_0_DequantizeLinear_Output_duplicated_vaip_461", "shim_mm2s": 166080, "shim_s2mm": 76800, "unresolved": 0, "mm2s_by_tag": {"0x1000": 192, "0x3000": 165888}, "push_bytes_by_col": [80960, 80960, 80960, 0], "bd_bytes_by_col": [80960, 80960, 80960, 80960], "repeats": 0, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 40, "name": "model_9_m_2_MaxPool_output_0_DequantizeLinear_Output_vaip_465", "shim_mm2s": 2900160, "shim_s2mm": 153600, "unresolved": 0, "mm2s_by_tag": {"0x1000": 1671360, "0x3000": 1228800}, "push_bytes_by_col": [1017920, 1017920, 1017920, 0], "bd_bytes_by_col": [864320, 864320, 864320, 864320], "repeats": 0, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 41, "name": "model_9_cv2_act_Mul_output_0_DequantizeLinear_Output_duplicated_vaip_475", "shim_mm2s": 983040, "shim_s2mm": 983040, "unresolved": 0, "mm2s_by_tag": {"0x3000": 983040}, "push_bytes_by_col": [655360, 655360, 655360, 0], "bd_bytes_by_col": [327680, 327680, 327680, 327680], "repeats": 48, "same_across_columns": {"0x3000": false}}
+SEGMENT {"segment": 42, "name": "model_10_Resize_output_0_DequantizeLinear_Output_vaip_478", "shim_mm2s": 1228992, "shim_s2mm": 153600, "unresolved": 0, "mm2s_by_tag": {"0x1000": 307392, "0x3000": 921600}, "push_bytes_by_col": [460864, 460864, 460864, 0], "bd_bytes_by_col": [281664, 281664, 281664, 281664], "repeats": 9, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 43, "name": "model_12_Split_output_1_DequantizeLinear_Output_duplicated_vaip_490", "shim_mm2s": 657600, "shim_s2mm": 153600, "unresolved": 0, "mm2s_by_tag": {"0x1000": 454848, "0x3000": 202752}, "push_bytes_by_col": [270400, 270400, 270400, 0], "bd_bytes_by_col": [270400, 270400, 270400, 270400], "repeats": 0, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 44, "name": "model_12_m_0_cv1_act_Mul_output_0_DequantizeLinear_Output_vaip_499", "shim_mm2s": 657600, "shim_s2mm": 153600, "unresolved": 0, "mm2s_by_tag": {"0x1000": 454848, "0x3000": 202752}, "push_bytes_by_col": [270400, 270400, 270400, 0], "bd_bytes_by_col": [270400, 270400, 270400, 270400], "repeats": 0, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 45, "name": "model_12_m_0_cv2_act_Mul_output_0_DequantizeLinear_Output_vaip_507", "shim_mm2s": 1228992, "shim_s2mm": 153600, "unresolved": 0, "mm2s_by_tag": {"0x1000": 307392, "0x3000": 921600}, "push_bytes_by_col": [460864, 460864, 460864, 0], "bd_bytes_by_col": [281664, 281664, 281664, 281664], "repeats": 9, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 46, "name": "model_12_Split_output_0_DequantizeLinear_Output_vaip_510", "shim_mm2s": 768192, "shim_s2mm": 307200, "unresolved": 0, "mm2s_by_tag": {"0x1000": 307392, "0x3000": 460800}, "push_bytes_by_col": [358464, 358464, 358464, 0], "bd_bytes_by_col": [307264, 307264, 307264, 307264], "repeats": 3, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 47, "name": "model_12_cv2_act_Mul_output_0_DequantizeLinear_Output_duplicated_vaip_520", "shim_mm2s": 1228800, "shim_s2mm": 1228800, "unresolved": 0, "mm2s_by_tag": {"0x3000": 1228800}, "push_bytes_by_col": [819200, 819200, 819200, 0], "bd_bytes_by_col": [409600, 409600, 409600, 409600], "repeats": 24, "same_across_columns": {"0x3000": false}}
+SEGMENT {"segment": 48, "name": "model_13_Resize_output_0_DequantizeLinear_Output_vaip_523", "shim_mm2s": 2013888, "shim_s2mm": 322560, "unresolved": 0, "mm2s_by_tag": {"0x1000": 78528, "0x3000": 1935360}, "push_bytes_by_col": [778816, 778816, 778816, 0], "bd_bytes_by_col": [176704, 176704, 176704, 176704], "repeats": 36, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 49, "name": "model_15_Split_output_1_DequantizeLinear_Output_duplicated_vaip_535", "shim_mm2s": 505536, "shim_s2mm": 322560, "unresolved": 0, "mm2s_by_tag": {"0x1000": 116928, "0x3000": 388608}, "push_bytes_by_col": [276032, 276032, 276032, 0], "bd_bytes_by_col": [157504, 157504, 157504, 157504], "repeats": 9, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 50, "name": "model_15_m_0_cv1_act_Mul_output_0_DequantizeLinear_Output_vaip_544", "shim_mm2s": 505536, "shim_s2mm": 322560, "unresolved": 0, "mm2s_by_tag": {"0x1000": 116928, "0x3000": 388608}, "push_bytes_by_col": [276032, 276032, 276032, 0], "bd_bytes_by_col": [157504, 157504, 157504, 157504], "repeats": 9, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 51, "name": "model_15_m_0_cv2_act_Mul_output_0_DequantizeLinear_Output_vaip_552", "shim_mm2s": 2013888, "shim_s2mm": 322560, "unresolved": 0, "mm2s_by_tag": {"0x1000": 78528, "0x3000": 1935360}, "push_bytes_by_col": [778816, 778816, 778816, 0], "bd_bytes_by_col": [176704, 176704, 176704, 176704], "repeats": 36, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 52, "name": "model_15_Split_output_0_DequantizeLinear_Output_vaip_555", "shim_mm2s": 1046208, "shim_s2mm": 645120, "unresolved": 0, "mm2s_by_tag": {"0x1000": 78528, "0x3000": 967680}, "push_bytes_by_col": [563776, 563776, 563776, 0], "bd_bytes_by_col": [133696, 133696, 133696, 133696], "repeats": 36, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 53, "name": "model_15_cv2_act_Mul_output_0_DequantizeLinear_Output_duplicated_token_12_vaip_701", "shim_mm2s": 1325760, "shim_s2mm": 645120, "unresolved": 0, "mm2s_by_tag": {"0x1000": 454848, "0x3000": 870912}, "push_bytes_by_col": [656960, 656960, 656960, 0], "bd_bytes_by_col": [656960, 656960, 656960, 656960], "repeats": 0, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 54, "name": "model_22_cv3_0_cv3_0_0_act_Mul_output_0_DequantizeLinear_Output_vaip_709", "shim_mm2s": 1325760, "shim_s2mm": 645120, "unresolved": 0, "mm2s_by_tag": {"0x1000": 454848, "0x3000": 870912}, "push_bytes_by_col": [656960, 656960, 656960, 0], "bd_bytes_by_col": [656960, 656960, 656960, 656960], "repeats": 0, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 55, "name": "model_22_cv3_0_cv3_0_1_act_Mul_output_0_DequantizeLinear_Output_vaip_717", "shim_mm2s": 676992, "shim_s2mm": 403200, "unresolved": 0, "mm2s_by_tag": {"0x1000": 31872, "0x3000": 645120}, "push_bytes_by_col": [360064, 360064, 360064, 0], "bd_bytes_by_col": [80512, 80512, 80512, 80512], "repeats": 36, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 56, "name": "model_22_cv3_0_cv3_0_2_Conv_output_0_vaip_718", "shim_mm2s": 384192, "shim_s2mm": 384000, "unresolved": 0, "mm2s_by_tag": {"0x1000": 192, "0x3000": 384000}, "push_bytes_by_col": [256064, 256064, 256064, 0], "bd_bytes_by_col": [12864, 12864, 12864, 12864], "repeats": 171, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 57, "name": "model_22_cv3_0_cv3_0_2_Conv_output_0_download_0", "shim_mm2s": 1010880, "shim_s2mm": 322560, "unresolved": 0, "mm2s_by_tag": {"0x1000": 233664, "0x3000": 777216}, "push_bytes_by_col": [444480, 444480, 444480, 0], "bd_bytes_by_col": [261184, 261184, 261184, 261184], "repeats": 9, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 58, "name": "model_22_cv2_0_cv2_0_0_act_Mul_output_0_DequantizeLinear_Output_vaip_763", "shim_mm2s": 505536, "shim_s2mm": 322560, "unresolved": 0, "mm2s_by_tag": {"0x1000": 116928, "0x3000": 388608}, "push_bytes_by_col": [276032, 276032, 276032, 0], "bd_bytes_by_col": [157504, 157504, 157504, 157504], "repeats": 9, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 59, "name": "model_22_cv2_0_cv2_0_1_act_Mul_output_0_DequantizeLinear_Output_vaip_771", "shim_mm2s": 335808, "shim_s2mm": 322560, "unresolved": 0, "mm2s_by_tag": {"0x1000": 13248, "0x3000": 322560}, "push_bytes_by_col": [219456, 219456, 219456, 0], "bd_bytes_by_col": [219456, 219456, 219456, 219456], "repeats": 0, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 60, "name": "model_22_cv2_0_cv2_0_2_Conv_output_0_vaip_772", "shim_mm2s": 307392, "shim_s2mm": 307200, "unresolved": 0, "mm2s_by_tag": {"0x1000": 192, "0x3000": 307200}, "push_bytes_by_col": [204864, 204864, 204864, 0], "bd_bytes_by_col": [10304, 10304, 10304, 10304], "repeats": 171, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 61, "name": "model_22_cv2_0_cv2_0_2_Conv_output_0_download_0", "shim_mm2s": 1273536, "shim_s2mm": 184320, "unresolved": 0, "mm2s_by_tag": {"0x1000": 467136, "0x3000": 806400}, "push_bytes_by_col": [485952, 485952, 485952, 0], "bd_bytes_by_col": [320832, 320832, 320832, 320832], "repeats": 9, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 62, "name": "model_16_act_Mul_output_0_DequantizeLinear_Output_vaip_573", "shim_mm2s": 614592, "shim_s2mm": 153600, "unresolved": 0, "mm2s_by_tag": {"0x1000": 153792, "0x3000": 460800}, "push_bytes_by_col": [256064, 256064, 256064, 0], "bd_bytes_by_col": [153664, 153664, 153664, 153664], "repeats": 9, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 63, "name": "model_18_Split_output_1_DequantizeLinear_Output_duplicated_vaip_585", "shim_mm2s": 657600, "shim_s2mm": 153600, "unresolved": 0, "mm2s_by_tag": {"0x1000": 454848, "0x3000": 202752}, "push_bytes_by_col": [270400, 270400, 270400, 0], "bd_bytes_by_col": [270400, 270400, 270400, 270400], "repeats": 0, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 64, "name": "model_18_m_0_cv1_act_Mul_output_0_DequantizeLinear_Output_vaip_594", "shim_mm2s": 657600, "shim_s2mm": 153600, "unresolved": 0, "mm2s_by_tag": {"0x1000": 454848, "0x3000": 202752}, "push_bytes_by_col": [270400, 270400, 270400, 0], "bd_bytes_by_col": [270400, 270400, 270400, 270400], "repeats": 0, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 65, "name": "model_18_m_0_cv2_act_Mul_output_0_DequantizeLinear_Output_vaip_602", "shim_mm2s": 614592, "shim_s2mm": 153600, "unresolved": 0, "mm2s_by_tag": {"0x1000": 153792, "0x3000": 460800}, "push_bytes_by_col": [256064, 256064, 256064, 0], "bd_bytes_by_col": [153664, 153664, 153664, 153664], "repeats": 9, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 66, "name": "model_18_Split_output_0_DequantizeLinear_Output_vaip_605", "shim_mm2s": 768192, "shim_s2mm": 307200, "unresolved": 0, "mm2s_by_tag": {"0x1000": 307392, "0x3000": 460800}, "push_bytes_by_col": [358464, 358464, 358464, 0], "bd_bytes_by_col": [358464, 358464, 358464, 358464], "repeats": 0, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 67, "name": "model_18_cv2_act_Mul_output_0_DequantizeLinear_Output_duplicated_token_14_vaip_683", "shim_mm2s": 1450176, "shim_s2mm": 153600, "unresolved": 0, "mm2s_by_tag": {"0x1000": 934080, "0x3000": 516096}, "push_bytes_by_col": [534592, 534592, 534592, 0], "bd_bytes_by_col": [422976, 422976, 422976, 422976], "repeats": 9, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 68, "name": "model_22_cv3_1_cv3_1_0_act_Mul_output_0_DequantizeLinear_Output_vaip_691", "shim_mm2s": 657600, "shim_s2mm": 153600, "unresolved": 0, "mm2s_by_tag": {"0x1000": 454848, "0x3000": 202752}, "push_bytes_by_col": [270400, 270400, 270400, 0], "bd_bytes_by_col": [270400, 270400, 270400, 270400], "repeats": 0, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 69, "name": "model_22_cv3_1_cv3_1_1_act_Mul_output_0_DequantizeLinear_Output_vaip_699", "shim_mm2s": 185472, "shim_s2mm": 96000, "unresolved": 0, "mm2s_by_tag": {"0x1000": 31872, "0x3000": 153600}, "push_bytes_by_col": [93824, 93824, 93824, 0], "bd_bytes_by_col": [93824, 93824, 93824, 93824], "repeats": 0, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 70, "name": "model_22_cv3_1_cv3_1_2_Conv_output_0_vaip_700", "shim_mm2s": 96192, "shim_s2mm": 96000, "unresolved": 0, "mm2s_by_tag": {"0x1000": 192, "0x3000": 96000}, "push_bytes_by_col": [64064, 64064, 64064, 0], "bd_bytes_by_col": [6464, 6464, 6464, 6464], "repeats": 81, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 71, "name": "model_22_cv3_1_cv3_1_2_Conv_output_0_download_0", "shim_mm2s": 860352, "shim_s2mm": 76800, "unresolved": 0, "mm2s_by_tag": {"0x1000": 454848, "0x3000": 405504}, "push_bytes_by_col": [312384, 312384, 312384, 0], "bd_bytes_by_col": [312384, 312384, 312384, 312384], "repeats": 0, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 72, "name": "model_22_cv2_1_cv2_1_0_act_Mul_output_0_DequantizeLinear_Output_vaip_745", "shim_mm2s": 215232, "shim_s2mm": 76800, "unresolved": 0, "mm2s_by_tag": {"0x1000": 113856, "0x3000": 101376}, "push_bytes_by_col": [97344, 97344, 97344, 0], "bd_bytes_by_col": [97344, 97344, 97344, 97344], "repeats": 0, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 73, "name": "model_22_cv2_1_cv2_1_1_act_Mul_output_0_DequantizeLinear_Output_vaip_753", "shim_mm2s": 90048, "shim_s2mm": 76800, "unresolved": 0, "mm2s_by_tag": {"0x1000": 13248, "0x3000": 76800}, "push_bytes_by_col": [55616, 55616, 55616, 0], "bd_bytes_by_col": [55616, 55616, 55616, 55616], "repeats": 0, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 74, "name": "model_22_cv2_1_cv2_1_2_Conv_output_0_vaip_754", "shim_mm2s": 76992, "shim_s2mm": 76800, "unresolved": 0, "mm2s_by_tag": {"0x1000": 192, "0x3000": 76800}, "push_bytes_by_col": [51264, 51264, 51264, 0], "bd_bytes_by_col": [5184, 5184, 5184, 5184], "repeats": 81, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 75, "name": "model_22_cv2_1_cv2_1_2_Conv_output_0_download_0", "shim_mm2s": 2771136, "shim_s2mm": 92160, "unresolved": 0, "mm2s_by_tag": {"0x1000": 1867968, "0x3000": 903168}, "push_bytes_by_col": [954432, 954432, 954432, 0], "bd_bytes_by_col": [788544, 788544, 788544, 788544], "repeats": 6, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 76, "name": "model_19_act_Mul_output_0_DequantizeLinear_Output_vaip_623", "shim_mm2s": 857280, "shim_s2mm": 76800, "unresolved": 0, "mm2s_by_tag": {"0x1000": 626880, "0x3000": 230400}, "push_bytes_by_col": [311360, 311360, 311360, 0], "bd_bytes_by_col": [311360, 311360, 311360, 311360], "repeats": 0, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 77, "name": "model_21_Split_output_1_DequantizeLinear_Output_duplicated_vaip_635", "shim_mm2s": 2126016, "shim_s2mm": 76800, "unresolved": 0, "mm2s_by_tag": {"0x1000": 1867968, "0x3000": 258048}, "push_bytes_by_col": [734272, 734272, 734272, 0], "bd_bytes_by_col": [691264, 691264, 691264, 691264], "repeats": 0, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 78, "name": "model_21_m_0_cv1_act_Mul_output_0_DequantizeLinear_Output_vaip_644", "shim_mm2s": 2126016, "shim_s2mm": 76800, "unresolved": 0, "mm2s_by_tag": {"0x1000": 1867968, "0x3000": 258048}, "push_bytes_by_col": [734272, 734272, 734272, 0], "bd_bytes_by_col": [691264, 691264, 691264, 691264], "repeats": 0, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 79, "name": "model_21_m_0_cv2_act_Mul_output_0_DequantizeLinear_Output_vaip_652", "shim_mm2s": 857280, "shim_s2mm": 76800, "unresolved": 0, "mm2s_by_tag": {"0x1000": 626880, "0x3000": 230400}, "push_bytes_by_col": [311360, 311360, 311360, 0], "bd_bytes_by_col": [311360, 311360, 311360, 311360], "repeats": 0, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 80, "name": "model_21_Split_output_0_DequantizeLinear_Output_vaip_655", "shim_mm2s": 1714368, "shim_s2mm": 153600, "unresolved": 0, "mm2s_by_tag": {"0x1000": 1253568, "0x3000": 460800}, "push_bytes_by_col": [622656, 622656, 622656, 0], "bd_bytes_by_col": [545856, 545856, 545856, 545856], "repeats": 0, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 81, "name": "model_21_cv2_act_Mul_output_0_DequantizeLinear_Output_duplicated_vaip_665", "shim_mm2s": 1208448, "shim_s2mm": 61440, "unresolved": 0, "mm2s_by_tag": {"0x1000": 622720, "0x3000": 585728}, "push_bytes_by_col": [634944, 634944, 0, 0], "bd_bytes_by_col": [401472, 401472, 0, 0], "repeats": 12, "same_across_columns": {"0x1000": false, "0x3000": true}}
+SEGMENT {"segment": 82, "name": "model_22_cv3_2_cv3_2_0_act_Mul_output_0_DequantizeLinear_Output_vaip_673", "shim_mm2s": 531648, "shim_s2mm": 38400, "unresolved": 0, "mm2s_by_tag": {"0x1000": 467136, "0x3000": 64512}, "push_bytes_by_col": [190016, 190016, 190016, 0], "bd_bytes_by_col": [190016, 190016, 190016, 190016], "repeats": 0, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 83, "name": "model_22_cv3_2_cv3_2_1_act_Mul_output_0_DequantizeLinear_Output_vaip_681", "shim_mm2s": 70272, "shim_s2mm": 24000, "unresolved": 0, "mm2s_by_tag": {"0x1000": 31872, "0x3000": 38400}, "push_bytes_by_col": [31424, 31424, 31424, 0], "bd_bytes_by_col": [31424, 31424, 31424, 31424], "repeats": 0, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 84, "name": "model_22_cv3_2_cv3_2_2_Conv_output_0_vaip_682", "shim_mm2s": 24192, "shim_s2mm": 24000, "unresolved": 0, "mm2s_by_tag": {"0x1000": 192, "0x3000": 24000}, "push_bytes_by_col": [16064, 16064, 16064, 0], "bd_bytes_by_col": [3264, 3264, 3264, 3264], "repeats": 36, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 85, "name": "model_22_cv3_2_cv3_2_2_Conv_output_0_download_0", "shim_mm2s": 604224, "shim_s2mm": 30720, "unresolved": 0, "mm2s_by_tag": {"0x1000": 311360, "0x3000": 292864}, "push_bytes_by_col": [634944, 0, 0, 0], "bd_bytes_by_col": [401472, 0, 0, 0], "repeats": 6, "same_across_columns": {"0x1000": true, "0x3000": true}}
+SEGMENT {"segment": 86, "name": "model_22_cv2_2_cv2_2_0_act_Mul_output_0_DequantizeLinear_Output_vaip_727", "shim_mm2s": 146112, "shim_s2mm": 19200, "unresolved": 0, "mm2s_by_tag": {"0x1000": 113856, "0x3000": 32256}, "push_bytes_by_col": [55104, 55104, 55104, 0], "bd_bytes_by_col": [55104, 55104, 55104, 55104], "repeats": 0, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 87, "name": "model_22_cv2_2_cv2_2_1_act_Mul_output_0_DequantizeLinear_Output_vaip_735", "shim_mm2s": 32448, "shim_s2mm": 19200, "unresolved": 0, "mm2s_by_tag": {"0x1000": 13248, "0x3000": 19200}, "push_bytes_by_col": [17216, 17216, 17216, 0], "bd_bytes_by_col": [17216, 17216, 17216, 17216], "repeats": 0, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 88, "name": "model_22_cv2_2_cv2_2_2_Conv_output_0_vaip_736", "shim_mm2s": 19392, "shim_s2mm": 19200, "unresolved": 0, "mm2s_by_tag": {"0x1000": 192, "0x3000": 19200}, "push_bytes_by_col": [12864, 12864, 12864, 0], "bd_bytes_by_col": [2624, 2624, 2624, 2624], "repeats": 36, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 89, "name": "model_22_cv2_2_cv2_2_2_Conv_output_0_download_0", "shim_mm2s": 0, "shim_s2mm": 0, "unresolved": 0, "mm2s_by_tag": {}, "push_bytes_by_col": [0, 0, 0, 0], "bd_bytes_by_col": [0, 0, 0, 0], "repeats": 0, "same_across_columns": {}}
+
+## --totals, cmt (per segment; push-derived shim bytes cover columns 0-2 only, column 3 has no start-queue writes)
+[decode] scratch\b8\cache\cmt\compiled.0x800020500148acb.xmodel: mc_code 119676 B, CODE 1711072 B, 90 segments
+SEGMENT {"segment": 0, "name": "<prologue>", "shim_mm2s": 1228992, "shim_s2mm": 1228800, "unresolved": 0, "mm2s_by_tag": {"0x1000": 192, "0x0": 1228800}, "push_bytes_by_col": [819264, 819264, 819264, 0], "bd_bytes_by_col": [20544, 20544, 20544, 20544], "repeats": 351, "same_across_columns": {"0x1000": true, "0x0": false}}
+SEGMENT {"segment": 1, "name": "images_DequantizeLinear_Output_vaip_1", "shim_mm2s": 1280448, "shim_s2mm": 2457600, "unresolved": 0, "mm2s_by_tag": {"0x1000": 5184, "0x3000": 1275264}, "push_bytes_by_col": [1246016, 1246016, 1246016, 0], "bd_bytes_by_col": [157264, 157264, 157264, 157264], "repeats": 63, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 2, "name": "model_0_act_Mul_output_0_DequantizeLinear_Output_vaip_207", "shim_mm2s": 2908608, "shim_s2mm": 1228800, "unresolved": 0, "mm2s_by_tag": {"0x1000": 74688, "0x3000": 2833920}, "push_bytes_by_col": [1379136, 1379136, 1379136, 0], "bd_bytes_by_col": [92608, 92608, 92608, 92608], "repeats": 171, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 3, "name": "model_1_act_Mul_output_0_DequantizeLinear_Output_vaip_215", "shim_mm2s": 1235520, "shim_s2mm": 614400, "unresolved": 0, "mm2s_by_tag": {"0x1000": 6720, "0x3000": 1228800}, "push_bytes_by_col": [616640, 616640, 616640, 0], "bd_bytes_by_col": [79040, 79040, 79040, 79040], "repeats": 63, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 4, "name": "model_2_Split_output_1_DequantizeLinear_Output_duplicated_token_0_vaip_225", "shim_mm2s": 802368, "shim_s2mm": 614400, "unresolved": 0, "mm2s_by_tag": {"0x1000": 28224, "0x3000": 774144}, "push_bytes_by_col": [472256, 472256, 472256, 0], "bd_bytes_by_col": [67264, 67264, 67264, 67264], "repeats": 63, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 5, "name": "model_2_m_0_cv1_act_Mul_output_0_DequantizeLinear_Output_vaip_235", "shim_mm2s": 802368, "shim_s2mm": 614400, "unresolved": 0, "mm2s_by_tag": {"0x1000": 28224, "0x3000": 774144}, "push_bytes_by_col": [472256, 472256, 472256, 0], "bd_bytes_by_col": [67264, 67264, 67264, 67264], "repeats": 63, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 6, "name": "model_2_m_0_cv2_act_Mul_output_0_DequantizeLinear_Output_vaip_243", "shim_mm2s": 1290432, "shim_s2mm": 645120, "unresolved": 0, "mm2s_by_tag": {"0x1000": 192, "0x3000": 1290240}, "push_bytes_by_col": [645184, 645184, 645184, 0], "bd_bytes_by_col": [92224, 92224, 92224, 92224], "repeats": 54, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 7, "name": "model_2_m_0_Add_output_0_DequantizeLinear_Output_vaip_245", "shim_mm2s": 1235520, "shim_s2mm": 614400, "unresolved": 0, "mm2s_by_tag": {"0x1000": 6720, "0x3000": 1228800}, "push_bytes_by_col": [616640, 616640, 616640, 0], "bd_bytes_by_col": [79040, 79040, 79040, 79040], "repeats": 63, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 8, "name": "model_2_Split_output_0_DequantizeLinear_Output_vaip_248", "shim_mm2s": 1863360, "shim_s2mm": 1228800, "unresolved": 0, "mm2s_by_tag": {"0x1000": 20160, "0x3000": 1843200}, "push_bytes_by_col": [1030720, 1030720, 1030720, 0], "bd_bytes_by_col": [134720, 134720, 134720, 134720], "repeats": 63, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 9, "name": "model_2_cv2_act_Mul_output_0_DequantizeLinear_Output_vaip_258", "shim_mm2s": 2026176, "shim_s2mm": 737280, "unresolved": 0, "mm2s_by_tag": {"0x1000": 298176, "0x3000": 1728000}, "push_bytes_by_col": [921152, 921152, 921152, 0], "bd_bytes_by_col": [181568, 181568, 181568, 181568], "repeats": 81, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 10, "name": "model_3_act_Mul_output_0_DequantizeLinear_Output_vaip_266", "shim_mm2s": 670656, "shim_s2mm": 322560, "unresolved": 0, "mm2s_by_tag": {"0x1000": 25536, "0x3000": 645120}, "push_bytes_by_col": [331072, 331072, 331072, 0], "bd_bytes_by_col": [151872, 151872, 151872, 151872], "repeats": 18, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 11, "name": "model_4_Split_output_1_DequantizeLinear_Output_duplicated_token_2_vaip_296", "shim_mm2s": 535488, "shim_s2mm": 322560, "unresolved": 0, "mm2s_by_tag": {"0x1000": 111552, "0x3000": 423936}, "push_bytes_by_col": [286016, 286016, 286016, 0], "bd_bytes_by_col": [99392, 99392, 99392, 99392], "repeats": 27, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 12, "name": "model_4_m_0_cv1_act_Mul_output_0_DequantizeLinear_Output_vaip_285", "shim_mm2s": 535488, "shim_s2mm": 322560, "unresolved": 0, "mm2s_by_tag": {"0x1000": 111552, "0x3000": 423936}, "push_bytes_by_col": [286016, 286016, 286016, 0], "bd_bytes_by_col": [99392, 99392, 99392, 99392], "repeats": 27, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 13, "name": "model_4_m_0_cv2_act_Mul_output_0_DequantizeLinear_Output_vaip_293", "shim_mm2s": 737472, "shim_s2mm": 368640, "unresolved": 0, "mm2s_by_tag": {"0x1000": 192, "0x3000": 737280}, "push_bytes_by_col": [368704, 368704, 368704, 0], "bd_bytes_by_col": [184384, 184384, 184384, 184384], "repeats": 9, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 14, "name": "model_4_m_0_Add_output_0_DequantizeLinear_Output_duplicated_token_4_vaip_295", "shim_mm2s": 535488, "shim_s2mm": 322560, "unresolved": 0, "mm2s_by_tag": {"0x1000": 111552, "0x3000": 423936}, "push_bytes_by_col": [286016, 286016, 286016, 0], "bd_bytes_by_col": [99392, 99392, 99392, 99392], "repeats": 27, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 15, "name": "model_4_m_1_cv1_act_Mul_output_0_DequantizeLinear_Output_vaip_306", "shim_mm2s": 535488, "shim_s2mm": 322560, "unresolved": 0, "mm2s_by_tag": {"0x1000": 111552, "0x3000": 423936}, "push_bytes_by_col": [286016, 286016, 286016, 0], "bd_bytes_by_col": [99392, 99392, 99392, 99392], "repeats": 27, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 16, "name": "model_4_m_1_cv2_act_Mul_output_0_DequantizeLinear_Output_vaip_314", "shim_mm2s": 737472, "shim_s2mm": 368640, "unresolved": 0, "mm2s_by_tag": {"0x1000": 192, "0x3000": 737280}, "push_bytes_by_col": [368704, 368704, 368704, 0], "bd_bytes_by_col": [184384, 184384, 184384, 184384], "repeats": 9, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 17, "name": "model_4_m_1_Add_output_0_DequantizeLinear_Output_vaip_316", "shim_mm2s": 670656, "shim_s2mm": 322560, "unresolved": 0, "mm2s_by_tag": {"0x1000": 25536, "0x3000": 645120}, "push_bytes_by_col": [331072, 331072, 331072, 0], "bd_bytes_by_col": [151872, 151872, 151872, 151872], "repeats": 18, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 18, "name": "model_4_Split_output_0_DequantizeLinear_Output_vaip_319", "shim_mm2s": 1391808, "shim_s2mm": 645120, "unresolved": 0, "mm2s_by_tag": {"0x1000": 101568, "0x3000": 1290240}, "push_bytes_by_col": [678976, 678976, 678976, 0], "bd_bytes_by_col": [98368, 98368, 98368, 98368], "repeats": 81, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 19, "name": "model_4_cv2_act_Mul_output_0_DequantizeLinear_Output_duplicated_vaip_521", "shim_mm2s": 128258304, "shim_s2mm": 35206400, "unresolved": 0, "mm2s_by_tag": {"0x1000": 56340480, "0x3000": 71917824}, "push_bytes_by_col": [81547264, 81249792, 667648, 0], "bd_bytes_by_col": [45947904, 45674496, 672832, 0], "repeats": 3861, "same_across_columns": {"0x1000": false, "0x3000": false}}
+SEGMENT {"segment": 20, "name": "model_5_act_Mul_output_0_DequantizeLinear_Output_vaip_337", "shim_mm2s": 408768, "shim_s2mm": 153600, "unresolved": 0, "mm2s_by_tag": {"0x1000": 101568, "0x3000": 307200}, "push_bytes_by_col": [187456, 187456, 187456, 0], "bd_bytes_by_col": [110656, 110656, 110656, 110656], "repeats": 12, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 21, "name": "model_6_Split_output_1_DequantizeLinear_Output_duplicated_token_6_vaip_367", "shim_mm2s": 666816, "shim_s2mm": 153600, "unresolved": 0, "mm2s_by_tag": {"0x1000": 445632, "0x3000": 221184}, "push_bytes_by_col": [273472, 273472, 273472, 0], "bd_bytes_by_col": [211008, 211008, 211008, 211008], "repeats": 9, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 22, "name": "model_6_m_0_cv1_act_Mul_output_0_DequantizeLinear_Output_vaip_356", "shim_mm2s": 666816, "shim_s2mm": 153600, "unresolved": 0, "mm2s_by_tag": {"0x1000": 445632, "0x3000": 221184}, "push_bytes_by_col": [273472, 273472, 273472, 0], "bd_bytes_by_col": [211008, 211008, 211008, 211008], "repeats": 9, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 23, "name": "model_6_m_0_cv2_act_Mul_output_0_DequantizeLinear_Output_vaip_364", "shim_mm2s": 307392, "shim_s2mm": 153600, "unresolved": 0, "mm2s_by_tag": {"0x1000": 192, "0x3000": 307200}, "push_bytes_by_col": [153664, 153664, 153664, 0], "bd_bytes_by_col": [153664, 153664, 153664, 153664], "repeats": 0, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 24, "name": "model_6_m_0_Add_output_0_DequantizeLinear_Output_duplicated_token_8_vaip_366", "shim_mm2s": 666816, "shim_s2mm": 153600, "unresolved": 0, "mm2s_by_tag": {"0x1000": 445632, "0x3000": 221184}, "push_bytes_by_col": [273472, 273472, 273472, 0], "bd_bytes_by_col": [211008, 211008, 211008, 211008], "repeats": 9, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 25, "name": "model_6_m_1_cv1_act_Mul_output_0_DequantizeLinear_Output_vaip_377", "shim_mm2s": 666816, "shim_s2mm": 153600, "unresolved": 0, "mm2s_by_tag": {"0x1000": 445632, "0x3000": 221184}, "push_bytes_by_col": [273472, 273472, 273472, 0], "bd_bytes_by_col": [211008, 211008, 211008, 211008], "repeats": 9, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 26, "name": "model_6_m_1_cv2_act_Mul_output_0_DequantizeLinear_Output_vaip_385", "shim_mm2s": 307392, "shim_s2mm": 153600, "unresolved": 0, "mm2s_by_tag": {"0x1000": 192, "0x3000": 307200}, "push_bytes_by_col": [153664, 153664, 153664, 0], "bd_bytes_by_col": [153664, 153664, 153664, 153664], "repeats": 0, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 27, "name": "model_6_m_1_Add_output_0_DequantizeLinear_Output_vaip_387", "shim_mm2s": 408768, "shim_s2mm": 153600, "unresolved": 0, "mm2s_by_tag": {"0x1000": 101568, "0x3000": 307200}, "push_bytes_by_col": [187456, 187456, 187456, 0], "bd_bytes_by_col": [110656, 110656, 110656, 110656], "repeats": 12, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 28, "name": "model_6_Split_output_0_DequantizeLinear_Output_vaip_390", "shim_mm2s": 1020096, "shim_s2mm": 307200, "unresolved": 0, "mm2s_by_tag": {"0x1000": 405696, "0x3000": 614400}, "push_bytes_by_col": [442432, 442432, 442432, 0], "bd_bytes_by_col": [288832, 288832, 288832, 288832], "repeats": 12, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 29, "name": "model_6_cv2_act_Mul_output_0_DequantizeLinear_Output_duplicated_vaip_476", "shim_mm2s": 5902272, "shim_s2mm": 153600, "unresolved": 0, "mm2s_by_tag": {"0x1000": 4485312, "0x3000": 1416960}, "push_bytes_by_col": [2018624, 2018624, 2018624, 0], "bd_bytes_by_col": [647488, 647488, 647488, 647488], "repeats": 105, "same_across_columns": {"0x1000": false, "0x3000": true}}
+SEGMENT {"segment": 30, "name": "model_7_act_Mul_output_0_DequantizeLinear_Output_vaip_408", "shim_mm2s": 559296, "shim_s2mm": 76800, "unresolved": 0, "mm2s_by_tag": {"0x1000": 405696, "0x3000": 153600}, "push_bytes_by_col": [212032, 212032, 212032, 0], "bd_bytes_by_col": [212032, 212032, 212032, 212032], "repeats": 0, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 31, "name": "model_8_Split_output_1_DequantizeLinear_Output_duplicated_token_10_vaip_418", "shim_mm2s": 1376448, "shim_s2mm": 92160, "unresolved": 0, "mm2s_by_tag": {"0x1000": 897216, "0x3000": 479232}, "push_bytes_by_col": [489536, 489536, 489536, 0], "bd_bytes_by_col": [265280, 265280, 265280, 265280], "repeats": 36, "same_across_columns": {"0x1000": false, "0x3000": true}}
+SEGMENT {"segment": 32, "name": "model_8_m_0_cv1_act_Mul_output_0_DequantizeLinear_Output_vaip_428", "shim_mm2s": 1376448, "shim_s2mm": 92160, "unresolved": 0, "mm2s_by_tag": {"0x1000": 897216, "0x3000": 479232}, "push_bytes_by_col": [489536, 489536, 489536, 0], "bd_bytes_by_col": [265280, 265280, 265280, 265280], "repeats": 36, "same_across_columns": {"0x1000": false, "0x3000": true}}
+SEGMENT {"segment": 33, "name": "model_8_m_0_cv2_act_Mul_output_0_DequantizeLinear_Output_vaip_436", "shim_mm2s": 153792, "shim_s2mm": 76800, "unresolved": 0, "mm2s_by_tag": {"0x1000": 192, "0x3000": 153600}, "push_bytes_by_col": [76864, 76864, 76864, 0], "bd_bytes_by_col": [76864, 76864, 76864, 76864], "repeats": 0, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 34, "name": "model_8_m_0_Add_output_0_DequantizeLinear_Output_vaip_438", "shim_mm2s": 559296, "shim_s2mm": 76800, "unresolved": 0, "mm2s_by_tag": {"0x1000": 405696, "0x3000": 153600}, "push_bytes_by_col": [212032, 212032, 212032, 0], "bd_bytes_by_col": [212032, 212032, 212032, 212032], "repeats": 0, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 35, "name": "model_8_Split_output_0_DequantizeLinear_Output_vaip_441", "shim_mm2s": 1665216, "shim_s2mm": 153600, "unresolved": 0, "mm2s_by_tag": {"0x1000": 1204416, "0x3000": 460800}, "push_bytes_by_col": [606272, 606272, 606272, 0], "bd_bytes_by_col": [529472, 529472, 529472, 529472], "repeats": 0, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 36, "name": "model_8_cv2_act_Mul_output_0_DequantizeLinear_Output_vaip_451", "shim_mm2s": 559296, "shim_s2mm": 76800, "unresolved": 0, "mm2s_by_tag": {"0x1000": 405696, "0x3000": 153600}, "push_bytes_by_col": [212032, 212032, 212032, 0], "bd_bytes_by_col": [212032, 212032, 212032, 212032], "repeats": 0, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 37, "name": "model_9_cv1_act_Mul_output_0_DequantizeLinear_Output_duplicated_vaip_463", "shim_mm2s": 166080, "shim_s2mm": 76800, "unresolved": 0, "mm2s_by_tag": {"0x1000": 192, "0x3000": 165888}, "push_bytes_by_col": [80960, 80960, 80960, 0], "bd_bytes_by_col": [80960, 80960, 80960, 80960], "repeats": 0, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 38, "name": "model_9_m_MaxPool_output_0_DequantizeLinear_Output_duplicated_vaip_462", "shim_mm2s": 166080, "shim_s2mm": 76800, "unresolved": 0, "mm2s_by_tag": {"0x1000": 192, "0x3000": 165888}, "push_bytes_by_col": [80960, 80960, 80960, 0], "bd_bytes_by_col": [80960, 80960, 80960, 80960], "repeats": 0, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 39, "name": "model_9_m_1_MaxPool_output_0_DequantizeLinear_Output_duplicated_vaip_461", "shim_mm2s": 166080, "shim_s2mm": 76800, "unresolved": 0, "mm2s_by_tag": {"0x1000": 192, "0x3000": 165888}, "push_bytes_by_col": [80960, 80960, 80960, 0], "bd_bytes_by_col": [80960, 80960, 80960, 80960], "repeats": 0, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 40, "name": "model_9_m_2_MaxPool_output_0_DequantizeLinear_Output_vaip_465", "shim_mm2s": 2728128, "shim_s2mm": 184320, "unresolved": 0, "mm2s_by_tag": {"0x1000": 1253568, "0x3000": 1474560}, "push_bytes_by_col": [970816, 970816, 970816, 0], "bd_bytes_by_col": [622656, 622656, 622656, 622656], "repeats": 54, "same_across_columns": {"0x1000": false, "0x3000": true}}
+SEGMENT {"segment": 41, "name": "model_9_cv2_act_Mul_output_0_DequantizeLinear_Output_duplicated_vaip_475", "shim_mm2s": 983040, "shim_s2mm": 983040, "unresolved": 0, "mm2s_by_tag": {"0x3000": 983040}, "push_bytes_by_col": [655360, 655360, 655360, 0], "bd_bytes_by_col": [327680, 327680, 327680, 327680], "repeats": 48, "same_across_columns": {"0x3000": false}}
+SEGMENT {"segment": 42, "name": "model_10_Resize_output_0_DequantizeLinear_Output_vaip_478", "shim_mm2s": 146489472, "shim_s2mm": 39052800, "unresolved": 0, "mm2s_by_tag": {"0x1000": 66475392, "0x3000": 80014080}, "push_bytes_by_col": [62229440, 61847424, 61465408, 0], "bd_bytes_by_col": [36663232, 36383616, 36104000, 279616], "repeats": 5109, "same_across_columns": {"0x1000": true, "0x3000": true}}
+SEGMENT {"segment": 43, "name": "model_12_Split_output_1_DequantizeLinear_Output_duplicated_vaip_490", "shim_mm2s": 666816, "shim_s2mm": 153600, "unresolved": 0, "mm2s_by_tag": {"0x1000": 445632, "0x3000": 221184}, "push_bytes_by_col": [273472, 273472, 273472, 0], "bd_bytes_by_col": [211008, 211008, 211008, 211008], "repeats": 9, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 44, "name": "model_12_m_0_cv1_act_Mul_output_0_DequantizeLinear_Output_vaip_499", "shim_mm2s": 666816, "shim_s2mm": 153600, "unresolved": 0, "mm2s_by_tag": {"0x1000": 445632, "0x3000": 221184}, "push_bytes_by_col": [273472, 273472, 273472, 0], "bd_bytes_by_col": [211008, 211008, 211008, 211008], "repeats": 9, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 45, "name": "model_12_m_0_cv2_act_Mul_output_0_DequantizeLinear_Output_vaip_507", "shim_mm2s": 137185152, "shim_s2mm": 37209600, "unresolved": 0, "mm2s_by_tag": {"0x1000": 61705344, "0x3000": 75479808}, "push_bytes_by_col": [58513600, 58131584, 57749568, 0], "bd_bytes_by_col": [33856704, 33577088, 33297472, 279616], "repeats": 4977, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 46, "name": "model_12_Split_output_0_DequantizeLinear_Output_vaip_510", "shim_mm2s": 762048, "shim_s2mm": 307200, "unresolved": 0, "mm2s_by_tag": {"0x1000": 301248, "0x3000": 460800}, "push_bytes_by_col": [356416, 356416, 356416, 0], "bd_bytes_by_col": [228416, 228416, 228416, 228416], "repeats": 12, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 47, "name": "model_12_cv2_act_Mul_output_0_DequantizeLinear_Output_duplicated_vaip_520", "shim_mm2s": 1228800, "shim_s2mm": 1228800, "unresolved": 0, "mm2s_by_tag": {"0x3000": 1228800}, "push_bytes_by_col": [819200, 819200, 819200, 0], "bd_bytes_by_col": [409600, 409600, 409600, 409600], "repeats": 24, "same_across_columns": {"0x3000": false}}
+SEGMENT {"segment": 48, "name": "model_13_Resize_output_0_DequantizeLinear_Output_vaip_523", "shim_mm2s": 125443200, "shim_s2mm": 30443520, "unresolved": 0, "mm2s_by_tag": {"0x1000": 59521152, "0x3000": 65922048}, "push_bytes_by_col": [52283072, 51962240, 51641408, 0], "bd_bytes_by_col": [30186176, 30035584, 29884992, 150592], "repeats": 4758, "same_across_columns": {"0x1000": true, "0x3000": true}}
+SEGMENT {"segment": 49, "name": "model_15_Split_output_1_DequantizeLinear_Output_duplicated_vaip_535", "shim_mm2s": 535488, "shim_s2mm": 322560, "unresolved": 0, "mm2s_by_tag": {"0x1000": 111552, "0x3000": 423936}, "push_bytes_by_col": [286016, 286016, 286016, 0], "bd_bytes_by_col": [99392, 99392, 99392, 99392], "repeats": 27, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 50, "name": "model_15_m_0_cv1_act_Mul_output_0_DequantizeLinear_Output_vaip_544", "shim_mm2s": 535488, "shim_s2mm": 322560, "unresolved": 0, "mm2s_by_tag": {"0x1000": 111552, "0x3000": 423936}, "push_bytes_by_col": [286016, 286016, 286016, 0], "bd_bytes_by_col": [99392, 99392, 99392, 99392], "repeats": 27, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 51, "name": "model_15_m_0_cv2_act_Mul_output_0_DequantizeLinear_Output_vaip_552", "shim_mm2s": 117954432, "shim_s2mm": 27217920, "unresolved": 0, "mm2s_by_tag": {"0x1000": 58326912, "0x3000": 59627520}, "push_bytes_by_col": [48711616, 48390784, 48069952, 0], "bd_bytes_by_col": [28788672, 28638080, 28487488, 150592], "repeats": 4422, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 52, "name": "model_15_Split_output_0_DequantizeLinear_Output_vaip_555", "shim_mm2s": 1043136, "shim_s2mm": 645120, "unresolved": 0, "mm2s_by_tag": {"0x1000": 75456, "0x3000": 967680}, "push_bytes_by_col": [562752, 562752, 562752, 0], "bd_bytes_by_col": [78912, 78912, 78912, 78912], "repeats": 81, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 53, "name": "model_15_cv2_act_Mul_output_0_DequantizeLinear_Output_duplicated_token_12_vaip_701", "shim_mm2s": 1293504, "shim_s2mm": 645120, "unresolved": 0, "mm2s_by_tag": {"0x1000": 445632, "0x3000": 847872}, "push_bytes_by_col": [646208, 646208, 646208, 0], "bd_bytes_by_col": [272960, 272960, 272960, 272960], "repeats": 27, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 54, "name": "model_22_cv3_0_cv3_0_0_act_Mul_output_0_DequantizeLinear_Output_vaip_709", "shim_mm2s": 1293504, "shim_s2mm": 645120, "unresolved": 0, "mm2s_by_tag": {"0x1000": 445632, "0x3000": 847872}, "push_bytes_by_col": [646208, 646208, 646208, 0], "bd_bytes_by_col": [272960, 272960, 272960, 272960], "repeats": 27, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 55, "name": "model_22_cv3_0_cv3_0_1_act_Mul_output_0_DequantizeLinear_Output_vaip_717", "shim_mm2s": 676992, "shim_s2mm": 403200, "unresolved": 0, "mm2s_by_tag": {"0x1000": 31872, "0x3000": 645120}, "push_bytes_by_col": [360064, 360064, 360064, 0], "bd_bytes_by_col": [185344, 185344, 185344, 185344], "repeats": 9, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 56, "name": "model_22_cv3_0_cv3_0_2_Conv_output_0_vaip_718", "shim_mm2s": 384192, "shim_s2mm": 384000, "unresolved": 0, "mm2s_by_tag": {"0x1000": 192, "0x3000": 384000}, "push_bytes_by_col": [256064, 256064, 256064, 0], "bd_bytes_by_col": [12864, 12864, 12864, 12864], "repeats": 171, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 57, "name": "model_22_cv3_0_cv3_0_2_Conv_output_0_download_0", "shim_mm2s": 1070784, "shim_s2mm": 322560, "unresolved": 0, "mm2s_by_tag": {"0x1000": 222912, "0x3000": 847872}, "push_bytes_by_col": [464448, 464448, 464448, 0], "bd_bytes_by_col": [171840, 171840, 171840, 171840], "repeats": 27, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 58, "name": "model_22_cv2_0_cv2_0_0_act_Mul_output_0_DequantizeLinear_Output_vaip_763", "shim_mm2s": 535488, "shim_s2mm": 322560, "unresolved": 0, "mm2s_by_tag": {"0x1000": 111552, "0x3000": 423936}, "push_bytes_by_col": [286016, 286016, 286016, 0], "bd_bytes_by_col": [99392, 99392, 99392, 99392], "repeats": 27, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 59, "name": "model_22_cv2_0_cv2_0_1_act_Mul_output_0_DequantizeLinear_Output_vaip_771", "shim_mm2s": 335808, "shim_s2mm": 322560, "unresolved": 0, "mm2s_by_tag": {"0x1000": 13248, "0x3000": 322560}, "push_bytes_by_col": [219456, 219456, 219456, 0], "bd_bytes_by_col": [58176, 58176, 58176, 58176], "repeats": 27, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 60, "name": "model_22_cv2_0_cv2_0_2_Conv_output_0_vaip_772", "shim_mm2s": 307392, "shim_s2mm": 307200, "unresolved": 0, "mm2s_by_tag": {"0x1000": 192, "0x3000": 307200}, "push_bytes_by_col": [204864, 204864, 204864, 0], "bd_bytes_by_col": [10304, 10304, 10304, 10304], "repeats": 171, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 61, "name": "model_22_cv2_0_cv2_0_2_Conv_output_0_download_0", "shim_mm2s": 1757376, "shim_s2mm": 245760, "unresolved": 0, "mm2s_by_tag": {"0x1000": 596160, "0x3000": 1161216}, "push_bytes_by_col": [667712, 667712, 667712, 0], "bd_bytes_by_col": [433216, 433216, 433216, 0], "repeats": 12, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 62, "name": "model_16_act_Mul_output_0_DequantizeLinear_Output_vaip_573", "shim_mm2s": 82019136, "shim_s2mm": 9853440, "unresolved": 0, "mm2s_by_tag": {"0x1000": 50774592, "0x3000": 31244544}, "push_bytes_by_col": [30840832, 30624192, 30407552, 0], "bd_bytes_by_col": [22235648, 22083008, 21930368, 152640], "repeats": 2013, "same_across_columns": {"0x1000": true, "0x3000": true}}
+SEGMENT {"segment": 63, "name": "model_18_Split_output_1_DequantizeLinear_Output_duplicated_vaip_585", "shim_mm2s": 666816, "shim_s2mm": 153600, "unresolved": 0, "mm2s_by_tag": {"0x1000": 445632, "0x3000": 221184}, "push_bytes_by_col": [273472, 273472, 273472, 0], "bd_bytes_by_col": [211008, 211008, 211008, 211008], "repeats": 9, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 64, "name": "model_18_m_0_cv1_act_Mul_output_0_DequantizeLinear_Output_vaip_594", "shim_mm2s": 666816, "shim_s2mm": 153600, "unresolved": 0, "mm2s_by_tag": {"0x1000": 445632, "0x3000": 221184}, "push_bytes_by_col": [273472, 273472, 273472, 0], "bd_bytes_by_col": [211008, 211008, 211008, 211008], "repeats": 9, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 65, "name": "model_18_m_0_cv2_act_Mul_output_0_DequantizeLinear_Output_vaip_602", "shim_mm2s": 74699328, "shim_s2mm": 8010240, "unresolved": 0, "mm2s_by_tag": {"0x1000": 46606656, "0x3000": 28092672}, "push_bytes_by_col": [27786496, 27569856, 27353216, 0], "bd_bytes_by_col": [19937024, 19784384, 19631744, 152640], "repeats": 1881, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 66, "name": "model_18_Split_output_0_DequantizeLinear_Output_vaip_605", "shim_mm2s": 762048, "shim_s2mm": 307200, "unresolved": 0, "mm2s_by_tag": {"0x1000": 301248, "0x3000": 460800}, "push_bytes_by_col": [356416, 356416, 356416, 0], "bd_bytes_by_col": [228416, 228416, 228416, 228416], "repeats": 9, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 67, "name": "model_18_cv2_act_Mul_output_0_DequantizeLinear_Output_duplicated_token_14_vaip_683", "shim_mm2s": 1775808, "shim_s2mm": 153600, "unresolved": 0, "mm2s_by_tag": {"0x1000": 891072, "0x3000": 884736}, "push_bytes_by_col": [643136, 643136, 643136, 0], "bd_bytes_by_col": [396352, 396352, 396352, 396352], "repeats": 18, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 68, "name": "model_22_cv3_1_cv3_1_0_act_Mul_output_0_DequantizeLinear_Output_vaip_691", "shim_mm2s": 666816, "shim_s2mm": 153600, "unresolved": 0, "mm2s_by_tag": {"0x1000": 445632, "0x3000": 221184}, "push_bytes_by_col": [273472, 273472, 273472, 0], "bd_bytes_by_col": [211008, 211008, 211008, 211008], "repeats": 9, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 69, "name": "model_22_cv3_1_cv3_1_1_act_Mul_output_0_DequantizeLinear_Output_vaip_699", "shim_mm2s": 185472, "shim_s2mm": 96000, "unresolved": 0, "mm2s_by_tag": {"0x1000": 31872, "0x3000": 153600}, "push_bytes_by_col": [93824, 93824, 93824, 0], "bd_bytes_by_col": [52224, 52224, 52224, 52224], "repeats": 9, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 70, "name": "model_22_cv3_1_cv3_1_2_Conv_output_0_vaip_700", "shim_mm2s": 96192, "shim_s2mm": 96000, "unresolved": 0, "mm2s_by_tag": {"0x1000": 192, "0x3000": 96000}, "push_bytes_by_col": [64064, 64064, 64064, 0], "bd_bytes_by_col": [6464, 6464, 6464, 6464], "repeats": 81, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 71, "name": "model_22_cv3_1_cv3_1_2_Conv_output_0_download_0", "shim_mm2s": 888000, "shim_s2mm": 76800, "unresolved": 0, "mm2s_by_tag": {"0x1000": 445632, "0x3000": 442368}, "push_bytes_by_col": [321600, 321600, 321600, 0], "bd_bytes_by_col": [235072, 235072, 235072, 235072], "repeats": 9, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 72, "name": "model_22_cv2_1_cv2_1_0_act_Mul_output_0_DequantizeLinear_Output_vaip_745", "shim_mm2s": 222144, "shim_s2mm": 76800, "unresolved": 0, "mm2s_by_tag": {"0x1000": 111552, "0x3000": 110592}, "push_bytes_by_col": [99648, 99648, 99648, 0], "bd_bytes_by_col": [68416, 68416, 68416, 68416], "repeats": 9, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 73, "name": "model_22_cv2_1_cv2_1_1_act_Mul_output_0_DequantizeLinear_Output_vaip_753", "shim_mm2s": 90048, "shim_s2mm": 76800, "unresolved": 0, "mm2s_by_tag": {"0x1000": 13248, "0x3000": 76800}, "push_bytes_by_col": [55616, 55616, 55616, 0], "bd_bytes_by_col": [30016, 30016, 30016, 30016], "repeats": 9, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 74, "name": "model_22_cv2_1_cv2_1_2_Conv_output_0_vaip_754", "shim_mm2s": 76992, "shim_s2mm": 76800, "unresolved": 0, "mm2s_by_tag": {"0x1000": 192, "0x3000": 76800}, "push_bytes_by_col": [51264, 51264, 51264, 0], "bd_bytes_by_col": [5184, 5184, 5184, 5184], "repeats": 81, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 75, "name": "model_22_cv2_1_cv2_1_2_Conv_output_0_download_0", "shim_mm2s": 3204288, "shim_s2mm": 76800, "unresolved": 0, "mm2s_by_tag": {"0x1000": 1818816, "0x3000": 1385472}, "push_bytes_by_col": [1093696, 1093696, 1093696, 0], "bd_bytes_by_col": [563264, 563264, 563264, 563264], "repeats": 72, "same_across_columns": {"0x1000": false, "0x3000": true}}
+SEGMENT {"segment": 76, "name": "model_19_act_Mul_output_0_DequantizeLinear_Output_vaip_623", "shim_mm2s": 832704, "shim_s2mm": 76800, "unresolved": 0, "mm2s_by_tag": {"0x1000": 602304, "0x3000": 230400}, "push_bytes_by_col": [303168, 303168, 303168, 0], "bd_bytes_by_col": [303168, 303168, 303168, 303168], "repeats": 0, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 77, "name": "model_21_Split_output_1_DequantizeLinear_Output_duplicated_vaip_635", "shim_mm2s": 1376448, "shim_s2mm": 92160, "unresolved": 0, "mm2s_by_tag": {"0x1000": 897216, "0x3000": 479232}, "push_bytes_by_col": [489536, 489536, 489536, 0], "bd_bytes_by_col": [265280, 265280, 265280, 265280], "repeats": 36, "same_across_columns": {"0x1000": false, "0x3000": true}}
+SEGMENT {"segment": 78, "name": "model_21_m_0_cv1_act_Mul_output_0_DequantizeLinear_Output_vaip_644", "shim_mm2s": 1376448, "shim_s2mm": 92160, "unresolved": 0, "mm2s_by_tag": {"0x1000": 897216, "0x3000": 479232}, "push_bytes_by_col": [489536, 489536, 489536, 0], "bd_bytes_by_col": [265280, 265280, 265280, 265280], "repeats": 36, "same_across_columns": {"0x1000": false, "0x3000": true}}
+SEGMENT {"segment": 79, "name": "model_21_m_0_cv2_act_Mul_output_0_DequantizeLinear_Output_vaip_652", "shim_mm2s": 832704, "shim_s2mm": 76800, "unresolved": 0, "mm2s_by_tag": {"0x1000": 602304, "0x3000": 230400}, "push_bytes_by_col": [303168, 303168, 303168, 0], "bd_bytes_by_col": [303168, 303168, 303168, 303168], "repeats": 0, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 80, "name": "model_21_Split_output_0_DequantizeLinear_Output_vaip_655", "shim_mm2s": 1665216, "shim_s2mm": 153600, "unresolved": 0, "mm2s_by_tag": {"0x1000": 1204416, "0x3000": 460800}, "push_bytes_by_col": [606272, 606272, 606272, 0], "bd_bytes_by_col": [529472, 529472, 529472, 529472], "repeats": 0, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 81, "name": "model_21_cv2_act_Mul_output_0_DequantizeLinear_Output_duplicated_vaip_665", "shim_mm2s": 2298048, "shim_s2mm": 38400, "unresolved": 0, "mm2s_by_tag": {"0x1000": 1781952, "0x3000": 516096}, "push_bytes_by_col": [778816, 778816, 778816, 0], "bd_bytes_by_col": [692800, 692800, 692800, 692800], "repeats": 0, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 82, "name": "model_22_cv3_2_cv3_2_0_act_Mul_output_0_DequantizeLinear_Output_vaip_673", "shim_mm2s": 510144, "shim_s2mm": 38400, "unresolved": 0, "mm2s_by_tag": {"0x1000": 445632, "0x3000": 64512}, "push_bytes_by_col": [182848, 182848, 182848, 0], "bd_bytes_by_col": [182848, 182848, 182848, 182848], "repeats": 0, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 83, "name": "model_22_cv3_2_cv3_2_1_act_Mul_output_0_DequantizeLinear_Output_vaip_681", "shim_mm2s": 70272, "shim_s2mm": 24000, "unresolved": 0, "mm2s_by_tag": {"0x1000": 31872, "0x3000": 38400}, "push_bytes_by_col": [31424, 31424, 31424, 0], "bd_bytes_by_col": [31424, 31424, 31424, 31424], "repeats": 0, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 84, "name": "model_22_cv3_2_cv3_2_2_Conv_output_0_vaip_682", "shim_mm2s": 24192, "shim_s2mm": 24000, "unresolved": 0, "mm2s_by_tag": {"0x1000": 192, "0x3000": 24000}, "push_bytes_by_col": [16064, 16064, 16064, 0], "bd_bytes_by_col": [3264, 3264, 3264, 3264], "repeats": 36, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 85, "name": "model_22_cv3_2_cv3_2_2_Conv_output_0_download_0", "shim_mm2s": 1149120, "shim_s2mm": 19200, "unresolved": 0, "mm2s_by_tag": {"0x1000": 891072, "0x3000": 258048}, "push_bytes_by_col": [389440, 389440, 389440, 0], "bd_bytes_by_col": [389440, 389440, 389440, 389440], "repeats": 0, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 86, "name": "model_22_cv2_2_cv2_2_0_act_Mul_output_0_DequantizeLinear_Output_vaip_727", "shim_mm2s": 143808, "shim_s2mm": 19200, "unresolved": 0, "mm2s_by_tag": {"0x1000": 111552, "0x3000": 32256}, "push_bytes_by_col": [54336, 54336, 54336, 0], "bd_bytes_by_col": [54336, 54336, 54336, 54336], "repeats": 0, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 87, "name": "model_22_cv2_2_cv2_2_1_act_Mul_output_0_DequantizeLinear_Output_vaip_735", "shim_mm2s": 36288, "shim_s2mm": 23040, "unresolved": 0, "mm2s_by_tag": {"0x1000": 13248, "0x3000": 23040}, "push_bytes_by_col": [19776, 19776, 19776, 0], "bd_bytes_by_col": [12096, 12096, 12096, 12096], "repeats": 9, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 88, "name": "model_22_cv2_2_cv2_2_2_Conv_output_0_vaip_736", "shim_mm2s": 19392, "shim_s2mm": 19200, "unresolved": 0, "mm2s_by_tag": {"0x1000": 192, "0x3000": 19200}, "push_bytes_by_col": [12864, 12864, 12864, 0], "bd_bytes_by_col": [2624, 2624, 2624, 2624], "repeats": 36, "same_across_columns": {"0x1000": true, "0x3000": false}}
+SEGMENT {"segment": 89, "name": "model_22_cv2_2_cv2_2_2_Conv_output_0_download_0", "shim_mm2s": 0, "shim_s2mm": 0, "unresolved": 0, "mm2s_by_tag": {}, "push_bytes_by_col": [0, 0, 0, 0], "bd_bytes_by_col": [0, 0, 0, 0], "repeats": 0, "same_across_columns": {}}
+
+## Join: segment -> AMD declared layer, exact on input (tag 0x3000) x 3/4, const (tag 0x1000) x 3/4, output x 3/4
+JOIN {"seg": 1, "layer": "subgraph_(/model.0/conv/Conv_output_0_vaip_3)", "type": "conv2d-fix", "in": 1700352, "const": 6912, "out": 3276800, "same": {"0x1000": true, "0x3000": false}, "repeats": 63}
+JOIN {"seg": 2, "layer": "subgraph_(/model.1/conv/Conv_output_0_vaip_6)", "type": "conv2d-fix", "in": 3483648, "const": 78080, "out": 1638400, "same": {"0x1000": true, "0x3000": false}, "repeats": 63}
+JOIN {"seg": 3, "layer": "subgraph_(/model.2/cv1/conv/Conv_output_0_vaip_9)_merge_(/model.2/Split_output_1_vaip_224)", "type": "conv2d-fix", "in": 1638400, "const": 8960, "out": 819200, "same": {"0x1000": true, "0x3000": false}, "repeats": 63}
+JOIN {"seg": 4, "layer": "subgraph_(/model.2/m.0/cv1/conv/Conv_output_0_vaip_12)", "type": "conv2d-fix", "in": 946176, "const": 38144, "out": 819200, "same": {"0x1000": true, "0x3000": false}, "repeats": 27}
+JOIN {"seg": 5, "layer": "subgraph_(/model.2/m.0/cv2/conv/Conv_output_0_vaip_15)", "type": "conv2d-fix", "in": 946176, "const": 38144, "out": 819200, "same": {"0x1000": true, "0x3000": false}, "repeats": 27}
+JOIN {"seg": 6, "layer": "subgraph_(/model.2/m.0/Add_output_0_vaip_244)", "type": "eltwise-fix", "in": 1720320, "const": 256, "out": 860160, "same": {"0x1000": true, "0x3000": false}, "repeats": 54}
+JOIN {"seg": 7, "layer": "subgraph_(/model.2/cv1/conv/Conv_output_0_vaip_9)_merge_(/model.2/Split_output_0_vaip_247)", "type": "conv2d-fix", "in": 1638400, "const": 8960, "out": 819200, "same": {"0x1000": true, "0x3000": false}, "repeats": 63}
+JOIN {"seg": 8, "layer": "subgraph_(/model.2/cv2/conv/Conv_output_0_vaip_18)", "type": "conv2d-fix", "in": 2457600, "const": 25856, "out": 1638400, "same": {"0x1000": true, "0x3000": false}, "repeats": 27}
+JOIN {"seg": 9, "layer": "subgraph_(/model.3/conv/Conv_output_0_vaip_21)", "type": "conv2d-fix", "in": 1763328, "const": 303360, "out": 819200, "same": {"0x1000": true, "0x3000": false}, "repeats": 27}
+JOIN {"seg": 10, "layer": "subgraph_(/model.4/cv1/conv/Conv_output_0_vaip_24)_merge_(/model.4/Split_output_1_vaip_275)", "type": "conv2d-fix", "in": 860160, "const": 34048, "out": 430080, "same": {"0x1000": true, "0x3000": false}, "repeats": 36}
+JOIN {"seg": 11, "layer": "subgraph_(/model.4/m.0/cv1/conv/Conv_output_0_vaip_27)", "type": "conv2d-fix", "in": 518144, "const": 155904, "out": 430080, "same": {"0x1000": true, "0x3000": false}, "repeats": 9}
+JOIN {"seg": 12, "layer": "subgraph_(/model.4/m.0/cv2/conv/Conv_output_0_vaip_30)", "type": "conv2d-fix", "in": 518144, "const": 155904, "out": 430080, "same": {"0x1000": true, "0x3000": false}, "repeats": 9}
+JOIN {"seg": 13, "layer": "subgraph_(/model.4/m.0/Add_output_0_vaip_294)", "type": "eltwise-fix", "in": 983040, "const": 256, "out": 491520, "same": {"0x1000": true, "0x3000": false}, "repeats": 9}
+JOIN {"seg": 14, "layer": "subgraph_(/model.4/m.1/cv1/conv/Conv_output_0_vaip_33)", "type": "conv2d-fix", "in": 518144, "const": 155904, "out": 430080, "same": {"0x1000": true, "0x3000": false}, "repeats": 9}
+JOIN {"seg": 15, "layer": "subgraph_(/model.4/m.1/cv2/conv/Conv_output_0_vaip_36)", "type": "conv2d-fix", "in": 518144, "const": 155904, "out": 430080, "same": {"0x1000": true, "0x3000": false}, "repeats": 9}
+JOIN {"seg": 16, "layer": "subgraph_(/model.4/m.1/Add_output_0_vaip_315)", "type": "eltwise-fix", "in": 983040, "const": 256, "out": 491520, "same": {"0x1000": true, "0x3000": false}, "repeats": 9}
+JOIN {"seg": 17, "layer": "subgraph_(/model.4/cv1/conv/Conv_output_0_vaip_24)_merge_(/model.4/Split_output_0_vaip_318)", "type": "conv2d-fix", "in": 860160, "const": 34048, "out": 430080, "same": {"0x1000": true, "0x3000": false}, "repeats": 36}
+JOIN {"seg": 18, "layer": "subgraph_(/model.4/cv2/conv/Conv_output_0_vaip_39)", "type": "conv2d-fix", "in": 1720320, "const": 139520, "out": 860160, "same": {"0x1000": true, "0x3000": false}, "repeats": 36}
+JOIN {"seg": 19, "layer": "subgraph_(/model.5/conv/Conv_output_0_vaip_42)", "type": "conv2d-fix", "in": 1152000, "const": 1245440, "out": 491520, "same": {"0x1000": true, "0x3000": false}, "repeats": 36}
+JOIN {"seg": 20, "layer": "subgraph_(/model.6/cv1/conv/Conv_output_0_vaip_45)_merge_(/model.6/Split_output_1_vaip_346)", "type": "conv2d-fix", "in": 409600, "const": 139520, "out": 204800, "same": {"0x1000": true, "0x3000": false}, "repeats": 3}
+JOIN {"seg": 21, "layer": "subgraph_(/model.6/m.0/cv1/conv/Conv_output_0_vaip_48)", "type": "conv2d-fix", "in": 270336, "const": 606464, "out": 204800, "same": {"0x1000": true, "0x3000": false}, "repeats": 0}
+JOIN {"seg": 22, "layer": "subgraph_(/model.6/m.0/cv2/conv/Conv_output_0_vaip_51)", "type": "conv2d-fix", "in": 270336, "const": 606464, "out": 204800, "same": {"0x1000": true, "0x3000": false}, "repeats": 0}
+JOIN {"seg": 23, "layer": "subgraph_(/model.6/m.0/Add_output_0_vaip_365)", "type": "eltwise-fix", "in": 409600, "const": 256, "out": 204800, "same": {"0x1000": true, "0x3000": false}, "repeats": 0}
+JOIN {"seg": 24, "layer": "subgraph_(/model.6/m.1/cv1/conv/Conv_output_0_vaip_54)", "type": "conv2d-fix", "in": 270336, "const": 606464, "out": 204800, "same": {"0x1000": true, "0x3000": false}, "repeats": 0}
+JOIN {"seg": 25, "layer": "subgraph_(/model.6/m.1/cv2/conv/Conv_output_0_vaip_57)", "type": "conv2d-fix", "in": 270336, "const": 606464, "out": 204800, "same": {"0x1000": true, "0x3000": false}, "repeats": 0}
+JOIN {"seg": 26, "layer": "subgraph_(/model.6/m.1/Add_output_0_vaip_386)", "type": "eltwise-fix", "in": 409600, "const": 256, "out": 204800, "same": {"0x1000": true, "0x3000": false}, "repeats": 0}
+JOIN {"seg": 27, "layer": "subgraph_(/model.6/cv1/conv/Conv_output_0_vaip_45)_merge_(/model.6/Split_output_0_vaip_389)", "type": "conv2d-fix", "in": 409600, "const": 139520, "out": 204800, "same": {"0x1000": true, "0x3000": false}, "repeats": 3}
+JOIN {"seg": 28, "layer": "subgraph_(/model.6/cv2/conv/Conv_output_0_vaip_60)", "type": "conv2d-fix", "in": 819200, "const": 557312, "out": 409600, "same": {"0x1000": true, "0x3000": false}, "repeats": 3}
+JOIN {"seg": 29, "layer": "subgraph_(/model.7/conv/Conv_output_0_vaip_63)", "type": "conv2d-fix", "in": 4472832, "const": 4849920, "out": 245760, "same": {"0x1000": true, "0x3000": false}, "repeats": 0}
+JOIN {"seg": 30, "layer": "subgraph_(/model.8/cv1/conv/Conv_output_0_vaip_66)_merge_(/model.8/Split_output_1_vaip_417)", "type": "conv2d-fix", "in": 204800, "const": 557312, "out": 102400, "same": {"0x1000": true, "0x3000": false}, "repeats": 0}
+JOIN {"seg": 31, "layer": "subgraph_(/model.8/m.0/cv1/conv/Conv_output_0_vaip_69)", "type": "conv2d-fix", "in": 344064, "const": 2490624, "out": 102400, "same": {"0x1000": true, "0x3000": false}, "repeats": 0}
+JOIN {"seg": 32, "layer": "subgraph_(/model.8/m.0/cv2/conv/Conv_output_0_vaip_72)", "type": "conv2d-fix", "in": 344064, "const": 2490624, "out": 102400, "same": {"0x1000": true, "0x3000": false}, "repeats": 0}
+JOIN {"seg": 33, "layer": "subgraph_(/model.8/m.0/Add_output_0_vaip_437)", "type": "eltwise-fix", "in": 204800, "const": 256, "out": 102400, "same": {"0x1000": true, "0x3000": false}, "repeats": 0}
+JOIN {"seg": 34, "layer": "subgraph_(/model.8/cv1/conv/Conv_output_0_vaip_66)_merge_(/model.8/Split_output_0_vaip_440)", "type": "conv2d-fix", "in": 204800, "const": 557312, "out": 102400, "same": {"0x1000": true, "0x3000": false}, "repeats": 0}
+JOIN {"seg": 35, "layer": "subgraph_(/model.8/cv2/conv/Conv_output_0_vaip_75)", "type": "conv2d-fix", "in": 614400, "const": 1671424, "out": 204800, "same": {"0x1000": true, "0x3000": false}, "repeats": 0}
+JOIN {"seg": 36, "layer": "subgraph_(/model.9/cv1/conv/Conv_output_0_vaip_78)", "type": "conv2d-fix", "in": 204800, "const": 557312, "out": 102400, "same": {"0x1000": true, "0x3000": false}, "repeats": 0}
+JOIN {"seg": 37, "layer": "subgraph_(/model.9/m/MaxPool_output_0_DequantizeLinear_Output/duplicated_vaip_462)", "type": "pool-fix", "in": 221184, "const": 256, "out": 102400, "same": {"0x1000": true, "0x3000": false}, "repeats": 0}
+JOIN {"seg": 38, "layer": "subgraph_(/model.9/m_1/MaxPool_output_0_DequantizeLinear_Output/duplicated_vaip_461)", "type": "pool-fix", "in": 221184, "const": 256, "out": 102400, "same": {"0x1000": true, "0x3000": false}, "repeats": 0}
+JOIN {"seg": 39, "layer": "subgraph_(/model.9/m_2/MaxPool_output_0_DequantizeLinear_Output_vaip_465)", "type": "pool-fix", "in": 221184, "const": 256, "out": 102400, "same": {"0x1000": true, "0x3000": false}, "repeats": 0}
+JOIN {"seg": 40, "layer": "subgraph_(/model.9/cv2/conv/Conv_output_0_vaip_87)", "type": "conv2d-fix", "in": 1638400, "const": 2228480, "out": 204800, "same": {"0x1000": true, "0x3000": false}, "repeats": 0}
+JOIN {"seg": 41, "layer": "subgraph_(/model.10/Resize_output_0_vaip_89)", "type": "upsample-fix", "in": 1310720, "const": 0, "out": 1310720, "same": {"0x3000": false}, "repeats": 48}
+JOIN {"seg": 42, "layer": "subgraph_(/model.12/cv1/conv/Conv_output_0_vaip_92)_merge_(/model.12/Split_output_1_vaip_489)", "type": "conv2d-fix", "in": 1228800, "const": 409856, "out": 204800, "same": {"0x1000": true, "0x3000": false}, "repeats": 9}
+JOIN {"seg": 43, "layer": "subgraph_(/model.12/m.0/cv1/conv/Conv_output_0_vaip_95)", "type": "conv2d-fix", "in": 270336, "const": 606464, "out": 204800, "same": {"0x1000": true, "0x3000": false}, "repeats": 0}
+JOIN {"seg": 44, "layer": "subgraph_(/model.12/m.0/cv2/conv/Conv_output_0_vaip_98)", "type": "conv2d-fix", "in": 270336, "const": 606464, "out": 204800, "same": {"0x1000": true, "0x3000": false}, "repeats": 0}
+JOIN {"seg": 45, "layer": "subgraph_(/model.12/cv1/conv/Conv_output_0_vaip_92)_merge_(/model.12/Split_output_0_vaip_509)", "type": "conv2d-fix", "in": 1228800, "const": 409856, "out": 204800, "same": {"0x1000": true, "0x3000": false}, "repeats": 9}
+JOIN {"seg": 46, "layer": "subgraph_(/model.12/cv2/conv/Conv_output_0_vaip_101)", "type": "conv2d-fix", "in": 614400, "const": 409856, "out": 409600, "same": {"0x1000": true, "0x3000": false}, "repeats": 3}
+JOIN {"seg": 47, "layer": "subgraph_(/model.13/Resize_output_0_vaip_103)", "type": "upsample-fix", "in": 1638400, "const": 0, "out": 1638400, "same": {"0x3000": false}, "repeats": 24}
+JOIN {"seg": 48, "layer": "subgraph_(/model.15/cv1/conv/Conv_output_0_vaip_106)_merge_(/model.15/Split_output_1_vaip_534)", "type": "conv2d-fix", "in": 2580480, "const": 104704, "out": 430080, "same": {"0x1000": true, "0x3000": false}, "repeats": 36}
+JOIN {"seg": 49, "layer": "subgraph_(/model.15/m.0/cv1/conv/Conv_output_0_vaip_109)", "type": "conv2d-fix", "in": 518144, "const": 155904, "out": 430080, "same": {"0x1000": true, "0x3000": false}, "repeats": 9}
+JOIN {"seg": 50, "layer": "subgraph_(/model.15/m.0/cv2/conv/Conv_output_0_vaip_112)", "type": "conv2d-fix", "in": 518144, "const": 155904, "out": 430080, "same": {"0x1000": true, "0x3000": false}, "repeats": 9}
+JOIN {"seg": 51, "layer": "subgraph_(/model.15/cv1/conv/Conv_output_0_vaip_106)_merge_(/model.15/Split_output_0_vaip_554)", "type": "conv2d-fix", "in": 2580480, "const": 104704, "out": 430080, "same": {"0x1000": true, "0x3000": false}, "repeats": 36}
+JOIN {"seg": 52, "layer": "subgraph_(/model.15/cv2/conv/Conv_output_0_vaip_115)", "type": "conv2d-fix", "in": 1290240, "const": 104704, "out": 860160, "same": {"0x1000": true, "0x3000": false}, "repeats": 36}
+JOIN {"seg": 53, "layer": "subgraph_(/model.22/cv3.0/cv3.0.0/conv/Conv_output_0_vaip_166)", "type": "conv2d-fix", "in": 1161216, "const": 606464, "out": 860160, "same": {"0x1000": true, "0x3000": false}, "repeats": 0}
+JOIN {"seg": 54, "layer": "subgraph_(/model.22/cv3.0/cv3.0.1/conv/Conv_output_0_vaip_169)", "type": "conv2d-fix", "in": 1161216, "const": 606464, "out": 860160, "same": {"0x1000": true, "0x3000": false}, "repeats": 0}
+JOIN {"seg": 55, "layer": "subgraph_(/model.22/cv3.0/cv3.0.2/Conv_output_0_QuantizeLinear_Input_vaip_172)", "type": "conv2d-fix", "in": 860160, "const": 42496, "out": 537600, "same": {"0x1000": true, "0x3000": false}, "repeats": 36}
+JOIN {"seg": 56, "layer": "subgraph_(/model.22/cv3.0/cv3.0.2/Conv_output_0)", "type": "transpose-fix", "in": 512000, "const": 256, "out": 512000, "same": {"0x1000": true, "0x3000": false}, "repeats": 171}
+JOIN {"seg": 57, "layer": "subgraph_(/model.22/cv2.0/cv2.0.0/conv/Conv_output_0_vaip_193)", "type": "conv2d-fix", "in": 1036288, "const": 311552, "out": 430080, "same": {"0x1000": true, "0x3000": false}, "repeats": 9}
+JOIN {"seg": 58, "layer": "subgraph_(/model.22/cv2.0/cv2.0.1/conv/Conv_output_0_vaip_196)", "type": "conv2d-fix", "in": 518144, "const": 155904, "out": 430080, "same": {"0x1000": true, "0x3000": false}, "repeats": 9}
+JOIN {"seg": 59, "layer": "subgraph_(/model.22/cv2.0/cv2.0.2/Conv_output_0_QuantizeLinear_Input_vaip_199)", "type": "conv2d-fix", "in": 430080, "const": 17664, "out": 430080, "same": {"0x1000": true, "0x3000": false}, "repeats": 0}
+JOIN {"seg": 60, "layer": "subgraph_(/model.22/cv2.0/cv2.0.2/Conv_output_0)", "type": "transpose-fix", "in": 409600, "const": 256, "out": 409600, "same": {"0x1000": true, "0x3000": false}, "repeats": 171}
+JOIN {"seg": 61, "layer": "subgraph_(/model.16/conv/Conv_output_0_vaip_118)", "type": "conv2d-fix", "in": 1075200, "const": 622848, "out": 245760, "same": {"0x1000": true, "0x3000": false}, "repeats": 9}
+JOIN {"seg": 62, "layer": "subgraph_(/model.18/cv1/conv/Conv_output_0_vaip_121)_merge_(/model.18/Split_output_1_vaip_584)", "type": "conv2d-fix", "in": 614400, "const": 205056, "out": 204800, "same": {"0x1000": true, "0x3000": false}, "repeats": 9}
+JOIN {"seg": 63, "layer": "subgraph_(/model.18/m.0/cv1/conv/Conv_output_0_vaip_124)", "type": "conv2d-fix", "in": 270336, "const": 606464, "out": 204800, "same": {"0x1000": true, "0x3000": false}, "repeats": 0}
+JOIN {"seg": 64, "layer": "subgraph_(/model.18/m.0/cv2/conv/Conv_output_0_vaip_127)", "type": "conv2d-fix", "in": 270336, "const": 606464, "out": 204800, "same": {"0x1000": true, "0x3000": false}, "repeats": 0}
+JOIN {"seg": 65, "layer": "subgraph_(/model.18/cv1/conv/Conv_output_0_vaip_121)_merge_(/model.18/Split_output_0_vaip_604)", "type": "conv2d-fix", "in": 614400, "const": 205056, "out": 204800, "same": {"0x1000": true, "0x3000": false}, "repeats": 9}
+JOIN {"seg": 66, "layer": "subgraph_(/model.18/cv2/conv/Conv_output_0_vaip_130)", "type": "conv2d-fix", "in": 614400, "const": 409856, "out": 409600, "same": {"0x1000": true, "0x3000": false}, "repeats": 0}
+JOIN {"seg": 67, "layer": "subgraph_(/model.22/cv3.1/cv3.1.0/conv/Conv_output_0_vaip_157)", "type": "conv2d-fix", "in": 688128, "const": 1245440, "out": 204800, "same": {"0x1000": true, "0x3000": false}, "repeats": 9}
+JOIN {"seg": 68, "layer": "subgraph_(/model.22/cv3.1/cv3.1.1/conv/Conv_output_0_vaip_160)", "type": "conv2d-fix", "in": 270336, "const": 606464, "out": 204800, "same": {"0x1000": true, "0x3000": false}, "repeats": 0}
+JOIN {"seg": 69, "layer": "subgraph_(/model.22/cv3.1/cv3.1.2/Conv_output_0_QuantizeLinear_Input_vaip_163)", "type": "conv2d-fix", "in": 204800, "const": 42496, "out": 128000, "same": {"0x1000": true, "0x3000": false}, "repeats": 0}
+JOIN {"seg": 70, "layer": "subgraph_(/model.22/cv3.1/cv3.1.2/Conv_output_0)", "type": "transpose-fix", "in": 128000, "const": 256, "out": 128000, "same": {"0x1000": true, "0x3000": false}, "repeats": 81}
+JOIN {"seg": 71, "layer": "subgraph_(/model.22/cv2.1/cv2.1.0/conv/Conv_output_0_vaip_184)", "type": "conv2d-fix", "in": 540672, "const": 606464, "out": 102400, "same": {"0x1000": true, "0x3000": false}, "repeats": 0}
+JOIN {"seg": 72, "layer": "subgraph_(/model.22/cv2.1/cv2.1.1/conv/Conv_output_0_vaip_187)", "type": "conv2d-fix", "in": 135168, "const": 151808, "out": 102400, "same": {"0x1000": true, "0x3000": false}, "repeats": 0}
+JOIN {"seg": 73, "layer": "subgraph_(/model.22/cv2.1/cv2.1.2/Conv_output_0_QuantizeLinear_Input_vaip_190)", "type": "conv2d-fix", "in": 102400, "const": 17664, "out": 102400, "same": {"0x1000": true, "0x3000": false}, "repeats": 0}
+JOIN {"seg": 74, "layer": "subgraph_(/model.22/cv2.1/cv2.1.2/Conv_output_0)", "type": "transpose-fix", "in": 102400, "const": 256, "out": 102400, "same": {"0x1000": true, "0x3000": false}, "repeats": 81}
+JOIN {"seg": 75, "layer": "subgraph_(/model.19/conv/Conv_output_0_vaip_133)", "type": "conv2d-fix", "in": 1204224, "const": 2490624, "out": 122880, "same": {"0x1000": true, "0x3000": false}, "repeats": 6}
+JOIN {"seg": 76, "layer": "subgraph_(/model.21/cv1/conv/Conv_output_0_vaip_136)_merge_(/model.21/Split_output_1_vaip_634)", "type": "conv2d-fix", "in": 307200, "const": 835840, "out": 102400, "same": {"0x1000": true, "0x3000": false}, "repeats": 0}
+JOIN {"seg": 77, "layer": "subgraph_(/model.21/m.0/cv1/conv/Conv_output_0_vaip_139)", "type": "conv2d-fix", "in": 344064, "const": 2490624, "out": 102400, "same": {"0x1000": true, "0x3000": false}, "repeats": 0}
+JOIN {"seg": 78, "layer": "subgraph_(/model.21/m.0/cv2/conv/Conv_output_0_vaip_142)", "type": "conv2d-fix", "in": 344064, "const": 2490624, "out": 102400, "same": {"0x1000": true, "0x3000": false}, "repeats": 0}
+JOIN {"seg": 79, "layer": "subgraph_(/model.21/cv1/conv/Conv_output_0_vaip_136)_merge_(/model.21/Split_output_0_vaip_654)", "type": "conv2d-fix", "in": 307200, "const": 835840, "out": 102400, "same": {"0x1000": true, "0x3000": false}, "repeats": 0}
+JOIN {"seg": 80, "layer": "subgraph_(/model.21/cv2/conv/Conv_output_0_vaip_145)", "type": "conv2d-fix", "in": 614400, "const": 1671424, "out": 204800, "same": {"0x1000": true, "0x3000": false}, "repeats": 0}
+JOIN {"seg": 82, "layer": "subgraph_(/model.22/cv3.2/cv3.2.1/conv/Conv_output_0_vaip_151)", "type": "conv2d-fix", "in": 86016, "const": 622848, "out": 51200, "same": {"0x1000": true, "0x3000": false}, "repeats": 0}
+JOIN {"seg": 83, "layer": "subgraph_(/model.22/cv3.2/cv3.2.2/Conv_output_0_QuantizeLinear_Input_vaip_154)", "type": "conv2d-fix", "in": 51200, "const": 42496, "out": 32000, "same": {"0x1000": true, "0x3000": false}, "repeats": 0}
+JOIN {"seg": 84, "layer": "subgraph_(/model.22/cv3.2/cv3.2.2/Conv_output_0)", "type": "transpose-fix", "in": 32000, "const": 256, "out": 32000, "same": {"0x1000": true, "0x3000": false}, "repeats": 36}
+JOIN {"seg": 86, "layer": "subgraph_(/model.22/cv2.2/cv2.2.1/conv/Conv_output_0_vaip_178)", "type": "conv2d-fix", "in": 43008, "const": 151808, "out": 25600, "same": {"0x1000": true, "0x3000": false}, "repeats": 0}
+JOIN {"seg": 87, "layer": "subgraph_(/model.22/cv2.2/cv2.2.2/Conv_output_0_QuantizeLinear_Input_vaip_181)", "type": "conv2d-fix", "in": 25600, "const": 17664, "out": 25600, "same": {"0x1000": true, "0x3000": false}, "repeats": 0}
+JOIN {"seg": 88, "layer": "subgraph_(/model.22/cv2.2/cv2.2.2/Conv_output_0)", "type": "transpose-fix", "in": 25600, "const": 256, "out": 25600, "same": {"0x1000": true, "0x3000": false}, "repeats": 36}
+JOIN {"seg": 89, "layer": "subgraph_(/model.2/Concat_output_0_vaip_249)", "type": "concat-fix", "in": 0, "const": 0, "out": 0, "same": {}, "repeats": 0}
+ctl: 87 segments joined exactly, 3 not: [0, 81, 85]; declared layers with loads: 102
+JOIN {"seg": 1, "layer": "subgraph_(/model.0/conv/Conv_output_0_vaip_3)", "type": "conv2d-fix", "in": 1700352, "const": 6912, "out": 3276800, "same": {"0x1000": true, "0x3000": false}, "repeats": 63}
+JOIN {"seg": 2, "layer": "subgraph_(/model.1/conv/Conv_output_0_vaip_6)", "type": "conv2d-fix", "in": 3778560, "const": 99584, "out": 1638400, "same": {"0x1000": true, "0x3000": false}, "repeats": 171}
+JOIN {"seg": 3, "layer": "subgraph_(/model.2/cv1/conv/Conv_output_0_vaip_9)_merge_(/model.2/Split_output_1_vaip_224)", "type": "conv2d-fix", "in": 1638400, "const": 8960, "out": 819200, "same": {"0x1000": true, "0x3000": false}, "repeats": 63}
+JOIN {"seg": 4, "layer": "subgraph_(/model.2/m.0/cv1/conv/Conv_output_0_vaip_12)", "type": "conv2d-fix", "in": 1032192, "const": 37632, "out": 819200, "same": {"0x1000": true, "0x3000": false}, "repeats": 63}
+JOIN {"seg": 5, "layer": "subgraph_(/model.2/m.0/cv2/conv/Conv_output_0_vaip_15)", "type": "conv2d-fix", "in": 1032192, "const": 37632, "out": 819200, "same": {"0x1000": true, "0x3000": false}, "repeats": 63}
+JOIN {"seg": 6, "layer": "subgraph_(/model.2/m.0/Add_output_0_vaip_244)", "type": "eltwise-fix", "in": 1720320, "const": 256, "out": 860160, "same": {"0x1000": true, "0x3000": false}, "repeats": 54}
+JOIN {"seg": 7, "layer": "subgraph_(/model.2/cv1/conv/Conv_output_0_vaip_9)_merge_(/model.2/Split_output_0_vaip_247)", "type": "conv2d-fix", "in": 1638400, "const": 8960, "out": 819200, "same": {"0x1000": true, "0x3000": false}, "repeats": 63}
+JOIN {"seg": 8, "layer": "subgraph_(/model.2/cv2/conv/Conv_output_0_vaip_18)", "type": "conv2d-fix", "in": 2457600, "const": 26880, "out": 1638400, "same": {"0x1000": true, "0x3000": false}, "repeats": 63}
+JOIN {"seg": 9, "layer": "subgraph_(/model.3/conv/Conv_output_0_vaip_21)", "type": "conv2d-fix", "in": 2304000, "const": 397568, "out": 983040, "same": {"0x1000": true, "0x3000": false}, "repeats": 81}
+JOIN {"seg": 10, "layer": "subgraph_(/model.4/cv1/conv/Conv_output_0_vaip_24)_merge_(/model.4/Split_output_1_vaip_275)", "type": "conv2d-fix", "in": 860160, "const": 34048, "out": 430080, "same": {"0x1000": true, "0x3000": false}, "repeats": 18}
+JOIN {"seg": 11, "layer": "subgraph_(/model.4/m.0/cv1/conv/Conv_output_0_vaip_27)", "type": "conv2d-fix", "in": 565248, "const": 148736, "out": 430080, "same": {"0x1000": true, "0x3000": false}, "repeats": 27}
+JOIN {"seg": 12, "layer": "subgraph_(/model.4/m.0/cv2/conv/Conv_output_0_vaip_30)", "type": "conv2d-fix", "in": 565248, "const": 148736, "out": 430080, "same": {"0x1000": true, "0x3000": false}, "repeats": 27}
+JOIN {"seg": 13, "layer": "subgraph_(/model.4/m.0/Add_output_0_vaip_294)", "type": "eltwise-fix", "in": 983040, "const": 256, "out": 491520, "same": {"0x1000": true, "0x3000": false}, "repeats": 9}
+JOIN {"seg": 14, "layer": "subgraph_(/model.4/m.1/cv1/conv/Conv_output_0_vaip_33)", "type": "conv2d-fix", "in": 565248, "const": 148736, "out": 430080, "same": {"0x1000": true, "0x3000": false}, "repeats": 27}
+JOIN {"seg": 15, "layer": "subgraph_(/model.4/m.1/cv2/conv/Conv_output_0_vaip_36)", "type": "conv2d-fix", "in": 565248, "const": 148736, "out": 430080, "same": {"0x1000": true, "0x3000": false}, "repeats": 27}
+JOIN {"seg": 16, "layer": "subgraph_(/model.4/m.1/Add_output_0_vaip_315)", "type": "eltwise-fix", "in": 983040, "const": 256, "out": 491520, "same": {"0x1000": true, "0x3000": false}, "repeats": 9}
+JOIN {"seg": 17, "layer": "subgraph_(/model.4/cv1/conv/Conv_output_0_vaip_24)_merge_(/model.4/Split_output_0_vaip_318)", "type": "conv2d-fix", "in": 860160, "const": 34048, "out": 430080, "same": {"0x1000": true, "0x3000": false}, "repeats": 18}
+JOIN {"seg": 18, "layer": "subgraph_(/model.4/cv2/conv/Conv_output_0_vaip_39)", "type": "conv2d-fix", "in": 1720320, "const": 135424, "out": 860160, "same": {"0x1000": true, "0x3000": false}, "repeats": 81}
+JOIN {"seg": 20, "layer": "subgraph_(/model.6/cv1/conv/Conv_output_0_vaip_45)_merge_(/model.6/Split_output_1_vaip_346)", "type": "conv2d-fix", "in": 409600, "const": 135424, "out": 204800, "same": {"0x1000": true, "0x3000": false}, "repeats": 12}
+JOIN {"seg": 21, "layer": "subgraph_(/model.6/m.0/cv1/conv/Conv_output_0_vaip_48)", "type": "conv2d-fix", "in": 294912, "const": 594176, "out": 204800, "same": {"0x1000": true, "0x3000": false}, "repeats": 9}
+JOIN {"seg": 22, "layer": "subgraph_(/model.6/m.0/cv2/conv/Conv_output_0_vaip_51)", "type": "conv2d-fix", "in": 294912, "const": 594176, "out": 204800, "same": {"0x1000": true, "0x3000": false}, "repeats": 9}
+JOIN {"seg": 23, "layer": "subgraph_(/model.6/m.0/Add_output_0_vaip_365)", "type": "eltwise-fix", "in": 409600, "const": 256, "out": 204800, "same": {"0x1000": true, "0x3000": false}, "repeats": 0}
+JOIN {"seg": 24, "layer": "subgraph_(/model.6/m.1/cv1/conv/Conv_output_0_vaip_54)", "type": "conv2d-fix", "in": 294912, "const": 594176, "out": 204800, "same": {"0x1000": true, "0x3000": false}, "repeats": 9}
+JOIN {"seg": 25, "layer": "subgraph_(/model.6/m.1/cv2/conv/Conv_output_0_vaip_57)", "type": "conv2d-fix", "in": 294912, "const": 594176, "out": 204800, "same": {"0x1000": true, "0x3000": false}, "repeats": 9}
+JOIN {"seg": 26, "layer": "subgraph_(/model.6/m.1/Add_output_0_vaip_386)", "type": "eltwise-fix", "in": 409600, "const": 256, "out": 204800, "same": {"0x1000": true, "0x3000": false}, "repeats": 0}
+JOIN {"seg": 27, "layer": "subgraph_(/model.6/cv1/conv/Conv_output_0_vaip_45)_merge_(/model.6/Split_output_0_vaip_389)", "type": "conv2d-fix", "in": 409600, "const": 135424, "out": 204800, "same": {"0x1000": true, "0x3000": false}, "repeats": 12}
+JOIN {"seg": 28, "layer": "subgraph_(/model.6/cv2/conv/Conv_output_0_vaip_60)", "type": "conv2d-fix", "in": 819200, "const": 540928, "out": 409600, "same": {"0x1000": true, "0x3000": false}, "repeats": 12}
+JOIN {"seg": 29, "layer": "subgraph_(/model.7/conv/Conv_output_0_vaip_63)", "type": "conv2d-fix", "in": 1889280, "const": 5980416, "out": 204800, "same": {"0x1000": false, "0x3000": true}, "repeats": 105}
+JOIN {"seg": 30, "layer": "subgraph_(/model.8/cv1/conv/Conv_output_0_vaip_66)_merge_(/model.8/Split_output_1_vaip_417)", "type": "conv2d-fix", "in": 204800, "const": 540928, "out": 102400, "same": {"0x1000": true, "0x3000": false}, "repeats": 0}
+JOIN {"seg": 31, "layer": "subgraph_(/model.8/m.0/cv1/conv/Conv_output_0_vaip_69)", "type": "conv2d-fix", "in": 638976, "const": 1196288, "out": 122880, "same": {"0x1000": false, "0x3000": true}, "repeats": 36}
+JOIN {"seg": 32, "layer": "subgraph_(/model.8/m.0/cv2/conv/Conv_output_0_vaip_72)", "type": "conv2d-fix", "in": 638976, "const": 1196288, "out": 122880, "same": {"0x1000": false, "0x3000": true}, "repeats": 36}
+JOIN {"seg": 33, "layer": "subgraph_(/model.8/m.0/Add_output_0_vaip_437)", "type": "eltwise-fix", "in": 204800, "const": 256, "out": 102400, "same": {"0x1000": true, "0x3000": false}, "repeats": 0}
+JOIN {"seg": 34, "layer": "subgraph_(/model.8/cv1/conv/Conv_output_0_vaip_66)_merge_(/model.8/Split_output_0_vaip_440)", "type": "conv2d-fix", "in": 204800, "const": 540928, "out": 102400, "same": {"0x1000": true, "0x3000": false}, "repeats": 0}
+JOIN {"seg": 35, "layer": "subgraph_(/model.8/cv2/conv/Conv_output_0_vaip_75)", "type": "conv2d-fix", "in": 614400, "const": 1605888, "out": 204800, "same": {"0x1000": true, "0x3000": false}, "repeats": 0}
+JOIN {"seg": 36, "layer": "subgraph_(/model.9/cv1/conv/Conv_output_0_vaip_78)", "type": "conv2d-fix", "in": 204800, "const": 540928, "out": 102400, "same": {"0x1000": true, "0x3000": false}, "repeats": 0}
+JOIN {"seg": 37, "layer": "subgraph_(/model.9/m/MaxPool_output_0_DequantizeLinear_Output/duplicated_vaip_462)", "type": "pool-fix", "in": 221184, "const": 256, "out": 102400, "same": {"0x1000": true, "0x3000": false}, "repeats": 0}
+JOIN {"seg": 38, "layer": "subgraph_(/model.9/m_1/MaxPool_output_0_DequantizeLinear_Output/duplicated_vaip_461)", "type": "pool-fix", "in": 221184, "const": 256, "out": 102400, "same": {"0x1000": true, "0x3000": false}, "repeats": 0}
+JOIN {"seg": 39, "layer": "subgraph_(/model.9/m_2/MaxPool_output_0_DequantizeLinear_Output_vaip_465)", "type": "pool-fix", "in": 221184, "const": 256, "out": 102400, "same": {"0x1000": true, "0x3000": false}, "repeats": 0}
+JOIN {"seg": 40, "layer": "subgraph_(/model.9/cv2/conv/Conv_output_0_vaip_87)", "type": "conv2d-fix", "in": 1966080, "const": 1671424, "out": 245760, "same": {"0x1000": false, "0x3000": true}, "repeats": 54}
+JOIN {"seg": 41, "layer": "subgraph_(/model.10/Resize_output_0_vaip_89)", "type": "upsample-fix", "in": 1310720, "const": 0, "out": 1310720, "same": {"0x3000": false}, "repeats": 48}
+JOIN {"seg": 43, "layer": "subgraph_(/model.12/m.0/cv1/conv/Conv_output_0_vaip_95)", "type": "conv2d-fix", "in": 294912, "const": 594176, "out": 204800, "same": {"0x1000": true, "0x3000": false}, "repeats": 9}
+JOIN {"seg": 44, "layer": "subgraph_(/model.12/m.0/cv2/conv/Conv_output_0_vaip_98)", "type": "conv2d-fix", "in": 294912, "const": 594176, "out": 204800, "same": {"0x1000": true, "0x3000": false}, "repeats": 9}
+JOIN {"seg": 46, "layer": "subgraph_(/model.12/cv2/conv/Conv_output_0_vaip_101)", "type": "conv2d-fix", "in": 614400, "const": 401664, "out": 409600, "same": {"0x1000": true, "0x3000": false}, "repeats": 12}
+JOIN {"seg": 47, "layer": "subgraph_(/model.13/Resize_output_0_vaip_103)", "type": "upsample-fix", "in": 1638400, "const": 0, "out": 1638400, "same": {"0x3000": false}, "repeats": 24}
+JOIN {"seg": 49, "layer": "subgraph_(/model.15/m.0/cv1/conv/Conv_output_0_vaip_109)", "type": "conv2d-fix", "in": 565248, "const": 148736, "out": 430080, "same": {"0x1000": true, "0x3000": false}, "repeats": 27}
+JOIN {"seg": 50, "layer": "subgraph_(/model.15/m.0/cv2/conv/Conv_output_0_vaip_112)", "type": "conv2d-fix", "in": 565248, "const": 148736, "out": 430080, "same": {"0x1000": true, "0x3000": false}, "repeats": 27}
+JOIN {"seg": 52, "layer": "subgraph_(/model.15/cv2/conv/Conv_output_0_vaip_115)", "type": "conv2d-fix", "in": 1290240, "const": 100608, "out": 860160, "same": {"0x1000": true, "0x3000": false}, "repeats": 81}
+JOIN {"seg": 53, "layer": "subgraph_(/model.22/cv3.0/cv3.0.0/conv/Conv_output_0_vaip_166)", "type": "conv2d-fix", "in": 1130496, "const": 594176, "out": 860160, "same": {"0x1000": true, "0x3000": false}, "repeats": 27}
+JOIN {"seg": 54, "layer": "subgraph_(/model.22/cv3.0/cv3.0.1/conv/Conv_output_0_vaip_169)", "type": "conv2d-fix", "in": 1130496, "const": 594176, "out": 860160, "same": {"0x1000": true, "0x3000": false}, "repeats": 27}
+JOIN {"seg": 55, "layer": "subgraph_(/model.22/cv3.0/cv3.0.2/Conv_output_0_QuantizeLinear_Input_vaip_172)", "type": "conv2d-fix", "in": 860160, "const": 42496, "out": 537600, "same": {"0x1000": true, "0x3000": false}, "repeats": 9}
+JOIN {"seg": 56, "layer": "subgraph_(/model.22/cv3.0/cv3.0.2/Conv_output_0)", "type": "transpose-fix", "in": 512000, "const": 256, "out": 512000, "same": {"0x1000": true, "0x3000": false}, "repeats": 171}
+JOIN {"seg": 57, "layer": "subgraph_(/model.22/cv2.0/cv2.0.0/conv/Conv_output_0_vaip_193)", "type": "conv2d-fix", "in": 1130496, "const": 297216, "out": 430080, "same": {"0x1000": true, "0x3000": false}, "repeats": 27}
+JOIN {"seg": 58, "layer": "subgraph_(/model.22/cv2.0/cv2.0.1/conv/Conv_output_0_vaip_196)", "type": "conv2d-fix", "in": 565248, "const": 148736, "out": 430080, "same": {"0x1000": true, "0x3000": false}, "repeats": 27}
+JOIN {"seg": 59, "layer": "subgraph_(/model.22/cv2.0/cv2.0.2/Conv_output_0_QuantizeLinear_Input_vaip_199)", "type": "conv2d-fix", "in": 430080, "const": 17664, "out": 430080, "same": {"0x1000": true, "0x3000": false}, "repeats": 27}
+JOIN {"seg": 60, "layer": "subgraph_(/model.22/cv2.0/cv2.0.2/Conv_output_0)", "type": "transpose-fix", "in": 409600, "const": 256, "out": 409600, "same": {"0x1000": true, "0x3000": false}, "repeats": 171}
+JOIN {"seg": 63, "layer": "subgraph_(/model.18/m.0/cv1/conv/Conv_output_0_vaip_124)", "type": "conv2d-fix", "in": 294912, "const": 594176, "out": 204800, "same": {"0x1000": true, "0x3000": false}, "repeats": 9}
+JOIN {"seg": 64, "layer": "subgraph_(/model.18/m.0/cv2/conv/Conv_output_0_vaip_127)", "type": "conv2d-fix", "in": 294912, "const": 594176, "out": 204800, "same": {"0x1000": true, "0x3000": false}, "repeats": 9}
+JOIN {"seg": 66, "layer": "subgraph_(/model.18/cv2/conv/Conv_output_0_vaip_130)", "type": "conv2d-fix", "in": 614400, "const": 401664, "out": 409600, "same": {"0x1000": true, "0x3000": false}, "repeats": 9}
+JOIN {"seg": 67, "layer": "subgraph_(/model.22/cv3.1/cv3.1.0/conv/Conv_output_0_vaip_157)", "type": "conv2d-fix", "in": 1179648, "const": 1188096, "out": 204800, "same": {"0x1000": true, "0x3000": false}, "repeats": 18}
+JOIN {"seg": 68, "layer": "subgraph_(/model.22/cv3.1/cv3.1.1/conv/Conv_output_0_vaip_160)", "type": "conv2d-fix", "in": 294912, "const": 594176, "out": 204800, "same": {"0x1000": true, "0x3000": false}, "repeats": 9}
+JOIN {"seg": 69, "layer": "subgraph_(/model.22/cv3.1/cv3.1.2/Conv_output_0_QuantizeLinear_Input_vaip_163)", "type": "conv2d-fix", "in": 204800, "const": 42496, "out": 128000, "same": {"0x1000": true, "0x3000": false}, "repeats": 9}
+JOIN {"seg": 70, "layer": "subgraph_(/model.22/cv3.1/cv3.1.2/Conv_output_0)", "type": "transpose-fix", "in": 128000, "const": 256, "out": 128000, "same": {"0x1000": true, "0x3000": false}, "repeats": 81}
+JOIN {"seg": 71, "layer": "subgraph_(/model.22/cv2.1/cv2.1.0/conv/Conv_output_0_vaip_184)", "type": "conv2d-fix", "in": 589824, "const": 594176, "out": 102400, "same": {"0x1000": true, "0x3000": false}, "repeats": 9}
+JOIN {"seg": 72, "layer": "subgraph_(/model.22/cv2.1/cv2.1.1/conv/Conv_output_0_vaip_187)", "type": "conv2d-fix", "in": 147456, "const": 148736, "out": 102400, "same": {"0x1000": true, "0x3000": false}, "repeats": 9}
+JOIN {"seg": 73, "layer": "subgraph_(/model.22/cv2.1/cv2.1.2/Conv_output_0_QuantizeLinear_Input_vaip_190)", "type": "conv2d-fix", "in": 102400, "const": 17664, "out": 102400, "same": {"0x1000": true, "0x3000": false}, "repeats": 9}
+JOIN {"seg": 74, "layer": "subgraph_(/model.22/cv2.1/cv2.1.2/Conv_output_0)", "type": "transpose-fix", "in": 102400, "const": 256, "out": 102400, "same": {"0x1000": true, "0x3000": false}, "repeats": 81}
+JOIN {"seg": 75, "layer": "subgraph_(/model.19/conv/Conv_output_0_vaip_133)", "type": "conv2d-fix", "in": 1847296, "const": 2425088, "out": 102400, "same": {"0x1000": false, "0x3000": true}, "repeats": 72}
+JOIN {"seg": 76, "layer": "subgraph_(/model.21/cv1/conv/Conv_output_0_vaip_136)_merge_(/model.21/Split_output_1_vaip_634)", "type": "conv2d-fix", "in": 307200, "const": 803072, "out": 102400, "same": {"0x1000": true, "0x3000": false}, "repeats": 0}
+JOIN {"seg": 77, "layer": "subgraph_(/model.21/m.0/cv1/conv/Conv_output_0_vaip_139)", "type": "conv2d-fix", "in": 638976, "const": 1196288, "out": 122880, "same": {"0x1000": false, "0x3000": true}, "repeats": 36}
+JOIN {"seg": 78, "layer": "subgraph_(/model.21/m.0/cv2/conv/Conv_output_0_vaip_142)", "type": "conv2d-fix", "in": 638976, "const": 1196288, "out": 122880, "same": {"0x1000": false, "0x3000": true}, "repeats": 36}
+JOIN {"seg": 79, "layer": "subgraph_(/model.21/cv1/conv/Conv_output_0_vaip_136)_merge_(/model.21/Split_output_0_vaip_654)", "type": "conv2d-fix", "in": 307200, "const": 803072, "out": 102400, "same": {"0x1000": true, "0x3000": false}, "repeats": 0}
+JOIN {"seg": 80, "layer": "subgraph_(/model.21/cv2/conv/Conv_output_0_vaip_145)", "type": "conv2d-fix", "in": 614400, "const": 1605888, "out": 204800, "same": {"0x1000": true, "0x3000": false}, "repeats": 0}
+JOIN {"seg": 81, "layer": "subgraph_(/model.22/cv3.2/cv3.2.0/conv/Conv_output_0_vaip_148)", "type": "conv2d-fix", "in": 688128, "const": 2375936, "out": 51200, "same": {"0x1000": true, "0x3000": false}, "repeats": 0}
+JOIN {"seg": 82, "layer": "subgraph_(/model.22/cv3.2/cv3.2.1/conv/Conv_output_0_vaip_151)", "type": "conv2d-fix", "in": 86016, "const": 594176, "out": 51200, "same": {"0x1000": true, "0x3000": false}, "repeats": 0}
+JOIN {"seg": 83, "layer": "subgraph_(/model.22/cv3.2/cv3.2.2/Conv_output_0_QuantizeLinear_Input_vaip_154)", "type": "conv2d-fix", "in": 51200, "const": 42496, "out": 32000, "same": {"0x1000": true, "0x3000": false}, "repeats": 0}
+JOIN {"seg": 84, "layer": "subgraph_(/model.22/cv3.2/cv3.2.2/Conv_output_0)", "type": "transpose-fix", "in": 32000, "const": 256, "out": 32000, "same": {"0x1000": true, "0x3000": false}, "repeats": 36}
+JOIN {"seg": 85, "layer": "subgraph_(/model.22/cv2.2/cv2.2.0/conv/Conv_output_0_vaip_175)", "type": "conv2d-fix", "in": 344064, "const": 1188096, "out": 25600, "same": {"0x1000": true, "0x3000": false}, "repeats": 0}
+JOIN {"seg": 86, "layer": "subgraph_(/model.22/cv2.2/cv2.2.1/conv/Conv_output_0_vaip_178)", "type": "conv2d-fix", "in": 43008, "const": 148736, "out": 25600, "same": {"0x1000": true, "0x3000": false}, "repeats": 0}
+JOIN {"seg": 87, "layer": "subgraph_(/model.22/cv2.2/cv2.2.2/Conv_output_0_QuantizeLinear_Input_vaip_181)", "type": "conv2d-fix", "in": 30720, "const": 17664, "out": 30720, "same": {"0x1000": true, "0x3000": false}, "repeats": 9}
+JOIN {"seg": 88, "layer": "subgraph_(/model.22/cv2.2/cv2.2.2/Conv_output_0)", "type": "transpose-fix", "in": 25600, "const": 256, "out": 25600, "same": {"0x1000": true, "0x3000": false}, "repeats": 36}
+JOIN {"seg": 89, "layer": "subgraph_(/model.2/Concat_output_0_vaip_249)", "type": "concat-fix", "in": 0, "const": 0, "out": 0, "same": {}, "repeats": 0}
+cmt: 81 segments joined exactly, 9 not: [0, 19, 42, 45, 48, 51, 61, 62, 65]; declared layers with loads: 102
+
+## Convolutions side by side: declared input / const bytes and the decoded column split (ctl | cmt)
+#  spatial = columns read the same weights and different input; out-ch = the same input and different weights
+/model.0                                  1,700,352      6,912  spatial |  1,700,352      6,912  spatial
+/model.1                                  3,483,648     78,080  spatial |  3,778,560     99,584  spatial  *
+/model.2/cv1                              1,638,400      8,960  spatial |  1,638,400      8,960  spatial
+/model.2/m.0/cv1                            946,176     38,144  spatial |  1,032,192     37,632  spatial  *
+/model.2/m.0/cv2                            946,176     38,144  spatial |  1,032,192     37,632  spatial  *
+/model.2/cv1                              1,638,400      8,960  spatial |  1,638,400      8,960  spatial
+/model.2/cv2                              2,457,600     25,856  spatial |  2,457,600     26,880  spatial  *
+/model.3                                  1,763,328    303,360  spatial |  2,304,000    397,568  spatial  *
+/model.4/cv1                                860,160     34,048  spatial |    860,160     34,048  spatial
+/model.4/m.0/cv1                            518,144    155,904  spatial |    565,248    148,736  spatial  *
+/model.4/m.0/cv2                            518,144    155,904  spatial |    565,248    148,736  spatial  *
+/model.4/m.1/cv1                            518,144    155,904  spatial |    565,248    148,736  spatial  *
+/model.4/m.1/cv2                            518,144    155,904  spatial |    565,248    148,736  spatial  *
+/model.4/cv1                                860,160     34,048  spatial |    860,160     34,048  spatial
+/model.4/cv2                              1,720,320    139,520  spatial |  1,720,320    135,424  spatial  *
+/model.5                                  1,152,000  1,245,440  spatial | 
+/model.6/cv1                                409,600    139,520  spatial |    409,600    135,424  spatial  *
+/model.6/m.0/cv1                            270,336    606,464  spatial |    294,912    594,176  spatial  *
+/model.6/m.0/cv2                            270,336    606,464  spatial |    294,912    594,176  spatial  *
+/model.6/m.1/cv1                            270,336    606,464  spatial |    294,912    594,176  spatial  *
+/model.6/m.1/cv2                            270,336    606,464  spatial |    294,912    594,176  spatial  *
+/model.6/cv1                                409,600    139,520  spatial |    409,600    135,424  spatial  *
+/model.6/cv2                                819,200    557,312  spatial |    819,200    540,928  spatial  *
+/model.7                                  4,472,832  4,849,920  spatial |  1,889,280  5,980,416   out-ch  *
+/model.8/cv1                                204,800    557,312  spatial |    204,800    540,928  spatial  *
+/model.8/m.0/cv1                            344,064  2,490,624  spatial |    638,976  1,196,288   out-ch  *
+/model.8/m.0/cv2                            344,064  2,490,624  spatial |    638,976  1,196,288   out-ch  *
+/model.8/cv1                                204,800    557,312  spatial |    204,800    540,928  spatial  *
+/model.8/cv2                                614,400  1,671,424  spatial |    614,400  1,605,888  spatial  *
+/model.9/cv1                                204,800    557,312  spatial |    204,800    540,928  spatial  *
+/model.9/cv2                              1,638,400  2,228,480  spatial |  1,966,080  1,671,424   out-ch  *
+/model.12/cv1                             1,228,800    409,856  spatial | 
+/model.12/m.0/cv1                           270,336    606,464  spatial |    294,912    594,176  spatial  *
+/model.12/m.0/cv2                           270,336    606,464  spatial |    294,912    594,176  spatial  *
+/model.12/cv1                             1,228,800    409,856  spatial | 
+/model.12/cv2                               614,400    409,856  spatial |    614,400    401,664  spatial  *
+/model.15/cv1                             2,580,480    104,704  spatial | 
+/model.15/m.0/cv1                           518,144    155,904  spatial |    565,248    148,736  spatial  *
+/model.15/m.0/cv2                           518,144    155,904  spatial |    565,248    148,736  spatial  *
+/model.15/cv1                             2,580,480    104,704  spatial | 
+/model.15/cv2                             1,290,240    104,704  spatial |  1,290,240    100,608  spatial  *
+/model.22/cv3.0/cv3.0.0                   1,161,216    606,464  spatial |  1,130,496    594,176  spatial  *
+/model.22/cv3.0/cv3.0.1                   1,161,216    606,464  spatial |  1,130,496    594,176  spatial  *
+/model.22/cv3.0/cv3.0.2/Conv_output_0_Qu    860,160     42,496  spatial |    860,160     42,496  spatial
+/model.22/cv2.0/cv2.0.0                   1,036,288    311,552  spatial |  1,130,496    297,216  spatial  *
+/model.22/cv2.0/cv2.0.1                     518,144    155,904  spatial |    565,248    148,736  spatial  *
+/model.22/cv2.0/cv2.0.2/Conv_output_0_Qu    430,080     17,664  spatial |    430,080     17,664  spatial
+/model.16                                 1,075,200    622,848  spatial | 
+/model.18/cv1                               614,400    205,056  spatial | 
+/model.18/m.0/cv1                           270,336    606,464  spatial |    294,912    594,176  spatial  *
+/model.18/m.0/cv2                           270,336    606,464  spatial |    294,912    594,176  spatial  *
+/model.18/cv1                               614,400    205,056  spatial | 
+/model.18/cv2                               614,400    409,856  spatial |    614,400    401,664  spatial  *
+/model.22/cv3.1/cv3.1.0                     688,128  1,245,440  spatial |  1,179,648  1,188,096  spatial  *
+/model.22/cv3.1/cv3.1.1                     270,336    606,464  spatial |    294,912    594,176  spatial  *
+/model.22/cv3.1/cv3.1.2/Conv_output_0_Qu    204,800     42,496  spatial |    204,800     42,496  spatial
+/model.22/cv2.1/cv2.1.0                     540,672    606,464  spatial |    589,824    594,176  spatial  *
+/model.22/cv2.1/cv2.1.1                     135,168    151,808  spatial |    147,456    148,736  spatial  *
+/model.22/cv2.1/cv2.1.2/Conv_output_0_Qu    102,400     17,664  spatial |    102,400     17,664  spatial
+/model.19                                 1,204,224  2,490,624  spatial |  1,847,296  2,425,088   out-ch  *
+/model.21/cv1                               307,200    835,840  spatial |    307,200    803,072  spatial  *
+/model.21/m.0/cv1                           344,064  2,490,624  spatial |    638,976  1,196,288   out-ch  *
+/model.21/m.0/cv2                           344,064  2,490,624  spatial |    638,976  1,196,288   out-ch  *
+/model.21/cv1                               307,200    835,840  spatial |    307,200    803,072  spatial  *
+/model.21/cv2                               614,400  1,671,424  spatial |    614,400  1,605,888  spatial  *
+/model.22/cv3.2/cv3.2.1                      86,016    622,848  spatial |     86,016    594,176  spatial  *
+/model.22/cv3.2/cv3.2.2/Conv_output_0_Qu     51,200     42,496  spatial |     51,200     42,496  spatial
+/model.22/cv2.2/cv2.2.1                      43,008    151,808  spatial |     43,008    148,736  spatial  *
+/model.22/cv2.2/cv2.2.2/Conv_output_0_Qu     25,600     17,664  spatial |     30,720     17,664  spatial  *
+changed: 51
+
+## Start-queue pushes per frame and for segments 2 (model.1), 9 (model.3), 19 (model.5), 29 (model.7)
+#  cmt segment 19 does not join (see above); its and the cmt frame counts are not trusted
+# ctl
+segment 2 model_0_act_Mul_output_0_DequantizeLinear_Output_v: shim pushes 18 (runs 81), memtile pushes 84 (runs 249)
+segment 9 model_2_cv2_act_Mul_output_0_DequantizeLinear_Outp: shim pushes 18 (runs 45), memtile pushes 84 (runs 237)
+segment 19 model_4_cv2_act_Mul_output_0_DequantizeLinear_Outp: shim pushes 18 (runs 54), memtile pushes 84 (runs 144)
+segment 29 model_6_cv2_act_Mul_output_0_DequantizeLinear_Outp: shim pushes 123 (runs 123), memtile pushes 342 (runs 342)
+frame: shim pushes 1779 (runs 3660), memtile pushes 5370 (runs 7548)
+# cmt
+segment 2 model_0_act_Mul_output_0_DequantizeLinear_Output_v: shim pushes 18 (runs 189), memtile pushes 84 (runs 189)
+segment 9 model_2_cv2_act_Mul_output_0_DequantizeLinear_Outp: shim pushes 18 (runs 99), memtile pushes 84 (runs 255)
+segment 19 model_4_cv2_act_Mul_output_0_DequantizeLinear_Outp: shim pushes 3240 (runs 7101), memtile pushes 11578 (runs 24118)
+segment 29 model_6_cv2_act_Mul_output_0_DequantizeLinear_Outp: shim pushes 78 (runs 183), memtile pushes 396 (runs 411)
+frame: shim pushes 23352 (runs 53166), memtile pushes 83464 (runs 162463)
+
+## model.7 (model_6_cv2_act segment), ctl, columns 0 and 3
+##### model_6_cv2_act_Mul_output_0_DequantizeLinear_Output_duplicated_vaip_476  column 0
+  shim BD 0       64 B addr 0x100000165ca0 d0(wrap,step) (0, 1) d1 (0, 1) d2step 1 iter(wrap,step) (1, 1) next None pkt (1, 0)
+  shim BD 1    75776 B addr 0x100000268ce0 d0(wrap,step) (0, 1) d1 (0, 1) d2step 1 iter(wrap,step) (1, 1) next None pkt (1, 0)
+  shim BD 2    75776 B addr 0x10000027b4e0 d0(wrap,step) (0, 1) d1 (0, 1) d2step 1 iter(wrap,step) (1, 1) next None pkt (0, 0)
+  shim BD 3    69888 B addr 0x300000983480 d0(wrap,step) (64, 1) d1 (13, 256) d2step 16384 iter(wrap,step) (1, 655360) next None pkt (1, 0)
+  shim BD 4    69888 B addr 0x300000ac3480 d0(wrap,step) (64, 1) d1 (13, 256) d2step 16384 iter(wrap,step) (1, 655360) next None pkt (0, 0)
+  shim BD11     7680 B addr 0x300001b57b40 d0(wrap,step) (16, 1) d1 (6, 128) d2step 4096 iter(wrap,step) (1, 81920) next None pkt (0, 0)
+  mt BD 0      64 B base  0xe9410 d0 (0, 1) d1 (0, 1) d2 (0, 1) d3step 1 iter (1, 1) next None pkt (0, 0) acq (64, 0, 1) rel (65, 1)
+  mt BD 1      64 B base  0xe9410 d0 (0, 1) d1 (0, 1) d2 (0, 1) d3step 1 iter (1, 1) next None pkt (1, 0) acq (65, -1, 1) rel (64, 0)
+  mt BD 2   75776 B base  0xc4410 d0 (0, 1) d1 (0, 1) d2 (0, 1) d3step 1 iter (1, 1) next None pkt (0, 0) acq (66, 0, 1) rel (67, 1)
+  mt BD 3  151552 B base  0xc4410 d0 (0, 1) d1 (0, 1) d2 (0, 1) d3step 1 iter (1, 1) next None pkt (1, 0) acq (67, 2, 1) rel (66, 0)
+  mt BD 4   69888 B base  0x80000 d0 (2, 1) d1 (32, 546) d2 (13, 2) d3step 26 iter (1, 1) next 5 pkt (0, 0) acq (68, -2, 1) rel (69, 2)
+  mt BD 5   69888 B base  0x91100 d0 (2, 1) d1 (32, 546) d2 (13, 2) d3step 26 iter (1, 1) next 4 pkt (0, 0) acq (70, -2, 1) rel (71, 2)
+  mt BD 6   56320 B base  0x80070 d0 (32, 1) d1 (2, 546) d2 (10, 26) d3step 1092 iter (1, 1) next None pkt (0, 0) acq (69, -1, 1) rel (68, 1)
+  mt BD 7   56320 B base  0xa2218 d0 (32, 1) d1 (2, 546) d2 (11, 26) d3step 1092 iter (1, 1) next None pkt (0, 0) acq (73, -1, 1) rel (72, 1)
+  mt BD14    2560 B base  0xe9450 d0 (16, 1) d1 (5, 128) d2 (8, 16) d3step 16 iter (1, 1) next 16 pkt (0, 0) acq (76, -1, 1) rel (77, 1)
+  mt BD15    2560 B base  0xea850 d0 (16, 1) d1 (5, 128) d2 (8, 16) d3step 16 iter (1, 1) next 17 pkt (0, 0) acq (76, -1, 1) rel (77, 1)
+  mt BD16    2560 B base  0xebc50 d0 (16, 1) d1 (5, 128) d2 (8, 16) d3step 16 iter (1, 1) next 14 pkt (0, 0) acq (78, -1, 1) rel (79, 1)
+  mt BD17    2560 B base  0xed050 d0 (16, 1) d1 (5, 128) d2 (8, 16) d3step 16 iter (1, 1) next 15 pkt (0, 0) acq (78, -1, 1) rel (79, 1)
+  mt BD24   75776 B base  0xd6c10 d0 (0, 1) d1 (0, 1) d2 (0, 1) d3step 1 iter (1, 1) next None pkt (0, 0) acq (66, 0, 1) rel (67, 1)
+  mt BD25   69888 B base  0xa2210 d0 (2, 1) d1 (32, 546) d2 (13, 2) d3step 26 iter (1, 1) next 26 pkt (0, 0) acq (72, -2, 1) rel (73, 2)
+  mt BD26   69888 B base  0xb3310 d0 (2, 1) d1 (32, 546) d2 (13, 2) d3step 26 iter (1, 1) next 25 pkt (0, 0) acq (74, -2, 1) rel (75, 2)
+  mt BD27   56320 B base  0x80418 d0 (32, 1) d1 (2, 546) d2 (11, 26) d3step 1092 iter (1, 1) next None pkt (0, 0) acq (69, -1, 1) rel (68, 1)
+  mt BD28   56320 B base  0xa2628 d0 (32, 1) d1 (2, 546) d2 (11, 26) d3step 1092 iter (1, 1) next None pkt (0, 0) acq (73, -1, 1) rel (72, 1)
+  mt BD35    2560 B base  0xe9e50 d0 (16, 1) d1 (5, 128) d2 (8, 16) d3step 16 iter (1, 1) next 37 pkt (0, 0) acq (76, -1, 1) rel (77, 1)
+  mt BD36    2560 B base  0xeb250 d0 (16, 1) d1 (5, 128) d2 (8, 16) d3step 16 iter (1, 1) next 38 pkt (0, 0) acq (76, -1, 1) rel (77, 1)
+  mt BD37    2560 B base  0xec650 d0 (16, 1) d1 (5, 128) d2 (8, 16) d3step 16 iter (1, 1) next 35 pkt (0, 0) acq (78, -1, 1) rel (79, 1)
+  mt BD38    2560 B base  0xeda50 d0 (16, 1) d1 (5, 128) d2 (8, 16) d3step 16 iter (1, 1) next 36 pkt (0, 0) acq (78, -1, 1) rel (79, 1)
+  mt BD39    7680 B base  0xe9450 d0 (16, 1) d1 (6, 16) d2 (20, 128) d3step 1 iter (1, 1) next 40 pkt (0, 0) acq (77, -4, 1) rel (76, 4)
+  mt BD40    7680 B base  0xebc50 d0 (16, 1) d1 (6, 16) d2 (20, 128) d3step 1 iter (1, 1) next 39 pkt (0, 0) acq (79, -4, 1) rel (78, 4)
+  push memtile S2MM_0  BD 0 repeat 0 token 0
+  push memtile MM2S_4  BD 1 repeat 0 token 0
+  push memtile S2MM_0  BD 2 repeat 0 token 0
+  push memtile S2MM_1  BD24 repeat 0 token 0
+  push memtile S2MM_0  BD 4 repeat 0 token 0
+  push memtile S2MM_1  BD25 repeat 0 token 0
+  push memtile S2MM_2  BD14 repeat 0 token 0
+  push memtile S2MM_3  BD35 repeat 0 token 0
+  push memtile S2MM_4  BD15 repeat 0 token 0
+  push memtile S2MM_5  BD36 repeat 0 token 0
+  push memtile MM2S_5  BD39 repeat 0 token 0
+  push memtile MM2S_4  BD 3 repeat 0 token 0
+  push memtile MM2S_0  BD 6 repeat 0 token 0
+  push memtile MM2S_1  BD27 repeat 0 token 0
+  push memtile MM2S_2  BD 7 repeat 0 token 0
+  push memtile MM2S_3  BD28 repeat 0 token 0
+  push shim    MM2S_0  BD 0 repeat 0 token 0 chain [0] = 64 B x 1 | tag 0x1000 off 0x165ca0 d0 (0, 1) d1 (0, 1) d2step 1 iter (1, 1)
+  push shim    MM2S_0  BD 1 repeat 0 token 0 chain [1] = 75776 B x 1 | tag 0x1000 off 0x165ce0 d0 (0, 1) d1 (0, 1) d2step 1 iter (1, 1)
+  push shim    MM2S_1  BD 2 repeat 0 token 0 chain [2] = 75776 B x 1 | tag 0x1000 off 0x1784e0 d0 (0, 1) d1 (0, 1) d2step 1 iter (1, 1)
+  push shim    MM2S_0  BD 3 repeat 0 token 0 chain [3] = 69888 B x 1 | tag 0x3000 off 0x983480 d0 (64, 1) d1 (13, 256) d2step 16384 iter (1, 655360)
+  push shim    MM2S_1  BD 4 repeat 0 token 0 chain [4] = 69888 B x 1 | tag 0x3000 off 0xac3480 d0 (64, 1) d1 (13, 256) d2step 16384 iter (1, 655360)
+  push shim    S2MM_0  BD11 repeat 0 token 1 chain [11] = 7680 B x 1 | tag 0x3000 off 0x1b57980 d0 (16, 1) d1 (6, 128) d2step 4096 iter (1, 81920)
+  push memtile S2MM_0  BD 2 repeat 0 token 0
+  push memtile S2MM_1  BD24 repeat 0 token 0
+  push memtile S2MM_0  BD 4 repeat 0 token 0
+  push memtile S2MM_1  BD25 repeat 0 token 0
+  push memtile S2MM_2  BD14 repeat 0 token 0
+  push memtile S2MM_3  BD35 repeat 0 token 0
+  push memtile S2MM_4  BD15 repeat 0 token 0
+  push memtile S2MM_5  BD36 repeat 0 token 0
+  push memtile MM2S_5  BD39 repeat 0 token 0
+  push memtile MM2S_4  BD 3 repeat 0 token 0
+  push memtile MM2S_0  BD 6 repeat 0 token 0
+  push memtile MM2S_1  BD27 repeat 0 token 0
+  push memtile MM2S_2  BD 7 repeat 0 token 0
+  push memtile MM2S_3  BD28 repeat 0 token 0
+  push shim    MM2S_0  BD 1 repeat 0 token 0 chain [1] = 75776 B x 1 | tag 0x1000 off 0x18ace0 d0 (0, 1) d1 (0, 1) d2step 1 iter (1, 1)
+  push shim    MM2S_1  BD 2 repeat 0 token 0 chain [2] = 75776 B x 1 | tag 0x1000 off 0x19d4e0 d0 (0, 1) d1 (0, 1) d2step 1 iter (1, 1)
+  push shim    MM2S_0  BD 3 repeat 0 token 0 chain [3] = 69888 B x 1 | tag 0x3000 off 0x983480 d0 (64, 1) d1 (13, 256) d2step 16384 iter (1, 655360)
+  push shim    MM2S_1  BD 4 repeat 0 token 0 chain [4] = 69888 B x 1 | tag 0x3000 off 0xac3480 d0 (64, 1) d1 (13, 256) d2step 16384 iter (1, 655360)
+  push shim    S2MM_0  BD11 repeat 0 token 1 chain [11] = 7680 B x 1 | tag 0x3000 off 0x1b579c0 d0 (16, 1) d1 (6, 128) d2step 4096 iter (1, 81920)
+  push memtile S2MM_0  BD 2 repeat 0 token 0
+  push memtile S2MM_1  BD24 repeat 0 token 0
+  push memtile S2MM_0  BD 4 repeat 0 token 0
+  push memtile S2MM_1  BD25 repeat 0 token 0
+  push memtile S2MM_2  BD14 repeat 0 token 0
+  push memtile S2MM_3  BD35 repeat 0 token 0
+  push memtile S2MM_4  BD15 repeat 0 token 0
+  push memtile S2MM_5  BD36 repeat 0 token 0
+  push memtile MM2S_5  BD39 repeat 0 token 0
+  push memtile MM2S_4  BD 3 repeat 0 token 0
+  push memtile MM2S_0  BD 6 repeat 0 token 0
+  push memtile MM2S_1  BD27 repeat 0 token 0
+  push memtile MM2S_2  BD 7 repeat 0 token 0
+  push memtile MM2S_3  BD28 repeat 0 token 0
+  push shim    MM2S_0  BD 1 repeat 0 token 0 chain [1] = 75776 B x 1 | tag 0x1000 off 0x1afce0 d0 (0, 1) d1 (0, 1) d2step 1 iter (1, 1)
+  push shim    MM2S_1  BD 2 repeat 0 token 0 chain [2] = 75776 B x 1 | tag 0x1000 off 0x1c24e0 d0 (0, 1) d1 (0, 1) d2step 1 iter (1, 1)
+  push shim    MM2S_0  BD 3 repeat 0 token 0 chain [3] = 69888 B x 1 | tag 0x3000 off 0x983480 d0 (64, 1) d1 (13, 256) d2step 16384 iter (1, 655360)
+  push shim    MM2S_1  BD 4 repeat 0 token 0 chain [4] = 69888 B x 1 | tag 0x3000 off 0xac3480 d0 (64, 1) d1 (13, 256) d2step 16384 iter (1, 655360)
+  push shim    S2MM_0  BD11 repeat 0 token 1 chain [11] = 7680 B x 1 | tag 0x3000 off 0x1b57a00 d0 (16, 1) d1 (6, 128) d2step 4096 iter (1, 81920)
+  push memtile S2MM_0  BD 2 repeat 0 token 0
+  push memtile S2MM_1  BD24 repeat 0 token 0
+  push memtile S2MM_0  BD 4 repeat 0 token 0
+  push memtile S2MM_1  BD25 repeat 0 token 0
+  push memtile S2MM_2  BD14 repeat 0 token 0
+  push memtile S2MM_3  BD35 repeat 0 token 0
+  push memtile S2MM_4  BD15 repeat 0 token 0
+  push memtile S2MM_5  BD36 repeat 0 token 0
+  push memtile MM2S_5  BD39 repeat 0 token 0
+  push memtile MM2S_4  BD 3 repeat 0 token 0
+  push memtile MM2S_0  BD 6 repeat 0 token 0
+  push memtile MM2S_1  BD27 repeat 0 token 0
+  push memtile MM2S_2  BD 7 repeat 0 token 0
+  push memtile MM2S_3  BD28 repeat 0 token 0
+  push shim    MM2S_0  BD 1 repeat 0 token 0 chain [1] = 75776 B x 1 | tag 0x1000 off 0x1d4ce0 d0 (0, 1) d1 (0, 1) d2step 1 iter (1, 1)
+  push shim    MM2S_1  BD 2 repeat 0 token 0 chain [2] = 75776 B x 1 | tag 0x1000 off 0x1e74e0 d0 (0, 1) d1 (0, 1) d2step 1 iter (1, 1)
+  push shim    MM2S_0  BD 3 repeat 0 token 0 chain [3] = 69888 B x 1 | tag 0x3000 off 0x983480 d0 (64, 1) d1 (13, 256) d2step 16384 iter (1, 655360)
+  push shim    MM2S_1  BD 4 repeat 0 token 0 chain [4] = 69888 B x 1 | tag 0x3000 off 0xac3480 d0 (64, 1) d1 (13, 256) d2step 16384 iter (1, 655360)
+  push shim    S2MM_0  BD11 repeat 0 token 1 chain [11] = 7680 B x 1 | tag 0x3000 off 0x1b57a40 d0 (16, 1) d1 (6, 128) d2step 4096 iter (1, 81920)
+  push memtile S2MM_0  BD 2 repeat 0 token 0
+  push memtile S2MM_1  BD24 repeat 0 token 0
+  push memtile S2MM_0  BD 4 repeat 0 token 0
+  push memtile S2MM_1  BD25 repeat 0 token 0
+  push memtile S2MM_2  BD14 repeat 0 token 0
+  push memtile S2MM_3  BD35 repeat 0 token 0
+  push memtile S2MM_4  BD15 repeat 0 token 0
+  push memtile S2MM_5  BD36 repeat 0 token 0
+  push memtile MM2S_5  BD39 repeat 0 token 0
+  push memtile MM2S_4  BD 3 repeat 0 token 0
+  push memtile MM2S_0  BD 6 repeat 0 token 0
+  push memtile MM2S_1  BD27 repeat 0 token 0
+  push memtile MM2S_2  BD 7 repeat 0 token 0
+  push memtile MM2S_3  BD28 repeat 0 token 0
+  push shim    MM2S_0  BD 1 repeat 0 token 0 chain [1] = 75776 B x 1 | tag 0x1000 off 0x1f9ce0 d0 (0, 1) d1 (0, 1) d2step 1 iter (1, 1)
+  push shim    MM2S_1  BD 2 repeat 0 token 0 chain [2] = 75776 B x 1 | tag 0x1000 off 0x20c4e0 d0 (0, 1) d1 (0, 1) d2step 1 iter (1, 1)
+  push shim    MM2S_0  BD 3 repeat 0 token 0 chain [3] = 69888 B x 1 | tag 0x3000 off 0x983480 d0 (64, 1) d1 (13, 256) d2step 16384 iter (1, 655360)
+  push shim    MM2S_1  BD 4 repeat 0 token 0 chain [4] = 69888 B x 1 | tag 0x3000 off 0xac3480 d0 (64, 1) d1 (13, 256) d2step 16384 iter (1, 655360)
+  push shim    S2MM_0  BD11 repeat 0 token 1 chain [11] = 7680 B x 1 | tag 0x3000 off 0x1b57a80 d0 (16, 1) d1 (6, 128) d2step 4096 iter (1, 81920)
+  push memtile S2MM_0  BD 2 repeat 0 token 0
+  push memtile S2MM_1  BD24 repeat 0 token 0
+  push memtile S2MM_0  BD 4 repeat 0 token 0
+  push memtile S2MM_1  BD25 repeat 0 token 0
+  push memtile S2MM_2  BD14 repeat 0 token 0
+  push memtile S2MM_3  BD35 repeat 0 token 0
+  push memtile S2MM_4  BD15 repeat 0 token 0
+  push memtile S2MM_5  BD36 repeat 0 token 0
+  push memtile MM2S_5  BD39 repeat 0 token 0
+  push memtile MM2S_4  BD 3 repeat 0 token 0
+  push memtile MM2S_0  BD 6 repeat 0 token 0
+  push memtile MM2S_1  BD27 repeat 0 token 0
+  push memtile MM2S_2  BD 7 repeat 0 token 0
+  push memtile MM2S_3  BD28 repeat 0 token 0
+  push shim    MM2S_0  BD 1 repeat 0 token 0 chain [1] = 75776 B x 1 | tag 0x1000 off 0x21ece0 d0 (0, 1) d1 (0, 1) d2step 1 iter (1, 1)
+  push shim    MM2S_1  BD 2 repeat 0 token 0 chain [2] = 75776 B x 1 | tag 0x1000 off 0x2314e0 d0 (0, 1) d1 (0, 1) d2step 1 iter (1, 1)
+  push shim    MM2S_0  BD 3 repeat 0 token 0 chain [3] = 69888 B x 1 | tag 0x3000 off 0x983480 d0 (64, 1) d1 (13, 256) d2step 16384 iter (1, 655360)
+  push shim    MM2S_1  BD 4 repeat 0 token 0 chain [4] = 69888 B x 1 | tag 0x3000 off 0xac3480 d0 (64, 1) d1 (13, 256) d2step 16384 iter (1, 655360)
+  push shim    S2MM_0  BD11 repeat 0 token 1 chain [11] = 7680 B x 1 | tag 0x3000 off 0x1b57ac0 d0 (16, 1) d1 (6, 128) d2step 4096 iter (1, 81920)
+  push memtile S2MM_0  BD 2 repeat 0 token 0
+  push memtile S2MM_1  BD24 repeat 0 token 0
+  push memtile S2MM_0  BD 4 repeat 0 token 0
+  push memtile S2MM_1  BD25 repeat 0 token 0
+  push memtile S2MM_2  BD14 repeat 0 token 0
+  push memtile S2MM_3  BD35 repeat 0 token 0
+  push memtile S2MM_4  BD15 repeat 0 token 0
+  push memtile S2MM_5  BD36 repeat 0 token 0
+  push memtile MM2S_5  BD39 repeat 0 token 0
+  push memtile MM2S_4  BD 3 repeat 0 token 0
+  push memtile MM2S_0  BD 6 repeat 0 token 0
+  push memtile MM2S_1  BD27 repeat 0 token 0
+  push memtile MM2S_2  BD 7 repeat 0 token 0
+  push memtile MM2S_3  BD28 repeat 0 token 0
+  push shim    MM2S_0  BD 1 repeat 0 token 0 chain [1] = 75776 B x 1 | tag 0x1000 off 0x243ce0 d0 (0, 1) d1 (0, 1) d2step 1 iter (1, 1)
+  push shim    MM2S_1  BD 2 repeat 0 token 0 chain [2] = 75776 B x 1 | tag 0x1000 off 0x2564e0 d0 (0, 1) d1 (0, 1) d2step 1 iter (1, 1)
+  push shim    MM2S_0  BD 3 repeat 0 token 0 chain [3] = 69888 B x 1 | tag 0x3000 off 0x983480 d0 (64, 1) d1 (13, 256) d2step 16384 iter (1, 655360)
+  push shim    MM2S_1  BD 4 repeat 0 token 0 chain [4] = 69888 B x 1 | tag 0x3000 off 0xac3480 d0 (64, 1) d1 (13, 256) d2step 16384 iter (1, 655360)
+  push shim    S2MM_0  BD11 repeat 0 token 1 chain [11] = 7680 B x 1 | tag 0x3000 off 0x1b57b00 d0 (16, 1) d1 (6, 128) d2step 4096 iter (1, 81920)
+  push memtile S2MM_0  BD 2 repeat 0 token 0
+  push memtile S2MM_1  BD24 repeat 0 token 0
+  push memtile S2MM_0  BD 4 repeat 0 token 0
+  push memtile S2MM_1  BD25 repeat 0 token 0
+  push memtile S2MM_2  BD14 repeat 0 token 0
+  push memtile S2MM_3  BD35 repeat 0 token 0
+  push memtile S2MM_4  BD15 repeat 0 token 0
+  push memtile S2MM_5  BD36 repeat 0 token 0
+  push memtile MM2S_5  BD39 repeat 0 token 0
+  push memtile MM2S_4  BD 3 repeat 0 token 0
+  push memtile MM2S_0  BD 6 repeat 0 token 0
+  push memtile MM2S_1  BD27 repeat 0 token 0
+  push memtile MM2S_2  BD 7 repeat 0 token 0
+  push memtile MM2S_3  BD28 repeat 0 token 0
+  push shim    MM2S_0  BD 1 repeat 0 token 0 chain [1] = 75776 B x 1 | tag 0x1000 off 0x268ce0 d0 (0, 1) d1 (0, 1) d2step 1 iter (1, 1)
+  push shim    MM2S_1  BD 2 repeat 0 token 0 chain [2] = 75776 B x 1 | tag 0x1000 off 0x27b4e0 d0 (0, 1) d1 (0, 1) d2step 1 iter (1, 1)
+  push shim    MM2S_0  BD 3 repeat 0 token 0 chain [3] = 69888 B x 1 | tag 0x3000 off 0x983480 d0 (64, 1) d1 (13, 256) d2step 16384 iter (1, 655360)
+  push shim    MM2S_1  BD 4 repeat 0 token 0 chain [4] = 69888 B x 1 | tag 0x3000 off 0xac3480 d0 (64, 1) d1 (13, 256) d2step 16384 iter (1, 655360)
+  push shim    S2MM_0  BD11 repeat 0 token 1 chain [11] = 7680 B x 1 | tag 0x3000 off 0x1b57b40 d0 (16, 1) d1 (6, 128) d2step 4096 iter (1, 81920)
+##### model_6_cv2_act_Mul_output_0_DequantizeLinear_Output_duplicated_vaip_476  column 3
+  shim BD 0       64 B addr 0x100000165ca0 d0(wrap,step) (0, 1) d1 (0, 1) d2step 1 iter(wrap,step) (1, 1) next None pkt (1, 0)
+  shim BD 1    75776 B addr 0x100000268ce0 d0(wrap,step) (0, 1) d1 (0, 1) d2step 1 iter(wrap,step) (1, 1) next None pkt (1, 0)
+  shim BD 2    75776 B addr 0x10000027b4e0 d0(wrap,step) (0, 1) d1 (0, 1) d2step 1 iter(wrap,step) (1, 1) next None pkt (0, 0)
+  shim BD 3    69888 B addr 0x30000098c480 d0(wrap,step) (64, 1) d1 (13, 256) d2step 16384 iter(wrap,step) (1, 655360) next None pkt (1, 0)
+  shim BD 4    69888 B addr 0x300000acc480 d0(wrap,step) (64, 1) d1 (13, 256) d2step 16384 iter(wrap,step) (1, 655360) next None pkt (0, 0)
+  shim BD11     7680 B addr 0x300001b59f40 d0(wrap,step) (16, 1) d1 (6, 128) d2step 4096 iter(wrap,step) (1, 81920) next None pkt (0, 0)
+  mt BD 0      64 B base  0xe9410 d0 (0, 1) d1 (0, 1) d2 (0, 1) d3step 1 iter (1, 1) next None pkt (0, 0) acq (64, 0, 1) rel (65, 1)
+  mt BD 1      64 B base  0xe9410 d0 (0, 1) d1 (0, 1) d2 (0, 1) d3step 1 iter (1, 1) next None pkt (1, 0) acq (65, -1, 1) rel (64, 0)
+  mt BD 2   75776 B base  0xc4410 d0 (0, 1) d1 (0, 1) d2 (0, 1) d3step 1 iter (1, 1) next None pkt (0, 0) acq (66, 0, 1) rel (67, 1)
+  mt BD 3  151552 B base  0xc4410 d0 (0, 1) d1 (0, 1) d2 (0, 1) d3step 1 iter (1, 1) next None pkt (1, 0) acq (67, 2, 1) rel (66, 0)
+  mt BD 4   69888 B base  0x80000 d0 (2, 1) d1 (32, 546) d2 (13, 2) d3step 26 iter (1, 1) next 5 pkt (0, 0) acq (68, -2, 1) rel (69, 2)
+  mt BD 5   69888 B base  0x91100 d0 (2, 1) d1 (32, 546) d2 (13, 2) d3step 26 iter (1, 1) next 4 pkt (0, 0) acq (70, -2, 1) rel (71, 2)
+  mt BD 6   56320 B base  0x80068 d0 (26, 1) d1 (2, 546) d2 (10, 26) d3step 1092 iter (1, 1) next None pkt (0, 0) acq (69, -1, 1) rel (68, 1)
+  mt BD 7   56320 B base  0xa2210 d0 (26, 1) d1 (2, 546) d2 (11, 26) d3step 1092 iter (1, 1) next None pkt (0, 0) acq (73, -1, 1) rel (72, 1)
+  mt BD14    2560 B base  0xe9450 d0 (16, 1) d1 (5, 128) d2 (8, 16) d3step 16 iter (1, 1) next 16 pkt (0, 0) acq (76, -1, 1) rel (77, 1)
+  mt BD15    2560 B base  0xea850 d0 (16, 1) d1 (5, 128) d2 (8, 16) d3step 16 iter (1, 1) next 17 pkt (0, 0) acq (76, -1, 1) rel (77, 1)
+  mt BD16    2560 B base  0xebc50 d0 (16, 1) d1 (5, 128) d2 (8, 16) d3step 16 iter (1, 1) next 14 pkt (0, 0) acq (78, -1, 1) rel (79, 1)
+  mt BD17    2560 B base  0xed050 d0 (16, 1) d1 (5, 128) d2 (8, 16) d3step 16 iter (1, 1) next 15 pkt (0, 0) acq (78, -1, 1) rel (79, 1)
+  mt BD24   75776 B base  0xd6c10 d0 (0, 1) d1 (0, 1) d2 (0, 1) d3step 1 iter (1, 1) next None pkt (0, 0) acq (66, 0, 1) rel (67, 1)
+  mt BD25   69888 B base  0xa2210 d0 (2, 1) d1 (32, 546) d2 (13, 2) d3step 26 iter (1, 1) next 26 pkt (0, 0) acq (72, -2, 1) rel (73, 2)
+  mt BD26   69888 B base  0xb3310 d0 (2, 1) d1 (32, 546) d2 (13, 2) d3step 26 iter (1, 1) next 25 pkt (0, 0) acq (74, -2, 1) rel (75, 2)
+  mt BD27   56320 B base  0x80410 d0 (26, 1) d1 (2, 546) d2 (11, 26) d3step 1092 iter (1, 1) next None pkt (0, 0) acq (69, -1, 1) rel (68, 1)
+  mt BD28   56320 B base  0xa2620 d0 (26, 1) d1 (2, 546) d2 (11, 26) d3step 1092 iter (1, 1) next None pkt (0, 0) acq (73, -1, 1) rel (72, 1)
+  mt BD35    2560 B base  0xe9e50 d0 (16, 1) d1 (5, 128) d2 (8, 16) d3step 16 iter (1, 1) next 37 pkt (0, 0) acq (76, -1, 1) rel (77, 1)
+  mt BD36    2560 B base  0xeb250 d0 (16, 1) d1 (5, 128) d2 (8, 16) d3step 16 iter (1, 1) next 38 pkt (0, 0) acq (76, -1, 1) rel (77, 1)
+  mt BD37    2560 B base  0xec650 d0 (16, 1) d1 (5, 128) d2 (8, 16) d3step 16 iter (1, 1) next 35 pkt (0, 0) acq (78, -1, 1) rel (79, 1)
+  mt BD38    2560 B base  0xeda50 d0 (16, 1) d1 (5, 128) d2 (8, 16) d3step 16 iter (1, 1) next 36 pkt (0, 0) acq (78, -1, 1) rel (79, 1)
+  mt BD39    7680 B base  0xe9450 d0 (16, 1) d1 (6, 16) d2 (20, 128) d3step 1 iter (1, 1) next 40 pkt (0, 0) acq (77, -4, 1) rel (76, 4)
+  mt BD40    7680 B base  0xebc50 d0 (16, 1) d1 (6, 16) d2 (20, 128) d3step 1 iter (1, 1) next 39 pkt (0, 0) acq (79, -4, 1) rel (78, 4)
+
+## model.7 (model_6_cv2_act segment), cmt, columns 0 and 3
+##### model_6_cv2_act_Mul_output_0_DequantizeLinear_Output_duplicated_vaip_476  column 0
+  shim BD 0     5120 B addr 0x300001b57b80 d0(wrap,step) (16, 1) d1 (20, 128) d2step 2560 iter(wrap,step) (2, 16) next None pkt (0, 0)
+  shim BD 1    41984 B addr 0x300000b5ba80 d0(wrap,step) (64, 1) d1 (41, 256) d2step 16384 iter(wrap,step) (1, 10240) next None pkt (1, 0)
+  shim BD 2    52480 B addr 0x300000b9ba80 d0(wrap,step) (64, 1) d1 (41, 256) d2step 16384 iter(wrap,step) (1, 10240) next None pkt (0, 0)
+  shim BD 3    37376 B addr 0x10000017b5e0 d0(wrap,step) (0, 1) d1 (0, 1) d2step 1 iter(wrap,step) (4, 18688) next None pkt (1, 0)
+  shim BD 4    37376 B addr 0x1000001847e0 d0(wrap,step) (0, 1) d1 (0, 1) d2step 1 iter(wrap,step) (4, 18688) next None pkt (0, 0)
+  shim BD 5    37376 B addr 0x1000001847e0 d0(wrap,step) (0, 1) d1 (0, 1) d2step 1 iter(wrap,step) (4, 18688) next None pkt (0, 0)
+  mt BD 0    1280 B base  0xbb940 d0 (4, 1) d1 (4, 320) d2 (20, 16) d3step 4 iter (1, 1) next 1 pkt (0, 0) acq (68, -1, 1) rel (69, 1)
+  mt BD 1    1280 B base  0xbcd40 d0 (4, 1) d1 (4, 320) d2 (20, 16) d3step 4 iter (1, 1) next 0 pkt (0, 0) acq (78, -1, 1) rel (79, 1)
+  mt BD 2    1280 B base  0xbb960 d0 (4, 1) d1 (4, 320) d2 (20, 16) d3step 4 iter (1, 1) next 3 pkt (0, 0) acq (68, -1, 1) rel (69, 1)
+  mt BD 3    1280 B base  0xbcd60 d0 (4, 1) d1 (4, 320) d2 (20, 16) d3step 4 iter (1, 1) next 2 pkt (0, 0) acq (78, -1, 1) rel (79, 1)
+  mt BD 4   41984 B base  0xa4800 d0 (2, 1) d1 (32, 738) d2 (41, 2) d3step 82 iter (1, 1) next None pkt (0, 0) acq (64, 0, 1) rel (65, 1)
+  mt BD 5  101376 B base  0xa4800 d0 (80, 1) d1 (4, 738) d2 (9, 82) d3step 2952 iter (1, 1) next None pkt (1, 0) acq (65, 2, 1) rel (64, 0)
+  mt BD 6   37376 B base  0x80000 d0 (0, 1) d1 (0, 1) d2 (0, 1) d3step 1 iter (1, 1) next 7 pkt (0, 0) acq (72, -2, 1) rel (73, 2)
+  mt BD 7   37376 B base  0x92400 d0 (0, 1) d1 (0, 1) d2 (0, 1) d3step 1 iter (1, 1) next 6 pkt (0, 0) acq (66, -2, 1) rel (67, 2)
+  mt BD 8   18688 B base  0x80000 d0 (0, 1) d1 (0, 1) d2 (0, 1) d3step 1 iter (1, 1) next None pkt (0, 0) acq (73, -1, 1) rel (72, 1)
+  mt BD 9   18688 B base  0x89200 d0 (0, 1) d1 (0, 1) d2 (0, 1) d3step 1 iter (1, 1) next None pkt (0, 0) acq (71, -1, 1) rel (70, 1)
+  mt BD10   18688 B base  0x92400 d0 (0, 1) d1 (0, 1) d2 (0, 1) d3step 1 iter (1, 1) next None pkt (0, 0) acq (67, -1, 1) rel (66, 1)
+  mt BD11   18688 B base  0x9b600 d0 (0, 1) d1 (0, 1) d2 (0, 1) d3step 1 iter (1, 1) next None pkt (0, 0) acq (75, -1, 1) rel (74, 1)
+  mt BD12   18688 B base  0x92400 d0 (0, 1) d1 (0, 1) d2 (0, 1) d3step 1 iter (1, 1) next None pkt (0, 0) acq (67, -1, 1) rel (66, 1)
+  mt BD13   18688 B base  0x9b600 d0 (0, 1) d1 (0, 1) d2 (0, 1) d3step 1 iter (1, 1) next None pkt (0, 0) acq (75, -1, 1) rel (74, 1)
+  mt BD24    1280 B base  0xbb950 d0 (4, 1) d1 (4, 320) d2 (20, 16) d3step 4 iter (1, 1) next 25 pkt (0, 0) acq (68, -1, 1) rel (69, 1)
+  mt BD25    1280 B base  0xbcd50 d0 (4, 1) d1 (4, 320) d2 (20, 16) d3step 4 iter (1, 1) next 24 pkt (0, 0) acq (78, -1, 1) rel (79, 1)
+  mt BD26    1280 B base  0xbb970 d0 (4, 1) d1 (4, 320) d2 (20, 16) d3step 4 iter (1, 1) next 27 pkt (0, 0) acq (68, -1, 1) rel (69, 1)
+  mt BD27    1280 B base  0xbcd70 d0 (4, 1) d1 (4, 320) d2 (20, 16) d3step 4 iter (1, 1) next 26 pkt (0, 0) acq (78, -1, 1) rel (79, 1)
+  mt BD28    5120 B base  0xbb940 d0 (0, 1) d1 (0, 1) d2 (0, 1) d3step 1 iter (1, 1) next 29 pkt (0, 0) acq (69, -4, 1) rel (68, 4)
+  mt BD29    5120 B base  0xbcd40 d0 (0, 1) d1 (0, 1) d2 (0, 1) d3step 1 iter (1, 1) next 28 pkt (0, 0) acq (79, -4, 1) rel (78, 4)
+  mt BD30   52480 B base  0xa4d20 d0 (2, 1) d1 (32, 738) d2 (41, 2) d3step 82 iter (1, 1) next None pkt (0, 0) acq (64, 0, 1) rel (65, 1)
+  mt BD31   37376 B base  0x89200 d0 (0, 1) d1 (0, 1) d2 (0, 1) d3step 1 iter (1, 1) next 32 pkt (0, 0) acq (70, -2, 1) rel (71, 2)
+  mt BD32   37376 B base  0x9b600 d0 (0, 1) d1 (0, 1) d2 (0, 1) d3step 1 iter (1, 1) next 31 pkt (0, 0) acq (74, -2, 1) rel (75, 2)
+  mt BD33   18688 B base  0x84900 d0 (0, 1) d1 (0, 1) d2 (0, 1) d3step 1 iter (1, 1) next None pkt (0, 0) acq (73, -1, 1) rel (72, 1)
+  mt BD34   18688 B base  0x8db00 d0 (0, 1) d1 (0, 1) d2 (0, 1) d3step 1 iter (1, 1) next None pkt (0, 0) acq (71, -1, 1) rel (70, 1)
+  mt BD35   18688 B base  0x96d00 d0 (0, 1) d1 (0, 1) d2 (0, 1) d3step 1 iter (1, 1) next None pkt (0, 0) acq (67, -1, 1) rel (66, 1)
+  mt BD36   18688 B base  0x9ff00 d0 (0, 1) d1 (0, 1) d2 (0, 1) d3step 1 iter (1, 1) next None pkt (0, 0) acq (75, -1, 1) rel (74, 1)
+  push memtile S2MM_0  BD 0 repeat 0 token 0
+  push memtile MM2S_4  BD 1 repeat 0 token 0
+  push memtile S2MM_2  BD 2 repeat 0 token 0
+  push memtile S2MM_3  BD24 repeat 0 token 0
+  push memtile S2MM_4  BD 4 repeat 0 token 0
+  push memtile S2MM_5  BD26 repeat 0 token 0
+  push memtile MM2S_5  BD28 repeat 0 token 0
+  push memtile S2MM_0  BD 6 repeat 0 token 0
+  push memtile S2MM_1  BD30 repeat 0 token 0
+  push memtile MM2S_4  BD 7 repeat 1 token 0
+  push memtile S2MM_0  BD 8 repeat 0 token 0
+  push memtile S2MM_1  BD31 repeat 0 token 0
+  push memtile MM2S_0  BD10 repeat 0 token 0
+  push memtile MM2S_1  BD33 repeat 0 token 0
+  push memtile MM2S_2  BD11 repeat 0 token 0
+  push memtile MM2S_3  BD34 repeat 0 token 0
+  push memtile MM2S_0  BD12 repeat 0 token 0
+  push memtile MM2S_1  BD35 repeat 0 token 0
+  push memtile MM2S_2  BD13 repeat 0 token 0
+  push memtile MM2S_3  BD36 repeat 0 token 0
+  push memtile MM2S_0  BD10 repeat 0 token 0
+  push memtile MM2S_1  BD33 repeat 0 token 0
+  push memtile MM2S_2  BD11 repeat 0 token 0
+  push memtile MM2S_3  BD34 repeat 0 token 0
+  push memtile MM2S_0  BD12 repeat 0 token 0
+  push memtile MM2S_1  BD35 repeat 0 token 0
+  push memtile MM2S_2  BD13 repeat 0 token 0
+  push memtile MM2S_3  BD36 repeat 0 token 0
+  push shim    MM2S_0  BD 0 repeat 0 token 0 chain [0] = 64 B x 1 | tag 0x1000 off 0x17b5a0 d0 (0, 1) d1 (0, 1) d2step 1 iter (1, 1)
+  push shim    S2MM_0  BD 1 repeat 1 token 1 chain [1] = 5120 B x 2 | tag 0x3000 off 0x1b2fb80 d0 (16, 1) d1 (20, 128) d2step 2560 iter (2, 16)
+  push shim    MM2S_0  BD 2 repeat 0 token 0 chain [2] = 41984 B x 1 | tag 0x3000 off 0x96ba80 d0 (64, 1) d1 (41, 256) d2step 16384 iter (1, 10240)
+  push shim    MM2S_1  BD 3 repeat 0 token 0 chain [3] = 52480 B x 1 | tag 0x3000 off 0x9aba80 d0 (64, 1) d1 (41, 256) d2step 16384 iter (1, 10240)
+  push shim    MM2S_0  BD 4 repeat 3 token 0 chain [4] = 37376 B x 4 | tag 0x1000 off 0x17b5e0 d0 (0, 1) d1 (0, 1) d2step 1 iter (4, 18688)
+  push shim    MM2S_1  BD 5 repeat 3 token 0 chain [5] = 37376 B x 4 | tag 0x1000 off 0x1847e0 d0 (0, 1) d1 (0, 1) d2step 1 iter (4, 18688)
+  push memtile S2MM_2  BD 0 repeat 0 token 0
+  push memtile S2MM_3  BD24 repeat 0 token 0
+  push memtile S2MM_4  BD 2 repeat 0 token 0
+  push memtile S2MM_5  BD26 repeat 0 token 0
+  push memtile MM2S_5  BD28 repeat 0 token 0
+  push memtile S2MM_0  BD 4 repeat 0 token 0
+  push memtile S2MM_1  BD30 repeat 0 token 0
+  push memtile MM2S_4  BD 5 repeat 1 token 0
+  push memtile S2MM_0  BD 6 repeat 0 token 0
+  push memtile S2MM_1  BD31 repeat 0 token 0
+  push memtile MM2S_0  BD 8 repeat 0 token 0
+  push memtile MM2S_1  BD33 repeat 0 token 0
+  push memtile MM2S_2  BD 9 repeat 0 token 0
+  push memtile MM2S_3  BD34 repeat 0 token 0
+  push memtile MM2S_0  BD10 repeat 0 token 0
+  push memtile MM2S_1  BD35 repeat 0 token 0
+  push memtile MM2S_2  BD11 repeat 0 token 0
+  push memtile MM2S_3  BD36 repeat 0 token 0
+  push memtile MM2S_0  BD 8 repeat 0 token 0
+  push memtile MM2S_1  BD33 repeat 0 token 0
+  push memtile MM2S_2  BD 9 repeat 0 token 0
+  push memtile MM2S_3  BD34 repeat 0 token 0
+  push memtile MM2S_0  BD10 repeat 0 token 0
+  push memtile MM2S_1  BD35 repeat 0 token 0
+  push memtile MM2S_2  BD11 repeat 0 token 0
+  push memtile MM2S_3  BD36 repeat 0 token 0
+  push shim    S2MM_0  BD 0 repeat 1 token 1 chain [0] = 5120 B x 2 | tag 0x3000 off 0x1b39b80 d0 (16, 1) d1 (20, 128) d2step 2560 iter (2, 16)
+  push shim    MM2S_0  BD 1 repeat 0 token 0 chain [1] = 41984 B x 1 | tag 0x3000 off 0x9dba80 d0 (64, 1) d1 (41, 256) d2step 16384 iter (1, 10240)
+  push shim    MM2S_1  BD 2 repeat 0 token 0 chain [2] = 52480 B x 1 | tag 0x3000 off 0xa1ba80 d0 (64, 1) d1 (41, 256) d2step 16384 iter (1, 10240)
+  push shim    MM2S_0  BD 3 repeat 3 token 0 chain [3] = 37376 B x 4 | tag 0x1000 off 0x17b5e0 d0 (0, 1) d1 (0, 1) d2step 1 iter (4, 18688)
+  push shim    MM2S_1  BD 4 repeat 3 token 0 chain [4] = 37376 B x 4 | tag 0x1000 off 0x1847e0 d0 (0, 1) d1 (0, 1) d2step 1 iter (4, 18688)
+  push memtile S2MM_2  BD 0 repeat 0 token 0
+  push memtile S2MM_3  BD24 repeat 0 token 0
+  push memtile S2MM_4  BD 2 repeat 0 token 0
+  push memtile S2MM_5  BD26 repeat 0 token 0
+  push memtile MM2S_5  BD28 repeat 0 token 0
+  push memtile S2MM_0  BD 4 repeat 0 token 0
+  push memtile S2MM_1  BD30 repeat 0 token 0
+  push memtile MM2S_4  BD 5 repeat 1 token 0
+  push memtile S2MM_0  BD 6 repeat 0 token 0
+  push memtile S2MM_1  BD31 repeat 0 token 0
+  push memtile MM2S_0  BD 8 repeat 0 token 0
+  push memtile MM2S_1  BD33 repeat 0 token 0
+  push memtile MM2S_2  BD 9 repeat 0 token 0
+  push memtile MM2S_3  BD34 repeat 0 token 0
+  push memtile MM2S_0  BD10 repeat 0 token 0
+  push memtile MM2S_1  BD35 repeat 0 token 0
+  push memtile MM2S_2  BD11 repeat 0 token 0
+  push memtile MM2S_3  BD36 repeat 0 token 0
+  push memtile MM2S_0  BD 8 repeat 0 token 0
+  push memtile MM2S_1  BD33 repeat 0 token 0
+  push memtile MM2S_2  BD 9 repeat 0 token 0
+  push memtile MM2S_3  BD34 repeat 0 token 0
+  push memtile MM2S_0  BD10 repeat 0 token 0
+  push memtile MM2S_1  BD35 repeat 0 token 0
+  push memtile MM2S_2  BD11 repeat 0 token 0
+  push memtile MM2S_3  BD36 repeat 0 token 0
+  push shim    S2MM_0  BD 0 repeat 1 token 1 chain [0] = 5120 B x 2 | tag 0x3000 off 0x1b43b80 d0 (16, 1) d1 (20, 128) d2step 2560 iter (2, 16)
+  push shim    MM2S_0  BD 1 repeat 0 token 0 chain [1] = 41984 B x 1 | tag 0x3000 off 0xa5ba80 d0 (64, 1) d1 (41, 256) d2step 16384 iter (1, 10240)
+  push shim    MM2S_1  BD 2 repeat 0 token 0 chain [2] = 52480 B x 1 | tag 0x3000 off 0xa9ba80 d0 (64, 1) d1 (41, 256) d2step 16384 iter (1, 10240)
+  push shim    MM2S_0  BD 3 repeat 3 token 0 chain [3] = 37376 B x 4 | tag 0x1000 off 0x17b5e0 d0 (0, 1) d1 (0, 1) d2step 1 iter (4, 18688)
+  push shim    MM2S_1  BD 4 repeat 3 token 0 chain [4] = 37376 B x 4 | tag 0x1000 off 0x1847e0 d0 (0, 1) d1 (0, 1) d2step 1 iter (4, 18688)
+  push memtile S2MM_2  BD 0 repeat 0 token 0
+  push memtile S2MM_3  BD24 repeat 0 token 0
+  push memtile S2MM_4  BD 2 repeat 0 token 0
+  push memtile S2MM_5  BD26 repeat 0 token 0
+  push memtile MM2S_5  BD28 repeat 0 token 0
+  push memtile S2MM_0  BD 4 repeat 0 token 0
+  push memtile S2MM_1  BD30 repeat 0 token 0
+  push memtile MM2S_4  BD 5 repeat 1 token 0
+  push memtile S2MM_0  BD 6 repeat 0 token 0
+  push memtile S2MM_1  BD31 repeat 0 token 0
+  push memtile MM2S_0  BD 8 repeat 0 token 0
+  push memtile MM2S_1  BD33 repeat 0 token 0
+  push memtile MM2S_2  BD 9 repeat 0 token 0
+  push memtile MM2S_3  BD34 repeat 0 token 0
+  push memtile MM2S_0  BD10 repeat 0 token 0
+  push memtile MM2S_1  BD35 repeat 0 token 0
+  push memtile MM2S_2  BD11 repeat 0 token 0
+  push memtile MM2S_3  BD36 repeat 0 token 0
+  push memtile MM2S_0  BD 8 repeat 0 token 0
+  push memtile MM2S_1  BD33 repeat 0 token 0
+  push memtile MM2S_2  BD 9 repeat 0 token 0
+  push memtile MM2S_3  BD34 repeat 0 token 0
+  push memtile MM2S_0  BD10 repeat 0 token 0
+  push memtile MM2S_1  BD35 repeat 0 token 0
+  push memtile MM2S_2  BD11 repeat 0 token 0
+  push memtile MM2S_3  BD36 repeat 0 token 0
+  push shim    S2MM_0  BD 0 repeat 1 token 1 chain [0] = 5120 B x 2 | tag 0x3000 off 0x1b4db80 d0 (16, 1) d1 (20, 128) d2step 2560 iter (2, 16)
+  push shim    MM2S_0  BD 1 repeat 0 token 0 chain [1] = 41984 B x 1 | tag 0x3000 off 0xadba80 d0 (64, 1) d1 (41, 256) d2step 16384 iter (1, 10240)
+  push shim    MM2S_1  BD 2 repeat 0 token 0 chain [2] = 52480 B x 1 | tag 0x3000 off 0xb1ba80 d0 (64, 1) d1 (41, 256) d2step 16384 iter (1, 10240)
+  push shim    MM2S_0  BD 3 repeat 3 token 0 chain [3] = 37376 B x 4 | tag 0x1000 off 0x17b5e0 d0 (0, 1) d1 (0, 1) d2step 1 iter (4, 18688)
+  push shim    MM2S_1  BD 4 repeat 3 token 0 chain [4] = 37376 B x 4 | tag 0x1000 off 0x1847e0 d0 (0, 1) d1 (0, 1) d2step 1 iter (4, 18688)
+  push memtile S2MM_2  BD 0 repeat 0 token 0
+  push memtile S2MM_3  BD24 repeat 0 token 0
+  push memtile S2MM_4  BD 2 repeat 0 token 0
+  push memtile S2MM_5  BD26 repeat 0 token 0
+  push memtile MM2S_5  BD28 repeat 0 token 0
+  push memtile S2MM_0  BD 4 repeat 0 token 0
+  push memtile S2MM_1  BD30 repeat 0 token 0
+  push memtile MM2S_4  BD 5 repeat 1 token 0
+  push memtile S2MM_0  BD 6 repeat 0 token 0
+  push memtile S2MM_1  BD31 repeat 0 token 0
+  push memtile MM2S_0  BD 8 repeat 0 token 0
+  push memtile MM2S_1  BD33 repeat 0 token 0
+  push memtile MM2S_2  BD 9 repeat 0 token 0
+  push memtile MM2S_3  BD34 repeat 0 token 0
+  push memtile MM2S_0  BD10 repeat 0 token 0
+  push memtile MM2S_1  BD35 repeat 0 token 0
+  push memtile MM2S_2  BD11 repeat 0 token 0
+  push memtile MM2S_3  BD36 repeat 0 token 0
+  push memtile MM2S_0  BD 8 repeat 0 token 0
+  push memtile MM2S_1  BD33 repeat 0 token 0
+  push memtile MM2S_2  BD 9 repeat 0 token 0
+  push memtile MM2S_3  BD34 repeat 0 token 0
+  push memtile MM2S_0  BD10 repeat 0 token 0
+  push memtile MM2S_1  BD35 repeat 0 token 0
+  push memtile MM2S_2  BD11 repeat 0 token 0
+  push memtile MM2S_3  BD36 repeat 0 token 0
+  push shim    S2MM_0  BD 0 repeat 1 token 1 chain [0] = 5120 B x 2 | tag 0x3000 off 0x1b57b80 d0 (16, 1) d1 (20, 128) d2step 2560 iter (2, 16)
+  push shim    MM2S_0  BD 1 repeat 0 token 0 chain [1] = 41984 B x 1 | tag 0x3000 off 0xb5ba80 d0 (64, 1) d1 (41, 256) d2step 16384 iter (1, 10240)
+  push shim    MM2S_1  BD 2 repeat 0 token 0 chain [2] = 52480 B x 1 | tag 0x3000 off 0xb9ba80 d0 (64, 1) d1 (41, 256) d2step 16384 iter (1, 10240)
+  push shim    MM2S_0  BD 3 repeat 3 token 0 chain [3] = 37376 B x 4 | tag 0x1000 off 0x17b5e0 d0 (0, 1) d1 (0, 1) d2step 1 iter (4, 18688)
+  push shim    MM2S_1  BD 4 repeat 3 token 0 chain [4] = 37376 B x 4 | tag 0x1000 off 0x1847e0 d0 (0, 1) d1 (0, 1) d2step 1 iter (4, 18688)
+##### model_6_cv2_act_Mul_output_0_DequantizeLinear_Output_duplicated_vaip_476  column 3
+  shim BD 0     5120 B addr 0x300001b57d00 d0(wrap,step) (16, 1) d1 (20, 128) d2step 2560 iter(wrap,step) (2, 16) next None pkt (0, 0)
+  shim BD 1    41984 B addr 0x300000b5ba80 d0(wrap,step) (64, 1) d1 (41, 256) d2step 16384 iter(wrap,step) (1, 10240) next None pkt (1, 0)
+  shim BD 2    52480 B addr 0x300000b9ba80 d0(wrap,step) (64, 1) d1 (41, 256) d2step 16384 iter(wrap,step) (1, 10240) next None pkt (0, 0)
+  shim BD 3    37376 B addr 0x1000002565e0 d0(wrap,step) (0, 1) d1 (0, 1) d2step 1 iter(wrap,step) (4, 18688) next None pkt (1, 0)
+  shim BD 4    37376 B addr 0x10000025f7e0 d0(wrap,step) (0, 1) d1 (0, 1) d2step 1 iter(wrap,step) (4, 18688) next None pkt (0, 0)
+  shim BD 5    37376 B addr 0x10000025f7e0 d0(wrap,step) (0, 1) d1 (0, 1) d2step 1 iter(wrap,step) (4, 18688) next None pkt (0, 0)
+  mt BD 0    1280 B base  0xbb940 d0 (4, 1) d1 (4, 320) d2 (20, 16) d3step 4 iter (1, 1) next 1 pkt (0, 0) acq (68, -1, 1) rel (69, 1)
+  mt BD 1    1280 B base  0xbcd40 d0 (4, 1) d1 (4, 320) d2 (20, 16) d3step 4 iter (1, 1) next 0 pkt (0, 0) acq (78, -1, 1) rel (79, 1)
+  mt BD 2    1280 B base  0xbb960 d0 (4, 1) d1 (4, 320) d2 (20, 16) d3step 4 iter (1, 1) next 3 pkt (0, 0) acq (68, -1, 1) rel (69, 1)
+  mt BD 3    1280 B base  0xbcd60 d0 (4, 1) d1 (4, 320) d2 (20, 16) d3step 4 iter (1, 1) next 2 pkt (0, 0) acq (78, -1, 1) rel (79, 1)
+  mt BD 4   41984 B base  0xa4800 d0 (2, 1) d1 (32, 738) d2 (41, 2) d3step 82 iter (1, 1) next None pkt (0, 0) acq (64, 0, 1) rel (65, 1)
+  mt BD 5  101376 B base  0xa4800 d0 (80, 1) d1 (4, 738) d2 (9, 82) d3step 2952 iter (1, 1) next None pkt (1, 0) acq (65, 2, 1) rel (64, 0)
+  mt BD 6   37376 B base  0x80000 d0 (0, 1) d1 (0, 1) d2 (0, 1) d3step 1 iter (1, 1) next 7 pkt (0, 0) acq (72, -2, 1) rel (73, 2)
+  mt BD 7   37376 B base  0x92400 d0 (0, 1) d1 (0, 1) d2 (0, 1) d3step 1 iter (1, 1) next 6 pkt (0, 0) acq (66, -2, 1) rel (67, 2)
+  mt BD 8   18688 B base  0x80000 d0 (0, 1) d1 (0, 1) d2 (0, 1) d3step 1 iter (1, 1) next None pkt (0, 0) acq (73, -1, 1) rel (72, 1)
+  mt BD 9   18688 B base  0x89200 d0 (0, 1) d1 (0, 1) d2 (0, 1) d3step 1 iter (1, 1) next None pkt (0, 0) acq (71, -1, 1) rel (70, 1)
+  mt BD10   18688 B base  0x92400 d0 (0, 1) d1 (0, 1) d2 (0, 1) d3step 1 iter (1, 1) next None pkt (0, 0) acq (67, -1, 1) rel (66, 1)
+  mt BD11   18688 B base  0x9b600 d0 (0, 1) d1 (0, 1) d2 (0, 1) d3step 1 iter (1, 1) next None pkt (0, 0) acq (75, -1, 1) rel (74, 1)
+  mt BD12   18688 B base  0x92400 d0 (0, 1) d1 (0, 1) d2 (0, 1) d3step 1 iter (1, 1) next None pkt (0, 0) acq (67, -1, 1) rel (66, 1)
+  mt BD13   18688 B base  0x9b600 d0 (0, 1) d1 (0, 1) d2 (0, 1) d3step 1 iter (1, 1) next None pkt (0, 0) acq (75, -1, 1) rel (74, 1)
+  mt BD24    1280 B base  0xbb950 d0 (4, 1) d1 (4, 320) d2 (20, 16) d3step 4 iter (1, 1) next 25 pkt (0, 0) acq (68, -1, 1) rel (69, 1)
+  mt BD25    1280 B base  0xbcd50 d0 (4, 1) d1 (4, 320) d2 (20, 16) d3step 4 iter (1, 1) next 24 pkt (0, 0) acq (78, -1, 1) rel (79, 1)
+  mt BD26    1280 B base  0xbb970 d0 (4, 1) d1 (4, 320) d2 (20, 16) d3step 4 iter (1, 1) next 27 pkt (0, 0) acq (68, -1, 1) rel (69, 1)
+  mt BD27    1280 B base  0xbcd70 d0 (4, 1) d1 (4, 320) d2 (20, 16) d3step 4 iter (1, 1) next 26 pkt (0, 0) acq (78, -1, 1) rel (79, 1)
+  mt BD28    5120 B base  0xbb940 d0 (0, 1) d1 (0, 1) d2 (0, 1) d3step 1 iter (1, 1) next 29 pkt (0, 0) acq (69, -4, 1) rel (68, 4)
+  mt BD29    5120 B base  0xbcd40 d0 (0, 1) d1 (0, 1) d2 (0, 1) d3step 1 iter (1, 1) next 28 pkt (0, 0) acq (79, -4, 1) rel (78, 4)
+  mt BD30   52480 B base  0xa4d20 d0 (2, 1) d1 (32, 738) d2 (41, 2) d3step 82 iter (1, 1) next None pkt (0, 0) acq (64, 0, 1) rel (65, 1)
+  mt BD31   37376 B base  0x89200 d0 (0, 1) d1 (0, 1) d2 (0, 1) d3step 1 iter (1, 1) next 32 pkt (0, 0) acq (70, -2, 1) rel (71, 2)
+  mt BD32   37376 B base  0x9b600 d0 (0, 1) d1 (0, 1) d2 (0, 1) d3step 1 iter (1, 1) next 31 pkt (0, 0) acq (74, -2, 1) rel (75, 2)
+  mt BD33   18688 B base  0x84900 d0 (0, 1) d1 (0, 1) d2 (0, 1) d3step 1 iter (1, 1) next None pkt (0, 0) acq (73, -1, 1) rel (72, 1)
+  mt BD34   18688 B base  0x8db00 d0 (0, 1) d1 (0, 1) d2 (0, 1) d3step 1 iter (1, 1) next None pkt (0, 0) acq (71, -1, 1) rel (70, 1)
+  mt BD35   18688 B base  0x96d00 d0 (0, 1) d1 (0, 1) d2 (0, 1) d3step 1 iter (1, 1) next None pkt (0, 0) acq (67, -1, 1) rel (66, 1)
+  mt BD36   18688 B base  0x9ff00 d0 (0, 1) d1 (0, 1) d2 (0, 1) d3step 1 iter (1, 1) next None pkt (0, 0) acq (75, -1, 1) rel (74, 1)
+
+## model.3 (model_2_cv2_act segment), ctl, columns 0 and 3
+##### model_2_cv2_act_Mul_output_0_DequantizeLinear_Output_vaip_258  column 0
+  shim BD 0       64 B addr 0x10000000cda0 d0(wrap,step) (0, 1) d1 (0, 1) d2step 1 iter(wrap,step) (1, 1) next None pkt (1, 0)
+  shim BD 1    37888 B addr 0x10000000cde0 d0(wrap,step) (0, 1) d1 (0, 1) d2step 1 iter(wrap,step) (1, 1) next None pkt (1, 0)
+  shim BD 2    37888 B addr 0x1000000161e0 d0(wrap,step) (0, 1) d1 (0, 1) d2step 1 iter(wrap,step) (1, 1) next None pkt (0, 0)
+  shim BD 3    55104 B addr 0x3000019eb780 d0(wrap,step) (656, 1) d1 (21, 2560) d2step 640 iter(wrap,step) (4, 102400) next None pkt (1, 0)
+  shim BD 4    55104 B addr 0x300001a1d780 d0(wrap,step) (656, 1) d1 (21, 2560) d2step 640 iter(wrap,step) (4, 102400) next None pkt (0, 0)
+  shim BD11    51200 B addr 0x3000012505c0 d0(wrap,step) (640, 1) d1 (20, 2560) d2step 640 iter(wrap,step) (4, 51200) next None pkt (0, 0)
+  mt BD 0      64 B base  0xc8510 d0 (0, 1) d1 (0, 1) d2 (0, 1) d3step 1 iter (1, 1) next None pkt (0, 0) acq (64, 0, 1) rel (65, 1)
+  mt BD 1      64 B base  0xc8510 d0 (0, 1) d1 (0, 1) d2 (0, 1) d3step 1 iter (1, 1) next None pkt (1, 0) acq (65, -1, 1) rel (64, 0)
+  mt BD 2   37888 B base  0xb5d10 d0 (0, 1) d1 (0, 1) d2 (0, 1) d3step 1 iter (1, 1) next None pkt (0, 0) acq (66, 0, 1) rel (67, 1)
+  mt BD 3   75776 B base  0xb5d10 d0 (0, 1) d1 (0, 1) d2 (0, 1) d3step 1 iter (1, 1) next None pkt (1, 0) acq (67, 2, 1) rel (66, 0)
+  mt BD 4   55104 B base  0x80000 d0 (2, 1) d1 (8, 1722) d2 (41, 2) d3step 82 iter (1, 1) next 5 pkt (0, 0) acq (68, -8, 1) rel (69, 8)
+  mt BD 5   55104 B base  0x8d740 d0 (2, 1) d1 (8, 1722) d2 (41, 2) d3step 82 iter (1, 1) next 4 pkt (0, 0) acq (70, -8, 1) rel (71, 8)
+  mt BD 6   30976 B base  0x80150 d0 (80, 1) d1 (2, 1722) d2 (10, 82) d3step 3444 iter (1, 1) next None pkt (0, 0) acq (69, -1, 1) rel (68, 1)
+  mt BD 7   30976 B base  0x9ae98 d0 (80, 1) d1 (2, 1722) d2 (11, 82) d3step 3444 iter (1, 1) next None pkt (0, 0) acq (73, -1, 1) rel (72, 1)
+  mt BD 8   30976 B base  0x8d748 d0 (80, 1) d1 (2, 1722) d2 (11, 82) d3step 3444 iter (1, 1) next None pkt (0, 0) acq (71, -1, 1) rel (70, 1)
+  mt BD 9   30976 B base  0xa85d8 d0 (80, 1) d1 (2, 1722) d2 (11, 82) d3step 3444 iter (1, 1) next None pkt (0, 0) acq (75, -1, 1) rel (74, 1)
+  mt BD10   30976 B base  0x80008 d0 (80, 1) d1 (2, 1722) d2 (11, 82) d3step 3444 iter (1, 1) next None pkt (0, 0) acq (69, -1, 1) rel (68, 1)
+  mt BD11   30976 B base  0x9ae98 d0 (80, 1) d1 (2, 1722) d2 (11, 82) d3step 3444 iter (1, 1) next None pkt (0, 0) acq (73, -1, 1) rel (72, 1)
+  mt BD12   30976 B base  0x8d748 d0 (80, 1) d1 (2, 1722) d2 (11, 82) d3step 3444 iter (1, 1) next None pkt (0, 0) acq (71, -1, 1) rel (70, 1)
+  mt BD13   30976 B base  0xa85d8 d0 (80, 1) d1 (2, 1722) d2 (11, 82) d3step 3444 iter (1, 1) next None pkt (0, 0) acq (75, -1, 1) rel (74, 1)
+  mt BD14   12800 B base  0xc8550 d0 (8, 1) d1 (5, 640) d2 (20, 32) d3step 8 iter (1, 1) next 16 pkt (0, 0) acq (76, -1, 1) rel (77, 1)
+  mt BD15   12800 B base  0xce950 d0 (8, 1) d1 (5, 640) d2 (20, 32) d3step 8 iter (1, 1) next 17 pkt (0, 0) acq (76, -1, 1) rel (77, 1)
+  mt BD16   12800 B base  0xd4d50 d0 (8, 1) d1 (5, 640) d2 (20, 32) d3step 8 iter (1, 1) next 14 pkt (0, 0) acq (78, -1, 1) rel (79, 1)
+  mt BD17   12800 B base  0xdb150 d0 (8, 1) d1 (5, 640) d2 (20, 32) d3step 8 iter (1, 1) next 15 pkt (0, 0) acq (78, -1, 1) rel (79, 1)
+  mt BD24   37888 B base  0xbf110 d0 (0, 1) d1 (0, 1) d2 (0, 1) d3step 1 iter (1, 1) next None pkt (0, 0) acq (66, 0, 1) rel (67, 1)
+  mt BD25   55104 B base  0x9ae90 d0 (2, 1) d1 (8, 1722) d2 (41, 2) d3step 82 iter (1, 1) next 26 pkt (0, 0) acq (72, -8, 1) rel (73, 8)
+  mt BD26   55104 B base  0xa85d0 d0 (2, 1) d1 (8, 1722) d2 (41, 2) d3step 82 iter (1, 1) next 25 pkt (0, 0) acq (74, -8, 1) rel (75, 8)
+  mt BD27   30976 B base  0x80cd8 d0 (80, 1) d1 (2, 1722) d2 (11, 82) d3step 3444 iter (1, 1) next None pkt (0, 0) acq (69, -1, 1) rel (68, 1)
+  mt BD28   30976 B base  0x9bb68 d0 (80, 1) d1 (2, 1722) d2 (11, 82) d3step 3444 iter (1, 1) next None pkt (0, 0) acq (73, -1, 1) rel (72, 1)
+  mt BD29   30976 B base  0x8e418 d0 (80, 1) d1 (2, 1722) d2 (11, 82) d3step 3444 iter (1, 1) next None pkt (0, 0) acq (71, -1, 1) rel (70, 1)
+  mt BD30   30976 B base  0xa92a8 d0 (80, 1) d1 (2, 1722) d2 (11, 82) d3step 3444 iter (1, 1) next None pkt (0, 0) acq (75, -1, 1) rel (74, 1)
+  mt BD31   30976 B base  0x80cd8 d0 (80, 1) d1 (2, 1722) d2 (11, 82) d3step 3444 iter (1, 1) next None pkt (0, 0) acq (69, -1, 1) rel (68, 1)
+  mt BD32   30976 B base  0x9bb68 d0 (80, 1) d1 (2, 1722) d2 (11, 82) d3step 3444 iter (1, 1) next None pkt (0, 0) acq (73, -1, 1) rel (72, 1)
+  mt BD33   30976 B base  0x8e418 d0 (80, 1) d1 (2, 1722) d2 (11, 82) d3step 3444 iter (1, 1) next None pkt (0, 0) acq (71, -1, 1) rel (70, 1)
+  mt BD34   30976 B base  0xa92a8 d0 (80, 1) d1 (2, 1722) d2 (11, 82) d3step 3444 iter (1, 1) next None pkt (0, 0) acq (75, -1, 1) rel (74, 1)
+  mt BD35   12800 B base  0xcb750 d0 (8, 1) d1 (5, 640) d2 (20, 32) d3step 8 iter (1, 1) next 37 pkt (0, 0) acq (76, -1, 1) rel (77, 1)
+  mt BD36   12800 B base  0xd1b50 d0 (8, 1) d1 (5, 640) d2 (20, 32) d3step 8 iter (1, 1) next 38 pkt (0, 0) acq (76, -1, 1) rel (77, 1)
+  mt BD37   12800 B base  0xd7f50 d0 (8, 1) d1 (5, 640) d2 (20, 32) d3step 8 iter (1, 1) next 35 pkt (0, 0) acq (78, -1, 1) rel (79, 1)
+  mt BD38   12800 B base  0xde350 d0 (8, 1) d1 (5, 640) d2 (20, 32) d3step 8 iter (1, 1) next 36 pkt (0, 0) acq (78, -1, 1) rel (79, 1)
+  mt BD39   51200 B base  0xc8550 d0 (0, 1) d1 (0, 1) d2 (0, 1) d3step 1 iter (1, 1) next 40 pkt (0, 0) acq (77, -4, 1) rel (76, 4)
+  mt BD40   51200 B base  0xd4d50 d0 (0, 1) d1 (0, 1) d2 (0, 1) d3step 1 iter (1, 1) next 39 pkt (0, 0) acq (79, -4, 1) rel (78, 4)
+  push memtile S2MM_0  BD 0 repeat 0 token 0
+  push memtile MM2S_4  BD 1 repeat 0 token 0
+  push memtile S2MM_0  BD 2 repeat 0 token 0
+  push memtile S2MM_1  BD24 repeat 0 token 0
+  push memtile S2MM_0  BD 4 repeat 0 token 0
+  push memtile S2MM_1  BD25 repeat 0 token 0
+  push memtile S2MM_2  BD14 repeat 0 token 0
+  push memtile S2MM_3  BD35 repeat 0 token 0
+  push memtile S2MM_4  BD15 repeat 0 token 0
+  push memtile S2MM_5  BD36 repeat 0 token 0
+  push memtile MM2S_5  BD39 repeat 0 token 0
+  push memtile MM2S_4  BD 3 repeat 3 token 0
+  push memtile MM2S_0  BD 6 repeat 3 token 0
+  push memtile MM2S_1  BD27 repeat 3 token 0
+  push memtile MM2S_2  BD 7 repeat 3 token 0
+  push memtile MM2S_3  BD28 repeat 3 token 0
+  push memtile MM2S_0  BD 8 repeat 3 token 0
+  push memtile MM2S_1  BD29 repeat 3 token 0
+  push memtile MM2S_2  BD 9 repeat 3 token 0
+  push memtile MM2S_3  BD30 repeat 3 token 0
+  push memtile MM2S_0  BD10 repeat 3 token 0
+  push memtile MM2S_1  BD31 repeat 3 token 0
+  push memtile MM2S_2  BD11 repeat 3 token 0
+  push memtile MM2S_3  BD32 repeat 3 token 0
+  push memtile MM2S_0  BD12 repeat 3 token 0
+  push memtile MM2S_1  BD33 repeat 3 token 0
+  push memtile MM2S_2  BD13 repeat 3 token 0
+  push memtile MM2S_3  BD34 repeat 3 token 0
+  push shim    MM2S_0  BD 0 repeat 0 token 0 chain [0] = 64 B x 1 | tag 0x1000 off 0xcda0 d0 (0, 1) d1 (0, 1) d2step 1 iter (1, 1)
+  push shim    MM2S_0  BD 1 repeat 0 token 0 chain [1] = 37888 B x 1 | tag 0x1000 off 0xcde0 d0 (0, 1) d1 (0, 1) d2step 1 iter (1, 1)
+  push shim    MM2S_1  BD 2 repeat 0 token 0 chain [2] = 37888 B x 1 | tag 0x1000 off 0x161e0 d0 (0, 1) d1 (0, 1) d2step 1 iter (1, 1)
+  push shim    MM2S_0  BD 3 repeat 3 token 0 chain [3] = 55104 B x 4 | tag 0x3000 off 0x19eb780 d0 (656, 1) d1 (21, 2560) d2step 640 iter (4, 102400)
+  push shim    MM2S_1  BD 4 repeat 3 token 0 chain [4] = 55104 B x 4 | tag 0x3000 off 0x1a1d780 d0 (656, 1) d1 (21, 2560) d2step 640 iter (4, 102400)
+  push shim    S2MM_0  BD11 repeat 3 token 1 chain [11] = 51200 B x 4 | tag 0x3000 off 0x12505c0 d0 (640, 1) d1 (20, 2560) d2step 640 iter (4, 51200)
+##### model_2_cv2_act_Mul_output_0_DequantizeLinear_Output_vaip_258  column 3
+  shim BD 0       64 B addr 0x10000000cda0 d0(wrap,step) (0, 1) d1 (0, 1) d2step 1 iter(wrap,step) (1, 1) next None pkt (1, 0)
+  shim BD 1    37888 B addr 0x10000000cde0 d0(wrap,step) (0, 1) d1 (0, 1) d2step 1 iter(wrap,step) (1, 1) next None pkt (1, 0)
+  shim BD 2    37888 B addr 0x1000000161e0 d0(wrap,step) (0, 1) d1 (0, 1) d2step 1 iter(wrap,step) (1, 1) next None pkt (0, 0)
+  shim BD 3    55104 B addr 0x3000019ed580 d0(wrap,step) (656, 1) d1 (21, 2560) d2step 640 iter(wrap,step) (4, 102400) next None pkt (1, 0)
+  shim BD 4    55104 B addr 0x300001a1f580 d0(wrap,step) (656, 1) d1 (21, 2560) d2step 640 iter(wrap,step) (4, 102400) next None pkt (0, 0)
+  shim BD11    51200 B addr 0x3000012523c0 d0(wrap,step) (640, 1) d1 (20, 2560) d2step 640 iter(wrap,step) (4, 51200) next None pkt (0, 0)
+  mt BD 0      64 B base  0xc8510 d0 (0, 1) d1 (0, 1) d2 (0, 1) d3step 1 iter (1, 1) next None pkt (0, 0) acq (64, 0, 1) rel (65, 1)
+  mt BD 1      64 B base  0xc8510 d0 (0, 1) d1 (0, 1) d2 (0, 1) d3step 1 iter (1, 1) next None pkt (1, 0) acq (65, -1, 1) rel (64, 0)
+  mt BD 2   37888 B base  0xb5d10 d0 (0, 1) d1 (0, 1) d2 (0, 1) d3step 1 iter (1, 1) next None pkt (0, 0) acq (66, 0, 1) rel (67, 1)
+  mt BD 3   75776 B base  0xb5d10 d0 (0, 1) d1 (0, 1) d2 (0, 1) d3step 1 iter (1, 1) next None pkt (1, 0) acq (67, 2, 1) rel (66, 0)
+  mt BD 4   55104 B base  0x80000 d0 (2, 1) d1 (8, 1722) d2 (41, 2) d3step 82 iter (1, 1) next 5 pkt (0, 0) acq (68, -8, 1) rel (69, 8)
+  mt BD 5   55104 B base  0x8d740 d0 (2, 1) d1 (8, 1722) d2 (41, 2) d3step 82 iter (1, 1) next 4 pkt (0, 0) acq (70, -8, 1) rel (71, 8)
+  mt BD 6   30976 B base  0x80148 d0 (82, 1) d1 (2, 1722) d2 (10, 82) d3step 3444 iter (1, 1) next None pkt (0, 0) acq (69, -1, 1) rel (68, 1)
+  mt BD 7   30976 B base  0x9ae90 d0 (82, 1) d1 (2, 1722) d2 (11, 82) d3step 3444 iter (1, 1) next None pkt (0, 0) acq (73, -1, 1) rel (72, 1)
+  mt BD 8   30976 B base  0x8d740 d0 (82, 1) d1 (2, 1722) d2 (11, 82) d3step 3444 iter (1, 1) next None pkt (0, 0) acq (71, -1, 1) rel (70, 1)
+  mt BD 9   30976 B base  0xa85d0 d0 (82, 1) d1 (2, 1722) d2 (11, 82) d3step 3444 iter (1, 1) next None pkt (0, 0) acq (75, -1, 1) rel (74, 1)
+  mt BD10   30976 B base  0x80000 d0 (82, 1) d1 (2, 1722) d2 (11, 82) d3step 3444 iter (1, 1) next None pkt (0, 0) acq (69, -1, 1) rel (68, 1)
+  mt BD11   30976 B base  0x9ae90 d0 (82, 1) d1 (2, 1722) d2 (11, 82) d3step 3444 iter (1, 1) next None pkt (0, 0) acq (73, -1, 1) rel (72, 1)
+  mt BD12   30976 B base  0x8d740 d0 (82, 1) d1 (2, 1722) d2 (11, 82) d3step 3444 iter (1, 1) next None pkt (0, 0) acq (71, -1, 1) rel (70, 1)
+  mt BD13   30976 B base  0xa85d0 d0 (82, 1) d1 (2, 1722) d2 (11, 82) d3step 3444 iter (1, 1) next None pkt (0, 0) acq (75, -1, 1) rel (74, 1)
+  mt BD14   12800 B base  0xc8550 d0 (8, 1) d1 (5, 640) d2 (20, 32) d3step 8 iter (1, 1) next 16 pkt (0, 0) acq (76, -1, 1) rel (77, 1)
+  mt BD15   12800 B base  0xce950 d0 (8, 1) d1 (5, 640) d2 (20, 32) d3step 8 iter (1, 1) next 17 pkt (0, 0) acq (76, -1, 1) rel (77, 1)
+  mt BD16   12800 B base  0xd4d50 d0 (8, 1) d1 (5, 640) d2 (20, 32) d3step 8 iter (1, 1) next 14 pkt (0, 0) acq (78, -1, 1) rel (79, 1)
+  mt BD17   12800 B base  0xdb150 d0 (8, 1) d1 (5, 640) d2 (20, 32) d3step 8 iter (1, 1) next 15 pkt (0, 0) acq (78, -1, 1) rel (79, 1)
+  mt BD24   37888 B base  0xbf110 d0 (0, 1) d1 (0, 1) d2 (0, 1) d3step 1 iter (1, 1) next None pkt (0, 0) acq (66, 0, 1) rel (67, 1)
+  mt BD25   55104 B base  0x9ae90 d0 (2, 1) d1 (8, 1722) d2 (41, 2) d3step 82 iter (1, 1) next 26 pkt (0, 0) acq (72, -8, 1) rel (73, 8)
+  mt BD26   55104 B base  0xa85d0 d0 (2, 1) d1 (8, 1722) d2 (41, 2) d3step 82 iter (1, 1) next 25 pkt (0, 0) acq (74, -8, 1) rel (75, 8)
+  mt BD27   30976 B base  0x80cd0 d0 (82, 1) d1 (2, 1722) d2 (11, 82) d3step 3444 iter (1, 1) next None pkt (0, 0) acq (69, -1, 1) rel (68, 1)
+  mt BD28   30976 B base  0x9bb60 d0 (82, 1) d1 (2, 1722) d2 (11, 82) d3step 3444 iter (1, 1) next None pkt (0, 0) acq (73, -1, 1) rel (72, 1)
+  mt BD29   30976 B base  0x8e410 d0 (82, 1) d1 (2, 1722) d2 (11, 82) d3step 3444 iter (1, 1) next None pkt (0, 0) acq (71, -1, 1) rel (70, 1)
+  mt BD30   30976 B base  0xa92a0 d0 (82, 1) d1 (2, 1722) d2 (11, 82) d3step 3444 iter (1, 1) next None pkt (0, 0) acq (75, -1, 1) rel (74, 1)
+  mt BD31   30976 B base  0x80cd0 d0 (82, 1) d1 (2, 1722) d2 (11, 82) d3step 3444 iter (1, 1) next None pkt (0, 0) acq (69, -1, 1) rel (68, 1)
+  mt BD32   30976 B base  0x9bb60 d0 (82, 1) d1 (2, 1722) d2 (11, 82) d3step 3444 iter (1, 1) next None pkt (0, 0) acq (73, -1, 1) rel (72, 1)
+  mt BD33   30976 B base  0x8e410 d0 (82, 1) d1 (2, 1722) d2 (11, 82) d3step 3444 iter (1, 1) next None pkt (0, 0) acq (71, -1, 1) rel (70, 1)
+  mt BD34   30976 B base  0xa92a0 d0 (82, 1) d1 (2, 1722) d2 (11, 82) d3step 3444 iter (1, 1) next None pkt (0, 0) acq (75, -1, 1) rel (74, 1)
+  mt BD35   12800 B base  0xcb750 d0 (8, 1) d1 (5, 640) d2 (20, 32) d3step 8 iter (1, 1) next 37 pkt (0, 0) acq (76, -1, 1) rel (77, 1)
+  mt BD36   12800 B base  0xd1b50 d0 (8, 1) d1 (5, 640) d2 (20, 32) d3step 8 iter (1, 1) next 38 pkt (0, 0) acq (76, -1, 1) rel (77, 1)
+  mt BD37   12800 B base  0xd7f50 d0 (8, 1) d1 (5, 640) d2 (20, 32) d3step 8 iter (1, 1) next 35 pkt (0, 0) acq (78, -1, 1) rel (79, 1)
+  mt BD38   12800 B base  0xde350 d0 (8, 1) d1 (5, 640) d2 (20, 32) d3step 8 iter (1, 1) next 36 pkt (0, 0) acq (78, -1, 1) rel (79, 1)
+  mt BD39   51200 B base  0xc8550 d0 (0, 1) d1 (0, 1) d2 (0, 1) d3step 1 iter (1, 1) next 40 pkt (0, 0) acq (77, -4, 1) rel (76, 4)
+  mt BD40   51200 B base  0xd4d50 d0 (0, 1) d1 (0, 1) d2 (0, 1) d3step 1 iter (1, 1) next 39 pkt (0, 0) acq (79, -4, 1) rel (78, 4)
+
+## model.3 (model_2_cv2_act segment), cmt, columns 0 and 3
+##### model_2_cv2_act_Mul_output_0_DequantizeLinear_Output_vaip_258  column 0
+  shim BD 0       64 B addr 0x10000000e2a0 d0(wrap,step) (0, 1) d1 (0, 1) d2step 1 iter(wrap,step) (1, 1) next None pkt (1, 0)
+  shim BD 1    49664 B addr 0x10000000e2e0 d0(wrap,step) (0, 1) d1 (0, 1) d2step 1 iter(wrap,step) (1, 1) next None pkt (1, 0)
+  shim BD 2    49664 B addr 0x10000001a4e0 d0(wrap,step) (0, 1) d1 (0, 1) d2step 1 iter(wrap,step) (1, 1) next None pkt (0, 0)
+  shim BD 3    28800 B addr 0x3000019c3980 d0(wrap,step) (800, 1) d1 (9, 2560) d2step 768 iter(wrap,step) (10, 40960) next None pkt (1, 0)
+  shim BD 4    28800 B addr 0x3000019d7980 d0(wrap,step) (800, 1) d1 (9, 2560) d2step 768 iter(wrap,step) (10, 40960) next None pkt (0, 0)
+  shim BD11    24576 B addr 0x3000012287c0 d0(wrap,step) (768, 1) d1 (8, 3072) d2step 768 iter(wrap,step) (10, 24576) next None pkt (0, 0)
+  mt BD 0      64 B base  0xb4610 d0 (0, 1) d1 (0, 1) d2 (0, 1) d3step 1 iter (1, 1) next None pkt (0, 0) acq (64, 0, 1) rel (65, 1)
+  mt BD 1      64 B base  0xb4610 d0 (0, 1) d1 (0, 1) d2 (0, 1) d3step 1 iter (1, 1) next None pkt (1, 0) acq (65, -1, 1) rel (64, 0)
+  mt BD 2   49664 B base  0x9c210 d0 (0, 1) d1 (0, 1) d2 (0, 1) d3step 1 iter (1, 1) next None pkt (0, 0) acq (66, 0, 1) rel (67, 1)
+  mt BD 3   99328 B base  0x9c210 d0 (0, 1) d1 (0, 1) d2 (0, 1) d3step 1 iter (1, 1) next None pkt (1, 0) acq (67, 2, 1) rel (66, 0)
+  mt BD 4   28800 B base  0x80000 d0 (2, 1) d1 (16, 450) d2 (25, 2) d3step 50 iter (1, 1) next 5 pkt (0, 0) acq (68, -8, 1) rel (69, 8)
+  mt BD 5   28800 B base  0x87080 d0 (2, 1) d1 (16, 450) d2 (25, 2) d3step 50 iter (1, 1) next 4 pkt (0, 0) acq (70, -8, 1) rel (71, 8)
+  mt BD 6   17920 B base  0x800d0 d0 (48, 1) d1 (8, 450) d2 (4, 50) d3step 3600 iter (1, 1) next None pkt (0, 0) acq (69, -1, 1) rel (68, 1)
+  mt BD 7   17920 B base  0x8e118 d0 (48, 1) d1 (8, 450) d2 (5, 50) d3step 3600 iter (1, 1) next None pkt (0, 0) acq (73, -1, 1) rel (72, 1)
+  mt BD 8   17920 B base  0x87088 d0 (48, 1) d1 (8, 450) d2 (5, 50) d3step 3600 iter (1, 1) next None pkt (0, 0) acq (71, -1, 1) rel (70, 1)
+  mt BD 9   17920 B base  0x95198 d0 (48, 1) d1 (8, 450) d2 (5, 50) d3step 3600 iter (1, 1) next None pkt (0, 0) acq (75, -1, 1) rel (74, 1)
+  mt BD10   17920 B base  0x80008 d0 (48, 1) d1 (8, 450) d2 (5, 50) d3step 3600 iter (1, 1) next None pkt (0, 0) acq (69, -1, 1) rel (68, 1)
+  mt BD11   17920 B base  0x8e118 d0 (48, 1) d1 (8, 450) d2 (5, 50) d3step 3600 iter (1, 1) next None pkt (0, 0) acq (73, -1, 1) rel (72, 1)
+  mt BD12   17920 B base  0x87088 d0 (48, 1) d1 (8, 450) d2 (5, 50) d3step 3600 iter (1, 1) next None pkt (0, 0) acq (71, -1, 1) rel (70, 1)
+  mt BD13   17920 B base  0x95198 d0 (48, 1) d1 (8, 450) d2 (5, 50) d3step 3600 iter (1, 1) next None pkt (0, 0) acq (75, -1, 1) rel (74, 1)
+  mt BD14    6144 B base  0xb4650 d0 (8, 1) d1 (2, 768) d2 (24, 32) d3step 8 iter (1, 1) next 16 pkt (0, 0) acq (76, -1, 1) rel (77, 1)
+  mt BD15    6144 B base  0xb7650 d0 (8, 1) d1 (2, 768) d2 (24, 32) d3step 8 iter (1, 1) next 17 pkt (0, 0) acq (76, -1, 1) rel (77, 1)
+  mt BD16    6144 B base  0xba650 d0 (8, 1) d1 (2, 768) d2 (24, 32) d3step 8 iter (1, 1) next 14 pkt (0, 0) acq (78, -1, 1) rel (79, 1)
+  mt BD17    6144 B base  0xbd650 d0 (8, 1) d1 (2, 768) d2 (24, 32) d3step 8 iter (1, 1) next 15 pkt (0, 0) acq (78, -1, 1) rel (79, 1)
+  mt BD24   49664 B base  0xa8410 d0 (0, 1) d1 (0, 1) d2 (0, 1) d3step 1 iter (1, 1) next None pkt (0, 0) acq (66, 0, 1) rel (67, 1)
+  mt BD25   28800 B base  0x8e110 d0 (2, 1) d1 (16, 450) d2 (25, 2) d3step 50 iter (1, 1) next 26 pkt (0, 0) acq (72, -8, 1) rel (73, 8)
+  mt BD26   28800 B base  0x95190 d0 (2, 1) d1 (16, 450) d2 (25, 2) d3step 50 iter (1, 1) next 25 pkt (0, 0) acq (74, -8, 1) rel (75, 8)
+  mt BD27   17920 B base  0x80328 d0 (48, 1) d1 (8, 450) d2 (5, 50) d3step 3600 iter (1, 1) next None pkt (0, 0) acq (69, -1, 1) rel (68, 1)
+  mt BD28   17920 B base  0x8e438 d0 (48, 1) d1 (8, 450) d2 (5, 50) d3step 3600 iter (1, 1) next None pkt (0, 0) acq (73, -1, 1) rel (72, 1)
+  mt BD29   17920 B base  0x873a8 d0 (48, 1) d1 (8, 450) d2 (5, 50) d3step 3600 iter (1, 1) next None pkt (0, 0) acq (71, -1, 1) rel (70, 1)
+  mt BD30   17920 B base  0x954b8 d0 (48, 1) d1 (8, 450) d2 (5, 50) d3step 3600 iter (1, 1) next None pkt (0, 0) acq (75, -1, 1) rel (74, 1)
+  mt BD31   17920 B base  0x80328 d0 (48, 1) d1 (8, 450) d2 (5, 50) d3step 3600 iter (1, 1) next None pkt (0, 0) acq (69, -1, 1) rel (68, 1)
+  mt BD32   17920 B base  0x8e438 d0 (48, 1) d1 (8, 450) d2 (5, 50) d3step 3600 iter (1, 1) next None pkt (0, 0) acq (73, -1, 1) rel (72, 1)
+  mt BD33   17920 B base  0x873a8 d0 (48, 1) d1 (8, 450) d2 (5, 50) d3step 3600 iter (1, 1) next None pkt (0, 0) acq (71, -1, 1) rel (70, 1)
+  mt BD34   17920 B base  0x954b8 d0 (48, 1) d1 (8, 450) d2 (5, 50) d3step 3600 iter (1, 1) next None pkt (0, 0) acq (75, -1, 1) rel (74, 1)
+  mt BD35    6144 B base  0xb5e50 d0 (8, 1) d1 (2, 768) d2 (24, 32) d3step 8 iter (1, 1) next 37 pkt (0, 0) acq (76, -1, 1) rel (77, 1)
+  mt BD36    6144 B base  0xb8e50 d0 (8, 1) d1 (2, 768) d2 (24, 32) d3step 8 iter (1, 1) next 38 pkt (0, 0) acq (76, -1, 1) rel (77, 1)
+  mt BD37    6144 B base  0xbbe50 d0 (8, 1) d1 (2, 768) d2 (24, 32) d3step 8 iter (1, 1) next 35 pkt (0, 0) acq (78, -1, 1) rel (79, 1)
+  mt BD38    6144 B base  0xbee50 d0 (8, 1) d1 (2, 768) d2 (24, 32) d3step 8 iter (1, 1) next 36 pkt (0, 0) acq (78, -1, 1) rel (79, 1)
+  mt BD39   24576 B base  0xb4650 d0 (0, 1) d1 (0, 1) d2 (0, 1) d3step 1 iter (1, 1) next 40 pkt (0, 0) acq (77, -4, 1) rel (76, 4)
+  mt BD40   24576 B base  0xba650 d0 (0, 1) d1 (0, 1) d2 (0, 1) d3step 1 iter (1, 1) next 39 pkt (0, 0) acq (79, -4, 1) rel (78, 4)
+  push memtile S2MM_0  BD 0 repeat 0 token 0
+  push memtile MM2S_4  BD 1 repeat 0 token 0
+  push memtile S2MM_0  BD 2 repeat 0 token 0
+  push memtile S2MM_1  BD24 repeat 0 token 0
+  push memtile S2MM_0  BD 4 repeat 0 token 0
+  push memtile S2MM_1  BD25 repeat 0 token 0
+  push memtile S2MM_2  BD14 repeat 0 token 0
+  push memtile S2MM_3  BD35 repeat 0 token 0
+  push memtile S2MM_4  BD15 repeat 0 token 0
+  push memtile S2MM_5  BD36 repeat 0 token 0
+  push memtile MM2S_5  BD39 repeat 0 token 0
+  push memtile MM2S_4  BD 3 repeat 9 token 0
+  push memtile MM2S_0  BD 6 repeat 3 token 0
+  push memtile MM2S_1  BD27 repeat 3 token 0
+  push memtile MM2S_2  BD 7 repeat 3 token 0
+  push memtile MM2S_3  BD28 repeat 3 token 0
+  push memtile MM2S_0  BD 8 repeat 3 token 0
+  push memtile MM2S_1  BD29 repeat 3 token 0
+  push memtile MM2S_2  BD 9 repeat 3 token 0
+  push memtile MM2S_3  BD30 repeat 3 token 0
+  push memtile MM2S_0  BD10 repeat 3 token 0
+  push memtile MM2S_1  BD31 repeat 3 token 0
+  push memtile MM2S_2  BD11 repeat 3 token 0
+  push memtile MM2S_3  BD32 repeat 3 token 0
+  push memtile MM2S_0  BD12 repeat 3 token 1
+  push memtile MM2S_1  BD33 repeat 3 token 1
+  push memtile MM2S_2  BD13 repeat 3 token 1
+  push memtile MM2S_3  BD34 repeat 3 token 1
+  push shim    MM2S_0  BD 0 repeat 0 token 0 chain [0] = 64 B x 1 | tag 0x1000 off 0xe2a0 d0 (0, 1) d1 (0, 1) d2step 1 iter (1, 1)
+  push shim    MM2S_0  BD 1 repeat 0 token 0 chain [1] = 49664 B x 1 | tag 0x1000 off 0xe2e0 d0 (0, 1) d1 (0, 1) d2step 1 iter (1, 1)
+  push shim    MM2S_1  BD 2 repeat 0 token 0 chain [2] = 49664 B x 1 | tag 0x1000 off 0x1a4e0 d0 (0, 1) d1 (0, 1) d2step 1 iter (1, 1)
+  push shim    MM2S_0  BD 3 repeat 9 token 0 chain [3] = 28800 B x 10 | tag 0x3000 off 0x19c3980 d0 (800, 1) d1 (9, 2560) d2step 768 iter (10, 40960)
+  push shim    MM2S_1  BD 4 repeat 9 token 0 chain [4] = 28800 B x 10 | tag 0x3000 off 0x19d7980 d0 (800, 1) d1 (9, 2560) d2step 768 iter (10, 40960)
+  push shim    S2MM_0  BD11 repeat 9 token 1 chain [11] = 24576 B x 10 | tag 0x3000 off 0x12287c0 d0 (768, 1) d1 (8, 3072) d2step 768 iter (10, 24576)
+##### model_2_cv2_act_Mul_output_0_DequantizeLinear_Output_vaip_258  column 3
+  shim BD 0       64 B addr 0x10000000e2a0 d0(wrap,step) (0, 1) d1 (0, 1) d2step 1 iter(wrap,step) (1, 1) next None pkt (1, 0)
+  shim BD 1    49664 B addr 0x10000000e2e0 d0(wrap,step) (0, 1) d1 (0, 1) d2step 1 iter(wrap,step) (1, 1) next None pkt (1, 0)
+  shim BD 2    49664 B addr 0x10000001a4e0 d0(wrap,step) (0, 1) d1 (0, 1) d2step 1 iter(wrap,step) (1, 1) next None pkt (0, 0)
+  shim BD 3    28800 B addr 0x3000019c5d80 d0(wrap,step) (800, 1) d1 (9, 2560) d2step 768 iter(wrap,step) (10, 40960) next None pkt (1, 0)
+  shim BD 4    28800 B addr 0x3000019d9d80 d0(wrap,step) (800, 1) d1 (9, 2560) d2step 768 iter(wrap,step) (10, 40960) next None pkt (0, 0)
+  shim BD11    24576 B addr 0x30000122abc0 d0(wrap,step) (768, 1) d1 (8, 3072) d2step 768 iter(wrap,step) (10, 24576) next None pkt (0, 0)
+  mt BD 0      64 B base  0xb4610 d0 (0, 1) d1 (0, 1) d2 (0, 1) d3step 1 iter (1, 1) next None pkt (0, 0) acq (64, 0, 1) rel (65, 1)
+  mt BD 1      64 B base  0xb4610 d0 (0, 1) d1 (0, 1) d2 (0, 1) d3step 1 iter (1, 1) next None pkt (1, 0) acq (65, -1, 1) rel (64, 0)
+  mt BD 2   49664 B base  0x9c210 d0 (0, 1) d1 (0, 1) d2 (0, 1) d3step 1 iter (1, 1) next None pkt (0, 0) acq (66, 0, 1) rel (67, 1)
+  mt BD 3   99328 B base  0x9c210 d0 (0, 1) d1 (0, 1) d2 (0, 1) d3step 1 iter (1, 1) next None pkt (1, 0) acq (67, 2, 1) rel (66, 0)
+  mt BD 4   28800 B base  0x80000 d0 (2, 1) d1 (16, 450) d2 (25, 2) d3step 50 iter (1, 1) next 5 pkt (0, 0) acq (68, -8, 1) rel (69, 8)
+  mt BD 5   28800 B base  0x87080 d0 (2, 1) d1 (16, 450) d2 (25, 2) d3step 50 iter (1, 1) next 4 pkt (0, 0) acq (70, -8, 1) rel (71, 8)
+  mt BD 6   17920 B base  0x800c8 d0 (50, 1) d1 (8, 450) d2 (4, 50) d3step 3600 iter (1, 1) next None pkt (0, 0) acq (69, -1, 1) rel (68, 1)
+  mt BD 7   17920 B base  0x8e110 d0 (50, 1) d1 (8, 450) d2 (5, 50) d3step 3600 iter (1, 1) next None pkt (0, 0) acq (73, -1, 1) rel (72, 1)
+  mt BD 8   17920 B base  0x87080 d0 (50, 1) d1 (8, 450) d2 (5, 50) d3step 3600 iter (1, 1) next None pkt (0, 0) acq (71, -1, 1) rel (70, 1)
+  mt BD 9   17920 B base  0x95190 d0 (50, 1) d1 (8, 450) d2 (5, 50) d3step 3600 iter (1, 1) next None pkt (0, 0) acq (75, -1, 1) rel (74, 1)
+  mt BD10   17920 B base  0x80000 d0 (50, 1) d1 (8, 450) d2 (5, 50) d3step 3600 iter (1, 1) next None pkt (0, 0) acq (69, -1, 1) rel (68, 1)
+  mt BD11   17920 B base  0x8e110 d0 (50, 1) d1 (8, 450) d2 (5, 50) d3step 3600 iter (1, 1) next None pkt (0, 0) acq (73, -1, 1) rel (72, 1)
+  mt BD12   17920 B base  0x87080 d0 (50, 1) d1 (8, 450) d2 (5, 50) d3step 3600 iter (1, 1) next None pkt (0, 0) acq (71, -1, 1) rel (70, 1)
+  mt BD13   17920 B base  0x95190 d0 (50, 1) d1 (8, 450) d2 (5, 50) d3step 3600 iter (1, 1) next None pkt (0, 0) acq (75, -1, 1) rel (74, 1)
+  mt BD14    6144 B base  0xb4650 d0 (8, 1) d1 (2, 768) d2 (24, 32) d3step 8 iter (1, 1) next 16 pkt (0, 0) acq (76, -1, 1) rel (77, 1)
+  mt BD15    6144 B base  0xb7650 d0 (8, 1) d1 (2, 768) d2 (24, 32) d3step 8 iter (1, 1) next 17 pkt (0, 0) acq (76, -1, 1) rel (77, 1)
+  mt BD16    6144 B base  0xba650 d0 (8, 1) d1 (2, 768) d2 (24, 32) d3step 8 iter (1, 1) next 14 pkt (0, 0) acq (78, -1, 1) rel (79, 1)
+  mt BD17    6144 B base  0xbd650 d0 (8, 1) d1 (2, 768) d2 (24, 32) d3step 8 iter (1, 1) next 15 pkt (0, 0) acq (78, -1, 1) rel (79, 1)
+  mt BD24   49664 B base  0xa8410 d0 (0, 1) d1 (0, 1) d2 (0, 1) d3step 1 iter (1, 1) next None pkt (0, 0) acq (66, 0, 1) rel (67, 1)
+  mt BD25   28800 B base  0x8e110 d0 (2, 1) d1 (16, 450) d2 (25, 2) d3step 50 iter (1, 1) next 26 pkt (0, 0) acq (72, -8, 1) rel (73, 8)
+  mt BD26   28800 B base  0x95190 d0 (2, 1) d1 (16, 450) d2 (25, 2) d3step 50 iter (1, 1) next 25 pkt (0, 0) acq (74, -8, 1) rel (75, 8)
+  mt BD27   17920 B base  0x80320 d0 (50, 1) d1 (8, 450) d2 (5, 50) d3step 3600 iter (1, 1) next None pkt (0, 0) acq (69, -1, 1) rel (68, 1)
+  mt BD28   17920 B base  0x8e430 d0 (50, 1) d1 (8, 450) d2 (5, 50) d3step 3600 iter (1, 1) next None pkt (0, 0) acq (73, -1, 1) rel (72, 1)
+  mt BD29   17920 B base  0x873a0 d0 (50, 1) d1 (8, 450) d2 (5, 50) d3step 3600 iter (1, 1) next None pkt (0, 0) acq (71, -1, 1) rel (70, 1)
+  mt BD30   17920 B base  0x954b0 d0 (50, 1) d1 (8, 450) d2 (5, 50) d3step 3600 iter (1, 1) next None pkt (0, 0) acq (75, -1, 1) rel (74, 1)
+  mt BD31   17920 B base  0x80320 d0 (50, 1) d1 (8, 450) d2 (5, 50) d3step 3600 iter (1, 1) next None pkt (0, 0) acq (69, -1, 1) rel (68, 1)
+  mt BD32   17920 B base  0x8e430 d0 (50, 1) d1 (8, 450) d2 (5, 50) d3step 3600 iter (1, 1) next None pkt (0, 0) acq (73, -1, 1) rel (72, 1)
+  mt BD33   17920 B base  0x873a0 d0 (50, 1) d1 (8, 450) d2 (5, 50) d3step 3600 iter (1, 1) next None pkt (0, 0) acq (71, -1, 1) rel (70, 1)
+  mt BD34   17920 B base  0x954b0 d0 (50, 1) d1 (8, 450) d2 (5, 50) d3step 3600 iter (1, 1) next None pkt (0, 0) acq (75, -1, 1) rel (74, 1)
+  mt BD35    6144 B base  0xb5e50 d0 (8, 1) d1 (2, 768) d2 (24, 32) d3step 8 iter (1, 1) next 37 pkt (0, 0) acq (76, -1, 1) rel (77, 1)
+  mt BD36    6144 B base  0xb8e50 d0 (8, 1) d1 (2, 768) d2 (24, 32) d3step 8 iter (1, 1) next 38 pkt (0, 0) acq (76, -1, 1) rel (77, 1)
+  mt BD37    6144 B base  0xbbe50 d0 (8, 1) d1 (2, 768) d2 (24, 32) d3step 8 iter (1, 1) next 35 pkt (0, 0) acq (78, -1, 1) rel (79, 1)
+  mt BD38    6144 B base  0xbee50 d0 (8, 1) d1 (2, 768) d2 (24, 32) d3step 8 iter (1, 1) next 36 pkt (0, 0) acq (78, -1, 1) rel (79, 1)
+  mt BD39   24576 B base  0xb4650 d0 (0, 1) d1 (0, 1) d2 (0, 1) d3step 1 iter (1, 1) next 40 pkt (0, 0) acq (77, -4, 1) rel (76, 4)
+  mt BD40   24576 B base  0xba650 d0 (0, 1) d1 (0, 1) d2 (0, 1) d3step 1 iter (1, 1) next 39 pkt (0, 0) acq (79, -4, 1) rel (78, 4)
+

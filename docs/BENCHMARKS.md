@@ -16729,3 +16729,117 @@ Logs:
 - [per-layer diagnostic](../results/aie/stream_share_layer_diag_desktop2_20261013T1501Z.log) and its four per-run
   JSONs (`_run1_control` … `_run4_control`). Its driver was a git-ignored scratch file that runs the per-layer tool
   four times in the order above.
+
+#### How AMD's cost-model tiler lays out YOLOv8s's slow convs: its DMA program, decoded (2026-10-13, Desktop 2)
+
+**Question.** The sections above read AMD's per-layer byte totals. They do not show how AMD gets those totals:
+which tile goes where, how often, and how the columns divide a layer. Can that be read from AMD's compiled
+program itself?
+
+**Method (offline; no device opened).** `tools/amd_code_decode.py` reads the two YOLOv8s xmodels used above:
+the default build and the one with `enable_cost_model_tiling`. Three steps:
+- **Records.** `mc_code` is a list of records. A 48-byte record names a column and a chunk of the CODE region
+  (`REG_4`, 1,593,408 B default, 1,711,076 B in the option arm with its framing bytes). DECODED.
+- **Register writes.** Each chunk is a run of 32-byte AIE2 control packets. Packet id 1 reaches the shim's
+  control port and id 2 the MemTile's, as the overlay's routing has them
+  ([above](#how-amds-overlay-moves-data-and-control-cores-program-their-own-dmas-and-a-ddr-stream-reaches-every-tiles-control-port-2026-10-13-desktop-2)).
+  Every packet is one register write. DECODED.
+- **Descriptors.** Those writes are shim and MemTile DMA descriptors and their start-queue pushes, read with
+  aie-rt's field layouts (SPEC). The decode sums each push's descriptor chain, times its repeat count.
+
+**The decode checks against AMD's own numbers, exactly.** A record carrying a long tensor name starts a new layer.
+That name is the layer's **input** tensor: the segment named `model.6`'s output is `model.7`. Each segment's
+decoded shim traffic was then joined to AMD's per-layer records:
+- The DDR address's upper bits tag the region: `0x3000` for activations, `0x1000` for weights and constants.
+- **Default build:** 87 of 90 segments equal the declared input, constant and output bytes × 3/4, to the byte.
+- **Option build:** 81 of 90 do.
+- **A pre-registered prediction passed** (scratch sha256 `4041e847...`). Written before the option build was
+  decoded, it predicted 5,902,272 B read and 153,600 B written for `model.7`, and both were exact.
+
+This settles two open points:
+- **The per-layer byte fields are per frame.** The CODE region runs once per frame and reproduces them. The
+  subgraph-level 2× remains open.
+- **The decode is complete on the layers that join.** Weights and activations come out separately.
+
+**Why 3/4.** Column 3's descriptors are all written, and each column's descriptors total the same bytes. But no
+shim start-queue write for column 3 appears in the CODE region. What starts column 3's transfers is
+**unexplained**. The ×4/3 is what makes every join exact.
+
+**Limits.**
+- The tool decodes the 48-byte `0x5c`–`0x5f` records only.
+- The option arm's other record types (`0x5a`, `0x37`–`0x3e`) are not decoded. Nine of its segments do not join,
+  so no frame totals for the option arm are given.
+- Core-side buffering is invisible here: AMD's cores program their own DMAs. A MemTile transfer's length is not
+  what lands in a core.
+
+**1. How the columns divide a layer** (DECODED: whether the pushing columns read the same DDR regions).
+
+| | default | option |
+|---|---:|---:|
+| convolution records joined (of 71; a C2f `cv1` counts once per `Split` half) | 69 | 61 |
+| **spatial:** same weights in every column, different input | 69 | 54 |
+| **output-channel:** same input in every column, different weights | 0 | 7 |
+
+The 8 convolutions that do not join in the option arm are `model.5`, `model.16`, and the `cv1` of `model.12`,
+`model.15` and `model.18` (both halves).
+
+- **The default build splits every convolution spatially.** Every column fetches the whole weight tensor. The
+  earlier "each column fetches the weights" (DERIVED, above) is now observed.
+- **The option switches 7 layers to an output-channel split.** They are `model.7`, the four `model.8`/`model.21`
+  bottleneck 3×3s, `model.9.cv2` and `model.19`: deep layers whose output is 20×20.
+- **On 44 of the other 54 joined layers, only the bytes move,** mostly by a few percent. The 10 others are
+  unchanged.
+
+**2. `model.7` (3×3 stride 2, 256→512, 40×40→20×20).** Column 0's shim pushes:
+
+| | default | option |
+|---|---|---|
+| weights | 16 pushes of 75,776 B, at 16 different offsets: all 1,212,416 B once | 10 pushes of 37,376 B, each repeated 4×, stepping 74,752 B: a 299,008 B block, re-read 5 times |
+| input | 16 pushes of 69,888 B, at 2 offsets: the same stripe 8 times per channel | 10 pushes of 41,984 / 52,480 B, at 10 offsets |
+| what differs between columns | input offset | weight offset |
+| shim pushes per layer (3 columns) | 123 | 78 |
+
+- **Default (DERIVED):** each column takes a stripe of output rows, holds all 512 output channels' weights in
+  turn, and re-reads its input stripe from DDR on every pass. The 16 identical input pushes are 8 passes over 2
+  channels.
+- **Option (DERIVED):** each column takes 128 output channels (299,008 B = 128 × 2,336 B). It reads the input
+  once in 5 spatial pieces and re-reads its own weight block for each piece.
+- **Bytes fall only 16%,** 9.32 → 7.87 MB. The layer's time fell 54% (0.757 → 0.345 ms, above). Its declared
+  utilization rose 0.625 → 1.0: the padded work fell from 1,510,277,120 to the true 943,923,200 ops. Where the
+  default's 1.6× padding comes from is not decoded here.
+
+**3. `model.3` (3×3 stride 2, 64→128, 160×160→80×80), and why its gain is still open.** Both arms split it
+spatially, and each column reads the weights once. Input crosses DDR 1.08× in the default and 1.41× in the
+option. What changes is the tile:
+
+| (column 0, DECODED) | default | option |
+|---|---:|---:|
+| MemTile input buffer (ping-pong, ×2 per channel) | 55,104 B | 28,800 B |
+| MemTile→core input task, 4 core channels × 4 descriptors, each repeated 4× | 30,976 B | 17,920 B |
+| weights to the cores, one packet-mode task | 75,776 B × 4 runs | 99,328 B × 10 runs |
+| core output chunks | 12,800 B | 6,144 B |
+| shim runs (with repeats) per layer | 45 | 99 |
+
+The option halves the tile and sends the weights to the cores 10 times instead of 4. Its declared utilization
+falls (1.0 → 0.625), yet the layer gets faster (−0.06 ms). Why smaller tiles win here is **unexplained**. Nothing
+in the static program says how much DMA the cores overlap with compute.
+
+**4. What AMD's control costs, per frame** (default build; shim counts are columns 0–2 only):
+- **1,779 shim pushes** (3,660 runs with repeats) and **5,370 MemTile pushes** (7,548 runs).
+- **A spatial convolution at 80×80 or above costs 18 shim and 84 MemTile pushes** across the array.
+- **Hardware repeat carries the per-output-group re-delivery.** On `model.3` every MemTile→core input task runs
+  4 times from one push. The input crosses DDR 1.08×, and each re-delivery to the cores comes from the MemTile.
+  This is the shape of the engine's activation ring
+  ([2026-09-16](#memtile-residency-does-not-pay-on-the-graph-engine-and-the-yolov8s-gap-is-a-known-limitation-2026-09-16-desktop-2)),
+  which lost 3.40 ms. But AMD's version adds no control per round.
+
+**What this does not establish.**
+- How a 17,920–30,976 B MemTile task maps onto core buffers.
+- Which stage sets the engine's 0.235 µs per delivered packet ([above](#what-sets-a-layers-time-activation-packets-not-instruction-ops-exploratory-offline)).
+  This is what decides whether AMD's long, repeated tasks would pay on the engine.
+- The decoded tile shapes have not been checked against each layer's MAC count. Only the bytes have.
+- The 40-byte vs 48-byte packet question and which overlay ran were not addressed in this block.
+
+Log: [amd_code_decode_yolov8s_desktop2_20261013T194608Z.log](../results/aie/amd_code_decode_yolov8s_desktop2_20261013T194608Z.log)
+(both arms' per-segment totals, the joins, the side-by-side convolution table, push counts, and the full
+`model.7` and `model.3` decodes for columns 0 and 3).
