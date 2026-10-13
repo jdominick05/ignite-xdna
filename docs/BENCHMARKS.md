@@ -16317,7 +16317,7 @@ The arrangement that fits: per round, stream 1 sends its quads first, into buffe
   - **Uncapped:** the model saves 2.59 ms against +2,002 tasks (0.73 ms), which nets 1.85 ms.
   - **With the cap:** q = 1 loads all eight streams nearly evenly, the regime where the cap measured above
     binds (50.36 GB/s rather than 2 × 27.17). Scaling for it leaves about **1.3 ms**, the figure the
-    measurements support.
+    measurements support. *[Superseded the same day by the measured q = 1 ratio: about 1.07 ms, in the next subsection.]*
 - **Not measured:**
   - the q = 1 mix;
   - the quads-first order;
@@ -16346,3 +16346,61 @@ Logs:
 - [per-volume points](../results/aie/stream_share_points_phoenix_desktop2_20261013T0915Z.log)
 - [task counts](../results/aie/engine_stream_split_tasks_yolov8s_desktop2_20261013T080000Z.log)
 - [packet order and per-layer ratio](../results/aie/engine_stream_share_order_yolov8s_desktop2_20261013T0930Z.log)
+
+#### Block 5: the order the engine needs works too, and the per-layer design nets about 1.07 ms on YOLOv8s (2026-10-13, Desktop 2)
+
+**Question.** The first stream-share sitting sent the weights first, and its cores took all four weights before
+any activation. The engine cannot use that order. Its cores consume chunk by chunk, and on a shared stream a long
+weight run blocks the quads behind it. Does the order the engine would need still run at full rate, and what does
+the per-layer 1-in-4 mix that YOLOv8s mostly wants measure?
+
+**Method.** The order under test (`build_qf` in
+[tools/stream_share_probe.py](../tools/stream_share_probe.py)):
+- **Stream order:** per round, stream 1 sends its quads first, into an 8-slot buffer B, then the round's weight
+  run as one fanned-out packet.
+- **MemTile:** chains use `BdIteration`, so buffer depth costs no descriptors. Core k reads position p of every 4
+  from the slot that position owns.
+- **Cores:** they consume weight, activation, weight, activation, as `engine.cc` does.
+
+Three routes, each also in an all-four-column form:
+- `base_i`: today's layout, with per-chunk consumption.
+- `qf2`: 1-in-2 alternation.
+- `qf1`: 1 quad in 4 on stream 1.
+
+Bytes per round are as in the first sitting. The criteria were pre-registered before any run of these routes
+(scratch sha256 `a3ef04bc...`), and a completion-only smoke ran after the hash, as declared. The sitting was
+`timing_eligible: true` with no foreign context, at 3 rounds × 30 dispatches and 64–256 rounds per dispatch.
+
+| route | µs per round | busier stream | vs base_i (fit) | vs base_i (per-volume minima) | one-stream prediction |
+|---|---:|---:|---:|---:|---:|
+| base_i | 15.665 | 6.54 GB/s | | | |
+| qf2 | 13.649 | 6.53 GB/s | **0.871** | 0.869–0.887 | 0.870 |
+| qf1 | 12.101 | 6.35 GB/s | **0.772** | 0.755–0.783 | 0.750 |
+| base_i_4 | 16.440 | 6.23 GB/s | | | |
+| qf2_4 | 14.402 | 6.19 GB/s | **0.876** | 0.881–0.898 | 0.870 |
+| qf1_4 | 13.446 | 5.71 GB/s | **0.818** | 0.786–0.802 | 0.750 |
+
+**Verdict: BUILD.** Every route completed, so there is no deadlock with quads first. The three pre-registered
+criteria hold:
+- **Q1:** quads-first at 1-in-2 is 0.871, against a bar of ≤ 0.92. The order, the deep buffer B and per-chunk
+  consumption cost nothing beyond the first sitting.
+- **Q2:** `qf1` on one column is 0.772, against ≤ 0.82.
+- **Q3:** `qf1` on four columns is 0.818, against ≤ 0.85.
+
+The four-column `qf1` misses its 0.750 prediction by the array cap. Its two streams are nearly balanced (76,800
+and 63,488 B per round), every stream slows to 5.71 GB/s, and the array moves 41.7 GB/s in all. That falls short
+of the stream-ceiling probe's 50.36 GB/s for pure reads; which resource sets this lower total is unexplained.
+
+**On YOLOv8s (DERIVED, the pre-registered formula):** the measured four-column ratio applied to the 8.673 ms
+modelled transport, at slope 1.138, less the counted task cost:
+- **Per-layer design** (q = 1 on 62 layers): (1 − 0.818) × 8.673 × 1.138 − 0.732 = **1.07 ms per frame**. This
+  supersedes the 1.3 ms (cap-scaled model) and 1.85 ms (uncapped) estimates above.
+- **Static 1-in-2:** **0.62 ms**.
+
+**What is still not measured:**
+- the per-task issue cost (the probe chains descriptors; the 0.36 µs per task is the per-layer fit's);
+- YOLOv8s's per-layer mix, which varies around the probe's fixed 0.37 weight ratio;
+- compute overlapping the transport.
+
+Logs: [sitting](../results/aie/stream_share_qf_phoenix_desktop2_20261013T1000Z.log),
+[per-volume points and the derived nets](../results/aie/stream_share_qf_points_phoenix_desktop2_20261013T1015Z.log).
