@@ -404,7 +404,11 @@ class SequenceEmitter:
     """Emit raw shim DMA tasks inside an IRON runtime sequence body."""
 
     def __init__(self, ws, wp, ws_bytes: int, wp_bytes: int, fifo_names: Dict[int, Dict[str, str]],
-                 a_ring: int = 0):
+                 a_ring: int = 0, packet_ids: Optional[Dict[int, Tuple[int, int]]] = None):
+        # Stream sharing (compiler/stream_share.py): column c's weight stream is packet-routed, weights under
+        # packet id packet_ids[c][0] (fanned out to the four cores) and the "P" quads under packet_ids[c][1]
+        # (into MemTile buffer B). None is the shipped circuit-routed transport.
+        self._packet_ids = packet_ids
         from aie.dialects.aiex import (dma_await_task, dma_free_task, dma_start_task, npu_maskwrite32,
                                        npu_push_queue, npu_write32, npu_writebd, shim_dma_single_bd_task)
         from aie.dialects._aie_enum_gen import DMAChannelDir
@@ -458,9 +462,10 @@ class SequenceEmitter:
         # IRON hands the sequence body RuntimeData wrappers; the BD wants the MLIR value.
         return getattr(mem, "op", mem)
 
-    def transfer(self, alloc: str, pattern: DmaPattern, token: bool):
+    def transfer(self, alloc: str, pattern: DmaPattern, token: bool, packet: Optional[Tuple[int, int]] = None):
+        kw = {} if packet is None else {"packet": packet}
         task = self._single(alloc, self._mem(pattern), tap=pattern.tap(self._bytes[pattern.buffer]),
-                            issue_token=token)
+                            issue_token=token, **kw)
         self._start(task)
         return task
 
@@ -798,7 +803,7 @@ class SequenceEmitter:
         for c, prog in enumerate(programs):
             t = {"w": 0, "a": 0, "o": 0}
             for it in prog:
-                if it[0] in ("w", "W"):
+                if it[0] in ("w", "W", "P"):
                     t["w"] += 1
                 elif it[0] == "a":
                     t["a"] += len(it[1])
@@ -854,12 +859,20 @@ class SequenceEmitter:
                 if not retire_channel(c, channel):
                     raise RuntimeError(f"channel {channel} queue is full of held tasks")
 
-        def push(c: int, channel: str, pattern: DmaPattern, hold: int = 0, force_token: bool = False) -> None:
+        def push(c: int, channel: str, pattern: DmaPattern, hold: int = 0, force_token: bool = False,
+                 packet: Optional[Tuple[int, int]] = None) -> None:
             ensure(c, channel)
             issued[c][channel] += 1
             n = issued[c][channel]
             token = force_token or n == totals[c][channel] or n % retire_batch == 0
-            queues[c].append([self.transfer(self._names[c][channel], pattern, token=token), channel, hold, token])
+            kw = {} if packet is None else {"packet": packet}
+            queues[c].append([self.transfer(self._names[c][channel], pattern, token=token, **kw),
+                              channel, hold, token])
+
+        pkt = getattr(self, "_packet_ids", None)
+
+        def w_packet(c: int):
+            return None if pkt is None else (0, pkt[c][0])
 
         def served(c: int) -> None:
             # One activation item releases one unit of the oldest held weight task
@@ -881,9 +894,16 @@ class SequenceEmitter:
 
         def issue(c: int, item: tuple) -> None:
             if item[0] == "w":
-                push(c, "w", linear("wp", item[1], item[2]), hold=item[3] if len(item) > 3 else 0)
+                push(c, "w", linear("wp", item[1], item[2]), hold=item[3] if len(item) > 3 else 0,
+                     packet=w_packet(c))
             elif item[0] == "W":
-                push(c, "w", item[1], hold=item[2])
+                push(c, "w", item[1], hold=item[2], packet=w_packet(c))
+            elif item[0] == "P":
+                # A stream-shared quad: on the weight stream, packet-routed into MemTile buffer B.
+                if pkt is None:
+                    raise ValueError("a stream-shared quad in a container built without stream sharing")
+                served(c)
+                push(c, "w", item[1], packet=(0, pkt[c][1]))
             elif item[0] == "a":
                 served(c)
                 for p in item[1]:

@@ -23,7 +23,8 @@ whole-stream dispatch of the same round, byte for byte.
 same stream and data movement with the arithmetic skipped. Per layer, real minus NOP is that layer's core compute,
 and NOP net is its transport plus task overhead.
 
-Run so far: YOLOv8s merged container with --silu-sigmoid (Desktop 2, 2026-10-13).
+Run so far: YOLOv8s merged container with --silu-sigmoid (Desktop 2, 2026-10-13); the same and its --stream-share
+build, same sitting (Desktop 2, 2026-10-13, branch block5-stream-share).
 """
 from __future__ import annotations
 
@@ -51,7 +52,13 @@ def relower(onnx: Path, manifest: dict):
     sched = profile_for_manifest(manifest).schedule
     ir = lower_yolov8n(onnx, silu_sigmoid=ge.get("silu") == "sigmoid4")
     ws = sched.plan_workspace(ir, reuse=ge.get("workspace_reuse", True))
-    scheds, store = sched.schedule_graph(ir, ws)
+    if ge.get("stream_share"):
+        # Stream-shared containers (compiler/stream_share.py). The layer pieces still run in frame order, so the
+        # MemTile chains' period phase is the whole frame's; the frame's period padding is in the last piece.
+        from ignite_xdna.compiler.stream_share import schedule_stream_shared
+        _, scheds, store, _ = schedule_stream_shared(ir, ws)
+    else:
+        scheds, store = sched.schedule_graph(ir, ws)
     return ir, ws, scheds, store
 
 
