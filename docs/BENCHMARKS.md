@@ -16932,3 +16932,71 @@ issue path (about 1.42 µs per task) is a separate bound that runs in parallel, 
   issue-bound as their bytes fall, so the saving does not convert.
 
 The measurement above stands. Only its "therefore issue" reading is withdrawn.
+
+#### Block 5: what AMD-style MemTile replay could save, sized offline (2026-10-13, Desktop 2)
+
+**Question.** The decode above shows how AMD avoids re-reading from DDR: it holds a tile in the MemTile and
+re-delivers it to the cores once per output group by hardware repeat, with no control per round. The correction
+above puts the engine's per-packet cost on per-column shim bytes. How much could the same replay save on YOLOv8s?
+The kill line set before the sizing: under 1 ms, stop before writing engine code.
+
+**Method (offline, all DERIVED).** Every layer's tasks and bytes come from the real schedule, counted the way
+`tools/engine_stream_report.py` counts them. The replayed activation bytes come from the schedule's own
+activation ring at a given slot count: each tile is fetched once and replayed. Two cost models survive from the
+sections above:
+- **A:** `max(activation bytes per column / 6.9 GB/s, 1.42 µs × tasks)`, summed over layers;
+- **C:** `activation bytes per column / 6.9 GB/s + 0.372 µs × tasks`.
+
+**Calibration: neither model reproduces the ring's measured loss.** It is the one measured case of this
+mechanism.
+
+| | ring loss, YOLOv8s | ring loss, YOLOv8n | frame, YOLOv8s (NOP measured 11.85 ms) |
+|---|---:|---:|---:|
+| measured (real dispatch, 2026-09-16) | +3.40 ms | +2.66 ms | - |
+| model A | +4.61 | +4.16 | 12.03 |
+| model C | +1.85 | +1.90 | 11.14 |
+
+- **A overshoots and C undershoots,** on both models. The true cost lies between them, so every saving below is
+  given under both.
+- **The ring's arming is priced coarsely:** 27 `write32`s at 73 ns per scheduled re-arm. The emitter's final
+  arming differed from the schedule's re-arm items, so this term is the least certain one.
+- **A fits the absolute NOP frame better:** 12.03 against 11.85 ms measured.
+
+**The bound** (YOLOv8s NOP frame, ms saved):
+
+| design | model A | model C |
+|---|---:|---:|
+| replay at the ring's 6 slots, tasks as today | 0.32 | 2.63 |
+| replay of whole tiles (16 slots), tasks as today | 1.50 | 5.01 |
+| no replay, tasks capped at 48 per layer | 3.07 | 1.52 |
+| 16 slots and tasks capped at 48 per layer | 6.92 | 6.52 |
+
+- **Under the pessimistic model, replay alone does not clear the line** at the window the ring's locks and
+  descriptors allowed: 0.32 ms. Whole-tile replay reaches 1.50 ms, but only if tasks do not rise.
+- **Tasks rising is exactly how the ring lost.** It went from 6,795 to 8,347 tasks; under A that adds 2.2 ms of
+  issue.
+- **Under A, issue is the larger lever.** 51 of 66 layers are issue-bound today. Capping each layer at 48 tasks
+  is worth 3.07 ms on its own.
+- **AMD issues 18 shim and 84 MemTile pushes for a whole large convolution.** It can because the shim moves coarse
+  tiles while the MemTile's own lock-cycled descriptor chains, configured once per layer, cut them into per-core
+  objects. The engine does that cutting on the shim today: a one-quad fill carries the core index on its repeat.
+- **`model.7` cannot replay in this schedule** (3.28 MB per column either way). That is the layer AMD moved to an
+  output-channel column split, so the two levers are not independent.
+
+**The fifth dimension does not exist on the shim.** In mlir-aie v1.4.2, a BD's outermost size is both its
+iteration wrap and its repeat count (`AIEDmaToNpu.cpp`, `AIEDMATasksToNPU.cpp`). The hardware's iteration is one
+modular dimension under repeat. So a one-quad fill cannot gain a second quad by iteration. The 2026-10-13 reading
+("needs a fifth dimension") stands.
+
+**Verdict against the kill line.** The variant built from proven parts is replay at 6 slots with today's tasks.
+Under the pessimistic model it is 0.32 ms, below 1 ms, so **that variant is stopped**.
+
+**What would clear the line** is a different design: AMD's split of roles. The shim issues per-tile transfers,
+and MemTile descriptor chains, set once per layer, deliver each core's packets with repeat per group. That would
+cut both bytes and tasks, worth 1.5–6.9 ms under A. It is unbuilt and its control is unproven: the ring's
+free-running chains hung until a per-layer reset was added. It is also NOP-only. The stream-sharing precedent
+turned a −0.48 ms NOP gain into a +0.93 ms real loss through compute exposure.
+
+Log: [memtile_replay_sizing_yolov8s_desktop2_20261013T214115Z.log](../results/aie/memtile_replay_sizing_yolov8s_desktop2_20261013T214115Z.log).
+Its two scripts are git-ignored scratch files; both cost models are stated in the
+log header.
