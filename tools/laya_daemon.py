@@ -11,6 +11,9 @@ ONNX Runtime session resident and ``ask`` sends it one question at a time.
     python tools/laya_daemon.py ask --question Q --option A --option B [--type choice] [--context T | --context-file F]
     python tools/laya_daemon.py ask --type score --question Q --option "low" --option "high" ...
     python tools/laya_daemon.py ask --type noul --question "Is it safe to ...?" --context-file F
+    python tools/laya_daemon.py ask ... --min-confidence 0.85 --incumbent "<decision actually taken>"
+    python tools/laya_daemon.py outcome <shadow id> --label <reviewed answer>
+    python tools/laya_daemon.py shadow-report [--min-confidence F]
     python tools/laya_daemon.py golden | status | stop     [--port 8765]
     python tools/laya_daemon.py bench [--rounds 4]          latency through the resident session
 
@@ -23,6 +26,20 @@ count temperature), the chosen option, confidence (1 - normalised entropy, as th
 uncalibrated probabilities at T=1, the expected level for ``score``, tokens, latency_ms of the forward pass and the
 backend. It exits 2 if no daemon answers. ``golden`` runs receptron's reference support ticket through the resident
 session and compares it to the reference's published output to 4 decimals, as tools/laya_accuracy.py golden does.
+
+How it is meant to be used, following upstream (convaiinnovations/laya model card and docs, 2026-10): the base
+checkpoint is "a fast base to specialise, not a zero-shot decision engine" (0.362 zero-shot on their typed-decisions
+benchmark, below the 0.461 majority baseline; 0.766 after fine-tuning). So:
+
+- ``--min-confidence`` gates on confidence (upstream: confidence, not act probability, separates right from wrong).
+  Below the floor the answer abstains: ``chosen`` is null, ``top_option`` and the probabilities stay as evidence.
+  The floor is a policy to measure on your own decisions; upstream's 0.85 is a starting point, not a fit.
+- ``noul`` is asked as a two-option ``choice`` with neutral keys (upstream issue #156: noul can follow its
+  false:/true: labels rather than the state); ``--noul-native`` asks it natively.
+- Shadow mode: ``--incumbent`` logs the ask beside the decision actually taken, which stays authoritative, to
+  ``--shadow-log`` (default scratch/laya/shadow.jsonl, git-ignored). ``outcome`` records the reviewed answer and
+  ``shadow-report`` scores agreement and coverage above a floor. That log is what a floor, a temperature refit
+  or a fine-tune is fitted on. Nothing in it is ever executed.
 
 Backends: ``dml`` (the Radeon 780M through DirectML; needs the allowzero-cleared copy from
 ``tools/laya_baseline.py dmlcopy``) and ``cpu`` (8 intra-op threads). The default model is the guard-free copy
@@ -114,8 +131,13 @@ class Laya:
         else:
             if opts and len(opts) != 2:
                 raise ValueError("noul takes no options, or exactly two: false then true")
-            crit = {"false": opts[0], "true": opts[1]} if opts else None
-            qdef = {"type": "noul", "instructions": req["question"], "criteria": crit}
+            if req.get("noul_native"):
+                crit = {"false": opts[0], "true": opts[1]} if opts else None
+                qdef = {"type": "noul", "instructions": req["question"], "criteria": crit}
+            else:   # upstream issue #156: noul can follow its false:/true: labels; ask a neutral two-option choice
+                qdef = {"type": "choice", "instructions": req["question"],
+                        "criteria": {"A": opts[0] if opts else "no, the statement does not hold",
+                                     "B": opts[1] if opts else "yes, the statement holds"}}
             labels = ["no", "yes"]
         q = la.to_internal(qdef)
         z, tokens, ms = self.logits(q, req.get("context", ""))
@@ -130,6 +152,15 @@ class Laya:
                "temperature": round(t, 4), "tokens": tokens, "latency_ms": round(ms, 2), "backend": self.backend}
         if qtype == "score":
             out["expected_level"] = round(float((np.arange(len(p)) * p).sum()), 4)
+        if qtype == "noul":
+            out["asked_as"] = q["t"]
+        floor = req.get("min_confidence")
+        if floor is not None:   # upstream's gate: below the floor the answer is evidence, not a decision
+            out["min_confidence"] = float(floor)
+            out["abstain"] = out["confidence"] < float(floor)
+            if out["abstain"]:
+                out["top_option"] = out["chosen"]
+                out["chosen"] = None
         return out
 
     def golden(self) -> dict:
@@ -150,6 +181,64 @@ class Laya:
                 "backend": self.backend}
 
 
+class Shadow:
+    """Upstream's staged adoption: Laya runs beside the incumbent decision, which stays authoritative. Each ask
+    that names its incumbent appends one JSON line (question, options, context, Laya's probabilities, confidence,
+    backend, latency, the incumbent, outcome null); ``outcome`` later records the reviewed answer. The log is what a
+    confidence floor, a temperature refit or a fine-tune would be fitted on; nothing in it is ever executed."""
+
+    def __init__(self, path: Path):
+        self.path = path
+
+    def _rows(self) -> list[dict]:
+        if not self.path.exists():
+            return []
+        return [json.loads(x) for x in self.path.read_text(encoding="utf-8").splitlines() if x.strip()]
+
+    def record(self, req: dict, res: dict) -> str:
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        sid = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime()) + "-%05d" % len(self._rows())
+        row = {"id": sid, "type": req.get("type", "choice"), "question": req["question"],
+               "options": req.get("options") or [], "context": req.get("context", ""),
+               "laya": {k: res.get(k) for k in ("options", "chosen", "top_option", "confidence", "abstain",
+                                                "asked_as", "temperature", "tokens", "latency_ms", "backend")},
+               "incumbent": req["incumbent"], "outcome": None}
+        with self.path.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(row) + "\n")
+        return sid
+
+    def outcome(self, sid: str, label: str) -> dict:
+        rows = self._rows()
+        hit = [r for r in rows if r["id"] == sid]
+        if not hit:
+            raise ValueError(f"no shadow record {sid!r}")
+        hit[0]["outcome"] = label
+        self.path.write_text("".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
+        return {"id": sid, "outcome": label}
+
+    def report(self, floor) -> dict:
+        """Agreement with the incumbent, and accuracy against reviewed outcomes, overall and above a floor."""
+        rows = self._rows()
+
+        def pick(r):
+            return r["laya"].get("chosen") or r["laya"].get("top_option")
+
+        def stats(sel, key):
+            k = sum(str(pick(r)).split(":")[0].strip() == str(r[key]).split(":")[0].strip() for r in sel)
+            return {"n": len(sel), "agree": k, "rate": round(k / len(sel), 4) if sel else None}
+
+        out = {"records": len(rows), "with_outcome": sum(r["outcome"] is not None for r in rows),
+               "vs_incumbent": stats(rows, "incumbent"),
+               "vs_outcome": stats([r for r in rows if r["outcome"] is not None], "outcome")}
+        if floor is not None:
+            kept = [r for r in rows if r["laya"]["confidence"] >= float(floor)]
+            out["floor"] = float(floor)
+            out["coverage"] = round(len(kept) / len(rows), 4) if rows else None
+            out["above_floor_vs_incumbent"] = stats(kept, "incumbent")
+            out["above_floor_vs_outcome"] = stats([r for r in kept if r["outcome"] is not None], "outcome")
+        return out
+
+
 def serve(a) -> int:
     model_dir = Path(a.model_dir)
     model = Path(a.model) if a.model else model_dir / DEFAULT_MODEL[a.backend]
@@ -158,6 +247,7 @@ def serve(a) -> int:
     print(f"[serve] {model.name} on {a.backend} ({laya.providers[0]}), loaded in {laya.load_s:.1f} s; "
           f"listening on 127.0.0.1:{a.port}", flush=True)
     stop = {"now": False}
+    shadow = Shadow(Path(a.shadow_log))
 
     class Handler(socketserver.StreamRequestHandler):
         def handle(self):
@@ -167,8 +257,14 @@ def serve(a) -> int:
                 op = req.get("op", "ask")
                 if op == "ask":
                     res = laya.ask(req)
+                    if req.get("incumbent") is not None:
+                        res["shadow_id"] = shadow.record(req, res)
                     print(f"[ask] {res['type']} k={len(res['options'])} tokens={res['tokens']} "
                           f"{res['latency_ms']:.1f} ms", flush=True)
+                elif op == "outcome":
+                    res = shadow.outcome(req["id"], req["label"])
+                elif op == "shadow_report":
+                    res = shadow.report(req.get("min_confidence"))
                 elif op == "golden":
                     res = laya.golden()
                     print(f"[golden] {'PASS' if res['pass'] else 'FAIL'}", flush=True)
@@ -262,6 +358,8 @@ def main() -> int:
     s.add_argument("--no-pad", action="store_true",
                    help="run each question at its own length instead of padding to 512 (not with --backend npu)")
     s.add_argument("--gemm-dir", default="scratch/gemm_generic/aot6", help="npu: the generic GEMM builds")
+    s.add_argument("--shadow-log", default="scratch/laya/shadow.jsonl",
+                   help="where asks that name an --incumbent are logged (git-ignored by default)")
     s.add_argument("--model-dir", required=True, help="the laya-onnx directory: laya_config.json and tokenizer/")
     s.add_argument("--model", default=None, help="ONNX file (default: <model-dir>/laya_az0_noguard.onnx)")
     s.add_argument("--threads", type=int, default=8, help="cpu backend intra-op threads")
@@ -274,6 +372,18 @@ def main() -> int:
     g.add_argument("--context", default="")
     g.add_argument("--context-file", default=None)
     q.add_argument("--port", type=int, default=DEFAULT_PORT)
+    q.add_argument("--min-confidence", type=float, default=None,
+                   help="abstain below this confidence (upstream suggests starting near 0.85; it is a policy to "
+                        "measure on your own decisions, not a property of the model)")
+    q.add_argument("--incumbent", default=None, help="the decision actually taken; logs the ask in shadow mode")
+    q.add_argument("--noul-native", action="store_true", help="ask noul natively instead of as a neutral choice")
+    o = sub.add_parser("outcome", help="record the reviewed answer for a shadow record")
+    o.add_argument("id")
+    o.add_argument("--label", required=True)
+    o.add_argument("--port", type=int, default=DEFAULT_PORT)
+    r = sub.add_parser("shadow-report", help="agreement with the incumbent and with reviewed outcomes")
+    r.add_argument("--min-confidence", type=float, default=None)
+    r.add_argument("--port", type=int, default=DEFAULT_PORT)
     for name in ("golden", "status", "stop"):
         sub.add_parser(name).add_argument("--port", type=int, default=DEFAULT_PORT)
     b = sub.add_parser("bench", help="latency through the daemon: 5 real-length questions + 1 at 512 tokens, per round")
@@ -287,7 +397,12 @@ def main() -> int:
     if a.cmd == "ask":
         ctx = Path(a.context_file).read_text(encoding="utf-8") if a.context_file else a.context
         res = call(a.port, {"op": "ask", "type": a.type, "question": a.question, "options": a.option,
-                            "context": ctx})
+                            "context": ctx, "min_confidence": a.min_confidence, "incumbent": a.incumbent,
+                            "noul_native": a.noul_native})
+    elif a.cmd == "outcome":
+        res = call(a.port, {"op": "outcome", "id": a.id, "label": a.label})
+    elif a.cmd == "shadow-report":
+        res = call(a.port, {"op": "shadow_report", "min_confidence": a.min_confidence})
     else:
         res = call(a.port, {"op": a.cmd})
     print(json.dumps(res, indent=1))
