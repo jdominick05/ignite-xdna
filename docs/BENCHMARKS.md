@@ -15327,6 +15327,43 @@ Step 4a, the first item on step 3's list: remove the cost of switching between s
   - item 4: split the host graph;
   - item 5: build the hybrid end to end, scored against step 2's bf16 emulation.
 
+## Laya as a resident decision service: the reference ticket passes on both backends, and short questions are faster on the CPU (2026-10-14, Desktop 2)
+
+`tools/laya_daemon.py` keeps one ONNX Runtime session of Laya loaded and answers typed questions over localhost:
+`choice`, `score` and `noul`, as Laya defines them. It encodes each question at its own length, exactly as
+`tools/laya_accuracy.py` does. For each option it returns the calibrated probability, the chosen option and a
+confidence. It serves the guard-free copy (`laya_az0_noguard.onnx`, sha256 `9ab43d87...`), whose logits are
+bit-identical to the shipped export
+([screen](#laya-on-the-npu-screened-the-floor-beats-the-cpu-and-the-780m-without-the-nan-guards-2026-09-26-desktop-2)).
+It has no NPU backend: no end-to-end NPU build of Laya exists.
+
+**The model was fetched again** from receptron/laya-onnx at `68f27dfe`. Its shas match the 09-26 logs
+(`a874eb25`, data `48774636`), and the DirectML and guard-free copies came out with their logged shas again
+(`fd35271c`, `9ab43d87`).
+
+**One sitting, both backends.** Each backend ran serve → golden → bench → stop. The bench was 5 rounds, each of 5
+questions of 63–84 tokens plus 1 at 512.
+
+| backend | reference ticket | 63–84 tokens, forward median | 512 tokens, forward median |
+|---|---|---:|---:|
+| CPU, 8 threads | PASS (4 decimals) | 159.8 ms | 1,030.6 ms |
+| 780M, DirectML | PASS (4 decimals) | 228.4 ms | 1,002.4 ms |
+
+- **The reference ticket passes on both.** receptron's support ticket reproduces to 4 decimals through the resident
+  session, as `laya_accuracy.py golden` checks it.
+- **The sitting is not timing-eligible.** A Ghidra JVM that was not part of this work held about 2 cores
+  throughout (`HOST_LOAD_VERDICT PEER`), so these latencies are indicative. They are not comparable with step 1's.
+- **Even contended, the CPU answers short questions faster:** 160 ms against 228 ms. At 512 tokens the two are
+  level, and both are slower than step 1's quiet 688 ms (780M) and 834 ms (CPU) for the same copy. The daemon's
+  default backend is therefore the CPU; the 780M remains the choice when the CPU must stay free.
+- **An earlier run the same hour had no load witness and was not kept.** It read 233 / 167 ms and 911 / 1,118 ms.
+- **The NPU question stays open.** The hybrid build is DERIVED near 550–570 ms at 512 tokens. Real questions are
+  60–90 tokens, while a fixed-512 NPU build would pay for all 512, so the bar it must beat at those lengths is about
+  160 ms on the CPU, not 688.
+
+Logs: [sitting](../results/laya/laya_daemon_desktop2_20261014T145115Z.log) and its
+[load witness](../results/laya/laya_daemon_witness_desktop2_20261014T145115Z.log).
+
 ## With the shipped SiLU recipe, `ptr` does not carry YOLOv8s past AMD's stack: 17.20 against 17.06 ms (2026-10-13, Desktop 2)
 
 The question for landing this branch on `main`: does the shipped YOLOv8s container beat AMD's

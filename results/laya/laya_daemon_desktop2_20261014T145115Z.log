@@ -1,0 +1,25 @@
+# Laya decision daemon: golden check and latency through the resident session, per backend
+# host: DESKTOP-CBL5NUA (Desktop 2); UTC start: 2026-10-14T14:51:24Z; main 485016d
+# model dir: scratch/laya/laya-onnx (receptron/laya-onnx @ 68f27dfe; laya.onnx a874eb25, data 48774636)
+# served model: laya_az0_noguard.onnx sha256 9ab43d87c9a696c8439788addfccaff8956d4dcee36ae24549add8d5b0f638bf
+# onnxruntime 1.27.0 ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider'] python 3.12.11
+
+## backend dml
+[serve] laya_az0_noguard.onnx on dml (DmlExecutionProvider), loaded in 1.6 s; listening on 127.0.0.1:8765
+GOLDEN PASS {"input_tokens": 267, "department": [0.9415, 0.031, 0.0275], "department_confidence": 0.7603, "urgency_score": 1.3886, "urgency": [0.1752, 0.2947, 0.4962, 0.0338], "churn_risk": 0.0988}
+[bench] backend dml (DmlExecutionProvider), model laya_az0_noguard.onnx, 5 rounds
+[bench] real    n= 25 tokens 63-84: forward median 228.4 ms (min 197.9, max 279.7); round trip median 240.5 ms
+[bench] max_len n=  5 tokens 512-512: forward median 1002.4 ms (min 955.9, max 1069.9); round trip median 1016.3 ms
+[serve] stopped
+
+## backend cpu
+[serve] laya_az0_noguard.onnx on cpu (CPUExecutionProvider), loaded in 1.4 s; listening on 127.0.0.1:8765
+GOLDEN PASS {"input_tokens": 267, "department": [0.9415, 0.031, 0.0275], "department_confidence": 0.7603, "urgency_score": 1.3886, "urgency": [0.1752, 0.2947, 0.4962, 0.0338], "churn_risk": 0.0988}
+[bench] backend cpu (CPUExecutionProvider), model laya_az0_noguard.onnx, 5 rounds
+[bench] real    n= 25 tokens 63-84: forward median 159.8 ms (min 128.8, max 198.8); round trip median 179.3 ms
+[bench] max_len n=  5 tokens 512-512: forward median 1030.6 ms (min 815.9, max 1199.4); round trip median 1044.9 ms
+[serve] stopped
+
+## error path: ask with no daemon running
+{"ok": false, "error": "no Laya daemon on 127.0.0.1:8765 ([WinError 10061] No connection could be made because the target machine actively refused it); start one with 'python tools/laya_daemon.py serve'"}
+exit code 2
