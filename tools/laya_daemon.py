@@ -7,7 +7,7 @@ Laya (Convai Innovations, Apache 2.0, receptron/laya-onnx) is ModernBERT-large p
 pass per question, a probability per option, no text generated. Loading it takes seconds, so ``serve`` keeps one
 ONNX Runtime session resident and ``ask`` sends it one question at a time.
 
-    python tools/laya_daemon.py serve [--backend cpu|dml] --model-dir D [--model M] [--port 8765]
+    python tools/laya_daemon.py serve [--backend cpu|dml|npu] --model-dir D [--model M] [--no-pad] [--port 8765]
     python tools/laya_daemon.py ask --question Q --option A --option B [--type choice] [--context T | --context-file F]
     python tools/laya_daemon.py ask --type score --question Q --option "low" --option "high" ...
     python tools/laya_daemon.py ask --type noul --question "Is it safe to ...?" --context-file F
@@ -27,14 +27,18 @@ session and compares it to the reference's published output to 4 decimals, as to
 Backends: ``dml`` (the Radeon 780M through DirectML; needs the allowzero-cleared copy from
 ``tools/laya_baseline.py dmlcopy``) and ``cpu`` (8 intra-op threads). The default model is the guard-free copy
 (``tools/laya_npu_screen.py noguard``), whose logits are bit-identical to the shipped export on 2,403 items and
-which runs faster on both. There is no NPU backend yet: no end-to-end NPU build of Laya exists.
-The default is ``cpu``: questions of 60-90 tokens, the usual size, came back faster there than on the 780M
-(results/laya/laya_daemon_desktop2_20261014T145115Z.log, a sitting with a foreign CPU load, so indicative only).
+which runs faster on both. ``npu`` is tools/laya_hybrid.py: the 120 weight products as bf16 GEMMs on the NPU in
+one hardware context, everything else on the CPU. It is built for 512 tokens only, and its products are bf16, so
+its logits follow the bf16 emulation, not the fp32 reference: ``golden`` is an fp32 check and is not expected to
+pass to 4 decimals there.
 
-Inputs are encoded exactly as tools/laya_accuracy.py encodes them (its tokenizer, build_sequence and feed), at the
-question's own length. The server binds 127.0.0.1 only and serves one request at a time. Laya's answer is a
-probability over the options it was given, not a judgement about anything else.
-Run in the ryzen-ai-1.8.0 env (ONNX Runtime with DirectML), activated with conda.
+Inputs are encoded exactly as tools/laya_accuracy.py encodes them (its tokenizer, build_sequence and feed), then
+padded with [PAD] under attention mask 0 to Laya's 512-token limit, so every backend runs the same computation (padded,
+the guard-free copy stays bit-identical to the shipped export: tools/laya_npu_screen.py padded). ``--no-pad`` runs each question at its own
+length instead, which is faster on cpu and dml for short questions. The server binds 127.0.0.1 only and serves one
+request at a time. Laya's answer is a probability over the options it was given, not a judgement about anything else.
+Run cpu and dml in the ryzen-ai-1.8.0 env (ONNX Runtime with DirectML), npu in mlir-aie-iron (ONNX Runtime CPU and
+pyxrt), each activated with conda.
 """
 import argparse
 import json
@@ -52,24 +56,39 @@ import laya_accuracy as la  # noqa: E402
 import laya_baseline as lb  # noqa: E402
 
 DEFAULT_PORT = 8765
-DEFAULT_MODEL = {"dml": "laya_az0_noguard.onnx", "cpu": "laya_az0_noguard.onnx"}
+DEFAULT_MODEL = {"dml": "laya_az0_noguard.onnx", "cpu": "laya_az0_noguard.onnx", "npu": "laya_az0_noguard.onnx"}
 
 
 class Laya:
-    def __init__(self, model_dir: Path, model: Path, backend: str, threads: int):
+    def __init__(self, model_dir: Path, model: Path, backend: str, threads: int, pad: bool = True,
+                 gemm_dir: Path | None = None):
         self.cfg = json.loads((model_dir / "laya_config.json").read_text(encoding="utf-8"))
         self.enc = la.tokenizer(model_dir)
-        self.backend, self.model = backend, model
+        self.backend, self.model, self.pad = backend, model, pad or backend == "npu"
         t0 = time.perf_counter()
-        self.sess = lb.session(model, backend, threads)
+        if backend == "npu":
+            import laya_hybrid as lh
+            self.plan = lh.Plan(model, threads)
+            self.prod = lh.NpuProducts(self.plan, gemm_dir)
+            self.run = lambda feed: self.plan.run(feed, self.prod)
+            self.providers = ["NPU (one-context bf16 GEMM) + CPUExecutionProvider"]
+        else:
+            sess = lb.session(model, backend, threads)
+            self.run = lambda feed: sess.run(None, feed)
+            self.providers = sess.get_providers()
         self.load_s = time.perf_counter() - t0
-        self.providers = self.sess.get_providers()
         self.calls = 0
 
     def logits(self, q: dict, state) -> tuple[np.ndarray, int, float]:
         ids, mk = la.build_sequence(self.enc, state, q, self.cfg["max_len"], self.cfg["head_max_len"])
+        qt = la.QTYPES[q["t"]]
+        feed = la.feed(ids, mk, qt)
+        if self.pad:   # [PAD] under attention mask 0 to the full 512: the same computation on every backend
+            n = len(ids)
+            feed["input_ids"] = np.array([ids + [la.PAD] * (self.cfg["max_len"] - n)], np.int64)
+            feed["attention_mask"] = np.array([[1] * n + [0] * (self.cfg["max_len"] - n)], np.int64)
         t0 = time.perf_counter()
-        z = self.sess.run(None, la.feed(ids, mk, la.QTYPES[q["t"]]))[0][0, :len(mk)]
+        z = self.run(feed)[0][0, :len(mk)]
         self.calls += 1
         return z, len(ids), (time.perf_counter() - t0) * 1e3
 
@@ -134,7 +153,7 @@ class Laya:
 def serve(a) -> int:
     model_dir = Path(a.model_dir)
     model = Path(a.model) if a.model else model_dir / DEFAULT_MODEL[a.backend]
-    laya = Laya(model_dir, model, a.backend, a.threads)
+    laya = Laya(model_dir, model, a.backend, a.threads, pad=not a.no_pad, gemm_dir=Path(a.gemm_dir))
     laya.ask({"type": "choice", "question": "warm-up", "options": ["a", "b"]})
     print(f"[serve] {model.name} on {a.backend} ({laya.providers[0]}), loaded in {laya.load_s:.1f} s; "
           f"listening on 127.0.0.1:{a.port}", flush=True)
@@ -155,6 +174,7 @@ def serve(a) -> int:
                     print(f"[golden] {'PASS' if res['pass'] else 'FAIL'}", flush=True)
                 elif op == "status":
                     res = {"backend": laya.backend, "providers": laya.providers, "model": str(laya.model),
+                           "padded_to_512": laya.pad,
                            "calls": laya.calls, "load_s": round(laya.load_s, 2)}
                 elif op == "stop":
                     res, stop["now"] = {"stopping": True}, True
@@ -169,6 +189,8 @@ def serve(a) -> int:
     with socketserver.TCPServer(("127.0.0.1", a.port), Handler) as srv:
         while not stop["now"]:
             srv.handle_request()
+    if a.backend == "npu":
+        laya.prod.close()
     print("[serve] stopped", flush=True)
     return 0
 
@@ -234,8 +256,12 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
     s = sub.add_parser("serve")
-    s.add_argument("--backend", choices=("dml", "cpu"), default="cpu",
-                   help="cpu (default) answers real-length questions faster; dml leaves the CPU free")
+    s.add_argument("--backend", choices=("cpu", "dml", "npu"), default="cpu",
+                   help="cpu (default); dml leaves the CPU free; npu runs the 120 weight products on the NPU "
+                        "(mlir-aie-iron env)")
+    s.add_argument("--no-pad", action="store_true",
+                   help="run each question at its own length instead of padding to 512 (not with --backend npu)")
+    s.add_argument("--gemm-dir", default="scratch/gemm_generic/aot6", help="npu: the generic GEMM builds")
     s.add_argument("--model-dir", required=True, help="the laya-onnx directory: laya_config.json and tokenizer/")
     s.add_argument("--model", default=None, help="ONNX file (default: <model-dir>/laya_az0_noguard.onnx)")
     s.add_argument("--threads", type=int, default=8, help="cpu backend intra-op threads")

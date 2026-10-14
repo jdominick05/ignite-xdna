@@ -15364,6 +15364,82 @@ questions of 63–84 tokens plus 1 at 512.
 Logs: [sitting](../results/laya/laya_daemon_desktop2_20261014T145115Z.log) and its
 [load witness](../results/laya/laya_daemon_witness_desktop2_20261014T145115Z.log).
 
+## Laya end to end with its weight products on the NPU: at 512 tokens it is the fastest backend, 608 ms against 755 (780M) and 870 (CPU) (2026-10-14, Desktop 2)
+
+This is step 5 of the Laya study: the hybrid, built and timed in one pre-registered sitting.
+`tools/laya_hybrid.py` cuts the guard-free copy at its 120 weight MatMuls into 121 CPU segments (ONNX Runtime,
+8 threads, spinning off). Of the 120 products' 720 runs over six inputs, 708 ran as bf16 GEMMs on the NPU and the
+other 12 as bf16 products in numpy; the 12 are the 1024×1 product, which no GEMM design covers.
+The NPU side is the one-context generic GEMM
+([one context](#laya-on-the-npu-one-context-serves-all-six-gemm-shapes-and-halves-the-device-side-2026-10-13-desktop-2)), here the `aot6` builds:
+- one hardware context and six instruction streams;
+- 120 weight buffers, written once and kept resident;
+- activations rounded to bf16 into a local buffer, then copied into a mapped input buffer;
+- results read zero-copy from a mapped output buffer.
+
+`tools/laya_daemon.py --backend npu` serves it, and every backend now pads each question to 512 tokens with [PAD]
+under attention mask 0.
+
+**The split is exact before the NPU enters.** With the 120 products done in numpy fp32, the hybrid's logits match
+the whole model to within 6.7e-6 on six inputs, with the same top option on 6/6. The six inputs are the reference
+ticket's three questions and three synthetic ones (180, 400 and 512 tokens), all padded to 512.
+
+**The NPU hybrid tracks the bf16 emulation.**
+- Against `bf16copy`'s emulation of the same model, its worst |Δlogit| is 1.48e-2, with the same top option on
+  6/6.
+- The numpy-bf16 hybrid itself departs from that emulation by up to 2.14e-2, from accumulation order alone. That
+  sets the band.
+- Through the daemon, receptron's reference ticket comes within 0.0047 of every published value, with the same
+  department on top. It is not exact to 4 decimals, and as an fp32 check it is not expected to be.
+
+**The first build was 2.1 s, not 0.6.** Rounding took 1.41 s per call. The 121 sessions' intra-op pools kept
+spinning after each segment and starved the rounding threads, which in isolation take 0.66 ms per 512×1024.
+Turning spinning off (`session.intra_op.allow_spinning 0`) brought the call to 593 ms. The split by stage was:
+
+| stage | ms per call |
+|---|---:|
+| rounding and write | 98.8 |
+| NPU: sync, call, wait, sync | 226.9 |
+| reads | 40.8 |
+| host segments (by difference) | 226.4 |
+
+Rounding into a local buffer before the copy changed nothing on its own: 2,115 ms became 2,105.
+
+**The sitting** (pre-registered, scratch prereg sha256 `aff7d061...`) ran three daemons resident at once:
+- cpu and dml in `ryzen-ai-1.8.0`, ORT 1.27;
+- npu in `mlir-aie-iron`, ORT 1.30.
+
+There were 8 rounds with the backend order rotated, each of 6 questions per backend, so 48 forward passes per
+backend, all at 512 tokens. `timing_eligible: true`: no foreign process was seen, and the NPU was idle before and
+after.
+
+| backend | forward median | IQR | min–max |
+|---|---:|---:|---:|
+| **NPU hybrid** | **607.9 ms** | 605.4–623.0 | 597.9–666.8 |
+| 780M, DirectML | 754.9 ms | 742.1–769.4 | 727.1–792.6 |
+| CPU, 8 threads | 869.5 ms | 809.6–915.6 | 738.4–1,096.6 |
+
+- **Gates.**
+  - G1: cpu and dml golden PASS, padded.
+  - G2: npu golden within 0.01, same top: PASS.
+  - G3: npu chose the same option as cpu on 48/48: PASS.
+  - V1: timing-eligible.
+- **Verdict: NPU FASTEST.** Its median is below both others, and its IQR lies wholly below both. It is 147 ms
+  (19%) faster than the 780M and 262 ms (30%) faster than the CPU.
+- **Against the written expectation:** the DERIVED 550–570 ms is close; it reads 608.
+- **These are not step 1's numbers.** The 780M and the CPU read 755 and 870 here, against step 1's 688 and 834,
+  measured separately on 09-26. Today all three daemons were resident and run in turn, and the cpu and dml figures
+  come from ORT 1.27, while the hybrid's host segments run on ORT 1.30. Which of these moved them is unexplained;
+  the ranking within this sitting is what the gate judged.
+- **The header's `main e00a7e0`** is the `laya-testing` branch head the sitting ran from. The work lives on that
+  branch, not on main.
+- **Still open:**
+  - the host side (227 ms of segments plus 99 ms of rounding) is now larger than the NPU's 227 ms;
+  - padding short questions to 512 costs the CPU and the 780M time they did not need to spend
+    ([previous section](#laya-as-a-resident-decision-service-the-reference-ticket-passes-on-both-backends-and-short-questions-are-faster-on-the-cpu-2026-10-14-desktop-2)).
+
+Log: [sitting](../results/laya/laya_three_way_512_desktop2_20261014T152451Z.log).
+
 ## With the shipped SiLU recipe, `ptr` does not carry YOLOv8s past AMD's stack: 17.20 against 17.06 ms (2026-10-13, Desktop 2)
 
 The question for landing this branch on `main`: does the shipped YOLOv8s container beat AMD's
