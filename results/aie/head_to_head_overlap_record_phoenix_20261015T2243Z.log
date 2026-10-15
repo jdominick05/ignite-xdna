@@ -1,0 +1,76 @@
+same-sitting head to head on the layer-overlap default: pre-registration and per-arm summary. Desktop 2 (DESKTOP-CBL5NUA), written 2026-10-15T22:49Z; sitting log head_to_head_overlap_phoenix_20261015T2243Z.log
+
+== 1. Hashes taken before the sitting ==
+d2d5ecff940e574d463431368e9efdeff77762b1cfc241bd1525fcd7c9233a63 *scratch/b49/prereg.txt
+7b903aef4804e23343e140af2b2b1021cd9a6b9b17fc919bb3ee34519160c288 *scratch/b49/sitting.py
+60d8cf0247dd9657f4f6b89913f91e3c8c05733d09384ae99d6d914fee92307a *build/df_yolov8n_silu_def.ignite
+
+== 2. Pre-registration, verbatim ==
+PRE-REGISTRATION: same-sitting head to head on the layer-overlap default, Ignition against AMD's Ryzen AI 1.7.1 stack.
+Desktop 2 (DESKTOP-CBL5NUA, Phoenix), 2026-10-15. Written before any timed run. ignite-xdna main 653084f, Ignition
+main 4f23442.
+
+Arms, per model (two interleaved rounds, the second in reverse order):
+- AMD: tools/amd_vitisai_yolo.py (YOLOv8n, YOLOv8s), tools/amd_vitisai_sesr.py (SESR M7), pipelines/yolov8n-pose/4_pose.py
+  --ep npu (pose), resnet_env17, fresh cache keys compiled by an untimed run first.
+- Ignition overlap: live_ignition.py on the default build (YOLOv8n/s and pose with --silu-sigmoid, as Ignition's docs
+  build them; SESR M7 plain).
+- Ignition barrier: the same build with --no-overlap-layers (the control that isolates the default's end-to-end effect).
+50 warm-up + 500 timed frames of bus.jpg each, balanced power mode, xrt-smi idle before every run. Every Ignition
+container verified layer-exact on the NPU first; a mismatch voids the sitting. Method as the v0.3.3 release sitting
+(BENCHMARKS, 2026-09-17), which this re-runs.
+
+Metric: glass-to-glass mean (ms) per run, as each tool prints it (for pose, AMD's arm is 4_pose.py's pre+infer+post,
+as in the release sitting).
+
+Predictions (orientation, from the dispatch A/B and the release sitting; not rules):
+- overlap - barrier, per model: about the dispatch deltas (-1.00 / -1.31 / -1.14 / -0.08 ms).
+- YOLOv8n and pose: Ignition faster than AMD (release: 8.50 vs 10.66, 9.28 vs 12.07).
+- YOLOv8s: about level with AMD (release gap +1.4 ms, dispatch now -1.3 ms); sign not predicted.
+- SESR M7: AMD faster (release 4.78 vs 4.35).
+
+Rule for any doc that states who is faster on a model: "Ignition faster" only if the overlap arm's mean is below
+AMD's in BOTH rounds; "AMD faster" only if above in both; otherwise "level within this sitting's spread".
+A failed run, a busy NPU or a layer mismatch voids the sitting for that model.
+
+== 3. Summary (scratch/b49/summarize.py over the sitting log) ==
+timing_eligible true
+
+verify witnesses:
+verify df_yolov8n_silu_def: [verify] 28/28 readable layers exact; 38/38 reused slots hold their planned final tenant | 66 layers total | first dispa
+verify df_yolov8n_silu_def: [verify] PASS
+verify df_yolov8n_silu_bar: [verify] 28/28 readable layers exact; 38/38 reused slots hold their planned final tenant | 66 layers total | first dispa
+verify df_yolov8n_silu_bar: [verify] PASS
+verify df_yolov8s_silu_def: [verify] 28/28 readable layers exact; 38/38 reused slots hold their planned final tenant | 66 layers total | first dispa
+verify df_yolov8s_silu_def: [verify] PASS
+verify df_yolov8s_silu_bar: [verify] 28/28 readable layers exact; 38/38 reused slots hold their planned final tenant | 66 layers total | first dispa
+verify df_yolov8s_silu_bar: [verify] PASS
+verify df_yolov8n_pose_silu_def: [verify] 37/37 readable layers exact; 38/38 reused slots hold their planned final tenant | 75 layers total | first dispa
+verify df_yolov8n_pose_silu_def: [verify] PASS
+verify df_yolov8n_pose_silu_bar: [verify] 37/37 readable layers exact; 38/38 reused slots hold their planned final tenant | 75 layers total | first dispa
+verify df_yolov8n_pose_silu_bar: [verify] PASS
+verify df_sesr_m7_def: [verify] 5/5 readable layers exact; 4/4 reused slots hold their planned final tenant | 9 layers total | first dispatch 5
+verify df_sesr_m7_def: [verify] PASS
+verify df_sesr_m7_bar: [verify] 5/5 readable layers exact; 4/4 reused slots hold their planned final tenant | 9 layers total | first dispatch 5
+verify df_sesr_m7_bar: [verify] PASS
+
+G2G means (ms), round 1 / round 2:
+  amd sesr_m7                  3.833 / 3.739
+  amd yolov8n                  10.787 / 10.731
+  amd yolov8s                  17.249 / 17.327
+  ignition barrier pose        8.961 / 8.858
+  ignition barrier sesr_m7     4.937 / 4.989
+  ignition barrier yolov8n     8.278 / 8.240
+  ignition barrier yolov8s     17.146 / 17.238
+  ignition overlap pose        7.703 / 7.750
+  ignition overlap sesr_m7     4.794 / 4.766
+  ignition overlap yolov8n     7.251 / 7.235
+  ignition overlap yolov8s     15.818 / 15.815
+
+amd pose #1:
+  infer   mean 9.13 ms   median 9.15 ms   p95 9.52 ms   (109.6 fps)
+  pre     mean 2.954 ms
+
+amd pose #2:
+  infer   mean 9.12 ms   median 9.17 ms   p95 9.55 ms   (109.6 fps)
+  pre     mean 3.035 ms

@@ -2060,7 +2060,8 @@ cached reference heads rather than `bo_out`.
       - `engine_shim_trace.py` prints no per-layer table for an overlap container, and `shim_trace_budget.py` and
         `shim_trace_compare.py` refuse one.
     - **The AMD arm: NOT RUN.** The README is unchanged, and its "AMD stays ahead on YOLOv8s and SESR M7" waits on a
-      same-sitting AMD comparison.
+      same-sitting AMD comparison. *[Run the same day: Ignition faster on YOLOv8n, YOLOv8s and pose,
+      AMD on SESR M7; the README follows it. [BENCHMARKS](BENCHMARKS.md#against-amds-stack-on-the-overlap-default-yolov8s-flips-to-ignition-1582-against-1729-ms-yolov8n-and-pose-widen-their-lead-amd-keeps-sesr-m7-2026-10-15-desktop-2).]*
   - **Tool consequence.** Per-layer timing (`engine_layer_timing`), any barrier control and per-layer trace windows
     need a `--no-overlap-layers` build.
   - [BENCHMARKS](BENCHMARKS.md#layer-overlap-is-the-compilers-default-yolov8n-100-ms-yolov8s-131-pose-114-sesr-m7-008-every-container-exact-2026-10-15-desktop-2).

@@ -100,9 +100,9 @@ and the engineering time to chase it — on AMD's stack; the next finding asks i
 **The graph engine is more accurate than AMD's stack, not just faster.** Most of the zoo's XINT8
 loss is Quark rendering SiLU as a HardSigmoid. Computed instead as a four-line integer sigmoid on
 the NPU, YOLOv8n, YOLOv8s and YOLOv8n-pose read **34.12 / 42.37 / 44.16** mAP@50-95 over all 5000
-COCO images against AMD's **26.68 / 37.31 / 32.64**, with no AdaRound — and YOLOv8n and pose are
-faster too (8.50 vs 10.66 ms, 9.28 vs 12.07). AMD stays ahead on YOLOv8s and SESR M7.
-[Accuracy](docs/BENCHMARKS.md#the-sigmoid-silu-containers-against-amds-stack-more-accurate-on-all-5000-coco-images-faster-on-yolov8n-and-yolov8n-pose-slower-on-yolov8s-2026-09-17-desktop-2) · [sitting](docs/BENCHMARKS.md#the-v033-release-sitting-sigmoid-silu-containers-on-the-host-fast-paths-against-amds-stack-2026-09-17-desktop-2).
+COCO images against AMD's **26.68 / 37.31 / 32.64**, with no AdaRound — and with layer overlap now the
+default all three are faster too (**7.24 vs 10.76 ms, 15.82 vs 17.29, 7.73 vs ~12.2**). AMD keeps SESR M7.
+[Accuracy](docs/BENCHMARKS.md#the-sigmoid-silu-containers-against-amds-stack-more-accurate-on-all-5000-coco-images-faster-on-yolov8n-and-yolov8n-pose-slower-on-yolov8s-2026-09-17-desktop-2) · [sitting](docs/BENCHMARKS.md#against-amds-stack-on-the-overlap-default-yolov8s-flips-to-ignition-1582-against-1729-ms-yolov8n-and-pose-widen-their-lead-amd-keeps-sesr-m7-2026-10-15-desktop-2).
 
 **Batching is unsafe; independent concurrency is not.** A static batch-2 export doesn't fail
 cleanly — the EP takes 80/395 nodes, runs with a plausible latency, and **writes only slot 0**:

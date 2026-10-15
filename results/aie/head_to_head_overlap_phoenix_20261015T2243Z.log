@@ -1,0 +1,810 @@
+RESEARCH_PLATFORM {"machine": "Desktop 2", "cpu": "AMD Ryzen 7 8700G w/ Radeon 780M Graphics", "os": "Windows-11-10.0.26200-SP0", "ram_bytes": 33381138432, "source_sha256": {"tools/research_process.py": "ffeb1857f190b482eed101b5f5a928f455de26bfa61d23f78a2eacec08e2663e", "tools/quant_calib_alphabet.py": "2dc0b2878c564853f340880209a425dfcf63b8536b2b8e9fd32344daade58d37", "tools/xint8_arithmetic_probe.py": "6aa3df08b9870c3c2264b868459d7ffbac3070dddc1349d7c6f3f480075f7041", "scripts/research-lowlevel.sh": "3455ad7933697936487712665505c216891865c6deada647302785f6e37020bd", "scripts/research-iron.sh": "4c863a262646ddab39b5005006ba8e03809895e6386c6310e2fd9d0a9e9609ee", "kernels/memory_placement/probe.py": "e8d990169ad6091fa1b53852e9f61eff495b5def72d35165a5c5cf1759e38898", "kernels/memory_placement/memory_kernels.cc": "182e7af7071a1e851afb4a7ca266069c489aea1fbaaa85eca129708daeba5ba6", "scripts/research-matrix.sh": "739254171629deae822b0ad7dabc875aee19ace56dde77d3e8aab61663f97516", "kernels/memory_placement/gemm.py": "17c905ad66110d3346bbf0db898dfc6b780df59fae1dfb0c1747057ce1e5844e", "kernels/memory_placement/gemm_placement.cc": "f21acf7250b12914ea30cc1f77613239dfa18421a85a1b9a5199017dd916278a", "tools/research_summary.py": "0c00dcceef07053d06731b41a1f1ed58d3ba4ea09f82497de354ce9cef17da20", "tools/research_toolchain.py": "f0a126a24ae213acfaa43460cfd9def0c86d9cb70cfee0228aa271688467b314"}, "commit": "653084fbe355bb616bd180c0c3af6032f9e9ce40", "command": ["bash", "scripts/research-iron.sh", "scratch/b49/sitting.py", "--out", "scratch/b49/run_20261015T2243Z"], "seconds_limit": 3300.0, "rss_gib_limit": 8, "checks_only": false, "free_ram_bytes": 27243749376}
+HOST_LOAD busy_cores=0.08 logical_cores=16 free_ram_gb=25.3 sample_sec=1
+HOST_LOAD_TOP 0.05 powershell:7080 ws_mb=80
+HOST_LOAD_TOP 0.03 dev-agent:7624 ws_mb=458
+HOST_LOAD_VERDICT CLEAR
+
+PRE_NPU_CONTEXT_WITNESS "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+# head to head, host DESKTOP-CBL5NUA, start 2026-10-15T22:44:04Z
+# ignite-xdna 653084f docs(research): the transport question's progress - the computing frame waits at layer boundaries, and overlap (now default) recovers it; per-layer tools name --no-overlap-layers
+# Ignition 4f23442 docs(guide): layer overlap is ignite-xdna's default - the runtime change that paid (dispatch -1.00/-1.31/-1.14/-0.08 ms), and a CPU step now forgoes it; AMD comparison not re-run
+
+## Witnesses: every Ignition container layer-exact on the NPU
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [6448, 11740, 14876, 15988, 17764, 18132, 18348], "foreign_pids": []}
+
+== 2026-10-15T22:44:04Z [verify df_yolov8n_silu_def] $ C:\Users\<user>\miniforge3\envs\mlir-aie-iron\python.exe tools/verify_engine_container.py --container build/df_yolov8n_silu_def.ignite --model models/yolov8n_cut_xint8.onnx --iters 2
+[verify] SiLU through the sigmoid epilogue: the reference is silu_sigmoid.reference_model of the model
+[verify] detect container df_yolov8n_silu_def.ignite: 66 layers, reference in 0.5 s
+  L 0 /model.0/conv/Conv                           EXACT
+  L 2 /model.2/cv1/conv/Conv                       EXACT
+  L 4 /model.2/m.0/cv2/conv/Conv                   EXACT
+  L 5 /model.2/cv2/conv/Conv                       EXACT
+  L25 /model.9/cv1/conv/Conv                       EXACT
+  L26 /model.9/m/MaxPool                           EXACT
+  L27 /model.9/m_1/MaxPool                         EXACT
+  L37 /model.15/cv2/conv/Conv                      EXACT
+  L39 /model.22/cv2.0/cv2.0.0/conv/Conv            EXACT
+  L40 /model.22/cv3.0/cv3.0.0/conv/Conv            EXACT
+  L41 /model.22/cv2.0/cv2.0.1/conv/Conv            EXACT
+  L42 /model.22/cv3.0/cv3.0.1/conv/Conv            EXACT
+  L44 /model.22/cv2.0/cv2.0.2/Conv                 EXACT
+  L45 /model.22/cv3.0/cv3.0.2/Conv                 EXACT
+  L48 /model.18/cv2/conv/Conv                      EXACT
+  L50 /model.22/cv2.1/cv2.1.0/conv/Conv            EXACT
+  L51 /model.22/cv3.1/cv3.1.0/conv/Conv            EXACT
+  L52 /model.22/cv2.1/cv2.1.1/conv/Conv            EXACT
+  L53 /model.22/cv3.1/cv3.1.1/conv/Conv            EXACT
+  L55 /model.22/cv2.1/cv2.1.2/Conv                 EXACT
+  L56 /model.22/cv3.1/cv3.1.2/Conv                 EXACT
+  L59 /model.21/cv2/conv/Conv                      EXACT
+  L60 /model.22/cv2.2/cv2.2.0/conv/Conv            EXACT
+  L61 /model.22/cv3.2/cv3.2.0/conv/Conv            EXACT
+  L62 /model.22/cv2.2/cv2.2.1/conv/Conv            EXACT
+  L63 /model.22/cv3.2/cv3.2.1/conv/Conv            EXACT
+  L64 /model.22/cv2.2/cv2.2.2/Conv                 EXACT
+  L65 /model.22/cv3.2/cv3.2.2/Conv                 EXACT
+[verify] 28/28 readable layers exact; 38/38 reused slots hold their planned final tenant | 66 layers total | first dispatch 7.773 ms | dispatch mean 6.106 ms, min 6.058, max 6.155 over 2
+[verify] 38 of 66 layers are NOT checkable by post-dispatch readback: workspace reuse let a later layer write their slot. That is this tool's coverage limit, not a device finding -- build with ignite-compile --no-workspace-reuse to check every layer of the lowering.
+[verify] PASS
+== 2026-10-15T22:44:06Z [verify df_yolov8n_silu_def] exit 0 after 1.9 s
+
+== 2026-10-15T22:44:06Z [verify df_yolov8n_silu_bar] $ C:\Users\<user>\miniforge3\envs\mlir-aie-iron\python.exe tools/verify_engine_container.py --container build/df_yolov8n_silu_bar.ignite --model models/yolov8n_cut_xint8.onnx --iters 2
+HOST_TIMELINE {"elapsed_seconds": 2.438, "tree_rss_bytes": 81072128, "foreign_peers": []}
+[verify] SiLU through the sigmoid epilogue: the reference is silu_sigmoid.reference_model of the model
+[verify] detect container df_yolov8n_silu_bar.ignite: 66 layers, reference in 0.5 s
+  L 0 /model.0/conv/Conv                           EXACT
+  L 2 /model.2/cv1/conv/Conv                       EXACT
+  L 4 /model.2/m.0/cv2/conv/Conv                   EXACT
+  L 5 /model.2/cv2/conv/Conv                       EXACT
+  L25 /model.9/cv1/conv/Conv                       EXACT
+  L26 /model.9/m/MaxPool                           EXACT
+  L27 /model.9/m_1/MaxPool                         EXACT
+  L37 /model.15/cv2/conv/Conv                      EXACT
+  L39 /model.22/cv2.0/cv2.0.0/conv/Conv            EXACT
+  L40 /model.22/cv3.0/cv3.0.0/conv/Conv            EXACT
+  L41 /model.22/cv2.0/cv2.0.1/conv/Conv            EXACT
+  L42 /model.22/cv3.0/cv3.0.1/conv/Conv            EXACT
+  L44 /model.22/cv2.0/cv2.0.2/Conv                 EXACT
+  L45 /model.22/cv3.0/cv3.0.2/Conv                 EXACT
+  L48 /model.18/cv2/conv/Conv                      EXACT
+  L50 /model.22/cv2.1/cv2.1.0/conv/Conv            EXACT
+  L51 /model.22/cv3.1/cv3.1.0/conv/Conv            EXACT
+  L52 /model.22/cv2.1/cv2.1.1/conv/Conv            EXACT
+  L53 /model.22/cv3.1/cv3.1.1/conv/Conv            EXACT
+  L55 /model.22/cv2.1/cv2.1.2/Conv                 EXACT
+  L56 /model.22/cv3.1/cv3.1.2/Conv                 EXACT
+  L59 /model.21/cv2/conv/Conv                      EXACT
+  L60 /model.22/cv2.2/cv2.2.0/conv/Conv            EXACT
+  L61 /model.22/cv3.2/cv3.2.0/conv/Conv            EXACT
+  L62 /model.22/cv2.2/cv2.2.1/conv/Conv            EXACT
+  L63 /model.22/cv3.2/cv3.2.1/conv/Conv            EXACT
+  L64 /model.22/cv2.2/cv2.2.2/Conv                 EXACT
+  L65 /model.22/cv3.2/cv3.2.2/Conv                 EXACT
+[verify] 28/28 readable layers exact; 38/38 reused slots hold their planned final tenant | 66 layers total | first dispatch 8.475 ms | dispatch mean 6.945 ms, min 6.937, max 6.953 over 2
+[verify] 38 of 66 layers are NOT checkable by post-dispatch readback: workspace reuse let a later layer write their slot. That is this tool's coverage limit, not a device finding -- build with ignite-compile --no-workspace-reuse to check every layer of the lowering.
+[verify] PASS
+== 2026-10-15T22:44:08Z [verify df_yolov8n_silu_bar] exit 0 after 1.8 s
+
+== 2026-10-15T22:44:08Z [verify df_yolov8s_silu_def] $ C:\Users\<user>\miniforge3\envs\mlir-aie-iron\python.exe tools/verify_engine_container.py --container build/df_yolov8s_silu_def.ignite --model models/yolov8s_cut_xint8.onnx --iters 2
+HOST_TIMELINE {"elapsed_seconds": 4.797, "tree_rss_bytes": 181526528, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [6448, 10968, 11740, 13652, 14876, 15980, 15988, 17648, 17764, 18132, 18348], "foreign_pids": []}
+[verify] SiLU through the sigmoid epilogue: the reference is silu_sigmoid.reference_model of the model
+[verify] detect container df_yolov8s_silu_def.ignite: 66 layers, reference in 1.0 s
+  L 0 /model.0/conv/Conv                           EXACT
+  L 2 /model.2/cv1/conv/Conv                       EXACT
+  L 4 /model.2/m.0/cv2/conv/Conv                   EXACT
+  L 5 /model.2/cv2/conv/Conv                       EXACT
+  L25 /model.9/cv1/conv/Conv                       EXACT
+  L26 /model.9/m/MaxPool                           EXACT
+  L27 /model.9/m_1/MaxPool                         EXACT
+  L37 /model.15/cv2/conv/Conv                      EXACT
+  L39 /model.22/cv2.0/cv2.0.0/conv/Conv            EXACT
+  L40 /model.22/cv3.0/cv3.0.0/conv/Conv            EXACT
+  L41 /model.22/cv2.0/cv2.0.1/conv/Conv            EXACT
+  L42 /model.22/cv3.0/cv3.0.1/conv/Conv            EXACT
+  L44 /model.22/cv2.0/cv2.0.2/Conv                 EXACT
+  L45 /model.22/cv3.0/cv3.0.2/Conv                 EXACT
+  L48 /model.18/cv2/conv/Conv                      EXACT
+  L50 /model.22/cv2.1/cv2.1.0/conv/Conv            EXACT
+  L51 /model.22/cv3.1/cv3.1.0/conv/Conv            EXACT
+  L52 /model.22/cv2.1/cv2.1.1/conv/Conv            EXACT
+  L53 /model.22/cv3.1/cv3.1.1/conv/Conv            EXACT
+  L55 /model.22/cv2.1/cv2.1.2/Conv                 EXACT
+  L56 /model.22/cv3.1/cv3.1.2/Conv                 EXACT
+  L59 /model.21/cv2/conv/Conv                      EXACT
+  L60 /model.22/cv2.2/cv2.2.0/conv/Conv            EXACT
+  L61 /model.22/cv3.2/cv3.2.0/conv/Conv            EXACT
+  L62 /model.22/cv2.2/cv2.2.1/conv/Conv            EXACT
+  L63 /model.22/cv3.2/cv3.2.1/conv/Conv            EXACT
+  L64 /model.22/cv2.2/cv2.2.2/Conv                 EXACT
+  L65 /model.22/cv3.2/cv3.2.2/Conv                 EXACT
+[verify] 28/28 readable layers exact; 38/38 reused slots hold their planned final tenant | 66 layers total | first dispatch 16.257 ms | dispatch mean 14.659 ms, min 14.575, max 14.742 over 2
+[verify] 38 of 66 layers are NOT checkable by post-dispatch readback: workspace reuse let a later layer write their slot. That is this tool's coverage limit, not a device finding -- build with ignite-compile --no-workspace-reuse to check every layer of the lowering.
+[verify] PASS
+== 2026-10-15T22:44:10Z [verify df_yolov8s_silu_def] exit 0 after 2.5 s
+
+== 2026-10-15T22:44:10Z [verify df_yolov8s_silu_bar] $ C:\Users\<user>\miniforge3\envs\mlir-aie-iron\python.exe tools/verify_engine_container.py --container build/df_yolov8s_silu_bar.ignite --model models/yolov8s_cut_xint8.onnx --iters 2
+HOST_TIMELINE {"elapsed_seconds": 7.094, "tree_rss_bytes": 180121600, "foreign_peers": []}
+[verify] SiLU through the sigmoid epilogue: the reference is silu_sigmoid.reference_model of the model
+[verify] detect container df_yolov8s_silu_bar.ignite: 66 layers, reference in 1.0 s
+  L 0 /model.0/conv/Conv                           EXACT
+  L 2 /model.2/cv1/conv/Conv                       EXACT
+  L 4 /model.2/m.0/cv2/conv/Conv                   EXACT
+  L 5 /model.2/cv2/conv/Conv                       EXACT
+  L25 /model.9/cv1/conv/Conv                       EXACT
+  L26 /model.9/m/MaxPool                           EXACT
+  L27 /model.9/m_1/MaxPool                         EXACT
+  L37 /model.15/cv2/conv/Conv                      EXACT
+  L39 /model.22/cv2.0/cv2.0.0/conv/Conv            EXACT
+  L40 /model.22/cv3.0/cv3.0.0/conv/Conv            EXACT
+  L41 /model.22/cv2.0/cv2.0.1/conv/Conv            EXACT
+  L42 /model.22/cv3.0/cv3.0.1/conv/Conv            EXACT
+  L44 /model.22/cv2.0/cv2.0.2/Conv                 EXACT
+  L45 /model.22/cv3.0/cv3.0.2/Conv                 EXACT
+  L48 /model.18/cv2/conv/Conv                      EXACT
+  L50 /model.22/cv2.1/cv2.1.0/conv/Conv            EXACT
+  L51 /model.22/cv3.1/cv3.1.0/conv/Conv            EXACT
+  L52 /model.22/cv2.1/cv2.1.1/conv/Conv            EXACT
+  L53 /model.22/cv3.1/cv3.1.1/conv/Conv            EXACT
+  L55 /model.22/cv2.1/cv2.1.2/Conv                 EXACT
+  L56 /model.22/cv3.1/cv3.1.2/Conv                 EXACT
+  L59 /model.21/cv2/conv/Conv                      EXACT
+  L60 /model.22/cv2.2/cv2.2.0/conv/Conv            EXACT
+  L61 /model.22/cv3.2/cv3.2.0/conv/Conv            EXACT
+  L62 /model.22/cv2.2/cv2.2.1/conv/Conv            EXACT
+  L63 /model.22/cv3.2/cv3.2.1/conv/Conv            EXACT
+  L64 /model.22/cv2.2/cv2.2.2/Conv                 EXACT
+  L65 /model.22/cv3.2/cv3.2.2/Conv                 EXACT
+[verify] 28/28 readable layers exact; 38/38 reused slots hold their planned final tenant | 66 layers total | first dispatch 17.958 ms | dispatch mean 16.487 ms, min 16.356, max 16.618 over 2
+[verify] 38 of 66 layers are NOT checkable by post-dispatch readback: workspace reuse let a later layer write their slot. That is this tool's coverage limit, not a device finding -- build with ignite-compile --no-workspace-reuse to check every layer of the lowering.
+[verify] PASS
+== 2026-10-15T22:44:13Z [verify df_yolov8s_silu_bar] exit 0 after 2.5 s
+HOST_TIMELINE {"elapsed_seconds": 9.313, "tree_rss_bytes": 44376064, "foreign_peers": []}
+
+== 2026-10-15T22:44:13Z [verify df_yolov8n_pose_silu_def] $ C:\Users\<user>\miniforge3\envs\mlir-aie-iron\python.exe tools/verify_engine_container.py --container build/df_yolov8n_pose_silu_def.ignite --model models/yolov8n-pose_cut_xint8.onnx --iters 2
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [6448, 10968, 11740, 13652, 14224, 14876, 14972, 15672, 15980, 15988, 17648, 17696, 17764, 18132, 18348], "foreign_pids": []}
+  L 0 /model.0/conv/Conv                           EXACT
+  L 2 /model.2/cv1/conv/Conv                       EXACT
+  L 4 /model.2/m.0/cv2/conv/Conv                   EXACT
+  L 5 /model.2/cv2/conv/Conv                       EXACT
+  L25 /model.9/cv1/conv/Conv                       EXACT
+  L26 /model.9/m/MaxPool                           EXACT
+  L27 /model.9/m_1/MaxPool                         EXACT
+  L37 /model.15/cv2/conv/Conv                      EXACT
+  L39 /model.22/cv2.0/cv2.0.0/conv/Conv            EXACT
+  L40 /model.22/cv3.0/cv3.0.0/conv/Conv            EXACT
+  L41 /model.22/cv4.0/cv4.0.0/conv/Conv            EXACT
+  L42 /model.22/cv2.0/cv2.0.1/conv/Conv            EXACT
+  L43 /model.22/cv3.0/cv3.0.1/conv/Conv            EXACT
+  L44 /model.22/cv4.0/cv4.0.1/conv/Conv            EXACT
+  L46 /model.22/cv2.0/cv2.0.2/Conv                 EXACT
+  L47 /model.22/cv3.0/cv3.0.2/Conv                 EXACT
+  L48 /model.22/cv4.0/cv4.0.2/Conv                 EXACT
+  L51 /model.18/cv2/conv/Conv                      EXACT
+  L53 /model.22/cv2.1/cv2.1.0/conv/Conv            EXACT
+  L54 /model.22/cv3.1/cv3.1.0/conv/Conv            EXACT
+  L55 /model.22/cv4.1/cv4.1.0/conv/Conv            EXACT
+  L56 /model.22/cv2.1/cv2.1.1/conv/Conv            EXACT
+  L57 /model.22/cv3.1/cv3.1.1/conv/Conv            EXACT
+  L58 /model.22/cv4.1/cv4.1.1/conv/Conv            EXACT
+  L60 /model.22/cv2.1/cv2.1.2/Conv                 EXACT
+  L61 /model.22/cv3.1/cv3.1.2/Conv                 EXACT
+  L62 /model.22/cv4.1/cv4.1.2/Conv                 EXACT
+  L65 /model.21/cv2/conv/Conv                      EXACT
+  L66 /model.22/cv2.2/cv2.2.0/conv/Conv            EXACT
+  L67 /model.22/cv3.2/cv3.2.0/conv/Conv            EXACT
+  L68 /model.22/cv4.2/cv4.2.0/conv/Conv            EXACT
+  L69 /model.22/cv2.2/cv2.2.1/conv/Conv            EXACT
+  L70 /model.22/cv3.2/cv3.2.1/conv/Conv            EXACT
+  L71 /model.22/cv4.2/cv4.2.1/conv/Conv            EXACT
+  L72 /model.22/cv2.2/cv2.2.2/Conv                 EXACT
+  L73 /model.22/cv3.2/cv3.2.2/Conv                 EXACT
+  L74 /model.22/cv4.2/cv4.2.2/Conv                 EXACT
+[verify] 37/37 readable layers exact; 38/38 reused slots hold their planned final tenant | 75 layers total | first dispatch 8.134 ms | dispatch mean 6.593 ms, min 6.532, max 6.653 over 2
+[verify] 38 of 75 layers are NOT checkable by post-dispatch readback: workspace reuse let a later layer write their slot. That is this tool's coverage limit, not a device finding -- build with ignite-compile --no-workspace-reuse to check every layer of the lowering.
+[verify] PASS
+== 2026-10-15T22:44:15Z [verify df_yolov8n_pose_silu_def] exit 0 after 1.7 s
+
+== 2026-10-15T22:44:15Z [verify df_yolov8n_pose_silu_bar] $ C:\Users\<user>\miniforge3\envs\mlir-aie-iron\python.exe tools/verify_engine_container.py --container build/df_yolov8n_pose_silu_bar.ignite --model models/yolov8n-pose_cut_xint8.onnx --iters 2
+HOST_TIMELINE {"elapsed_seconds": 11.641, "tree_rss_bytes": 143691776, "foreign_peers": []}
+  L 0 /model.0/conv/Conv                           EXACT
+  L 2 /model.2/cv1/conv/Conv                       EXACT
+  L 4 /model.2/m.0/cv2/conv/Conv                   EXACT
+  L 5 /model.2/cv2/conv/Conv                       EXACT
+  L25 /model.9/cv1/conv/Conv                       EXACT
+  L26 /model.9/m/MaxPool                           EXACT
+  L27 /model.9/m_1/MaxPool                         EXACT
+  L37 /model.15/cv2/conv/Conv                      EXACT
+  L39 /model.22/cv2.0/cv2.0.0/conv/Conv            EXACT
+  L40 /model.22/cv3.0/cv3.0.0/conv/Conv            EXACT
+  L41 /model.22/cv4.0/cv4.0.0/conv/Conv            EXACT
+  L42 /model.22/cv2.0/cv2.0.1/conv/Conv            EXACT
+  L43 /model.22/cv3.0/cv3.0.1/conv/Conv            EXACT
+  L44 /model.22/cv4.0/cv4.0.1/conv/Conv            EXACT
+  L46 /model.22/cv2.0/cv2.0.2/Conv                 EXACT
+  L47 /model.22/cv3.0/cv3.0.2/Conv                 EXACT
+  L48 /model.22/cv4.0/cv4.0.2/Conv                 EXACT
+  L51 /model.18/cv2/conv/Conv                      EXACT
+  L53 /model.22/cv2.1/cv2.1.0/conv/Conv            EXACT
+  L54 /model.22/cv3.1/cv3.1.0/conv/Conv            EXACT
+  L55 /model.22/cv4.1/cv4.1.0/conv/Conv            EXACT
+  L56 /model.22/cv2.1/cv2.1.1/conv/Conv            EXACT
+  L57 /model.22/cv3.1/cv3.1.1/conv/Conv            EXACT
+  L58 /model.22/cv4.1/cv4.1.1/conv/Conv            EXACT
+  L60 /model.22/cv2.1/cv2.1.2/Conv                 EXACT
+  L61 /model.22/cv3.1/cv3.1.2/Conv                 EXACT
+  L62 /model.22/cv4.1/cv4.1.2/Conv                 EXACT
+  L65 /model.21/cv2/conv/Conv                      EXACT
+  L66 /model.22/cv2.2/cv2.2.0/conv/Conv            EXACT
+  L67 /model.22/cv3.2/cv3.2.0/conv/Conv            EXACT
+  L68 /model.22/cv4.2/cv4.2.0/conv/Conv            EXACT
+  L69 /model.22/cv2.2/cv2.2.1/conv/Conv            EXACT
+  L70 /model.22/cv3.2/cv3.2.1/conv/Conv            EXACT
+  L71 /model.22/cv4.2/cv4.2.1/conv/Conv            EXACT
+  L72 /model.22/cv2.2/cv2.2.2/Conv                 EXACT
+  L73 /model.22/cv3.2/cv3.2.2/Conv                 EXACT
+  L74 /model.22/cv4.2/cv4.2.2/Conv                 EXACT
+[verify] 37/37 readable layers exact; 38/38 reused slots hold their planned final tenant | 75 layers total | first dispatch 9.444 ms | dispatch mean 7.419 ms, min 7.408, max 7.430 over 2
+[verify] 38 of 75 layers are NOT checkable by post-dispatch readback: workspace reuse let a later layer write their slot. That is this tool's coverage limit, not a device finding -- build with ignite-compile --no-workspace-reuse to check every layer of the lowering.
+[verify] PASS
+== 2026-10-15T22:44:16Z [verify df_yolov8n_pose_silu_bar] exit 0 after 1.7 s
+
+== 2026-10-15T22:44:17Z [verify df_sesr_m7_def] $ C:\Users\<user>\miniforge3\envs\mlir-aie-iron\python.exe tools/verify_engine_container.py --container build/df_sesr_m7_def.ignite --model models/sesr_m7_xint8.onnx --iters 2
+[verify] super_resolution container df_sesr_m7_def.ignite: 9 layers, reference in 0.4 s
+  L 0 /head/Conv                                   EXACT
+  L 5 /body.4/body.4.0/Conv                        EXACT
+  L 6 /body.5/body.5.0/Conv                        EXACT
+  L 7 /body.6/body.6.0/Conv                        EXACT
+  L 8 /tail/Conv                                   EXACT
+[verify] 5/5 readable layers exact; 4/4 reused slots hold their planned final tenant | 9 layers total | first dispatch 5.738 ms | dispatch mean 3.913 ms, min 3.885, max 3.940 over 2
+[verify] 4 of 9 layers are NOT checkable by post-dispatch readback: workspace reuse let a later layer write their slot. That is this tool's coverage limit, not a device finding -- build with ignite-compile --no-workspace-reuse to check every layer of the lowering.
+[verify] PASS
+== 2026-10-15T22:44:17Z [verify df_sesr_m7_def] exit 0 after 0.9 s
+
+== 2026-10-15T22:44:18Z [verify df_sesr_m7_bar] $ C:\Users\<user>\miniforge3\envs\mlir-aie-iron\python.exe tools/verify_engine_container.py --container build/df_sesr_m7_bar.ignite --model models/sesr_m7_xint8.onnx --iters 2
+HOST_TIMELINE {"elapsed_seconds": 13.953, "tree_rss_bytes": 82841600, "foreign_peers": []}
+[verify] super_resolution container df_sesr_m7_bar.ignite: 9 layers, reference in 0.5 s
+  L 0 /head/Conv                                   EXACT
+  L 5 /body.4/body.4.0/Conv                        EXACT
+  L 6 /body.5/body.5.0/Conv                        EXACT
+  L 7 /body.6/body.6.0/Conv                        EXACT
+  L 8 /tail/Conv                                   EXACT
+[verify] 5/5 readable layers exact; 4/4 reused slots hold their planned final tenant | 9 layers total | first dispatch 5.566 ms | dispatch mean 4.333 ms, min 4.133, max 4.533 over 2
+[verify] 4 of 9 layers are NOT checkable by post-dispatch readback: workspace reuse let a later layer write their slot. That is this tool's coverage limit, not a device finding -- build with ignite-compile --no-workspace-reuse to check every layer of the lowering.
+[verify] PASS
+== 2026-10-15T22:44:18Z [verify df_sesr_m7_bar] exit 0 after 1.0 s
+
+## AMD compile runs (fresh cache keys; untimed, discarded)
+
+== 2026-10-15T22:44:19Z [amd yolov8n compile] $ C:\Users\<user>\miniforge3\envs\resnet_env17\python.exe tools/amd_vitisai_yolo.py --model models/yolov8n_cut_xint8.onnx --image C:\Users\<user>\PycharmProjects\ignite-xdna\Ignition\examples\assets\bus.jpg --ignition-src C:\Users\<user>\PycharmProjects\ignite-xdna\Ignition\src --cache-dir scratch\b49\run_20261015T2243Z\vitisai_cache --cache-key yolov8n_h2h_20261015 --xclbin C:\Users\<user>\PycharmProjects\ignite-xdna\yolocutcachekey\4x4.xclbin --warmup 1 --iterations 5 --json scratch\b49\run_20261015T2243Z\amd_yolov8n_compile.json
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [6448, 10968, 11320, 11740, 12572, 12752, 13652, 14220, 14224, 14268, 14876, 14972, 15672, 15980, 15988, 16156, 16312, 16664, 17648, 17696, 17764, 18132, 18348], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 16.328, "tree_rss_bytes": 264015872, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 18.641, "tree_rss_bytes": 364150784, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [6448, 10968, 11320, 11740, 12572, 12752, 13652, 14220, 14224, 14268, 14876, 14972, 15672, 15980, 15988, 16156, 16312, 16664, 17648, 17696, 17764, 18132, 18348], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 20.891, "tree_rss_bytes": 365256704, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 23.156, "tree_rss_bytes": 364326912, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 25.391, "tree_rss_bytes": 487337984, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [6448, 10968, 11320, 11740, 12572, 12752, 13652, 14220, 14224, 14268, 14876, 14972, 15672, 15980, 15988, 16156, 16312, 16664, 17648, 17696, 17764, 18132, 18348], "foreign_pids": []}
+[amd] ort 1.23.3.dev20260320 | model yolov8n_cut_xint8.onnx | session load 11.96 s | EP report node devices {'CPU': 7, 'NPU': 922}
+[amd] G2G mean 10.865 ms | P50 10.861 | P95 11.045 | P99 11.066 | max 11.071 | over 5 timed frames after 1 warm-up
+[amd] stage means (ms): letterbox 1.818 | session.run 7.122 | decode+NMS 1.924
+[amd] detections on the last frame: 5 {'person': 4, 'bus': 1} | RSS 424.1 MB
+== 2026-10-15T22:44:31Z [amd yolov8n compile] exit 0 after 12.5 s
+
+== 2026-10-15T22:44:31Z [amd yolov8s compile] $ C:\Users\<user>\miniforge3\envs\resnet_env17\python.exe tools/amd_vitisai_yolo.py --model models/yolov8s_cut_xint8.onnx --image C:\Users\<user>\PycharmProjects\ignite-xdna\Ignition\examples\assets\bus.jpg --ignition-src C:\Users\<user>\PycharmProjects\ignite-xdna\Ignition\src --cache-dir scratch\b49\run_20261015T2243Z\vitisai_cache --cache-key yolov8s_h2h_20261015 --xclbin C:\Users\<user>\PycharmProjects\ignite-xdna\yolocutcachekey\4x4.xclbin --warmup 1 --iterations 5 --json scratch\b49\run_20261015T2243Z\amd_yolov8s_compile.json
+HOST_TIMELINE {"elapsed_seconds": 27.672, "tree_rss_bytes": 138092544, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 29.969, "tree_rss_bytes": 377741312, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [6448, 10968, 11320, 11740, 12572, 12752, 13652, 14220, 14224, 14268, 14536, 14876, 14972, 15672, 15980, 15988, 16156, 16312, 16460, 16664, 17648, 17696, 17764, 18132, 18348], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 32.203, "tree_rss_bytes": 602222592, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 34.438, "tree_rss_bytes": 603127808, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [6448, 10968, 11320, 11740, 12572, 12752, 13652, 14220, 14224, 14268, 14536, 14876, 14972, 15672, 15980, 15988, 16156, 16312, 16460, 16664, 17648, 17696, 17764, 18132, 18348], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 36.688, "tree_rss_bytes": 582402048, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 38.938, "tree_rss_bytes": 661024768, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [6448, 10968, 11320, 11740, 12572, 12752, 13652, 14220, 14224, 14268, 14536, 14876, 14972, 15672, 15980, 15988, 16156, 16312, 16460, 16664, 17648, 17696, 17764, 18132, 18348], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 41.203, "tree_rss_bytes": 483516416, "foreign_peers": []}
+[amd] ort 1.23.3.dev20260320 | model yolov8s_cut_xint8.onnx | session load 13.71 s | EP report node devices {'CPU': 7, 'NPU': 922}
+[amd] G2G mean 16.902 ms | P50 16.718 | P95 17.283 | P99 17.310 | max 17.317 | over 5 timed frames after 1 warm-up
+[amd] stage means (ms): letterbox 1.738 | session.run 13.080 | decode+NMS 2.084
+[amd] detections on the last frame: 5 {'person': 4, 'bus': 1} | RSS 553.6 MB
+== 2026-10-15T22:44:45Z [amd yolov8s compile] exit 0 after 14.1 s
+
+== 2026-10-15T22:44:45Z [amd pose compile] $ C:\Users\<user>\miniforge3\envs\resnet_env17\python.exe pipelines/yolov8n-pose/4_pose.py --model models/yolov8n-pose_cut_xint8.onnx --ep npu --source assets/bus.jpg --warmup 1 --runs 5 --log 2 --cache-key pose_h2h_20261015 --out scratch\b49\run_20261015T2243Z\amd_pose_compile.jpg --fresh
+HOST_TIMELINE {"elapsed_seconds": 43.469, "tree_rss_bytes": 324698112, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 45.703, "tree_rss_bytes": 391536640, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [6448, 10968, 11320, 11740, 12572, 12752, 13652, 14220, 14224, 14268, 14536, 14876, 14972, 15536, 15672, 15752, 15980, 15988, 16156, 16312, 16460, 16664, 17648, 17696, 17764, 18132, 18348], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 47.984, "tree_rss_bytes": 372563968, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 50.266, "tree_rss_bytes": 371363840, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [6448, 10968, 11320, 11740, 12572, 12752, 13652, 14220, 14224, 14268, 14536, 14876, 14972, 15536, 15672, 15752, 15980, 15988, 16156, 16312, 16460, 16664, 17648, 17696, 17764, 18132, 18348], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 52.547, "tree_rss_bytes": 477753344, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 54.797, "tree_rss_bytes": 688418816, "foreign_peers": []}
+infer   mean 8.73 ms   median 8.69 ms   p95 8.90 ms   (114.6 fps)
+pre     mean 3.030 ms
+3 people:
+== 2026-10-15T22:45:00Z [amd pose compile] exit 0 after 14.2 s
+
+== 2026-10-15T22:45:00Z [amd sesr_m7 compile] $ C:\Users\<user>\miniforge3\envs\resnet_env17\python.exe tools/amd_vitisai_sesr.py --model models/sesr_m7_xint8.onnx --image C:\Users\<user>\PycharmProjects\ignite-xdna\Ignition\examples\assets\bus.jpg --ignition-src C:\Users\<user>\PycharmProjects\ignite-xdna\Ignition\src --cache-dir scratch\b49\run_20261015T2243Z\vitisai_cache --cache-key sesr_m7_h2h_20261015 --xclbin C:\Users\<user>\PycharmProjects\ignite-xdna\yolocutcachekey\4x4.xclbin --warmup 1 --iterations 5 --json scratch\b49\run_20261015T2243Z\amd_sesr_m7_compile.json
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [1100, 6448, 10968, 11320, 11740, 12572, 12752, 13652, 14004, 14220, 14224, 14268, 14536, 14876, 14972, 15536, 15672, 15752, 15980, 15988, 16156, 16312, 16460, 16664, 17648, 17696, 17764, 18132, 18348], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 57.063, "tree_rss_bytes": 353406976, "foreign_peers": []}
+[amd] ort 1.23.3.dev20260320 | model sesr_m7_xint8.onnx | session load 0.94 s | EP report node devices {'CPU': 2, 'NPU': 50}
+[amd] G2G mean 3.742 ms | P50 3.534 | P95 4.208 | P99 4.283 | max 4.302 | over 5 timed frames after 1 warm-up
+[amd] stage means (ms): preprocess 0.341 | session.run 1.495 | postprocess 1.906
+[amd] output (512, 512, 3) from input (256, 256) | RSS 298.9 MB
+== 2026-10-15T22:45:01Z [amd sesr_m7 compile] exit 0 after 1.3 s
+
+## Timed runs: 50 warm-up + 500 frames each, interleaved; round 2 reverses the order
+
+== 2026-10-15T22:45:01Z [amd yolov8n #1] $ C:\Users\<user>\miniforge3\envs\resnet_env17\python.exe tools/amd_vitisai_yolo.py --model models/yolov8n_cut_xint8.onnx --image C:\Users\<user>\PycharmProjects\ignite-xdna\Ignition\examples\assets\bus.jpg --ignition-src C:\Users\<user>\PycharmProjects\ignite-xdna\Ignition\src --cache-dir scratch\b49\run_20261015T2243Z\vitisai_cache --cache-key yolov8n_h2h_20261015 --xclbin C:\Users\<user>\PycharmProjects\ignite-xdna\yolocutcachekey\4x4.xclbin --warmup 50 --iterations 500 --json scratch\b49\run_20261015T2243Z\amd_yolov8n_1.json
+HOST_TIMELINE {"elapsed_seconds": 59.328, "tree_rss_bytes": 365428736, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 93 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |17812               |84         |313         |0           |0    |Normal   |\n      |python.exe          |Active     |312         |0           |     |9        |\n      |93 MB               |4 MB       |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [17812], "owned_pids": [1100, 6448, 10968, 11320, 11740, 12572, 12752, 13652, 14004, 14220, 14224, 14268, 14536, 14876, 14972, 15536, 15672, 15752, 15980, 15988, 16156, 16312, 16460, 16664, 17648, 17696, 17764, 17812, 18132, 18348], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 61.672, "tree_rss_bytes": 361590784, "foreign_peers": []}
+[amd] ort 1.23.3.dev20260320 | model yolov8n_cut_xint8.onnx | session load 0.40 s | EP report node devices {'CPU': 7, 'NPU': 922}
+[run] frame 100 | G2G 10.73 ms | 5 objects
+[run] frame 200 | G2G 10.85 ms | 5 objects
+[run] frame 300 | G2G 10.60 ms | 5 objects
+[run] frame 400 | G2G 10.86 ms | 5 objects
+[run] frame 500 | G2G 10.85 ms | 5 objects
+[amd] G2G mean 10.787 ms | P50 10.800 | P95 11.243 | P99 11.471 | max 11.782 | over 500 timed frames after 50 warm-up
+[amd] stage means (ms): letterbox 1.776 | session.run 7.075 | decode+NMS 1.936
+[amd] detections on the last frame: 5 {'person': 4, 'bus': 1} | RSS 306.9 MB
+== 2026-10-15T22:45:08Z [amd yolov8n #1] exit 0 after 6.6 s
+
+== 2026-10-15T22:45:08Z [ignition overlap yolov8n #1] $ C:\Users\<user>\miniforge3\envs\mlir-aie-iron\python.exe live_ignition.py --model C:\Users\<user>\PycharmProjects\ignite-xdna\build\df_yolov8n_silu_def.ignite --source C:\Users\<user>\PycharmProjects\ignite-xdna\Ignition\examples\assets\bus.jpg --headless --warmup 50 --frames 500 --json scratch\b49\run_20261015T2243Z\ignition_overlap_yolov8n_1.json
+HOST_TIMELINE {"elapsed_seconds": 63.984, "tree_rss_bytes": 75055104, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 85 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |3276                |85         |144         |0           |0    |Normal   |\n      |python.exe          |Active     |143         |0           |     |N/A      |\n      |85 MB               |640 KB     |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [3276], "owned_pids": [1100, 3276, 6448, 10968, 11320, 11740, 12572, 12752, 13652, 14004, 14220, 14224, 14268, 14536, 14876, 14972, 14992, 15536, 15672, 15752, 15980, 15988, 16156, 16312, 16460, 16664, 17648, 17696, 17764, 17812, 18132, 18348], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 66.297, "tree_rss_bytes": 232611840, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 68.641, "tree_rss_bytes": 232611840, "foreign_peers": []}
+[run] frame 100 | G2G 7.29 ms | 133 FPS | 5 objects | detect: npu
+[run] frame 200 | G2G 7.27 ms | 147 FPS | 5 objects | detect: npu
+[run] frame 300 | G2G 7.02 ms | 141 FPS | 5 objects | detect: npu
+[run] frame 400 | G2G 7.24 ms | 135 FPS | 5 objects | detect: npu
+[run] frame 500 | G2G 6.67 ms | 147 FPS | 5 objects | detect: npu
+[summary] stop: frame limit | 550 frames processed (50 warm-up, 500 timed) | 1 distinct source frames | image bus.jpg 810x1080
+[summary] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+[summary] G2G mean 7.251 ms | P50 7.279 | P95 7.665 | P99 7.781 | max 7.893 | over the last 500 timed frames; cold first frame 10.65 ms
+[summary] stage means (ms): preprocess 0.300 | NPU forward 6.779 (dispatch 6.389, readback 0.390) | decode+NMS 0.164
+[summary] boxes from NPU heads on 500/500 timed frames | 5.00 detections per frame
+[summary] RSS 183.5 MB at the first timed frame, 183.5 MB at the end (+0.00 MB over 500 frames)
+[summary] wrote scratch\b49\run_20261015T2243Z\ignition_overlap_yolov8n_1.json
+== 2026-10-15T22:45:13Z [ignition overlap yolov8n #1] exit 0 after 5.3 s
+
+== 2026-10-15T22:45:13Z [ignition barrier yolov8n #1] $ C:\Users\<user>\miniforge3\envs\mlir-aie-iron\python.exe live_ignition.py --model C:\Users\<user>\PycharmProjects\ignite-xdna\build\df_yolov8n_silu_bar.ignite --source C:\Users\<user>\PycharmProjects\ignite-xdna\Ignition\examples\assets\bus.jpg --headless --warmup 50 --frames 500 --json scratch\b49\run_20261015T2243Z\ignition_barrier_yolov8n_1.json
+HOST_TIMELINE {"elapsed_seconds": 70.938, "tree_rss_bytes": 234053632, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 85 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |8152                |86         |113         |0           |0    |Normal   |\n      |python.exe          |Active     |112         |0           |     |N/A      |\n      |85 MB               |640 KB     |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [8152], "owned_pids": [1100, 3276, 3948, 6448, 8152, 10968, 11320, 11740, 12572, 12752, 13652, 14004, 14220, 14224, 14268, 14536, 14876, 14972, 14992, 15536, 15672, 15752, 15980, 15988, 16156, 16312, 16460, 16664, 17648, 17696, 17764, 17812, 18132, 18348], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 73.203, "tree_rss_bytes": 234053632, "foreign_peers": []}
+[run] frame 100 | G2G 7.98 ms | 127 FPS | 5 objects | detect: npu
+[run] frame 200 | G2G 8.19 ms | 119 FPS | 5 objects | detect: npu
+[run] frame 300 | G2G 8.24 ms | 120 FPS | 5 objects | detect: npu
+[run] frame 400 | G2G 8.47 ms | 119 FPS | 5 objects | detect: npu
+[run] frame 500 | G2G 8.07 ms | 120 FPS | 5 objects | detect: npu
+[summary] stop: frame limit | 550 frames processed (50 warm-up, 500 timed) | 1 distinct source frames | image bus.jpg 810x1080
+[summary] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+[summary] G2G mean 8.278 ms | P50 8.342 | P95 8.653 | P99 8.756 | max 8.879 | over the last 500 timed frames; cold first frame 10.45 ms
+[summary] stage means (ms): preprocess 0.303 | NPU forward 7.797 (dispatch 7.414, readback 0.383) | decode+NMS 0.169
+[summary] boxes from NPU heads on 500/500 timed frames | 5.00 detections per frame
+[summary] RSS 184.9 MB at the first timed frame, 184.9 MB at the end (+0.00 MB over 500 frames)
+[summary] wrote scratch\b49\run_20261015T2243Z\ignition_barrier_yolov8n_1.json
+== 2026-10-15T22:45:19Z [ignition barrier yolov8n #1] exit 0 after 5.8 s
+
+== 2026-10-15T22:45:19Z [ignition barrier yolov8n #2] $ C:\Users\<user>\miniforge3\envs\mlir-aie-iron\python.exe live_ignition.py --model C:\Users\<user>\PycharmProjects\ignite-xdna\build\df_yolov8n_silu_bar.ignite --source C:\Users\<user>\PycharmProjects\ignite-xdna\Ignition\examples\assets\bus.jpg --headless --warmup 50 --frames 500 --json scratch\b49\run_20261015T2243Z\ignition_barrier_yolov8n_2.json
+HOST_TIMELINE {"elapsed_seconds": 75.469, "tree_rss_bytes": 229421056, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 85 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |10824               |87         |18          |0           |0    |Normal   |\n      |python.exe          |Active     |17          |0           |     |N/A      |\n      |85 MB               |640 KB     |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [10824], "owned_pids": [1100, 3276, 3948, 6448, 8152, 10824, 10968, 11320, 11740, 12500, 12572, 12752, 13652, 14004, 14220, 14224, 14268, 14536, 14876, 14972, 14992, 15536, 15672, 15752, 15980, 15988, 16156, 16312, 16460, 16664, 17648, 17696, 17764, 17812, 18132, 18348], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 77.797, "tree_rss_bytes": 233783296, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 80.047, "tree_rss_bytes": 233783296, "foreign_peers": []}
+[run] frame 100 | G2G 8.22 ms | 120 FPS | 5 objects | detect: npu
+[run] frame 200 | G2G 7.51 ms | 129 FPS | 5 objects | detect: npu
+[run] frame 300 | G2G 8.40 ms | 120 FPS | 5 objects | detect: npu
+[run] frame 400 | G2G 8.22 ms | 118 FPS | 5 objects | detect: npu
+[run] frame 500 | G2G 8.39 ms | 122 FPS | 5 objects | detect: npu
+[summary] stop: frame limit | 550 frames processed (50 warm-up, 500 timed) | 1 distinct source frames | image bus.jpg 810x1080
+[summary] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+[summary] G2G mean 8.240 ms | P50 8.295 | P95 8.623 | P99 8.732 | max 8.874 | over the last 500 timed frames; cold first frame 10.65 ms
+[summary] stage means (ms): preprocess 0.301 | NPU forward 7.765 (dispatch 7.381, readback 0.385) | decode+NMS 0.165
+[summary] boxes from NPU heads on 500/500 timed frames | 5.00 detections per frame
+[summary] RSS 184.6 MB at the first timed frame, 184.6 MB at the end (+0.00 MB over 500 frames)
+[summary] wrote scratch\b49\run_20261015T2243Z\ignition_barrier_yolov8n_2.json
+== 2026-10-15T22:45:25Z [ignition barrier yolov8n #2] exit 0 after 5.8 s
+
+== 2026-10-15T22:45:25Z [ignition overlap yolov8n #2] $ C:\Users\<user>\miniforge3\envs\mlir-aie-iron\python.exe live_ignition.py --model C:\Users\<user>\PycharmProjects\ignite-xdna\build\df_yolov8n_silu_def.ignite --source C:\Users\<user>\PycharmProjects\ignite-xdna\Ignition\examples\assets\bus.jpg --headless --warmup 50 --frames 500 --json scratch\b49\run_20261015T2243Z\ignition_overlap_yolov8n_2.json
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 85 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |17516               |88         |0           |0           |0    |Normal   |\n      |python.exe          |Active     |0           |0           |     |N/A      |\n      |85 MB               |640 KB     |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [17516], "owned_pids": [1100, 3276, 3948, 6448, 8152, 10824, 10968, 11320, 11740, 12500, 12572, 12752, 13652, 14004, 14220, 14224, 14268, 14512, 14536, 14876, 14972, 14992, 15536, 15672, 15752, 15980, 15988, 16156, 16312, 16460, 16664, 17516, 17648, 17696, 17764, 17812, 18132, 18348], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 82.375, "tree_rss_bytes": 234008576, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 84.641, "tree_rss_bytes": 234016768, "foreign_peers": []}
+[run] frame 100 | G2G 7.76 ms | 134 FPS | 5 objects | detect: npu
+[run] frame 200 | G2G 7.11 ms | 137 FPS | 5 objects | detect: npu
+[run] frame 300 | G2G 6.84 ms | 136 FPS | 5 objects | detect: npu
+[run] frame 400 | G2G 6.88 ms | 140 FPS | 5 objects | detect: npu
+[run] frame 500 | G2G 6.69 ms | 145 FPS | 5 objects | detect: npu
+[summary] stop: frame limit | 550 frames processed (50 warm-up, 500 timed) | 1 distinct source frames | image bus.jpg 810x1080
+[summary] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+[summary] G2G mean 7.235 ms | P50 7.287 | P95 7.622 | P99 7.768 | max 7.952 | over the last 500 timed frames; cold first frame 9.63 ms
+[summary] stage means (ms): preprocess 0.301 | NPU forward 6.766 (dispatch 6.367, readback 0.398) | decode+NMS 0.160
+[summary] boxes from NPU heads on 500/500 timed frames | 5.00 detections per frame
+[summary] RSS 184.8 MB at the first timed frame, 184.8 MB at the end (+0.00 MB over 500 frames)
+[summary] wrote scratch\b49\run_20261015T2243Z\ignition_overlap_yolov8n_2.json
+== 2026-10-15T22:45:30Z [ignition overlap yolov8n #2] exit 0 after 5.2 s
+
+== 2026-10-15T22:45:30Z [amd yolov8n #2] $ C:\Users\<user>\miniforge3\envs\resnet_env17\python.exe tools/amd_vitisai_yolo.py --model models/yolov8n_cut_xint8.onnx --image C:\Users\<user>\PycharmProjects\ignite-xdna\Ignition\examples\assets\bus.jpg --ignition-src C:\Users\<user>\PycharmProjects\ignite-xdna\Ignition\src --cache-dir scratch\b49\run_20261015T2243Z\vitisai_cache --cache-key yolov8n_h2h_20261015 --xclbin C:\Users\<user>\PycharmProjects\ignite-xdna\yolocutcachekey\4x4.xclbin --warmup 50 --iterations 500 --json scratch\b49\run_20261015T2243Z\amd_yolov8n_2.json
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [1100, 3276, 3948, 6448, 8152, 10824, 10968, 11320, 11740, 12500, 12572, 12596, 12752, 13652, 14004, 14220, 14224, 14268, 14512, 14536, 14876, 14972, 14992, 15536, 15672, 15752, 15848, 15980, 15988, 16156, 16312, 16460, 16664, 17516, 17648, 17696, 17764, 17812, 18132, 18348], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 86.891, "tree_rss_bytes": 350818304, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 89.219, "tree_rss_bytes": 362442752, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 91.469, "tree_rss_bytes": 363831296, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 93 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |15848               |89         |469         |0           |0    |Normal   |\n      |python.exe          |Active     |469         |0           |     |9        |\n      |93 MB               |4 MB       |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [15848], "owned_pids": [1100, 3276, 3948, 6448, 8152, 10824, 10968, 11320, 11740, 12500, 12572, 12596, 12752, 13652, 14004, 14220, 14224, 14268, 14512, 14536, 14876, 14972, 14992, 15536, 15672, 15752, 15848, 15980, 15988, 16156, 16312, 16460, 16664, 17516, 17648, 17696, 17764, 17812, 18132, 18348], "foreign_pids": []}
+[amd] ort 1.23.3.dev20260320 | model yolov8n_cut_xint8.onnx | session load 0.40 s | EP report node devices {'CPU': 7, 'NPU': 922}
+[run] frame 100 | G2G 10.82 ms | 5 objects
+[run] frame 200 | G2G 10.88 ms | 5 objects
+[run] frame 300 | G2G 10.97 ms | 5 objects
+[run] frame 400 | G2G 10.80 ms | 5 objects
+[run] frame 500 | G2G 10.78 ms | 5 objects
+[amd] G2G mean 10.731 ms | P50 10.784 | P95 11.029 | P99 11.261 | max 11.973 | over 500 timed frames after 50 warm-up
+[amd] stage means (ms): letterbox 1.731 | session.run 7.055 | decode+NMS 1.946
+[amd] detections on the last frame: 5 {'person': 4, 'bus': 1} | RSS 305.5 MB
+== 2026-10-15T22:45:37Z [amd yolov8n #2] exit 0 after 6.6 s
+
+== 2026-10-15T22:45:37Z [amd yolov8s #1] $ C:\Users\<user>\miniforge3\envs\resnet_env17\python.exe tools/amd_vitisai_yolo.py --model models/yolov8s_cut_xint8.onnx --image C:\Users\<user>\PycharmProjects\ignite-xdna\Ignition\examples\assets\bus.jpg --ignition-src C:\Users\<user>\PycharmProjects\ignite-xdna\Ignition\src --cache-dir scratch\b49\run_20261015T2243Z\vitisai_cache --cache-key yolov8s_h2h_20261015 --xclbin C:\Users\<user>\PycharmProjects\ignite-xdna\yolocutcachekey\4x4.xclbin --warmup 50 --iterations 500 --json scratch\b49\run_20261015T2243Z\amd_yolov8s_1.json
+HOST_TIMELINE {"elapsed_seconds": 93.75, "tree_rss_bytes": 397352960, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 96.078, "tree_rss_bytes": 397471744, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 118 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |452                 |90         |200         |0           |0    |Normal   |\n      |python.exe          |Active     |200         |0           |     |29       |\n      |118 MB              |4128 KB    |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [452], "owned_pids": [452, 1100, 3276, 3948, 6448, 8152, 10824, 10968, 11320, 11740, 12500, 12572, 12596, 12752, 13652, 14004, 14220, 14224, 14268, 14512, 14536, 14876, 14972, 14992, 15536, 15672, 15752, 15848, 15980, 15988, 16156, 16312, 16460, 16664, 17516, 17648, 17696, 17764, 17812, 18132, 18348, 18400], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 98.422, "tree_rss_bytes": 397500416, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 100.75, "tree_rss_bytes": 402427904, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 118 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |452                 |90         |492         |0           |0    |Normal   |\n      |python.exe          |Active     |491         |0           |     |29       |\n      |118 MB              |4128 KB    |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [452], "owned_pids": [452, 1100, 3276, 3948, 6448, 8152, 10824, 10968, 11320, 11740, 12500, 12572, 12596, 12752, 13652, 14004, 14220, 14224, 14268, 14512, 14536, 14876, 14972, 14992, 15536, 15672, 15752, 15848, 15980, 15988, 16156, 16312, 16460, 16664, 17516, 17648, 17696, 17764, 17812, 18132, 18348, 18400], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 103.016, "tree_rss_bytes": 397598720, "foreign_peers": []}
+[amd] ort 1.23.3.dev20260320 | model yolov8s_cut_xint8.onnx | session load 0.41 s | EP report node devices {'CPU': 7, 'NPU': 922}
+[run] frame 100 | G2G 16.54 ms | 5 objects
+[run] frame 200 | G2G 16.94 ms | 5 objects
+[run] frame 300 | G2G 18.39 ms | 5 objects
+[run] frame 400 | G2G 17.16 ms | 5 objects
+[run] frame 500 | G2G 16.86 ms | 5 objects
+[amd] G2G mean 17.249 ms | P50 17.276 | P95 17.837 | P99 18.193 | max 18.551 | over 500 timed frames after 50 warm-up
+[amd] stage means (ms): letterbox 1.738 | session.run 13.547 | decode+NMS 1.964
+[amd] detections on the last frame: 5 {'person': 4, 'bus': 1} | RSS 340.9 MB
+== 2026-10-15T22:45:47Z [amd yolov8s #1] exit 0 after 10.2 s
+
+== 2026-10-15T22:45:47Z [ignition overlap yolov8s #1] $ C:\Users\<user>\miniforge3\envs\mlir-aie-iron\python.exe live_ignition.py --model C:\Users\<user>\PycharmProjects\ignite-xdna\build\df_yolov8s_silu_def.ignite --source C:\Users\<user>\PycharmProjects\ignite-xdna\Ignition\examples\assets\bus.jpg --headless --warmup 50 --frames 500 --json scratch\b49\run_20261015T2243Z\ignition_overlap_yolov8s_1.json
+HOST_TIMELINE {"elapsed_seconds": 105.266, "tree_rss_bytes": 281944064, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 112 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |17988               |91         |178         |0           |0    |Normal   |\n      |python.exe          |Active     |177         |0           |     |N/A      |\n      |112 MB              |1152 KB    |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [17988], "owned_pids": [452, 1100, 3276, 3948, 6448, 8152, 10824, 10968, 11320, 11740, 12500, 12572, 12596, 12752, 13652, 14004, 14220, 14224, 14268, 14512, 14536, 14876, 14972, 14992, 15536, 15672, 15752, 15848, 15980, 15988, 16156, 16312, 16460, 16664, 17516, 17648, 17696, 17764, 17812, 17988, 18132, 18348, 18400], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 107.547, "tree_rss_bytes": 281944064, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 109.859, "tree_rss_bytes": 281944064, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 112.109, "tree_rss_bytes": 281944064, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 112 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |17988               |91         |513         |0           |0    |Normal   |\n      |python.exe          |Active     |512         |0           |     |N/A      |\n      |112 MB              |1152 KB    |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [17988], "owned_pids": [452, 1100, 3276, 3948, 6448, 8152, 10824, 10968, 11320, 11740, 12500, 12572, 12596, 12752, 13652, 14004, 14220, 14224, 14268, 14512, 14536, 14876, 14972, 14992, 15536, 15672, 15752, 15848, 15980, 15988, 16156, 16312, 16460, 16664, 17516, 17648, 17696, 17764, 17812, 17988, 18132, 18348, 18400], "foreign_pids": []}
+[run] frame 100 | G2G 15.86 ms | 63 FPS | 5 objects | detect: npu
+[run] frame 200 | G2G 15.96 ms | 63 FPS | 5 objects | detect: npu
+[run] frame 300 | G2G 16.02 ms | 63 FPS | 5 objects | detect: npu
+[run] frame 400 | G2G 15.89 ms | 63 FPS | 5 objects | detect: npu
+[run] frame 500 | G2G 15.25 ms | 64 FPS | 5 objects | detect: npu
+[summary] stop: frame limit | 550 frames processed (50 warm-up, 500 timed) | 1 distinct source frames | image bus.jpg 810x1080
+[summary] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+[summary] G2G mean 15.818 ms | P50 15.889 | P95 16.134 | P99 16.231 | max 16.486 | over the last 500 timed frames; cold first frame 18.04 ms
+[summary] stage means (ms): preprocess 0.306 | NPU forward 15.337 (dispatch 14.932, readback 0.406) | decode+NMS 0.167
+[summary] boxes from NPU heads on 500/500 timed frames | 5.00 detections per frame
+[summary] RSS 230.3 MB at the first timed frame, 230.3 MB at the end (+0.00 MB over 500 frames)
+[summary] wrote scratch\b49\run_20261015T2243Z\ignition_overlap_yolov8s_1.json
+== 2026-10-15T22:45:57Z [ignition overlap yolov8s #1] exit 0 after 9.9 s
+
+== 2026-10-15T22:45:57Z [ignition barrier yolov8s #1] $ C:\Users\<user>\miniforge3\envs\mlir-aie-iron\python.exe live_ignition.py --model C:\Users\<user>\PycharmProjects\ignite-xdna\build\df_yolov8s_silu_bar.ignite --source C:\Users\<user>\PycharmProjects\ignite-xdna\Ignition\examples\assets\bus.jpg --headless --warmup 50 --frames 500 --json scratch\b49\run_20261015T2243Z\ignition_barrier_yolov8s_1.json
+HOST_TIMELINE {"elapsed_seconds": 114.391, "tree_rss_bytes": 283492352, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 116.641, "tree_rss_bytes": 283500544, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 112 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |12028               |92         |176         |0           |0    |Normal   |\n      |python.exe          |Active     |175         |0           |     |N/A      |\n      |112 MB              |1152 KB    |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [12028], "owned_pids": [452, 1100, 3276, 3948, 6448, 8152, 10824, 10968, 11320, 11740, 12028, 12500, 12572, 12596, 12752, 13328, 13652, 14004, 14220, 14224, 14268, 14512, 14536, 14876, 14972, 14992, 15536, 15672, 15752, 15848, 15980, 15988, 16156, 16312, 16460, 16664, 17516, 17648, 17696, 17764, 17812, 17988, 18132, 18348, 18400], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 118.875, "tree_rss_bytes": 283500544, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 121.156, "tree_rss_bytes": 283500544, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 112 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |12028               |92         |470         |0           |0    |Normal   |\n      |python.exe          |Active     |469         |0           |     |N/A      |\n      |112 MB              |1152 KB    |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [12028], "owned_pids": [452, 1100, 3276, 3948, 6448, 8152, 10824, 10968, 11320, 11740, 12028, 12500, 12572, 12596, 12752, 13328, 13652, 14004, 14220, 14224, 14268, 14512, 14536, 14876, 14972, 14992, 15536, 15672, 15752, 15848, 15980, 15988, 16156, 16312, 16460, 16664, 17516, 17648, 17696, 17764, 17812, 17988, 18132, 18348, 18400], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 123.438, "tree_rss_bytes": 283500544, "foreign_peers": []}
+[run] frame 100 | G2G 17.31 ms | 59 FPS | 5 objects | detect: npu
+[run] frame 200 | G2G 17.10 ms | 58 FPS | 5 objects | detect: npu
+[run] frame 300 | G2G 17.24 ms | 58 FPS | 5 objects | detect: npu
+[run] frame 400 | G2G 17.16 ms | 58 FPS | 5 objects | detect: npu
+[run] frame 500 | G2G 17.12 ms | 58 FPS | 5 objects | detect: npu
+[summary] stop: frame limit | 550 frames processed (50 warm-up, 500 timed) | 1 distinct source frames | image bus.jpg 810x1080
+[summary] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+[summary] G2G mean 17.146 ms | P50 17.241 | P95 17.432 | P99 17.528 | max 17.612 | over the last 500 timed frames; cold first frame 19.24 ms
+[summary] stage means (ms): preprocess 0.310 | NPU forward 16.658 (dispatch 16.268, readback 0.390) | decode+NMS 0.169
+[summary] boxes from NPU heads on 500/500 timed frames | 5.00 detections per frame
+[summary] RSS 231.9 MB at the first timed frame, 231.9 MB at the end (+0.00 MB over 500 frames)
+[summary] wrote scratch\b49\run_20261015T2243Z\ignition_barrier_yolov8s_1.json
+== 2026-10-15T22:46:07Z [ignition barrier yolov8s #1] exit 0 after 10.6 s
+
+== 2026-10-15T22:46:08Z [ignition barrier yolov8s #2] $ C:\Users\<user>\miniforge3\envs\mlir-aie-iron\python.exe live_ignition.py --model C:\Users\<user>\PycharmProjects\ignite-xdna\build\df_yolov8s_silu_bar.ignite --source C:\Users\<user>\PycharmProjects\ignite-xdna\Ignition\examples\assets\bus.jpg --headless --warmup 50 --frames 500 --json scratch\b49\run_20261015T2243Z\ignition_barrier_yolov8s_2.json
+HOST_TIMELINE {"elapsed_seconds": 125.703, "tree_rss_bytes": 283115520, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 112 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |3520                |93         |138         |0           |0    |Normal   |\n      |python.exe          |Active     |137         |0           |     |N/A      |\n      |112 MB              |1152 KB    |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [3520], "owned_pids": [452, 1100, 3276, 3520, 3948, 6448, 8152, 10824, 10968, 11320, 11740, 12028, 12500, 12572, 12596, 12752, 13328, 13652, 14004, 14220, 14224, 14268, 14512, 14536, 14876, 14972, 14992, 15536, 15672, 15752, 15848, 15980, 15988, 16156, 16312, 16460, 16664, 17492, 17516, 17648, 17696, 17764, 17812, 17988, 18132, 18348, 18400], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 127.984, "tree_rss_bytes": 283123712, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 130.297, "tree_rss_bytes": 283123712, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 112 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |3520                |93         |427         |0           |0    |Normal   |\n      |python.exe          |Active     |427         |0           |     |N/A      |\n      |112 MB              |1152 KB    |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [3520], "owned_pids": [452, 1100, 3276, 3520, 3948, 6448, 8152, 10824, 10968, 11320, 11740, 12028, 12500, 12572, 12596, 12752, 13328, 13652, 14004, 14220, 14224, 14268, 14512, 14536, 14876, 14972, 14992, 15536, 15672, 15752, 15848, 15980, 15988, 16156, 16312, 16460, 16664, 17492, 17516, 17648, 17696, 17764, 17812, 17988, 18132, 18348, 18400], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 132.547, "tree_rss_bytes": 283123712, "foreign_peers": []}
+[run] frame 100 | G2G 17.52 ms | 58 FPS | 5 objects | detect: npu
+[run] frame 200 | G2G 17.08 ms | 59 FPS | 5 objects | detect: npu
+[run] frame 300 | G2G 17.43 ms | 58 FPS | 5 objects | detect: npu
+[run] frame 400 | G2G 17.18 ms | 58 FPS | 5 objects | detect: npu
+[run] frame 500 | G2G 17.36 ms | 58 FPS | 5 objects | detect: npu
+[summary] stop: frame limit | 550 frames processed (50 warm-up, 500 timed) | 1 distinct source frames | image bus.jpg 810x1080
+[summary] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+[summary] G2G mean 17.238 ms | P50 17.337 | P95 17.548 | P99 17.631 | max 17.745 | over the last 500 timed frames; cold first frame 19.64 ms
+[summary] stage means (ms): preprocess 0.337 | NPU forward 16.720 (dispatch 16.297, readback 0.424) | decode+NMS 0.172
+[summary] boxes from NPU heads on 500/500 timed frames | 5.00 detections per frame
+[summary] RSS 231.4 MB at the first timed frame, 231.4 MB at the end (+0.00 MB over 500 frames)
+[summary] wrote scratch\b49\run_20261015T2243Z\ignition_barrier_yolov8s_2.json
+== 2026-10-15T22:46:18Z [ignition barrier yolov8s #2] exit 0 after 10.7 s
+
+== 2026-10-15T22:46:18Z [ignition overlap yolov8s #2] $ C:\Users\<user>\miniforge3\envs\mlir-aie-iron\python.exe live_ignition.py --model C:\Users\<user>\PycharmProjects\ignite-xdna\build\df_yolov8s_silu_def.ignite --source C:\Users\<user>\PycharmProjects\ignite-xdna\Ignition\examples\assets\bus.jpg --headless --warmup 50 --frames 500 --json scratch\b49\run_20261015T2243Z\ignition_overlap_yolov8s_2.json
+HOST_TIMELINE {"elapsed_seconds": 134.813, "tree_rss_bytes": 111566848, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 137.094, "tree_rss_bytes": 283738112, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 112 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |15696               |94         |114         |0           |0    |Normal   |\n      |python.exe          |Active     |113         |0           |     |N/A      |\n      |112 MB              |1152 KB    |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [15696], "owned_pids": [452, 1100, 3276, 3520, 3948, 6448, 8152, 10824, 10968, 11320, 11740, 12028, 12392, 12500, 12572, 12596, 12752, 13328, 13652, 14004, 14220, 14224, 14268, 14512, 14536, 14876, 14972, 14992, 15536, 15672, 15696, 15752, 15848, 15980, 15988, 16156, 16312, 16460, 16664, 17492, 17516, 17648, 17696, 17764, 17812, 17988, 18132, 18348, 18400], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 139.359, "tree_rss_bytes": 283738112, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 141.609, "tree_rss_bytes": 283738112, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 112 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |15696               |94         |433         |0           |0    |Normal   |\n      |python.exe          |Active     |432         |0           |     |N/A      |\n      |112 MB              |1152 KB    |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [15696], "owned_pids": [452, 1100, 3276, 3520, 3948, 6448, 8152, 10824, 10968, 11320, 11740, 12028, 12392, 12500, 12572, 12596, 12752, 13328, 13652, 14004, 14220, 14224, 14268, 14512, 14536, 14876, 14972, 14992, 15536, 15672, 15696, 15752, 15848, 15980, 15988, 16156, 16312, 16460, 16664, 17492, 17516, 17648, 17696, 17764, 17812, 17988, 18132, 18348, 18400], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 143.828, "tree_rss_bytes": 283738112, "foreign_peers": []}
+[run] frame 100 | G2G 15.30 ms | 64 FPS | 5 objects | detect: npu
+[run] frame 200 | G2G 15.87 ms | 63 FPS | 5 objects | detect: npu
+[run] frame 300 | G2G 15.50 ms | 63 FPS | 5 objects | detect: npu
+[run] frame 400 | G2G 15.99 ms | 64 FPS | 5 objects | detect: npu
+[run] frame 500 | G2G 15.71 ms | 63 FPS | 5 objects | detect: npu
+[summary] stop: frame limit | 550 frames processed (50 warm-up, 500 timed) | 1 distinct source frames | image bus.jpg 810x1080
+[summary] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+[summary] G2G mean 15.815 ms | P50 15.899 | P95 16.116 | P99 16.237 | max 16.409 | over the last 500 timed frames; cold first frame 18.12 ms
+[summary] stage means (ms): preprocess 0.307 | NPU forward 15.330 (dispatch 14.936, readback 0.394) | decode+NMS 0.169
+[summary] boxes from NPU heads on 500/500 timed frames | 5.00 detections per frame
+[summary] RSS 232.0 MB at the first timed frame, 232.0 MB at the end (+0.00 MB over 500 frames)
+[summary] wrote scratch\b49\run_20261015T2243Z\ignition_overlap_yolov8s_2.json
+== 2026-10-15T22:46:28Z [ignition overlap yolov8s #2] exit 0 after 9.9 s
+
+== 2026-10-15T22:46:28Z [amd yolov8s #2] $ C:\Users\<user>\miniforge3\envs\resnet_env17\python.exe tools/amd_vitisai_yolo.py --model models/yolov8s_cut_xint8.onnx --image C:\Users\<user>\PycharmProjects\ignite-xdna\Ignition\examples\assets\bus.jpg --ignition-src C:\Users\<user>\PycharmProjects\ignite-xdna\Ignition\src --cache-dir scratch\b49\run_20261015T2243Z\vitisai_cache --cache-key yolov8s_h2h_20261015 --xclbin C:\Users\<user>\PycharmProjects\ignite-xdna\yolocutcachekey\4x4.xclbin --warmup 50 --iterations 500 --json scratch\b49\run_20261015T2243Z\amd_yolov8s_2.json
+HOST_TIMELINE {"elapsed_seconds": 146.094, "tree_rss_bytes": 400986112, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 118 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |13916               |95         |141         |0           |0    |Normal   |\n      |python.exe          |Active     |140         |0           |     |29       |\n      |118 MB              |4128 KB    |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [13916], "owned_pids": [452, 1100, 3276, 3520, 3888, 3948, 6448, 8152, 10824, 10968, 11320, 11740, 12028, 12392, 12500, 12572, 12596, 12752, 13328, 13652, 13916, 14004, 14220, 14224, 14268, 14512, 14536, 14876, 14972, 14992, 15536, 15672, 15696, 15752, 15848, 15980, 15988, 16156, 16312, 16460, 16664, 17492, 17516, 17648, 17696, 17764, 17812, 17988, 18132, 18348, 18400], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 148.406, "tree_rss_bytes": 396185600, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 150.688, "tree_rss_bytes": 400764928, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 118 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |13916               |95         |429         |0           |0    |Normal   |\n      |python.exe          |Active     |429         |0           |     |29       |\n      |118 MB              |4128 KB    |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [13916], "owned_pids": [452, 1100, 3276, 3520, 3888, 3948, 6448, 8152, 10824, 10968, 11320, 11740, 12028, 12392, 12500, 12572, 12596, 12752, 13328, 13652, 13916, 14004, 14220, 14224, 14268, 14512, 14536, 14876, 14972, 14992, 15536, 15672, 15696, 15752, 15848, 15980, 15988, 16156, 16312, 16460, 16664, 17492, 17516, 17648, 17696, 17764, 17812, 17988, 18132, 18348, 18400], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 152.969, "tree_rss_bytes": 396230656, "foreign_peers": []}
+[amd] ort 1.23.3.dev20260320 | model yolov8s_cut_xint8.onnx | session load 0.42 s | EP report node devices {'CPU': 7, 'NPU': 922}
+[run] frame 100 | G2G 17.16 ms | 5 objects
+[run] frame 200 | G2G 17.05 ms | 5 objects
+[run] frame 300 | G2G 17.35 ms | 5 objects
+[run] frame 400 | G2G 17.17 ms | 5 objects
+[run] frame 500 | G2G 17.58 ms | 5 objects
+[amd] G2G mean 17.327 ms | P50 17.348 | P95 18.092 | P99 18.312 | max 18.615 | over 500 timed frames after 50 warm-up
+[amd] stage means (ms): letterbox 1.793 | session.run 13.542 | decode+NMS 1.992
+[amd] detections on the last frame: 5 {'person': 4, 'bus': 1} | RSS 339.7 MB
+== 2026-10-15T22:46:39Z [amd yolov8s #2] exit 0 after 10.2 s
+
+== 2026-10-15T22:46:39Z [amd pose #1] $ C:\Users\<user>\miniforge3\envs\resnet_env17\python.exe pipelines/yolov8n-pose/4_pose.py --model models/yolov8n-pose_cut_xint8.onnx --ep npu --source assets/bus.jpg --warmup 50 --runs 500 --log 2 --cache-key pose_h2h_20261015 --out scratch\b49\run_20261015T2243Z\amd_pose_1.jpg
+HOST_TIMELINE {"elapsed_seconds": 155.234, "tree_rss_bytes": 211668992, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 157.547, "tree_rss_bytes": 351576064, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 93 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |3364                |96         |204         |0           |0    |Normal   |\n      |python.exe          |Active     |203         |0           |     |10       |\n      |93 MB               |4128 KB    |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [3364], "owned_pids": [452, 1100, 3276, 3364, 3520, 3888, 3948, 6448, 8152, 10824, 10968, 11320, 11740, 12028, 12392, 12500, 12572, 12596, 12752, 13328, 13652, 13916, 14004, 14220, 14224, 14268, 14512, 14536, 14876, 14972, 14992, 15536, 15672, 15696, 15752, 15848, 15980, 15988, 16156, 16312, 16460, 16664, 17140, 17492, 17516, 17648, 17696, 17764, 17812, 17988, 18132, 18348, 18400], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 159.875, "tree_rss_bytes": 345419776, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 162.141, "tree_rss_bytes": 349954048, "foreign_peers": []}
+[run] frame 100 | G2G 12.24 ms | 3 people
+[run] frame 200 | G2G 11.52 ms | 3 people
+[run] frame 300 | G2G 12.33 ms | 3 people
+[run] frame 400 | G2G 12.15 ms | 3 people
+[run] frame 500 | G2G 12.10 ms | 3 people
+infer   mean 9.13 ms   median 9.15 ms   p95 9.52 ms   (109.6 fps)
+pre     mean 2.954 ms
+3 people:
+== 2026-10-15T22:46:46Z [amd pose #1] exit 0 after 7.5 s
+
+== 2026-10-15T22:46:46Z [ignition overlap pose #1] $ C:\Users\<user>\miniforge3\envs\mlir-aie-iron\python.exe live_ignition.py --model C:\Users\<user>\PycharmProjects\ignite-xdna\build\df_yolov8n_pose_silu_def.ignite --source C:\Users\<user>\PycharmProjects\ignite-xdna\Ignition\examples\assets\bus.jpg --headless --warmup 50 --frames 500 --json scratch\b49\run_20261015T2243Z\ignition_overlap_pose_1.json
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 86 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |18040               |97         |44          |0           |0    |Normal   |\n      |python.exe          |Active     |43          |0           |     |N/A      |\n      |86 MB               |640 KB     |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [18040], "owned_pids": [452, 1100, 3276, 3364, 3520, 3888, 3948, 6448, 8152, 10824, 10968, 11320, 11740, 12028, 12392, 12500, 12572, 12596, 12752, 13328, 13652, 13916, 14004, 14220, 14224, 14268, 14512, 14536, 14876, 14972, 14992, 15536, 15672, 15696, 15752, 15848, 15980, 15988, 16156, 16312, 16460, 16664, 17140, 17492, 17516, 17648, 17696, 17764, 17812, 17988, 18040, 18132, 18348, 18400], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 164.391, "tree_rss_bytes": 223662080, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 166.641, "tree_rss_bytes": 223809536, "foreign_peers": []}
+[run] frame 100 | G2G 7.97 ms | 128 FPS | 4 people | pose: npu
+[run] frame 200 | G2G 7.89 ms | 128 FPS | 4 people | pose: npu
+[run] frame 300 | G2G 8.05 ms | 128 FPS | 4 people | pose: npu
+[run] frame 400 | G2G 7.55 ms | 128 FPS | 4 people | pose: npu
+[run] frame 500 | G2G 7.65 ms | 128 FPS | 4 people | pose: npu
+[summary] stop: frame limit | 550 frames processed (50 warm-up, 500 timed) | 1 distinct source frames | image bus.jpg 810x1080
+[summary] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+[summary] G2G mean 7.703 ms | P50 7.665 | P95 8.171 | P99 8.262 | max 8.473 | over the last 500 timed frames; cold first frame 14.23 ms
+[summary] stage means (ms): preprocess 0.266 | NPU forward 7.045 (dispatch 6.422, readback 0.601) | decode+NMS 0.386
+[summary] keypoints from NPU heads on 500/500 timed frames | 4.00 people per frame
+[summary] RSS 175.1 MB at the first timed frame, 175.3 MB at the end (+0.20 MB over 500 frames)
+[summary] wrote scratch\b49\run_20261015T2243Z\ignition_overlap_pose_1.json
+== 2026-10-15T22:46:51Z [ignition overlap pose #1] exit 0 after 4.6 s
+
+== 2026-10-15T22:46:51Z [ignition barrier pose #1] $ C:\Users\<user>\miniforge3\envs\mlir-aie-iron\python.exe live_ignition.py --model C:\Users\<user>\PycharmProjects\ignite-xdna\build\df_yolov8n_pose_silu_bar.ignite --source C:\Users\<user>\PycharmProjects\ignite-xdna\Ignition\examples\assets\bus.jpg --headless --warmup 50 --frames 500 --json scratch\b49\run_20261015T2243Z\ignition_barrier_pose_1.json
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 86 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |10944               |98         |73          |0           |0    |Normal   |\n      |python.exe          |Active     |72          |0           |     |N/A      |\n      |86 MB               |640 KB     |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [10944], "owned_pids": [452, 1100, 3276, 3364, 3520, 3888, 3948, 6448, 8152, 10824, 10944, 10968, 11320, 11740, 12028, 12392, 12500, 12572, 12596, 12752, 13328, 13652, 13916, 14004, 14220, 14224, 14268, 14512, 14536, 14876, 14972, 14992, 15536, 15672, 15696, 15752, 15848, 15980, 15988, 16156, 16312, 16460, 16664, 17140, 17492, 17516, 17584, 17648, 17696, 17764, 17812, 17988, 18040, 18132, 18348, 18400], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 168.859, "tree_rss_bytes": 223944704, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 171.094, "tree_rss_bytes": 223944704, "foreign_peers": []}
+[run] frame 100 | G2G 9.42 ms | 110 FPS | 4 people | pose: npu
+[run] frame 200 | G2G 8.69 ms | 113 FPS | 4 people | pose: npu
+[run] frame 300 | G2G 8.78 ms | 110 FPS | 4 people | pose: npu
+[run] frame 400 | G2G 8.76 ms | 113 FPS | 4 people | pose: npu
+[run] frame 500 | G2G 9.15 ms | 110 FPS | 4 people | pose: npu
+[summary] stop: frame limit | 550 frames processed (50 warm-up, 500 timed) | 1 distinct source frames | image bus.jpg 810x1080
+[summary] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+[summary] G2G mean 8.961 ms | P50 8.895 | P95 9.450 | P99 9.570 | max 9.625 | over the last 500 timed frames; cold first frame 12.03 ms
+[summary] stage means (ms): preprocess 0.273 | NPU forward 8.299 (dispatch 7.651, readback 0.626) | decode+NMS 0.383
+[summary] keypoints from NPU heads on 500/500 timed frames | 4.00 people per frame
+[summary] RSS 175.3 MB at the first timed frame, 175.3 MB at the end (+0.02 MB over 500 frames)
+[summary] wrote scratch\b49\run_20261015T2243Z\ignition_barrier_pose_1.json
+== 2026-10-15T22:46:56Z [ignition barrier pose #1] exit 0 after 5.3 s
+
+== 2026-10-15T22:46:56Z [ignition barrier pose #2] $ C:\Users\<user>\miniforge3\envs\mlir-aie-iron\python.exe live_ignition.py --model C:\Users\<user>\PycharmProjects\ignite-xdna\build\df_yolov8n_pose_silu_bar.ignite --source C:\Users\<user>\PycharmProjects\ignite-xdna\Ignition\examples\assets\bus.jpg --headless --warmup 50 --frames 500 --json scratch\b49\run_20261015T2243Z\ignition_barrier_pose_2.json
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 86 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |15848               |99         |34          |0           |0    |Normal   |\n      |python.exe          |Active     |33          |0           |     |N/A      |\n      |86 MB               |640 KB     |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [15848], "owned_pids": [396, 452, 1100, 3276, 3364, 3520, 3888, 3948, 6448, 8152, 10824, 10944, 10968, 11320, 11740, 12028, 12392, 12500, 12572, 12596, 12752, 13328, 13652, 13916, 14004, 14220, 14224, 14268, 14512, 14536, 14876, 14972, 14992, 15536, 15672, 15696, 15752, 15848, 15980, 15988, 16156, 16312, 16460, 16664, 17140, 17492, 17516, 17584, 17648, 17696, 17764, 17812, 17988, 18040, 18132, 18348, 18400], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 173.328, "tree_rss_bytes": 223756288, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 175.594, "tree_rss_bytes": 223805440, "foreign_peers": []}
+[run] frame 100 | G2G 8.83 ms | 114 FPS | 4 people | pose: npu
+[run] frame 200 | G2G 9.25 ms | 112 FPS | 4 people | pose: npu
+[run] frame 300 | G2G 9.17 ms | 111 FPS | 4 people | pose: npu
+[run] frame 400 | G2G 8.25 ms | 114 FPS | 4 people | pose: npu
+[run] frame 500 | G2G 8.62 ms | 114 FPS | 4 people | pose: npu
+[summary] stop: frame limit | 550 frames processed (50 warm-up, 500 timed) | 1 distinct source frames | image bus.jpg 810x1080
+[summary] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+[summary] G2G mean 8.858 ms | P50 8.783 | P95 9.358 | P99 9.462 | max 9.480 | over the last 500 timed frames; cold first frame 11.78 ms
+[summary] stage means (ms): preprocess 0.273 | NPU forward 8.200 (dispatch 7.567, readback 0.612) | decode+NMS 0.379
+[summary] keypoints from NPU heads on 500/500 timed frames | 4.00 people per frame
+[summary] RSS 175.1 MB at the first timed frame, 175.2 MB at the end (+0.07 MB over 500 frames)
+[summary] wrote scratch\b49\run_20261015T2243Z\ignition_barrier_pose_2.json
+== 2026-10-15T22:47:01Z [ignition barrier pose #2] exit 0 after 5.3 s
+
+== 2026-10-15T22:47:02Z [ignition overlap pose #2] $ C:\Users\<user>\miniforge3\envs\mlir-aie-iron\python.exe live_ignition.py --model C:\Users\<user>\PycharmProjects\ignite-xdna\build\df_yolov8n_pose_silu_def.ignite --source C:\Users\<user>\PycharmProjects\ignite-xdna\Ignition\examples\assets\bus.jpg --headless --warmup 50 --frames 500 --json scratch\b49\run_20261015T2243Z\ignition_overlap_pose_2.json
+HOST_TIMELINE {"elapsed_seconds": 177.938, "tree_rss_bytes": 82698240, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 86 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |6252                |100        |29          |0           |0    |Normal   |\n      |python.exe          |Active     |28          |0           |     |N/A      |\n      |86 MB               |640 KB     |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [6252], "owned_pids": [396, 452, 1100, 3276, 3364, 3520, 3888, 3948, 4480, 6252, 6448, 8152, 10824, 10944, 10968, 11320, 11740, 12028, 12392, 12500, 12572, 12596, 12752, 13328, 13652, 13916, 14004, 14220, 14224, 14268, 14512, 14536, 14876, 14972, 14992, 15536, 15672, 15696, 15752, 15848, 15980, 15988, 16156, 16312, 16460, 16664, 17140, 17492, 17516, 17584, 17648, 17696, 17764, 17812, 17988, 18040, 18132, 18348, 18400], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 180.266, "tree_rss_bytes": 223727616, "foreign_peers": []}
+[run] frame 100 | G2G 7.65 ms | 128 FPS | 4 people | pose: npu
+[run] frame 200 | G2G 7.47 ms | 130 FPS | 4 people | pose: npu
+[run] frame 300 | G2G 7.28 ms | 137 FPS | 4 people | pose: npu
+[run] frame 400 | G2G 7.78 ms | 127 FPS | 4 people | pose: npu
+[run] frame 500 | G2G 7.57 ms | 127 FPS | 4 people | pose: npu
+[summary] stop: frame limit | 550 frames processed (50 warm-up, 500 timed) | 1 distinct source frames | image bus.jpg 810x1080
+[summary] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+[summary] G2G mean 7.750 ms | P50 7.740 | P95 8.161 | P99 8.222 | max 8.365 | over the last 500 timed frames; cold first frame 10.09 ms
+[summary] stage means (ms): preprocess 0.263 | NPU forward 7.098 (dispatch 6.471, readback 0.605) | decode+NMS 0.383
+[summary] keypoints from NPU heads on 500/500 timed frames | 4.00 people per frame
+[summary] RSS 175.1 MB at the first timed frame, 175.3 MB at the end (+0.17 MB over 500 frames)
+[summary] wrote scratch\b49\run_20261015T2243Z\ignition_overlap_pose_2.json
+== 2026-10-15T22:47:06Z [ignition overlap pose #2] exit 0 after 4.7 s
+HOST_TIMELINE {"elapsed_seconds": 182.5, "tree_rss_bytes": 44634112, "foreign_peers": []}
+
+== 2026-10-15T22:47:06Z [amd pose #2] $ C:\Users\<user>\miniforge3\envs\resnet_env17\python.exe pipelines/yolov8n-pose/4_pose.py --model models/yolov8n-pose_cut_xint8.onnx --ep npu --source assets/bus.jpg --warmup 50 --runs 500 --log 2 --cache-key pose_h2h_20261015 --out scratch\b49\run_20261015T2243Z\amd_pose_2.jpg
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 93 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |12572               |101        |17          |0           |0    |Normal   |\n      |python.exe          |Active     |16          |0           |     |10       |\n      |93 MB               |4128 KB    |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [12572], "owned_pids": [396, 452, 1100, 2960, 3276, 3364, 3520, 3888, 3948, 4480, 6252, 6448, 8152, 10824, 10944, 10968, 11320, 11740, 12028, 12392, 12500, 12572, 12596, 12752, 13328, 13652, 13916, 14004, 14220, 14224, 14268, 14512, 14536, 14876, 14972, 14992, 15536, 15672, 15696, 15752, 15848, 15980, 15988, 16156, 16312, 16460, 16664, 17140, 17492, 17516, 17584, 17648, 17696, 17764, 17812, 17988, 18040, 18132, 18348, 18400], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 184.766, "tree_rss_bytes": 349351936, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 187.109, "tree_rss_bytes": 349392896, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 93 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |12572               |101        |425         |0           |0    |Normal   |\n      |python.exe          |Active     |425         |0           |     |10       |\n      |93 MB               |4128 KB    |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [12572], "owned_pids": [396, 452, 1100, 2960, 3276, 3364, 3520, 3888, 3948, 4480, 6252, 6448, 8152, 10824, 10944, 10968, 11320, 11740, 12028, 12392, 12500, 12572, 12596, 12752, 13328, 13652, 13916, 14004, 14220, 14224, 14268, 14512, 14536, 14876, 14972, 14992, 15536, 15672, 15696, 15752, 15848, 15980, 15988, 16156, 16312, 16460, 16664, 17140, 17492, 17516, 17584, 17648, 17696, 17764, 17812, 17988, 18040, 18132, 18348, 18400], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 189.406, "tree_rss_bytes": 349417472, "foreign_peers": []}
+[run] frame 100 | G2G 12.34 ms | 3 people
+[run] frame 200 | G2G 12.03 ms | 3 people
+[run] frame 300 | G2G 12.26 ms | 3 people
+[run] frame 400 | G2G 12.20 ms | 3 people
+[run] frame 500 | G2G 12.94 ms | 3 people
+infer   mean 9.12 ms   median 9.17 ms   p95 9.55 ms   (109.6 fps)
+pre     mean 3.035 ms
+3 people:
+== 2026-10-15T22:47:14Z [amd pose #2] exit 0 after 7.5 s
+
+== 2026-10-15T22:47:14Z [amd sesr_m7 #1] $ C:\Users\<user>\miniforge3\envs\resnet_env17\python.exe tools/amd_vitisai_sesr.py --model models/sesr_m7_xint8.onnx --image C:\Users\<user>\PycharmProjects\ignite-xdna\Ignition\examples\assets\bus.jpg --ignition-src C:\Users\<user>\PycharmProjects\ignite-xdna\Ignition\src --cache-dir scratch\b49\run_20261015T2243Z\vitisai_cache --cache-key sesr_m7_h2h_20261015 --xclbin C:\Users\<user>\PycharmProjects\ignite-xdna\yolocutcachekey\4x4.xclbin --warmup 50 --iterations 500 --json scratch\b49\run_20261015T2243Z\amd_sesr_m7_1.json
+HOST_TIMELINE {"elapsed_seconds": 191.75, "tree_rss_bytes": 317796352, "foreign_peers": []}
+[amd] ort 1.23.3.dev20260320 | model sesr_m7_xint8.onnx | session load 0.71 s | EP report node devices {'CPU': 2, 'NPU': 50}
+[run] frame 100 | G2G 4.50 ms | output 512x512
+[run] frame 200 | G2G 4.61 ms | output 512x512
+[run] frame 300 | G2G 3.99 ms | output 512x512
+[run] frame 400 | G2G 3.47 ms | output 512x512
+[run] frame 500 | G2G 3.52 ms | output 512x512
+[amd] G2G mean 3.833 ms | P50 3.545 | P95 4.776 | P99 4.835 | max 4.883 | over 500 timed frames after 50 warm-up
+[amd] stage means (ms): preprocess 0.348 | session.run 1.451 | postprocess 2.034
+[amd] output (512, 512, 3) from input (256, 256) | RSS 264.9 MB
+== 2026-10-15T22:47:17Z [amd sesr_m7 #1] exit 0 after 3.1 s
+
+== 2026-10-15T22:47:17Z [ignition overlap sesr_m7 #1] $ C:\Users\<user>\miniforge3\envs\mlir-aie-iron\python.exe live_ignition.py --model C:\Users\<user>\PycharmProjects\ignite-xdna\build\df_sesr_m7_def.ignite --source C:\Users\<user>\PycharmProjects\ignite-xdna\Ignition\examples\assets\bus.jpg --headless --warmup 50 --frames 500 --json scratch\b49\run_20261015T2243Z\ignition_overlap_sesr_m7_1.json
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [396, 452, 1100, 2960, 3276, 3364, 3520, 3888, 3948, 4480, 5768, 6252, 6448, 8152, 10824, 10944, 10968, 11320, 11740, 12028, 12392, 12500, 12572, 12596, 12752, 13328, 13652, 13916, 14004, 14220, 14224, 14268, 14512, 14536, 14876, 14972, 14992, 15536, 15672, 15696, 15752, 15848, 15980, 15988, 16156, 16216, 16312, 16460, 16664, 17140, 17492, 17516, 17584, 17648, 17696, 17764, 17812, 17988, 17992, 18040, 18132, 18168, 18348, 18400], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 194.094, "tree_rss_bytes": 203243520, "foreign_peers": []}
+[run] frame 100 | G2G 4.64 ms | 212 FPS | 512x512 output | super_resolution: npu
+[run] frame 200 | G2G 4.86 ms | 206 FPS | 512x512 output | super_resolution: npu
+[run] frame 300 | G2G 4.68 ms | 203 FPS | 512x512 output | super_resolution: npu
+[run] frame 400 | G2G 4.59 ms | 204 FPS | 512x512 output | super_resolution: npu
+[run] frame 500 | G2G 4.98 ms | 204 FPS | 512x512 output | super_resolution: npu
+[summary] stop: frame limit | 550 frames processed (50 warm-up, 500 timed) | 1 distinct source frames | image bus.jpg 810x1080
+[summary] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+[summary] G2G mean 4.794 ms | P50 4.871 | P95 5.104 | P99 5.203 | max 5.443 | over the last 500 timed frames; cold first frame 6.83 ms
+[summary] stage means (ms): preprocess 0.149 | NPU forward 4.255 (dispatch 4.223, readback 0.031) | image output 0.384
+[summary] output image [512, 512, 3] from the NPU
+[summary] RSS 155.5 MB at the first timed frame, 155.5 MB at the end (+0.00 MB over 500 frames)
+[summary] wrote scratch\b49\run_20261015T2243Z\ignition_overlap_sesr_m7_1.json
+== 2026-10-15T22:47:20Z [ignition overlap sesr_m7 #1] exit 0 after 3.1 s
+
+== 2026-10-15T22:47:20Z [ignition barrier sesr_m7 #1] $ C:\Users\<user>\miniforge3\envs\mlir-aie-iron\python.exe live_ignition.py --model C:\Users\<user>\PycharmProjects\ignite-xdna\build\df_sesr_m7_bar.ignite --source C:\Users\<user>\PycharmProjects\ignite-xdna\Ignition\examples\assets\bus.jpg --headless --warmup 50 --frames 500 --json scratch\b49\run_20261015T2243Z\ignition_barrier_sesr_m7_1.json
+HOST_TIMELINE {"elapsed_seconds": 196.359, "tree_rss_bytes": 42110976, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 74 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |10720               |104        |352         |0           |0    |Normal   |\n      |python.exe          |Active     |352         |0           |     |N/A      |\n      |74 MB               |384 KB     |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [10720], "owned_pids": [396, 452, 1100, 2960, 3276, 3364, 3520, 3888, 3948, 4480, 5768, 6252, 6260, 6448, 8152, 10720, 10824, 10944, 10968, 11320, 11740, 12028, 12392, 12500, 12572, 12596, 12752, 13328, 13652, 13916, 14004, 14220, 14224, 14268, 14512, 14536, 14876, 14972, 14992, 15536, 15672, 15696, 15752, 15848, 15980, 15988, 16156, 16216, 16312, 16460, 16664, 17140, 17492, 17516, 17584, 17648, 17696, 17764, 17812, 17988, 17992, 18040, 18132, 18168, 18348, 18400], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 198.688, "tree_rss_bytes": 203079680, "foreign_peers": []}
+[run] frame 100 | G2G 5.31 ms | 194 FPS | 512x512 output | super_resolution: npu
+[run] frame 200 | G2G 5.10 ms | 195 FPS | 512x512 output | super_resolution: npu
+[run] frame 300 | G2G 4.69 ms | 206 FPS | 512x512 output | super_resolution: npu
+[run] frame 400 | G2G 5.17 ms | 194 FPS | 512x512 output | super_resolution: npu
+[run] frame 500 | G2G 5.09 ms | 198 FPS | 512x512 output | super_resolution: npu
+[summary] stop: frame limit | 550 frames processed (50 warm-up, 500 timed) | 1 distinct source frames | image bus.jpg 810x1080
+[summary] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+[summary] G2G mean 4.937 ms | P50 5.035 | P95 5.275 | P99 5.357 | max 5.451 | over the last 500 timed frames; cold first frame 6.59 ms
+[summary] stage means (ms): preprocess 0.157 | NPU forward 4.391 (dispatch 4.361, readback 0.030) | image output 0.383
+[summary] output image [512, 512, 3] from the NPU
+[summary] RSS 155.3 MB at the first timed frame, 155.3 MB at the end (+0.00 MB over 500 frames)
+[summary] wrote scratch\b49\run_20261015T2243Z\ignition_barrier_sesr_m7_1.json
+== 2026-10-15T22:47:23Z [ignition barrier sesr_m7 #1] exit 0 after 3.1 s
+
+== 2026-10-15T22:47:23Z [ignition barrier sesr_m7 #2] $ C:\Users\<user>\miniforge3\envs\mlir-aie-iron\python.exe live_ignition.py --model C:\Users\<user>\PycharmProjects\ignite-xdna\build\df_sesr_m7_bar.ignite --source C:\Users\<user>\PycharmProjects\ignite-xdna\Ignition\examples\assets\bus.jpg --headless --warmup 50 --frames 500 --json scratch\b49\run_20261015T2243Z\ignition_barrier_sesr_m7_2.json
+HOST_TIMELINE {"elapsed_seconds": 201.031, "tree_rss_bytes": 203161600, "foreign_peers": []}
+[run] frame 100 | G2G 5.10 ms | 197 FPS | 512x512 output | super_resolution: npu
+[run] frame 200 | G2G 5.08 ms | 199 FPS | 512x512 output | super_resolution: npu
+[run] frame 300 | G2G 4.80 ms | 213 FPS | 512x512 output | super_resolution: npu
+[run] frame 400 | G2G 5.17 ms | 194 FPS | 512x512 output | super_resolution: npu
+[run] frame 500 | G2G 5.09 ms | 195 FPS | 512x512 output | super_resolution: npu
+[summary] stop: frame limit | 550 frames processed (50 warm-up, 500 timed) | 1 distinct source frames | image bus.jpg 810x1080
+[summary] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+[summary] G2G mean 4.989 ms | P50 5.072 | P95 5.264 | P99 5.336 | max 5.518 | over the last 500 timed frames; cold first frame 6.59 ms
+[summary] stage means (ms): preprocess 0.164 | NPU forward 4.431 (dispatch 4.399, readback 0.032) | image output 0.388
+[summary] output image [512, 512, 3] from the NPU
+[summary] RSS 155.4 MB at the first timed frame, 155.4 MB at the end (+0.00 MB over 500 frames)
+[summary] wrote scratch\b49\run_20261015T2243Z\ignition_barrier_sesr_m7_2.json
+== 2026-10-15T22:47:26Z [ignition barrier sesr_m7 #2] exit 0 after 3.1 s
+
+== 2026-10-15T22:47:26Z [ignition overlap sesr_m7 #2] $ C:\Users\<user>\miniforge3\envs\mlir-aie-iron\python.exe live_ignition.py --model C:\Users\<user>\PycharmProjects\ignite-xdna\build\df_sesr_m7_def.ignite --source C:\Users\<user>\PycharmProjects\ignite-xdna\Ignition\examples\assets\bus.jpg --headless --warmup 50 --frames 500 --json scratch\b49\run_20261015T2243Z\ignition_overlap_sesr_m7_2.json
+HOST_TIMELINE {"elapsed_seconds": 203.328, "tree_rss_bytes": 202936320, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 74 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |13248               |106        |153         |0           |0    |Normal   |\n      |python.exe          |Active     |152         |0           |     |N/A      |\n      |74 MB               |384 KB     |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [13248], "owned_pids": [396, 452, 1100, 2960, 3276, 3364, 3520, 3888, 3948, 4480, 5768, 6252, 6260, 6448, 8152, 10720, 10824, 10944, 10968, 11320, 11344, 11740, 12028, 12392, 12500, 12572, 12596, 12752, 13248, 13328, 13652, 13916, 14004, 14220, 14224, 14268, 14512, 14536, 14876, 14972, 14992, 15536, 15672, 15696, 15752, 15848, 15980, 15988, 16156, 16216, 16312, 16420, 16460, 16664, 17140, 17492, 17516, 17584, 17648, 17696, 17764, 17812, 17988, 17992, 18040, 18132, 18168, 18348, 18396, 18400], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 205.578, "tree_rss_bytes": 202936320, "foreign_peers": []}
+[run] frame 100 | G2G 4.39 ms | 227 FPS | 512x512 output | super_resolution: npu
+[run] frame 200 | G2G 4.57 ms | 207 FPS | 512x512 output | super_resolution: npu
+[run] frame 300 | G2G 4.71 ms | 204 FPS | 512x512 output | super_resolution: npu
+[run] frame 400 | G2G 4.92 ms | 205 FPS | 512x512 output | super_resolution: npu
+[run] frame 500 | G2G 5.06 ms | 201 FPS | 512x512 output | super_resolution: npu
+[summary] stop: frame limit | 550 frames processed (50 warm-up, 500 timed) | 1 distinct source frames | image bus.jpg 810x1080
+[summary] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+[summary] G2G mean 4.766 ms | P50 4.843 | P95 5.116 | P99 5.208 | max 5.358 | over the last 500 timed frames; cold first frame 6.91 ms
+[summary] stage means (ms): preprocess 0.162 | NPU forward 4.213 (dispatch 4.183, readback 0.030) | image output 0.384
+[summary] output image [512, 512, 3] from the NPU
+[summary] RSS 155.2 MB at the first timed frame, 155.2 MB at the end (+0.00 MB over 500 frames)
+[summary] wrote scratch\b49\run_20261015T2243Z\ignition_overlap_sesr_m7_2.json
+== 2026-10-15T22:47:29Z [ignition overlap sesr_m7 #2] exit 0 after 3.0 s
+
+== 2026-10-15T22:47:30Z [amd sesr_m7 #2] $ C:\Users\<user>\miniforge3\envs\resnet_env17\python.exe tools/amd_vitisai_sesr.py --model models/sesr_m7_xint8.onnx --image C:\Users\<user>\PycharmProjects\ignite-xdna\Ignition\examples\assets\bus.jpg --ignition-src C:\Users\<user>\PycharmProjects\ignite-xdna\Ignition\src --cache-dir scratch\b49\run_20261015T2243Z\vitisai_cache --cache-key sesr_m7_h2h_20261015 --xclbin C:\Users\<user>\PycharmProjects\ignite-xdna\yolocutcachekey\4x4.xclbin --warmup 50 --iterations 500 --json scratch\b49\run_20261015T2243Z\amd_sesr_m7_2.json
+HOST_TIMELINE {"elapsed_seconds": 207.859, "tree_rss_bytes": 319598592, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [396, 452, 1100, 1908, 2960, 3276, 3284, 3364, 3520, 3888, 3948, 4480, 5768, 6252, 6260, 6448, 8152, 10720, 10824, 10944, 10968, 11320, 11344, 11740, 12028, 12392, 12500, 12572, 12596, 12752, 13248, 13328, 13652, 13916, 14004, 14220, 14224, 14268, 14512, 14536, 14876, 14972, 14992, 15536, 15672, 15696, 15752, 15848, 15980, 15988, 16156, 16216, 16312, 16420, 16460, 16664, 17140, 17492, 17516, 17584, 17648, 17696, 17764, 17812, 17988, 17992, 18040, 18132, 18168, 18348, 18396, 18400], "foreign_pids": []}
+[amd] ort 1.23.3.dev20260320 | model sesr_m7_xint8.onnx | session load 0.69 s | EP report node devices {'CPU': 2, 'NPU': 50}
+[run] frame 100 | G2G 4.06 ms | output 512x512
+[run] frame 200 | G2G 3.51 ms | output 512x512
+[run] frame 300 | G2G 4.66 ms | output 512x512
+[run] frame 400 | G2G 3.54 ms | output 512x512
+[run] frame 500 | G2G 4.12 ms | output 512x512
+[amd] G2G mean 3.739 ms | P50 3.537 | P95 4.763 | P99 4.828 | max 4.883 | over 500 timed frames after 50 warm-up
+[amd] stage means (ms): preprocess 0.347 | session.run 1.454 | postprocess 1.938
+[amd] output (512, 512, 3) from input (256, 256) | RSS 265.3 MB
+== 2026-10-15T22:47:33Z [amd sesr_m7 #2] exit 0 after 3.0 s
+
+# end 2026-10-15T22:47:33Z
+POST_NPU_CONTEXT_WITNESS "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+RESEARCH_PROCESS_RESULT {"exit_code": 0, "stop": null, "peak_tree_rss_bytes": 901095424, "rss_measurement": "maximum observed across sampled descendant working sets; zero observations reported as null", "elapsed_seconds": 209.06299999999464, "foreign_contention_observed": false, "timing_eligible": true}

@@ -17783,7 +17783,7 @@ sitting, barrier build against default; `timing_eligible: true`):
 - **SESR's small gain fits its shape** (DERIVED, not measured): 8 boundaries against the detectors' 65–74.
 
 **What this does not establish.**
-- **No comparison against AMD.** The README's "AMD stays ahead on YOLOv8s and SESR M7" may be stale. The
+- **No comparison against AMD.** The README's "AMD stays ahead on YOLOv8s and SESR M7" may be stale. *[Run the same day: [Ignition is faster on YOLOv8s now](#against-amds-stack-on-the-overlap-default-yolov8s-flips-to-ignition-1582-against-1729-ms-yolov8n-and-pose-widen-their-lead-amd-keeps-sesr-m7-2026-10-15-desktop-2), 15.82 against 17.29 ms; AMD keeps SESR M7.]* The
   [release sitting](#the-v033-release-sitting-sigmoid-silu-containers-on-the-host-fast-paths-against-amds-stack-2026-09-17-desktop-2)
   had Ignition's YOLOv8s 1.4 ms behind AMD's stack glass-to-glass (18.2 against 16.8 ms), and the default now takes
   1.3 ms off the dispatch. But those are different days and different sittings, and dispatch is not glass-to-glass.
@@ -17798,3 +17798,63 @@ Logs:
   ([JSON](../results/aie/overlap_default_ab_desktop2_20261015T2145Z.json));
 - [record](../results/aie/overlap_default_record_desktop2_20261015T2145Z.log): the pre-registration verbatim, stream
   identities, every manifest's decision and the proof run.
+
+#### Against AMD's stack on the overlap default: YOLOv8s flips to Ignition (15.82 against 17.29 ms), YOLOv8n and pose widen their lead, AMD keeps SESR M7 (2026-10-15, Desktop 2)
+
+**The question.** Does the layer-overlap default reach the frame, and who is faster now? This re-runs the
+[v0.3.3 release sitting](#the-v033-release-sitting-sigmoid-silu-containers-on-the-host-fast-paths-against-amds-stack-2026-09-17-desktop-2)
+with its method, plus one more arm per model: the same build with `--no-overlap-layers`.
+- **Pre-registered** (sha256 `d2d5ecff...`).
+- **Commits:** ignite-xdna `653084f`, Ignition `4f23442`.
+- **Every Ignition container was verified layer-exact on the NPU first.** Every readable layer exact, every reused
+  slot holding its planned final tenant: 28/28 per YOLOv8 container, 37/37 per pose container, 5/5 per SESR container.
+- **Runs:**
+  - AMD's stack: Ryzen AI 1.7.1 in `resnet_env17`, its caches compiled fresh by an untimed run first.
+  - Ignition: `live_ignition.py`.
+  - Each run: 50 warm-up and 500 timed frames of `bus.jpg`, balanced mode, `xrt-smi` idle before every run.
+  - Two interleaved rounds, the second in reverse order; `timing_eligible: true`.
+
+Glass to glass, mean ms, rounds 1 / 2:
+
+| Model | AMD's stack | Ignition, overlap (default) | Ignition, barrier | Pre-registered verdict |
+|---|---:|---:|---:|---|
+| YOLOv8n, `--silu-sigmoid` | 10.787 / 10.731 | **7.251 / 7.235** | 8.278 / 8.240 | Ignition faster |
+| YOLOv8s, `--silu-sigmoid` | 17.249 / 17.327 | **15.818 / 15.815** | 17.146 / 17.238 | **Ignition faster** |
+| YOLOv8n-pose, `--silu-sigmoid` | ≈12.2 (below) | **7.703 / 7.750** | 8.961 / 8.858 | Ignition faster |
+| SESR M7 | **3.833 / 3.739** | 4.794 / 4.766 | 4.937 / 4.989 | AMD faster |
+
+**What it shows.**
+- **YOLOv8s flips.** Ignition is 1.47 ms faster than AMD's stack, below it in both rounds.
+  - Its barrier arm is level with AMD in this sitting (17.15 / 17.24 against 17.25 / 17.33), so the flip is the
+    overlap's.
+  - In the release sitting Ignition trailed by 1.4 ms (18.21 against 16.79): a different day, and its own sitting.
+- **The overlap reaches the frame almost one for one.** Overlap minus barrier, glass to glass:
+
+  | Model | Glass to glass | Dispatch A/B earlier the same day |
+  |---|---:|---:|
+  | YOLOv8n | −1.016 ms | −1.000 ms |
+  | YOLOv8s | −1.376 ms | −1.307 ms |
+  | YOLOv8n-pose | −1.183 ms | −1.141 ms |
+  | SESR M7 | −0.183 ms | −0.083 ms |
+
+  - The SESR difference is within that model's run-to-run spread here. Its per-100-frame samples vary by ±0.3 ms.
+- **YOLOv8n is now 3.5 ms faster than AMD's stack and pose about 4.5 ms.** Accuracy is unchanged: every overlap
+  container is exact against its barrier build, so the
+  [mAP figures](#the-sigmoid-silu-containers-against-amds-stack-more-accurate-on-all-5000-coco-images-faster-on-yolov8n-and-yolov8n-pose-slower-on-yolov8s-2026-09-17-desktop-2)
+  stand. That includes YOLOv8s's 42.37 against AMD's 37.31 mAP@50-95. On YOLOv8s Ignition is now both faster and
+  more accurate.
+- **AMD keeps SESR M7**, by about 1.0 ms. The overlap has 8 boundaries to work with there.
+
+**AMD's pose arm.** As in the release sitting, it is `pipelines/yolov8n-pose/4_pose.py --ep npu`, which prints its
+stages, not one mean.
+- **Logged:** pre 2.954 / 3.035 ms and infer 9.13 / 9.12 ms.
+- **Not logged:** this sitting's driver filtered out the post line, so AMD's pose mean is an estimate. Its frame
+  samples read 12.0–12.9 ms; the release sitting had post at 0.10 ms. The verdict does not depend on it: AMD's pre
+  plus infer alone is 12.1 ms against Ignition's 7.7.
+
+**Not re-run here:** YOLO11n, which keeps its barrier because of its host segment, and the performance power mode.
+
+Logs:
+- [sitting](../results/aie/head_to_head_overlap_phoenix_20261015T2243Z.log), every run's command and output lines;
+- [record](../results/aie/head_to_head_overlap_record_phoenix_20261015T2243Z.log): the pre-registration verbatim,
+  hashes and the per-arm summary.
