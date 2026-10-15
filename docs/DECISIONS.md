@@ -2021,7 +2021,12 @@ cached reference heads rather than `bo_out`.
   prediction of −0.4 to −1.1 ms. NOP was −0.251 ms (4/4), and compute exposure grew 0.935 ms.
   - **Ruled out:** the path itself. The same build with every layer cut plain (`--box-cap 0`) reads −0.05 ms.
   - **The cause is unexplained.** Still standing: merged tasks stalling behind the 2-box MemTile buffer under
-    compute; the 26 extra mid-frame configures; the one-box task penalty the probe measured.
+    compute; the 26 extra mid-frame configures; the one-box task penalty the probe measured. *[Found the same day
+    by the shim trace: the whole loss is the 26 mid-frame configures, about 26.5 microseconds each (DERIVED), 0.690
+    ms in all. Net of them the merged tasks save about 0.05 ms in real dispatch, because the issue they save was
+    already hidden under compute. A rescue that made configures free would recover about 0.05 ms on YOLOv8s, so
+    the rejection stands
+    ([BENCHMARKS](BENCHMARKS.md#block-5-the-shim-trace-finds-what-box-fills-lost-26-mid-frame-memtile-configures-at-265-microseconds-each-2026-10-15-desktop-2)).]*
   - **What stays on `main`, off by default:** `--box-fills` / `--box-cap`, `compiler/box_fills.py`, and
     `design.py`'s `_activation_box`.
   - **Found on the way:** mlir-aie's `npu.writebd` drops a MemTile descriptor's D2 wrap, so the emitter writes
@@ -2030,6 +2035,19 @@ cached reference heads rather than `bo_out`.
     configure writes must first be made countable by `split_instruction_stream`). Then a new pre-registration,
     not a rerun
     ([BENCHMARKS](BENCHMARKS.md#block-5-box-fills-in-the-engine-exact-on-the-device-and-069-ms-slower-transport-gains-025-ms-but-compute-exposure-grows-094-ms-2026-10-15-desktop-2)).
+- **Pitfall (2026-10-15): the engine's cores cannot be traced, and a traced shim gives one clean dispatch per
+  hardware context.**
+  - **Cores have no route out.** Every core tile's four southbound switch ports carry the column's output join, so
+    aiecc finds no route for any core's trace packets ("Unable to find a legal routing" for any single core, any
+    egress column). Trace the shim tiles instead: `--trace-shims`, read by `tools/engine_shim_trace.py`.
+  - **On a shim, the marker must be `USER_EVENT_1`.** `-aie-insert-trace-flows` makes `USER_EVENT_1` the start event
+    and `USER_EVENT_0` the stop event, so a `USER_EVENT_0` marker stops the trace it is meant to mark.
+  - **One traced dispatch per context.** The trace's S2MM task is one descriptor as long as the buffer and outlives
+    the dispatch, so the next dispatch's trace lands mid-buffer. Run each traced dispatch in its own process; every
+    traced number is a cold first dispatch.
+  - **Decode as runs, not per cycle.** A whole frame expanded per cycle took 5.1 GB; `tools/trace_runs.py` keeps runs
+    and equals `clock_probe.decode_event_time` exactly.
+  - [BENCHMARKS](BENCHMARKS.md#block-5-the-shim-trace-finds-what-box-fills-lost-26-mid-frame-memtile-configures-at-265-microseconds-each-2026-10-15-desktop-2).
 - **Rejected again, on the container it mattered most for: the activation ring on SESR M7 (2026-09-19, built and
   measured).** SESR is the one zoo model whose dispatch is demonstrably transport-bound (2.650 ms NOP floor for
   ~14 MB of per-frame fill and drain, 5.4 GB/s effective), so the ring's "fetch once, serve several output groups"

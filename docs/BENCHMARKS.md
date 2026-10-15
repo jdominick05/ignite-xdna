@@ -17195,7 +17195,8 @@ tree, off by default.
   core's parity select and one configure per frame are not the loss.
 - **The loss is under compute, as with stream sharing.** Real minus NOP is 3.825 ms for `ctl` and 4.760 ms for
   `box`, +0.935 ms, while transport gains 0.25 ms.
-- **The cause is unexplained.**
+- **The cause is unexplained.** *[Found the same day: the whole loss is 26 mid-frame MemTile configures, 26.5 µs each
+  (DERIVED), and net of them box fills save about 0.05 ms in real dispatch; see [the shim trace](#block-5-the-shim-trace-finds-what-box-fills-lost-26-mid-frame-memtile-configures-at-265-microseconds-each-2026-10-15-desktop-2).]*
   - **Ruled out:** the path's own cost (`boxplain`), wrong data (exact at every dispatch), contention (none
     observed), and the control being a different design (byte-identical to `32b8eec`).
   - **Still standing:**
@@ -17216,3 +17217,108 @@ Logs:
 - [repeat-dispatch exactness](../results/aie/box_fills_repeat_exact_yolov8s_desktop2_20261015T1422Z.log);
 - [checks](../results/aie/box_fills_checks_yolov8s_desktop2_20261015T1430Z.log): the pre-registration verbatim, the
   census, the descriptor-against-CDO check, and the control and rebuild identities.
+
+#### Block 5: the shim trace finds what box fills lost: 26 mid-frame MemTile configures at 26.5 microseconds each (2026-10-15, Desktop 2)
+
+**Question.** Box fills read −0.25 ms all-NOP and +0.69 ms real. The section above names three candidates and could
+not separate them. Which input is late on the layers box fills changes?
+
+**The cores cannot be traced in this design.**
+- A build tracing any single core, with any egress column, fails in aiecc with "Unable to find a legal routing".
+- **Why:** every core tile's four southbound switch ports already carry the column's output join to the MemTile, so
+  a core's trace packets have no way out.
+- The shim tile's trace unit routes inside its own switch, so it is the instrument.
+
+**The instrument (`--trace-shims`, a measurement build).**
+- **Events:** the trace of logical column 0's shim records eight events (`design.TRACE_SHIM_EVENTS`):
+  - weight-stream backpressure: MM2S 1 blocked, so weights are ahead of the cores;
+  - activation-stream backpressure: MM2S 0 blocked by the MemTile;
+  - output starvation: S2MM 0 waiting on the cores;
+  - DDR starvation of each stream;
+  - two task-finish pulses;
+  - a layer marker.
+- **Wiring:**
+  - `engine_compile.inject_shim_trace` writes the raw `aie.trace` ops, because IRON traces worker tiles only.
+  - The emitter fires the marker before every layer, and 64 more times at the end to flush the trace.
+  - `GraphSession` passes the trace buffer as XRT argument 5.
+- **Three facts found while building it:**
+  - **The marker has to be `USER_EVENT_1`.** For a shim tile, `-aie-insert-trace-flows` makes `USER_EVENT_1` the
+    start event and `USER_EVENT_0` the stop event (`Trace_Control0 = 0x7E7F0000`). A first build that marked with
+    `USER_EVENT_0` stopped its own trace and returned an empty buffer. The start event, re-fired while the trace
+    runs, is harmless.
+  - **One traced dispatch per hardware context.** The trace's S2MM 1 task is one descriptor as long as the 4 MiB
+    buffer, and a frame never fills it, so the task outlives the dispatch. The next dispatch's trace queues behind it
+    and lands mid-buffer: a second dispatch read 121 of 130 markers, a de-interleave error, and once 45 ms.
+    `tools/engine_shim_trace.py` therefore runs each traced dispatch in its own process. Every traced number is a
+    context's first, cold dispatch.
+  - **Decoding has to keep runs.** `clock_probe.decode_event_time` expands one hit per cycle, which took 5.1 GB for one
+    frame. `tools/trace_runs.py` keeps its frame parser as runs and equals it on a full frame: all 8 slots, 22.8 M
+    hits in the largest.
+- **Checks before the sitting** (checks log):
+  - The traced containers are exact: 20 dispatches each, with heads equal to the untraced control.
+  - Untraced builds from the final code are byte-identical to the timed ones.
+  - All 66 layer markers arrive in every run; only the flush tail loses some. The tool checks the gap structure per
+    run.
+  - Per-layer windows track the per-layer times from 13 Oct (`engine_layer_timing`) at r = 0.997.
+  - **Not verified:** the trace timer's clock. The fit gives 1.695 GHz, but those times include each separate
+    dispatch's ramp, so every ms below is DERIVED at 1.80 GHz.
+
+**The sitting.**
+- **Setup:** pre-registered (sha256 `6447cdca...`, verbatim in the checks log, amended once before any box trace);
+  6 rounds of `ctl`, `box` and `boxplain`, order rotated; `timing_eligible: true`, no foreign contention.
+- **Cold traced dispatch, mean of 6 per arm:**
+
+  | arm | dispatch | marker span (DERIVED) |
+  |---|---:|---:|
+  | `ctl` | 17.13–17.52 ms | 15.50 ms |
+  | `box` | 17.70–18.15 ms | 16.16 ms (+0.66) |
+  | `boxplain` | 16.99–17.41 ms | 15.41 ms (−0.09) |
+
+  The +0.66 ms agrees with the warm sitting's +0.685 ms.
+
+| box − ctl, cycles | boxed layers (28) | other layers (38) |
+|---|---:|---:|
+| layer windows | +600,577 | +589,111 |
+| **lead** (marker to the layer's first DMA event) | **+599,646** | **+687,126** |
+| weight backpressure | −129,271 | +287,654 |
+| activation backpressure | +960,615 | +395,054 |
+| output starvation | −93,432 | +138,916 |
+
+**Verdict by the pre-registered rule: the attribution is not read.**
+- **Rule L** required at least 60% of the frame's added cycles on the boxed layers. They hold 50%, so neither H-W
+  (weights late) nor H-A (activations late) is tested.
+- **The null holds:** `boxplain` reads −122,184 cycles on the box set, within the registered ±300,000.
+
+**What the trace does show (the lead was a registered confound, reported but not verdict-bearing).**
+- **All of the loss is configure.** Box fills rewrite the MemTile's 18 descriptors at every layer whose cut differs
+  from the previous layer's. That is 27 layers, including the plain layers that follow a boxed one, which is why
+  half the loss sits on "other" layers.
+- **Per layer:**
+  - each of the 27 configuring layers' lead grows by 43,266–54,100 cycles;
+  - the 39 others' grows by −57 on average (−3,444 to +3,436);
+  - `boxplain`'s single configure shows as +46,544 at layer 0.
+- **The cost (DERIVED):** one configure, 264 MemTile writes across the 4 columns (8,224 B), costs about 47,800 cycles,
+  26.5 µs. The 26 mid-frame ones total **0.690 ms**, the whole measured loss.
+- **Net of configures, box fills save almost nothing in real dispatch:** −27,053 cycles on the configuring layers and
+  −70,030 on the rest, about −0.05 ms.
+  - So the all-NOP saving was task issue that the real frame already hides under compute.
+  - **This corrects the box-fills section's reading.** Real minus NOP grew because the NOP frame has no compute to hide
+    the saved issue behind, not because transport disturbed the overlap.
+- **Activation backpressure rises on the boxed layers (+0.96 M cycles)** while their windows, net of lead, do not move.
+  The merged tasks wait on the MemTile's two buffers without costing time.
+- **Not established:** why one configure costs 26.5 µs, about 100 ns per write against the ~75 µs amortised dispatch
+  floor. Also unmeasured: whether the same holds warm, since every traced number is cold.
+- **What it means for the lever:** free configures would recover only about 0.05 ms on YOLOv8s. Box fills are not
+  worth rescuing on this model. The stream-sharing loss (+1.30 ms of compute exposure) was not traced here and stays
+  unexplained.
+
+Logs:
+- [sitting](../results/aie/shim_trace_box_yolov8s_desktop2_20261015T1854Z.log), with per-arm JSONs
+  ([ctl](../results/aie/shim_trace_box_yolov8s_desktop2_20261015T1854Z_ctl.json),
+  [box](../results/aie/shim_trace_box_yolov8s_desktop2_20261015T1854Z_box.json),
+  [boxplain](../results/aie/shim_trace_box_yolov8s_desktop2_20261015T1854Z_boxplain.json)) and comparisons
+  ([box](../results/aie/shim_trace_box_yolov8s_desktop2_20261015T1854Z_compare_box.json),
+  [boxplain](../results/aie/shim_trace_box_yolov8s_desktop2_20261015T1854Z_compare_boxplain.json));
+- [checks](../results/aie/shim_trace_checks_yolov8s_desktop2_20261015T1854Z.log): the pre-registration, the routing
+  failure, the decoder self-test, the marker structure, the second-dispatch failure, exactness, rebuild identity,
+  calibration, noise, and the lead-against-configure analysis.

@@ -1,0 +1,168 @@
+shim-trace checks, YOLOv8s, Desktop 2 (DESKTOP-CBL5NUA), written 2026-10-15T19:01Z; sitting 20261015T1854Z
+
+== 1. Pre-registration, verbatim (amended once before any box/boxplain trace), and the analysis code hashes ==
+6447cdca971a0c8d49289dacf94d28c87546d466f0b39802ddb003355bc78e75 *scratch/b43/prereg_trace_sit.txt
+c3a24c4ab768c6df527e9d42a2839ce7b710fe4e10c9e87b0cd353192c606213 *tools/shim_trace_compare.py
+9c4a87f4ca800e5c82467475e3670461804b87612ed1a2728e40be60d8977a8a *tools/engine_shim_trace.py
+882a4c425588a513843dfca69e4f335da8a6ba3b5b8e49ebae2972219edd5307 *tools/trace_runs.py
+337d177e7a084057790c0e481e7ba1e43d976047bd4ae678a2aad80120666fd0 *scratch/b43/sit.py
+--- begin ---
+PRE-REGISTRATION: shim-trace attribution of the box-fills loss, YOLOv8s, Desktop 2 (DESKTOP-CBL5NUA), 2026-10-15
+Written before any traced dispatch of a box or boxplain container. Traced CONTROL dispatches have run (smoke, for the
+tool and the noise figure below): disclosed.
+
+Question. Box fills lost +0.685 ms real while saving 0.251 ms NOP (results/aie/box_fills_ab_..._1423Z): compute
+exposure grew 0.935 ms. Which input arrives late on the layers box fills changes?
+
+Instrument. The cores cannot be traced in this design (every core tile's four southbound ports carry the output
+join; aiecc "Unable to find a legal routing" for any single core and any egress column). The shim of logical column 0
+is traced instead (8 events, design.TRACE_SHIM_EVENTS): weight-stream backpressure (MM2S 1 blocked: weights AHEAD of
+the cores), activation-stream backpressure (MM2S 0 blocked by the MemTile), output starvation (S2MM 0 waiting on the
+cores), DDR starvation of each stream, two task-finish pulses, and a layer marker the emitter fires before every
+layer (USER_EVENT_1, the trace's start event).
+- Containers: build/yolov8s_tr_{ctl,box,boxplain}.ignite = the timed ctl/box/boxplain containers plus --trace-shims 0
+  (trace setup, 66 markers, 64 flush writes; +143 ops). All three: 20 dispatches exact and equal to the untraced
+  control's heads.
+- One traced dispatch per process (the trace's S2MM task outlives a dispatch; a second dispatch in one context
+  mis-lands). So every number is a context's FIRST, cold dispatch; traced arms are compared only with each other.
+- Decoder: tools/trace_runs.py, equal to clock_probe.decode_event_time on a full frame (all 8 slots, SELFTEST PASS).
+- Layer split checked per run: every layer gap >= 2,000 cycles and the next marker starts the flush group.
+- Not measured: the trace's own cost on dispatch time.
+
+Method. scratch/b43/sit.py --rounds 6: per round ctl, box, boxplain rotated, each tools/engine_shim_trace.py --runs 1;
+then tools/shim_trace_compare.py (box set = the 28 layers apply_box_fills converts, offline from the ONNX) for box
+and boxplain against ctl. Under research-lowlevel.sh --npu; timing_eligible must be true, else void.
+
+Noise (control smoke, 2 runs, disclosed): box-set layer cycles differ by 88,782 between runs; weight backpressure
+by 173,365.
+
+Predictions and rule (on the box set, box - ctl, mean of 6 runs per arm; dC = sum of layer-window deltas,
+dW = sum of weight-backpressure deltas):
+- L (location): the loss is on the boxed layers: dC_box >= 300,000 cycles (0.17 ms) and >= 60% of the frame's dC.
+  Otherwise "no loss located on the box set" and the attribution below is not read.
+- H-W, weights late (favoured for stream sharing, and plausible here if a merged box task holds the activation queue
+  full and stalls the issue of weight tasks behind it): dW <= -0.5 dC.
+- H-A, activations late (cores wait on the box path's serves while weight buffers stay full): dW >= +0.5 dC.
+- Neither: anything between; written up as unexplained.
+- boxplain - ctl is the null: |dC_box| < 300,000 predicted.
+Reported alongside, not verdict-bearing: activation backpressure, output starvation, DDR starvation, per layer.
+
+Confounds named before the data (amendment, same day, before any box or boxplain trace):
+- dW >= +0.5 dC (cores waiting while weight buffers stay full) is H-A, OR an output drain issued late (cores cannot
+  release output buffers). Reading: activations late keeps output starvation (O_starve) up with the added cycles,
+  since the cores produce nothing; drain late lowers it. dO_starve >= +0.5 dC reads as H-A, dO_starve <= 0 as drain.
+- dW <= -0.5 dC is weights late by any cause: issue stalled behind a full activation queue, OR DDR reads slow.
+  Reading: dW_mem (weight DDR starvation) >= +0.5 |dW| reads as DDR; otherwise issue.
+- Boxed-layer windows also hold the per-layer MemTile configure (up to 264 ops before the first task), which adds to
+  dC with no backpressure change and pulls dW/dC toward 0. Reported, not verdict-bearing: per layer "lead" = marker to
+  the first traced DMA event (control smoke: 1,300-5,400 cycles); d(lead) summed over the box set is the configure
+  component, and dC - d(lead) is stated beside the rule.
+- Clock: windows are in trace cycles. The trace timer's rate is assumed (1.80 GHz) and every ms is DERIVED. Control
+  calibration (smoke): per-layer windows track 2026-10-13 engine_layer_timing per-layer times at r = 0.997, fitting
+  1.695 GHz with those times including per-dispatch ramps; a consistency check, not a clock measurement.
+- Output: scratch/b43/sit/ prefix; the three merged per-arm JSONs and two compare JSONs are copied to results/aie/.
+
+A hang, a refused trace (markers, overflow) or contention voids the sitting; no rerun of the same design without a
+new pre-registration.
+--- end ---
+
+== 2. Core tiles cannot be traced: aiecc on a --trace-cores build (one core, egress columns 0, 1, 3) ==
+[ERROR] Compilation failed: [aiecc] Compilation failed with exit code 1:
+(4/37) [0/1] input_physical.mlirC:\Users\<user>\PycharmProjects\ignite-xdna\build\conv_engine\yolov8s_tr_ctl\design.prj\aie.mlir:2:3: error: Unable to find a legal routing
+(the same error for cores (1,0)->egress 1, (0,0)->egress 1, (3,3)->egress 3; every core tile's 4 southbound
+ switch ports carry the column's output join to the MemTile)
+
+== 3. The lowered shim trace in the traced control's stream: non-BD shim register writes ==
+25874 ops
+col 0 reg 0x340d4 val 8193: x1, op 0..0
+col 0 reg 0x340d0 val 2122252288: x1, op 1..1
+col 0 reg 0x340e0 val 623124768: x1, op 2..2
+col 0 reg 0x340e4 val 2132351006: x1, op 3..3
+col 0 reg 0x34000 val 32512: x1, op 8..8
+col 0 reg 0x3404c val 127: x1, op 9..9
+col 0 reg 0x34008 val 127: x131, op 10..25871
+col 0 reg 0x34048 val 126: x1, op 25872..25872
+col 0 reg 0x34008 val 126: x1, op 25873..25873
+(0x340d0 Trace_Control0 = 0x7E7F0000: start event 127 USER_EVENT_1, stop 126 USER_EVENT_0, for a shim tile;
+ 0x34008 Event_Generate 127 x131 = start + 66 layer markers + 64 flush; 0x34048 maps USER_EVENT_0 to broadcast 14
+ only at the end, then 126 stops the trace.)
+shim BD ids written by the untraced control (the trace uses BD 15 on column 0, S2MM 1):
+col 0: bd0x66, bd1x80, bd2x456, bd3x313, bd4x300, bd5x194, bd6x101, bd7x78, bd8x64, bd9x36, bd10x7, bd11x17
+col 1: bd0x66, bd1x80, bd2x456, bd3x313, bd4x300, bd5x194, bd6x101, bd7x78, bd8x64, bd9x36, bd10x7, bd11x17
+col 2: bd0x63, bd1x77, bd2x449, bd3x307, bd4x297, bd5x191, bd6x101, bd7x78, bd8x64, bd9x36, bd10x7, bd11x17
+col 3: bd0x62, bd1x76, bd2x448, bd3x307, bd4x297, bd5x191, bd6x101, bd7x78, bd8x64, bd9x36, bd10x7, bd11x17
+
+== 4. Run-length decoder against clock_probe.decode_event_time, on a full control frame ==
+slot 0: 3671856 hits; expanded runs equal: True; window count equal: True
+slot 1: 15413284 hits; expanded runs equal: True; window count equal: True
+slot 2: 3442855 hits; expanded runs equal: True; window count equal: True
+slot 3: 2565498 hits; expanded runs equal: True; window count equal: True
+slot 4: 22796135 hits; expanded runs equal: True; window count equal: True
+slot 5: 1387 hits; expanded runs equal: True; window count equal: True
+slot 6: 99 hits; expanded runs equal: True; window count equal: True
+slot 7: 130 hits; expanded runs equal: True; window count equal: True
+SELFTEST PASS
+
+== 5. Marker structure in four single-dispatch control traces (66 wide gaps; only the flush tail loses markers) ==
+-- run0_shim_r0c1.bin
+130 markers; first [123, 806180, 2116117]; last [27903140, 27903249, 27903362]
+gaps < 2,000 cycles: 63; gaps >= 2,000: 66
+non-tight gaps: [806057, 1309937, 319367, 319913, 390178, 626265, 1280617, 289596, 319423, 341899, 290572, 338702, 636289, 1229929, 270718, 314118, 329346, 289172, 310897, 581412, 1197519, 261411, 298691, 295312, 446817, 205442, 103297, 96848, 79770, 632265, 899199, 292474, 297508, 472161, 854484, 309251, 325303, 493542, 653373, 544705, 1078888, 321898, 1055518, 436993, 100710, 220240, 300759, 294780, 431747, 626450, 299322, 546950, 112508, 285095, 388472, 64703, 88406, 300943, 296580, 434753, 288761, 299482, 64954, 112836, 36080, 54660]
+-- shim_r0c1_1792090038293.bin
+129 markers; first [123, 826263, 2149815]; last [27935578, 27935690, 27935799]
+gaps < 2,000 cycles: 62; gaps >= 2,000: 66
+non-tight gaps: [826140, 1323552, 320831, 318281, 391382, 628931, 1263334, 291664, 326475, 348802, 290584, 332147, 618154, 1245497, 302604, 306761, 331854, 287911, 308750, 572033, 1206774, 292354, 311460, 297101, 442669, 175837, 102743, 95235, 79500, 588785, 773155, 293145, 294557, 472783, 848227, 335625, 335462, 486591, 659285, 583532, 1090828, 328274, 1076574, 443529, 108508, 229776, 296486, 298127, 434833, 624786, 284270, 548457, 108873, 291019, 415888, 65327, 80807, 303632, 291216, 441791, 291808, 302546, 64868, 108255, 36885, 50947]
+-- shim_r0c1_1792090041331.bin
+123 markers; first [123, 826577, 2123197]; last [27869797, 27869910, 27870018]
+gaps < 2,000 cycles: 56; gaps >= 2,000: 66
+non-tight gaps: [826454, 1296620, 329668, 317269, 399330, 624685, 1266140, 284807, 312907, 341832, 290737, 333439, 645201, 1239843, 272106, 306596, 323968, 287115, 310594, 564810, 1221204, 293241, 309047, 295551, 440525, 174835, 97841, 93379, 79528, 589322, 776100, 291975, 286942, 474514, 885604, 359610, 331629, 492414, 663900, 540522, 1068412, 317818, 1065370, 443418, 107773, 229568, 303315, 308124, 432193, 627584, 288478, 551222, 112342, 290996, 406092, 67588, 80728, 308724, 294023, 437666, 285591, 297159, 64412, 111369, 36017, 55914]
+-- shim_r0c1_1792090044358.bin
+123 markers; first [124, 813999, 2135929]; last [27857106, 27857218, 27857327]
+gaps < 2,000 cycles: 56; gaps >= 2,000: 66
+non-tight gaps: [813875, 1321930, 321196, 320277, 387275, 639272, 1291451, 286860, 318705, 333376, 325333, 361408, 615515, 1222934, 272047, 310365, 321217, 286465, 297002, 570345, 1207222, 289995, 303062, 288030, 440449, 170619, 100748, 92325, 79511, 572533, 766776, 294716, 298530, 468413, 888629, 325221, 330339, 489398, 654240, 579268, 1065276, 319194, 1062199, 438097, 109204, 230591, 299817, 299881, 439056, 627898, 297771, 541850, 106637, 296408, 396757, 67463, 82807, 302464, 297137, 459118, 289431, 296561, 64766, 110237, 36060, 57456]
+
+== 6. A second traced dispatch in one context mis-lands (smoke, control) ==
+[trace] run 0: dispatch 17.520 ms; buffer 441,792 of 4,194,304 B; shims [1]; marker span 27,912,007 cycles = 15.507 ms at 1.8 GHz; 130 markers
+[trace] 121 markers, expected at least 130 (layers + flush): the trace is truncated or the build is not a --trace-shims build
+[trace] run 0: dispatch 17.432 ms; buffer 435,392 of 4,194,304 B; shims [1]; marker span 27,896,267 cycles = 15.498 ms at 1.8 GHz; 130 markers
+KeyError: ''
+(first smoke: run 1 dispatched in 45.084 ms; the trace S2MM task, one BD as long as the 4 MiB buffer, is still
+ open when a dispatch completes, so the next dispatch's trace queues behind it)
+
+== 7. Traced containers are exact: 20 dispatches each, heads equal to the untraced control ==
+yolov8s_ab_ctl.ignite: 20 dispatches, 0 differ from the first; first equals yolov8s_ab_ctl.ignite's: True; head bytes 3637554
+yolov8s_tr_ctl.ignite: 20 dispatches, 0 differ from the first; first equals yolov8s_ab_ctl.ignite's: True; head bytes 3637554
+yolov8s_tr_boxplain.ignite: 20 dispatches, 0 differ from the first; first equals yolov8s_ab_ctl.ignite's: True; head bytes 3637554
+yolov8s_tr_box.ignite: 20 dispatches, 0 differ from the first; first equals yolov8s_ab_ctl.ignite's: True; head bytes 3637554
+REPEAT EXACT PASS
+RESEARCH_PROCESS_RESULT {"exit_code": 0, "stop": null, "peak_tree_rss_bytes": 681365504, "rss_measurement": "maximum observed across sampled descendant working sets; zero observations reported as null
+
+== 8. Untraced builds from the final code are byte-identical to the timed ones ==
+  ctl insts.bin identical
+  ctl design.mlir identical
+  box insts.bin identical
+  box design.mlir identical
+
+== 9. Calibration (control only): trace windows against 2026-10-13 engine_layer_timing per-layer net times ==
+layer-timing json: yolov8s_rule.ignite arms ['real', 'nop']
+arm keys: ['summary', 'layers']
+row keys: ['arm', 'index', 'name', 'ms', 'net_ms', 'spread_ms', 'rounds_in_layer', 'packets', 'w_fills']
+at 1.6 GHz: trace sum 17.415 ms vs net sum 16.611 ms; ratio median 1.041, IQR 0.988-1.077
+at 1.8 GHz: trace sum 15.480 ms vs net sum 16.611 ms; ratio median 0.925, IQR 0.879-0.958
+fitted clock (cycles per ns, LSQ through 0): 1.695 GHz; r = 0.9968
+
+== 10. Noise (control only, 2 runs): box-set differences between runs ==
+Traceback (most recent call last):
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\scratch\b43\ctl_noise.py", line 18, in <module>
+    per.append({k: np.array([x[ev] for x in L], dtype=float) for k, ev in stc.KEYS.items()})
+                             ~^^^^
+KeyError: 'lead'
+
+== 11. After the sitting: lead delta against the layers that reconfigure the MemTile (exploratory) ==
+box build: 27 configuring layers (incl. layer 0), 39 not
+  d(lead) on configuring layers: sum 1,289,011, mean 47,741, min 43,266, max 54,100
+  d(lead) on the others: sum -2,240, mean -57, min -3,444, max 3,436
+  d(cycles) on configuring layers 1,261,958; others -72,270
+  d(cycles) - d(lead): configuring -27,053; others -70,030
+boxplain build: layer 0 d(lead) 46,544; layers 1.. sum 5,891
+per mid-frame configure (box, layers 1..): 47,783 cycles = 26.5 us at 1.80 GHz (DERIVED); x26 = 0.690 ms

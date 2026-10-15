@@ -28,7 +28,7 @@ import time
 import importlib
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -481,6 +481,65 @@ def check_box_addresses(mlir_path: Path, expected: int, columns: int) -> None:
                            f"points: {', '.join(wrong)} (set design.BOX_ADDRESS to the allocator's choice)")
 
 
+def shim_layer_marker() -> int:
+    from aie.utils.trace.events import ShimTileEvent
+    return int(ShimTileEvent.USER_EVENT_1)
+
+
+def inject_shim_trace(module, cols: Sequence[int], buffer_bytes: int, events: Sequence[str]):
+    """Return ``module`` with the trace units of the shim tiles of ``cols`` on, writing to a host buffer.
+
+    IRON's ``Program.enable_trace`` traces worker (core) tiles only, and the engine's cores cannot be traced (no
+    southbound switch port is free; design.py, the shim-trace note), so the ops are written here as
+    ``kernels/aie2/sppf/sppf_stage.py`` writes them: one ``aie.trace`` per shim, a ``host_config`` that appends the
+    buffer as the sequence's third argument, and a ``start_config`` per trace. ``-aie-insert-trace-flows`` routes and
+    starts them.
+    """
+    from aie.ir import Module
+    text = str(module)
+    tiles = {}
+    for name, col in re.findall(r"(%[\w]+) = aie\.logical_tile<ShimNOCTile>\((\d+), 0\)", text):
+        tiles.setdefault(int(col), name)
+    missing = [c for c in cols if c not in tiles]
+    if missing:
+        raise RuntimeError(f"no shim tile op for trace columns {missing}")
+    seq = re.search(r"^(\s*)aie\.runtime_sequence\([^\n]*\{\n", text, re.M)
+    if seq is None or text.count("aie.runtime_sequence(") != 1:
+        raise RuntimeError("expected exactly one runtime_sequence to attach the trace to")
+    ind = seq.group(1)
+    defs = []
+    for c in cols:
+        defs.append(f"{ind}aie.trace @shim_trace{c}({tiles[c]}) {{")
+        defs.append(f"{ind}  aie.trace.packet type=shimtile")
+        defs += [f'{ind}  aie.trace.event<"{e}">' for e in events]
+        defs += [f"{ind}  aie.trace.start broadcast=15", f"{ind}  aie.trace.stop broadcast=14", f"{ind}}}"]
+    starts = [f"{ind}  aie.trace.host_config {{buffer_size = {int(buffer_bytes)} : i32}}"]
+    starts += [f"{ind}  aie.trace.start_config @shim_trace{c}" for c in cols]
+    text = text[:seq.start()] + "\n".join(defs) + "\n" + seq.group(0) + "\n".join(starts) + "\n" + text[seq.end():]
+    with module.context:
+        return Module.parse(text)
+
+
+def check_trace_route(mlir_path: Path) -> Dict[str, Any]:
+    """Read where the trace flows were routed and refuse a route the engine's own traffic uses.
+
+    The engine's shim traffic per column is weights and activations on MM2S and the output join on S2MM 0, so trace
+    egress must arrive on another S2MM channel. Returns the packet ids and the egress shim channel for the manifest.
+    """
+    text = Path(mlir_path).read_text(encoding="utf-8")
+    flows = re.findall(r"aie\.packet_flow\((\d+)\)\s*\{\s*aie\.packet_source<%(\w+), Trace : (\d+)>[^\n]*\n\s*"
+                       r"aie\.packet_dest<%(\w+), DMA : (\d+)>", text)
+    if not flows:
+        raise RuntimeError(f"trace requested but no trace packet flow in {mlir_path}")
+    dests = {(d, int(ch)) for _, _, _, d, ch in flows}
+    if len(dests) != 1:
+        raise RuntimeError(f"trace flows land on several shim channels: {sorted(dests)}")
+    dest, channel = dests.pop()
+    if not dest.startswith("shim") or channel == 0:
+        raise RuntimeError(f"trace egress {dest} DMA {channel} collides with the engine's output join (S2MM 0)")
+    return {"packet_ids": sorted(int(pid) for pid, *_ in flows), "egress": f"{dest} S2MM {channel}"}
+
+
 def compile_graph_container(onnx_path, output_path, build_dir: Optional[Path] = None, layers: Optional[int] = None,
                             verbose: bool = True, host_regions: Sequence[str] = (),
                             activation_ring: int = 0, weight_buffer: bool = False,
@@ -495,6 +554,8 @@ def compile_graph_container(onnx_path, output_path, build_dir: Optional[Path] = 
                             stream_share: bool = False,
                             box_fills: bool = False,
                             box_cap: Optional[int] = None,
+                            trace_shims: Optional[Sequence[int]] = None,
+                            trace_size: int = 4 << 20,
                             **kwargs) -> Dict[str, Any]:
     """Lower, schedule, build the device binaries and write the container. Returns the manifest.
 
@@ -534,6 +595,11 @@ def compile_graph_container(onnx_path, output_path, build_dir: Optional[Path] = 
     takes no host regions. ``box_cap`` is the most fills one shim task may carry (None = ``box_fills.DEFAULT_CAP``);
     0 builds the path but converts no layer, so every layer is cut as plain quads - the control that prices the
     path itself apart from the merges.
+
+    ``trace_shims`` = [column] turns on those columns' shim trace units (``design.TRACE_SHIM_EVENTS``) into a
+    ``trace_size``-byte buffer that becomes the instruction stream's third argument, and has the emitter fire the
+    shim's USER_EVENT_1 at every layer boundary and flush the trace after the last. ``tools/engine_shim_trace.py``
+    reads it. A measurement build, recorded in the manifest as ``graph_engine.trace``.
     """
     if core_depths is not None:
         core_depths = tuple(int(d) for d in core_depths)
@@ -541,6 +607,11 @@ def compile_graph_container(onnx_path, output_path, build_dir: Optional[Path] = 
             raise ValueError(f"core_depths must be three of 1 or 2 (weight, activation, output), got {core_depths}")
         if core_depths == (2, 2, 2):
             core_depths = None
+    trace_shims = [int(c) for c in (trace_shims or ())]
+    if trace_shims and (host_regions or dense_recipe or stream_share):
+        # One trace window per stream: a host-segment model would split it. Stream sharing numbers its packets
+        # from 1, where the trace flows' ids start too.
+        raise ValueError("trace takes no host regions, dense recipe or stream sharing")
     if stream_share and (host_regions or dense_recipe or activation_ring or weight_buffer or core_depths is not None):
         raise ValueError("stream_share takes no host regions, dense recipe, ring, weight buffer or core depths")
     if box_fills and (host_regions or dense_recipe or activation_ring or weight_buffer or stream_share
@@ -626,10 +697,13 @@ def compile_graph_container(onnx_path, output_path, build_dir: Optional[Path] = 
                                   a_ring=activation_ring,
                                   packet_ids=({c: eng.share_packet_ids(c) for c in range(eng.COLS)}
                                               if stream_share else None),
-                                  a_box=box_fills)
+                                  a_box=box_fills,
+                                  trace_marker=((trace_shims, eng.SHIM_EVENT_GENERATE, shim_layer_marker())
+                                                if trace_shims else None))
         for s in scheds:
             emitter.run_column_programs(s.programs, bd_budget=14, retire_batch=frame_rb,
                                         box=getattr(s, "box", None))
+        emitter.trace_flush()
         cadence.append({"retire_batch": emitter.last_retire_batch,
                         "thinnest_channel_tasks": emitter.thinnest_channel_tasks})
 
@@ -669,6 +743,7 @@ def compile_graph_container(onnx_path, output_path, build_dir: Optional[Path] = 
         build_kwargs["stream_share"] = True
     if box_fills:
         build_kwargs["a_box"] = True
+
     if core_depths is not None:
         if not profile.transport_options:
             raise ValueError(f"core_depths is an int8-engine experiment; the {profile.name} design does not take it")
@@ -676,6 +751,8 @@ def compile_graph_container(onnx_path, output_path, build_dir: Optional[Path] = 
     program = eng.build_program(iron.get_current_device(), body, ws_bytes=ws_extent, wp_bytes=wp_extent,
                                 **build_kwargs)
     module = program.resolve_program()
+    if trace_shims:
+        module = inject_shim_trace(module, trace_shims, trace_size, eng.TRACE_SHIM_EVENTS)
     work = build_dir / "design.prj"
     if work.exists():
         shutil.rmtree(work)
@@ -689,6 +766,9 @@ def compile_graph_container(onnx_path, output_path, build_dir: Optional[Path] = 
         check_weight_buffer_addresses(work / "input_with_addresses.mlir", eng.WBUF_ADDRESS, eng.COLS)
     if box_fills:
         check_box_addresses(work / "input_with_addresses.mlir", eng.BOX_ADDRESS, eng.COLS)
+    trace_route = None
+    if trace_shims:
+        trace_route = check_trace_route(work / "input_with_addresses.mlir")
     xclbin = xclbin_path.read_bytes()
     insts = insts_path.read_bytes()
     kernel_sha = hashlib.sha256(eng.KERNEL_SOURCE.read_bytes()).hexdigest()
@@ -722,6 +802,11 @@ def compile_graph_container(onnx_path, output_path, build_dir: Optional[Path] = 
         manifest["graph_engine"]["stream_share"] = {
             "period": share.PERIOD, "stream1_positions": [share.STREAM1_POSITION], "b_slots": share.B_DEPTH,
             "layers_per_round_weights": sum(m == "per-round" for m in share_modes), **share_counts}
+    if trace_shims:   # absent means no trace unit is configured
+        manifest["graph_engine"]["trace"] = {
+            "shims": list(trace_shims), "buffer_bytes": int(trace_size), "events": list(eng.TRACE_SHIM_EVENTS),
+            "layer_marker": "USER_EVENT_1, fired before every layer and TRACE_FLUSH_ROUNDS times after the last",
+            **trace_route}
     if box_fills:   # absent means the split ObjectFifo
         manifest["graph_engine"]["box_fills"] = {
             "layers": box_layers, "cap": box_cap}

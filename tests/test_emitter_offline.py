@@ -267,6 +267,30 @@ class EmitterOffline(unittest.TestCase):
                 with self.subTest(model=name, retire_batch=rb):
                     self._run(name, retire_batch=rb, box=True)
 
+    def test_08_trace_markers(self):
+        # --trace-shims: one Event_Generate write per traced shim before every layer, TRACE_FLUSH_ROUNDS more per shim
+        # from trace_flush, and nothing else. Without a marker the emitter writes none (the untraced stream is
+        # byte-identical to the shipped one, checked by rebuild on 2026-10-15).
+        from ignite_xdna.compiler.engine_sequence import TRACE_FLUSH_ROUNDS
+        scheds = self._scheds("yolov8n")
+        for marker in (None, ([0, 2], 0x34008, 127)):
+            em = RecordingEmitter(self, 14, 4)
+            writes = []
+            em._write32 = lambda reg, val, column, row: writes.append((reg, val, column, row))
+            if marker:
+                em._trace_marker = marker
+            for s in scheds:
+                em.start_layer(s.programs)
+                em.run_column_programs(s.programs, bd_budget=14, queue_depth=4)
+            em.trace_flush()
+            if not marker:
+                self.assertEqual(writes, [])
+                continue
+            self.assertEqual(len(writes), 2 * (len(scheds) + TRACE_FLUSH_ROUNDS))
+            self.assertEqual({w[0] for w in writes}, {0x34008})
+            self.assertEqual({w[1] for w in writes}, {127})
+            self.assertEqual({(w[2], w[3]) for w in writes}, {(0, 0), (2, 0)})
+
     def test_05_a_hold_binds(self):
         # On the shipped YOLOv8n/s schedules no hold ever stops a retirement (counted 2026-10-13: zero refusals),
         # so they cannot show that held tasks wait for their fills. Here one weight task serves five activation

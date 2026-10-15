@@ -345,6 +345,7 @@ MEMTILE_DMA_MEMORY_BASE = 0x80000
 # And word 7 names a MemTile lock at its id plus 64: lock 32 is written 0x60 and lock 8 is written 0x48. Only
 # the descriptor field is offset - the lock value registers (``memtile_lock_reg``) index by the raw id.
 MEMTILE_BD_LOCK_ID_OFFSET = 64
+TRACE_FLUSH_ROUNDS = 64
 # Word 4 of a MemTile descriptor: D2 wrap in bits 17-26, D2 stride (words - 1) in 0-16. Read from the box build's
 # configuration CDO (a 1-plane cut at a 25,600 B plane pitch is 0x000218ff).
 BOX_BD_D2_WORD = 0x10
@@ -408,7 +409,11 @@ class SequenceEmitter:
     """Emit raw shim DMA tasks inside an IRON runtime sequence body."""
 
     def __init__(self, ws, wp, ws_bytes: int, wp_bytes: int, fifo_names: Dict[int, Dict[str, str]],
-                 a_ring: int = 0, packet_ids: Optional[Dict[int, Tuple[int, int]]] = None, a_box: bool = False):
+                 a_ring: int = 0, packet_ids: Optional[Dict[int, Tuple[int, int]]] = None, a_box: bool = False,
+                 trace_marker: Optional[Tuple[Sequence[int], int, int]] = None):
+        # Shim trace (engine_compile.inject_shim_trace): (columns, Event_Generate register, USER_EVENT_1), fired on
+        # those shims before every layer so a whole-frame trace splits by layer, and by ``trace_flush`` at the end.
+        self._trace_marker = trace_marker
         # Box fills (compiler/box_fills.py): every layer's MemTile cut is written at its boundary by
         # ``_configure_box``; the geometry each column carries is tracked for the life of this stream (one frame).
         self._a_box = a_box
@@ -663,6 +668,20 @@ class SequenceEmitter:
                       | acq_bd_id,
                       column=col, row=MEMTILE_ROW)
 
+    def _mark_layer(self, rounds: int = 1) -> None:
+        marker = getattr(self, "_trace_marker", None)
+        if not marker:
+            return
+        cols, reg, event = marker
+        for _ in range(rounds):
+            for c in cols:
+                self._write32(reg, event, column=c, row=0)
+
+    def trace_flush(self) -> None:
+        """After the last layer: fire the marker TRACE_FLUSH_ROUNDS more times, so the trace unit fills and sends
+        its last partial packet (sppf_stage.py's flush). A no-op without a trace."""
+        self._mark_layer(TRACE_FLUSH_ROUNDS)
+
     def _box_descriptor(self, col: int, bd_id: int, offset: int, length: int, dims, next_bd: int,
                         acq_id: int, acq_val: int, rel_id: int, rel_val: int) -> None:
         """Write one whole box-path descriptor: a link in a cycle, so Use_Next_BD stays set.
@@ -902,6 +921,7 @@ class SequenceEmitter:
         # of) its objects, and a drain issued ahead of its fills only completes
         # once those fills were consumed, so neither may be awaited before the
         # activation items it serves are issued: ``hold`` counts them.
+        self._mark_layer()
         if getattr(self, "_a_box", False):
             # ``box`` is the layer's BoxGeometry, or None for a layer cut as plain quads.
             from ignite_xdna.compiler.box_fills import PLAIN

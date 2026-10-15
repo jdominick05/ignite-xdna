@@ -737,6 +737,21 @@ def _stream_shared(col, names):
     return handles, (flows, locks, tile_dmas)
 
 
+# Shim trace (tools/engine_shim_trace.py). The cores cannot be traced in this design: every core tile's four
+# southbound switch ports carry the column's output join, so a core's trace packets have no route out (aiecc:
+# "Unable to find a legal routing" for any single core, any egress column, 2026-10-15). The shim's trace unit
+# routes inside its own switch. Shim MM2S 0 carries a column's activations (to the MemTile) and MM2S 1 its weights
+# (to the cores), S2MM 0 the output join: read from the lowered flows, 2026-10-15. USER_EVENT_1 is the layer
+# marker the emitter fires through the shim's Event_Generate register. It is also the trace's start event, which
+# re-fires harmlessly once running; USER_EVENT_0 is the stop event (-aie-insert-trace-flows, for a shim), so it
+# cannot mark anything.
+TRACE_SHIM_EVENTS = ("DMA_MM2S_0_STREAM_BACKPRESSURE", "DMA_MM2S_1_STREAM_BACKPRESSURE",
+                     "DMA_MM2S_0_MEMORY_STARVATION", "DMA_MM2S_1_MEMORY_STARVATION",
+                     "DMA_S2MM_0_STREAM_STARVATION", "DMA_MM2S_0_FINISHED_TASK", "DMA_MM2S_1_FINISHED_TASK",
+                     "USER_EVENT_1")
+SHIM_EVENT_GENERATE = 0x34008   # tile-local; a write of an event number fires that event once
+
+
 def build_program(device, sequence_body, w_depth=2, ws_bytes=WS_BYTES, wp_bytes=WP_BYTES, a_ring: int = 0,
                   w_buf: bool = False, ops=None, a_depth: int = 2, o_depth: int = 2, stream_share: bool = False,
                   a_box: bool = False):
