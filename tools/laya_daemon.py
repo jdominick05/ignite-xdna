@@ -31,7 +31,8 @@ How it is meant to be used, following upstream (convaiinnovations/laya model car
 checkpoint is "a fast base to specialise, not a zero-shot decision engine" (0.362 zero-shot on their typed-decisions
 benchmark, below the 0.461 majority baseline; 0.766 after fine-tuning). So:
 
-- ``--min-confidence`` gates on confidence (upstream: confidence, not act probability, separates right from wrong).
+- ``--min-confidence`` gates on ``answer_confidence``, the top option's probability, as upstream laya 0.4.7 does.
+  ``confidence`` (1 - normalised entropy, the reference's older figure) is reported too, on a different scale.
   Below the floor the answer abstains: ``chosen`` is null, ``top_option`` and the probabilities stay as evidence.
   The floor is a policy to measure on your own decisions; upstream's 0.85 is a starting point, not a fit.
 - ``noul`` is asked as a two-option ``choice`` with neutral keys (upstream issue #156: noul can follow its
@@ -149,6 +150,7 @@ class Laya:
         out = {"type": qtype, "options": [{"option": lab, "p": round(float(x), 4), "p_t1": round(float(y), 4)}
                                           for lab, x, y in zip(labels, p, p1)],
                "chosen": labels[int(np.argmax(p))], "confidence": round(1.0 - ent / math.log(len(p)), 4),
+               "answer_confidence": round(float(p.max()), 4),
                "temperature": round(t, 4), "tokens": tokens, "latency_ms": round(ms, 2), "backend": self.backend}
         if qtype == "score":
             out["expected_level"] = round(float((np.arange(len(p)) * p).sum()), 4)
@@ -156,8 +158,10 @@ class Laya:
             out["asked_as"] = q["t"]
         floor = req.get("min_confidence")
         if floor is not None:   # upstream's gate: below the floor the answer is evidence, not a decision
+            # Gated on answer_confidence (max p), as upstream laya 0.4.7 gates (laya.answer_confidence): the quantity
+            # temperature scaling fits. The entropy-based "confidence" is on another scale and must not share a floor.
             out["min_confidence"] = float(floor)
-            out["abstain"] = out["confidence"] < float(floor)
+            out["abstain"] = out["answer_confidence"] < float(floor)
             if out["abstain"]:
                 out["top_option"] = out["chosen"]
                 out["chosen"] = None
@@ -200,7 +204,8 @@ class Shadow:
         sid = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime()) + "-%05d" % len(self._rows())
         row = {"id": sid, "type": req.get("type", "choice"), "question": req["question"],
                "options": req.get("options") or [], "context": req.get("context", ""),
-               "laya": {k: res.get(k) for k in ("options", "chosen", "top_option", "confidence", "abstain",
+               "laya": {k: res.get(k) for k in ("options", "chosen", "top_option", "confidence",
+                                                "answer_confidence", "abstain",
                                                 "asked_as", "temperature", "tokens", "latency_ms", "backend")},
                "incumbent": req["incumbent"], "outcome": None}
         with self.path.open("a", encoding="utf-8") as f:
@@ -231,7 +236,9 @@ class Shadow:
                "vs_incumbent": stats(rows, "incumbent"),
                "vs_outcome": stats([r for r in rows if r["outcome"] is not None], "outcome")}
         if floor is not None:
-            kept = [r for r in rows if r["laya"]["confidence"] >= float(floor)]
+            def conf(r):   # records written before answer_confidence existed: max p from their options
+                return r["laya"].get("answer_confidence") or max(o["p"] for o in r["laya"]["options"])
+            kept = [r for r in rows if conf(r) >= float(floor)]
             out["floor"] = float(floor)
             out["coverage"] = round(len(kept) / len(rows), 4) if rows else None
             out["above_floor_vs_incumbent"] = stats(kept, "incumbent")
