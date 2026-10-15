@@ -47,13 +47,14 @@ for _p in (ROOT / "src", ROOT, ROOT / "tools"):
         sys.path.insert(0, str(_p))
 
 from ignite_xdna.runtime.graph_session import GraphSession  # noqa: E402
-from trace_runs import decode_runs, first_hit, hits_in, slot_runs, times  # noqa: E402
+from trace_runs import decode_runs, first_hit, hits_in, last_hit, slot_runs, times  # noqa: E402
 
 # docs/SILICON.md's MEASURED core clock. That the shim's trace timer runs at it is ASSUMED, not checked: every ms this
 # tool prints is DERIVED from it. Counts and ratios in cycles do not depend on it. (Per-layer windows track
 # engine_layer_timing's per-layer times at r = 0.997 on YOLOv8s, 2026-10-15, which fits 1.695 GHz, but those times
 # include each separate dispatch's ramp, so that is a consistency check, not a clock measurement.)
 CLOCK_GHZ = 1.80
+FINISHED = {"DMA_MM2S_0_FINISHED_TASK": "a", "DMA_MM2S_1_FINISHED_TASK": "w"}
 MARKER = "USER_EVENT_1"
 FLUSH_GAP = 2000   # cycles: flush markers fire ~110 apart, the shortest layer measured ~36,000
 LEVEL = ("STREAM_BACKPRESSURE", "MEMORY_STARVATION", "STREAM_STARVATION", "STALLED_LOCK")
@@ -98,6 +99,16 @@ def per_layer(runs, events, n_layers):
         # Marker to the first DMA event of any traced kind: the layer's lead-in before its traffic shows, which holds
         # a box layer's MemTile configure.
         row["lead"] = (min(firsts) - lo) if firsts else hi - lo
+        # Task completions are pulses, one per task (checked equal to the stream's task counts on every layer,
+        # 2026-10-15). The last activation completion ends the layer's activation traffic; from there to the next
+        # marker is the layer's tail: the cores' backlog, the last drains and the barrier.
+        for s, sr in srs.items():
+            if events[s] in FINISHED:
+                tag = FINISHED[events[s]]
+                f, l = first_hit(sr, lo), last_hit(sr, hi)
+                row[f"{tag}_done_first"] = (f - lo) if f is not None and f < hi else None
+                row[f"{tag}_done_last"] = (l - lo) if l is not None and l >= lo else None
+                row[f"{tag}_tail"] = (hi - l) if l is not None and l >= lo else None
         rows.append(row)
     return rows, int(bounds[-1] - bounds[0]), len(marks)
 

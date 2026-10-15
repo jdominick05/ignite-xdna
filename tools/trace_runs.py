@@ -110,6 +110,16 @@ def first_hit(sr: np.ndarray, lo: int):
     return int((t0[ok] + a[ok] * s[ok]).min()) if ok.any() else None
 
 
+def last_hit(sr: np.ndarray, hi: int):
+    """The last hit time < hi of one slot's runs, or None."""
+    if not len(sr):
+        return None
+    t0, k, s = sr[:, 0], sr[:, 1], sr[:, 2]
+    a = np.minimum((hi - 1 - t0) // s, k - 1)
+    ok = (t0 < hi) & (a >= 0)
+    return int((t0[ok] + a[ok] * s[ok]).max()) if ok.any() else None
+
+
 def times(sr: np.ndarray) -> np.ndarray:
     """Every hit time of a pulse slot (expand; only for sparse slots such as a marker)."""
     if not len(sr):

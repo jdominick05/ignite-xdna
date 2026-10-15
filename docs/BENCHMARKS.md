@@ -17501,3 +17501,74 @@ Logs:
   verdict script verbatim, both budgets and the verdict, with budget JSONs
   ([ctl](../results/aie/shim_trace_nop_yolov8s_desktop2_20261015T1927Z_budget_ctl.json),
   [nop](../results/aie/shim_trace_nop_yolov8s_desktop2_20261015T1927Z_budget_nop.json)).
+
+#### Overlap, sized: at most ~3.6 ms on YOLOv8s, and 1.23 ms of it is compute left exposed at layer ends (2026-10-15, Desktop 2)
+
+**Question.** The NOP trace showed compute adding 3.49 ms to the traced frame by holding the MemTile. How much could
+better overlap of transport and compute recover, and where is it?
+
+**Offline ceiling (exploratory, data on record).** Per layer:
+- **Inputs:** the warm real time R and NOP time N (13 Oct), and the single-buffered `d111` time S from the 13 Oct
+  core-depth probe.
+- **Total compute C is unknown,** because the cores cannot be traced. It is at least the exposed compute E = R − N.
+  It is roughly at least S − N, if `d111` still overlaps something; its MemTile side stays at depth 2.
+- **The bound:** perfect overlap gives max(N, C), so the saving is at most R − max(N, C_lo).
+
+| layers (by compute share) | n | R | N | E = R − N | C_lo | saving at most |
+|---|---:|---:|---:|---:|---:|---:|
+| < 10% | 18 | 4.667 | 4.466 | 0.201 | 0.585 | 0.201 |
+| 10–35% | 17 | 5.490 | 4.040 | 1.450 | 2.943 | 1.398 |
+| ≥ 35% | 31 | 6.252 | 3.476 | 2.777 | 4.213 | 2.030 |
+| all | 66 | 16.409 | 11.982 | 4.427 | 7.741 | **3.629** |
+
+- **How firm the bound is.** If `d111`'s single-buffered output adds drain waits, C_lo overstates compute, and the
+  hard ceiling is E itself, 4.43 ms. If true compute exceeds C_lo, the saving is smaller.
+- **On 28 of the 31 compute-heavy layers, C_lo already exceeds N.** Perfect overlap would leave them compute-bound.
+  Past that point only a faster core kernel helps; its conv loops issue 0.17–0.35 `vmac` per cycle.
+- **Why not measure on a wider model.** Compute is a near-constant share on every YOLOv8 size (25–27%, 20 Sep split
+  sitting): a packet's compute is set by the layer type, and wider layers add packets and compute together. So
+  YOLOv8s carries the same question as YOLOv8x at a seventh of the cost.
+
+**Where the overlap is lost: the layer tail, measured.**
+- **What `tools/engine_shim_trace.py` now records:** per layer, the first and last completion of each stream's
+  tasks, and the tail, from the last activation completion to the next marker.
+- **The completion pulses are exact:** 1,387 of 1,387 activation and 99 of 99 weight completions on every layer in
+  all 6 control runs.
+- **Run-endpoint lookups were checked:** `first_hit` and `last_hit` equal the expanded hit times on 1,600 random
+  windows of a full frame.
+- **The sitting:** pre-registered (sha256 `10c457ea...`, with one control smoke run disclosed); 6 rounds of control
+  and NOP copy, alternated, cold traced dispatches; `timing_eligible: true`.
+- **Gates:** C, NOP/ctl 0.775, pass; S, control frame within 2% of the previous sitting's, pass.
+
+| layers | n | control tail | NOP tail | difference (cycles) | ms (DERIVED) |
+|---|---:|---:|---:|---:|---:|
+| < 10% | 18 | 546,486 | 390,750 | 155,736 | 0.087 |
+| 10–35% | 17 | 813,468 | 291,234 | 522,233 | 0.290 |
+| ≥ 35% | 31 | 2,251,386 | 717,663 | 1,533,724 | 0.852 |
+| **all** | 66 | 3,611,340 | 1,399,647 | **2,211,693** | **1.229** |
+
+**Verdict T: GO** (registered: ≥ 1,800,000 cycles).
+- **What the tail is.** After a layer's last activation task completes, the control frame spends 12.9% of its window
+  in the tail, and 1.23 ms of that (DERIVED) is compute: the cores' backlog of buffered packets runs while no
+  transport does.
+- **Where it sits:** mostly on the compute-heavy layers, 0.85 ms.
+- **The NOP tail, 1.40 M cycles,** is the last drains and the barrier with no compute behind them.
+- **This agrees with the earlier fit's ~1.34 ms,** but is measured per layer rather than inferred.
+
+**What GO does and does not mean.**
+- **It is the opportunity, not a reachable saving.** The next layer usually reads this layer's output, so how much of
+  the tail its transport can cover depends on which rows its first packets need.
+- **Weights can be fetched early regardless.** A weight object prefetched into a core must never be consumed as the
+  wrong layer's, the hazard `design.py` documents.
+- **Candidates for the prototype:**
+  - issue the next layer's first weight fill (and, where the data allows, its first activation fills) before the
+    barrier;
+  - relax the barrier between layers that do not depend on each other, such as the detection-head branches.
+
+Logs:
+- [sitting](../results/aie/shim_trace_tail_yolov8s_desktop2_20261015T1959Z.log), with the merged runs
+  ([ctl](../results/aie/shim_trace_tail_yolov8s_desktop2_20261015T1959Z_ctl.json),
+  [nop](../results/aie/shim_trace_tail_yolov8s_desktop2_20261015T1959Z_nop.json));
+- [analysis](../results/aie/shim_trace_tail_analysis_yolov8s_desktop2_20261015T1959Z.log): the pre-registration and
+  verdict script verbatim, the pulse completeness check, the run-endpoint check, the verdict and the offline
+  overlap sizing.

@@ -1,0 +1,43 @@
+RESEARCH_PLATFORM {"machine": "Desktop 2", "cpu": "AMD Ryzen 7 8700G w/ Radeon 780M Graphics", "os": "Windows-11-10.0.26200-SP0", "ram_bytes": 33381138432, "source_sha256": {"tools/research_process.py": "ffeb1857f190b482eed101b5f5a928f455de26bfa61d23f78a2eacec08e2663e", "tools/quant_calib_alphabet.py": "2dc0b2878c564853f340880209a425dfcf63b8536b2b8e9fd32344daade58d37", "tools/xint8_arithmetic_probe.py": "6aa3df08b9870c3c2264b868459d7ffbac3070dddc1349d7c6f3f480075f7041", "scripts/research-lowlevel.sh": "3455ad7933697936487712665505c216891865c6deada647302785f6e37020bd", "scripts/research-iron.sh": "4c863a262646ddab39b5005006ba8e03809895e6386c6310e2fd9d0a9e9609ee", "kernels/memory_placement/probe.py": "e8d990169ad6091fa1b53852e9f61eff495b5def72d35165a5c5cf1759e38898", "kernels/memory_placement/memory_kernels.cc": "182e7af7071a1e851afb4a7ca266069c489aea1fbaaa85eca129708daeba5ba6", "scripts/research-matrix.sh": "739254171629deae822b0ad7dabc875aee19ace56dde77d3e8aab61663f97516", "kernels/memory_placement/gemm.py": "17c905ad66110d3346bbf0db898dfc6b780df59fae1dfb0c1747057ce1e5844e", "kernels/memory_placement/gemm_placement.cc": "f21acf7250b12914ea30cc1f77613239dfa18421a85a1b9a5199017dd916278a", "tools/research_summary.py": "0c00dcceef07053d06731b41a1f1ed58d3ba4ea09f82497de354ce9cef17da20", "tools/research_toolchain.py": "f0a126a24ae213acfaa43460cfd9def0c86d9cb70cfee0228aa271688467b314"}, "commit": "fef02a1d3d5fc696dedab1a86b93324ef80dea8e", "command": ["bash", "scripts/research-iron.sh", "scratch/b45/sit_nop.py", "--rounds", "6", "--out", "scratch/b46/sit/run_20261015T1959Z"], "seconds_limit": 1200.0, "rss_gib_limit": 8, "checks_only": false, "free_ram_bytes": 23967936512}
+HOST_LOAD busy_cores=0.12 logical_cores=16 free_ram_gb=22.3 sample_sec=1
+HOST_LOAD_TOP 0.06 powershell:15076 ws_mb=80
+HOST_LOAD_TOP 0.02 WindowsTerminal:9268 ws_mb=138
+HOST_LOAD_TOP 0.02 RiotClientServices:11660 ws_mb=148
+HOST_LOAD_TOP 0.02 dev-agent:7624 ws_mb=536
+HOST_LOAD_VERDICT CLEAR
+
+PRE_NPU_CONTEXT_WITNESS "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [2340, 6320, 7120, 13244, 13388, 13904, 15156, 15628, 16936], "foreign_pids": []}
+round 0 ctl  [trace] run 0: dispatch 17.215 ms (first in its context); buffer 467,264 B; shims ['1'] (physical columns); marker span 27,988,645 cycles = 15.549 ms at 1.8 GHz (DERIVED); 125 markers
+HOST_TIMELINE {"elapsed_seconds": 2.375, "tree_rss_bytes": 147177472, "foreign_peers": []}
+round 0 nop  [trace] run 0: dispatch 13.722 ms (first in its context); buffer 401,856 B; shims ['1'] (physical columns); marker span 21,671,569 cycles = 12.040 ms at 1.8 GHz (DERIVED); 130 markers
+HOST_TIMELINE {"elapsed_seconds": 4.656, "tree_rss_bytes": 384397312, "foreign_peers": []}
+round 1 nop  [trace] run 0: dispatch 13.957 ms (first in its context); buffer 402,048 B; shims ['1'] (physical columns); marker span 21,618,918 cycles = 12.011 ms at 1.8 GHz (DERIVED); 130 markers
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [2340, 2436, 3520, 6320, 7120, 9208, 11728, 12796, 13244, 13388, 13904, 13920, 14104, 15156, 15268, 15628, 16232, 16400, 16936], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 6.937, "tree_rss_bytes": 233959424, "foreign_peers": []}
+round 1 ctl  [trace] run 0: dispatch 17.273 ms (first in its context); buffer 442,816 B; shims ['1'] (physical columns); marker span 28,024,220 cycles = 15.569 ms at 1.8 GHz (DERIVED); 123 markers
+round 2 ctl  [trace] run 0: dispatch 17.488 ms (first in its context); buffer 450,752 B; shims ['1'] (physical columns); marker span 28,019,503 cycles = 15.566 ms at 1.8 GHz (DERIVED); 130 markers
+HOST_TIMELINE {"elapsed_seconds": 9.234, "tree_rss_bytes": 174092288, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [2340, 2436, 3284, 3520, 4088, 6272, 6320, 7120, 9208, 9324, 11184, 11728, 12724, 12764, 12796, 13244, 13388, 13904, 13920, 14104, 14312, 15156, 15192, 15268, 15628, 16232, 16280, 16400, 16700, 16936, 17376], "foreign_pids": []}
+round 2 nop  [trace] run 0: dispatch 13.564 ms (first in its context); buffer 401,344 B; shims ['1'] (physical columns); marker span 21,573,061 cycles = 11.985 ms at 1.8 GHz (DERIVED); 119 markers
+HOST_TIMELINE {"elapsed_seconds": 11.531, "tree_rss_bytes": 386449408, "foreign_peers": []}
+round 3 nop  [trace] run 0: dispatch 14.079 ms (first in its context); buffer 401,344 B; shims ['1'] (physical columns); marker span 21,776,903 cycles = 12.098 ms at 1.8 GHz (DERIVED); 130 markers
+HOST_TIMELINE {"elapsed_seconds": 13.875, "tree_rss_bytes": 215035904, "foreign_peers": []}
+round 3 ctl  [trace] run 0: dispatch 18.846 ms (first in its context); buffer 437,568 B; shims ['1'] (physical columns); marker span 28,063,185 cycles = 15.591 ms at 1.8 GHz (DERIVED); 130 markers
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [1016, 2340, 2428, 2436, 3284, 3520, 4088, 6272, 6320, 6324, 7120, 9208, 9324, 9568, 11184, 11728, 12392, 12724, 12764, 12796, 12820, 13244, 13388, 13512, 13904, 13920, 14104, 14312, 15076, 15084, 15156, 15192, 15268, 15436, 15628, 16232, 16280, 16400, 16700, 16936, 17376], "foreign_pids": []}
+round 4 ctl  [trace] run 0: dispatch 17.337 ms (first in its context); buffer 426,240 B; shims ['1'] (physical columns); marker span 27,830,990 cycles = 15.462 ms at 1.8 GHz (DERIVED); 119 markers
+HOST_TIMELINE {"elapsed_seconds": 16.203, "tree_rss_bytes": 198156288, "foreign_peers": []}
+round 4 nop  [trace] run 0: dispatch 13.640 ms (first in its context); buffer 398,720 B; shims ['1'] (physical columns); marker span 21,729,529 cycles = 12.072 ms at 1.8 GHz (DERIVED); 123 markers
+HOST_TIMELINE {"elapsed_seconds": 18.453, "tree_rss_bytes": 401121280, "foreign_peers": []}
+round 5 nop  [trace] run 0: dispatch 13.973 ms (first in its context); buffer 399,296 B; shims ['1'] (physical columns); marker span 21,641,691 cycles = 12.023 ms at 1.8 GHz (DERIVED); 123 markers
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [1016, 2340, 2428, 2436, 3284, 3520, 3904, 4088, 6272, 6320, 6324, 7120, 8652, 9208, 9324, 9568, 9812, 11184, 11728, 11920, 12392, 12724, 12764, 12796, 12820, 13244, 13388, 13512, 13760, 13860, 13904, 13920, 14104, 14312, 14480, 14620, 15076, 15084, 15156, 15192, 15268, 15284, 15436, 15628, 15992, 16232, 16280, 16400, 16620, 16700, 16936, 17376], "foreign_pids": []}
+round 5 ctl  [trace] run 0: dispatch 17.916 ms (first in its context); buffer 444,160 B; shims ['1'] (physical columns); marker span 27,929,006 cycles = 15.516 ms at 1.8 GHz (DERIVED); 130 markers
+merged: scratch/b46/sit/run_20261015T1959Z_ctl.json, scratch/b46/sit/run_20261015T1959Z_nop.json
+HOST_TIMELINE {"elapsed_seconds": 20.828, "tree_rss_bytes": 0, "foreign_peers": []}
+POST_NPU_CONTEXT_WITNESS "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+RESEARCH_PROCESS_RESULT {"exit_code": 0, "stop": null, "peak_tree_rss_bytes": 412053504, "rss_measurement": "maximum observed across sampled descendant working sets; zero observations reported as null", "elapsed_seconds": 21.1559999999954, "foreign_contention_observed": false, "timing_eligible": true}

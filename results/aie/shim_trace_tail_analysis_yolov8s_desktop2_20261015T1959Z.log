@@ -1,0 +1,162 @@
+tail sitting 20261015T1959Z and the overlap sizing: Desktop 2 (DESKTOP-CBL5NUA), written 2026-10-15T19:59Z
+
+== 1. Pre-registration, verbatim, and hashes taken before the sitting ==
+10c457eaf49f48d7c16c5e41ee4ba015e63323264087bf51666d0ae42dfe4210 *scratch/b46/prereg_tail.txt
+505fe6bf3580a97d16b5fb03b5b05fbd405fbaec7969077193c9fd8200e7f90a *scratch/b46/tail_verdict.py
+8b9e548e15a9de467652e67d9107673106ce1c86c52b67c8500be52577210782 *scratch/b45/sit_nop.py
+6497f72ff45170ba40b098d99dd42c3c20ae5b4d361a16794eb9d3297cbbb98b *tools/engine_shim_trace.py
+3c2da77f681c833f197c78c794fe380d3256827412618faafd5fa887fa470a23 *tools/trace_runs.py
+c3eb59c5070f57622a296c081a99b290b1d574e69dde8dce5e4a055a6561e81f *build/yolov8s_tr_ctl.ignite
+865ae17a362f0097ef2afc2462349d10dbb84dd9bddf5451fcbebb8e662f7deb *build/yolov8s_tr_ctl_nop.ignite
+--- begin ---
+PRE-REGISTRATION: per-layer activation tail, traced control against traced NOP copy, YOLOv8s. Desktop 2
+(DESKTOP-CBL5NUA), 2026-10-15. Written before any NOP dispatch with the tail fields. Disclosed: one traced CONTROL
+run with the new fields was made as a smoke (ctl a_tail sum 3,693,428 cycles); no NOP data with them exists.
+
+Question. Per layer, how long after the layer's last activation task completes does the layer end (next marker), and
+how much of that is compute? That sizes lever 1 of the overlap scope: hiding each layer's exposed compute tail behind
+the next layer's transport (weight prefetch across the barrier, or relaxing the barrier where the next layer does not
+read this one's output). The NOP sitting's fit put it at ~36,647 cycles per layer (~1.34 ms, DERIVED).
+
+Instrument. tools/engine_shim_trace.py now records per layer, from the FINISHED_TASK pulses (exact: 1,387 of 1,387
+activation and 99 of 99 weight completions on every layer in all 6 control runs of 20261015T1927Z):
+a_done_first / a_done_last (offsets from the marker), a_tail = next marker - last activation completion, and the
+same for weights. Nothing else in the tool changed; containers unchanged (build/yolov8s_tr_ctl.ignite and
+build/yolov8s_tr_ctl_nop.ignite, hashed below).
+
+Method. scratch/b45/sit_nop.py --rounds 6 (ctl and nop alternated, one cold traced dispatch per process), under
+research-lowlevel.sh --npu, void unless timing_eligible true. Then scratch/b46/tail_verdict.py.
+
+Gates: C, NOP/ctl frame 0.70-0.82. S, ctl frame within 2% of the NOP sitting's 27,935,540 cycles.
+Rule T: X = sum over layers of (ctl a_tail - nop a_tail), mean of runs. X >= 1,800,000 cycles (1.0 ms DERIVED): GO
+(prototype cross-layer overlap); 900,000-1,800,000: MARGINAL; < 900,000: NO (lever 2 probe next, lever 3 main line).
+Expected: GO or MARGINAL (the fit's 1.34 ms is 2.4 M cycles, but it came from a residual model, not a direct timing).
+Named limits: X is the opportunity, not a reachable saving. The next layer usually reads this layer's output, so how
+much of the tail its transport can cover depends on which rows its first packets need; weights can be fetched early
+regardless. ctl tail - nop tail also contains any drain slowed by late outputs, which is compute-caused all the same.
+Reported, not verdict-bearing: per group, the head (marker to first activation completion), weight tails.
+
+A hang, refused trace or contention voids the sitting.
+--- end ---
+verdict script, verbatim:
+--- begin ---
+"""Scratch: the pre-registered tail verdict. python -I tail_verdict.py <ctl trace json> <nop trace json>
+Per layer, mean over runs of a_tail (next marker - last activation task completion), a_done_first, w_tail. Groups are
+fixed from the committed control budget's warm compute share."""
+import json
+import sys
+from pathlib import Path
+
+import numpy as np
+
+ROOT = Path(__file__).resolve().parents[2]
+ref = json.loads((ROOT / "results/aie/shim_trace_budget_yolov8s_desktop2_20261015T1922Z.json").read_text(encoding="utf-8"))
+cs = np.array([r["compute_share"] for r in ref["layers"]])
+G = {"lo (<10%)": cs < 0.10, "mid (10-35%)": (cs >= 0.10) & (cs < 0.35), "hi (>=35%)": cs >= 0.35}
+GHZ = 1.80
+
+
+def load(p):
+    d = json.loads(Path(p).read_text(encoding="utf-8"))
+    if d["layers"] != [r["name"] for r in ref["layers"]]:
+        raise SystemExit(f"{p}: layer list differs")
+    runs = [r["shims"][sorted(r["shims"])[0]]["layers"] for r in d["runs"]]
+    out = {}
+    for key in ("cycles", "a_tail", "a_done_first", "w_tail"):
+        vals = [[L[key] for L in run] for run in runs]
+        if any(v is None for run in vals for v in run):
+            raise SystemExit(f"{p}: {key} missing on some layer")
+        out[key] = np.mean(np.array(vals, dtype=float), axis=0)
+    return out, len(runs)
+
+
+c, nc = load(sys.argv[1])
+n, nn = load(sys.argv[2])
+print(f"runs: ctl {nc}, nop {nn}")
+print(f"{'group':14} {'n':>3} {'ctl tail':>10} {'nop tail':>10} {'d tail':>10} {'d ms':>7} {'ctl head':>10} {'nop head':>10}")
+for g, m in G.items():
+    dt = (c["a_tail"] - n["a_tail"])[m].sum()
+    print(f"{g:14} {m.sum():3d} {c['a_tail'][m].sum():10,.0f} {n['a_tail'][m].sum():10,.0f} {dt:10,.0f} "
+          f"{dt / GHZ / 1e6:7.3f} {c['a_done_first'][m].sum():10,.0f} {n['a_done_first'][m].sum():10,.0f}")
+X = (c["a_tail"] - n["a_tail"]).sum()
+print(f"\nframe: ctl window {c['cycles'].sum():,.0f}, nop window {n['cycles'].sum():,.0f}; ctl a_tail {c['a_tail'].sum():,.0f} "
+      f"({c['a_tail'].sum() / c['cycles'].sum():.1%} of the window), nop a_tail {n['a_tail'].sum():,.0f}")
+print(f"X = sum(ctl a_tail - nop a_tail) = {X:,.0f} cycles = {X / GHZ / 1e6:.3f} ms (DERIVED at {GHZ} GHz)")
+print(f"w_tail: ctl {c['w_tail'].sum():,.0f}, nop {n['w_tail'].sum():,.0f}")
+print("\n== rules (pre-registered) ==")
+ratio = n["cycles"].sum() / c["cycles"].sum()
+okc = 0.70 <= ratio <= 0.82
+oks = abs(c["cycles"].sum() / 27_935_540 - 1) <= 0.02
+print(f"C: nop/ctl frame {ratio:.3f} (0.70-0.82) -> {'PASS' if okc else 'FAIL'}")
+print(f"S: ctl frame {c['cycles'].sum():,.0f} within 2% of the NOP sitting's 27,935,540 -> {'PASS' if oks else 'FAIL'}")
+if not (okc and oks):
+    print("C or S failed: T is not read")
+verdict = "GO" if X >= 1_800_000 else "MARGINAL" if X >= 900_000 else "NO"
+print(f"T: X {X:,.0f} cycles (>= 1,800,000 GO; 900,000-1,800,000 MARGINAL; < 900,000 NO) -> {verdict}")
+--- end ---
+
+== 2. The pulses are complete: FINISHED_TASK hits against column 0's task counts (NOP sitting's 6 ctl runs) ==
+DMA_MM2S_0_FINISHED_TASK: per frame hits [1387, 1387, 1387, 1387, 1387, 1387] vs tasks 1387; layers with hits == tasks in every run 66 of 66
+  first 12 layers (hits run0, tasks): [(4, 4), (32, 32), (4, 4), (2, 2), (32, 32), (64, 64), (16, 16), (16, 16), (16, 16), (24, 24), (16, 16), (24, 24)]
+DMA_MM2S_1_FINISHED_TASK: per frame hits [99, 99, 99, 99, 99, 99] vs tasks 99; layers with hits == tasks in every run 66 of 66
+  first 12 layers (hits run0, tasks): [(1, 1), (2, 2), (1, 1), (1, 1), (1, 1), (2, 2), (4, 4), (4, 4), (2, 2), (2, 2), (2, 2), (2, 2)]
+
+== 3. first_hit / last_hit against the expanded hit times, on a full control frame (IRON env) ==
+checked 1600 windows, mismatches 0: PASS
+
+== 4. Verdict (scratch/b46/tail_verdict.py, as registered) ==
+runs: ctl 6, nop 6
+group            n   ctl tail   nop tail     d tail    d ms   ctl head   nop head
+lo (<10%)       18    546,486    390,750    155,736   0.087    574,358    591,579
+mid (10-35%)    17    813,468    291,234    522,233   0.290  1,636,071  1,567,278
+hi (>=35%)      31  2,251,386    717,663  1,533,724   0.852    712,749    725,768
+
+frame: ctl window 27,975,925, nop window 21,668,612; ctl a_tail 3,611,340 (12.9% of the window), nop a_tail 1,399,647
+X = sum(ctl a_tail - nop a_tail) = 2,211,693 cycles = 1.229 ms (DERIVED at 1.8 GHz)
+w_tail: ctl 4,465,290, nop 3,358,110
+
+== rules (pre-registered) ==
+C: nop/ctl frame 0.775 (0.70-0.82) -> PASS
+S: ctl frame 27,975,925 within 2% of the NOP sitting's 27,935,540 -> PASS
+T: X 2,211,693 cycles (>= 1,800,000 GO; 900,000-1,800,000 MARGINAL; < 900,000 NO) -> GO
+
+== 5. Offline overlap sizing from data on record (scratch/b46/overlap_bound.py; exploratory, before this sitting) ==
+d222 (probe) vs R (diag) per-layer sums: 16.728 vs 16.409 ms; d111 19.715; NOP 11.982
+group            n       R       N   E=R-N     S-N    C_lo   bound  C_lo>N
+compute < 10%   18   4.667   4.466   0.201   0.576   0.585   0.201       0
+10-35%          17   5.490   4.040   1.450   2.943   2.943   1.398       2
+>= 35%          31   6.252   3.476   2.777   4.213   4.213   2.030      28
+all             66  16.409  11.982   4.427   7.733   7.741   3.629      30
+
+per layer, >= 35% group: k, R, N, E, S-N, bound, name
+   3 0.221 0.102 0.119 0.178 0.044  /model.2/m.0/cv1/conv/Conv
+   8 0.192 0.104 0.089 0.119 0.073  /model.4/m.0/cv1/conv/Conv
+  10 0.189 0.107 0.082 0.121 0.068  /model.4/m.1/cv1/conv/Conv
+  15 0.184 0.101 0.082 0.148 0.035  /model.6/m.0/cv1/conv/Conv
+  16 0.197 0.117 0.080 0.129 0.068  /model.6/m.0/cv2/conv/Conv
+  17 0.193 0.102 0.090 0.129 0.064  /model.6/m.1/cv1/conv/Conv
+  18 0.198 0.124 0.073 0.122 0.073  /model.6/m.1/cv2/conv/Conv
+  22 0.177 0.099 0.078 0.111 0.066  /model.8/m.0/cv1/conv/Conv
+  23 0.186 0.112 0.075 0.106 0.075  /model.8/m.0/cv2/conv/Conv
+  27 0.060 0.037 0.022 0.038 0.022  /model.9/m_1/MaxPool
+  28 0.059 0.036 0.023 0.037 0.022  /model.9/m_2/MaxPool
+  31 0.178 0.099 0.079 0.130 0.048  /model.12/m.0/cv1/conv/Conv
+  32 0.179 0.099 0.080 0.126 0.053  /model.12/m.0/cv2/conv/Conv
+  35 0.190 0.101 0.089 0.113 0.077  /model.15/m.0/cv1/conv/Conv
+  36 0.199 0.098 0.101 0.124 0.075  /model.15/m.0/cv2/conv/Conv
+  39 0.323 0.180 0.142 0.201 0.122  /model.22/cv2.0/cv2.0.0/conv/Conv
+  40 0.612 0.349 0.263 0.384 0.228  /model.22/cv3.0/cv3.0.0/conv/Conv
+  41 0.199 0.103 0.096 0.119 0.080  /model.22/cv2.0/cv2.0.1/conv/Conv
+  42 0.616 0.348 0.268 0.375 0.241  /model.22/cv3.0/cv3.0.1/conv/Conv
+  46 0.183 0.103 0.080 0.138 0.045  /model.18/m.0/cv1/conv/Conv
+  47 0.182 0.100 0.082 0.132 0.051  /model.18/m.0/cv2/conv/Conv
+  50 0.174 0.101 0.073 0.099 0.073  /model.22/cv2.1/cv2.1.0/conv/Conv
+  51 0.316 0.183 0.132 0.217 0.099  /model.22/cv3.1/cv3.1.0/conv/Conv
+  52 0.072 0.034 0.038 0.068 0.005  /model.22/cv2.1/cv2.1.1/conv/Conv
+  53 0.181 0.097 0.084 0.118 0.064  /model.22/cv3.1/cv3.1.1/conv/Conv
+  57 0.173 0.101 0.072 0.148 0.025  /model.21/m.0/cv1/conv/Conv
+  58 0.173 0.101 0.072 0.142 0.031  /model.21/m.0/cv2/conv/Conv
+  60 0.168 0.080 0.088 0.121 0.047  /model.22/cv2.2/cv2.2.0/conv/Conv
+  61 0.174 0.100 0.074 0.140 0.033  /model.22/cv3.2/cv3.2.0/conv/Conv
+  62 0.039 0.022 0.018 0.028 0.011  /model.22/cv2.2/cv2.2.1/conv/Conv
+  63 0.066 0.035 0.031 0.054 0.012  /model.22/cv3.2/cv3.2.1/conv/Conv
