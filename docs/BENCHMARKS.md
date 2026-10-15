@@ -17225,8 +17225,9 @@ not separate them. Which input is late on the layers box fills changes?
 
 **The cores cannot be traced in this design.**
 - A build tracing any single core, with any egress column, fails in aiecc with "Unable to find a legal routing".
-- **Why:** every core tile's four southbound switch ports already carry the column's output join to the MemTile, so
-  a core's trace packets have no way out.
+- **Why (inferred, not named by aiecc):** every core tile's four southbound switch ports already carry the column's
+  output join to the MemTile, so a core's trace packets have no way out. The inference is from the design's four
+  output flows per column through the row-2 south ports; aiecc reports only the failure.
 - The shim tile's trace unit routes inside its own switch, so it is the instrument.
 
 **The instrument (`--trace-shims`, a measurement build).**
@@ -17287,6 +17288,8 @@ not separate them. Which input is late on the layers box fills changes?
 **Verdict by the pre-registered rule: the attribution is not read.**
 - **Rule L** required at least 60% of the frame's added cycles on the boxed layers. They hold 50%, so neither H-W
   (weights late) nor H-A (activations late) is tested.
+  - The sitting log's printed rule line reads "neither": `shim_trace_compare.py` implements only the minimum-loss
+    guard. Rule L's share test is applied here from the registered text.
 - **The null holds:** `boxplain` reads −122,184 cycles on the box set, within the registered ±300,000.
 
 **What the trace does show (the lead was a registered confound, reported but not verdict-bearing).**
@@ -17298,7 +17301,11 @@ not separate them. Which input is late on the layers box fills changes?
   - the 39 others' grows by −57 on average (−3,444 to +3,436);
   - `boxplain`'s single configure shows as +46,544 at layer 0.
 - **The cost (DERIVED):** one configure, 264 MemTile writes across the 4 columns (8,224 B), costs about 47,800 cycles,
-  26.5 µs. The 26 mid-frame ones total **0.690 ms**, the whole measured loss.
+  26.5 µs.
+  - **Against `ctl`, which never configures,** the box build pays 27: +1,286,772 cycles of lead, **+0.715 ms**.
+    Everything else nets −97,084 cycles (−0.054 ms), so the trace reads +0.661 ms in all, against +0.685 ms in the
+    warm sitting.
+  - **Against `boxplain`,** which configures once, the box build pays 26 extra: 0.690 ms.
 - **Net of configures, box fills save almost nothing in real dispatch:** −27,053 cycles on the configuring layers and
   −70,030 on the rest, about −0.05 ms.
   - So the all-NOP saving was task issue that the real frame already hides under compute.

@@ -2022,8 +2022,9 @@ cached reference heads rather than `bo_out`.
   - **Ruled out:** the path itself. The same build with every layer cut plain (`--box-cap 0`) reads −0.05 ms.
   - **The cause is unexplained.** Still standing: merged tasks stalling behind the 2-box MemTile buffer under
     compute; the 26 extra mid-frame configures; the one-box task penalty the probe measured. *[Found the same day
-    by the shim trace: the whole loss is the 26 mid-frame configures, about 26.5 microseconds each (DERIVED), 0.690
-    ms in all. Net of them the merged tasks save about 0.05 ms in real dispatch, because the issue they save was
+    by the shim trace: the loss is the MemTile configures, about 26.5 microseconds each (DERIVED). Against the
+    control the box build pays 27, +0.715 ms, and everything else nets -0.054 ms, for +0.661 ms traced; the 26 extra
+    over the no-merge build are 0.690 ms. Net of them the merged tasks save about 0.05 ms in real dispatch, because the issue they save was
     already hidden under compute. A rescue that made configures free would recover about 0.05 ms on YOLOv8s, so
     the rejection stands
     ([BENCHMARKS](BENCHMARKS.md#block-5-the-shim-trace-finds-what-box-fills-lost-26-mid-frame-memtile-configures-at-265-microseconds-each-2026-10-15-desktop-2)).]*
@@ -2037,8 +2038,9 @@ cached reference heads rather than `bo_out`.
     ([BENCHMARKS](BENCHMARKS.md#block-5-box-fills-in-the-engine-exact-on-the-device-and-069-ms-slower-transport-gains-025-ms-but-compute-exposure-grows-094-ms-2026-10-15-desktop-2)).
 - **Pitfall (2026-10-15): the engine's cores cannot be traced, and a traced shim gives one clean dispatch per
   hardware context.**
-  - **Cores have no route out.** Every core tile's four southbound switch ports carry the column's output join, so
-    aiecc finds no route for any core's trace packets ("Unable to find a legal routing" for any single core, any
+  - **Cores have no route out.** Every core tile's four southbound switch ports carry the column's output join
+    (inferred from the design's four output flows per column; aiecc names no port), so aiecc finds no route for any
+    core's trace packets ("Unable to find a legal routing" for any single core, any
     egress column). Trace the shim tiles instead: `--trace-shims`, read by `tools/engine_shim_trace.py`.
   - **On a shim, the marker must be `USER_EVENT_1`.** `-aie-insert-trace-flows` makes `USER_EVENT_1` the start event
     and `USER_EVENT_0` the stop event, so a `USER_EVENT_0` marker stops the trace it is meant to mark.
