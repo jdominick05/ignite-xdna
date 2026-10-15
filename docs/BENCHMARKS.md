@@ -17556,7 +17556,7 @@ better overlap of transport and compute recover, and where is it?
 - **This agrees with the earlier fit's ~1.34 ms,** but is measured per layer rather than inferred.
 
 **What GO does and does not mean.**
-- **It is the opportunity, not a reachable saving.** *[Built the same day: [layer overlap](#layer-overlap-no-barrier-between-layers-only-exact-workspace-dependencies-yolov8s-122-ms-faster-and-exact-outside-its-prediction-2026-10-15-desktop-2) reads −1.220 ms real, −0.454 NOP; its mechanism is unexplained.]* The next layer usually reads this layer's output, so how much of
+- **It is the opportunity, not a reachable saving.** *[Traced after the build: about 1.0 ms of it is reachable, [hidden by the next layer's transfers](#where-layer-overlaps-gain-comes-from-the-boundary-gaps-and-after-compute-heavy-layers-the-cores-backlog-itself-2026-10-15-desktop-2).]* *[Built the same day: [layer overlap](#layer-overlap-no-barrier-between-layers-only-exact-workspace-dependencies-yolov8s-122-ms-faster-and-exact-outside-its-prediction-2026-10-15-desktop-2) reads −1.220 ms real, −0.454 NOP; its mechanism is unexplained.]* The next layer usually reads this layer's output, so how much of
   the tail its transport can cover depends on which rows its first packets need.
 - **Weights can be fetched early regardless.** A weight object prefetched into a core must never be consumed as the
   wrong layer's, the hazard `design.py` documents.
@@ -17583,7 +17583,7 @@ Logs:
 - **The rule reads PASS, but the model behind the prediction is wrong.** That model said removing the barrier
   recovers only the idle gap at each boundary, not the cores' backlog. The real frame recovered more than the
   modelled gap, so that reading was too narrow.
-- **This is not shown to be the backlog either.** That the gain is close to the tail sitting's 1.23 ms is a number
+- *[Traced the same day: [the gain is at the boundaries](#where-layer-overlaps-gain-comes-from-the-boundary-gaps-and-after-compute-heavy-layers-the-cores-backlog-itself-2026-10-15-desktop-2), and after compute-heavy layers it is the backlog itself, about 1.0 ms DERIVED.]* **This is not shown to be the backlog either.** That the gain is close to the tail sitting's 1.23 ms is a number
   to test, not a finding.
 
 **The change** (`--overlap-layers`, off by default).
@@ -17625,7 +17625,7 @@ alternated; `timing_eligible: true`):
 
 **Verdict: PASS** (registered: real ≤ −0.30 ms and 4/4). Compute exposure (real − NOP) falls 0.766 ms.
 
-**Why real gains 2.7x NOP is unexplained.** Candidates that fit:
+**Why real gains 2.7x NOP is unexplained.** *[Answered by the [traced sitting](#where-layer-overlaps-gain-comes-from-the-boundary-gaps-and-after-compute-heavy-layers-the-cores-backlog-itself-2026-10-15-desktop-2): pre-staging during the backlog, plus a boundary cost that exists with no compute.]* Candidates that fit:
 - **Issue moved off the critical path.** The command processor's issue work for the next layer, up to ~14 tasks per
   column, now runs while the cores finish the current one. In the NOP frame issue is already on the critical path,
   so it gains less: the compute-exposure pattern in reverse.
@@ -17648,3 +17648,77 @@ Logs:
 - [analysis](../results/aie/overlap_layers_analysis_yolov8s_desktop2_20261015T2058Z.log): the pre-registration
   verbatim, the proof run, the predictor, the gap sizing, the merge groups, the tolerated over-reads and the build
   identity.
+
+#### Where layer overlap's gain comes from: the boundary gaps, and after compute-heavy layers the cores' backlog itself (2026-10-15, Desktop 2)
+
+**Verdict: BOUNDARY in both arms.** Removing the barrier recovers more than the idle gap at each boundary. After
+compute-heavy layers it also hides the cores' backlog: the next layer's activations stream in while the cores finish
+the previous one.
+- **This corrects the reading given before the build.** It held that removing barriers recovers only the idle
+  gap, not the backlog, and the prediction was sized from that. The measurement says otherwise.
+- **The [tail sitting](#overlap-sized-at-most-36-ms-on-yolov8s-and-123-ms-of-it-is-compute-left-exposed-at-layer-ends-2026-10-15-desktop-2)'s 1.23 ms was a reachable saving in part.** The [overlap section](#layer-overlap-no-barrier-between-layers-only-exact-workspace-dependencies-yolov8s-122-ms-faster-and-exact-outside-its-prediction-2026-10-15-desktop-2)'s "not shown to be
+  the backlog" is answered here.
+
+**The method, and an amendment made after a first sitting.** The sitting was pre-registered (sha256 `b204957a...`):
+- four traced containers: the control, the overlap build, and their NOP copies;
+- 6 rounds, the order rotated, one cold traced dispatch per process;
+- exactness checked first (20 dispatches each, heads equal to the control's).
+
+The registered decomposition splits the frame into the activation stream's pieces: the span from each layer's first
+activation completion to its last, the gaps between layers, and the frame's head and end.
+- **What the first sitting showed.**
+  - It passed gate C: −1.171 ms real and −0.422 ms NOP, against the warm −1.220 and −0.454.
+  - It could not compute rule V. Under overlap, a layer's marker fires when that layer starts issuing, so some
+    layers finish no activation task inside their own marker window, and the window method reads NaN.
+- **The amendment** (sha256 `18afabb7...`, written before the second sitting). It attributes completions to layers by
+  count: column 0's activation channel completes in order, and its 1,387 pulses per frame are exact.
+  - **Method check:** dry-run on old control dumps, it agrees with the window method where the windows are valid
+    (within-layer 21.36M against 21.44M cycles; gaps 6.257M against 6.256M).
+  - **Both sittings' gains are disclosed.** The first sitting's partial figure (the change inside the compute-heavy
+    layers) was seen and is disclosed too.
+  - **The verdict is read from the second sitting only.**
+
+**The second sitting** (gate C PASS: −1.190 ms real, −0.432 ms NOP; `timing_eligible: true`). Means over 6 dumps,
+in cycles at 1.80 GHz; "gaps" are from layer k's last activation completion to layer k+1's first:
+
+| arm | frame gain | gaps | gap gain | after compute-heavy layers (≥35%) | within-layer change |
+|---|---:|---:|---:|---:|---:|
+| real | 2,141,222 = 1.190 ms | 6,194,782 → 3,515,248 | **2,679,534 (125%)** | 1,668,195 | −514,421 (spans longer) |
+| NOP | 778,029 = 0.432 ms | 4,037,036 → 3,161,256 | 875,781 (113%) | 276,788 | −86,099 |
+
+**Two components, measured.**
+- **The boundary cost with no compute: 0.88M cycles, 0.49 ms DERIVED.** This is the NOP arm's gap gain: issue,
+  first-packet transit and awaits at each boundary. It sets a floor on what overlap saves without compute.
+- **The backlog now hidden: about 1.8M cycles, 1.0 ms DERIVED.** This is the real arm's gap gain beyond the NOP's,
+  and it sits after the compute-heavy layers.
+  - In the control, a real frame's gaps hold 2.16M cycles more than the NOP frame's: the next layer waiting at the
+    barrier while the cores finish.
+  - With overlap, real gaps fall to 3.52M, within 0.36M of the NOP frame's 3.16M.
+- **This resolves the [overlap section](#layer-overlap-no-barrier-between-layers-only-exact-workspace-dependencies-yolov8s-122-ms-faster-and-exact-outside-its-prediction-2026-10-15-desktop-2)'s three candidates.** Issue moved off the critical path and fewer awaits
+  are the boundary-cost component. Pre-staging during the backlog is the larger one.
+
+**The within-layer spans get longer, and the cause is not DDR.** Reported, not verdict-bearing; split named after the
+sitting, from the same dumps. Cycles inside the within-layer spans, control → overlap, real arm:
+
+| shim event (column 0) | change | on compute-heavy layers |
+|---|---:|---:|
+| activation backpressure (MemTile/cores not taking it) | +901,412 | +578,819 |
+| weight backpressure | +1,805,112 | +742,220 |
+| activation DDR starvation | −765,133 | −541,095 |
+| weight DDR starvation | −628,665 | −458,883 |
+
+- **DDR starvation falls on both channels**, so DDR contention against the previous layer's drains is not the cause.
+- **The longer spans fill with backpressure.** The next layer's stream starts during the backlog and then waits on
+  MemTile and the cores. This fits fills pre-staged up to the buffer depth.
+- **Not measured:** whether the cores themselves run slower. The cores cannot be traced.
+
+**What is left.** Real-frame gaps still hold 3.52M cycles: 3.52M / 65 boundaries ≈ 54,000 cycles ≈ 30 µs each,
+DERIVED. That is the next target.
+- **Deeper MemTile activation buffering**, which would let more of the next layer pre-stage during the backlog,
+  would act on it.
+
+Logs:
+- [first sitting](../results/aie/overlap_explain_yolov8s_desktop2_20261015T2120Z.log);
+- [second sitting](../results/aie/overlap_explain2_yolov8s_desktop2_20261015T2122Z.log);
+- [analysis](../results/aie/overlap_explain_analysis_yolov8s_desktop2_20261015T2122Z.log): the pre-registration and
+  the amendment verbatim, both decompositions, and the stall split.

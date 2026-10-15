@@ -2054,7 +2054,9 @@ cached reference heads rather than `bo_out`.
       a stream lacks;
     - `tools/engine_shim_trace.py` windows still split at per-layer markers, but a marker now fires when the next
       layer starts issuing, not after the previous one finished.
-  - **The mechanism is unexplained.** Real gains 2.7x NOP and more than the modelled boundary gap.
+  - **The mechanism, traced.** Real gains 2.7x NOP and more than the modelled boundary gap. *[Traced: the gain is
+    at the boundaries; 0.49 ms of it exists with no compute, and about 1.0 ms DERIVED is the cores' backlog after
+    compute-heavy layers, now hidden by the next layer's transfers. [BENCHMARKS](BENCHMARKS.md#where-layer-overlaps-gain-comes-from-the-boundary-gaps-and-after-compute-heavy-layers-the-cores-backlog-itself-2026-10-15-desktop-2).]*
   - [BENCHMARKS](BENCHMARKS.md#layer-overlap-no-barrier-between-layers-only-exact-workspace-dependencies-yolov8s-122-ms-faster-and-exact-outside-its-prediction-2026-10-15-desktop-2).
 - **Pitfall (2026-10-15): the engine's cores cannot be traced, and a traced shim gives one clean dispatch per
   hardware context.**

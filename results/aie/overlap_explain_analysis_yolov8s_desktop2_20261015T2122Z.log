@@ -1,0 +1,129 @@
+where layer overlap's gain comes from, traced, YOLOv8s: pre-registration, amendment, both sittings' decompositions. Desktop 2 (DESKTOP-CBL5NUA), written 2026-10-15T21:26Z
+
+== 1. Hashes taken before each sitting ==
+b204957a0cf53874f6f0545d696c6f6511ff112cb1ba4caadc27d67ebb7c18b4 *scratch/b48/prereg_explain.txt
+7ae7386f2a33adf526d4cf471d7549b58a1aef539fa0e67ec7f798fe26a1eabb *scratch/b48/sit4.py
+a0ec1aebcf798f6e41edd7b72146c779e3b12b97c51e94402618b7c1425a6ba6 *scratch/b48/decompose.py
+c3eb59c5070f57622a296c081a99b290b1d574e69dde8dce5e4a055a6561e81f *build/yolov8s_tr_ctl.ignite
+42ba79fab49489a7d267989ac9f2a4d494b0235c2597af7d40f966b413e7fa6a *build/yolov8s_tr_ov.ignite
+865ae17a362f0097ef2afc2462349d10dbb84dd9bddf5451fcbebb8e662f7deb *build/yolov8s_tr_ctl_nop.ignite
+39fb08f848287ef2156561b5dced7347992b925c6a8be837d54a22108eb71fe5 *build/yolov8s_tr_ov_nop.ignite
+6497f72ff45170ba40b098d99dd42c3c20ae5b4d361a16794eb9d3297cbbb98b *tools/engine_shim_trace.py
+18afabb7a9f6367acce5f677332bc5488af9cd452ed558a8d46ce9681d81c670 *scratch/b48/prereg_explain_amend.txt
+51982313c6af31e4777d305acdf161a4ef310bb3e26b0c2433abce2edc950eaf *scratch/b48/decompose2.py
+d88173822cc28db03e36a5012df05cb336a85b90237ab378a185fa0f305bdb8c *scratch/b48/sit4.py
+
+== 2. Pre-registration, verbatim ==
+PRE-REGISTRATION: where layer overlap's gain comes from, traced, YOLOv8s. Desktop 2 (DESKTOP-CBL5NUA), 2026-10-15.
+Written before any traced dispatch of the overlap build. Disclosed: the decomposition script was dry-run on the
+control-only tail-sitting JSONs (ctl against itself: control gaps 6,256,428 cycles, within-layer 21,441,406).
+
+Question. --overlap-layers gained -1.220 ms real and -0.454 ms NOP (warm, edbb8b5), outside its prediction, with
+real gaining 2.7x NOP. Does the gain come from the activation stream's idle gaps between layers, or from inside
+layers?
+
+Containers: build/yolov8s_tr_ctl.ignite and its NOP copy (as before); build/yolov8s_tr_ov.ignite (= --overlap-layers
+--trace-shims 0) and its NOP copy (write_nop_copy). Hashes below. Exactness of tr_ov is checked in this sitting's
+log before the timing rounds (repeat_dispatch_exact --iters 20 against yolov8s_ab_ctl's heads); a failure voids it.
+
+Method. scratch/b48/sit4.py --rounds 6 (ctl, ov, ctl_nop, ov_nop rotated; one cold traced dispatch per process)
+under research-lowlevel.sh --npu; void unless timing_eligible true. Then scratch/b48/decompose.py: from the
+per-layer activation completion offsets, the frame = head + sum(within-layer first-to-last completion spans) +
+sum(gaps between layer k's last and k+1's first completion) + end. Note: under overlap a layer's marker fires when
+it starts issuing, so the decomposition uses absolute completion times, not windows.
+
+Gates: C, the traced frame gain within 0.40 ms of the warm -1.220 (real) and within 0.30 ms of -0.454 (NOP). If C
+fails for an arm, that arm's V is reported but not read as the warm mechanism.
+
+Rule V (per arm, on the frame gain dF = ctl - ov): BOUNDARY when the gaps' share of dF >= 60%; WITHIN when the
+within-layer share >= 60%; else MIXED.
+Expectations (weak): real BOUNDARY or MIXED; NOP BOUNDARY. If real is BOUNDARY with a gap gain much larger than
+NOP's, the asymmetry is that real frames' boundary gaps held compute-paced waiting the overlap removes. If real is
+WITHIN or MIXED, the overlap changes inside-layer behaviour (e.g. issue off the critical path) and the section says
+which groups carry it. Reported, not verdict-bearing: per compute-share group, gaps and within changes.
+
+A hang, an exactness failure or contention voids the sitting.
+
+== 3. Amendment after the first sitting, verbatim ==
+AMENDMENT to scratch/b48/prereg_explain.txt (sha256 b204957a...), written 2026-10-15 after the first sitting
+(results/aie/overlap_explain_yolov8s_desktop2_20261015T2120Z.log) and before a second one.
+
+What was seen from the first sitting, disclosed in full:
+- Exactness PASS (20 dispatches each, heads equal to yolov8s_ab_ctl's).
+- Gate C, both arms PASS: traced frame gain -1.171 ms real (warm -1.220), -0.422 ms NOP (warm -0.454).
+- Rule V could not be computed. The overlap arms' per-window JSON has layers with no activation completion inside
+  their own marker window (under overlap a marker fires when the layer starts issuing, so its completions can fall
+  in the next window). The pre-registered decompose.py reads those as NaN: head, within and gaps are NaN for ov and
+  ov_nop. One partial figure was printed and is disclosed: hi-group within change -1,268,620 cycles (real), from the
+  layers whose windows did hold completions. No gap or within share was seen for either arm.
+
+Amended method (V and C unchanged otherwise): attribute activation completions to layers BY COUNT, not by window.
+Column 0's MM2S_0 completes its tasks in order and its FINISHED_TASK pulses are exact (1,387 per frame); the k-th
+pulse belongs to the layer owning column 0's k-th activation task (a_tasks per layer from
+shim_trace_budget_yolov8s_desktop2_20261015T1922Z.json). Script: scratch/b48/decompose2.py, which needs the raw
+trace bytes, so a second sitting saves them (sit4.py now passes --dump-bytes; nothing else changed). It was
+dry-run on three control dumps from the tail sitting (ctl against itself): within 21,364,095, gaps 6,256,851
+cycles, agreeing with the window method's 21,441,406 and 6,256,428 where windows are valid.
+
+The verdict is read from the SECOND sitting only, with its own gate C (same tolerances). The first sitting's
+frame gains are reported beside it, not pooled.
+
+== 4. First sitting (20261015T2120Z): the registered window decomposition (scratch/b48/decompose.py); NaN where an overlap layer finished no activation task inside its own marker window ==
+ctl      runs 6: frame 15.406 ms; head 231,772; within 21,337,685; gaps 6,137,502; end 23,977 cycles
+ov       runs 6: frame 14.235 ms; head nan; within nan; gaps nan; end 30,103 cycles
+ctl_nop  runs 6: frame 11.900 ms; head 236,148; within 17,193,566; gaps 3,976,993; end 14,046 cycles
+ov_nop   runs 6: frame 11.479 ms; head nan; within nan; gaps nan; end 24,849 cycles
+
+real: frame gain 2,108,562 cycles = 1.171 ms (DERIVED); gaps nan (nan%); within nan (nan%); head+end nan (nan%)
+   lo (<10%)    : gaps          nan  within          nan
+   mid (10-35%) : gaps          nan  within          nan
+   hi (>=35%)   : gaps          nan  within   -1,268,620
+
+NOP: frame gain 758,896 cycles = 0.422 ms (DERIVED); gaps nan (nan%); within nan (nan%); head+end nan (nan%)
+   lo (<10%)    : gaps          nan  within          nan
+   mid (10-35%) : gaps          nan  within          nan
+   hi (>=35%)   : gaps          nan  within          nan
+
+== rules (pre-registered) ==
+C (real): traced gain -1.171 ms within 0.4 of the warm -1.220 -> PASS
+C (NOP): traced gain -0.422 ms within 0.3 of the warm -0.454 -> PASS
+V (real): gaps nan%, within nan% of the gain -> MIXED
+V (NOP): gaps nan%, within nan% of the gain -> MIXED
+
+== 5. Second sitting (20261015T2122Z): count attribution (scratch/b48/decompose2.py) - THE VERDICT ==
+ctl      dumps 6: frame 15.478 ms; head 244,567; within 21,398,374; gaps 6,194,782; end 22,736 cycles
+ov       dumps 6: frame 14.288 ms; head 260,836; within 21,912,795; gaps 3,515,248; end 30,357 cycles
+ctl_nop  dumps 6: frame 12.027 ms; head 244,373; within 17,353,224; gaps 4,037,036; end 13,995 cycles
+ov_nop   dumps 6: frame 11.595 ms; head 245,591; within 17,439,324; gaps 3,161,256; end 24,429 cycles
+
+real: frame gain 2,141,222 cycles = 1.190 ms (DERIVED); gaps 2,679,534 (125%); within -514,421 (-24%); head+end -23,890 (-1%)
+   lo (<10%)    : gaps after these layers      444,445  within     -286,798
+   mid (10-35%) : gaps after these layers      566,893  within       -9,237
+   hi (>=35%)   : gaps after these layers    1,668,195  within     -218,387
+
+NOP: frame gain 778,029 cycles = 0.432 ms (DERIVED); gaps 875,781 (113%); within -86,099 (-11%); head+end -11,652 (-1%)
+   lo (<10%)    : gaps after these layers      307,303  within      -83,863
+   mid (10-35%) : gaps after these layers      291,690  within       44,602
+   hi (>=35%)   : gaps after these layers      276,788  within      -46,838
+
+== rules (pre-registered, amended) ==
+C (real): traced gain -1.190 ms within 0.4 of the warm -1.220 -> PASS
+C (NOP): traced gain -0.432 ms within 0.3 of the warm -0.454 -> PASS
+V (real): gaps 125%, within -24% of the gain -> BOUNDARY
+V (NOP): gaps 113%, within -11% of the gain -> BOUNDARY
+
+== 6. Reported, named after the sitting: shim stall cycles inside the within-layer spans and the gaps (scratch/b48/stalls.py, same dumps) ==
+
+real: cycles, control -> overlap (change); within-layer spans, then gaps; 'hi' = layers with compute share >= 35%
+  span  within   21,398,374 ->   21,912,795 (    +514,421; hi    +218,387)   gaps    6,194,782 ->    3,515,248 (  -2,679,534)
+  A_bp  within    3,332,270 ->    4,233,682 (    +901,412; hi    +578,819)   gaps      115,939 ->      207,033 (     +91,093)
+  W_bp  within   13,803,652 ->   15,608,763 (  +1,805,112; hi    +742,220)   gaps    1,481,908 ->    2,401,161 (    +919,253)
+  A_st  within    3,116,847 ->    2,351,714 (    -765,133; hi    -541,095)   gaps      217,034 ->      213,081 (      -3,953)
+  W_st  within    1,943,442 ->    1,314,776 (    -628,665; hi    -458,883)   gaps      662,192 ->      262,927 (    -399,265)
+
+NOP: cycles, control -> overlap (change); within-layer spans, then gaps; 'hi' = layers with compute share >= 35%
+  span  within   17,353,224 ->   17,439,324 (     +86,099; hi     +46,838)   gaps    4,037,036 ->    3,161,256 (    -875,781)
+  A_bp  within        8,099 ->        8,217 (        +118; hi         -10)   gaps          790 ->          868 (         +77)
+  W_bp  within   10,461,288 ->   11,236,844 (    +775,555; hi     +87,376)   gaps      956,930 ->    1,792,279 (    +835,348)
+  A_st  within    1,762,660 ->    1,722,389 (     -40,272; hi     -24,677)   gaps      303,194 ->      324,003 (     +20,808)
+  W_st  within      546,457 ->      519,123 (     -27,334; hi     +10,961)   gaps      589,686 ->      203,961 (    -385,725)
