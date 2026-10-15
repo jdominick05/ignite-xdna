@@ -556,7 +556,7 @@ def compile_graph_container(onnx_path, output_path, build_dir: Optional[Path] = 
                             box_cap: Optional[int] = None,
                             trace_shims: Optional[Sequence[int]] = None,
                             trace_size: int = 4 << 20,
-                            overlap_layers: bool = False,
+                            overlap_layers: Optional[bool] = None,
                             **kwargs) -> Dict[str, Any]:
     """Lower, schedule, build the device binaries and write the container. Returns the manifest.
 
@@ -601,6 +601,13 @@ def compile_graph_container(onnx_path, output_path, build_dir: Optional[Path] = 
     ``trace_size``-byte buffer that becomes the instruction stream's third argument, and has the emitter fire the
     shim's USER_EVENT_1 at every layer boundary and flush the trace after the last. ``tools/engine_shim_trace.py``
     reads it. A measurement build, recorded in the manifest as ``graph_engine.trace``.
+
+    ``overlap_layers`` drops the barrier between layers: each fill or drain waits only for the earlier-layer tasks it
+    conflicts with in the workspace (``compiler/layer_overlap.py``). None, the default, turns it on unless a host
+    layer, an excluded mode (host regions, dense recipe, stream sharing, ring, weight buffer, box fills, split
+    layers), the bf16 design or an off-grain pattern stands in the way; True refuses such a build; False keeps the
+    barrier. The manifest records ``graph_engine.overlap_layers`` either way, and what blocked a default build in
+    ``overlap_layers_blocked_by``. A container without the key predates it and has the barrier.
     """
     if core_depths is not None:
         core_depths = tuple(int(d) for d in core_depths)
@@ -613,12 +620,16 @@ def compile_graph_container(onnx_path, output_path, build_dir: Optional[Path] = 
         # One trace window per stream: a host-segment model would split it. Stream sharing numbers its packets
         # from 1, where the trace flows' ids start too.
         raise ValueError("trace takes no host regions, dense recipe or stream sharing")
-    if overlap_layers and (host_regions or dense_recipe or stream_share or activation_ring or weight_buffer
-                           or box_fills or split_layers):
-        # Layer overlap (compiler/layer_overlap.py) drops the barrier between layers. Each excluded mode writes
-        # MemTile state at a layer boundary, or ends a dispatch there, on the assumption that the column is idle.
-        raise ValueError("overlap_layers takes no host regions, dense recipe, stream sharing, ring, weight buffer, "
-                         "box fills or split layers")
+    # Layer overlap (compiler/layer_overlap.py) drops the barrier between layers. Each of these modes writes MemTile
+    # state at a layer boundary, or ends a dispatch there, on the assumption that the column is idle. None (the
+    # default) turns overlap on wherever none of them, no host layer and no off-grain pattern stands in the way;
+    # True refuses a build that cannot take it; False keeps the barrier.
+    overlap_modes = {"host regions": bool(host_regions), "dense recipe": bool(dense_recipe),
+                     "stream sharing": bool(stream_share), "activation ring": bool(activation_ring),
+                     "weight buffer": bool(weight_buffer), "box fills": bool(box_fills),
+                     "split layers": bool(split_layers)}
+    if overlap_layers and any(overlap_modes.values()):
+        raise ValueError("overlap_layers takes no " + ", ".join(k for k, on in overlap_modes.items() if on))
     if stream_share and (host_regions or dense_recipe or activation_ring or weight_buffer or core_depths is not None):
         raise ValueError("stream_share takes no host regions, dense recipe, ring, weight buffer or core depths")
     if box_fills and (host_regions or dense_recipe or activation_ring or weight_buffer or stream_share
@@ -686,6 +697,14 @@ def compile_graph_container(onnx_path, output_path, build_dir: Optional[Path] = 
             raise ValueError(f"box_cap must be 0 or more, got {box_cap}")
         if box_cap:
             box_layers = apply_box_fills(scheds, box_cap)
+    from ignite_xdna.compiler.layer_overlap import overlap_blockers
+    overlap_blocked = overlap_blockers(scheds, any(isinstance(L, HostLayer) for L in ir.layers),
+                                       profile.transport_options, overlap_modes)
+    if overlap_layers and overlap_blocked:
+        raise ValueError("overlap_layers cannot be used here: " + ", ".join(overlap_blocked))
+    if overlap_layers is None:
+        overlap_layers = not overlap_blocked
+    overlap_layers = bool(overlap_layers)
     if verbose:
         n_host = sum(isinstance(L, HostLayer) for L in ir.layers)
         print(f"[*] Lowered {len(ir.layers)} layers ({n_host} on the host); workspace {ws.nbytes / 1e6:.1f} MB; "
@@ -816,8 +835,10 @@ def compile_graph_container(onnx_path, output_path, build_dir: Optional[Path] = 
             "shims": list(trace_shims), "buffer_bytes": int(trace_size), "events": list(eng.TRACE_SHIM_EVENTS),
             "layer_marker": "USER_EVENT_1, fired before every layer and TRACE_FLUSH_ROUNDS times after the last",
             **trace_route}
-    if overlap_layers:   # absent means a barrier after every layer
-        manifest["graph_engine"]["overlap_layers"] = True
+    # Written both ways: absent (a container built before overlap existed) means a barrier after every layer.
+    manifest["graph_engine"]["overlap_layers"] = overlap_layers
+    if not overlap_layers and overlap_blocked:
+        manifest["graph_engine"]["overlap_layers_blocked_by"] = overlap_blocked
     if box_fills:   # absent means the split ObjectFifo
         manifest["graph_engine"]["box_fills"] = {
             "layers": box_layers, "cap": box_cap}

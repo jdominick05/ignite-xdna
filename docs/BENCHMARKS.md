@@ -17586,7 +17586,7 @@ Logs:
 - *[Traced the same day: [the gain is at the boundaries](#where-layer-overlaps-gain-comes-from-the-boundary-gaps-and-after-compute-heavy-layers-the-cores-backlog-itself-2026-10-15-desktop-2), and after compute-heavy layers it is the backlog itself, about 1.0 ms DERIVED.]* **This is not shown to be the backlog either.** That the gain is close to the tail sitting's 1.23 ms is a number
   to test, not a finding.
 
-**The change** (`--overlap-layers`, off by default).
+**The change** (`--overlap-layers`, off by default). *[The compiler's default since the [same day](#layer-overlap-is-the-compilers-default-yolov8n-100-ms-yolov8s-131-pose-114-sesr-m7-008-every-container-exact-2026-10-15-desktop-2); `--no-overlap-layers` keeps the barrier.]*
 - **Today** every layer ends in a barrier: every task of every column is awaited before the next layer's first push.
 - **With the flag** the barrier goes. Before each fill or drain, the emitter awaits exactly the earlier-layer tasks
   it conflicts with in the workspace: read after write, write after read, write after write.
@@ -17722,3 +17722,79 @@ Logs:
 - [second sitting](../results/aie/overlap_explain2_yolov8s_desktop2_20261015T2122Z.log);
 - [analysis](../results/aie/overlap_explain_analysis_yolov8s_desktop2_20261015T2122Z.log): the pre-registration and
   the amendment verbatim, both decompositions, and the stall split.
+
+#### Layer overlap is the compiler's default: YOLOv8n −1.00 ms, YOLOv8s −1.31, pose −1.14, SESR M7 −0.08, every container exact (2026-10-15, Desktop 2)
+
+**What changed.** `ignite-compile` now overlaps layers by default.
+- **When it applies.** Wherever a build allows it: the int8 design, no host layer, and none of ring, weight buffer,
+  box fills, stream sharing, split layers or dense recipe. Every workspace pattern must also sit on the 8-byte grain,
+  which is checked before the choice is made.
+- **The flags.**
+  - `--no-overlap-layers` keeps the barrier after every layer.
+  - `--overlap-layers` makes a build that cannot take it an error. The error names the blocking modes.
+- **The manifest records the choice both ways.**
+  - `graph_engine.overlap_layers` is true or false.
+  - `overlap_layers_blocked_by` lists what kept a default build on the barrier.
+  - A container without the key predates the change and has the barrier.
+
+**What the default reaches**, from the built manifests:
+
+| graph | default | why |
+|---|---|---|
+| YOLOv8n and YOLOv8s (with and without `--silu-sigmoid`), YOLOv8n-pose, SESR M7 | overlap | monolithic int8 graph |
+| ResNet50 head | overlap, no effect | one layer, no boundary: the default and barrier streams are byte-identical |
+| YOLOv8n-cls 640 | barrier | its graph lowers a host layer (`blocked_by: host layers`); both streams byte-identical |
+| anything with `--host-region` (YOLO11n, YOLO26n, YOLO-World), split and dense containers | barrier | host layers, split layers or a dense recipe |
+
+So a model with a CPU step gives up the overlap as well as paying for the step.
+
+**Proof, exactness and identity.**
+- **The offline proof** (`tests/test_layer_overlap_offline.py`) now covers every graph above:
+  - YOLOv8n and YOLOv8s with and without the SiLU sigmoid, pose, SESR M7, both classifiers;
+  - hazard-free on each, from exact byte sets and the stream's own awaits;
+  - plus the default decision itself, and a pattern off the grain being refused rather than truncated.
+- **On the device**, 300 dispatches per container, each default build against its own barrier build:
+  - **Heads** (`repeat_dispatch_exact.py`): YOLOv8n and YOLOv8s with `--silu-sigmoid`, and pose.
+  - **The whole workspace** (`--workspace`, a new mode): every byte of every layer's output, for SESR M7 (11.2 MB), the
+    ResNet50 head, YOLOv8n and YOLOv8s with `--silu-sigmoid`, and pose.
+  - All exact.
+  - The first whole-workspace run stopped at the ResNet head: the tool staged channel-major input into a
+    channel-blocked plane. Its log is kept; the tool now fills the raw plane, and the second run passed all five.
+- **Byte identity.**
+  - YOLOv8s's barrier build is byte-identical to the stream shipped before the change, and its default build to the
+    `--overlap-layers` build timed earlier.
+  - For the other graphs the claim is only that `--no-overlap-layers` runs the unchanged emitter path.
+
+**The sitting** (pre-registered, sha256 `725b19ac...`; `bench_dispatch_ab.py`, 4 rounds × 300; four pairs in one
+sitting, barrier build against default; `timing_eligible: true`):
+- **Registered:** sign only, with a per-pair KILL rule.
+- **Result:** every pair reads **PASS**.
+
+| graph | barrier (ms, real) | default | real delta | lower | NOP delta |
+|---|---:|---:|---:|---:|---:|
+| YOLOv8n, `--silu-sigmoid` | 7.342 | 6.343 | **−1.000 (−13.6%)** | 4/4 | −0.284 |
+| YOLOv8s, `--silu-sigmoid` | 16.229 | 14.921 | **−1.307 (−8.1%)** | 4/4 | −0.430 |
+| YOLOv8n-pose | 7.509 | 6.368 | **−1.141 (−15.2%)** | 4/4 | −0.449 |
+| SESR M7 | 4.267 | 4.184 | −0.083 (−1.9%) | 4/4 | −0.105 |
+
+- **Not attributed: the per-graph pattern.** In every detector the real gain is 2.5–3.5x the NOP gain, the pattern
+  the YOLOv8s trace attributed to the cores' backlog. These graphs were not traced, so for them it is a resemblance,
+  not an attribution.
+- **SESR's small gain fits its shape** (DERIVED, not measured): 8 boundaries against the detectors' 65–74.
+
+**What this does not establish.**
+- **No comparison against AMD.** The README's "AMD stays ahead on YOLOv8s and SESR M7" may be stale. The
+  [release sitting](#the-v033-release-sitting-sigmoid-silu-containers-on-the-host-fast-paths-against-amds-stack-2026-09-17-desktop-2)
+  had Ignition's YOLOv8s 1.4 ms behind AMD's stack glass-to-glass (18.2 against 16.8 ms), and the default now takes
+  1.3 ms off the dispatch. But those are different days and different sittings, and dispatch is not glass-to-glass.
+  A same-sitting AMD arm comes before any README change; it is the first follow-up.
+- **The figures above are dispatch only:** warm, one staged frame, no pre- or post-processing.
+
+Logs:
+- [exactness, heads](../results/aie/overlap_default_exact_desktop2_20261015T2142Z.log);
+- exactness, whole workspace: [first run](../results/aie/overlap_default_exact_ws_desktop2_20261015T2143Z.log)
+  (stopped at the ResNet head on the tool's staging) and [second](../results/aie/overlap_default_exact_ws_desktop2_20261015T2144Z.log);
+- [sitting](../results/aie/overlap_default_ab_desktop2_20261015T2145Z.log)
+  ([JSON](../results/aie/overlap_default_ab_desktop2_20261015T2145Z.json));
+- [record](../results/aie/overlap_default_record_desktop2_20261015T2145Z.log): the pre-registration verbatim, stream
+  identities, every manifest's decision and the proof run.

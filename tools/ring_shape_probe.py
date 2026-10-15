@@ -107,8 +107,9 @@ def main() -> None:
     try:
         out = Path(args.out)
         out.parent.mkdir(parents=True, exist_ok=True)
+        # The barrier build: the ring refuses layer overlap, and the control arm must match the ring arm.
         manifest = compile_graph_container(str(model), str(out), layers=None,
-                                           activation_ring=args.activation_ring)
+                                           activation_ring=args.activation_ring, overlap_layers=False)
     finally:
         es.schedule_graph = real_schedule_graph
 

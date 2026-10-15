@@ -47,6 +47,9 @@ def load(paths):
     runs, names = [], None
     for p in paths:
         d = json.loads(Path(p).read_text(encoding="utf-8"))
+        if d.get("overlap_layers") or any(r.get("overlap_layers") for r in d["runs"]):
+            raise SystemExit(f"{p}: a layer-overlap trace; its per-layer windows are not layer-attributable "
+                             "(trace a --no-overlap-layers build)")
         names = names or d["layers"]
         if d["layers"] != names:
             raise SystemExit(f"{p}: a different layer list")

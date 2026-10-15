@@ -11,6 +11,12 @@ checks that a container stays exact across the hundreds of dispatches a timing s
 transport that reconfigures MemTile state inside the frame (box fills reset five channels per layer). Exit 0 on
 PASS. It times nothing. Written and run on Desktop 2 (Phoenix), 2026-10-15, for the box-fills sitting; first run
 as scratch/b42/repeat_exact.py, the same code but for the repository-root depth.
+
+``--workspace`` compares the whole workspace after each dispatch instead of the heads, for a container of any task
+(super-resolution, classification as well as detect and pose): the base ``EngineSession`` fills its whole input plane
+(halo and channel blocks included, so any layout) with bytes from a seeded generator, and every byte of every layer's
+output must repeat across
+dispatches and match the first container's. Written for the layer-overlap default (2026-10-15).
 """
 import argparse
 import sys
@@ -27,15 +33,34 @@ ap = argparse.ArgumentParser()
 ap.add_argument("containers", nargs="+")
 ap.add_argument("--iters", type=int, default=300)
 ap.add_argument("--image", default=str(ROOT / "assets" / "bus.jpg"))
+ap.add_argument("--workspace", action="store_true", help="compare the whole workspace; any task")
+ap.add_argument("--seed", type=int, default=0, help="--workspace: the input generator's seed")
 a = ap.parse_args()
 img = cv2.cvtColor(cv2.resize(cv2.imread(a.image), (640, 640)), cv2.COLOR_BGR2RGB)
 x = (img.astype(np.float32) / 255.0).transpose(2, 0, 1)[None]
 ref0 = None
 ok = True
 for c in a.containers:
-    s = GraphSession(c)
+    if a.workspace:
+        from ignite_xdna.runtime.graph_session import EngineSession
+        s = EngineSession(c)
+    else:
+        s = GraphSession(c)
     try:
+        def workspace():
+            s.dispatch()
+            s.bo_ws.sync(s.harness.pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_FROM_DEVICE, s.workspace_bytes, 0)
+            return [np.frombuffer(s.bo_ws.read(s.workspace_bytes, 0), dtype=np.uint8).tobytes()]
+
+        if a.workspace:
+            # Seeded bytes over the whole input plane, halo and channel blocks included: any layout, any task.
+            plane = s._input_plane
+            plane[...] = np.random.default_rng(a.seed).integers(0, 256, plane.shape, dtype=np.uint8)
+            s._upload_input()
+
         def heads():
+            if a.workspace:
+                return workspace()
             h = s.run_yolo_monolithic(x)
             leaves = []
 

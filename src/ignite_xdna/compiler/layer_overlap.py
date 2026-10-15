@@ -40,6 +40,44 @@ def pattern_cells(pattern) -> np.ndarray:
     return ((starts // GRAIN)[:, None] + run[None, :]).reshape(-1)
 
 
+def workspace_patterns(scheds):
+    """Every workspace pattern the schedules' fills and drains touch (weight items read the packet buffer)."""
+    for s in scheds:
+        for items in s.programs:
+            for item in items:
+                if item[0] == "a":
+                    yield from item[1]
+                elif item[0] in ("A", "X", "o"):
+                    yield item[1]
+
+
+def off_grain(scheds):
+    """The first workspace pattern not on the 8-byte grain, or None. The tracker refuses such a pattern, so the
+    compiler checks this before choosing overlap by default rather than failing mid-emission."""
+    for p in workspace_patterns(scheds):
+        try:
+            pattern_cells(p)
+        except ValueError:
+            return p
+    return None
+
+
+def overlap_blockers(scheds, ir_has_host: bool, transport: bool, modes) -> list:
+    """Why a build cannot overlap layers, as a list of reasons (empty means it can).
+
+    ``modes`` maps each excluded build mode's name to whether it is on. Each such mode writes MemTile state at a
+    layer boundary, or ends a dispatch there, on the assumption that the column is idle; a host layer ends the NPU
+    stream at a boundary; an engine design without transport options (the bf16 one) has not been proved."""
+    out = [name for name, on in modes.items() if on]
+    if ir_has_host:
+        out.append("host layers")
+    if not transport:
+        out.append("an engine design without transport options")
+    if not out and off_grain(scheds) is not None:
+        out.append(f"a workspace pattern off the {GRAIN}-byte grain")
+    return out
+
+
 class ConflictTracker:
     """Last writer and last reader per 8-byte workspace cell and column, as task sequence numbers."""
 

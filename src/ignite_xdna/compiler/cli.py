@@ -169,10 +169,23 @@ def parse_args(args: Optional[List[str]] = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--overlap-layers",
-        action="store_true",
+        dest="overlap_layers",
+        action="store_const",
+        const=True,
+        default=None,
         help="Graph engine (int8): no barrier between layers; each fill or drain waits only for the earlier-layer "
-             "tasks it conflicts with in the workspace (compiler/layer_overlap.py). Off by default; recorded in "
-             "the manifest as graph_engine.overlap_layers.",
+             "tasks it conflicts with in the workspace (compiler/layer_overlap.py). ON BY DEFAULT wherever the "
+             "build allows it (no host layer, ring, weight buffer, box fills, stream sharing, split layers or "
+             "dense recipe); this flag makes a build that cannot take it an error. Recorded in the manifest as "
+             "graph_engine.overlap_layers.",
+    )
+    parser.add_argument(
+        "--no-overlap-layers",
+        dest="overlap_layers",
+        action="store_const",
+        const=False,
+        help="Graph engine: keep the barrier after every layer (the build before overlap; what "
+             "tools/engine_layer_timing.py and a barrier control need).",
     )
     parser.add_argument(
         "--trace-shims",
@@ -509,7 +522,7 @@ def compile_graph_engine(input_path: Union[str, Path], output_path: Union[str, P
                          task: Optional[str] = None, dense_recipe: Optional[str] = None,
                          datapath: str = "int8", stream_share: bool = False, box_fills: bool = False,
                          box_cap: Optional[int] = None, trace_shims: Optional[str] = None,
-                         trace_size: int = 4 << 20, overlap_layers: bool = False) -> int:
+                         trace_size: int = 4 << 20, overlap_layers: Optional[bool] = None) -> int:
     """Lower the whole graph onto the convolution engine (see engine_compile.py); ``host_regions`` run on the host;
     ``silu_sigmoid`` gives SiLU the sigmoid epilogue; ``retire_batch`` sets the shim retirement cadence;
     ``datapath`` picks the engine profile (int8, or bf16 for W8A16)."""

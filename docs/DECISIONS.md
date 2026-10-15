@@ -2036,8 +2036,36 @@ cached reference heads rather than `bo_out`.
     configure writes must first be made countable by `split_instruction_stream`). Then a new pre-registration,
     not a rerun
     ([BENCHMARKS](BENCHMARKS.md#block-5-box-fills-in-the-engine-exact-on-the-device-and-069-ms-slower-transport-gains-025-ms-but-compute-exposure-grows-094-ms-2026-10-15-desktop-2)).
+- **Decision (2026-10-15): layer overlap is the compiler's default. `--no-overlap-layers` keeps the barrier.**
+  - **Where it applies.** Every build that allows it: the int8 design, no host layer, none of ring, weight buffer,
+    box fills, stream sharing, split layers or dense recipe, and every workspace pattern on the 8-byte grain.
+    - `--overlap-layers` makes a build that cannot take it an error.
+    - The manifest records `graph_engine.overlap_layers` both ways, and `overlap_layers_blocked_by` for a default
+      build kept on the barrier.
+    - A container without the key predates the change and has the barrier.
+  - **Measured.** Pre-registered, every pair PASS, 4/4 rounds: YOLOv8n −1.000 ms, YOLOv8s −1.307 (both
+    `--silu-sigmoid`), YOLOv8n-pose −1.141, SESR M7 −0.083. Every default build is exact against its barrier build:
+    300 dispatches; heads, and the whole workspace.
+  - **The option entry's landing condition, item by item:**
+    - **Proof: met.** `tests/test_layer_overlap_offline.py` covers YOLOv8n and YOLOv8s with and without the SiLU
+      sigmoid, pose, SESR M7 and both classifiers.
+    - **Device exactness: met.** On every container the default changes.
+    - **Consumers: met.** Checked by search, not assumed:
+      - every caller of `split_instruction_stream` runs only under refused modes (host segments, split, dense)
+        or refuses an overlap container (`engine_layer_timing`);
+      - the other two `SequenceEmitter` constructors (hardware tests, the bf16 kernel) keep the barrier;
+      - the runtime dispatches one stream per container;
+      - `tools/rebuild_container_check.py` rebuilds with the reference's own key;
+      - `tools/ring_shape_probe.py` pins the barrier;
+      - `engine_shim_trace.py` prints no per-layer table for an overlap container, and `shim_trace_budget.py` and
+        `shim_trace_compare.py` refuse one.
+    - **The AMD arm: NOT RUN.** The README is unchanged, and its "AMD stays ahead on YOLOv8s and SESR M7" waits on a
+      same-sitting AMD comparison.
+  - **Tool consequence.** Per-layer timing (`engine_layer_timing`), any barrier control and per-layer trace windows
+    need a `--no-overlap-layers` build.
+  - [BENCHMARKS](BENCHMARKS.md#layer-overlap-is-the-compilers-default-yolov8n-100-ms-yolov8s-131-pose-114-sesr-m7-008-every-container-exact-2026-10-15-desktop-2).
 - **Option (2026-10-15): `--overlap-layers`, no barrier between layers. Measured −1.220 ms on YOLOv8s (real,
-  4/4 rounds, pre-registered), exact. Off by default.**
+  4/4 rounds, pre-registered), exact. Off by default.** *[The default since the same day: the entry above.]*
   - **What it does.** Each fill or drain awaits only the earlier-layer tasks it conflicts with in the workspace
     (`compiler/layer_overlap.py`, exact 8-byte cells); a frame barrier ends the stream.
   - **What the exactness rests on.** An offline proof over the emitted stream (`tests/test_layer_overlap_offline.py`)
@@ -2053,7 +2081,8 @@ cached reference heads rather than `bo_out`.
     - `tools/engine_layer_timing.py` refuses such containers, because it cuts the stream at per-layer barriers, which such
       a stream lacks;
     - `tools/engine_shim_trace.py` windows still split at per-layer markers, but a marker now fires when the next
-      layer starts issuing, not after the previous one finished.
+      layer starts issuing, not after the previous one finished. *[Since the default: the tool prints no per-layer table for such a
+      container, and its readers refuse one.]*
   - **The mechanism, traced.** Real gains 2.7x NOP and more than the modelled boundary gap. *[Traced: the gain is
     at the boundaries; 0.49 ms of it exists with no compute, and about 1.0 ms DERIVED is the cores' backlog after
     compute-heavy layers, now hidden by the next layer's transfers. [BENCHMARKS](BENCHMARKS.md#where-layer-overlaps-gain-comes-from-the-boundary-gaps-and-after-compute-heavy-layers-the-cores-backlog-itself-2026-10-15-desktop-2).]*

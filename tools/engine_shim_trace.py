@@ -122,6 +122,7 @@ def trace_once(container: str, image: str, dump: Path = None) -> dict:
             raise SystemExit(f"{container} was not built with --trace-shims")
         events = list(trace["events"])
         names = [L["name"] for L in s.ge["layers"]]
+        overlap = bool(s.ge.get("overlap_layers"))
         img = cv2.cvtColor(cv2.resize(cv2.imread(image), (640, 640)), cv2.COLOR_BGR2RGB)
         x = (img.astype(np.float32) / 255.0).transpose(2, 0, 1)[None]
         pyxrt = s.harness.pyxrt
@@ -147,7 +148,8 @@ def trace_once(container: str, image: str, dump: Path = None) -> dict:
             (dump / f"shim_r{row}c{col}_{int(time.time() * 1000)}.bin").write_bytes(bytes(bs))
         rows, frame_cycles, n_marks = per_layer(decode_runs(bs), events, len(names))
         per_shim[col] = {"layers": rows, "frame_cycles": frame_cycles, "markers": n_marks}
-    return {"dispatch_ms": ms, "trace_bytes_used": used, "shims": per_shim, "events": events, "layers": names}
+    return {"dispatch_ms": ms, "trace_bytes_used": used, "shims": per_shim, "events": events, "layers": names,
+            "overlap_layers": overlap}
 
 
 def main() -> int:
@@ -181,6 +183,20 @@ def main() -> int:
                   f"{f0['frame_cycles']:,} cycles = {f0['frame_cycles'] / CLOCK_GHZ / 1e6:.3f} ms at {CLOCK_GHZ} GHz (DERIVED); "
                   f"{f0['markers']} markers")
     events, names = runs[0]["events"], runs[0]["layers"]
+    overlap = bool(runs[0].get("overlap_layers"))
+    if a.json:
+        Path(a.json).write_text(json.dumps({"container": str(a.container), "events": events, "layers": names,
+                                            "clock_ghz": CLOCK_GHZ, "overlap_layers": overlap, "runs": runs},
+                                           indent=1), encoding="utf-8")
+    if overlap:
+        # With layer overlap (the compiler's default since 2026-10-15) a layer's marker fires when it starts issuing,
+        # not after the layer before it finished, so its tasks complete in later windows: the per-layer rows below
+        # would be plausible and wrong. The frame span above stands. For per-layer figures, rebuild with
+        # --no-overlap-layers, or keep --dump-bytes and attribute completions by count (BENCHMARKS, "Where layer
+        # overlap's gain comes from").
+        print("\n[trace] layer-overlap container: per-layer windows are not layer-attributable; no per-layer table "
+              "(rebuild with --no-overlap-layers for one)")
+        return 0
 
     # Per layer, the mean over runs of the first traced shim's counts.
     col = sorted(runs[0]["shims"])[0]
@@ -190,9 +206,6 @@ def main() -> int:
     for k, name in enumerate(names):
         vals = [np.mean([r["shims"][col]["layers"][k][key] for r in runs]) for key in keys]
         print(f"{k:3d}  " + " ".join(f"{v:22.0f}" for v in vals) + f"  {name}")
-    if a.json:
-        Path(a.json).write_text(json.dumps({"container": str(a.container), "events": events, "layers": names,
-                                            "clock_ghz": CLOCK_GHZ, "runs": runs}, indent=1), encoding="utf-8")
     return 0
 
 

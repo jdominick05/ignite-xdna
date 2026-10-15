@@ -4,7 +4,9 @@ Removing the layer barrier is safe only if no shim task is pushed while an earli
 the workspace might still be running: a fill must not read bytes a drain has not finished writing (RAW), and a
 drain must not write bytes a fill has not finished reading (WAR) or another drain is still writing (WAW). Twenty
 exact dispatches cannot show that - a hazard is a race - and the emulator does not model time. So it is proved here
-over the emitted stream itself, for the real YOLOv8n and YOLOv8s schedules.
+over the emitted stream itself, for the real schedule of every graph in ``MODELS``: each one the compiler's default
+reaches (overlap is on by default wherever a build allows it), plus the 640 classifier, whose host layer keeps it on
+the barrier. A new monolithic graph the default reaches belongs in ``MODELS`` before it ships.
 
 The checker is independent of ``compiler/layer_overlap.py``: it uses exact byte sets (``DmaPattern.indices``), not the
 tracker's 8-byte cells, and it knows a task is complete only from the awaits the stream actually makes, plus the
@@ -29,8 +31,15 @@ from ignite_xdna.compiler.engine_sequence import (SequenceEmitter, frame_retire_
                                                   program_task_count)
 from ignite_xdna.compiler.layer_overlap import ConflictTracker  # noqa: E402
 
-MODELS = {"yolov8n": ROOT / "models" / "yolov8n_cut_xint8.onnx",
-          "yolov8s": ROOT / "models" / "yolov8s_cut_xint8.onnx"}
+# Every graph the compiler turns overlap on for by default (monolithic int8 graph containers): (model, silu_sigmoid).
+MODELS = {"yolov8n": (ROOT / "models" / "yolov8n_cut_xint8.onnx", False),
+          "yolov8s": (ROOT / "models" / "yolov8s_cut_xint8.onnx", False),
+          "yolov8n_silu": (ROOT / "models" / "yolov8n_cut_xint8.onnx", True),
+          "yolov8s_silu": (ROOT / "models" / "yolov8s_cut_xint8.onnx", True),
+          "yolov8n_pose": (ROOT / "models" / "yolov8n-pose_cut_xint8.onnx", False),
+          "sesr_m7": (ROOT / "models" / "sesr_m7_xint8.onnx", False),
+          "yolov8n_cls640": (ROOT / "models" / "yolov8n-cls_640_cut_xint8.onnx", False),
+          "resnet50_head": (ROOT / "build" / "test_resnet50_head.onnx", False)}
 
 
 class _Task:
@@ -110,14 +119,18 @@ class LayerOverlapOffline(unittest.TestCase):
     _cache = {}
 
     def _scheds(self, name):
-        model = MODELS[name]
+        model, silu = MODELS[name]
         if not model.exists():
             self.skipTest(f"{name} model not present")
         if name not in self._cache:
-            ir = graph_ir.lower_yolov8n(model)
+            ir = graph_ir.lower_yolov8n(model, silu_sigmoid=silu)
             ws = es.plan_workspace(ir)
-            self._cache[name] = (ws, es.schedule_graph(ir, ws)[0])
-        return self._cache[name]
+            self._cache[name] = (ws, es.schedule_graph(ir, ws)[0], ir)
+        return self._cache[name][:2]
+
+    def _ir(self, name):
+        self._scheds(name)
+        return self._cache[name][2]
 
     def _emit(self, name, overlap, withhold=False):
         ws, scheds = self._scheds(name)
@@ -143,9 +156,15 @@ class LayerOverlapOffline(unittest.TestCase):
         em, _ = self._emit("yolov8s", overlap=True)
         self.assertEqual(em.hazards, [], f"hazards under overlap: {em.hazards[:5]}")
 
-    def test_03_yolov8n_overlap_hazard_free(self):
-        em, _ = self._emit("yolov8n", overlap=True)
-        self.assertEqual(em.hazards, [], f"hazards under overlap: {em.hazards[:5]}")
+    def test_03_every_default_graph_hazard_free(self):
+        # Overlap is the compiler's default wherever a build allows it, so every graph it reaches is proved here:
+        # the YOLOv8 detectors with and without the SiLU sigmoid, pose, SESR M7 and both classifiers.
+        for name in MODELS:
+            if name == "yolov8s":
+                continue   # test_02
+            with self.subTest(model=name):
+                em, _ = self._emit(name, overlap=True)
+                self.assertEqual(em.hazards, [], f"{name}: hazards under overlap: {em.hazards[:5]}")
 
     def test_04_checker_catches_missing_waits(self):
         # The checker's own sensitivity: the same stream with the dependency waits withheld must show hazards,
@@ -159,6 +178,42 @@ class LayerOverlapOffline(unittest.TestCase):
         # it is not yet known complete. Required on most boundaries, else the flag does nothing.
         em, scheds = self._emit("yolov8s", overlap=True)
         self.assertGreater(em.overlapped, (len(scheds) - 1) // 2, f"only {em.overlapped} boundaries overlap")
+
+    def test_06_default_decision(self):
+        # What the compiler's default (overlap_layers=None) decides, from the same function it calls. Every graph
+        # above must be on the grain and unblocked; each excluded mode, a host layer or the bf16 design blocks it.
+        from ignite_xdna.compiler.graph_ir import HostLayer
+        from ignite_xdna.compiler.layer_overlap import overlap_blockers
+        none = {"box fills": False, "activation ring": False}
+        hosted = {"yolov8n_cls640"}   # its graph lowers a host layer, so the default keeps its barrier
+        for name in MODELS:
+            with self.subTest(model=name):
+                _, scheds = self._scheds(name)
+                has_host = any(isinstance(L, HostLayer) for L in self._ir(name).layers)
+                self.assertEqual(has_host, name in hosted, f"{name}: host layer {has_host}")
+                self.assertEqual(overlap_blockers(scheds, has_host, True, none),
+                                 ["host layers"] if has_host else [], name)
+        _, scheds = self._scheds("yolov8n")
+        self.assertEqual(overlap_blockers(scheds, False, True, {"box fills": True}), ["box fills"])
+        self.assertEqual(overlap_blockers(scheds, True, True, none), ["host layers"])
+        self.assertEqual(overlap_blockers(scheds, False, False, none), ["an engine design without transport options"])
+
+    def test_07_off_grain_pattern_blocks(self):
+        # A pattern off the 8-byte grain is refused by the tracker and reported by the pre-check, never truncated.
+        from ignite_xdna.compiler.layer_overlap import off_grain, pattern_cells
+
+        class _S:
+            def __init__(self, pattern):
+                self.programs = [[("o", pattern)]]
+
+        _, scheds = self._scheds("yolov8n")
+        good = next(item[1] for s in scheds for items in s.programs for item in items if item[0] == "o")
+        self.assertIsNone(off_grain([_S(good)]))
+        import dataclasses
+        bad = dataclasses.replace(good, offset=good.offset + 4)   # 4-byte aligned, as DMA allows; off the 8 grain
+        with self.assertRaises(ValueError):
+            pattern_cells(bad)
+        self.assertIs(off_grain([_S(bad)]), bad)
 
 
 if __name__ == "__main__":
