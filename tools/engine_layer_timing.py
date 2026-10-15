@@ -9,7 +9,8 @@ and must reproduce the container (workspace size and every weight-packet byte), 
 task count then cuts `insts.bin` at its layer barrier (`engine_sequence.split_instruction_stream`; the emitter
 retires every task at each barrier, so the pieces are position independent). Each piece, the whole stream and an
 empty stream (header only, no ops) get one pre-built XRT run each, the same start/wait path `GraphSession.dispatch`
-uses.
+uses. The compiler overlaps layers by default since 2026-10-15, leaving no barrier to cut at: time a container built
+with `--no-overlap-layers` (the tool refuses an overlap container).
 
 One round = the whole stream once, then every layer piece in order, then the empty stream `--empty` times; rounds
 repeat `--rounds` times after `--warmup` rounds, on the same staged frame. Reported per layer: the median dispatch

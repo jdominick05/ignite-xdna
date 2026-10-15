@@ -11,7 +11,9 @@ image, reads the trace buffer back, decodes it with ``tools/trace_runs.py`` (``c
 frame parser kept as runs, since a whole frame expanded cycle by cycle took 5.1 GB; ``--dump-bytes`` saves the stream
 so ``trace_runs.py --selftest`` can check the two agree on it) and splits it at the markers: layer k is the cycles from marker k to
 marker k+1, the last layer ends at the first flush marker. The core tiles cannot be traced in this design (no free
-southbound switch port; design.py, the shim-trace note), so this sees the transport side only:
+southbound switch port; design.py, the shim-trace note), so this sees the transport side only. Per-layer windows need
+a barrier build: since 2026-10-15 the compiler overlaps layers by default, so build with ``--trace-shims C
+--no-overlap-layers`` for the per-layer table; an overlap container gets the frame span only. The events:
 
 - ``DMA_MM2S_n_STREAM_BACKPRESSURE``: shim channel n has data and the consumer will not take it (n = 0 activations
   into the MemTile, n = 1 weights into the cores): that input is AHEAD of its consumer.
