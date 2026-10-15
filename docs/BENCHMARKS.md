@@ -17417,7 +17417,7 @@ The 12.3 ms transport figure stands.
   - This is consistent with stream sharing and box fills losing in the real frame what they saved in NOP.
   - It does not explain those losses: neither was traced this way.
 
-**Next, on hardware (not run):** a traced NOP copy of the control. If A blocked on the compute-heavy layers falls
+**Next, on hardware** *([run the same day](#the-traced-nop-copy-the-memtile-fill-on-the-compute-heavy-layers-is-the-arithmetic-weights-stay-ahead-without-it-and-with-compute-gone-the-residual-tracks-task-count-2026-10-15-desktop-2): P1 COMPUTE, P2 AHEAD WITHOUT COMPUTE, P3a CHANGED, P3b SHRANK)*: a traced NOP copy of the control. If A blocked on the compute-heavy layers falls
 toward 0% and W blocked stays near 55%, the MemTile fill is compute. If the per-task residual is unchanged it is issue;
 if it shrinks it was tail.
 
@@ -17426,3 +17426,78 @@ Logs:
   the budget, the byte cross-check against the schedule, the workload match, the groups, the residual fit and the
   clock sensitivity.
 - [JSON](../results/aie/shim_trace_budget_yolov8s_desktop2_20261015T1922Z.json): per layer.
+
+#### The traced NOP copy: the MemTile fill on the compute-heavy layers is the arithmetic, weights stay ahead without it, and with compute gone the residual tracks task count (2026-10-15, Desktop 2)
+
+**Question.** The shim budget above left three readings open:
+- Is the compute-heavy layers' 20% MemTile backpressure the arithmetic?
+- Are weights ahead even with no arithmetic?
+- Is the activation residual compute-related?
+
+**Method.**
+- **Containers:** the traced control and its all-NOP-weights copy (`write_nop_copy`). The copy keeps the same
+  instruction stream, data and trace and changes only the cores' arithmetic.
+- **Runs:** 6 rounds, order alternated, one cold traced dispatch per process; `timing_eligible: true`, and no
+  foreign context before, during or after.
+- **Analysis:** `tools/shim_trace_budget.py` on each arm.
+- **Groups:** fixed beforehand from the committed control budget's warm compute share.
+- **Pre-registration:** sha256 `5485d2ed...`, verbatim in the analysis log, with the verdict script.
+
+**Gates.**
+- **C, calibration, pass.** The NOP frame is 0.775 of the control's (DERIVED; registered 0.70–0.82; warm 13 Oct
+  0.76), and the low-compute layers' windows are 0.990 of the control's.
+- **S, stability, pass.** This sitting's control reads 20.2% activation backpressure on the compute-heavy layers;
+  the earlier sitting read 20%.
+
+| group (by 13 Oct compute share) | arm | ms (DERIVED) | W blocked | A blocked | A DDR starved | A moving | A residual |
+|---|---|---:|---:|---:|---:|---:|---:|
+| < 10% (18 layers) | ctl | 4.570 | 59.7% | 0.0% | 8.0% | 73.1% | 18.9% |
+| | nop | 4.523 | 59.3% | 0.0% | 8.9% | 73.8% | 17.2% |
+| 10–35% (17) | ctl | 5.148 | 52.3% | 14.0% | 12.8% | 63.9% | 9.3% |
+| | nop | 4.048 | 48.0% | **0.0%** | 13.4% | 81.3% | 5.3% |
+| ≥ 35% (31) | ctl | 5.801 | 52.7% | 20.2% | 15.9% | 37.2% | 26.7% |
+| | nop | 3.459 | 49.5% | **0.0%** | 7.9% | 62.3% | 29.7% |
+
+**Verdicts, as registered.**
+- **P1: COMPUTE.** With no arithmetic, the compute-heavy layers' MemTile backpressure falls from 20.2% to 0.0%
+  (registered: ≤ 5%). The stage below the MemTile that held the stream was the cores' arithmetic. In the
+  NOP frame, the MemTile-to-core split and the handshake keep up with the shim stream on every layer.
+- **P2: AHEAD WITHOUT COMPUTE.** Weight backpressure stays at 56.0% over the 62 weight-moving layers (registered:
+  ≥ 45%). Weights wait on the cores whether or not they compute. Inferred, not traced: the cores consume a weight
+  object per round of activations, so their pace is the activations' pace, and weight backpressure is set by
+  activation delivery.
+- **P3a: CHANGED, not a registered outcome.** The per-task part of the activation residual rose to 1.52x (1,182 →
+  1,795 cycles per task).
+- **P3b: SHRANK.** The per-layer part fell to 0.32x (54,024 → 17,377 cycles per layer). The per-layer tail was
+  mostly the last compute.
+
+**What the residual now looks like.**
+- **With compute gone, the residual tracks task count:** R² 0.75 in NOP against 0.50 in the control, at about 1,795
+  cycles (1.0 µs, DERIVED) per activation task.
+- **In absolute terms it fell** from 5.21 M to 3.64 M cycles per frame. On the compute-heavy layers it fell from about
+  1.55 to 1.03 ms. The per-task coefficient rises because the shrunken per-layer tail stops absorbing it.
+- **What could produce it, both still standing:**
+  - issue gaps: the channel has no task queued while the command processor awaits tokens and pushes the next task;
+  - a lower effective rate on short strided reads than the 6.79 GB/s used for moving time.
+
+  The trace separates neither, so the per-task cost stays **unexplained**.
+
+**What it means.**
+- **The NOP frame is the activation stream everywhere.** The MemTile never pushes back on any layer. The stream
+  moves 73% of the time (DERIVED), DDR starves it 10%, and the remaining 17% is the per-task residual.
+- **Compute adds 3.49 ms (DERIVED) to the traced frame,** and it does so by holding the MemTile on the 48 layers with
+  ≥ 10% compute. The 18 transport-bound layers are unchanged (0.99x).
+- **For the levers:**
+  - Faster activation transport pays fully only on the transport-bound layers and in the stream's own residual.
+  - On the compute-heavy layers it waits on the arithmetic, unless compute and transport overlap better: the cores
+    would have to compute while the next packets land, which the MemTile buffers already allow to depth 2.
+  - Neither stream sharing's nor box fills' loss is explained by this. Neither was traced in NOP.
+
+Logs:
+- [sitting](../results/aie/shim_trace_nop_yolov8s_desktop2_20261015T1927Z.log), with the merged runs
+  ([ctl](../results/aie/shim_trace_nop_yolov8s_desktop2_20261015T1927Z_ctl.json),
+  [nop](../results/aie/shim_trace_nop_yolov8s_desktop2_20261015T1927Z_nop.json));
+- [analysis](../results/aie/shim_trace_nop_analysis_yolov8s_desktop2_20261015T1927Z.log): the pre-registration and
+  verdict script verbatim, both budgets and the verdict, with budget JSONs
+  ([ctl](../results/aie/shim_trace_nop_yolov8s_desktop2_20261015T1927Z_budget_ctl.json),
+  [nop](../results/aie/shim_trace_nop_yolov8s_desktop2_20261015T1927Z_budget_nop.json)).

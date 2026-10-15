@@ -1,0 +1,42 @@
+RESEARCH_PLATFORM {"machine": "Desktop 2", "cpu": "AMD Ryzen 7 8700G w/ Radeon 780M Graphics", "os": "Windows-11-10.0.26200-SP0", "ram_bytes": 33381138432, "source_sha256": {"tools/research_process.py": "ffeb1857f190b482eed101b5f5a928f455de26bfa61d23f78a2eacec08e2663e", "tools/quant_calib_alphabet.py": "2dc0b2878c564853f340880209a425dfcf63b8536b2b8e9fd32344daade58d37", "tools/xint8_arithmetic_probe.py": "6aa3df08b9870c3c2264b868459d7ffbac3070dddc1349d7c6f3f480075f7041", "scripts/research-lowlevel.sh": "3455ad7933697936487712665505c216891865c6deada647302785f6e37020bd", "scripts/research-iron.sh": "4c863a262646ddab39b5005006ba8e03809895e6386c6310e2fd9d0a9e9609ee", "kernels/memory_placement/probe.py": "e8d990169ad6091fa1b53852e9f61eff495b5def72d35165a5c5cf1759e38898", "kernels/memory_placement/memory_kernels.cc": "182e7af7071a1e851afb4a7ca266069c489aea1fbaaa85eca129708daeba5ba6", "scripts/research-matrix.sh": "739254171629deae822b0ad7dabc875aee19ace56dde77d3e8aab61663f97516", "kernels/memory_placement/gemm.py": "17c905ad66110d3346bbf0db898dfc6b780df59fae1dfb0c1747057ce1e5844e", "kernels/memory_placement/gemm_placement.cc": "f21acf7250b12914ea30cc1f77613239dfa18421a85a1b9a5199017dd916278a", "tools/research_summary.py": "0c00dcceef07053d06731b41a1f1ed58d3ba4ea09f82497de354ce9cef17da20", "tools/research_toolchain.py": "f0a126a24ae213acfaa43460cfd9def0c86d9cb70cfee0228aa271688467b314"}, "commit": "dc9e17bb182c36f61a1b15cbfb1c7c776a850974", "command": ["bash", "scripts/research-iron.sh", "scratch/b45/sit_nop.py", "--rounds", "6", "--out", "scratch/b45/sit/run_20261015T1927Z"], "seconds_limit": 1200.0, "rss_gib_limit": 8, "checks_only": false, "free_ram_bytes": 24072069120}
+HOST_LOAD busy_cores=0.28 logical_cores=16 free_ram_gb=22.4 sample_sec=1
+HOST_LOAD_TOP 0.17 dev-agent:7624 ws_mb=506
+HOST_LOAD_TOP 0.05 powershell:456 ws_mb=80
+HOST_LOAD_TOP 0.02 WindowsTerminal:9268 ws_mb=138
+HOST_LOAD_TOP 0.02 dev-agent:9128 ws_mb=172
+HOST_LOAD_TOP 0.02 dev-agent:12688 ws_mb=123
+HOST_LOAD_VERDICT CLEAR
+
+PRE_NPU_CONTEXT_WITNESS "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [3276, 6164, 9032, 10688, 12596, 13880, 14860, 16200, 16388], "foreign_pids": []}
+round 0 ctl  [trace] run 0: dispatch 17.619 ms (first in its context); buffer 448,448 B; shims ['1'] (physical columns); marker span 28,159,459 cycles = 15.644 ms at 1.8 GHz (DERIVED); 129 markers
+HOST_TIMELINE {"elapsed_seconds": 2.312, "tree_rss_bytes": 157188096, "foreign_peers": []}
+round 0 nop  [trace] run 0: dispatch 13.924 ms (first in its context); buffer 398,976 B; shims ['1'] (physical columns); marker span 21,599,330 cycles = 12.000 ms at 1.8 GHz (DERIVED); 130 markers
+HOST_TIMELINE {"elapsed_seconds": 4.531, "tree_rss_bytes": 369135616, "foreign_peers": []}
+round 1 nop  [trace] run 0: dispatch 13.719 ms (first in its context); buffer 396,416 B; shims ['1'] (physical columns); marker span 21,606,703 cycles = 12.004 ms at 1.8 GHz (DERIVED); 119 markers
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [3276, 6164, 7920, 8788, 9032, 10688, 12596, 13240, 13484, 13880, 13956, 14428, 14860, 15156, 16200, 16300, 16388, 17368, 17376], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 6.843, "tree_rss_bytes": 285233152, "foreign_peers": []}
+round 1 ctl  [trace] run 0: dispatch 17.500 ms (first in its context); buffer 438,976 B; shims ['1'] (physical columns); marker span 27,915,759 cycles = 15.509 ms at 1.8 GHz (DERIVED); 130 markers
+round 2 ctl  [trace] run 0: dispatch 17.563 ms (first in its context); buffer 435,072 B; shims ['1'] (physical columns); marker span 27,842,341 cycles = 15.468 ms at 1.8 GHz (DERIVED); 130 markers
+HOST_TIMELINE {"elapsed_seconds": 9.172, "tree_rss_bytes": 187879424, "foreign_peers": []}
+round 2 nop  [trace] run 0: dispatch 13.664 ms (first in its context); buffer 390,400 B; shims ['1'] (physical columns); marker span 21,728,391 cycles = 12.071 ms at 1.8 GHz (DERIVED); 130 markers
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [3276, 4384, 4480, 5116, 6164, 7104, 7920, 8788, 9032, 10228, 10688, 12548, 12596, 12616, 13240, 13484, 13880, 13956, 14428, 14860, 14952, 15156, 15656, 15940, 16200, 16300, 16388, 17244, 17332, 17368, 17376], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 11.422, "tree_rss_bytes": 401948672, "foreign_peers": []}
+round 3 nop  [trace] run 0: dispatch 13.757 ms (first in its context); buffer 404,224 B; shims ['1'] (physical columns); marker span 21,588,041 cycles = 11.993 ms at 1.8 GHz (DERIVED); 125 markers
+round 3 ctl  [trace] run 0: dispatch 17.613 ms (first in its context); buffer 438,976 B; shims ['1'] (physical columns); marker span 28,035,435 cycles = 15.575 ms at 1.8 GHz (DERIVED); 130 markers
+HOST_TIMELINE {"elapsed_seconds": 13.734, "tree_rss_bytes": 41803776, "foreign_peers": []}
+round 4 ctl  [trace] run 0: dispatch 17.761 ms (first in its context); buffer 428,288 B; shims ['1'] (physical columns); marker span 27,897,810 cycles = 15.499 ms at 1.8 GHz (DERIVED); 125 markers
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [968, 1544, 3276, 3484, 4176, 4384, 4480, 5116, 5128, 6164, 7104, 7920, 8788, 9032, 9408, 10228, 10688, 12548, 12596, 12616, 13240, 13364, 13484, 13624, 13676, 13880, 13956, 14008, 14428, 14860, 14952, 15156, 15656, 15932, 15940, 16104, 16200, 16300, 16388, 17244, 17332, 17368, 17376], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 16.031, "tree_rss_bytes": 198549504, "foreign_peers": []}
+round 4 nop  [trace] run 0: dispatch 13.634 ms (first in its context); buffer 407,488 B; shims ['1'] (physical columns); marker span 21,710,945 cycles = 12.062 ms at 1.8 GHz (DERIVED); 130 markers
+HOST_TIMELINE {"elapsed_seconds": 18.265, "tree_rss_bytes": 399417344, "foreign_peers": []}
+round 5 nop  [trace] run 0: dispatch 13.955 ms (first in its context); buffer 397,120 B; shims ['1'] (physical columns); marker span 21,688,178 cycles = 12.049 ms at 1.8 GHz (DERIVED); 130 markers
+round 5 ctl  [trace] run 0: dispatch 17.445 ms (first in its context); buffer 433,088 B; shims ['1'] (physical columns); marker span 27,762,438 cycles = 15.424 ms at 1.8 GHz (DERIVED); 130 markers
+merged: scratch/b45/sit/run_20261015T1927Z_ctl.json, scratch/b45/sit/run_20261015T1927Z_nop.json
+HOST_TIMELINE {"elapsed_seconds": 20.593, "tree_rss_bytes": 0, "foreign_peers": []}
+POST_NPU_CONTEXT_WITNESS "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+RESEARCH_PROCESS_RESULT {"exit_code": 0, "stop": null, "peak_tree_rss_bytes": 415567872, "rss_measurement": "maximum observed across sampled descendant working sets; zero observations reported as null", "elapsed_seconds": 20.9059999999954, "foreign_contention_observed": false, "timing_eligible": true}
