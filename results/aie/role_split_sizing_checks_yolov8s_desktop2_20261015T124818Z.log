@@ -1,0 +1,131 @@
+# Shim/MemTile role split on YOLOv8s: offline sizing (DERIVED) and the device exactness checks
+# host: DESKTOP-CBL5NUA (Desktop 2, Phoenix); UTC: 2026-10-15T12:48:18Z; main 485016d
+# scripts: scratch/b41/fill_census.py, scratch/b41/split_size.py (git-ignored), scratch/b36/calib.py constants
+
+## 0. Pre-registrations (verbatim, with sha256)
+# scratch/b41/prereg_split_size.txt sha256 6628b9e32b65e942f18e8ceaac8f813be0e45ac21f92757e130dfea8f36746e5
+#   Pre-registration: offline sizing of the shim/MemTile role split (union box on the shim, per-core cut on the MemTile)
+#   Written 2026-10-15, Desktop 2, before split_size.py has been run.
+#   
+#   Design sized: every one-quad activation fill whose four per-core slices form one 3-D box (planes x row span x
+#   bytes) when unioned is replaced by that box on the shim; the MemTile cuts the four per-core objects from it
+#   (split offsets + dims_to_stream). Consecutive boxes in one column program merge by repeat (merge_runs) up to a
+#   cap of k boxes per task (k = 4, 8, 16), standing for the MemTile buffer it holds. Every other fill is unchanged.
+#   
+#   Priced per layer under the two surviving models (scratch/b36/calib.py constants):
+#     A  max(act bytes per column / 6.9 GB/s, 1.42 us x tasks)
+#     C  act bytes per column / 6.9 GB/s + 0.372 us x tasks
+#   
+#   Kill line: if the YOLOv8s saving under model A at k = 8 is under 1.0 ms, stop before any device probe or engine
+#   code. Saving under C is reported beside it but does not decide.
+#   Validity: the union test must be exact (set equality of byte offsets), and total delivered bytes per core must
+#   be unchanged (the MemTile re-cut delivers the same objects).
+# scratch/b41/prereg_mtsplit_sit.txt sha256 196d9db80fbd5638bd8a26b297f848cbe4e88727b7d892575c77b6f058e4d2b0
+#   Pre-registration: device sitting for the shim/MemTile role split (tools/task_issue_probe.py o4raw / boxraw)
+#   Written 2026-10-15, Desktop 2 (Phoenix), before any timing dispatch of these builds. Builds are the non-check
+#   variants (cores acquire/release only); exactness was established separately on check builds:
+#     1 col x 16 quads: o4 (IRON) 0/409,600 mismatched; o4raw, boxraw k1, boxraw k4 0/409,600.
+#     4 col x 64 quads: o4raw k1, boxraw k16, boxraw k64 0/6,553,600.
+#     box via IRON split + dims_to_stream: ERT_CMD_STATE_TIMEOUT (child BD len = offset gap 1000/1000/1000/15400,
+#     read from the lowered IR); not part of this sitting.
+#   
+#   What the arms are: per quad (4 cores x 6,400 B) the engine's dominant YOLOv8s fill shape, core j = 4 planes x rows
+#   5j..5j+7 x 200 B (3-row overlap between neighbours).
+#     o4     IRON ObjectFifo split, cut on the shim, 1 quad per task (the engine's form today).
+#     o4raw  same shim tasks, hand-written MemTile/core DMA (relay-lock S2MM chain) - the like-for-like control.
+#     boxraw union box (4 x 23 x 200 = 18,400 B per quad, 28% fewer shim bytes) on the shim, k boxes per task by
+#            repeat; MemTile MM2S cuts the four 6,400 B objects (dims [4@4600, 8@200, 200@1], offsets 1000 j).
+#   
+#   Grid (Q = 1024 quads per column; 3 rounds x 30 dispatches, rotated, odd rounds reversed, child per point):
+#     4 columns: o4:1, o4raw:1, boxraw:1, boxraw:2, boxraw:8, boxraw:64
+#     1 column:  o4raw:1, boxraw:1, boxraw:8
+#   
+#   Predictions (ms, frame = dispatch; shim transport 6.9 GB/s per column, issue 1.42 us/task serial over the array,
+#   C's additive 0.372 us/task; absolute values carry an unmodelled intercept, so the rules below use deltas
+#   against o4raw k1 in the same column count):
+#     4 col  o4raw k1   tasks 4096, 26.2 MB/col   A max(3.80, 5.82)=5.82        C 3.80+1.52=5.32
+#            boxraw k1  tasks 4096, 18.8 MB/col   A 5.82  (delta  0.00)        C 2.73+1.52=4.25 (delta -1.07)
+#            boxraw k2  tasks 2048               A 2.91  (delta -2.91)        C 2.73+0.76=3.49 (delta -1.83)
+#            boxraw k8  tasks  512               A 2.73  (delta -3.09)        C 2.92            (delta -2.40)
+#            boxraw k64 tasks   64               A 2.73  (delta -3.09)        C 2.75            (delta -2.57)
+#     1 col  o4raw k1   tasks 1024               A 3.80                       C 4.18
+#            boxraw k1                           A 2.73  (delta -1.07)        C 3.11 (delta -1.07)
+#            boxraw k8                           A 2.73  (delta -1.07)        C 2.78 (delta -1.40)
+#   
+#   Decision rules (band 0.15 ms on a mean-of-rounds delta):
+#    R1 protocol cost: |o4raw - o4| <= 0.15 at 4 col -> the raw protocol is like-for-like; otherwise report the gap and
+#       read every boxraw delta against o4raw only.
+#    R2 model: 4-col boxraw k1 - o4raw k1 within 0.15 of 0 -> favours A; within 0.30 of -1.07 -> favours C; otherwise
+#       neither ("intermediate", report the fraction of C's byte term that appeared).
+#    R3 kill line (frame): re-price scratch/b41/split_size.py's YOLOv8s saving under the favoured model (A 3.27, C 1.81
+#       at cap 8). If R2 says neither, scale: projected = A-saving x (measured 4-col k8 delta / A's -3.09). Under 1.0 ms
+#       -> stop before engine code. A hang or any mismatch on a later check voids the sitting.
+#    R4 the step: 4-col boxraw k2 vs k64 within 0.15 -> merging past 2 boxes buys nothing at this traffic (as the
+#       contig grid found for 2+ quads).
+#   Only these rules decide; anything else in the log is exploratory.
+
+## 1. Which activation fills stay one-quad today, and their shapes (canonical; outermost = repeat)
+activation tasks 5509 one-quad 4774 MB 237.6704
+top one-quad shapes (ndim, sizes, strides): count
+  (4, (4, 4, 8, 200), (3280, 53792, 656, 1)) 1088
+  (4, (4, 4, 8, 200), (1680, 14112, 336, 1)) 784
+  (4, (4, 8, 5, 160), (1680, 14112, 336, 1)) 608
+  (4, (4, 8, 5, 160), (3280, 53792, 656, 1)) 512
+  (4, (4, 4, 8, 200), (880, 3872, 176, 1)) 372
+  (4, (4, 8, 5, 160), (880, 3872, 176, 1)) 264
+  (4, (4, 10, 4, 160), (640, 12800, 320, 1)) 256
+  (4, (4, 8, 5, 160), (6480, 209952, 1296, 1)) 192
+  (4, (4, 8, 5, 160), (960, 4608, 192, 1)) 192
+  (2, (160, 160), (1280, 1)) 128
+  (3, (4, 40, 160), (51200, 640, 1)) 128
+  (4, (4, 8, 5, 160), (1600, 12800, 320, 1)) 128
+  (4, (4, 4, 8, 200), (6480, 209952, 1296, 1)) 64
+  (4, (4, 2, 16, 200), (960, 4608, 192, 1)) 48
+  (3, (4, 40, 160), (51200, 320, 1)) 8
+  (3, (4, 8, 800), (51200, 800, 1)) 2
+per layer: name tasks one-quad example
+  /model.0/conv/Conv              16     0  
+
+## 2. Offline sizing: union boxes on the shim, merged by repeat up to cap boxes per task
+yolov8s_cut_xint8.onnx: one-quad fills boxed 4508, one-quad 4-D fills not boxable 0
+cap 4: tasks 6795 -> 3973, activation 237.7 -> 218.0 MB
+  model A: 12.033 -> 8.763 ms (saving 3.270)
+  model C: 11.139 -> 9.375 ms (saving 1.764)
+cap 8: tasks 6795 -> 3857, activation 237.7 -> 218.0 MB
+  model A: 12.033 -> 8.762 ms (saving 3.271)
+  model C: 11.139 -> 9.332 ms (saving 1.807)
+  box tasks: 424 single-box (unmerged), 1146 multi-box
+  top layers by saving under A (name, tasks, act MB, saving A / C ms):
+    /model.15/cv1/conv/Conv               416 ->  160    9.83 ->   7.37  0.324 / 0.184
+    /model.22/cv3.0/cv3.0.0/conv/Conv     288 ->   96    6.55 ->   4.71  0.238 / 0.138
+    /model.22/cv3.0/cv3.0.1/conv/Conv     288 ->   96    6.55 ->   4.71  0.238 / 0.138
+    /model.6/cv2/conv/Conv                260 ->  132    6.55 ->   6.55  0.132 / 0.048
+    /model.22/cv3.1/cv3.1.0/conv/Conv     148 ->   36    3.28 ->   2.36  0.125 / 0.075
+    /model.22/cv2.0/cv2.0.0/conv/Conv     144 ->   48    3.28 ->   2.36  0.119 / 0.069
+    /model.12/cv2/conv/Conv               196 ->  100    4.92 ->   4.92  0.100 / 0.036
+    /model.18/cv1/conv/Conv               196 ->  100    4.92 ->   4.92  0.100 / 0.036
+    /model.18/cv2/conv/Conv               196 ->  100    4.92 ->   4.92  0.100 / 0.036
+    /model.4/cv2/conv/Conv                288 ->  224    6.55 ->   6.55  0.091 / 0.024
+    /model.15/cv2/conv/Conv               224 ->  160    4.92 ->   4.92  0.091 / 0.024
+    /model.9/cv2/conv/Conv                228 ->   68    6.55 ->   6.55  0.086 / 0.060
+cap 16: tasks 6795 -> 3835, activation 237.7 -> 218.0 MB
+  model A: 12.033 -> 8.762 ms (saving 3.271)
+  model C: 11.139 -> 9.324 ms (saving 1.815)
+
+## 3. Device exactness checks (tools/task_issue_probe.py time ... --check; random bytes, seed 1234;
+##    cores copy every object back through a MemTile join; host compares exactly)
+# chk_o4raw_1
+{"k": 1, "q": 16, "shape": "o4raw", "cols": 1, "tasks": 16, "mb": 0.4096, "check": true, "exact": {"bytes": 409600, "mismatched": 0}, "abytes": 6400, "core_objects": 64, "insts_bytes": 2452, "mean_ms": 0.6066999994800426, "median_ms": 0.6066999994800426, "min_ms": 0.6020000000717118, "times_ms": [0.6020000000717118, 0.6113999988883734]}
+# chk_boxraw_1
+{"k": 1, "q": 16, "shape": "boxraw", "cols": 1, "tasks": 16, "mb": 0.2944, "check": true, "exact": {"bytes": 409600, "mismatched": 0}, "abytes": 6400, "core_objects": 64, "insts_bytes": 2452, "mean_ms": 0.5920000003243331, "median_ms": 0.5920000003243331, "min_ms": 0.5909999963478185, "times_ms": [0.5930000043008476, 0.5909999963478185]}
+# chk_boxraw_4
+{"k": 4, "q": 16, "shape": "boxraw", "cols": 1, "tasks": 4, "mb": 0.2944, "check": true, "exact": {"bytes": 409600, "mismatched": 0}, "abytes": 6400, "core_objects": 64, "insts_bytes": 748, "mean_ms": 0.6061999993107747, "median_ms": 0.6061999993107747, "min_ms": 0.6033000026945956, "times_ms": [0.6090999959269539, 0.6033000026945956]}
+# chk4_o4raw_1
+{"k": 1, "q": 64, "shape": "o4raw", "cols": 4, "tasks": 256, "mb": 6.5536, "check": true, "exact": {"bytes": 6553600, "mismatched": 0}, "abytes": 6400, "core_objects": 1024, "insts_bytes": 37024, "mean_ms": 2.014700003201142, "median_ms": 2.014700003201142, "min_ms": 2.012600001762621, "times_ms": [2.016800004639663, 2.012600001762621]}
+# chk4_boxraw_16
+{"k": 16, "q": 64, "shape": "boxraw", "cols": 4, "tasks": 16, "mb": 4.7104, "check": true, "exact": {"bytes": 6553600, "mismatched": 0}, "abytes": 6400, "core_objects": 1024, "insts_bytes": 2944, "mean_ms": 2.0659000001614913, "median_ms": 2.0659000001614913, "min_ms": 2.049599999736529, "times_ms": [2.082200000586454, 2.049599999736529]}
+# chk4_boxraw_64
+{"k": 64, "q": 64, "shape": "boxraw", "cols": 4, "tasks": 4, "mb": 4.7104, "check": true, "exact": {"bytes": 6553600, "mismatched": 0}, "abytes": 6400, "core_objects": 1024, "insts_bytes": 1328, "mean_ms": 2.006199996685609, "median_ms": 2.006199996685609, "min_ms": 2.0001999946543947, "times_ms": [2.0121999987168238, 2.0001999946543947]}
+# console readings (not saved to files): o4 (IRON ObjectFifo split, 1 col x 16 quads) exact {bytes 409600, mismatched 0};
+#   box (IRON split + dims_to_stream, 1 col x 16 quads): k1 ERT_CMD_STATE_TIMEOUT on dispatch 0, k4 also failed (no result); lowered MemTile
+#   MM2S child BDs len 1000/1000/1000/15400 (offset gaps) against a 6,400 B pattern, S2MM chunked at the same offsets

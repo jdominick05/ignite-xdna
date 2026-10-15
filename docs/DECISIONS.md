@@ -1000,6 +1000,24 @@
       same way (`scripts/w4a8-eval.sh`).
     - [Gate D](BENCHMARKS.md#int4-on-phoenix-gates-first-the-chip-runs-the-engines-uint8--int4-and-on-paper-the-current-weight-packets-leave-int4-little-to-save-2026-09-23-desktop-2),
       `results/int4/w4a8_accuracy_verdict_desktop2_20260923.log`.
+- **Pitfall: IRON's ObjectFifo `split` cannot cut overlapping per-core objects out of one MemTile buffer
+  (2026-10-15).** It times out on the first dispatch, and the cause is decoded from the lowered IR.
+  - **Why:** `split` models a disjoint partition. Each child's MM2S BD gets the gap to the next offset as its
+    length (1,000 / 1,000 / 1,000 / 15,400 B), whatever its `dims_to_stream` pattern streams (6,400 B). Its S2MM
+    side is chunked and locked at the same offsets.
+  - **Don't patch `len` in the lowered MLIR.** The per-chunk locks would still release a core before its bytes
+    land.
+  - **The route that works is a hand-written MemTile program:** raw MLIR in `tools/task_issue_probe.py`
+    (`o4raw` / `boxraw`), exact on silicon.
+  - **Its lock protocol:**
+    - one producer lock per buffer, initialised to 4 and taken 4 at a time;
+    - one consumer lock per core;
+    - an S2MM chain whose first chunk puts 4 tokens on a relay lock, with each later chunk taking one and
+      releasing one core.
+  - **Two toolchain rules shape it.** The CDO generator rejects a locked BD without both an acquire and a
+    release, and rejects a zero-value acquire. The MemTile's BDs are split 24 per channel-parity half.
+  - [BENCHMARKS](BENCHMARKS.md#block-5-amds-split-of-roles-built-as-a-probe-the-shim-moves-one-box-the-memtile-cuts-it-per-core-2026-10-15-desktop-2),
+    `results/aie/role_split_sizing_checks_yolov8s_desktop2_20261015T124818Z.log`.
 
 ## The YOLOv8 partitioning failure (resolved)
 

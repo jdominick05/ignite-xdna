@@ -17000,3 +17000,112 @@ turned a −0.48 ms NOP gain into a +0.93 ms real loss through compute exposure.
 Log: [memtile_replay_sizing_yolov8s_desktop2_20261013T214115Z.log](../results/aie/memtile_replay_sizing_yolov8s_desktop2_20261013T214115Z.log).
 Its two scripts are git-ignored scratch files; both cost models are stated in the
 log header.
+
+#### Block 5: AMD's split of roles, built as a probe: the shim moves one box, the MemTile cuts it per core (2026-10-15, Desktop 2)
+
+**Question.** The decode above shows AMD's shim moving coarse tiles while MemTile descriptor chains cut them into
+per-core objects. Does that split work under the engine's own shapes, and what does it save?
+
+**Why the engine's fills stay one quad (offline).**
+- Of YOLOv8s's 5,509 activation fills, 4,774 still carry one quad.
+- 4,508 of those have the shape of the 3×3 convolutions: core j takes 4 planes × rows 5j..5j+7, e.g.
+  `(4, 4, 8, 200)` at `(3280, 53792, 656, 1)`.
+- So neighbouring cores' slices overlap by a 3-row halo. With the core index on the repeat, no second quad fits
+  in a shim BD.
+- **The union of the four slices is one 3-D box:** 4 planes × 23 rows × 200 B = 18,400 B against 25,600 B. That
+  test is exact set equality of byte offsets and holds for all 4,508. A box leaves the repeat free, so consecutive
+  boxes merge.
+
+**Sizing (DERIVED, kill line pre-registered first, sha256 `6628b9e3...`).** Every boxable fill becomes its box,
+and consecutive boxes in a column program merge by repeat, at most 8 per task.
+- YOLOv8s tasks fall from 6,795 to 3,857, and activation bytes from 237.7 to 218.0 MB.
+- The saving is **3.27 ms under model A and 1.81 ms under model C**. Caps of 4 and 16 change it by under 0.05 ms.
+- 424 boxes stay unmerged.
+- The line was 1 ms under A at cap 8, so the probe went ahead.
+
+**The probe (`tools/task_issue_probe.py`, shapes `o4`, `o4raw`, `boxraw`).** It uses the probe's activation path
+with the engine's retire order. The DDR quad is laid out like the engine's dominant fill.
+
+**The split does not go through IRON's ObjectFifo.**
+- **What failed:** a `split` with `dims_to_stream` and offsets 0 / 1,000 / 2,000 / 3,000 timed out on its first
+  dispatch (`ERT_CMD_STATE_TIMEOUT`).
+- **Why:** the lowered IR shows the cause (DECODED). `split` models a disjoint partition, so each child's MM2S BD
+  gets the gap to the next offset as its length (1,000 / 1,000 / 1,000 / 15,400 B) while its pattern streams
+  6,400 B. The S2MM side is chunked at the same offsets.
+- **Ruled out:** the shim BD (its length matches its pattern), and the cores and drain, which are identical in the
+  `o4` build that came back exact.
+- **The working route is a hand-written design.** `o4raw` and `boxraw` give the MemTile two 18,400 B buffers.
+  - **Producer locks:** one per buffer, initialised to 4 and taken 4 at a time.
+  - **Consumer locks:** one per core.
+  - **The S2MM chain** has five chunks. The CDO generator requires every locked BD to acquire and release, and it
+    rejects a zero acquire. So the first chunk puts 4 tokens on a relay lock, and chunk i takes one and releases
+    core i−1, after that core's last byte has landed.
+  - **Each core's MM2S BD** reads its 6,400 B as `[4 @ 4,600, 8 @ 200, 200 @ 1]` from offset 1,000 j: four
+    channels reading overlapping ranges of one buffer.
+  - **Descriptor budget:** the input S2MM moved to MemTile channel 1, because the check build overflowed the
+    24-descriptor half of the even channels.
+
+**Exact on silicon (MEASURED).** In the check builds the cores copy every object back through a MemTile join; the
+input bytes are random (seed 1234):
+- `o4raw`, `boxraw` k1 and k4, on 1 column × 16 quads: 0 of 409,600 bytes differ.
+- `o4raw` k1, `boxraw` k16 and k64, on 4 columns × 64 quads: 0 of 6,553,600 differ.
+- IRON's `o4`: 0 of 409,600 differ.
+
+This is four channels each walking an overlapping range, not one BD re-reading its own addresses. So it does not
+settle the self-overlap question that the 09-09 im2col probe left open.
+
+**The sitting.**
+- **Setup:** pre-registered (sha256 `196d9db8...`), timing builds only (the cores just acquire and release), 3
+  rounds × 30 dispatches, rotated, `timing_eligible: true`, no foreign contention.
+- **Issue held equal:** instruction bytes per task are identical across `o4`, `o4raw` and `boxraw` (581,648 B for
+  4,096 tasks).
+
+| Q = 1,024 quads per column | tasks | shim MB | mean of rounds | vs `o4raw` k1 |
+|---|---:|---:|---:|---:|
+| 4 col `o4` (IRON, the engine's form) k1 | 4,096 | 104.9 | 5.838 ms | +0.055 |
+| 4 col `o4raw` k1 | 4,096 | 104.9 | 5.783 | - |
+| 4 col `boxraw` k1 | 4,096 | 75.4 | 6.577 | **+0.794** |
+| 4 col `boxraw` k2 | 2,048 | 75.4 | 3.079 | −2.704 |
+| 4 col `boxraw` k8 | 512 | 75.4 | 3.133 | **−2.650** |
+| 4 col `boxraw` k64 | 64 | 75.4 | 3.095 | −2.688 |
+| 1 col `o4raw` k1 | 1,024 | 26.2 | 4.170 | - |
+| 1 col `boxraw` k1 | 1,024 | 18.8 | 2.882 | −1.288 |
+| 1 col `boxraw` k8 | 128 | 18.8 | 3.041 | −1.129 |
+
+**Verdicts by the pre-registered rules:**
+- **R1, the protocol is like-for-like:** `o4raw` reads within 0.055 ms of IRON's `o4`.
+- **R2, neither model.**
+  - A predicted 0 for a one-box task and C predicted −1.07 ms. It reads **+0.794 ms**, slower than the engine's
+    one-quad task by 0.19 µs per task, though it moves 28% fewer bytes. The cause is unexplained.
+  - **Ruled out:** instruction bytes (equal), the MemTile/core protocol (shared by `o4raw` and `boxraw`), and
+    contention (none observed).
+  - **Still standing:** task size. An 18.4 KB task may fall further behind its own transfer than a 25.6 KB one.
+    That is the same unexplained step the contiguous grid showed between 25.6 and 51.2 KB tasks.
+  - **On one column,** where issue is not binding, the same box saves 1.29 ms, slightly more than both models'
+    byte term (1.07).
+- **R3, kill line:** neither model was favoured, so the rule scales A's frame saving by the measured k8 delta:
+  3.27 × 2.650 / 3.09 = **2.80 ms projected for YOLOv8s (DERIVED)**. That clears the 1 ms line.
+  - The 424 unmerged boxes would pay the one-box penalty, at most about 0.08 ms.
+  - **Implication for the build:** a fill that does not merge should stay in today's form.
+- **R4, the step:** k2 and k64 read within 0.016 ms, so merging past two boxes buys nothing at this traffic. This
+  matches the contiguous grid.
+
+**What this does and does not establish.**
+- **Established:** the split works on this silicon, exactly, at the engine's own shape. It halves this traffic's
+  time once boxes merge, 5.78 → 3.08–3.13 ms, at 6.1 GB/s per column.
+- **Not established:** that the engine gains 2.80 ms. This is a NOP probe. The stream-sharing precedent turned a
+  −0.48 ms NOP gain into a +0.93 ms real loss through compute exposure.
+- **The engine work would need:**
+  - a raw-BD MemTile program per layer shape, in place of the ObjectFifo split, with its descriptor budget;
+  - weights and drains beside it;
+  - an exact oracle per layer before any frame is timed.
+
+That is a separate, planned block.
+
+Logs:
+- [sitting](../results/aie/mtsplit_probe_phoenix_desktop2_20261015T1245Z.log) and its
+  [JSON](../results/aie/mtsplit_probe_phoenix_desktop2_20261015T1245Z.json);
+- [sizing, census and exactness checks](../results/aie/role_split_sizing_checks_yolov8s_desktop2_20261015T124818Z.log),
+  which quotes both pre-registrations verbatim.
+
+Its scripts are git-ignored scratch files (`scratch/b41/`).

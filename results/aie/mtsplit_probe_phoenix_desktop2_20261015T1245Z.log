@@ -1,0 +1,59 @@
+RESEARCH_PLATFORM {"machine": "Desktop 2", "cpu": "AMD Ryzen 7 8700G w/ Radeon 780M Graphics", "os": "Windows-11-10.0.26200-SP0", "ram_bytes": 33381138432, "source_sha256": {"tools/research_process.py": "ffeb1857f190b482eed101b5f5a928f455de26bfa61d23f78a2eacec08e2663e", "tools/quant_calib_alphabet.py": "2dc0b2878c564853f340880209a425dfcf63b8536b2b8e9fd32344daade58d37", "tools/xint8_arithmetic_probe.py": "6aa3df08b9870c3c2264b868459d7ffbac3070dddc1349d7c6f3f480075f7041", "scripts/research-lowlevel.sh": "3455ad7933697936487712665505c216891865c6deada647302785f6e37020bd", "scripts/research-iron.sh": "4c863a262646ddab39b5005006ba8e03809895e6386c6310e2fd9d0a9e9609ee", "kernels/memory_placement/probe.py": "e8d990169ad6091fa1b53852e9f61eff495b5def72d35165a5c5cf1759e38898", "kernels/memory_placement/memory_kernels.cc": "182e7af7071a1e851afb4a7ca266069c489aea1fbaaa85eca129708daeba5ba6", "scripts/research-matrix.sh": "739254171629deae822b0ad7dabc875aee19ace56dde77d3e8aab61663f97516", "kernels/memory_placement/gemm.py": "17c905ad66110d3346bbf0db898dfc6b780df59fae1dfb0c1747057ce1e5844e", "kernels/memory_placement/gemm_placement.cc": "f21acf7250b12914ea30cc1f77613239dfa18421a85a1b9a5199017dd916278a", "tools/research_summary.py": "0c00dcceef07053d06731b41a1f1ed58d3ba4ea09f82497de354ce9cef17da20", "tools/research_toolchain.py": "f0a126a24ae213acfaa43460cfd9def0c86d9cb70cfee0228aa271688467b314"}, "commit": "485016de594b2c759301ec5db0e7b6dd596fa9bb", "command": ["C:/Users/<user>/miniforge3/envs/mlir-aie-iron/python.exe", "tools/task_issue_probe.py", "sit", "--points", "o4:1:1024,o4raw:1:1024,boxraw:1:1024,boxraw:2:1024,boxraw:8:1024,boxraw:64:1024,o4raw:1:1024:1,boxraw:1:1024:1,boxraw:8:1024:1", "--rounds", "3", "--iters", "30", "--json", "results/aie/mtsplit_probe_phoenix_desktop2_20261015T1245Z.json"], "seconds_limit": 1500.0, "rss_gib_limit": 8, "checks_only": false, "free_ram_bytes": 24597999616}
+HOST_LOAD busy_cores=0.02 logical_cores=16 free_ram_gb=22.9 sample_sec=1
+HOST_LOAD_TOP 0.02 powershell:10016 ws_mb=80
+HOST_LOAD_VERDICT CLEAR
+
+PRE_NPU_CONTEXT_WITNESS "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [14256, 15172, 15652], "foreign_pids": []}
+[sit] round 0 o4     k1   q1024  c4 a6400  4096 tasks   16384 objects  104.9 MB: mean 5.874 ms, min 5.547
+[sit] round 0 o4raw  k1   q1024  c4 a6400  4096 tasks   16384 objects  104.9 MB: mean 5.862 ms, min 5.601
+[sit] round 0 boxraw k1   q1024  c4 a6400  4096 tasks   16384 objects   75.4 MB: mean 6.510 ms, min 6.211
+HOST_TIMELINE {"elapsed_seconds": 2.235, "tree_rss_bytes": 100388864, "foreign_peers": []}
+[sit] round 0 boxraw k2   q1024  c4 a6400  2048 tasks   16384 objects   75.4 MB: mean 3.149 ms, min 2.967
+[sit] round 0 boxraw k8   q1024  c4 a6400   512 tasks   16384 objects   75.4 MB: mean 3.030 ms, min 2.869
+[sit] round 0 boxraw k64  q1024  c4 a6400    64 tasks   16384 objects   75.4 MB: mean 3.170 ms, min 2.872
+[sit] round 0 o4raw  k1   q1024  c1 a6400  1024 tasks    4096 objects   26.2 MB: mean 4.170 ms, min 3.788
+HOST_TIMELINE {"elapsed_seconds": 4.422, "tree_rss_bytes": 104570880, "foreign_peers": []}
+[sit] round 0 boxraw k1   q1024  c1 a6400  1024 tasks    4096 objects   18.8 MB: mean 2.925 ms, min 2.829
+[sit] round 0 boxraw k8   q1024  c1 a6400   128 tasks    4096 objects   18.8 MB: mean 3.106 ms, min 2.783
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [3992, 5268, 9368, 9380, 11196, 12000, 12612, 14256, 15172, 15652, 16492, 17316], "foreign_pids": []}
+[sit] round 1 o4     k1   q1024  c4 a6400  4096 tasks   16384 objects  104.9 MB: mean 5.822 ms, min 5.532
+[sit] round 1 boxraw k8   q1024  c1 a6400   128 tasks    4096 objects   18.8 MB: mean 3.011 ms, min 2.769
+HOST_TIMELINE {"elapsed_seconds": 6.641, "tree_rss_bytes": 135114752, "foreign_peers": []}
+[sit] round 1 boxraw k1   q1024  c1 a6400  1024 tasks    4096 objects   18.8 MB: mean 2.807 ms, min 2.777
+[sit] round 1 o4raw  k1   q1024  c1 a6400  1024 tasks    4096 objects   26.2 MB: mean 4.133 ms, min 3.896
+[sit] round 1 boxraw k64  q1024  c4 a6400    64 tasks   16384 objects   75.4 MB: mean 2.955 ms, min 2.869
+[sit] round 1 boxraw k8   q1024  c4 a6400   512 tasks   16384 objects   75.4 MB: mean 3.135 ms, min 2.876
+HOST_TIMELINE {"elapsed_seconds": 8.782, "tree_rss_bytes": 467419136, "foreign_peers": []}
+[sit] round 1 boxraw k2   q1024  c4 a6400  2048 tasks   16384 objects   75.4 MB: mean 2.998 ms, min 2.959
+[sit] round 1 boxraw k1   q1024  c4 a6400  4096 tasks   16384 objects   75.4 MB: mean 6.726 ms, min 6.451
+[sit] round 1 o4raw  k1   q1024  c4 a6400  4096 tasks   16384 objects  104.9 MB: mean 5.830 ms, min 5.610
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [2848, 3992, 5268, 9240, 9368, 9380, 11196, 12000, 12612, 12720, 13920, 14256, 15172, 15212, 15652, 16060, 16224, 16492, 16872, 17228, 17316], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 10.922, "tree_rss_bytes": 379588608, "foreign_peers": []}
+[sit] round 2 boxraw k1   q1024  c4 a6400  4096 tasks   16384 objects   75.4 MB: mean 6.494 ms, min 6.164
+[sit] round 2 boxraw k2   q1024  c4 a6400  2048 tasks   16384 objects   75.4 MB: mean 3.090 ms, min 3.029
+[sit] round 2 boxraw k8   q1024  c4 a6400   512 tasks   16384 objects   75.4 MB: mean 3.234 ms, min 2.981
+[sit] round 2 boxraw k64  q1024  c4 a6400    64 tasks   16384 objects   75.4 MB: mean 3.161 ms, min 2.874
+HOST_TIMELINE {"elapsed_seconds": 13.157, "tree_rss_bytes": 97505280, "foreign_peers": []}
+[sit] round 2 o4raw  k1   q1024  c1 a6400  1024 tasks    4096 objects   26.2 MB: mean 4.208 ms, min 3.949
+[sit] round 2 boxraw k1   q1024  c1 a6400  1024 tasks    4096 objects   18.8 MB: mean 2.914 ms, min 2.844
+[sit] round 2 boxraw k8   q1024  c1 a6400   128 tasks    4096 objects   18.8 MB: mean 3.005 ms, min 2.781
+[sit] round 2 o4     k1   q1024  c4 a6400  4096 tasks   16384 objects  104.9 MB: mean 5.817 ms, min 5.525
+HOST_TIMELINE {"elapsed_seconds": 15.313, "tree_rss_bytes": 379285504, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [2472, 2848, 3992, 5268, 9240, 9368, 9380, 10768, 11196, 11352, 12000, 12612, 12720, 13900, 13920, 14256, 14352, 14752, 14888, 15172, 15212, 15652, 16060, 16224, 16492, 16872, 17228, 17260, 17316], "foreign_pids": []}
+[sit] round 2 o4raw  k1   q1024  c4 a6400  4096 tasks   16384 objects  104.9 MB: mean 5.658 ms, min 5.486
+[point] o4     k1   q1024  c4 a6400 mean of rounds 5.838 ms (round spread 57 us)
+[point] o4raw  k1   q1024  c4 a6400 mean of rounds 5.783 ms (round spread 203 us)
+[point] boxraw k1   q1024  c4 a6400 mean of rounds 6.577 ms (round spread 231 us)
+[point] boxraw k2   q1024  c4 a6400 mean of rounds 3.079 ms (round spread 151 us)
+[point] boxraw k8   q1024  c4 a6400 mean of rounds 3.133 ms (round spread 204 us)
+[point] boxraw k64  q1024  c4 a6400 mean of rounds 3.095 ms (round spread 215 us)
+[point] o4raw  k1   q1024  c1 a6400 mean of rounds 4.170 ms (round spread 75 us)
+[point] boxraw k1   q1024  c1 a6400 mean of rounds 2.882 ms (round spread 118 us)
+[point] boxraw k8   q1024  c1 a6400 mean of rounds 3.041 ms (round spread 101 us)
+POST_NPU_CONTEXT_WITNESS "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+RESEARCH_PROCESS_RESULT {"exit_code": 0, "stop": null, "peak_tree_rss_bytes": 604893184, "rss_measurement": "maximum observed across sampled descendant working sets; zero observations reported as null", "elapsed_seconds": 15.578000000001339, "foreign_contention_observed": false, "timing_eligible": true}
