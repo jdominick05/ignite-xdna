@@ -16005,7 +16005,9 @@ so the two are separable here. Fit of each layer's NOP time ([log](../results/ai
 - **It is consistent with the activation ring result.** The ring cut DDR traffic 38%, but every core still
   received one packet per chunk per group. Its time rose with its instruction stream.
 - **Still open:** whether the cost is per packet or per byte (every packet is 6,400 B), and which stage of
-  the path (shim, MemTile, core DMA, lock handshake) sets it.
+  the path (shim, MemTile, core DMA, lock handshake) sets it. *[Partly answered 2026-10-15 by the
+  [shim budget](#where-the-control-frames-time-goes-seen-from-the-shim-activation-bytes-on-the-transport-bound-layers-the-memtile-filling-on-the-compute-heavy-ones-exploratory-offline-2026-10-15-desktop-2): on the transport-bound layers the shim's activation stream (the MemTile
+  never pushes back), on the compute-heavy ones a stage below the MemTile. Per packet against per byte stays open.]*
 
 **Lever sizes (DERIVED, at 0.235 µs per packet).** A layer's packet count is 4 × G × T × C:
 - G = ceil(Cout / 32), the output-channel groups;
@@ -16128,7 +16130,7 @@ the array, roughly 6.8 GB/s per column. That is close to one 32-bit stream at th
 (7.2 GB/s), and to the 7 GB/s the one-core MemTile hop probe measured (0.143 ms per MB). That suggests a
 per-column ceiling: one shim-to-MemTile activation stream feeding four cores. This is DERIVED and untested.
 - **If it holds,** the lever is more activation streams per column, not packet shape. Each column's second
-  shim MM2S channel carries only weights, about 57 MB per frame against 237 MB of activations.
+  shim MM2S channel carries only weights, about 57 MB per frame against 237 MB of activations. *[83.6 MB, not ~57: 20.99 MB per column with the replay, from the schedule and the instruction stream ([shim budget](#where-the-control-frames-time-goes-seen-from-the-shim-activation-bytes-on-the-transport-bound-layers-the-memtile-filling-on-the-compute-heavy-ones-exploratory-offline-2026-10-15-desktop-2)), as the sizing section below already reads.]*
 - **If the ceiling is per core instead,** shape and bytes are the lever and the sizing above applies.
 
 A probe that drives one, two and four cores of one column from one shim channel, and four cores from two,
@@ -16185,7 +16187,7 @@ The four columns are independent (3.95x one column).
 - **It explains why earlier transport experiments could not win.** The MemTile hop costs nothing, the ring and
   the weight buffer moved bytes around the same single stream, and packet shape only trims bytes on it.
 - **The lever is a second stream per column.** Today each column's second shim MM2S channel carries only
-  weights: about 57 MB per YOLOv8s frame (29.5 MB of packets plus the stride-0 replay), against 237 MB of
+  weights: about 57 MB per YOLOv8s frame (29.5 MB of packets plus the stride-0 replay) *[83.6 MB, not ~57: 20.99 MB per column with the replay, from the schedule and the instruction stream ([shim budget](#where-the-control-frames-time-goes-seen-from-the-shim-activation-bytes-on-the-transport-bound-layers-the-memtile-filling-on-the-compute-heavy-ones-exploratory-offline-2026-10-15-desktop-2)), as the sizing section below already reads.]*, against 237 MB of
   activations.
 
 At the measured rates, the activations alone take about 8.7 ms per frame at 27.17 GB/s and about 4.7 ms at
@@ -17329,3 +17331,98 @@ Logs:
 - [checks](../results/aie/shim_trace_checks_yolov8s_desktop2_20261015T1854Z.log): the pre-registration, the routing
   failure, the decoder self-test, the marker structure, the second-dispatch failure, exactness, rebuild identity,
   calibration, noise, and the lead-against-configure analysis.
+
+#### Where the control frame's time goes, seen from the shim: activation bytes on the transport-bound layers, the MemTile filling on the compute-heavy ones (exploratory, offline, 2026-10-15, Desktop 2)
+
+**Question.** The shim trace above was used only as a baseline for box fills. Read on its own, which stage holds
+each layer of the YOLOv8s control frame? This is part of the open question in "What sets a layer's time" (which
+stage of the path sets the per-packet cost).
+
+**A lead given before this analysis was wrong.** Before the analysis, weight backpressure on 53–60% of the window
+was read as "the cores hold most layers, not the weights", which would put the 12.3 ms transport figure in question.
+The budget below shows otherwise:
+- On the layers with almost no compute, the MemTile never pushes back and the activation stream is what the layer
+  waits on.
+- Weight backpressure is the normal state of a weight stream kept deliberately ahead. It is not a compute signal.
+
+The 12.3 ms transport figure stands.
+
+**Method.** `tools/shim_trace_budget.py` adds bytes to the trace.
+- **Bytes per layer:** it disassembles the traced control's `insts.bin`, splits it at the layer markers, and sums
+  what column 0's task pushes move (BD length × (repeat + 1)).
+  - The result equals the compiler's schedule exactly: 99 weight tasks (20,999,424 B), 1,387 activation tasks
+    (59,673,600 B) and 226 drains (6,976,000 B) per frame.
+- **Moving time:** bytes at the MEASURED four-column stream rate, 6.79 GB/s per column (the stream-ceiling route).
+- **The budget per channel:** `window − backpressure − DDR starvation − moving = residual`.
+- **Compute share:** joined from the 13 Oct per-layer real/NOP sitting as (real − NOP) / real, warm.
+  - That container's per-layer packets and rounds equal the traced build's on 66 of 66 layers.
+  - Its layer windows track the trace's at r = 0.997.
+
+**Two kinds of number, and the caveats.**
+- **Measured cycles:** backpressure, starvation and the windows, independent of the trace clock.
+- **DERIVED twice:** moving time, and so the residual, from the rate and from the assumed 1.80 GHz clock.
+  - At the 1.695 GHz calibration fit, the activation stream moves 53% of the frame instead of 57%, and the residual
+    is 22% instead of 19%.
+  - **The product is bounded.** On the 19 layers whose weights move at least 25% of the window, the weight channel
+    reads backpressure + starvation + moving = 84–98%, never over 100%.
+- **Caveats:** every traced run is a cold first dispatch, and only logical column 0 is seen.
+
+**The frame, column 0** (6 runs, 15.50 ms of windows, DERIVED):
+
+| channel | blocked downstream | DDR starved | moving (DERIVED) | residual (DERIVED) |
+|---|---:|---:|---:|---:|
+| activations (MM2S 0 → MemTile) | 13% | 12% | 57% | 19% |
+| weights (MM2S 1, broadcast to 4 cores) | 55% | 10% | 20% | 16% |
+| output join (S2MM 0) | starved 81% | | | |
+
+**By warm compute share** (window-weighted; thresholds chosen after seeing the data):
+
+| layers | n | ms | W blocked | A blocked | A DDR starved | A moving | A residual |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| compute < 10% (1×1 over wide inputs) | 18 | 4.57 | 60% | **0%** | 7% | **73%** | 19% |
+| 10–35% | 17 | 5.13 | 53% | 15% | 12% | 64% | 9% |
+| ≥ 35% (mostly the 3×3s in the C2f blocks) | 31 | 5.80 | 53% | **20%** | 16% | 37% | 26% |
+
+- **Weights are ahead everywhere.** Weight backpressure is 53–60% in every group and does not track compute share
+  (r = −0.13 over the 62 layers that move weights).
+  - The weight broadcast is blocked when any one of the four cores' two weight buffers is full. The instrument
+    cannot say whether that core is computing or waiting on its activations.
+  - **What it rules out:** that weight delivery holds the frame.
+- **On the transport-bound layers the shim's activation stream is the stage.**
+  - The stream moves for 73% of the window and is DDR-starved for 7%.
+  - The MemTile never pushes back. Whatever is downstream of the MemTile keeps up.
+  - This is the stream-ceiling finding seen inside the real frame, per layer, rather than inferred from a fit.
+  - It is not "at the ceiling": the stream is idle or slower than the rate for 19% of these windows.
+- **On the compute-heavy layers the MemTile fills.**
+  - Activation backpressure is 20% there and tracks compute share (r = +0.71). The stage below the MemTile holds
+    the stream: the MemTile-to-core split, the core DMA or handshake, or the arithmetic. The shim cannot see which.
+  - DDR starvation also rises, to 16% (r = +0.39). Strided halo reads would produce that, but it is not attributed.
+- **The residual (5.23 M cycles, 19%, DERIVED) is unexplained.**
+  - Across layers it fits about 1,230 cycles per activation task plus about 53,000 per layer (R² 0.52).
+  - **The per-layer part, about 3.5 M cycles, is mostly not issue.** A window runs marker to marker, so after a
+    layer's last activation task every channel sits task-less through the last compute, the last drains and the
+    barrier. The weight channel's residual, 16% of the frame, bounds that shared head and tail from above.
+  - **The per-task part, about 1.7 M cycles (0.68 µs per task, DERIVED),** could be gaps with no task queued, or a
+    slower effective rate on short strided reads. The trace does not separate them.
+  - It agrees with the earlier packets + ops fit but is not independent evidence. Per-packet against per-byte stays
+    open, because moving time here is per-byte by construction.
+- **Output starvation, 81%,** says only that drains are queued far ahead of the cores' output. It does not identify a
+  bottleneck.
+
+**What it means for the levers.**
+- **On about 4.6 ms of the frame, activation bytes per second on the shim stream are the cost.** That is what the
+  second-stream and fewer-bytes designs target.
+- **On the 5.8 ms of compute-heavy layers, the stream is already held back from below 20% of the time.** Moving the
+  same bytes faster there fills the MemTile sooner.
+  - This is consistent with stream sharing and box fills losing in the real frame what they saved in NOP.
+  - It does not explain those losses: neither was traced this way.
+
+**Next, on hardware (not run):** a traced NOP copy of the control. If A blocked on the compute-heavy layers falls
+toward 0% and W blocked stays near 55%, the MemTile fill is compute. If the per-task residual is unchanged it is issue;
+if it shrinks it was tail.
+
+Logs:
+- [shim_trace_budget_yolov8s_desktop2_20261015T1922Z.log](../results/aie/shim_trace_budget_yolov8s_desktop2_20261015T1922Z.log):
+  the budget, the byte cross-check against the schedule, the workload match, the groups, the residual fit and the
+  clock sensitivity.
+- [JSON](../results/aie/shim_trace_budget_yolov8s_desktop2_20261015T1922Z.json): per layer.
