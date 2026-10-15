@@ -21,12 +21,16 @@ separately:
 
     python tools/laya_hybrid.py check --mode fp32|bf16|npu --model-dir D [--model M] [--ref R] [--gemm-dir G]
     python tools/laya_hybrid.py time --mode npu|fp32|bf16 --model-dir D [--gemm-dir G] [--calls 20]
+    python tools/laya_hybrid.py profile --model-dir D --profile-dir P [--mode fp32|bf16] [--calls 20]
 
 ``check`` runs Laya's reference support ticket (three questions) and three synthetic inputs, all padded to 512
 tokens with [PAD] under attention mask 0, through the hybrid and through the whole model ``--ref`` on the CPU
 (default: the served model for fp32; for bf16 and npu, pass the ``bf16copy`` of it), and prints the largest
 |logit difference| and whether the top option agrees. ``time`` prints the per-call split: host segments,
-rounding and writes, NPU calls, reads. Every input is 512 tokens: the hybrid is built for that shape only.
+rounding and writes, NPU calls, reads. ``profile`` opens no NPU: it times every host segment with the products in
+numpy, then rebuilds the segments under ONNX Runtime's profiler and splits each segment's wall time by op type (the
+profiler's own per-node times are inflated, so only their proportions are used). Every input is 512 tokens: the
+hybrid is built for that shape only.
 
 Runs in the mlir-aie-iron env (ONNX Runtime CPU and pyxrt in one process). The NPU mode refuses to start unless
 xrt-smi reports no hardware contexts, gives every dispatch a timeout, and stops at the first failed state.
@@ -50,6 +54,7 @@ DEFAULT_MODEL = "laya_az0_noguard.onnx"
 XRT_PY = "C:/Xilinx/XRT/xrt_sdk/xrt/python"
 XRT_SMI = "C:/Windows/System32/AMD/xrt-smi.exe"
 WAIT_MS = 5000
+LAYERS = 28          # ModernBERT-large encoder layers
 GEMM_SHAPES = {(1024, 3072), (1024, 1024), (1024, 5248), (2624, 1024), (1024, 4096), (4096, 1024)}
 
 
@@ -61,7 +66,7 @@ def padded_n(n: int) -> int:
 class Plan:
     """The 121 host segments and the 120 products between them, from one ONNX model."""
 
-    def __init__(self, model_path: Path, threads: int = THREADS):
+    def __init__(self, model_path: Path, threads: int = THREADS, profile_dir: Path | None = None):
         import onnx
         import onnxruntime as ort
         from onnx import helper, shape_inference
@@ -109,13 +114,22 @@ class Plan:
         # next segment and the activation rounding need.
         so.add_session_config_entry("session.intra_op.allow_spinning", "0")
         self.segments = []
+        self.seg_ops = []          # op types of each segment's nodes, before ONNX Runtime rewrites them
+        self.seg_ext = []          # the graph inputs and segment outputs (not products) each segment reads
+        self.seg_t = None          # set to a list to collect per-segment wall seconds in run()
+        prod_outs = {pr["out"] for pr in self.products}
         for s, idx in enumerate(seg_nodes):
             nodes = [g.node[j] for j in idx]
+            self.seg_ops.append([n.op_type for n in nodes])
+            if profile_dir is not None:
+                so.enable_profiling = True
+                so.profile_file_prefix = str(profile_dir / f"seg{s:03d}")
             produced = {o for n in nodes for o in n.output if o}
             needed = [t for n in nodes for t in n.input if t and t not in produced]
             needed = list(dict.fromkeys(needed))
             inits = [init[t] for t in needed if t in init]
             ins = [t for t in needed if t not in init]
+            self.seg_ext.append(sorted(t for t in ins if t not in prod_outs))
             outs = [t for t in produced
                     if t in graph_outputs or any(c != ("seg", s) for c in consumers.get(t, ()))]
             if not nodes:
@@ -142,7 +156,10 @@ class Plan:
         env = dict(feed)
         for s, seg in enumerate(self.segments):
             if seg is not None:
+                t0 = time.perf_counter()
                 res = seg["sess"].run(seg["outs"], {t: env[t] for t in seg["ins"]})
+                if self.seg_t is not None:
+                    self.seg_t[s] += time.perf_counter() - t0
                 env.update(zip(seg["outs"], res))
             if s < len(self.products):
                 pr = self.products[s]
@@ -391,9 +408,137 @@ def cmd_time(a) -> int:
     return 0
 
 
+def segment_kind(plan: Plan, s: int) -> str:
+    """What one host segment does, from its ops: the segments alternate in a fixed pattern per encoder layer."""
+    ops = set(plan.seg_ops[s])
+    if s == 0:
+        return "embed"
+    if s == len(plan.segments) - 1:
+        return "head"
+    if "Softmax" in ops:
+        return "attention"
+    if "Erf" in ops:
+        return "geglu"
+    if "LayerNormalization" in ops:
+        return "residual+norm"
+    return "other"
+
+
+def profile_events(path: Path, drop_first: int) -> tuple[dict, list[float]]:
+    """Per op type, the mean microseconds per run of one session's profile, dropping its first runs; and each kept
+    run's whole duration. The profiler's per-node times include its own overhead: use them as proportions only."""
+    ev = json.loads(path.read_text(encoding="utf-8"))
+    runs = sorted((e["ts"], e["ts"] + e["dur"]) for e in ev if e.get("cat") == "Session" and e.get("name") == "model_run")
+    kept = runs[drop_first:]
+    per = {}
+    for e in ev:
+        if e.get("cat") != "Node" or not e.get("name", "").endswith("_kernel_time"):
+            continue
+        if not any(a <= e["ts"] <= b for a, b in kept):
+            continue
+        op = e.get("args", {}).get("op_name", "?")
+        per[op] = per.get(op, 0.0) + e["dur"] / len(kept)
+    return per, [b - a for a, b in kept]
+
+
+def cmd_profile(a) -> int:
+    """Where the host segments' time goes: pass 1 times every segment unprofiled; pass 2 rebuilds the sessions with
+    ONNX Runtime's profiler and splits each segment's time by op type, scaled to pass 1's wall time."""
+    model_dir = Path(a.model_dir)
+    model = Path(a.model) if a.model else model_dir / DEFAULT_MODEL
+    feed = inputs(model_dir)[-1][1]
+    plan = Plan(model)
+    prod = NumpyProducts(plan, a.mode == "bf16")
+    n_seg = len(plan.segments)
+    kinds = [segment_kind(plan, s) for s in range(n_seg)]
+    # ModernBERT-large: 28 encoder layers, every third one (from layer 0) global, the rest a 128-token sliding window.
+    # The attention segments after the encoder's belong to the decision head. Labelled by position, then checked
+    # against what the segments read: each label's segments must share one set of external inputs from layer 3 on.
+    att = [s for s in range(n_seg) if kinds[s] == "attention"]
+    if len(att) < LAYERS:
+        raise SystemExit(f"expected at least {LAYERS} attention segments, found {len(att)}")
+    for k, s in enumerate(att):
+        kinds[s] = ("attention/global" if k % 3 == 0 else "attention/local") if k < LAYERS else "attention/head"
+    for lab in ("attention/global", "attention/local"):
+        reads = {tuple(plan.seg_ext[s]) for k, s in enumerate(att[:LAYERS]) if kinds[s] == lab and k >= 3}
+        print(f"[layers] {lab}: {sum(kinds[s] == lab for s in att)} segments, {len(reads)} distinct input set(s) "
+              f"from layer 3 on", flush=True)
+        if len(reads) != 1:
+            raise SystemExit(f"{lab}: the positional labels do not match the segments' inputs")
+    for s in range(att[LAYERS] if len(att) > LAYERS else n_seg, n_seg):
+        if kinds[s] in ("geglu", "residual+norm", "other"):
+            kinds[s] = "head/" + kinds[s]
+
+    # Pass 1: unprofiled.
+    for _ in range(3):
+        plan.run(feed, prod)
+    per_call, frames = [], []
+    for _ in range(a.calls):
+        plan.seg_t = [0.0] * n_seg
+        t0 = time.perf_counter()
+        plan.run(feed, prod)
+        frames.append((time.perf_counter() - t0) * 1e3)
+        per_call.append([x * 1e3 for x in plan.seg_t])
+    plan.seg_t = None
+    seg_med = np.median(np.array(per_call), axis=0)
+    frame_med = float(np.median(frames))
+    print(f"[pass1] {a.mode} 512 tokens, {a.calls} calls: frame median {frame_med:.1f} ms, sum of segment medians "
+          f"{seg_med.sum():.1f} ms; products and Python between them {frame_med - seg_med.sum():.1f} ms "
+          f"(by difference)", flush=True)
+    by_kind = {}
+    for s, k in enumerate(kinds):
+        if plan.segments[s] is not None:
+            c = by_kind.setdefault(k, [0, 0.0])
+            c[0] += 1
+            c[1] += seg_med[s]
+    for k, (n, ms) in sorted(by_kind.items(), key=lambda kv: -kv[1][1]):
+        print(f"[pass1] {k:18} {n:3d} segments  {ms:7.1f} ms  ({ms / seg_med.sum() * 100:4.1f}%)  "
+              f"{ms / n:6.2f} ms each", flush=True)
+    del plan, prod
+    gc.collect()
+
+    # Pass 2: profiled.
+    pdir = Path(a.profile_dir)
+    pdir.mkdir(parents=True, exist_ok=True)
+    for old in pdir.glob("seg*.json"):
+        old.unlink()
+    plan = Plan(model, profile_dir=pdir)
+    prod = NumpyProducts(plan, a.mode == "bf16")
+    warm = 2
+    for _ in range(warm + a.profiled_calls):
+        plan.run(feed, prod)
+    by_op, prof_node, prof_run = {}, 0.0, 0.0
+    for s, seg in enumerate(plan.segments):
+        if seg is None:
+            continue
+        per, runs = profile_events(Path(seg["sess"].end_profiling()), warm)
+        node_us = sum(per.values())
+        prof_node += node_us / 1e3
+        prof_run += float(np.median(runs)) / 1e3
+        for op, us in per.items():       # this segment's pass-1 wall time, split in the profiled proportions
+            key = (kinds[s], op)
+            by_op[key] = by_op.get(key, 0.0) + (seg_med[s] * us / node_us if node_us else 0.0)
+    print(f"[pass2] {a.profiled_calls} profiled calls after {warm} warm-up: per call, profiled segment runs "
+          f"{prof_run:.1f} ms, of which node kernels {prof_node:.1f} ms; outside the kernels (session dispatch, "
+          f"thread wake-up, feeds) {prof_run - prof_node:.1f} ms", flush=True)
+    print("[pass2] pass-1 ms by segment kind and op type (the op as ONNX Runtime ran it, after its fusions):",
+          flush=True)
+    for (k, op), ms in sorted(by_op.items(), key=lambda kv: -kv[1]):
+        if ms >= 0.05:
+            print(f"[op] {k:18} {op:28} {ms:7.2f} ms", flush=True)
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
+    p = sub.add_parser("profile", help="split the host segments' time by segment kind and op type (no NPU)")
+    p.add_argument("--mode", choices=("fp32", "bf16"), default="fp32")
+    p.add_argument("--model-dir", required=True)
+    p.add_argument("--model", default=None, help=f"default <model-dir>/{DEFAULT_MODEL}")
+    p.add_argument("--calls", type=int, default=20)
+    p.add_argument("--profiled-calls", type=int, default=5)
+    p.add_argument("--profile-dir", required=True, help="where the 121 profiler JSON files go (emptied first)")
     for name in ("check", "time"):
         p = sub.add_parser(name)
         p.add_argument("--mode", choices=("fp32", "bf16", "npu"), required=True)
@@ -405,7 +550,7 @@ def main() -> int:
         else:
             p.add_argument("--calls", type=int, default=20)
     a = ap.parse_args()
-    return {"check": cmd_check, "time": cmd_time}[a.cmd](a)
+    return {"check": cmd_check, "time": cmd_time, "profile": cmd_profile}[a.cmd](a)
 
 
 if __name__ == "__main__":

@@ -15440,6 +15440,79 @@ after.
 
 Log: [sitting](../results/laya/laya_three_way_512_desktop2_20261014T152451Z.log).
 
+## Laya's host segments by op type: attention is two thirds, and a third of it all is moving data (2026-10-15, Desktop 2)
+
+**The question.** Which ops make up the hybrid's host side, and so which NPU kernel would pay first? In the
+[end-to-end sitting](#laya-end-to-end-with-its-weight-products-on-the-npu-at-512-tokens-it-is-the-fastest-backend-608-ms-against-755-780m-and-870-cpu-2026-10-14-desktop-2)
+the host segments took 226.4 ms of 608 by difference. This is phase 0 of moving them onto the NPU.
+
+**Method.** `tools/laya_hybrid.py profile` opens no NPU. It ran on `laya_az0_noguard.onnx` (the export without the
+NaN guards), on the 512-token synthetic input, with the 120 products in numpy fp32.
+- **Pass 1** times each of the 121 host segments unprofiled: the median of 20 calls after 3 warm-up calls.
+- **Pass 2** rebuilds the segments under ONNX Runtime's profiler and splits each segment's pass-1 time in the
+  proportions of its per-node times, over 5 calls after 2 warm-up calls. ONNX Runtime fused nothing here: the
+  op names below are the export's own.
+- **Labels.** Segments are labelled by what they hold:
+  - Softmax marks an attention segment, Erf a GeGLU segment, and LayerNormalization a residual-and-norm segment;
+  - the attention segments of the 28 encoder layers are global every third layer from layer 0, local otherwise,
+    and the two after them belong to the decision head.
+  - The tool checks the positional labels against the segments' inputs: from layer 3 on, each label's segments
+    read one shared set of tensors (10 global, 18 local).
+- **Expectation stated before the run:** attention would dominate. Global layers would cost more than local ones
+  if the export computes the 128-token window as a narrower product, and the same if it masks a full 512×512 one.
+  This was descriptive, not pre-registered.
+
+The segments sum to 203.7 ms per call. By segment kind:
+
+| Segment kind | Segments | ms | Share | ms each |
+|---|---:|---:|---:|---:|
+| Attention, local (128-token window) | 18 | 87.6 | 43.0% | 4.87 |
+| Attention, global | 10 | 49.3 | 24.2% | 4.93 |
+| GeGLU | 28 | 39.3 | 19.3% | 1.40 |
+| Residual add + LayerNorm | 56 | 13.2 | 6.5% | 0.24 |
+| Decision head (attention, GeGLU, norms, other) | 8 | 13.3 | 6.5% | |
+| Embeddings | 1 | 0.9 | 0.5% | |
+
+By op type, summed over the 28 encoder layers' attention and GeGLU segments (pass-1 ms):
+
+| Where | Op | ms | What it is |
+|---|---|---:|---|
+| Attention | MatMul | 32.7 | Q·Kᵀ and ·V |
+| Attention | Slice | 28.5 | splitting QKV into heads; RoPE's half-rotation |
+| Attention | Add | 25.6 | the mask add over 16×512×512 scores; RoPE |
+| Attention | Softmax | 18.4 | |
+| Attention | Transpose | 13.1 | head layout |
+| Attention | Mul, Concat, Neg, Reshape | 16.8 | RoPE and the score scale |
+| GeGLU | Split | 13.7 | halving the 5,248-wide product |
+| GeGLU | Mul, Div, Erf, Add | 25.6 | the erf GELU and the gate |
+| Residual + norm | Add, LayerNormalization | 8.1, 5.0 | |
+
+**What it shows.**
+- **Attention is two thirds of the host side**: 136.9 ms in the encoder, plus 11.3 in the head.
+- **Local layers cost the same as global ones**, 4.87 against 4.93 ms. The export masks a full 512×512 product,
+  so the 128-token window saves nothing on the CPU. A kernel that computes only the window would do about a quarter
+  of the score work in 18 of the 28 layers (DERIVED).
+- **About a third of the host time moves data and computes nothing.** Slice, Split, Transpose, Concat and Reshape
+  come to about 63 ms (DERIVED from the table). A fused kernel that reads Q, K and V in place would not run them at
+  all. That makes the attention kernel the first to build: it removes the largest compute and the largest copying
+  together.
+- **LayerNorm is small.** All 56 residual-and-norm segments come to 13.2 ms (6.5%). It matters for keeping the
+  stream on the device, not for its own time.
+- **The 121-session structure costs little.** Under the profiler, the segments ran 242.6 ms per call, of which the
+  node kernels were 240.0. That leaves 2.6 ms for session dispatch, thread wake-up and feeds, so merging sessions
+  would not pay.
+- **This agrees in size with the sitting's 226.4 ms** of host time by difference. That figure also holds the Python
+  between products and came from a different sitting, so the two are not expected to match exactly.
+
+**Not done here.** The 98.8 ms of bf16 rounding on the host (an NPU-mode cost) needs its own measured change.
+Padding short questions to 512 tokens is the other lever: attention is quadratic in the length, and real questions
+are shorter. The GEMM designs are fixed at 512 rows, so it is not pursued here.
+
+**Machine state.** No other `python.exe` was running before the run. The CPU-load probe (`wmic`) is absent on this
+machine, so the log carries no load figure.
+
+Log: [profile](../results/laya/laya_segment_profile_desktop2_20261015T231621Z.log).
+
 ## With the shipped SiLU recipe, `ptr` does not carry YOLOv8s past AMD's stack: 17.20 against 17.06 ms (2026-10-13, Desktop 2)
 
 The question for landing this branch on `main`: does the shipped YOLOv8s container beat AMD's

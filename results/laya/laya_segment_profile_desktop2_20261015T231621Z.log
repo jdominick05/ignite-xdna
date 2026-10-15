@@ -1,0 +1,90 @@
+Laya host-segment profile (phase 0): where the CPU time between the 120 weight products goes, by segment kind
+and op type. No NPU. DESKTOP-CBL5NUA (Desktop 2), 2026-10-15T23:16Z, branch laya-testing ea572bb
+(tools/laya_hybrid.py profile, uncommitted at the run; committed with this log). Model laya_az0_noguard.onnx
+(the export without the NaN guards), 512 tokens (synthetic/512 input), products in numpy fp32.
+
+Expectation stated before the run: attention segments take most of the host time; global layers cost more
+than local ones if the export computes the 128-token window as a narrower product, and the same if it masks a
+full 512x512 product. Not a pre-registered verdict: this is descriptive, it decides which kernel phase 1 builds.
+
+== machine state before ==
+INFO: No tasks are running which match the specified criteria.
+runner: wmic: command not found
+
+== profile ==
+[layers] attention/global: 10 segments, 1 distinct input set(s) from layer 3 on
+[layers] attention/local: 18 segments, 1 distinct input set(s) from layer 3 on
+[pass1] fp32 512 tokens, 20 calls: frame median 785.0 ms, sum of segment medians 203.7 ms; products and Python between them 581.3 ms (by difference)
+[pass1] attention/local     18 segments     87.6 ms  (43.0%)    4.87 ms each
+[pass1] attention/global    10 segments     49.3 ms  (24.2%)    4.93 ms each
+[pass1] geglu               28 segments     39.3 ms  (19.3%)    1.40 ms each
+[pass1] residual+norm       56 segments     13.2 ms  ( 6.5%)    0.24 ms each
+[pass1] attention/head       2 segments     11.3 ms  ( 5.5%)    5.65 ms each
+[pass1] head/other           2 segments      1.3 ms  ( 0.7%)    0.67 ms each
+[pass1] embed                1 segments      0.9 ms  ( 0.5%)    0.93 ms each
+[pass1] head/residual+norm   2 segments      0.6 ms  ( 0.3%)    0.30 ms each
+[pass1] head                 1 segments      0.1 ms  ( 0.1%)    0.11 ms each
+[pass1] head/geglu           1 segments      0.0 ms  ( 0.0%)    0.04 ms each
+[pass2] 5 profiled calls after 2 warm-up: per call, profiled segment runs 242.6 ms, of which node kernels 240.0 ms; outside the kernels (session dispatch, thread wake-up, feeds) 2.6 ms
+[pass2] pass-1 ms by segment kind and op type (the op as ONNX Runtime ran it, after its fusions):
+[op] attention/local    MatMul                         20.76 ms
+[op] attention/local    Slice                          18.26 ms
+[op] attention/local    Add                            16.26 ms
+[op] geglu              Split                          13.70 ms
+[op] attention/local    Softmax                        12.28 ms
+[op] attention/global   MatMul                         11.96 ms
+[op] geglu              Mul                            10.99 ms
+[op] attention/global   Slice                          10.25 ms
+[op] attention/global   Add                             9.32 ms
+[op] attention/local    Transpose                       8.35 ms
+[op] residual+norm      Add                             8.10 ms
+[op] geglu              Div                             7.61 ms
+[op] attention/global   Softmax                         6.10 ms
+[op] geglu              Erf                             5.09 ms
+[op] residual+norm      LayerNormalization              4.97 ms
+[op] attention/global   Transpose                       4.79 ms
+[op] attention/local    Mul                             4.67 ms
+[op] attention/local    Concat                          2.91 ms
+[op] attention/global   Mul                             2.62 ms
+[op] attention/head     MatMul                          2.57 ms
+[op] attention/head     Gemm                            2.52 ms
+[op] attention/head     Add                             2.09 ms
+[op] geglu              Add                             1.88 ms
+[op] attention/head     Transpose                       1.83 ms
+[op] attention/local    Reshape                         1.79 ms
+[op] attention/global   Concat                          1.79 ms
+[op] attention/local    Neg                             1.29 ms
+[op] attention/global   Reshape                         0.98 ms
+[op] attention/head     Softmax                         0.96 ms
+[op] attention/global   Neg                             0.75 ms
+[op] head/other         Relu                            0.72 ms
+[op] head/other         Add                             0.62 ms
+[op] attention/local    Squeeze                         0.55 ms
+[op] attention/head     Gather                          0.42 ms
+[op] head/residual+norm Add                             0.37 ms
+[op] attention/global   Squeeze                         0.32 ms
+[op] attention/global   Where                           0.29 ms
+[op] attention/local    Where                           0.29 ms
+[op] attention/head     Mul                             0.27 ms
+[op] attention/head     Reshape                         0.25 ms
+[op] attention/local    Shape                           0.16 ms
+[op] embed              And                             0.15 ms
+[op] attention/head     LayerNormalization              0.13 ms
+[op] attention/head     Concat                          0.13 ms
+[op] head/residual+norm LayerNormalization              0.10 ms
+[op] attention/global   Shape                           0.09 ms
+[op] embed              Gather                          0.08 ms
+[op] embed              LayerNormalization              0.08 ms
+[op] embed              Sin                             0.07 ms
+[op] embed              Cos                             0.07 ms
+[op] embed              Abs                             0.07 ms
+[op] embed              Sub                             0.07 ms
+[op] residual+norm      Transpose                       0.07 ms
+[op] embed              Unsqueeze                       0.06 ms
+[op] attention/head     Slice                           0.06 ms
+[op] head/residual+norm Transpose                       0.05 ms
+[op] embed              Transpose                       0.05 ms
+exit 0
+
+== machine state after ==
+runner: wmic: command not found
