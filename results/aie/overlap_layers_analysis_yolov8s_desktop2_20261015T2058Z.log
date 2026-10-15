@@ -1,0 +1,102 @@
+layer overlap, YOLOv8s: pre-registration, offline proof, predictor and sizing. Desktop 2 (DESKTOP-CBL5NUA), written 2026-10-15T21:00Z; A/B sitting 20261015T2058Z
+
+== 1. Pre-registration, verbatim, and hashes taken before the sitting ==
+bb4d28b6b2ffd899bde6ee9075e571d9ed7da63f7cf4e803b598116ec15de78a *scratch/b47/prereg_overlap.txt
+2348931eedb859d8969668b3d89f60e7da9f0d7e4b31de2dd52be6332772d66a *build/yolov8s_ab_ctl.ignite
+f60d8fced6faae06823f65fd424f5b210f8a8732827e4018dcf1960559b70eac *build/yolov8s_ol_ov.ignite
+b8ea6b8c92482a6f20f212531e0664fffb9b00a12a7b4b7f853ab9ad26531f4a *src/ignite_xdna/compiler/layer_overlap.py
+10a11bb1ace70b7225a124888400211503949be5d9a6c033f6a339452971ad04 *src/ignite_xdna/compiler/engine_sequence.py
+a3a1663995c89c35cfa92676bfc0875a56b2427783b530ef40a46ac221b2e5e7 *tools/bench_dispatch_ab.py
+--- begin ---
+PRE-REGISTRATION: layer overlap (--overlap-layers), YOLOv8s, warm dispatch A/B. Desktop 2 (DESKTOP-CBL5NUA),
+2026-10-15. Written before any timed dispatch of the overlap container. Its only device runs so far: the exactness
+check (results/aie/overlap_layers_exact_yolov8s_desktop2_20261015T2057Z: 300 dispatches each, 0 differ, heads equal
+to yolov8s_ab_ctl's). No timing from that run is read.
+
+Change. The emitter drops the barrier after each layer. Each fill or drain instead waits for exactly the
+earlier-layer tasks it conflicts with in the workspace (RAW, WAR, WAW at exact 8-byte cells,
+compiler/layer_overlap.py); a frame barrier ends the stream. Proved hazard-free offline over the emitted stream for
+YOLOv8s and YOLOv8n with an independent exact-byte checker that does find hazards when the waits are withheld
+(tests/test_layer_overlap_offline.py). The default build is byte-identical to the shipped stream.
+
+Containers: build/yolov8s_ab_ctl.ignite (control) and build/yolov8s_ol_ov.ignite (same build + --overlap-layers;
+same instruction-stream size, 933,028 B, reordered awaits). Hashes below.
+
+Method: tools/bench_dispatch_ab.py --pair overlap=build/yolov8s_ab_ctl.ignite,build/yolov8s_ol_ov.ignite --rounds 4
+--iters 300 (real and all-NOP copies, one process per run, order reversed every second round), under
+research-lowlevel.sh --npu; void unless timing_eligible true.
+
+What it can recover (DERIVED, from the tail sitting 20261015T1959Z): the gap at each boundary, not the cores' busy
+backlog. Over the 65 boundaries: NOP tail 1,385,276 + next lead 124,108 + one quad's transit 441,119 =
+1,950,503 cycles = 1.084 ms at 1.80 GHz; the NOP tail alone 0.770 ms. The offline predictor finds the next layer's
+first fill pushable before the previous layer is known complete at all 65 boundaries.
+
+Prediction: real delta (test - control) between -0.30 and -1.10 ms; NOP delta between -0.30 and -1.10 ms, and NOP
+gains at least as much as real less 0.2 ms (the NOP frame has the same boundaries and no compute to hide behind).
+
+Rules (on the 4-round means):
+- KILL: real delta > -0.10 ms, or the test lower in fewer than 3 of 4 rounds.
+- PASS: real delta <= -0.30 ms with the test lower in 4 of 4 rounds.
+- else MARGINAL.
+Reported, not verdict-bearing: NOP delta; compute exposure change (real - NOP).
+Named alternatives for any gain: dispatch-to-dispatch drift (controlled by interleaving and 4 rounds); a different
+instruction count (none: same stream size, same task count per layer, offline-checked). For a loss: hazard-free
+waits that serialize more than the barrier did (the stream awaits specific tasks earlier), which would show as a
+NOP loss too.
+
+A hang, an exactness failure or contention voids the sitting.
+--- end ---
+
+== 2. Offline proof (tests/test_layer_overlap_offline.py): barrier stream hazard-free and never overlapping; overlap stream hazard-free on YOLOv8s and YOLOv8n; the checker finds hazards with the waits withheld; most boundaries overlap ==
+tests/test_layer_overlap_offline.py::LayerOverlapOffline::test_01_barrier_is_hazard_free PASSED [ 20%]
+tests/test_layer_overlap_offline.py::LayerOverlapOffline::test_02_yolov8s_overlap_hazard_free PASSED [ 40%]
+tests/test_layer_overlap_offline.py::LayerOverlapOffline::test_03_yolov8n_overlap_hazard_free PASSED [ 60%]
+tests/test_layer_overlap_offline.py::LayerOverlapOffline::test_04_checker_catches_missing_waits PASSED [ 80%]
+tests/test_layer_overlap_offline.py::LayerOverlapOffline::test_05_overlap_happens PASSED [100%]
+======================== 5 passed in 135.16s (0:02:15) ========================
+
+== 3. What overlap pre-stages per boundary, offline (scratch/b47/predict.py) ==
+65 boundaries; next-layer tasks pushed before the previous layer is known complete: weights 360, fills 4869, drains 839; boundaries where a first fill goes early: 65
+boundaries with nothing early: 0 []
+per boundary (k: w a o): 1:8/128/16 2:4/16/16 3:4/8/8 4:4/128/8 5:8/256/16 6:11/32/8 7:15/48/12 8:8/64/8 9:8/96/8 10:8/64/8 11:8/96/8 12:11/128/8 13:4/32/32 14:4/32/32 15:4/64/16 16:4/80/16 17:4/64/16 18:4/80/16 19:4/224/32 20:4/16/16 21:4/16/16 22:4/64/8 23:4/72/8 24:4/144/16 25:4/8/8 26:4/16/8 27:4/16/8 28:4/16/8 29:4/208/16 30:4/160/32 31:4/64/16 32:4/64/16 33:4/160/32 34:15/288/12 35:8/64/8 36:8/64/8 37:11/96/8 38:4/16/16 39:8/128/8 40:12/128/11 41:8/64/8 42:12/128/11 43:4/160/32 44:4/8/8 45:12/48/12 46:4/64/16 47:4/64/16 48:4/160/32 49:4/8/8 50:4/64/8 51:4/128/16 52:4/16/8 53:4/64/16 54:4/32/16 55:4/8/8 56:4/12/12 57:4/64/8 58:4/64/8 59:4/144/16 60:2/32/2 61:4/64/4 62:2/4/2 63:4/16/4 64:2/2/2 65:3/3/3
+
+== 4. The boundary gap over all 65 boundaries, from the tail sitting (scratch/b47/gap_all.py) ==
+65 boundaries: NOP tail 1,385,276 + next lead 124,108 + quad transit 441,119 = 1,950,503 cycles = 1.084 ms (DERIVED); NOP tail alone 0.770 ms
+
+== 5. Hazard-free merge groups by adjacency only vs every pair (scratch/b47/groups.py; the safe-merge option sized and not built) ==
+66 layers -> 54 groups; 10 groups of 2+ layers; 12 boundaries merged
+  38:model.16 + 39:cv2.0.0
+  40:cv3.0.0 + 41:cv2.0.1
+  42:cv3.0.1 + 43:cv1 + 44:cv2.0
+  45:cv3.0 + 46:cv1
+  49:model.19 + 50:cv2.1.0
+  51:cv3.1.0 + 52:cv2.1.1
+  53:cv3.1.1 + 54:cv1 + 55:cv2.1
+  56:cv3.1 + 57:cv1
+  61:cv3.2.0 + 62:cv2.2.1
+  63:cv3.2.1 + 64:cv2.2
+
+estimated gap per merged boundary (DERIVED): mean 29,474 cycles = 16.4 us; sum 353,690 cycles = 0.196 ms
+  of which nop tail 252,668, next lead 19,585, quad transit 81,437
+
+adjacent-only free boundaries for comparison: 18
+
+== 6. Same-layer over-reads the tracker tolerates (scratch/b47/self_conflict.py) ==
+0 /model.0/conv/Conv: 17896 bytes read and written; e.g. [3299928, 3299929, 3299930] in /model.0/act/Mul_output_0_QuantizeLinear_Output; output /model.0/act/Mul_output_0_QuantizeLinear_Output base 3297344 halo 1 planes 4 blocks 4
+1 /model.1/conv/Conv: 10368 bytes read and written; e.g. [6615232, 6615233, 6615234] in /model.1/act/Mul_output_0_QuantizeLinear_Output; output /model.1/act/Mul_output_0_QuantizeLinear_Output base 6615232 halo 0 planes 8 blocks 8
+3 /model.2/m.0/cv1/conv/Conv: 16 bytes read and written; e.g. [9934552, 9934553, 9934554] in /model.2/m.0/cv1/act/Mul_output_0_QuantizeLinear_Output; output /model.2/m.0/cv1/act/Mul_output_0_QuantizeLinear_Output base 9933248 halo 1 planes 8 blocks 4
+6 /model.3/conv/Conv: 5248 bytes read and written; e.g. [11612864, 11612865, 11612866] in /model.3/act/Mul_output_0_QuantizeLinear_Output; output /model.3/act/Mul_output_0_QuantizeLinear_Output base 11612864 halo 0 planes 16 blocks 16
+8 /model.4/m.0/cv1/conv/Conv: 16 bytes read and written; e.g. [14112600, 14112601, 14112602] in /model.4/m.0/cv1/act/Mul_output_0_QuantizeLinear_Output; output /model.4/m.0/cv1/act/Mul_output_0_QuantizeLinear_Output base 14111936 halo 1 planes 16 blocks 8
+15 /model.6/m.0/cv1/conv/Conv: 16 bytes read and written; e.g. [16899608, 16899609, 16899610] in /model.6/m.0/cv1/act/Mul_output_0_QuantizeLinear_Output; output /model.6/m.0/cv1/act/Mul_output_0_QuantizeLinear_Output base 16899264 halo 1 planes 32 blocks 16
+layers with self conflicts: 16
+
+== 7. Builds: default rebuild identical to the shipped control; overlap stream ==
+  default insts.bin identical to yolov8s_ab_ctl
+  default design.mlir identical to yolov8s_ab_ctl
+  933028 B build/conv_engine/yolov8s_ab_ctl/insts.bin
+  933028 B build/conv_engine/yolov8s_ol_ov/insts.bin
+build/conv_engine/yolov8s_ol_ov/insts.bin build/conv_engine/yolov8s_ab_ctl/insts.bin differ: char 4897, line 3
+
+== 8. The A/B summary (from the sitting log) ==
+[summary] overlap    real: control 15.780 | test 14.559 | delta -1.220 ms | test lower in 4/4 rounds | control rounds 15.731 / 15.818 / 15.737 / 15.834 | test rounds 14.572 / 14.554 / 14.580 / 14.532
+[summary] overlap    nop : control 12.002 | test 11.549 | delta -0.454 ms | test lower in 4/4 rounds | control rounds 11.964 / 12.017 / 12.029 / 12.000 | test rounds 11.554 / 11.572 / 11.546 / 11.523

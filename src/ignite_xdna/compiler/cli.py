@@ -168,6 +168,13 @@ def parse_args(args: Optional[List[str]] = None) -> argparse.Namespace:
              "boxes no layer, the control that prices the path apart from the merges.",
     )
     parser.add_argument(
+        "--overlap-layers",
+        action="store_true",
+        help="Graph engine (int8): no barrier between layers; each fill or drain waits only for the earlier-layer "
+             "tasks it conflicts with in the workspace (compiler/layer_overlap.py). Off by default; recorded in "
+             "the manifest as graph_engine.overlap_layers.",
+    )
+    parser.add_argument(
         "--trace-shims",
         default=None,
         metavar="C[,C...]",
@@ -502,7 +509,7 @@ def compile_graph_engine(input_path: Union[str, Path], output_path: Union[str, P
                          task: Optional[str] = None, dense_recipe: Optional[str] = None,
                          datapath: str = "int8", stream_share: bool = False, box_fills: bool = False,
                          box_cap: Optional[int] = None, trace_shims: Optional[str] = None,
-                         trace_size: int = 4 << 20) -> int:
+                         trace_size: int = 4 << 20, overlap_layers: bool = False) -> int:
     """Lower the whole graph onto the convolution engine (see engine_compile.py); ``host_regions`` run on the host;
     ``silu_sigmoid`` gives SiLU the sigmoid epilogue; ``retire_batch`` sets the shim retirement cadence;
     ``datapath`` picks the engine profile (int8, or bf16 for W8A16)."""
@@ -529,7 +536,7 @@ def compile_graph_engine(input_path: Union[str, Path], output_path: Union[str, P
                                        task=task, dense_recipe=dense_recipe, engine=datapath,
                                        stream_share=stream_share, box_fills=box_fills, box_cap=box_cap,
                                        trace_shims=([int(v) for v in trace_shims.split(",")] if trace_shims else None),
-                                       trace_size=trace_size)
+                                       trace_size=trace_size, overlap_layers=overlap_layers)
     if no_workspace_reuse:
         print(f"    [OK] workspace reuse off: every tensor owns a slot, so every layer is readable "
               f"after one dispatch")
@@ -610,7 +617,8 @@ def main(args: Optional[List[str]] = None):
                                  task=parsed.task, dense_recipe=parsed.dense_recipe,
                                  datapath=parsed.datapath, stream_share=parsed.stream_share,
                                  box_fills=parsed.box_fills, box_cap=parsed.box_cap,
-                                 trace_shims=parsed.trace_shims, trace_size=parsed.trace_size)
+                                 trace_shims=parsed.trace_shims, trace_size=parsed.trace_size,
+                                 overlap_layers=parsed.overlap_layers)
             if parsed.verify_silicon:
                 from ignite_xdna.runtime.graph_session import GraphSession
                 sess = GraphSession(parsed.output, device_index=parsed.device)

@@ -556,6 +556,7 @@ def compile_graph_container(onnx_path, output_path, build_dir: Optional[Path] = 
                             box_cap: Optional[int] = None,
                             trace_shims: Optional[Sequence[int]] = None,
                             trace_size: int = 4 << 20,
+                            overlap_layers: bool = False,
                             **kwargs) -> Dict[str, Any]:
     """Lower, schedule, build the device binaries and write the container. Returns the manifest.
 
@@ -612,6 +613,12 @@ def compile_graph_container(onnx_path, output_path, build_dir: Optional[Path] = 
         # One trace window per stream: a host-segment model would split it. Stream sharing numbers its packets
         # from 1, where the trace flows' ids start too.
         raise ValueError("trace takes no host regions, dense recipe or stream sharing")
+    if overlap_layers and (host_regions or dense_recipe or stream_share or activation_ring or weight_buffer
+                           or box_fills or split_layers):
+        # Layer overlap (compiler/layer_overlap.py) drops the barrier between layers. Each excluded mode writes
+        # MemTile state at a layer boundary, or ends a dispatch there, on the assumption that the column is idle.
+        raise ValueError("overlap_layers takes no host regions, dense recipe, stream sharing, ring, weight buffer, "
+                         "box fills or split layers")
     if stream_share and (host_regions or dense_recipe or activation_ring or weight_buffer or core_depths is not None):
         raise ValueError("stream_share takes no host regions, dense recipe, ring, weight buffer or core depths")
     if box_fills and (host_regions or dense_recipe or activation_ring or weight_buffer or stream_share
@@ -699,10 +706,12 @@ def compile_graph_container(onnx_path, output_path, build_dir: Optional[Path] = 
                                               if stream_share else None),
                                   a_box=box_fills,
                                   trace_marker=((trace_shims, eng.SHIM_EVENT_GENERATE, shim_layer_marker())
-                                                if trace_shims else None))
+                                                if trace_shims else None),
+                                  overlap_layers=overlap_layers)
         for s in scheds:
             emitter.run_column_programs(s.programs, bd_budget=14, retire_batch=frame_rb,
                                         box=getattr(s, "box", None))
+        emitter.finish_frame()
         emitter.trace_flush()
         cadence.append({"retire_batch": emitter.last_retire_batch,
                         "thinnest_channel_tasks": emitter.thinnest_channel_tasks})
@@ -807,6 +816,8 @@ def compile_graph_container(onnx_path, output_path, build_dir: Optional[Path] = 
             "shims": list(trace_shims), "buffer_bytes": int(trace_size), "events": list(eng.TRACE_SHIM_EVENTS),
             "layer_marker": "USER_EVENT_1, fired before every layer and TRACE_FLUSH_ROUNDS times after the last",
             **trace_route}
+    if overlap_layers:   # absent means a barrier after every layer
+        manifest["graph_engine"]["overlap_layers"] = True
     if box_fills:   # absent means the split ObjectFifo
         manifest["graph_engine"]["box_fills"] = {
             "layers": box_layers, "cap": box_cap}

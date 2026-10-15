@@ -410,7 +410,13 @@ class SequenceEmitter:
 
     def __init__(self, ws, wp, ws_bytes: int, wp_bytes: int, fifo_names: Dict[int, Dict[str, str]],
                  a_ring: int = 0, packet_ids: Optional[Dict[int, Tuple[int, int]]] = None, a_box: bool = False,
-                 trace_marker: Optional[Tuple[Sequence[int], int, int]] = None):
+                 trace_marker: Optional[Tuple[Sequence[int], int, int]] = None, overlap_layers: bool = False):
+        # Layer overlap (compiler/layer_overlap.py): no barrier between layers; each fill or drain waits only for
+        # the earlier-layer tasks it conflicts with in the workspace, and ``finish_frame`` is the frame's barrier.
+        self._overlap = None
+        if overlap_layers:
+            from .layer_overlap import ConflictTracker
+            self._overlap = {"queues": {}, "seq": 0, "tracker": ConflictTracker(ws_bytes)}
         # Shim trace (engine_compile.inject_shim_trace): (columns, Event_Generate register, USER_EVENT_1), fired on
         # those shims before every layer so a whole-frame trace splits by layer, and by ``trace_flush`` at the end.
         self._trace_marker = trace_marker
@@ -931,7 +937,21 @@ class SequenceEmitter:
                 self._configure_box(c, geom)
         elif box is not None:
             raise ValueError("a boxed layer in a stream built without box fills")
-        queues: Dict[int, List[list]] = {c: [] for c in range(len(programs))}
+        # Queue entries carry a fifth field, the task's frame-wide sequence number, which layer overlap uses to
+        # name a dependency. Without overlap the queues live for one layer and the barrier below empties them;
+        # with it they live for the frame and ``finish_frame`` empties them.
+        overlap = getattr(self, "_overlap", None) is not None
+        if overlap:
+            if getattr(self, "_a_box", False) or getattr(self, "_packet_ids", None) is not None \
+                    or getattr(self, "_ring_slots", 0):
+                raise ValueError("layer overlap assumes no MemTile state is written at a layer boundary")
+            self._layer_ix = getattr(self, "_layer_ix", -1) + 1
+            layer_ix = self._layer_ix
+            queues = self._overlap["queues"]
+            for c in range(len(programs)):
+                queues.setdefault(c, [])
+        else:
+            queues = {c: [] for c in range(len(programs))}
         totals: Dict[int, Dict[str, int]] = {}
         for c, prog in enumerate(programs):
             t = {"w": 0, "a": 0, "o": 0}
@@ -965,7 +985,8 @@ class SequenceEmitter:
             """Retire the oldest token group of one channel (its tasks up to and
             including the first tokened one); False if a held task blocks it."""
             group = []
-            for i, (_, ch, hold, token) in enumerate(queues[c]):
+            for i, e in enumerate(queues[c]):
+                ch, hold, token = e[1], e[2], e[3]
                 if ch != channel:
                     continue
                 if hold:
@@ -988,19 +1009,35 @@ class SequenceEmitter:
                 guard += 1
                 if guard > 64:
                     raise RuntimeError("could not free buffer descriptors")
-            while sum(1 for _, ch, _, _ in queues[c] if ch == channel) >= queue_depth:
+            while sum(1 for e in queues[c] if e[1] == channel) >= queue_depth:
                 if not retire_channel(c, channel):
                     raise RuntimeError(f"channel {channel} queue is full of held tasks")
 
         def push(c: int, channel: str, pattern: DmaPattern, hold: int = 0, force_token: bool = False,
                  packet: Optional[Tuple[int, int]] = None) -> None:
+            ws_task = overlap and channel in ("a", "o")
+            if ws_task:
+                # Instead of the barrier: the earlier-layer tasks this one conflicts with in the workspace must be
+                # complete before it is pushed. Every layer's last task on a channel carries a token, so an
+                # earlier layer's task always sits in a closed token group and retiring up to it cannot wait on a
+                # token nobody will issue; its holds were cleared when its layer's items were all issued.
+                for (dc, dch), dseq in self._overlap["tracker"].deps(channel, pattern, layer_ix).items():
+                    while any(e[1] == dch and e[4] <= dseq for e in queues[dc]):
+                        if not retire_channel(dc, dch):
+                            raise RuntimeError(f"layer overlap: cannot retire column {dc} channel {dch} up to "
+                                               f"task {dseq}")
             ensure(c, channel)
             issued[c][channel] += 1
             n = issued[c][channel]
             token = force_token or n == totals[c][channel] or n % retire_batch == 0
             kw = {} if packet is None else {"packet": packet}
+            seq = -1
+            if overlap:
+                seq = self._overlap["seq"]
+                self._overlap["seq"] += 1
+                self._overlap["tracker"].record(channel, pattern if ws_task else None, c, seq, layer_ix)
             queues[c].append([self.transfer(self._names[c][channel], pattern, token=token, **kw),
-                              channel, hold, token])
+                              channel, hold, token, seq])
 
         pkt = getattr(self, "_packet_ids", None)
 
@@ -1102,6 +1139,21 @@ class SequenceEmitter:
         for c in range(len(programs)):
             for e in queues[c]:
                 e[2] = 0  # every item has been issued
+            if overlap:
+                continue  # no barrier: the next layer's tasks wait only for what they conflict with
             while queues[c]:
                 if not retire_channel(c, queues[c][0][1]):
                     raise RuntimeError("layer barrier: a channel's newest task carries no token")
+        if overlap:
+            self._overlap["retire"] = retire_channel
+
+    def finish_frame(self) -> None:
+        """The frame's barrier under layer overlap: every task still live is awaited and freed. A no-op without
+        overlap, where every layer ends with its own barrier."""
+        state = getattr(self, "_overlap", None)
+        if state is None or "retire" not in state:
+            return
+        for c, q in state["queues"].items():
+            while q:
+                if not state["retire"](c, q[0][1]):
+                    raise RuntimeError("frame barrier: a channel's newest task carries no token")

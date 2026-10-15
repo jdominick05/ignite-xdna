@@ -17489,7 +17489,7 @@ Logs:
   ≥ 10% compute. The 18 transport-bound layers are unchanged (0.99x).
 - **For the levers:**
   - Faster activation transport pays fully only on the transport-bound layers and in the stream's own residual.
-  - On the compute-heavy layers it waits on the arithmetic, unless compute and transport overlap better: the cores
+  - *[Across layer boundaries, [layer overlap](#layer-overlap-no-barrier-between-layers-only-exact-workspace-dependencies-yolov8s-122-ms-faster-and-exact-outside-its-prediction-2026-10-15-desktop-2) measured −1.22 ms.]* On the compute-heavy layers it waits on the arithmetic, unless compute and transport overlap better: the cores
     would have to compute while the next packets land, which the MemTile buffers already allow to depth 2.
   - Neither stream sharing's nor box fills' loss is explained by this. Neither was traced in NOP.
 
@@ -17556,7 +17556,7 @@ better overlap of transport and compute recover, and where is it?
 - **This agrees with the earlier fit's ~1.34 ms,** but is measured per layer rather than inferred.
 
 **What GO does and does not mean.**
-- **It is the opportunity, not a reachable saving.** The next layer usually reads this layer's output, so how much of
+- **It is the opportunity, not a reachable saving.** *[Built the same day: [layer overlap](#layer-overlap-no-barrier-between-layers-only-exact-workspace-dependencies-yolov8s-122-ms-faster-and-exact-outside-its-prediction-2026-10-15-desktop-2) reads −1.220 ms real, −0.454 NOP; its mechanism is unexplained.]* The next layer usually reads this layer's output, so how much of
   the tail its transport can cover depends on which rows its first packets need.
 - **Weights can be fetched early regardless.** A weight object prefetched into a core must never be consumed as the
   wrong layer's, the hazard `design.py` documents.
@@ -17572,3 +17572,79 @@ Logs:
 - [analysis](../results/aie/shim_trace_tail_analysis_yolov8s_desktop2_20261015T1959Z.log): the pre-registration and
   verdict script verbatim, the pulse completeness check, the run-endpoint check, the verdict and the offline
   overlap sizing.
+
+#### Layer overlap: no barrier between layers, only exact workspace dependencies; YOLOv8s 1.22 ms faster and exact, outside its prediction (2026-10-15, Desktop 2)
+
+**The prediction missed, in both arms.**
+- **Real gained more than the model allowed.** The pre-registration predicted −0.30 to −1.10 ms. It read
+  **−1.220 ms**, beyond even the 1.084 ms boundary-gap ceiling it derived.
+- **NOP gained less, and the registered relation inverted.** The prediction was that NOP would gain at least as much
+  as real less 0.2 ms. NOP read **−0.454 ms**, below its range and below the 0.770 ms NOP tail.
+- **The rule reads PASS, but the model behind the prediction is wrong.** That model said removing the barrier
+  recovers only the idle gap at each boundary, not the cores' backlog. The real frame recovered more than the
+  modelled gap, so that reading was too narrow.
+- **This is not shown to be the backlog either.** That the gain is close to the tail sitting's 1.23 ms is a number
+  to test, not a finding.
+
+**The change** (`--overlap-layers`, off by default).
+- **Today** every layer ends in a barrier: every task of every column is awaited before the next layer's first push.
+- **With the flag** the barrier goes. Before each fill or drain, the emitter awaits exactly the earlier-layer tasks
+  it conflicts with in the workspace: read after write, write after read, write after write.
+  - The conflicts come from `compiler/layer_overlap.py`, at exact 8-byte cells: every offset, length and stride on
+    these layouts is a multiple of 8.
+  - The queues persist across layers, and one frame barrier ends the stream (`finish_frame`, which reuses the last
+    layer's retire closure).
+  - The per-layer order of items within a column is unchanged, since a channel runs its tasks in order.
+- **One tolerance.** Over-reads within a layer are not dependencies. On 16 layers a tile's last fill reads padding
+  rows past its input, into the layer's own output, and the barrier design already races those. Where such an entry
+  masks an older earlier-layer task, the wait falls back to all of the earlier layers' tasks on that column and
+  channel.
+- **The flag is refused** with host regions, dense recipes, stream sharing, the ring, the weight buffer, box fills
+  and split layers, each of which writes MemTile state or ends a dispatch at a layer boundary.
+
+**What the exactness rests on.**
+- **An offline proof over the emitted stream** (`tests/test_layer_overlap_offline.py`), independent of the tracker:
+  exact byte sets, completion known only from awaits plus in-order channel completion, and no task pushed while a
+  conflicting earlier-layer task may run.
+  - It passes on YOLOv8s and YOLOv8n.
+  - The barrier stream passes and never overlaps.
+  - With the waits withheld, the checker finds hazards, including read after write.
+  - It covers only those two default schedules.
+- **On the device:** 300 dispatches each, 0 differ, heads equal to the control's.
+- **Rebuild check:** the default rebuild is byte-identical to the shipped stream.
+- **Offline, before timing,** the next layer's first fill can be pushed before the previous layer is known complete
+  at all 65 boundaries.
+
+**The sitting** (pre-registered, sha256 `bb4d28b6...`; `tools/bench_dispatch_ab.py`, 4 rounds × 300, order
+alternated; `timing_eligible: true`):
+
+| arm | control (4 rounds) | overlap (4 rounds) | delta | lower |
+|---|---|---|---:|---:|
+| real | 15.731 / 15.818 / 15.737 / 15.834 | 14.572 / 14.554 / 14.580 / 14.532 | **−1.220 ms** | 4/4 |
+| NOP | 11.964 / 12.017 / 12.029 / 12.000 | 11.554 / 11.572 / 11.546 / 11.523 | −0.454 ms | 4/4 |
+
+**Verdict: PASS** (registered: real ≤ −0.30 ms and 4/4). Compute exposure (real − NOP) falls 0.766 ms.
+
+**Why real gains 2.7x NOP is unexplained.** Candidates that fit:
+- **Issue moved off the critical path.** The command processor's issue work for the next layer, up to ~14 tasks per
+  column, now runs while the cores finish the current one. In the NOP frame issue is already on the critical path,
+  so it gains less: the compute-exposure pattern in reverse.
+- **Pre-staging.** The next layer's weight object and first quads land in the core and MemTile buffers during the
+  backlog.
+- **Fewer serialized awaits at the boundary.** The op count is the same, but the control's barrier awaits about 14
+  tasks per column while every core is idle.
+
+A shim trace of the overlap build against the control (per-layer lead and tail) would discriminate these. It is
+the next step and has not been run.
+
+**Not established:**
+- the effect on any other container: YOLOv8n, pose and SESR are proved or tested only as far as stated above;
+- any change against AMD: the README's YOLOv8s comparison comes from same-sitting AMD arms, and none ran here.
+
+Logs:
+- [exactness](../results/aie/overlap_layers_exact_yolov8s_desktop2_20261015T2057Z.log);
+- [sitting](../results/aie/overlap_layers_ab_yolov8s_desktop2_20261015T2058Z.log)
+  ([JSON](../results/aie/overlap_layers_ab_yolov8s_desktop2_20261015T2058Z.json));
+- [analysis](../results/aie/overlap_layers_analysis_yolov8s_desktop2_20261015T2058Z.log): the pre-registration
+  verbatim, the proof run, the predictor, the gap sizing, the merge groups, the tolerated over-reads and the build
+  identity.

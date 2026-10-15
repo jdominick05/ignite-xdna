@@ -2036,6 +2036,26 @@ cached reference heads rather than `bo_out`.
     configure writes must first be made countable by `split_instruction_stream`). Then a new pre-registration,
     not a rerun
     ([BENCHMARKS](BENCHMARKS.md#block-5-box-fills-in-the-engine-exact-on-the-device-and-069-ms-slower-transport-gains-025-ms-but-compute-exposure-grows-094-ms-2026-10-15-desktop-2)).
+- **Option (2026-10-15): `--overlap-layers`, no barrier between layers. Measured −1.220 ms on YOLOv8s (real,
+  4/4 rounds, pre-registered), exact. Off by default.**
+  - **What it does.** Each fill or drain awaits only the earlier-layer tasks it conflicts with in the workspace
+    (`compiler/layer_overlap.py`, exact 8-byte cells); a frame barrier ends the stream.
+  - **What the exactness rests on.** An offline proof over the emitted stream (`tests/test_layer_overlap_offline.py`)
+    plus 300 equal dispatches. The dispatches alone cannot exclude a race. The proof skips over-reads within a layer
+    (padding rows, already raced under the barrier).
+  - **Landing condition for making it the default:**
+    - the proof test passing on every graph-engine container the flag can reach (YOLOv8n, YOLOv8n-pose and SESR M7
+      as well as YOLOv8s);
+    - a device exactness run on each;
+    - a check that every `GraphSession` consumer tolerates a stream without per-layer barriers;
+    - a same-sitting AMD arm, before any README number changes.
+  - **Tool consequences:**
+    - `tools/engine_layer_timing.py` refuses such containers, because it cuts the stream at per-layer barriers, which such
+      a stream lacks;
+    - `tools/engine_shim_trace.py` windows still split at per-layer markers, but a marker now fires when the next
+      layer starts issuing, not after the previous one finished.
+  - **The mechanism is unexplained.** Real gains 2.7x NOP and more than the modelled boundary gap.
+  - [BENCHMARKS](BENCHMARKS.md#layer-overlap-no-barrier-between-layers-only-exact-workspace-dependencies-yolov8s-122-ms-faster-and-exact-outside-its-prediction-2026-10-15-desktop-2).
 - **Pitfall (2026-10-15): the engine's cores cannot be traced, and a traced shim gives one clean dispatch per
   hardware context.**
   - **Cores have no route out.** Every core tile's four southbound switch ports carry the column's output join

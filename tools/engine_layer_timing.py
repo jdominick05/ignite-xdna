@@ -72,6 +72,9 @@ def pieces_for(container: Path, onnx: Path):
     ge = manifest["graph_engine"]
     if ge.get("segments"):
         raise ValueError("container has host segments; this tool times monolithic containers only")
+    if ge.get("overlap_layers"):
+        # The cut below relies on every layer ending in a barrier; with layer overlap the stream has none.
+        raise ValueError("container was built with overlap_layers; its stream has no layer barriers to cut at")
     ir, ws, scheds, store = relower(onnx, manifest)
     if ws.nbytes != manifest.get("workspace_bytes", ge.get("workspace_bytes")):
         raise ValueError(f"re-lowered workspace {ws.nbytes} differs from the container's")
