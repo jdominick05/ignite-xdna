@@ -1,0 +1,94 @@
+box fills checks, YOLOv8s, Desktop 2 (DESKTOP-CBL5NUA), 2026-10-15T14:40Z
+
+== 1. Pre-registration, verbatim (written before any timing dispatch) ==
+sha256 e83df060732d65f28cb3bbc403f8b8b720d7f2f7c822370d73a9f53e3b5d461a
+--- begin ---
+PRE-REGISTRATION: box fills (--box-fills) dispatch sitting, YOLOv8s, Desktop 2 (DESKTOP-CBL5NUA), 2026-10-15
+Written before any timing dispatch of these containers.
+
+Containers (same tree, main 32b8eec + the uncommitted box-fills lowering, default compile otherwise, rb3):
+  ctl      build/yolov8s_ab_ctl.ignite       no flag. design.mlir, all three CDOs and insts.bin byte-identical to
+                                             a build from a `git archive HEAD` tree (xclbin bytes differ; the
+                                             contents it packages do not).
+  boxplain build/yolov8s_ab_boxplain.ignite  --box-fills --box-cap 0: the MemTile box path, every layer cut as
+                                             plain quads; 6,795 shim tasks, one configure per column per frame
+                                             (264 MemTile ops).
+  box      build/yolov8s_ab_box.ignite       --box-fills (cap 8): 28 layers boxed, adjacent fills merged;
+                                             5,353 shim tasks (DDR_PATCH count), 27 configures (7,128 MemTile ops),
+                                             total ops 27,537 vs 25,731 (+1,806), stream bytes 960,108 vs 933,012.
+
+Exactness (done, before this file): yolov8s --box-fills --no-workspace-reuse verified 66/66 layers EXACT
+(results/aie/box_fills_verify_yolov8s_desktop2_20261015T1415Z.log). All three containers above: 300 dispatches
+each, 0 differ from the first, every first equals ctl's heads byte for byte
+(results/aie/box_fills_repeat_exact_yolov8s_desktop2_20261015T1422Z.log).
+
+SMOKE DISCLOSED: the verify run printed a dispatch mean of 16.580 ms (20 iters) for the NO-REUSE box container.
+There is no no-reuse control in that sitting and a no-reuse workspace differs, so it is not comparable to
+anything here; it is disclosed because the default container has read 15.7-16.2 ms in other sittings, which, if
+comparable, would point against the prediction.
+
+Method: scripts/research-lowlevel.sh --npu --wait-clear 30, tools/bench_dispatch_ab.py
+  --pair box=ctl,box --pair path=ctl,boxplain --rounds 4 --iters 300; real and all-NOP each round, order
+reversed on even rounds. Requires timing_eligible: true and no foreign contention, else the sitting is void.
+
+Predictions (test minus control, mean of 4 rounds):
+  path (boxplain - ctl): same task count, one extra configure; |delta| < 0.15 ms real and NOP.
+  box (box - ctl), PER-TASK model (task issue is the cost; the probe's measured ratio applies to the 1,442 tasks
+    removed, 1.58 ms NOP, less 26 extra configures estimated at 0.4-0.5 ms):
+      NOP  -0.6 to -1.4 ms;  real  -0.4 to -1.1 ms (57-92% of NOP savings reached real dispatch in the
+      issue-inject data).
+  box, PER-OP model (every instruction op costs alike): +1,806 ops makes box SLOWER: delta > 0.
+  The sitting discriminates: a NOP delta below -0.3 ms favours per-task over per-op; above 0 favours per-op.
+
+Verdict (on REAL dispatch, box pair):
+  KEEP (land behind the off-by-default flag; default flip is a later block): mean delta <= -0.30 ms AND box lower
+    in >= 3/4 rounds.
+  KILL: mean delta >= 0, or box lower in <= 1/4 rounds.
+  Anything else: INCONCLUSIVE (lands behind the flag, recorded as such).
+  If path pair's real delta is > +0.15 ms, the write-up states the path's own cost and the box delta net of it,
+  but the verdict above stays on the box pair as registered.
+A hang or any mismatch voids the sitting ("control unproven"), no workaround.
+--- end ---
+
+== 2. Instruction-stream census (tools/disasm_txn.py over each insts.bin) ==
+yolov8s_ab_ctl: 25731 ops, 933,012 B; BLOCKWRITE 6795 (326,160 B), DDR_PATCH 6795 (326,160 B), MASKWRITE 2673 (74,844 B), TCT 2673 (42,768 B), WRITE 6795 (163,080 B); MemTile-row ops 0 (0 B)
+yolov8s_ab_boxplain: 25995 ops, 941,236 B; BLOCKWRITE 6867 (329,616 B), DDR_PATCH 6795 (326,160 B), MASKWRITE 2713 (75,964 B), TCT 2673 (42,768 B), WRITE 6947 (166,728 B); MemTile-row ops 264 (8,224 B)
+yolov8s_ab_box: 27537 ops, 960,108 B; BLOCKWRITE 7297 (350,256 B), DDR_PATCH 5353 (256,944 B), MASKWRITE 3255 (91,140 B), TCT 2175 (34,800 B), WRITE 9457 (226,968 B); MemTile-row ops 7128 (222,048 B)
+
+== 3. The stream's box descriptors against the configuration CDO (column 0, first configure = plain cut) ==
+-- no-reuse verify build --
+bd 24: stream 0000063f 019a0000 00000000 00000000 00000000 00000000 00000000 8456fc50  full-match True  words0-6 True  word7 alone True
+bd 25: stream 00000001 01aa063f 00000000 00000000 00000000 00000000 00000000 8152ff56  full-match True  words0-6 True  word7 alone True
+bd 26: stream 00000640 01ba0640 00000000 00000000 00000000 00000000 00000000 8153ff56  full-match True  words0-6 True  word7 alone True
+bd 27: stream 00000640 01ca0c80 00000000 00000000 00000000 00000000 00000000 8154ff56  full-match True  words0-6 True  word7 alone True
+bd 28: stream 00000640 01da12c0 00000000 00000000 00000000 00000000 00000000 8155ff56  full-match True  words0-6 True  word7 alone True
+bd 29: stream 0000063f 01ea1900 00000000 00000000 00000000 00000000 00000000 8456fc51  full-match True  words0-6 True  word7 alone True
+bd 30: stream 00000001 01fa1f3f 00000000 00000000 00000000 00000000 00000000 8152ff56  full-match True  words0-6 True  word7 alone True
+bd 31: stream 00000640 020a1f40 00000000 00000000 00000000 00000000 00000000 8153ff56  full-match True  words0-6 True  word7 alone True
+bd 32: stream 00000640 021a2580 00000000 00000000 00000000 00000000 00000000 8154ff56  full-match True  words0-6 True  word7 alone True
+bd 33: stream 00000640 018a2bc0 00000000 00000000 00000000 00000000 00000000 8155ff56  full-match True  words0-6 True  word7 alone True
+bd  0: stream 00000640 001a0000 00640000 00400031 000218ff 00000000 00000000 8150ff52  full-match True  words0-6 True  word7 alone True
+bd  1: stream 00000640 000a1900 00640000 00400031 000218ff 00000000 00000000 8151ff52  full-match True  words0-6 True  word7 alone True
+bd  2: stream 00000640 003a0c80 00640000 00400031 000218ff 00000000 00000000 8150ff54  full-match True  words0-6 True  word7 alone True
+bd  3: stream 00000640 002a2580 00640000 00400031 000218ff 00000000 00000000 8151ff54  full-match True  words0-6 True  word7 alone True
+bd 34: stream 00000640 023a0640 00640000 00400031 000218ff 00000000 00000000 8150ff53  full-match True  words0-6 True  word7 alone True
+bd 35: stream 00000640 022a1f40 00640000 00400031 000218ff 00000000 00000000 8151ff53  full-match True  words0-6 True  word7 alone True
+bd 36: stream 00000640 025a12c0 00640000 00400031 000218ff 00000000 00000000 8150ff55  full-match True  words0-6 True  word7 alone True
+bd 37: stream 00000640 024a2bc0 00640000 00400031 000218ff 00000000 00000000 8151ff55  full-match True  words0-6 True  word7 alone True
+18/18 descriptors identical to the CDO's
+-- timed box build --
+18/18 descriptors identical to the CDO's
+
+== 4. Identities ==
+control vs a build from 'git archive HEAD' (32b8eec):
+  design.mlir identical
+  insts.bin identical
+  design.prj/cdo_main/main_aie_cdo_init.bin identical
+  design.prj/cdo_main/main_aie_cdo_elfs.bin identical
+  design.prj/cdo_main/main_aie_cdo_enable.bin identical
+  engine.xclbin DIFFERS
+timed box containers vs a rebuild from the final (committed) code:
+  box insts.bin identical
+  box design.mlir identical
+  boxplain insts.bin identical
+  boxplain design.mlir identical

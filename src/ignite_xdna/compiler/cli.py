@@ -154,6 +154,20 @@ def parse_args(args: Optional[List[str]] = None) -> argparse.Namespace:
              "on branch block5-stream-share, recorded in the manifest as graph_engine.stream_share.",
     )
     parser.add_argument(
+        "--box-fills",
+        action="store_true",
+        help="Graph engine (int8): the shim moves one tile box per quad and the MemTile cuts it per core, on "
+             "every layer whose fills share one box geometry (compiler/box_fills.py; AMD's split of roles). "
+             "Off by default; recorded in the manifest as graph_engine.box_fills.",
+    )
+    parser.add_argument(
+        "--box-cap",
+        type=int,
+        default=None,
+        help="With --box-fills: the most fills one shim task carries (default 8). 0 builds the box path but "
+             "boxes no layer, the control that prices the path apart from the merges.",
+    )
+    parser.add_argument(
         "--topology-policy",
         choices=("report", "refuse"),
         default="report",
@@ -472,7 +486,8 @@ def compile_graph_engine(input_path: Union[str, Path], output_path: Union[str, P
                          split_layers: Optional[Sequence[int]] = None,
                          decouple_weights: bool = False,
                          task: Optional[str] = None, dense_recipe: Optional[str] = None,
-                         datapath: str = "int8", stream_share: bool = False) -> int:
+                         datapath: str = "int8", stream_share: bool = False, box_fills: bool = False,
+                         box_cap: Optional[int] = None) -> int:
     """Lower the whole graph onto the convolution engine (see engine_compile.py); ``host_regions`` run on the host;
     ``silu_sigmoid`` gives SiLU the sigmoid epilogue; ``retire_batch`` sets the shim retirement cadence;
     ``datapath`` picks the engine profile (int8, or bf16 for W8A16)."""
@@ -497,7 +512,7 @@ def compile_graph_engine(input_path: Union[str, Path], output_path: Union[str, P
                                        workspace_reuse=not no_workspace_reuse, retire_batch=retire_batch,
                                        split_layers=split_layers, decouple_weights=decouple_weights,
                                        task=task, dense_recipe=dense_recipe, engine=datapath,
-                                       stream_share=stream_share)
+                                       stream_share=stream_share, box_fills=box_fills, box_cap=box_cap)
     if no_workspace_reuse:
         print(f"    [OK] workspace reuse off: every tensor owns a slot, so every layer is readable "
               f"after one dispatch")
@@ -576,7 +591,8 @@ def main(args: Optional[List[str]] = None):
                                  split_layers=parsed.split_layer,
                                  decouple_weights=parsed.decouple_weights,
                                  task=parsed.task, dense_recipe=parsed.dense_recipe,
-                                 datapath=parsed.datapath, stream_share=parsed.stream_share)
+                                 datapath=parsed.datapath, stream_share=parsed.stream_share,
+                                 box_fills=parsed.box_fills, box_cap=parsed.box_cap)
             if parsed.verify_silicon:
                 from ignite_xdna.runtime.graph_session import GraphSession
                 sess = GraphSession(parsed.output, device_index=parsed.device)

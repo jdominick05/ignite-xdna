@@ -345,6 +345,10 @@ MEMTILE_DMA_MEMORY_BASE = 0x80000
 # And word 7 names a MemTile lock at its id plus 64: lock 32 is written 0x60 and lock 8 is written 0x48. Only
 # the descriptor field is offset - the lock value registers (``memtile_lock_reg``) index by the raw id.
 MEMTILE_BD_LOCK_ID_OFFSET = 64
+# Word 4 of a MemTile descriptor: D2 wrap in bits 17-26, D2 stride (words - 1) in 0-16. Read from the box build's
+# configuration CDO (a 1-plane cut at a 25,600 B plane pitch is 0x000218ff).
+BOX_BD_D2_WORD = 0x10
+BOX_D2_WRAP_SHIFT = 17
 
 
 def split_instruction_stream(insts: bytes, tasks_per_segment: Sequence[int]) -> List[bytes]:
@@ -404,7 +408,11 @@ class SequenceEmitter:
     """Emit raw shim DMA tasks inside an IRON runtime sequence body."""
 
     def __init__(self, ws, wp, ws_bytes: int, wp_bytes: int, fifo_names: Dict[int, Dict[str, str]],
-                 a_ring: int = 0, packet_ids: Optional[Dict[int, Tuple[int, int]]] = None):
+                 a_ring: int = 0, packet_ids: Optional[Dict[int, Tuple[int, int]]] = None, a_box: bool = False):
+        # Box fills (compiler/box_fills.py): every layer's MemTile cut is written at its boundary by
+        # ``_configure_box``; the geometry each column carries is tracked for the life of this stream (one frame).
+        self._a_box = a_box
+        self._box_geom: Dict[int, tuple] = {}
         # Stream sharing (compiler/stream_share.py): column c's weight stream is packet-routed, weights under
         # packet id packet_ids[c][0] (fanned out to the four cores) and the "P" quads under packet_ids[c][1]
         # (into MemTile buffer B). None is the shipped circuit-routed transport.
@@ -655,6 +663,101 @@ class SequenceEmitter:
                       | acq_bd_id,
                       column=col, row=MEMTILE_ROW)
 
+    def _box_descriptor(self, col: int, bd_id: int, offset: int, length: int, dims, next_bd: int,
+                        acq_id: int, acq_val: int, rel_id: int, rel_val: int) -> None:
+        """Write one whole box-path descriptor: a link in a cycle, so Use_Next_BD stays set.
+
+        ``offset`` and ``length`` are bytes; ``dims`` is None (linear) or (sizes, strides) in bytes, outermost
+        first, three of each. They are encoded as mlir-aie's ``encodeHardwareStridesWraps`` does for a MemTile
+        (AIEX/Utils/BdLowering.h): d0's size in 32-bit words with a stride of 0 for the contiguous innermost run,
+        and every other stride in words minus one. Word 7 is then rewritten with the encoding ``_wbuf_descriptor``
+        proved on silicon.
+        """
+        from kernels.aie2.conv_engine.design import BOX_ADDRESS
+        d = dict(d0_size=0, d0_stride=0, d1_size=0, d1_stride=0, d2_size=0, d2_stride=0)
+        if dims is not None:
+            (planes, rows, width), (s_plane, s_row, unit) = dims
+            if unit != 1 or width % 4 or s_row % 4 or s_plane % 4:
+                raise ValueError(f"box read {dims} is not 32-bit aligned")
+            # d2's stride is written even for a single plane: the configuration CDO does (word 4 = 0x000218ff
+            # for the plain cut), and these writes are checked against it word for word.
+            d.update(d0_size=width // 4, d0_stride=0, d1_size=rows, d1_stride=s_row // 4 - 1,
+                     d2_size=planes, d2_stride=s_plane // 4 - 1)
+        if offset % 4 or length % 4:
+            raise ValueError(f"box descriptor offset {offset} / length {length} not 32-bit aligned")
+        acq_bd_id = acq_id + MEMTILE_BD_LOCK_ID_OFFSET
+        rel_bd_id = rel_id + MEMTILE_BD_LOCK_ID_OFFSET
+        self._writebd(
+            column=col, row=MEMTILE_ROW, bd_id=bd_id, buffer_length=length // 4,
+            buffer_offset=(MEMTILE_DMA_MEMORY_BASE + BOX_ADDRESS + offset) // 4,
+            enable_packet=0, out_of_order_id=0, packet_id=0, packet_type=0, **d,
+            iteration_current=0, iteration_size=0, iteration_stride=0,
+            next_bd=next_bd, use_next_bd=1, valid_bd=1,
+            lock_acq_enable=1, lock_acq_id=acq_bd_id, lock_acq_val=acq_val,
+            lock_rel_id=rel_bd_id, lock_rel_val=rel_val,
+            d0_zero_before=0, d1_zero_before=0, d2_zero_before=0,
+            d0_zero_after=0, d1_zero_after=0, d2_zero_after=0,
+        )
+        if dims is not None:
+            # mlir-aie's npu.writebd never packs a MemTile descriptor's D2 wrap (AIEDmaToNpu.cpp, "TODO:
+            # D2Size"), so word 4 is written here as the configuration CDO lays it out: wrap in bits 17+, the
+            # stride below.
+            self._write32(self._ring_bd_base + RING_BD_STRIDE * bd_id + BOX_BD_D2_WORD,
+                          (d["d2_size"] << BOX_D2_WRAP_SHIFT) | d["d2_stride"], column=col, row=MEMTILE_ROW)
+        self._write32(self._ring_bd_base + RING_BD_STRIDE * bd_id + RING_BD_LOCK_WORD,
+                      RING_VALID_BD
+                      | ((rel_val & RING_LOCK_MASK) << RING_LOCK_REL_SHIFT)
+                      | (rel_bd_id << self.WBUF_REL_ID_SHIFT)
+                      | self.WBUF_ACQ_ENABLE
+                      | ((-acq_val & RING_LOCK_MASK) << RING_LOCK_ACQ_SHIFT)
+                      | acq_bd_id,
+                      column=col, row=MEMTILE_ROW)
+
+    def _configure_box(self, col: int, geom: tuple) -> None:
+        """Point one column's box path at a layer's cut: once per layer, and only when the cut changes.
+
+        The order is the one the ring and the weight buffer proved on silicon: reset the channels (a free-running
+        cycle's head has already taken its acquire, so the state must be made known rather than guessed), write
+        the descriptors, restore the locks, push the heads last. It runs at a layer boundary, where
+        ``run_column_programs`` has retired every task of every column, so the cores have consumed every object
+        and nothing is in flight. The map starts empty per stream, so every frame opens with a full reset.
+        """
+        from kernels.aie2.conv_engine.design import (BOX_BUF_BYTES, BOX_CHUNKS, BOX_FILL_CHANNEL,
+                                                     BOX_LOCK_READY, BOX_LOCK_RELAY, BOX_LOCK_SPACE, ROWS,
+                                                     _box_fill_bd, _box_serve_bd, box_chunks, box_core_read)
+        geom = tuple(geom)
+        if self._box_geom.get(col) == geom:
+            return
+        self._box_geom[col] = geom
+        a_bytes = BOX_BUF_BYTES // ROWS
+        ctrls = [MEMTILE_S2MM_CTRL + MEMTILE_CHANNEL_STRIDE * BOX_FILL_CHANNEL] + \
+                [MEMTILE_MM2S_CTRL + MEMTILE_CHANNEL_STRIDE * j for j in range(ROWS)]
+        for ctrl in ctrls:
+            self._maskwrite(ctrl, MEMTILE_CHANNEL_RESET, MEMTILE_CHANNEL_RESET, column=col, row=MEMTILE_ROW)
+            self._maskwrite(ctrl, 0, MEMTILE_CHANNEL_RESET, column=col, row=MEMTILE_ROW)
+        chunks = box_chunks(geom)
+        for b in range(2):
+            for i, (off, length) in enumerate(chunks):
+                nb, ni = (b, i + 1) if i + 1 < BOX_CHUNKS else (1 - b, 0)
+                acq, acq_val, rel, rel_val = ((BOX_LOCK_SPACE + b, ROWS, BOX_LOCK_RELAY, ROWS) if i == 0 else
+                                              (BOX_LOCK_RELAY, 1, BOX_LOCK_READY + i - 1, 1))
+                self._box_descriptor(col, _box_fill_bd(b, i), b * BOX_BUF_BYTES + off, length, None,
+                                     _box_fill_bd(nb, ni), acq, acq_val, rel, rel_val)
+        for j in range(ROWS):
+            off, sizes, strides = box_core_read(geom, j)
+            for b in range(2):
+                self._box_descriptor(col, _box_serve_bd(j, b), b * BOX_BUF_BYTES + off, a_bytes,
+                                     (sizes, strides), _box_serve_bd(j, 1 - b),
+                                     BOX_LOCK_READY + j, 1, BOX_LOCK_SPACE + b, 1)
+        for b in range(2):
+            self._write32(self._ring_lock_reg(BOX_LOCK_SPACE + b), ROWS, column=col, row=MEMTILE_ROW)
+        for j in range(ROWS):
+            self._write32(self._ring_lock_reg(BOX_LOCK_READY + j), 0, column=col, row=MEMTILE_ROW)
+        self._write32(self._ring_lock_reg(BOX_LOCK_RELAY), 0, column=col, row=MEMTILE_ROW)
+        self._push_queue(col, MEMTILE_ROW, self._dir.S2MM, BOX_FILL_CHANNEL, False, 0, _box_fill_bd(0, 0))
+        for j in range(ROWS):
+            self._push_queue(col, MEMTILE_ROW, self._dir.MM2S, j, False, 0, _box_serve_bd(j, 0))
+
     def _reset_wbuf_channels(self, col: int) -> None:
         """Reset both weight-buffer channels, so a layer starts from a state it did not inherit.
 
@@ -769,7 +872,8 @@ class SequenceEmitter:
                              self._wbuf_bd_serve + k)
 
     def run_column_programs(self, programs: Sequence[Sequence[tuple]], bd_budget: int = 14,
-                            queue_depth: int = 4, retire_batch: Optional[int] = None) -> None:
+                            queue_depth: int = 4, retire_batch: Optional[int] = None,
+                            box=None) -> None:
         """Issue every column's items interleaved within two hardware limits per shim.
 
         Every task carries a completion token. Before a new task is configured,
@@ -798,6 +902,15 @@ class SequenceEmitter:
         # of) its objects, and a drain issued ahead of its fills only completes
         # once those fills were consumed, so neither may be awaited before the
         # activation items it serves are issued: ``hold`` counts them.
+        if getattr(self, "_a_box", False):
+            # ``box`` is the layer's BoxGeometry, or None for a layer cut as plain quads.
+            from ignite_xdna.compiler.box_fills import PLAIN
+            g = PLAIN if box is None else box
+            geom = (g.planes, g.span, g.width, g.step, g.rows)
+            for c in range(len(programs)):
+                self._configure_box(c, geom)
+        elif box is not None:
+            raise ValueError("a boxed layer in a stream built without box fills")
         queues: Dict[int, List[list]] = {c: [] for c in range(len(programs))}
         totals: Dict[int, Dict[str, int]] = {}
         for c, prog in enumerate(programs):
@@ -807,7 +920,7 @@ class SequenceEmitter:
                     t["w"] += 1
                 elif it[0] == "a":
                     t["a"] += len(it[1])
-                elif it[0] == "A":
+                elif it[0] in ("A", "X"):
                     t["a"] += 1
                 elif it[0] == "o":
                     t["o"] += 1
@@ -910,6 +1023,12 @@ class SequenceEmitter:
                     push(c, "a", p)
             elif item[0] == "A":  # one 4-D task fills all four cores' packets
                 served(c)
+                push(c, "a", item[1])
+            elif item[0] == "X":  # ("X", pattern, boxes): one task carries `boxes` adjacent fills
+                if not getattr(self, "_a_box", False):
+                    raise ValueError("a box fill in a stream built without box fills")
+                for _ in range(item[2]):
+                    served(c)
                 push(c, "a", item[1])
             elif item[0] == "o":
                 push(c, "o", item[1], hold=item[2] if len(item) > 2 else 0)

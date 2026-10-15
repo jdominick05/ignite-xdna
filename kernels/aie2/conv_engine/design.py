@@ -14,6 +14,7 @@ import numpy as np
 
 from aie.dialects import arith, memref
 from aie.dialects._aie_enum_gen import AIETileType, DMAChannelDir, WireBundle
+from aie.helpers.dialects.scf import else_, if_
 from aie.ir import IndexType, IntegerType
 from aie.iron import (Acquire, Bd, BdIteration, Buffer, DmaChannel, Flow, Lock, ObjectFifo, PacketFlow, Program,
                       Release, Runtime, TileDma, Worker)
@@ -434,6 +435,148 @@ def _activation_ring(col, name, slots):
     return handles, (flows, locks, tile_dmas)
 
 
+# Box fills (compiler/box_fills.py): the shim moves one tile box per quad and the MemTile cuts it into the four
+# cores' objects (AMD's split of roles; tools/task_issue_probe.py's boxraw arm proved the protocol exact on
+# silicon, 2026-10-15). Every layer of such a container runs through this path; a layer without boxes is cut as
+# plain quads (BOX_PLAIN). The cut is written per layer from the instruction stream (``_configure_box``).
+#
+# Descriptor ids are pinned for the same reason as the ring's: the output join is allocated around them. The
+# fill chain (two buffers x five chunks) sits on an odd S2MM channel, so in the odd half (24-33); the serves on
+# MM2S 0 and 2 take 0-3, on MM2S 1 and 3 34-37. The join's twelve even and four odd ids fit beside them.
+BOX_FILL_CHANNEL = 5
+BOX_BD_FILL = 24                # 24 + 5 * buffer + chunk
+BOX_BD_SERVE_EVEN = 0           # MM2S 0: 0, 1; MM2S 2: 2, 3
+BOX_BD_SERVE_ODD = 34           # MM2S 1: 34, 35; MM2S 3: 36, 37
+BOX_CHUNKS = 5
+BOX_LOCK_SPACE = 16             # one per buffer: 16, 17; taken ROWS at a time by the fill's first chunk
+BOX_LOCK_READY = 18             # one per core: 18..21
+BOX_LOCK_RELAY = 22             # carries the first chunk's ROWS tokens to the four later chunks
+BOX_BUF_BYTES = ROWS * A_BYTES  # one buffer holds the largest box, a plain quad
+# The buffer pair's L1 address as the instruction stream assumes it (word 1 of a MemTile descriptor is
+# absolute). Checked after every build by engine_compile, which refuses a mismatch.
+BOX_ADDRESS = 0
+# (planes, span, width, step, rows): a plain quad - core j's 6,400 B at 6,400 j - as a box.
+BOX_PLAIN = (1, 128, 200, 32, 32)
+
+
+def box_core_read(geom, j):
+    """(offset, sizes, strides) in bytes of core j's object in one box, outermost first."""
+    planes, span, width, step, rows = geom
+    return step * width * j, [planes, rows, width], [span * width, width, 1]
+
+
+def box_chunks(geom):
+    """The fill's five (offset, length) chunks of one box. Chunk 0 hands ROWS tokens to the relay lock; chunk i
+    (1..4) takes one and releases core i - 1, so it must end at or past that core's last byte. A descriptor that
+    touches a lock must acquire and release, and a zero acquire is refused, hence the relay."""
+    planes, span, width, step, rows = geom
+    ends = []
+    for j in range(ROWS):
+        off, (p, r, w), (sp, sr, _) = box_core_read(geom, j)
+        ends.append(off + (p - 1) * sp + (r - 1) * sr + w)
+    total = planes * span * width
+    if ends[-1] != total or any(b <= a for a, b in zip(ends, ends[1:])) or ends[0] <= 4:
+        raise ValueError(f"box {geom}: core ends {ends} do not rise to the box's {total} bytes")
+    bounds = [0, ends[0] - 4] + ends
+    return [(bounds[i], bounds[i + 1] - bounds[i]) for i in range(BOX_CHUNKS)]
+
+
+def _box_fill_bd(buffer, chunk):
+    return BOX_BD_FILL + BOX_CHUNKS * buffer + chunk
+
+
+def _box_serve_bd(channel, buffer):
+    base = BOX_BD_SERVE_ODD if channel % 2 else BOX_BD_SERVE_EVEN
+    return base + (channel // 2) * 2 + buffer
+
+
+def _core_fn_box(w_in, a_buf0, a_buf1, a_cons, a_prod, parity, o_out, engine, psum, scratch, row):
+    """The same core program, taking activations from the box path through raw locks, double-buffered.
+
+    The core's S2MM chain alternates two buffers for the life of the program, so the core alternates with it: a
+    one-word ``parity`` buffer says which holds the next object. Double-buffered like the shipped fifo, so a box
+    container overlaps transfer and compute exactly as the default does.
+    """
+    w = w_in.acquire(1)
+    idx_ty = IndexType.get()
+    n_out = memref.load(w, [arith.constant(idx_ty, H_COUNT_OUT)])
+    n_acc = memref.load(w, [arith.constant(idx_ty, H_COUNT_ACC)])
+    n_out = arith.index_cast(idx_ty, n_out)
+    n_acc = arith.index_cast(idx_ty, n_acc)
+    for _ in range_(n_out):
+        a_cons.acquire(1)
+        o = o_out.acquire(1)
+        with if_(parity[0] == 0) as branch:
+            engine(w, a_buf0, o, psum, row)
+        with else_(branch):
+            engine(w, a_buf1, o, psum, row)
+        parity[0] = 1 - parity[0]
+        a_prod.release(1)
+        o_out.release(1)
+    for _ in range_(n_acc):
+        a_cons.acquire(1)
+        with if_(parity[0] == 0) as branch:
+            engine(w, a_buf0, scratch, psum, row)
+        with else_(branch):
+            engine(w, a_buf1, scratch, psum, row)
+        parity[0] = 1 - parity[0]
+        a_prod.release(1)
+    w_in.release(1)
+
+
+def _activation_box(col, name):
+    """One column's activations through the box path: a hand-written MemTile buffer pair cut per core.
+
+    The lock protocol is the probe's: the fill's first chunk of a buffer takes ROWS ``space`` tokens and puts
+    ROWS on ``relay``; chunk i takes one ``relay`` and releases core i - 1's ``ready`` once that core's last byte
+    has landed; core j's serve takes one ``ready``, reads its object out of the box and returns one ``space``.
+    Every lock ends a box where it started. The compiled chains are cut as plain quads; a layer rewrites the
+    chunk lengths and the serves' offsets and dimensions at its boundary.
+    """
+    shim = Tile(col, 0, tile_type=AIETileType.ShimNOCTile)
+    mem = Tile(col, 1, tile_type=AIETileType.MemTile)
+    buf = Buffer(np.ndarray[(2 * BOX_BUF_BYTES,), np.dtype[np.uint8]], name=f"{name}_box", tile=mem)
+    space = [Lock(mem, lock_id=BOX_LOCK_SPACE + b, init=ROWS, name=f"{name}_space{b}") for b in range(2)]
+    ready = [Lock(mem, lock_id=BOX_LOCK_READY + j, init=0, name=f"{name}_ready{j}") for j in range(ROWS)]
+    relay = Lock(mem, lock_id=BOX_LOCK_RELAY, init=0, name=f"{name}_relay")
+    chunks = box_chunks(BOX_PLAIN)
+    fills = []
+    for b in range(2):
+        for i, (off, length) in enumerate(chunks):
+            acq, rel = ((Acquire(space[b], ROWS), Release(relay, ROWS)) if i == 0
+                        else (Acquire(relay, 1), Release(ready[i - 1], 1)))
+            # ``next`` is a position in this channel's chain, not a descriptor id: one cycle over both buffers.
+            nxt = (b * BOX_CHUNKS + i + 1) % (2 * BOX_CHUNKS)
+            fills.append(Bd(buf, offset=b * BOX_BUF_BYTES + off, length=length, bd_id=_box_fill_bd(b, i),
+                            acquires=[acq], releases=[rel], next=nxt))
+    serves = []
+    for j in range(ROWS):
+        off, sizes, strides = box_core_read(BOX_PLAIN, j)
+        serves.append(DmaChannel(DMAChannelDir.MM2S, j, [
+            Bd(buf, offset=b * BOX_BUF_BYTES + off, length=A_BYTES, sizes=sizes, strides=strides,
+               bd_id=_box_serve_bd(j, b), acquires=[Acquire(ready[j], 1)], releases=[Release(space[b], 1)],
+               next=1 - b)
+            for b in range(2)]))
+    flows = [Flow(shim, mem, src_channel=0, dst_channel=BOX_FILL_CHANNEL, shim_symbol=name)]
+    locks = space + ready + [relay]
+    tile_dmas = [TileDma(mem, [DmaChannel(DMAChannelDir.S2MM, BOX_FILL_CHANNEL, fills), *serves])]
+    handles = []
+    for r in range(ROWS):
+        core = Tile(col, r + 2, tile_type=AIETileType.CoreTile)
+        bufs = [Buffer(a_ty, name=f"{name}_{r}_buf{b}", tile=core) for b in range(2)]
+        parity = Buffer(np.ndarray[(1,), np.dtype[np.int32]], name=f"{name}_{r}_parity", tile=core,
+                        initial_value=np.zeros(1, dtype=np.int32))
+        c_prod = Lock(core, init=2, name=f"{name}_{r}_prod")
+        c_cons = Lock(core, init=0, name=f"{name}_{r}_cons")
+        tile_dmas.append(TileDma(core, [DmaChannel(DMAChannelDir.S2MM, 0, [
+            Bd(bufs[b], acquires=[Acquire(c_prod, 1)], releases=[Release(c_cons, 1)], next=1 - b)
+            for b in range(2)])]))
+        locks += [c_prod, c_cons]
+        flows.append(Flow(mem, core, src_channel=r, dst_channel=0))
+        handles.append((bufs[0], bufs[1], c_cons, c_prod, parity))
+    return handles, (flows, locks, tile_dmas)
+
+
 # Block 5 stream sharing (compiler/stream_share.py): one activation quad in four rides each column's weight stream.
 # The schedule side (which quad goes where, and the order that keeps both streams deadlock-free) is
 # compiler/stream_share.py; these are the pieces the transport pins, imported there and by the emitter.
@@ -595,7 +738,8 @@ def _stream_shared(col, names):
 
 
 def build_program(device, sequence_body, w_depth=2, ws_bytes=WS_BYTES, wp_bytes=WP_BYTES, a_ring: int = 0,
-                  w_buf: bool = False, ops=None, a_depth: int = 2, o_depth: int = 2, stream_share: bool = False):
+                  w_buf: bool = False, ops=None, a_depth: int = 2, o_depth: int = 2, stream_share: bool = False,
+                  a_box: bool = False):
     """Return an IRON Program for the engine with ``sequence_body(ws, wp)``.
 
     The body emits raw shim DMA tasks against the FIFO allocation symbols
@@ -622,6 +766,10 @@ def build_program(device, sequence_body, w_depth=2, ws_bytes=WS_BYTES, wp_bytes=
         raise ValueError("the activation ring and the resident weight buffer cannot be built together yet")
     if stream_share and (a_ring or w_buf or (w_depth, a_depth) != (2, 2)):
         raise ValueError("stream sharing replaces both input fifos; it takes no ring, weight buffer or core depths")
+    if a_box and (a_ring or w_buf or stream_share or (w_depth, a_depth) != (2, 2)):
+        # Each replaces the activation split or holds the MemTile ids the box path pins; measured together,
+        # neither would be attributable.
+        raise ValueError("box fills take no ring, weight buffer, stream sharing or core depths")
     workers = []
     w_prods, a_prods, o_conses = [], [], []
     rings = []                       # (flows, locks, tile dmas) of each column's ring, registered below
@@ -640,6 +788,9 @@ def build_program(device, sequence_body, w_depth=2, ws_bytes=WS_BYTES, wp_bytes=
         if a_ring:
             a_split, ring_parts = _activation_ring(c, names["a"], a_ring)
             rings.append(ring_parts)
+        elif a_box:
+            a_split, box_parts = _activation_box(c, names["a"])
+            rings.append(box_parts)
         elif not stream_share:
             a_col = ObjectFifo(a_col_ty, name=names["a"], depth=2)
             a_split = a_col.cons().split(
@@ -662,6 +813,10 @@ def build_program(device, sequence_body, w_depth=2, ws_bytes=WS_BYTES, wp_bytes=
             scratch = Buffer(o_ty, name=f"scratch_{c}_{r}")
             if stream_share:
                 fn, args = _core_fn_shared, [*share_handles[r], o_join[r].prod(), engine, psum, scratch, r]
+            elif a_box:
+                buf0, buf1, a_cons, a_prod, parity = a_split[r]
+                fn, args = _core_fn_box, [w_of.cons(), buf0, buf1, a_cons, a_prod, parity, o_join[r].prod(),
+                                          engine, psum, scratch, r]
             elif a_ring:
                 buf, a_cons, a_prod = a_split[r]
                 fn, args = _core_fn_ring, [w_of.cons(), buf, a_cons, a_prod, o_join[r].prod(),
@@ -686,7 +841,7 @@ def build_program(device, sequence_body, w_depth=2, ws_bytes=WS_BYTES, wp_bytes=
             # With the buffer the shim's weight stream lands in the MemTile, not in a fifo whose producer
             # is a shim endpoint, so there is no handle to register here - the flow carries the symbol.
             w_prods.append(w_of.prod(tile=Tile(c, 0)))
-        if not (a_ring or stream_share):
+        if not (a_ring or a_box or stream_share):
             a_prods.append(a_col.prod(tile=Tile(c, 0)))
         o_conses.append(o_col.cons(tile=Tile(c, 0)))
 

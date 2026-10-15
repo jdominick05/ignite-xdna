@@ -465,6 +465,22 @@ def check_weight_buffer_addresses(mlir_path: Path, expected: int, columns: int) 
                            f"points: {', '.join(wrong)}")
 
 
+def check_box_addresses(mlir_path: Path, expected: int, columns: int) -> None:
+    """Refuse a build whose box buffers are not where the instruction stream's descriptors point (box fills).
+
+    Same reason as ``check_weight_buffer_addresses``: ``_configure_box`` writes whole MemTile descriptors, whose
+    word 1 is an absolute address, so a buffer allocated elsewhere hangs the dispatch instead of failing.
+    """
+    found = re.findall(r'aie\.buffer\([^)]*\)\s*\{address = (\d+) : i32,[^}]*sym_name = "(a\d+_box)"',
+                       Path(mlir_path).read_text(encoding="utf-8"))
+    if len(found) != columns:
+        raise RuntimeError(f"expected {columns} box buffers in {mlir_path}, found {len(found)}")
+    wrong = [f"{name} at {int(addr):#x}" for addr, name in found if int(addr) != expected]
+    if wrong:
+        raise RuntimeError(f"box buffers allocated away from {expected:#x}, where the instruction stream "
+                           f"points: {', '.join(wrong)} (set design.BOX_ADDRESS to the allocator's choice)")
+
+
 def compile_graph_container(onnx_path, output_path, build_dir: Optional[Path] = None, layers: Optional[int] = None,
                             verbose: bool = True, host_regions: Sequence[str] = (),
                             activation_ring: int = 0, weight_buffer: bool = False,
@@ -477,6 +493,8 @@ def compile_graph_container(onnx_path, output_path, build_dir: Optional[Path] = 
                             engine: Any = "int8",
                             core_depths: Optional[Sequence[int]] = None,
                             stream_share: bool = False,
+                            box_fills: bool = False,
+                            box_cap: Optional[int] = None,
                             **kwargs) -> Dict[str, Any]:
     """Lower, schedule, build the device binaries and write the container. Returns the manifest.
 
@@ -509,6 +527,13 @@ def compile_graph_container(onnx_path, output_path, build_dir: Optional[Path] = 
     ``stream_share`` carries one activation quad in four on each column's weight stream (``stream_share.py``),
     int8 engine only, recorded in the manifest as ``graph_engine.stream_share``. Its MemTile chains free-run
     across dispatches, so it takes no host regions: each NPU segment would need its own period padding.
+
+    ``box_fills`` has the shim move one box per quad and the MemTile cut it per core, on every layer whose fills
+    share one box geometry (``box_fills.py``), int8 engine only, recorded in the manifest as
+    ``graph_engine.box_fills``. Its per-layer MemTile configuration writes break the host-segment split, so it
+    takes no host regions. ``box_cap`` is the most fills one shim task may carry (None = ``box_fills.DEFAULT_CAP``);
+    0 builds the path but converts no layer, so every layer is cut as plain quads - the control that prices the
+    path itself apart from the merges.
     """
     if core_depths is not None:
         core_depths = tuple(int(d) for d in core_depths)
@@ -518,6 +543,10 @@ def compile_graph_container(onnx_path, output_path, build_dir: Optional[Path] = 
             core_depths = None
     if stream_share and (host_regions or dense_recipe or activation_ring or weight_buffer or core_depths is not None):
         raise ValueError("stream_share takes no host regions, dense recipe, ring, weight buffer or core depths")
+    if box_fills and (host_regions or dense_recipe or activation_ring or weight_buffer or stream_share
+                      or core_depths is not None):
+        raise ValueError("box_fills takes no host regions, dense recipe, ring, weight buffer, stream sharing "
+                         "or core depths")
     if host_regions and (activation_ring or weight_buffer):
         # ``split_instruction_stream`` cuts a host-segment stream by counting WRITE ops as task pushes, and
         # both MemTile structures emit configuration WRITEs that belong to no shim task, so the cut would land
@@ -530,7 +559,7 @@ def compile_graph_container(onnx_path, output_path, build_dir: Optional[Path] = 
     profile = engine if isinstance(engine, EngineProfile) else ENGINE_PROFILES[engine]
     emu = profile.emulator
     sched = profile.schedule
-    if not profile.transport_options and (activation_ring or weight_buffer or stream_share):
+    if not profile.transport_options and (activation_ring or weight_buffer or stream_share or box_fills):
         raise ValueError(
             f"the {profile.name} design has no activation ring and no resident weight buffer: "
             f"both are int8-engine transport experiments, and both measured slower than the "
@@ -569,6 +598,16 @@ def compile_graph_container(onnx_path, output_path, build_dir: Optional[Path] = 
                                              weight_buffer=weight_buffer)
         if layers is not None:
             scheds = scheds[:layers]
+    box_layers = 0
+    if box_cap is not None and not box_fills:
+        raise ValueError("box_cap needs box_fills")
+    if box_fills:
+        from ignite_xdna.compiler.box_fills import DEFAULT_CAP, apply_box_fills
+        box_cap = DEFAULT_CAP if box_cap is None else int(box_cap)
+        if box_cap < 0:
+            raise ValueError(f"box_cap must be 0 or more, got {box_cap}")
+        if box_cap:
+            box_layers = apply_box_fills(scheds, box_cap)
     if verbose:
         n_host = sum(isinstance(L, HostLayer) for L in ir.layers)
         print(f"[*] Lowered {len(ir.layers)} layers ({n_host} on the host); workspace {ws.nbytes / 1e6:.1f} MB; "
@@ -586,9 +625,11 @@ def compile_graph_container(onnx_path, output_path, build_dir: Optional[Path] = 
                                   {c: eng.fifo_names(c) for c in range(eng.COLS)},
                                   a_ring=activation_ring,
                                   packet_ids=({c: eng.share_packet_ids(c) for c in range(eng.COLS)}
-                                              if stream_share else None))
+                                              if stream_share else None),
+                                  a_box=box_fills)
         for s in scheds:
-            emitter.run_column_programs(s.programs, bd_budget=14, retire_batch=frame_rb)
+            emitter.run_column_programs(s.programs, bd_budget=14, retire_batch=frame_rb,
+                                        box=getattr(s, "box", None))
         cadence.append({"retire_batch": emitter.last_retire_batch,
                         "thinnest_channel_tasks": emitter.thinnest_channel_tasks})
 
@@ -610,12 +651,24 @@ def compile_graph_container(onnx_path, output_path, build_dir: Optional[Path] = 
         assert (eng.SHARE_PERIOD, eng.SHARE_B_POSITIONS, eng.SHARE_B_SLOTS, eng.SHARE_W_DEPTH) == \
             (share.PERIOD, (share.STREAM1_POSITION,), share.B_DEPTH, share.CORE_W_DEPTH), \
             "design.py's stream-sharing constants have drifted from compiler/stream_share.py"
+    if box_fills:
+        # The same reason: a design whose plain cut or buffer size drifted from box_fills.py would serve the
+        # cores other bytes than the emulator checked.
+        from ignite_xdna.compiler import box_fills as bf
+        assert eng.BOX_PLAIN == (bf.PLAIN.planes, bf.PLAIN.span, bf.PLAIN.width, bf.PLAIN.step, bf.PLAIN.rows), \
+            "design.BOX_PLAIN has drifted from compiler/box_fills.py"
+        too_big = [s.name for s in scheds if getattr(s, "box", None) is not None
+                   and s.box.box_bytes > eng.BOX_BUF_BYTES]
+        if too_big:
+            raise ValueError(f"box larger than the MemTile buffer ({eng.BOX_BUF_BYTES} B): {too_big}")
     kernel_ops = store.opcodes()
     iron.set_current_device(NPU1())
     build_kwargs = (dict(a_ring=activation_ring, w_buf=weight_buffer, ops=kernel_ops)
                     if profile.transport_options else {})
     if stream_share:
         build_kwargs["stream_share"] = True
+    if box_fills:
+        build_kwargs["a_box"] = True
     if core_depths is not None:
         if not profile.transport_options:
             raise ValueError(f"core_depths is an int8-engine experiment; the {profile.name} design does not take it")
@@ -634,6 +687,8 @@ def compile_graph_container(onnx_path, output_path, build_dir: Optional[Path] = 
                         device=iron.get_current_device())
     if weight_buffer:
         check_weight_buffer_addresses(work / "input_with_addresses.mlir", eng.WBUF_ADDRESS, eng.COLS)
+    if box_fills:
+        check_box_addresses(work / "input_with_addresses.mlir", eng.BOX_ADDRESS, eng.COLS)
     xclbin = xclbin_path.read_bytes()
     insts = insts_path.read_bytes()
     kernel_sha = hashlib.sha256(eng.KERNEL_SOURCE.read_bytes()).hexdigest()
@@ -667,6 +722,9 @@ def compile_graph_container(onnx_path, output_path, build_dir: Optional[Path] = 
         manifest["graph_engine"]["stream_share"] = {
             "period": share.PERIOD, "stream1_positions": [share.STREAM1_POSITION], "b_slots": share.B_DEPTH,
             "layers_per_round_weights": sum(m == "per-round" for m in share_modes), **share_counts}
+    if box_fills:   # absent means the split ObjectFifo
+        manifest["graph_engine"]["box_fills"] = {
+            "layers": box_layers, "cap": box_cap}
     if cadence:
         # What the emitter retired on, per shim DMA channel: frame_retire_batch(frame_tasks) unless --retire-batch
         # forced it. Dispatch time is a property of this number (SESR M7: 4.17 ms at 2, 4.77 at 3; YOLOv8s:

@@ -17122,3 +17122,95 @@ Logs:
   which quotes both pre-registrations verbatim.
 
 Its scripts are git-ignored scratch files (`scratch/b41/`).
+
+#### Block 5: box fills in the engine: exact on the device, and 0.69 ms slower; transport gains 0.25 ms but compute exposure grows 0.94 ms (2026-10-15, Desktop 2)
+
+**Question.** The probe above proved AMD's split of roles exact at the engine's shape and projected 2.80 ms
+(DERIVED, NOP) for YOLOv8s. Lowered into the engine, what does it do to a real frame?
+
+**What was built (`--box-fills`, off by default, int8 engine only).**
+- **`compiler/box_fills.py`:** finds the layers whose one-quad fills all share one box geometry, 28 of YOLOv8s's
+  66, and rewrites their fills as `("X", pattern, boxes)` items.
+  - **Only adjacent fills merge.** A run breaks at any weight or drain item, so issue order is unchanged; at most 8
+    boxes per task.
+  - **Mixed layers are skipped,** 18 of them with two geometries.
+  - **The emulator replays the cut,** and YOLOv8n and YOLOv8s emulate byte-identical to the default schedule
+    (`tests/test_box_fills_offline.py`).
+- **`design.py`, `_activation_box`:** replaces the ObjectFifo split with the probe's hand-written MemTile program.
+  - It has two 25,600 B buffers and the relay-lock protocol.
+  - The fill is S2MM 5 with descriptors 24–33; the serves are MM2S 0–3 with descriptors 0–3 and 34–37; the locks
+    are 16–22.
+  - **On the core side,** two raw buffers, picked by a parity word, keep the default's double buffering.
+  - **`BOX_ADDRESS`** is checked against the allocator after every build, as the weight buffer's is.
+- **`engine_sequence.py`, `_configure_box`:** rewrites all 18 descriptors and resets the five channels' locks at
+  each layer whose cut differs from the column's last one.
+  - The order is reset, descriptors, locks, then push the heads, the same as the ring and the weight buffer use.
+  - An unconverted layer is cut as plain quads.
+- **One encoding fact found on the way (DECODED).** mlir-aie's `npu.writebd` never packs a MemTile descriptor's D2
+  wrap (`AIEDmaToNpu.cpp`, "TODO: D2Size"). The emitter writes word 4 itself: wrap in bits 17 and up, stride
+  below.
+  - All 18 descriptors of the stream's first configure equal the configuration CDO's word for word.
+- **Two controls were built in the same tree.** `ctl` is the default, and its MLIR, CDOs and instruction stream are
+  byte-identical to a build of `32b8eec`. `boxplain` (`--box-cap 0`) has the box path with every layer plain: the
+  path's own cost, with no merges.
+
+**Instruction streams (census, checks log section 2).**
+
+| container | shim tasks | ops | stream bytes | MemTile configuration ops |
+|---|---:|---:|---:|---:|
+| `ctl` | 6,795 | 25,731 | 933,012 | 0 |
+| `boxplain` | 6,795 | 25,995 | 941,236 | 264 (one configure) |
+| `box` | 5,353 | 27,537 | 960,108 | 7,128 (27 configures) |
+
+**Exact on the device (MEASURED).**
+- **One dispatch, every layer:** `--no-workspace-reuse` YOLOv8s read 66/66 layers EXACT
+  (`tools/verify_engine_container.py`).
+- **Across dispatches:** all three timed containers ran 300 dispatches each on one frame. 0 dispatches differ from
+  the first, and every container's heads equal `ctl`'s byte for byte (`tools/repeat_dispatch_exact.py`, first run
+  from scratch with the same code). Both checks ran before the sitting.
+
+**The sitting.**
+- **Setup:** pre-registered (sha256 `e83df060...`, quoted verbatim in the checks log); `tools/bench_dispatch_ab.py`,
+  4 rounds × 300 dispatches, real and all-NOP, order reversed on even rounds; `timing_eligible: true`, no foreign
+  contention.
+- **Smoke disclosed in the pre-registration:** the no-reuse verify run's 16.58 ms mean, not comparable and
+  pointing against.
+
+| pair | arm | control | test | delta | rounds lower |
+|---|---|---:|---:|---:|---:|
+| `box` − `ctl` | real dispatch | 15.865 ms | 16.550 ms | **+0.685 ms** | 0/4 |
+| | all-NOP | 12.040 | 11.790 | −0.251 | 4/4 |
+| `boxplain` − `ctl` | real dispatch | 15.851 | 15.800 | −0.051 | 4/4 |
+| | all-NOP | 12.038 | 12.034 | −0.004 | 3/4 |
+
+**Verdict: KILL**, by the pre-registered rule (real delta ≥ 0, lower in 0/4 rounds). `--box-fills` stays in the
+tree, off by default.
+- **Predictions against readings:**
+  - NOP was predicted at −0.6 to −1.4 ms under the per-task model and above 0 under the per-op model. It read
+    −0.251, between the two, so the sitting does not discriminate them.
+  - Real was predicted at −0.4 to −1.1 and read +0.685.
+- **The path itself costs nothing:** `boxplain` reads −0.05 ms real, so the MemTile cut, its channel use, the
+  core's parity select and one configure per frame are not the loss.
+- **The loss is under compute, as with stream sharing.** Real minus NOP is 3.825 ms for `ctl` and 4.760 ms for
+  `box`, +0.935 ms, while transport gains 0.25 ms.
+- **The cause is unexplained.**
+  - **Ruled out:** the path's own cost (`boxplain`), wrong data (exact at every dispatch), contention (none
+    observed), and the control being a different design (byte-identical to `32b8eec`).
+  - **Still standing:**
+    - a merged task of up to 8 boxes behind a 2-box MemTile buffer, which may stall the activation channel under
+      compute where the default's per-quad tasks do not;
+    - the 26 extra mid-frame configures, whose channel resets may cost more with cores busy than in NOP;
+    - the ~0.9 ms of predicted NOP saving that did not appear, for which the probe's +0.19 µs one-box penalty
+      is a candidate.
+  - The sitting cannot separate these. A `--box-cap 1` arm and per-layer timing would. `engine_layer_timing.py`
+    cannot split a box stream today: the configure writes break `split_instruction_stream`'s task count.
+- **The probe's 2.80 ms is not reachable this way.** It was a NOP projection on one traffic shape, and this frame's
+  NOP saving was 0.25 ms. The precedent held: a NOP gain turned into a real loss.
+
+Logs:
+- [sitting](../results/aie/box_fills_ab_yolov8s_desktop2_20261015T1423Z.log) and its
+  [JSON](../results/aie/box_fills_ab_yolov8s_desktop2_20261015T1423Z.json);
+- [layer-by-layer verify](../results/aie/box_fills_verify_yolov8s_desktop2_20261015T1415Z.log);
+- [repeat-dispatch exactness](../results/aie/box_fills_repeat_exact_yolov8s_desktop2_20261015T1422Z.log);
+- [checks](../results/aie/box_fills_checks_yolov8s_desktop2_20261015T1430Z.log): the pre-registration verbatim, the
+  census, the descriptor-against-CDO check, and the control and rebuild identities.

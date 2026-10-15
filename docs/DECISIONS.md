@@ -2014,6 +2014,22 @@ cached reference heads rather than `bo_out`.
   - **What would reopen it:** a measured mechanism, then a new pre-registration for a variant that keeps weights
     off the quads' path (a deeper B, another q, or weights on their own route). Not a rerun of this one
     ([BENCHMARKS](BENCHMARKS.md#block-5-stream-sharing-built-exact-on-the-device-and-093-ms-slower-transport-gains-048-ms-but-compute-exposure-grows-130-ms-2026-10-13-desktop-2)).
+- **Rejected (built and measured): box fills, AMD's split of roles lowered into the engine (2026-10-15, Block 5).**
+  The shim moves one box per quad, the MemTile cuts it per core, and adjacent boxes merge up to 8 per task on the
+  28 single-geometry YOLOv8s layers. It is exact on the device: 66/66 layers, and 300 dispatches equal to the
+  default's heads. It lost its pre-registered sitting: real dispatch was +0.685 ms (0/4 rounds) against a
+  prediction of −0.4 to −1.1 ms. NOP was −0.251 ms (4/4), and compute exposure grew 0.935 ms.
+  - **Ruled out:** the path itself. The same build with every layer cut plain (`--box-cap 0`) reads −0.05 ms.
+  - **The cause is unexplained.** Still standing: merged tasks stalling behind the 2-box MemTile buffer under
+    compute; the 26 extra mid-frame configures; the one-box task penalty the probe measured.
+  - **What stays on `main`, off by default:** `--box-fills` / `--box-cap`, `compiler/box_fills.py`, and
+    `design.py`'s `_activation_box`.
+  - **Found on the way:** mlir-aie's `npu.writebd` drops a MemTile descriptor's D2 wrap, so the emitter writes
+    word 4 itself.
+  - **What would reopen it:** a measured mechanism, from a cap-1 arm and per-layer timing of a box stream (the
+    configure writes must first be made countable by `split_instruction_stream`). Then a new pre-registration,
+    not a rerun
+    ([BENCHMARKS](BENCHMARKS.md#block-5-box-fills-in-the-engine-exact-on-the-device-and-069-ms-slower-transport-gains-025-ms-but-compute-exposure-grows-094-ms-2026-10-15-desktop-2)).
 - **Rejected again, on the container it mattered most for: the activation ring on SESR M7 (2026-09-19, built and
   measured).** SESR is the one zoo model whose dispatch is demonstrably transport-bound (2.650 ms NOP floor for
   ~14 MB of per-frame fill and drain, 5.4 GB/s effective), so the ring's "fetch once, serve several output groups"

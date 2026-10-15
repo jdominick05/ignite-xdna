@@ -42,6 +42,7 @@ def item_model(programs):
     its service is complete (None when the layer ends first, which the layer barrier settles)."""
     out = []
     fills = defaultdict(int)
+    act_ks = defaultdict(set)
     n = max((len(p) for p in programs), default=0)
     for i in range(n):
         for c, prog in enumerate(programs):
@@ -52,9 +53,16 @@ def item_model(programs):
             if kind in ("a", "A", "P"):
                 # A stream-shared quad ("P") is an activation item issued on the weight channel.
                 fills[c] += 1
+                act_ks[c].add(fills[c])
                 for _ in (it[1] if kind == "a" else [it[1]]):
                     out.append({"col": c, "channel": "w" if kind == "P" else "a", "hold": 0,
                                 "fills": fills[c], "act": True})
+            elif kind == "X":
+                # A box task ("X", pattern, boxes) is one transfer that completes `boxes` activation items.
+                for _ in range(it[2]):
+                    fills[c] += 1
+                    act_ks[c].add(fills[c])
+                out.append({"col": c, "channel": "a", "hold": 0, "fills": fills[c], "act": True})
             elif kind in ("w", "W", "o"):
                 if kind == "w":
                     hold = it[3] if len(it) > 3 else 0
@@ -62,7 +70,7 @@ def item_model(programs):
                     hold = it[2] if len(it) > 2 else 0
                 out.append({"col": c, "channel": "o" if kind == "o" else "w", "hold": hold, "fills": fills[c]})
     for c in range(len(programs)):
-        acts = sorted({e["fills"] for e in out if e["col"] == c and e.get("act")})
+        acts = sorted(act_ks[c])
         for channel in ("w", "o"):
             held = [e for e in out if e["col"] == c and e["channel"] == channel and e["hold"]]
             for e in held:
@@ -185,16 +193,27 @@ class EmitterOffline(unittest.TestCase):
                 self._cache[key] = es.schedule_graph(ir, ws)[0]
         return self._cache[key]
 
-    def _run(self, name, bd_budget=14, queue_depth=4, retire_batch=None, shared=False):
+    def _run(self, name, bd_budget=14, queue_depth=4, retire_batch=None, shared=False, box=False):
         em = RecordingEmitter(self, bd_budget, queue_depth)
         if shared:
             em._packet_ids = {c: (1 + 8 * c, 2 + 8 * c) for c in range(4)}
+        scheds = self._scheds(name, shared)
+        if box:
+            # The box path's MemTile configuration writes registers only; recorded, not emitted (it imports IRON's
+            # design module). Its shim side is what the guard checks.
+            import copy
+            from ignite_xdna.compiler.box_fills import apply_box_fills
+            scheds = copy.deepcopy(scheds)
+            self.assertGreater(apply_box_fills(scheds), 0)
+            em._a_box = True
+            em.configured = []
+            em._configure_box = lambda col, geom: em.configured.append((col, geom))
         tasks = 0
-        for s in self._scheds(name, shared):
+        for s in scheds:
             em.start_layer(s.programs)
             before = dict(em.issued_per_col)
             em.run_column_programs(s.programs, bd_budget=bd_budget, queue_depth=queue_depth,
-                                   retire_batch=retire_batch)
+                                   retire_batch=retire_batch, box=getattr(s, "box", None) if box else None)
             self.assertEqual(em.cursor, len(em.expected), f"{s.name}: transfers missing")
             for c, prog in enumerate(s.programs):
                 self.assertEqual(em.issued_per_col[c] - before.get(c, 0), program_task_count(prog),
@@ -204,6 +223,8 @@ class EmitterOffline(unittest.TestCase):
                 if e["task"].token:
                     self.assertTrue(e["task"].awaited, f"{s.name}: a token left unconsumed")
             tasks += len(em.expected)
+        if box:
+            self.assertEqual(len(em.configured), 4 * len(scheds), "a layer did not configure every column")
         return tasks
 
     def test_01_yolov8n_default(self):
@@ -237,6 +258,14 @@ class EmitterOffline(unittest.TestCase):
             for rb in (2, 3):
                 with self.subTest(model=name, retire_batch=rb):
                     self._run(name, retire_batch=rb, shared=True)
+
+    def test_07_box_fills(self):
+        # compiler/box_fills.py: one "X" task carries several adjacent fills, each served before the push. Every
+        # rule above must hold at both cadences, and every layer must configure all four columns once.
+        for name in ("yolov8n", "yolov8s"):
+            for rb in (2, 3):
+                with self.subTest(model=name, retire_batch=rb):
+                    self._run(name, retire_batch=rb, box=True)
 
     def test_05_a_hold_binds(self):
         # On the shipped YOLOv8n/s schedules no hold ever stops a retirement (counted 2026-10-13: zero refusals),
