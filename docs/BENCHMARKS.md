@@ -17098,6 +17098,8 @@ settle the self-overlap question that the 09-09 im2col probe left open.
     byte term (1.07).
 - **R3, kill line:** neither model was favoured, so the rule scales A's frame saving by the measured k8 delta:
   3.27 × 2.650 / 3.09 = **2.80 ms projected for YOLOv8s (DERIVED)**. That clears the 1 ms line.
+  *[Measured against the same day: lowered into the engine, YOLOv8s read +0.685 ms real and -0.251 ms NOP,
+  verdict KILL; see [box fills in the engine](#block-5-box-fills-in-the-engine-exact-on-the-device-and-069-ms-slower-transport-gains-025-ms-but-compute-exposure-grows-094-ms-2026-10-15-desktop-2).]*
   - The 424 unmerged boxes would pay the one-box penalty, at most about 0.08 ms.
   - **Implication for the build:** a fill that does not merge should stay in today's form.
 - **R4, the step:** k2 and k64 read within 0.016 ms, so merging past two boxes buys nothing at this traffic. This
@@ -17113,7 +17115,7 @@ settle the self-overlap question that the 09-09 im2col probe left open.
   - weights and drains beside it;
   - an exact oracle per layer before any frame is timed.
 
-That is a separate, planned block.
+That block was built and measured the same day: [box fills in the engine](#block-5-box-fills-in-the-engine-exact-on-the-device-and-069-ms-slower-transport-gains-025-ms-but-compute-exposure-grows-094-ms-2026-10-15-desktop-2), verdict KILL.
 
 Logs:
 - [sitting](../results/aie/mtsplit_probe_phoenix_desktop2_20261015T1245Z.log) and its
