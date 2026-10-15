@@ -17008,16 +17008,29 @@ per-core objects. Does that split work under the engine's own shapes, and what d
 
 **Why the engine's fills stay one quad (offline).**
 - Of YOLOv8s's 5,509 activation fills, 4,774 still carry one quad.
-- 4,508 of those have the shape of the 3×3 convolutions: core j takes 4 planes × rows 5j..5j+7, e.g.
-  `(4, 4, 8, 200)` at `(3280, 53792, 656, 1)`.
-- So neighbouring cores' slices overlap by a 3-row halo. With the core index on the repeat, no second quad fits
-  in a shim BD.
-- **The union of the four slices is one 3-D box:** 4 planes × 23 rows × 200 B = 18,400 B against 25,600 B. That
-  test is exact set equality of byte offsets and holds for all 4,508. A box leaves the repeat free, so consecutive
-  boxes merge.
+- 4,508 of them are 4-D, with the core index on the repeat. So no second quad fits in a shim BD.
+- **For all 4,508, the union of the four core slices is one 3-D box.** The test is exact set equality of byte
+  offsets. A box leaves the repeat free, so consecutive boxes merge. They fall into three groups (shape counts in
+  the census, section 1 of the sizing log):
+
+  | group | example | count | box | bytes per quad |
+  |---|---|---:|---|---:|
+  | 8-row windows at a 5-row step, a 3-row halo | `(4, 4, 8, 200)` at `(3280, 53792, 656, 1)` | 2,308 | 4 × 23 × 200 B | 18,400 |
+  | other overlaps, 2-row and 11-row halos | `(4, 10, 4, 160)`, `(4, 2, 16, 200)` | 304 | 4 × 10 × 160 B / 2 × 16 × 200 B | 16,000 / 12,400 |
+  | disjoint 5-row slices, no halo | `(4, 8, 5, 160)` | 1,896 | 8 × 20 × 160 B | 25,600 |
+
+  Every other one-quad shape moves 25,600 B. Only the 2,612 overlapping fills save bytes, and they account for all
+  19.7 MB of the byte saving below. The 1,896 disjoint ones save tasks only.
+- **The probe below tests the first group,** the largest one.
+- *Corrected 2026-10-15, before any push:* this paragraph first said all 4,508 were 3-row-halo windows of 18,400 B.
+  The sizing figures were computed per fill and are unchanged.
 
 **Sizing (DERIVED, kill line pre-registered first, sha256 `6628b9e3...`).** Every boxable fill becomes its box,
-and consecutive boxes in a column program merge by repeat, at most 8 per task.
+and runs of boxes merge by repeat, at most 8 per task.
+- **How runs are formed:** a run is consecutive boxes in a column program's sequence of activation fills. Weight
+  and drain items between them are skipped.
+- **Open for the engine block:** whether the emitter may legally move fills past those items. The MemTile buffer
+  depth and the cores' consumption order are the constraints.
 - YOLOv8s tasks fall from 6,795 to 3,857, and activation bytes from 237.7 to 218.0 MB.
 - The saving is **3.27 ms under model A and 1.81 ms under model C**. Caps of 4 and 16 change it by under 0.05 ms.
 - 424 boxes stay unmerged.
