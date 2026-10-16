@@ -2191,12 +2191,21 @@ glass-to-glass on YOLOv8n and YOLOv8n-pose but not on YOLOv8s
 Can a complete transformer execute on XDNA1 without CPU neural fallback while preserving
 its decisions and calibration? The native Laya arm now passes the original frozen
 full-set gates, with its source and artifacts registered before labelled scoring. This
-establishes the defined accuracy result for the hardware path. It leaves the speed
-question open: the eligible same-sitting CPU comparison still wins. The next work measures
-phase costs and transfer overlap while retaining the frozen accuracy contract. See
+establishes the defined accuracy result for the hardware path. See
 [full native accuracy and limits](docs/BENCHMARKS.md#laya-native-frozen-accuracy-c0c5-pass-2026-10-16-desktop-2).
-Deeper encoder buffering now reduces eligible complete-model fixture latency, while the
-same-sitting CPU remains faster. The separately registered buffered arm passes the
+The separately registered buffered arm passes the
 original full-set gates and preserves both complete native output arrays bit-for-bit.
 See [buffered full accuracy](docs/BENCHMARKS.md#laya-buffered-native-accuracy-c0c5-and-full-bit-equivalence-pass-2026-10-16-desktop-2) and
 [buffering result and limits](docs/BENCHMARKS.md#laya-deeper-encoder-buffering-reduces-complete-latency-2026-10-16-desktop-2).
+The lookup/short-head arm also passes the unchanged full frozen gates; later arms are
+re-validations on the known labelled set, not independent held-out tests.
+
+The speed question is now native versus hybrid first. In the preregistered sitting,
+matched 512-row native inference takes 2558.9248 ms against hybrid's 620.9457 ms.
+The qualified lookup arm serves the same 91-token request in 509.2963 ms using M128,
+while the current hybrid still requires 512 rows; the qualified buffered arm takes
+693.2183 ms. The serving gain includes row bucketing, and does not establish a
+matched-M128 kernel win. Eight-thread CPU controls remain unstable despite interleaving
+and spinning controls, so the cause is unexplained and CPU ratios are withheld.
+The next optimization must address the measured native-versus-hybrid gap while retaining
+the frozen gates. [Comparison, CPU investigation and limits](docs/BENCHMARKS.md#laya-native-versus-hybrid-at-matched-and-serving-schedules-2026-10-16-desktop-2).

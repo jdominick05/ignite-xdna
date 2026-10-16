@@ -19405,3 +19405,75 @@ Performance against the hybrid remains unmeasured at matching row schedules. The
 earlier native speedups compare native schedules with each other; they do not prove
 a win over the hybrid. CPU clock/load effects behind the prior timing drift remain
 unexplained, and no NPU/CPU ratio from that sitting is an accepted result.
+The [subsequent preregistered comparison](#laya-native-versus-hybrid-at-matched-and-serving-schedules-2026-10-16-desktop-2)
+now supplies the missing matched-schedule control.
+
+## Laya native versus hybrid at matched and serving schedules (2026-10-16, Desktop 2)
+
+Native loses to hybrid at matched 512-row schedules. For the same logical 91-token
+request, the qualified lookup/short-head serving arm is faster than the current
+hybrid, whose closest supported row schedule is 512. The qualified buffered arm with
+full heads remains slower than hybrid. This separates a serving-configuration gain
+from a claim that moving the same full schedule onto the NPU made it faster.
+
+The [registered protocol](../results/laya/native_hybrid_compare_v1_prereg_desktop2_20261016.json)
+was committed before comparison inference, SHA256
+`bb65c96e85b3886e22644978e937c3a72f9c453a21444af3726b1b4bec8625e2`.
+A [bounded qualification](../results/laya/native_hybrid_compare_v1_qualification_desktop2_20261016.log)
+passes before the [eligible same-sitting comparison](../results/laya/native_hybrid_compare_v1_same_sitting_desktop2_20261016.log).
+Three rounds rotate all four profiles; each profile warms twice and measures five
+complete inferences, excluding model/session setup. All use the same first unlabelled
+fixture and output/decision checks against CPU FP32. Reported profile medians aggregate
+the 15 timed samples per arm. Input tokenization is outside inference timing.
+
+| Profile | Executed row schedule | Median ms | Observed sample range ms |
+|---|---|---:|---:|
+| Existing hybrid | 512 | 620.9457 | 616.3143–626.7880 |
+| Native matched full schedule | 512 encoder and heads | 2558.9248 | 2499.2072–2566.3774 |
+| Qualified buffered native | M128 encoder, full heads | 693.2183 | 647.8893–703.6357 |
+| Qualified lookup/short-head native | M128 encoder and heads | 509.2963 | 453.6631–514.8653 |
+
+The current `tools/laya_hybrid.py` fixes `SEQ=512`, allocates fixed-size A/C buffers,
+and sends shorter activations to its host product branch. This comparison neither
+patches that value nor compiles new transactions. Both matched-512 profiles receive
+the identical right-padded 91-token input and mask. Native's full-schedule control
+uses its original full-512 instructions; the other native arms use their qualified
+serving policies. No matched-M128 hybrid result exists, so the serving gain includes
+row bucketing and must not be attributed solely to eliminating host neural segments.
+The earlier native speedup subjects compared against native's slower full schedule;
+they did not establish a win over the pre-existing hybrid.
+
+Actual hybrid counters confirm 118 NPU products, two host products and 121 CPU segment
+calls per inference, including each profile's warmups. Native profiles observe zero
+CPU neural/oracle calls, five contexts and 66 dispatches per inference. Hybrid uses
+one context. Profiles are serialized, with idle checks before and after each, and
+the process leaves no contexts after close. The wrapper records no foreign contention
+and `timing_eligible: true`. Registered source/artifact identities match at both ends.
+
+CPU measurements are interleaved before the first profile and after every profile:
+13 blocks, each with actual-length and padded inputs, three timed samples after two
+warmups, and rotating thread/spinning configurations. Sessions are released before
+NPU execution. The following ranges are across block medians, not individual samples.
+
+| CPU FP32 configuration | Input rows | Range of block medians ms | Registered stability test |
+|---|---:|---:|---|
+| One thread, spinning disabled | 91 | 513.8980–548.8352 | PASS |
+| One thread, spinning disabled | 512 | 3278.9098–3403.3327 | PASS |
+| Eight threads, spinning disabled | 91 | 129.2672–193.9409 | FAIL |
+| Eight threads, spinning disabled | 512 | 820.2148–1273.3489 | FAIL |
+| Eight threads, default spinning | 91 | 105.4451–180.2010 | FAIL |
+| Eight threads, default spinning | 512 | 810.4175–1474.6125 | FAIL |
+
+The one-thread controls stay within the preregistered maximum/minimum block-median
+ratio of 1.10; all eight-thread controls exceed it, especially in the final CPU block.
+System CPU load samples, process CPU seconds and native thread counts are retained.
+Disabling spinning does not remove the observed instability. Its cause remains
+unexplained: these observations do not establish clock, thermal, affinity, memory or
+background-work causality. All NPU/CPU performance ratios are withheld as registered.
+The earlier two-bracket CPU ratio is not an accepted result either.
+
+Verbose output stays in ignored `scratch/`. The committed summary records the raw
+SHA256 `d77ba78f5db5317edda1436b05fd24b99996a5596c50b6da5e7a750d1cab6d0e`,
+protocol identity, per-profile samples/load, correctness checks, idle witnesses and
+terminal eligibility. These measurements do not relax the original accuracy gates
+or establish a whole-model speed target beyond this fixture and its named schedules.

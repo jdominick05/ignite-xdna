@@ -539,5 +539,6 @@ Backs [complete lookup/head gate verdict](../docs/BENCHMARKS.md#laya-lookup-and-
 
 Backs the [comparison protocol](../docs/DECISIONS.md#laya-nativehybrid-comparison-protocol-2026-10-16).
 
-- [Preregistration](laya/native_hybrid_compare_v1_prereg_desktop2_20261016.json): matched-512 control, both qualified native serving arms, interleaved CPU thread/spinning controls and load capture; no comparison result yet.
+- [Preregistration](laya/native_hybrid_compare_v1_prereg_desktop2_20261016.json): matched-512 control, both qualified native serving arms, interleaved CPU thread/spinning controls and load capture; [completed comparison](../docs/BENCHMARKS.md#laya-native-versus-hybrid-at-matched-and-serving-schedules-2026-10-16-desktop-2).
 - [Offline validation](laya/native_hybrid_compare_v1_validation_desktop2_20261016.log): summary eligibility, CPU drift rejection, registration exclusivity, output gates, privacy and legacy checks; Win32 load/thread APIs checked without opening the NPU.
+- [Qualification](laya/native_hybrid_compare_v1_qualification_desktop2_20261016.log), [eligible same-sitting result](laya/native_hybrid_compare_v1_same_sitting_desktop2_20261016.log): native loses at matched512; lookup serving arm wins against the current padded hybrid on the91-token fixture. CPU ratios withheld because eight-thread controls fail stability. Raw logs stay in scratch with hashes in these summaries.
