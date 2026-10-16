@@ -297,3 +297,13 @@ performance result: [method and qualification](../docs/BENCHMARKS.md#laya-fused-
 - [Expanded run with incorrect per-row layout labels](laya/rotary_v4_all_suite_desktop2_20261016.log): retained reporting error; superseded for per-layout coverage by the next log.
 - [Correctly labelled expanded suite](laya/rotary_v5_all_model_suite_desktop2_20261016.log): all mask layouts and first actual QKV weights on synthetic activations; gates pass.
 - [Validation](laya/rotary_isolation_validation_desktop2_20261016.log): full syntax/import/shell gates, offline tests, error summaries, ELF/CDO identity, stack/SRAM audits and retained combined-image overflow.
+
+## Laya attention output projection and residual/norm
+
+[Device layout, exactness gates and remaining model work](../docs/BENCHMARKS.md#laya-attention-through-residual-and-norm-mlp-input-prepared-on-device-2026-10-16-desktop-2).
+
+- [Output projection smoke](laya/output_projection_v1_smoke_desktop2_20261016.log).
+- Norm integration: [initial output layout](laya/attention_norm_v1_smoke_desktop2_20261016.log), [reusable residual layout and MLP-input format](laya/attention_norm_v2_smoke_desktop2_20261016.log).
+- [Expanded qualification](laya/attention_norm_v3_all_suite_desktop2_20261016.log): all mask layouts, first actual projection weights/affine set on synthetic activations; fixed gates pass.
+- [Validation](laya/attention_norm_validation_desktop2_20261016.log): syntax/import/shell checks, offline tests, default object identity, ELF/stack/SRAM audits and numerical summary.
+- Frozen evaluation recovery, without inference: [identical item hashes from pinned dataset revisions](laya/eval_items_restore_desktop2_20261016.log), [identical reference logits and original model hashes](laya/eval_reference_restore_desktop2_20261016.log).

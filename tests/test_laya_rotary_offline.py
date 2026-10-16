@@ -26,8 +26,10 @@ def test_all_output_dma_words_written_once_with_disjoint_arena_guards():
             start=int(offset)+sum(i*s for i,s in zip(outer,strides))
             counts[start+inner]+=1
     expected=np.zeros(pl['words'],np.uint8)
-    for name in ('projection','queries','keys','kv','attention'):
+    for name in ('projection','queries','keys','kv','attention','packed_attention','norm','packed_norm'):
         start=pl['offsets'][name]; expected[start:start+pl['sizes'][name]]=1
+    start=pl['offsets']['norm_input']
+    expected[start:start+pl['sizes']['norm_input']].reshape(512,p.OUT)[:,:1040]=1
     assert np.array_equal(counts,expected)
 
 
@@ -71,7 +73,75 @@ def test_rotary_matrix_stream_addresses_all_qkv_source_tiles():
                     assert int(found)==col and int(offset)==expected
                     assert list(map(int,dims.split(',')))==[1,4,129,16]
                     assert list(map(int,strides.split(',')))==[0,p.OUT,16,1]
-    assert len(entries)==4
+    assert len(entries)==4+64+64+4+64
+
+
+def test_attention_pair_and_output_projection_stream_addresses():
+    pl=r.plan(); entries=re.findall(r'%a\[0,0,0,(\d+)\]\[([^]]+)\]\[([^]]+)\].*metadata = @(q|kv)L2_(\d+)',r.runtime(pl,False,512))
+    q=[entry for entry in entries if entry[3]=='q'][48+256+4:]
+    kv=[entry for entry in entries if entry[3]=='kv'][48+256+16:]
+    for which in range(4):
+        for mg in range(4):
+            for col in range(4):
+                head=col*4+which; source=pl['offsets']['attention']+(head*32+mg*8)*p.OUT
+                for entry,expected in ((q.pop(0),source),(kv.pop(0),source+p.OUT)):
+                    offset,dims,strides,_,found=entry
+                    assert int(offset)==expected and int(found)==col
+                    assert list(map(int,dims.split(',')))==[1,4,129,16]
+                    assert list(map(int,strides.split(',')))==[0,2*p.OUT,16,1]
+    for group in range(4):
+        for mg in range(4):
+            for col in range(4):
+                offset,dims,strides,_,found=q.pop(0)
+                assert int(offset)==pl['offsets']['packed_attention']+mg*4*p.OUT and int(found)==col
+                assert list(map(int,dims.split(',')))==[1,16,4,p.QWORDS]
+                assert list(map(int,strides.split(',')))==[0,16*p.OUT,p.OUT,1]
+                offset,_,_,_,found=kv.pop(0)
+                assert int(offset)==pl['offsets']['projection_weight']+(col*4+group)*16*p.KVWORDS and int(found)==col
+    assert len(q)==len(kv)==4+64
+    for col in range(4):
+        offset,_,_,_,found=q.pop(0)
+        assert int(offset)==pl['offsets']['norm_input']+col*128*p.OUT and int(found)==col
+        offset,_,_,_,found=kv.pop(0)
+        assert int(offset)==pl['offsets']['affine'] and int(found)==col
+    for group in range(4):
+        for mg in range(4):
+            for col in range(4):
+                for entries in (q,kv):
+                    offset,_,_,_,found=entries.pop(0)
+                    assert int(offset)==pl['offsets']['norm']+mg*128*p.OUT and int(found)==col
+    assert not q and not kv
+
+
+def test_output_projection_scatter_preserves_original_residual_words():
+    pl=r.plan(); entries=re.findall(r'%o\[0,0,0,(\d+)\]\[([^]]+)\]\[([^]]+)\].*metadata = @outL2_(\d+)',r.runtime(pl,False,512))
+    entries=entries[48+256+4+64:]
+    for group in range(4):
+        for mg in range(4):
+            for col in range(4):
+                offset,dims,strides,found=entries.pop(0)
+                assert int(offset)==pl['offsets']['norm_input']+mg*128*p.OUT+(group*4+col)*65
+                assert list(map(int,dims.split(',')))==[1,4,32,65]
+                assert list(map(int,strides.split(',')))==[0,32*p.OUT,p.OUT,1]
+                assert int(found)==col
+                for core in range(4):
+                    for row in range(32):
+                        start=int(offset)+core*32*p.OUT+row*p.OUT
+                        relative=(start-pl['offsets']['norm_input'])%p.OUT
+                        assert relative+65<=1040
+    assert len(entries)==4+64
+
+
+def test_attention_to_gemm_packet_inverse_all_rows_heads_and_features():
+    bits=(np.arange(512*1024,dtype=np.uint32)%2048+0x3c00).astype(np.uint16).reshape(512,1024)
+    raw=np.zeros((16,4,4,p.OUT),np.uint32)
+    for head in range(16):
+        for group in range(4):
+            for row in range(4):
+                tile=bits[group*128+row*32:group*128+row*32+32,head*64:head*64+64]
+                raw[head,group,row,16:1040].view(np.uint16)[:]=p.attention.tiled(tile,4,8)
+    got=r.unpack_activation(raw.reshape(256,p.OUT))
+    assert np.array_equal(got,(bits.astype(np.uint32)<<16).view(np.float32))
 
 
 def test_rtp_writes_only_changed_values_and_rejects_unavailable_operation():

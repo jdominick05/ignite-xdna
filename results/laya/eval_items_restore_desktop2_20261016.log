@@ -1,0 +1,116 @@
+RESEARCH_PLATFORM {"machine": "Desktop 2", "cpu": "AMD Ryzen 7 8700G w/ Radeon 780M Graphics", "os": "Windows-11-10.0.26200-SP0", "ram_bytes": 33381138432, "source_sha256": {"tools/research_process.py": "ffeb1857f190b482eed101b5f5a928f455de26bfa61d23f78a2eacec08e2663e", "tools/quant_calib_alphabet.py": "2dc0b2878c564853f340880209a425dfcf63b8536b2b8e9fd32344daade58d37", "tools/xint8_arithmetic_probe.py": "6aa3df08b9870c3c2264b868459d7ffbac3070dddc1349d7c6f3f480075f7041", "scripts/research-lowlevel.sh": "3455ad7933697936487712665505c216891865c6deada647302785f6e37020bd", "scripts/research-iron.sh": "4c863a262646ddab39b5005006ba8e03809895e6386c6310e2fd9d0a9e9609ee", "kernels/memory_placement/probe.py": "e8d990169ad6091fa1b53852e9f61eff495b5def72d35165a5c5cf1759e38898", "kernels/memory_placement/memory_kernels.cc": "182e7af7071a1e851afb4a7ca266069c489aea1fbaaa85eca129708daeba5ba6", "scripts/research-matrix.sh": "739254171629deae822b0ad7dabc875aee19ace56dde77d3e8aab61663f97516", "kernels/memory_placement/gemm.py": "17c905ad66110d3346bbf0db898dfc6b780df59fae1dfb0c1747057ce1e5844e", "kernels/memory_placement/gemm_placement.cc": "f21acf7250b12914ea30cc1f77613239dfa18421a85a1b9a5199017dd916278a", "tools/research_summary.py": "0c00dcceef07053d06731b41a1f1ed58d3ba4ea09f82497de354ce9cef17da20", "tools/research_toolchain.py": "f0a126a24ae213acfaa43460cfd9def0c86d9cb70cfee0228aa271688467b314"}, "commit": "38e05257cc256b46f2c3b5de87e8efa591b45d5b", "command": ["python", "scratch/laya_transformer/restore_items.py"], "seconds_limit": 300.0, "rss_gib_limit": 8, "checks_only": true, "free_ram_bytes": 24402681856}
+EVAL_RESTORE_SOURCE {"registration_sha256": "a8763c5242884488bbb2394e952dcd19ac8f2773ca61652f8ecf80c723e7c709", "tool_sha256": "30b9dbc8010a038b8baeb25c22a9fc0c54a676ffae30cee1eacdd2cc9ecbef97", "baseline_tool_sha256": "18c0738666192e9877c21d34e18e4017e6d61d3da0722a668ce6ea9cd9bf06af", "expected_items_sha256": "138b8a76ce66af5e838e2558832be3f0d33b8740c326ba35616185d079f33f59", "scope": "evaluation input reconstruction only; no inference or device context"}
+ITEMS fixture: 3 questions (receptron test_model.ts @ fbe9ed68), 267 tokens in all; sha256 7e30c62e1c1e34433062e2804381d2a03d0fd3efd0bc4f0dd3e98655a0307af1
+EVAL_DATASET_PIN {"repo": "fancyzhx/ag_news", "revision": "eb185aade064a813bc0b7f42de02595523103ca4"}
+C:\Users\<user>\miniforge3\envs\resnet_env17\Lib\site-packages\huggingface_hub\file_download.py:143: UserWarning: `huggingface_hub` cache-system uses symlinks by default to efficiently store duplicated files but your machine does not support them in \\<cache-host>\<cache-share>\huggingface\hub\datasets--fancyzhx--ag_news. Caching files will still work but in a degraded version that might require more space on your disk. This warning can be disabled by setting the `HF_HUB_DISABLE_SYMLINKS_WARNING` environment variable. For more details, see https://huggingface.co/docs/huggingface_hub/how-to-cache#limitations.
+To support symlinks on Windows, you either need to activate Developer Mode or to run Python as an administrator. In order to activate developer mode, see this article: https://docs.microsoft.com/en-us/windows/apps/get-started/enable-your-device-for-development
+  warnings.warn(message)
+EVAL_DATASET_PIN {"repo": "fancyzhx/ag_news", "revision": "eb185aade064a813bc0b7f42de02595523103ca4"}
+Xet Storage is enabled for this repo, but the 'hf_xet' package is not installed. Falling back to regular HTTP download. For better performance, install the package with: `pip install huggingface_hub[hf_xet]` or `pip install hf_xet`
+HOST_TIMELINE {"elapsed_seconds": 2.344, "tree_rss_bytes": 152731648, "foreign_peers": []}
+Xet Storage is enabled for this repo, but the 'hf_xet' package is not installed. Falling back to regular HTTP download. For better performance, install the package with: `pip install huggingface_hub[hf_xet]` or `pip install hf_xet`
+
+Generating train split:   0%|          | 0/120000 [00:00<?, ? examples/s]
+Generating train split:   1%|          | 1000/120000 [00:00<00:23, 5001.92 examples/s]
+Generating train split: 100%|██████████| 120000/120000 [00:00<00:00, 523855.82 examples/s]
+
+Generating test split:   0%|          | 0/7600 [00:00<?, ? examples/s]
+Generating test split: 100%|██████████| 7600/7600 [00:00<00:00, 292398.60 examples/s]
+ITEMS ag_news: fancyzhx/ag_news @ eb185aade064, test split of 7600, first 400 rows; 400 items, 0 dropped; 4 options; tokens mean 105, max 232; gold spread [103, 123, 72, 102]; sha256 ba7c0141d5f8deca1344cc702175cd97d280d0fa08bf6caad0fa73c4cd8e7e10
+ITEMS ag_news: dataset label names ['World', 'Sports', 'Business', 'Sci/Tech'] against options ['world: world news and international politics', 'sports: sports', 'business: business and economy', 'sci_tech: science and technology']
+EVAL_DATASET_PIN {"repo": "dair-ai/emotion", "revision": "cab853a1dbdf4c42c2b3ef2173804746df8825fe"}
+C:\Users\<user>\miniforge3\envs\resnet_env17\Lib\site-packages\huggingface_hub\file_download.py:143: UserWarning: `huggingface_hub` cache-system uses symlinks by default to efficiently store duplicated files but your machine does not support them in \\<cache-host>\<cache-share>\huggingface\hub\datasets--dair-ai--emotion. Caching files will still work but in a degraded version that might require more space on your disk. This warning can be disabled by setting the `HF_HUB_DISABLE_SYMLINKS_WARNING` environment variable. For more details, see https://huggingface.co/docs/huggingface_hub/how-to-cache#limitations.
+To support symlinks on Windows, you either need to activate Developer Mode or to run Python as an administrator. In order to activate developer mode, see this article: https://docs.microsoft.com/en-us/windows/apps/get-started/enable-your-device-for-development
+  warnings.warn(message)
+EVAL_DATASET_PIN {"repo": "dair-ai/emotion", "revision": "cab853a1dbdf4c42c2b3ef2173804746df8825fe"}
+Xet Storage is enabled for this repo, but the 'hf_xet' package is not installed. Falling back to regular HTTP download. For better performance, install the package with: `pip install huggingface_hub[hf_xet]` or `pip install hf_xet`
+Xet Storage is enabled for this repo, but the 'hf_xet' package is not installed. Falling back to regular HTTP download. For better performance, install the package with: `pip install huggingface_hub[hf_xet]` or `pip install hf_xet`
+HOST_TIMELINE {"elapsed_seconds": 4.672, "tree_rss_bytes": 181940224, "foreign_peers": []}
+Xet Storage is enabled for this repo, but the 'hf_xet' package is not installed. Falling back to regular HTTP download. For better performance, install the package with: `pip install huggingface_hub[hf_xet]` or `pip install hf_xet`
+
+Generating train split:   0%|          | 0/16000 [00:00<?, ? examples/s]
+Generating train split: 100%|██████████| 16000/16000 [00:00<00:00, 631007.07 examples/s]
+
+Generating validation split:   0%|          | 0/2000 [00:00<?, ? examples/s]
+Generating validation split: 100%|██████████| 2000/2000 [00:00<00:00, 166559.61 examples/s]
+
+Generating test split:   0%|          | 0/2000 [00:00<?, ? examples/s]
+Generating test split: 100%|██████████| 2000/2000 [00:00<00:00, 178831.07 examples/s]
+ITEMS emotion: dair-ai/emotion/split @ cab853a1dbdf, test split of 2000, first 400 rows; 400 items, 0 dropped; 6 options; tokens mean 54, max 97; gold spread [119, 118, 37, 64, 52, 10]; sha256 e3e398c6e3014be19f39b866278bbf099551282ef04d5b9ad7497a2c1191e89f
+ITEMS emotion: dataset label names ['sadness', 'joy', 'love', 'anger', 'fear', 'surprise'] against options ['sadness', 'joy', 'love', 'anger', 'fear', 'surprise']
+EVAL_DATASET_PIN {"repo": "mteb/banking77", "revision": "18072d2685ea682290f7b8924d94c62acc19c0b2"}
+C:\Users\<user>\miniforge3\envs\resnet_env17\Lib\site-packages\huggingface_hub\file_download.py:143: UserWarning: `huggingface_hub` cache-system uses symlinks by default to efficiently store duplicated files but your machine does not support them in \\<cache-host>\<cache-share>\huggingface\hub\datasets--mteb--banking77. Caching files will still work but in a degraded version that might require more space on your disk. This warning can be disabled by setting the `HF_HUB_DISABLE_SYMLINKS_WARNING` environment variable. For more details, see https://huggingface.co/docs/huggingface_hub/how-to-cache#limitations.
+To support symlinks on Windows, you either need to activate Developer Mode or to run Python as an administrator. In order to activate developer mode, see this article: https://docs.microsoft.com/en-us/windows/apps/get-started/enable-your-device-for-development
+  warnings.warn(message)
+EVAL_DATASET_PIN {"repo": "mteb/banking77", "revision": "18072d2685ea682290f7b8924d94c62acc19c0b2"}
+Xet Storage is enabled for this repo, but the 'hf_xet' package is not installed. Falling back to regular HTTP download. For better performance, install the package with: `pip install huggingface_hub[hf_xet]` or `pip install hf_xet`
+Xet Storage is enabled for this repo, but the 'hf_xet' package is not installed. Falling back to regular HTTP download. For better performance, install the package with: `pip install huggingface_hub[hf_xet]` or `pip install hf_xet`
+
+Generating train split:   0%|          | 0/9993 [00:00<?, ? examples/s]
+Generating train split: 100%|██████████| 9993/9993 [00:00<00:00, 424283.36 examples/s]
+
+Generating test split:   0%|          | 0/3076 [00:00<?, ? examples/s]
+Generating test split: 100%|██████████| 3076/3076 [00:00<00:00, 265800.27 examples/s]
+ITEMS banking77: mteb/banking77 @ 18072d2685ea, test split of 3076, first 400 rows; 400 items, 0 dropped; 77 options; tokens mean 318, max 362; gold spread -; sha256 8110983e312074855e8440688c8fe1bd5e2a3aa0e0b24e2bd5c63929807a67e5
+EVAL_DATASET_PIN {"repo": "mteb/amazon_massive_intent", "revision": "940fd47a81eaa7f2cc7b129674d945d618ac38c2"}
+C:\Users\<user>\miniforge3\envs\resnet_env17\Lib\site-packages\huggingface_hub\file_download.py:143: UserWarning: `huggingface_hub` cache-system uses symlinks by default to efficiently store duplicated files but your machine does not support them in \\<cache-host>\<cache-share>\huggingface\hub\datasets--mteb--amazon_massive_intent. Caching files will still work but in a degraded version that might require more space on your disk. This warning can be disabled by setting the `HF_HUB_DISABLE_SYMLINKS_WARNING` environment variable. For more details, see https://huggingface.co/docs/huggingface_hub/how-to-cache#limitations.
+To support symlinks on Windows, you either need to activate Developer Mode or to run Python as an administrator. In order to activate developer mode, see this article: https://docs.microsoft.com/en-us/windows/apps/get-started/enable-your-device-for-development
+  warnings.warn(message)
+EVAL_DATASET_PIN {"repo": "mteb/amazon_massive_intent", "revision": "940fd47a81eaa7f2cc7b129674d945d618ac38c2"}
+HOST_TIMELINE {"elapsed_seconds": 7.032, "tree_rss_bytes": 190205952, "foreign_peers": []}
+Xet Storage is enabled for this repo, but the 'hf_xet' package is not installed. Falling back to regular HTTP download. For better performance, install the package with: `pip install huggingface_hub[hf_xet]` or `pip install hf_xet`
+Xet Storage is enabled for this repo, but the 'hf_xet' package is not installed. Falling back to regular HTTP download. For better performance, install the package with: `pip install huggingface_hub[hf_xet]` or `pip install hf_xet`
+Xet Storage is enabled for this repo, but the 'hf_xet' package is not installed. Falling back to regular HTTP download. For better performance, install the package with: `pip install huggingface_hub[hf_xet]` or `pip install hf_xet`
+
+Generating train split: 0 examples [00:00, ? examples/s]
+Generating train split: 11514 examples [00:00, 1439096.97 examples/s]
+
+Generating test split: 0 examples [00:00, ? examples/s]
+Generating test split: 2974 examples [00:00, 226525.63 examples/s]
+
+Generating validation split: 0 examples [00:00, ? examples/s]
+Generating validation split: 2033 examples [00:00, 169365.01 examples/s]
+ITEMS massive_en: mteb/amazon_massive_intent/en @ 940fd47a81ea, test split of 2974, first 300 rows; 300 items, 0 dropped; 20 options; tokens mean 190, max 218; gold spread -; sha256 5e99c129b045c4521911e9e0495532c2df1fac9ce41107e0363f4800315ce728
+EVAL_DATASET_PIN {"repo": "facebook/xnli", "revision": "b8dd5d7af51114dbda02c0e3f6133f332186418e"}
+C:\Users\<user>\miniforge3\envs\resnet_env17\Lib\site-packages\huggingface_hub\file_download.py:143: UserWarning: `huggingface_hub` cache-system uses symlinks by default to efficiently store duplicated files but your machine does not support them in \\<cache-host>\<cache-share>\huggingface\hub\datasets--facebook--xnli. Caching files will still work but in a degraded version that might require more space on your disk. This warning can be disabled by setting the `HF_HUB_DISABLE_SYMLINKS_WARNING` environment variable. For more details, see https://huggingface.co/docs/huggingface_hub/how-to-cache#limitations.
+To support symlinks on Windows, you either need to activate Developer Mode or to run Python as an administrator. In order to activate developer mode, see this article: https://docs.microsoft.com/en-us/windows/apps/get-started/enable-your-device-for-development
+  warnings.warn(message)
+EVAL_DATASET_PIN {"repo": "facebook/xnli", "revision": "b8dd5d7af51114dbda02c0e3f6133f332186418e"}
+Xet Storage is enabled for this repo, but the 'hf_xet' package is not installed. Falling back to regular HTTP download. For better performance, install the package with: `pip install huggingface_hub[hf_xet]` or `pip install hf_xet`
+HOST_TIMELINE {"elapsed_seconds": 9.407, "tree_rss_bytes": 201252864, "foreign_peers": []}
+Xet Storage is enabled for this repo, but the 'hf_xet' package is not installed. Falling back to regular HTTP download. For better performance, install the package with: `pip install huggingface_hub[hf_xet]` or `pip install hf_xet`
+Xet Storage is enabled for this repo, but the 'hf_xet' package is not installed. Falling back to regular HTTP download. For better performance, install the package with: `pip install huggingface_hub[hf_xet]` or `pip install hf_xet`
+
+Generating train split:   0%|          | 0/392702 [00:00<?, ? examples/s]
+Generating train split:   0%|          | 1000/392702 [00:00<02:01, 3236.32 examples/s]
+HOST_TIMELINE {"elapsed_seconds": 11.703, "tree_rss_bytes": 266874880, "foreign_peers": []}
+Generating train split:  67%|██████▋   | 264000/392702 [00:00<00:00, 640784.18 examples/s]
+Generating train split: 100%|██████████| 392702/392702 [00:00<00:00, 739246.56 examples/s]
+
+Generating test split:   0%|          | 0/5010 [00:00<?, ? examples/s]
+Generating test split: 100%|██████████| 5010/5010 [00:00<00:00, 236193.90 examples/s]
+
+Generating validation split:   0%|          | 0/2490 [00:00<?, ? examples/s]
+Generating validation split: 100%|██████████| 2490/2490 [00:00<00:00, 191454.02 examples/s]
+ITEMS xnli_en: facebook/xnli/en @ b8dd5d7af511, test split of 5010, first 300 rows; 300 items, 0 dropped; 3 options; tokens mean 98, max 131; gold spread [100, 100, 100]; sha256 a6a8503d40657a10af45824d32d0965c9571894fc50a9b30f04a6d8baa51a5ff
+ITEMS xnli_en: dataset label names ['entailment', 'neutral', 'contradiction'] against options ['entailment: the premise implies the hypothesis is true', 'neutral: the premise neither implies nor contradicts the hypothesis', 'contradiction: the premise implies the hypothesis is false']
+EVAL_DATASET_PIN {"repo": "SetFit/sst5", "revision": "e51bdcd8cd3a30da231967c1a249ba59361279a3"}
+C:\Users\<user>\miniforge3\envs\resnet_env17\Lib\site-packages\huggingface_hub\file_download.py:143: UserWarning: `huggingface_hub` cache-system uses symlinks by default to efficiently store duplicated files but your machine does not support them in \\<cache-host>\<cache-share>\huggingface\hub\datasets--SetFit--sst5. Caching files will still work but in a degraded version that might require more space on your disk. This warning can be disabled by setting the `HF_HUB_DISABLE_SYMLINKS_WARNING` environment variable. For more details, see https://huggingface.co/docs/huggingface_hub/how-to-cache#limitations.
+To support symlinks on Windows, you either need to activate Developer Mode or to run Python as an administrator. In order to activate developer mode, see this article: https://docs.microsoft.com/en-us/windows/apps/get-started/enable-your-device-for-development
+  warnings.warn(message)
+Repo card metadata block was not found. Setting CardData to empty.
+EVAL_DATASET_PIN {"repo": "SetFit/sst5", "revision": "e51bdcd8cd3a30da231967c1a249ba59361279a3"}
+
+Generating train split: 0 examples [00:00, ? examples/s]
+Generating train split: 8544 examples [00:00, 1423141.79 examples/s]
+
+Generating validation split: 0 examples [00:00, ? examples/s]
+Generating validation split: 1101 examples [00:00, 220257.98 examples/s]
+
+Generating test split: 0 examples [00:00, ? examples/s]
+Generating test split: 2210 examples [00:00, 310866.32 examples/s]
+ITEMS sst5: SetFit/sst5 @ e51bdcd8cd3a, test split of 2210, first 600 rows; 600 items, 0 dropped; 5 options; tokens mean 72, max 111; gold spread [78, 164, 94, 141, 123]; sha256 fe88b8d765e63dc3c984952d68ee4990b17635a8973883c8e6ad8f455a320b45
+ITEMS sst5: dataset label names ['very negative', 'negative', 'neutral', 'positive', 'very positive'] against options ['level 0: very negative', 'level 1: negative', 'level 2: neutral', 'level 3: positive', 'level 4: very positive']
+ITEMS items_reconstructed_candidate.jsonl: 2403 items (2400 labelled), sha256 138b8a76ce66af5e838e2558832be3f0d33b8740c326ba35616185d079f33f59
+EVAL_RESTORE_PASS {"items": 2403, "labelled": 2400, "fixture_questions": 3, "sha256": "138b8a76ce66af5e838e2558832be3f0d33b8740c326ba35616185d079f33f59", "per_task_sha256": {"fixture": "7e30c62e1c1e34433062e2804381d2a03d0fd3efd0bc4f0dd3e98655a0307af1", "ag_news": "ba7c0141d5f8deca1344cc702175cd97d280d0fa08bf6caad0fa73c4cd8e7e10", "emotion": "e3e398c6e3014be19f39b866278bbf099551282ef04d5b9ad7497a2c1191e89f", "banking77": "8110983e312074855e8440688c8fe1bd5e2a3aa0e0b24e2bd5c63929807a67e5", "massive_en": "5e99c129b045c4521911e9e0495532c2df1fac9ce41107e0363f4800315ce728", "xnli_en": "a6a8503d40657a10af45824d32d0965c9571894fc50a9b30f04a6d8baa51a5ff", "sst5": "fe88b8d765e63dc3c984952d68ee4990b17635a8973883c8e6ad8f455a320b45"}, "criteria": {"agree_pooled_min": 0.97, "dacc_pooled_min": -0.005, "dacc_task_min": -0.015, "dece1_pooled_max": 0.01, "dece1_task_max": 0.02}, "inference_run": false}
+RESEARCH_PROCESS_RESULT {"exit_code": 0, "stop": null, "peak_tree_rss_bytes": 266874880, "rss_measurement": "maximum observed across sampled descendant working sets; zero observations reported as null", "elapsed_seconds": 13.28200000000652, "foreign_contention_observed": false, "timing_eligible": false}

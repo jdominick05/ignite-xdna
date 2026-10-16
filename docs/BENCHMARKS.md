@@ -18010,6 +18010,97 @@ addresses and all transferred query/key/value data words.
 
 All hardware runs here are correctness-only: their durations establish no latency win.
 Inputs are synthetic, including when the first actual projection weights are used.
-The output projection, residual/norm composition, embedding/gather, MLP connection and
-decision tail remain required. Complete Laya inference, pinned decision accuracy and
-same-sitting whole-model performance remain unverified.
+At this milestone the output projection, residual/norm composition, embedding/gather,
+MLP connection and decision tail remained required. The next result extends the chain
+through residual/norm. Complete Laya inference, pinned decision accuracy and same-sitting
+whole-model performance remain unverified.
+
+## Laya attention through residual and norm: MLP input prepared on device (2026-10-16, Desktop 2)
+
+The attention image now runs QKV projection, RoPE, attention, its output projection,
+FP32 residual addition, LayerNorm and conversion of normalized output to the next
+GEMM's bf16 tile format. All phases execute in one kernel call with one context and
+shared arena. Host reads, writes and syncs occur only outside the complete chain.
+This qualifies the attention sublayer and MLP-input preparation, not a complete encoder
+block or model. The separate MLP image has not consumed this buffer in a chained run.
+
+### Layout connects the operators without a host gather
+
+A device command joins pairs of attention outputs into 32-by-64 bf16 operand tiles,
+checking exact RNE conversion. The output projection consumes those device-owned
+tiles. Its special finish stores each token's feature tile as 64 FP32 values plus a
+guard. Shim DMA scatters these tiles directly into the norm input, preserving the
+original residual vector. Residuals retain their original FP32 bits; only GEMM inputs
+round to bf16. Random fixtures include non-bf16 residual bits to exercise that split.
+
+The norm input uses 16 guarded feature tiles, then the original residual, then a tail
+guard. Unaligned vector loads skip the feature guards. The integer FP32 RNE residual
+adder and all existing norm tolerances remain in force. Norm output places normalized
+Y first, then a guard, residual sum R, and a tail guard. This layout lets a later
+projection overwrite the X tile region while retaining R for its next residual add;
+that later MLP connection remains untested.
+
+Another device command gathers normalized rows and emits the same bf16 GEMM operand
+tiles, again checking exact RNE bits. It currently replays full norm packets per
+feature tile, so traffic optimization remains open. The norm sets the arithmetic
+rounding mode; the existing fence restores attention's required mode. The builder
+verifies the emitted reset, and repeated full-chain dispatches exercise norm followed
+by later attention commands.
+
+These layouts compile only with `TRANSFORMER_NORM_TILED`. The [validation log](../results/laya/attention_norm_validation_desktop2_20261016.log)
+compiles the default norm and dispatch objects without that flag and verifies both
+are byte-identical to the preceding default program. The graph engine's accepted
+model vocabulary is unchanged.
+
+### Qualification and limits
+
+The [output-projection smoke](../results/laya/output_projection_v1_smoke_desktop2_20261016.log)
+passes before norm integration. The [first norm smoke](../results/laya/attention_norm_v1_smoke_desktop2_20261016.log)
+passes with the earlier diagnostic output layout. The [next smoke](../results/laya/attention_norm_v2_smoke_desktop2_20261016.log)
+passes with the final residual-preserving layout and MLP-input conversion. These are
+historical ABI steps; the [expanded suite](../results/laya/attention_norm_v3_all_suite_desktop2_20261016.log)
+backs the final result.
+
+All 160 comparisons pass: 20 for each global/local layout with valid-key counts 512,
+193, 1 and 0. Three seeds, random/zero/basis inputs and two poisons account for 144;
+the first encoder's actual QKV/output weights and MLP-norm affine set on one synthetic
+activation fixture account for 16. Selected tensors and hashes are in the log.
+All intermediate guards, untouched regions, original residual bits, input/weight
+immutability, output writes and poison independence pass.
+
+The residual sum matches CPU FP32 RNE bits exactly. Attention-to-GEMM and norm-to-GEMM
+conversions also match their bf16 RNE oracles exactly. Direct norm checks retain
+`abs <= 0.0002 + 0.0002*abs(ref)` and relative L2 at most `0.0002`. Their maximum
+absolute error is `1.808657471258357e-05`, maximum relative L2
+`1.5479263296809562e-07`. Composed output-projection and norm checks retain the
+attention gate `abs <= 0.01 + 0.02*abs(ref)`, relative L2 at most `0.02`.
+Maximum composed norm error is `0.009743085569756005`, relative L2
+`0.0007796955581473922`. Direct operator checks use actual device intermediates only
+after the entire chain finishes; no oracle result supplies a neural input.
+
+Every linked core occupies 16,192 bytes. Conservative stack bound is 4,160 bytes
+within the 4,608-byte reservation, with helper and physical SRAM audits passing.
+Core and initialization hashes match across all eight instruction layouts. The arena
+occupies 42,657,728 bytes. One context serves all comparisons and releases idle while
+the process is alive; no foreign contention is observed. All hardware runs here are
+correctness-only, so their durations establish no speedup or model latency.
+The [validation](../results/laya/attention_norm_validation_desktop2_20261016.log) records
+49 offline tests plus the full legacy syntax/import/shell gates. Independent DMA tests
+cover every output word, preservation of residual regions and all conversion/gather
+addresses. MLP connection, embeddings, remaining layers, decision head, pinned accuracy
+and same-sitting complete-model performance remain open. The MLP's earlier strict
+pointwise failure is unchanged by this attention result.
+
+### Frozen evaluation inputs restored, no new accuracy result
+
+The [item restoration](../results/laya/eval_items_restore_desktop2_20261016.log) rebuilds
+the missing local evaluation file from the dataset revisions recorded in the original
+preparation log. All per-task hashes and the complete file hash match the existing
+[preregistration](../results/laya/laya_accuracy_prereg_desktop2_20260926.json): 2,400 labelled
+items plus three fixture questions, SHA256
+`138b8a76ce66af5e838e2558832be3f0d33b8740c326ba35616185d079f33f59`.
+The [reference restoration](../results/laya/eval_reference_restore_desktop2_20261016.log)
+copies an existing frozen FP32 logits archive without modifying its source worktree.
+Its hash matches the preregistration, as do the current original model and external
+weight file hashes. No inference was run for either restoration. These recovered inputs
+enable the eventual decision/calibration comparison; they do not validate native Laya.

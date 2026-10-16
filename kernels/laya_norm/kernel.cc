@@ -57,10 +57,27 @@ static inline F residual_add(F x,F r) {
 }
 extern "C" void residual_norm(const int32_t *in,const float *affine,int32_t *out) {
   aie::set_rounding(aie::rounding_mode::conv_even);
+#ifdef TRANSFORMER_NORM_TILED
+  // The projection scatters 16 feature tiles directly into each token row.
+  // Every tile has 64 values plus one guard; the original FP32 residual
+  // follows the resulting 1040 words. No host gather supplies this packet.
+  const float *x=reinterpret_cast<const float *>(in),*r=x+1040;
+#else
   const float *x=reinterpret_cast<const float *>(in+16),*r=x+1024;
+#endif
+#ifdef TRANSFORMER_NORM_TILED
+  // Y can feed a following projection; R stays at the next norm packet's
+  // residual offset while that projection overwrites only its X tiles.
+  float *sum=reinterpret_cast<float *>(out+1040),*y=reinterpret_cast<float *>(out);
+#else
   float *sum=reinterpret_cast<float *>(out+16),*y=sum+1024;
+#endif
   for(int i=0;i<1024;i+=16) {
+#ifdef TRANSFORMER_NORM_TILED
+    F z=residual_add(aie::load_unaligned_v<16>(x+i+i/64),aie::load_v<16>(r+i));
+#else
     F z=residual_add(aie::load_v<16>(x+i),aie::load_v<16>(r+i));
+#endif
     aie::store_v(sum+i,z);
   }
   F total=full(0),anchor=full(sum[0]);
@@ -82,5 +99,11 @@ extern "C" void residual_norm(const int32_t *in,const float *affine,int32_t *out
     F z=mul(mul(centered,inv),aie::load_v<16>(affine+i));
     aie::store_v(y+i,aie::add(z,aie::load_v<16>(affine+1024+i)));
   }
-  for(int i=0;i<16;++i) { out[i]=in[0]; out[2064+i]=in[0]; }
+  for(int i=0;i<16;++i) {
+#ifdef TRANSFORMER_NORM_TILED
+    out[1024+i]=int32_t(0x7fc12345); out[2064+i]=int32_t(0x7fc12345);
+#else
+    out[i]=in[0]; out[2064+i]=in[0];
+#endif
+  }
 }

@@ -2497,3 +2497,21 @@ model decisions or qualify norm transitions. See [coverage and limits](BENCHMARK
 The MLP follow-up isolates both upstream rounding and nonlinear/conversion contributions
 without changing device code or feeding reference activations back to it. Its pointwise
 failure stays a failure; small relative L2 is not a replacement for the retained gate.
+
+## Laya projection and norm: preserve residual precision and reusable layout (2026-10-16)
+
+Keep original FP32 residuals independent of bf16 GEMM operands. A host gather between
+the projection and norm would defeat the device dataflow: emit guarded feature tiles
+and scatter them with Shim DMA instead. The norm's output layout keeps residual R at
+the following norm-input residual offset while normalized Y feeds the next projection.
+The intended MLP alias/handoff still needs a chained hardware qualification.
+
+Confine this ABI to `TRANSFORMER_NORM_TILED`; retain byte-identical default norm and
+dispatch objects. Preserve exact residual bits, exact bf16 operand conversion, original
+norm tolerances and the emitted arithmetic-mode fence. Full norm-packet replay in the
+format command is a correctness implementation with an open traffic cost. See
+[coverage and scope](BENCHMARKS.md#laya-attention-through-residual-and-norm-mlp-input-prepared-on-device-2026-10-16-desktop-2).
+
+Restore missing evaluation items against the existing full-file and per-task hashes,
+using the recorded dataset revisions. Keep the frozen reference logits and C0-C5
+criteria; do not replace them with a new CPU run or a smaller evaluation slice.

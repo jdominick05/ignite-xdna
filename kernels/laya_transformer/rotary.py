@@ -56,7 +56,9 @@ def coefficients(model,out):
 
 def plan():
     sizes=dict(input=p.geometry('gemm',1024,3072)[0],projection=768*p.OUT,coeff=16*p.KVWORDS,
-      queries=512*p.OUT,keys=256*p.OUT,kv=256*p.OUT,attention=512*p.OUT)
+      queries=512*p.OUT,keys=256*p.OUT,kv=256*p.OUT,attention=512*p.OUT,
+      packed_attention=256*p.OUT,projection_weight=256*p.KVWORDS,
+      norm_input=512*p.OUT,affine=p.KVWORDS,norm=512*p.OUT,packed_norm=256*p.OUT)
     offsets={}; cursor=16
     for name,size in sizes.items(): offsets[name]=cursor; cursor+=size+16
     return dict(sizes=sizes,offsets=offsets,words=cursor)
@@ -72,12 +74,13 @@ class Sequence:
             self.lines.append(f'      {name} = arith.constant {signed} : i32')
         return self.constants[value]
     def control(self,mode,kblocks=1,position=0,valid=512,local=0):
-        if mode not in (0,1,2,4,5,6,7): raise ValueError('operation unavailable in the attention image')
+        if mode not in (0,1,2,4,5,6,7,8,9,10): raise ValueError('operation unavailable in the attention image')
         for index,value in enumerate((mode,kblocks,mlp.POISON,None,position,valid,local)):
             if index in self.current and self.current[index]==value: continue
             self.current[index]=value
             for i in range(16):
-                name=self.constant(i%4 if value is None else value)
+                actual=i%4 if value is None else value[i//4] if isinstance(value,tuple) else value
+                name=self.constant(actual)
                 self.lines.append(f'      "aiex.npu.rtp_write"({name}) {{buffer = @chain_control_{i}, index = {index} : ui32}} : (i32) -> ()')
     def dma(self,col,kind,offset,dims,strides,output=False,bid=None):
         if dims[1]==1 and dims[3]>1023 and strides[3]==1 and strides[2]!=dims[3]:
@@ -95,6 +98,11 @@ def prefix():
     text=mlp.core_prefix()
     text=text.replace('    func.func private @chain_geglu(',
       f'    func.func private @chain_elementwise(memref<{p.QWORDS}xi32>,memref<{p.KVWORDS}xi32>,memref<{p.OUT}xi32>,i32,i32,i32,i32,i32,memref<{p.STATE}xi32>)\n    func.func private @chain_geglu(')
+    text=text.replace('    func.func private @chain_elementwise(',
+      f'    func.func private @chain_finish(memref<{p.STATE}xi32>,memref<{p.OUT}xi32>,i32)\n    func.func private @chain_elementwise(')
+    text=text.replace('    func.func private @chain_finish(',
+      f'    func.func private @norm_pack_step(memref<{p.KVWORDS}xi32>,memref<{p.STATE}xi32>,i32,i32,i32)\n'
+      f'    func.func private @norm_pack_finish(memref<{p.STATE}xi32>,memref<{p.OUT}xi32>,i32)\n    func.func private @chain_finish(')
     # This composed harness controls every operation through RTP. Dropping
     # legacy packet-command dispatch also saves scarce instruction memory.
     text=text.replace('%legacy = arith.cmpi eq, %override,%zero : i32','%legacy = arith.constant false')
@@ -102,7 +110,9 @@ def prefix():
     text=text.replace('%not_geglu = arith.cmpi ne, %command,%three : i32','%not_geglu = arith.cmpi ult, %command,%three : i32')
     for i in range(16):
         start=text.index(f'    %core{i} = aie.core'); end=text.index(' {link_with',start); body=text[start:end]
-        body=body.replace('      %c3 =', '      %c5 = arith.constant 5 : index\n      %c6 = arith.constant 6 : index\n      %thirtytwo = arith.constant 32 : i32\n      %c3 =')
+        body=body.replace('      %c3 =', '      %nine = arith.constant 9 : i32\n      %ten = arith.constant 10 : i32\n      %c127 = arith.constant 127 : index\n      %c128 = arith.constant 128 : index\n      %c5 = arith.constant 5 : index\n      %c6 = arith.constant 6 : index\n      %thirtytwo = arith.constant 32 : i32\n      %c3 =')
+        body=body.replace('%command = arith.select %legacy,%inband,%override : i32',
+          '%is_tiled = arith.cmpi eq, %override,%nine : i32\n        %tiled = arith.extui %is_tiled : i1 to i32\n        %command = arith.select %is_tiled,%two,%override : i32')
         body=body.replace('        %row = arith.index_cast',f'''        %base = memref.load %control{i}[%c4] : memref<16xi32>
         %valid = memref.load %control{i}[%c5] : memref<16xi32>
         %local = memref.load %control{i}[%c6] : memref<16xi32>
@@ -111,6 +121,25 @@ def prefix():
         %row = arith.index_cast''')
         body=body.replace(f'func.call @chain_geglu(%q,%kv,%go,%fill) : (memref<{p.QWORDS}xi32>,memref<{p.KVWORDS}xi32>,memref<{p.OUT}xi32>,i32) -> ()',
           f'func.call @chain_elementwise(%q,%kv,%go,%fill,%command,%position,%valid,%local,%state{i}) : (memref<{p.QWORDS}xi32>,memref<{p.KVWORDS}xi32>,memref<{p.OUT}xi32>,i32,i32,i32,i32,i32,memref<{p.STATE}xi32>) -> ()')
+        body=body.replace(f'func.call @gemm_finish(%state{i},%o) : (memref<{p.STATE}xi32>,memref<{p.OUT}xi32>) -> ()',
+          f'func.call @chain_finish(%state{i},%o,%tiled) : (memref<{p.STATE}xi32>,memref<{p.OUT}xi32>,i32) -> ()')
+        body=body.replace('        %non_attention_count = arith.select %is_geglu,%c4,%c1 : index',
+          '        %collect = arith.cmpi eq, %command,%ten : i32\n        %elementwise_count = arith.select %collect,%c128,%c4 : index\n        %non_attention_count = arith.select %is_geglu,%elementwise_count,%c1 : index')
+        body=body.replace('                %mine = arith.cmpi eq, %k,%row : index',f'''                scf.if %collect {{
+                  %packet = arith.index_cast %k : index to i32
+                  func.call @norm_pack_step(%kv,%state{i},%packet,%rowi,%base) : (memref<{p.KVWORDS}xi32>,memref<{p.STATE}xi32>,i32,i32,i32) -> ()
+                  %collected = arith.cmpi eq, %k,%c127 : index
+                  scf.if %collected {{
+                    %sp = aie.objectfifo.acquire @outF_{i}(Produce,1) : !aie.objectfifosubview<memref<{p.OUT}xi32>>
+                    %po = aie.objectfifo.subview.access %sp[0] : !aie.objectfifosubview<memref<{p.OUT}xi32>> -> memref<{p.OUT}xi32>
+                    func.call @norm_pack_finish(%state{i},%po,%fill) : (memref<{p.STATE}xi32>,memref<{p.OUT}xi32>,i32) -> ()
+                    aie.objectfifo.release @outF_{i}(Produce,1)
+                  }}
+                }} else {{
+                %mine = arith.cmpi eq, %k,%row : index''')
+        old=f'                  aie.objectfifo.release @outF_{i}(Produce,1)\n                }}\n              }} else {{'
+        if body.count(old)!=1: raise ValueError('unexpected elementwise output structure')
+        body=body.replace(old,f'                  aie.objectfifo.release @outF_{i}(Produce,1)\n                }}\n                }}\n              }} else {{')
         text=text[:start]+body+text[end:]
     return text
 
@@ -152,6 +181,41 @@ def runtime(pl,local,valid):
         for head in range(4):
             seq.dma(col,'kv',off['kv']+(col*4+head)*16*p.OUT+16,[8,1,16,p.KVWORDS],[0,0,p.OUT,1],bid=head+3)
     seq.wait()
+    seq.control(8)
+    for which in range(4):
+        for mg in range(4):
+            for col in range(4):
+                head=col*4+which
+                source=off['attention']+(head*32+mg*8)*p.OUT
+                seq.dma(col,'q',source,[1,1,4,p.QWORDS],[0,0,2*p.OUT,1])
+                target=off['packed_attention']+(head*16+mg*4)*p.OUT
+                seq.dma(col,'out',target,[1,1,p.OUT//4,16],[0,0,16,1],True)
+                seq.dma(col,'kv',source+p.OUT,[1,1,4,p.KVWORDS],[0,0,2*p.OUT,1])
+            seq.wait()
+    seq.control(9,16)
+    for group in range(4):
+        for mg in range(4):
+            for col in range(4):
+                seq.dma(col,'q',off['packed_attention']+mg*4*p.OUT,[1,16,4,p.QWORDS],[0,16*p.OUT,p.OUT,1])
+                target=off['norm_input']+mg*128*p.OUT+(group*4+col)*65
+                seq.dma(col,'out',target,[1,4,32,65],[0,32*p.OUT,p.OUT,1],True)
+                seq.dma(col,'kv',off['projection_weight']+(col*4+group)*16*p.KVWORDS,[1,1,16,p.KVWORDS],[0,0,p.KVWORDS,1])
+            seq.wait()
+    seq.control(1)
+    for col in range(4):
+        seq.dma(col,'q',off['norm_input']+col*128*p.OUT,[1,1,128,p.QWORDS],[0,0,p.OUT,1])
+        seq.dma(col,'out',off['norm']+col*128*p.OUT,[1,1,128*p.OUT//16,16],[0,0,16,1],True)
+        seq.dma(col,'kv',off['affine'],[32,1,1,p.KVWORDS],[0,0,0,1])
+    seq.wait()
+    for group in range(4):
+        seq.control(10,position=tuple(group*4+col for col in range(4)))
+        for mg in range(4):
+            for col in range(4):
+                source=off['norm']+mg*128*p.OUT; feature=group*4+col
+                seq.dma(col,'q',source,[1,1,4,p.QWORDS],[0,0,p.OUT,1])
+                seq.dma(col,'out',off['packed_norm']+(feature*16+mg*4)*p.OUT,[1,1,p.OUT//4,16],[0,0,16,1],True)
+                seq.dma(col,'kv',source,[1,1,128,p.KVWORDS],[0,0,p.OUT,1])
+            seq.wait()
     return seq.finish()
 
 
@@ -161,12 +225,14 @@ def build(out,model_path,all_masks=False):
     coefficients(model,out); pl=plan()
     flags=['-Oz','-std=c++20','--target=aie2-none-unknown-elf','-DNDEBUG','-fstack-size-section',
       '-D__AIE_API_AIE_ADF_HPP__',f'-I{p.attention.INSTALL/"include"}',f'-I{p.attention.UPSTREAM/"aie_runtime_lib/AIE2"}',
-      '-Wno-attributes','-Wno-parentheses','-DATTENTION_SHARED_MATMUL=1']
+      '-Wno-attributes','-Wno-parentheses','-DATTENTION_SHARED_MATMUL=1','-DTRANSFORMER_NORM_TILED=1']
     clang=p.attention.PEANO/'bin/clang++.exe'; objects=[]
     for name,src in [('rotary',HERE/'rotary.cc'),('gemm',HERE/'gemm.cc'),('dispatch',HERE/'dispatch.cc'),
       ('attention',HERE.parent/'laya_attention/kernel_shared.cc'),('norm',HERE.parent/'laya_norm/kernel.cc'),
       ('lut',p.attention.UPSTREAM/'aie_runtime_lib/AIE2/lut_based_ops.cpp')]:
         obj=out/f'{name}.o'; objects.append(obj); p.attention.command([clang,*flags,'-c',src,'-o',obj],out)
+    dispatch_code=p.attention.command([p.attention.PEANO/'bin/llvm-objdump.exe','-d',out/'dispatch.o'],out)
+    if not re.search(r'mov\s+crRnd,\s+#0x0\b',dispatch_code): raise ValueError('rounding-state fence removed')
     p.attention.command([clang,'--target=aie2-none-unknown-elf','-r','-nostdlib',*objects,'-o',out/'kernel.o'],out)
     if p.attention.command([p.attention.PEANO/'bin/llvm-nm.exe','-u',out/'kernel.o'],out).strip(): raise ValueError('unresolved helper')
     import shutil
@@ -187,7 +253,9 @@ def build(out,model_path,all_masks=False):
         if layouts[name]['audits']!=layouts['global_512']['audits'] or cdo!=layouts['global_512']['cdo']: raise ValueError('persistent core/init image differs')
         print('ROTARY_LAYOUT '+json.dumps(dict(name=name,code_bytes=sorted(set(a['code_bytes'] for a in audits)))),flush=True)
     meta=dict(sources=sources(),plan=pl,layouts=layouts,model_sha256=p.attention.sha(model_path),
-      coefficients_sha256=p.attention.sha(out/'coefficients.npz'))
+      coefficients_sha256=p.attention.sha(out/'coefficients.npz'),rounding_fence_machine_verified=True,
+      compiler_flags=[flag for flag in flags if not flag.startswith('-I')],
+      norm_layout='Y1024,guard16,R1024,guard16',norm_input_layout='16 X tiles of 64 values plus guard,R1024,guard16')
     p.attention.dump(out/'build.json',meta); print('ROTARY_BUILD '+json.dumps(meta),flush=True)
 
 
@@ -199,6 +267,13 @@ def unpack_query(raw):
     tiles=raw[:,16:528].copy().view(np.uint16).reshape(16,32,4,8,4,8)
     bits=tiles.transpose(0,1,2,4,3,5).reshape(16,512,64)
     return (bits.astype(np.uint32)<<16).view(np.float32)
+
+
+def unpack_activation(raw):
+    bits=raw[:,16:1040].copy().view(np.uint16).reshape(16,4,4,8,8,4,8)
+    tiles=bits.transpose(0,1,2,3,5,4,6).reshape(16,4,4,32,64)
+    full=tiles.transpose(1,2,3,0,4).reshape(512,1024)
+    return (full.astype(np.uint32)<<16).view(np.float32)
 
 
 def unpack_kv(raw):
@@ -220,6 +295,14 @@ def reference_rotary(projected,table):
     return (*result,p.attention.rounded(heads[2]))
 
 
+def norm_verdict(gotz,got,refz,ref):
+    difference=np.abs(got-ref)
+    relative_l2=float(np.sqrt(np.sum(difference*difference))/max(np.sqrt(np.sum(ref*ref)),1e-30))
+    mismatches=int(np.count_nonzero(gotz.copy().view(np.uint32)!=refz.view(np.uint32)))
+    ok=mismatches==0 and np.isfinite(got).all() and np.all(difference<=p.norm.ATOL+p.norm.RTOL*np.abs(ref)) and relative_l2<=p.norm.L2
+    return dict(ok=bool(ok),max_abs=float(difference.max()),relative_l2=relative_l2,residual_bit_mismatches=mismatches)
+
+
 def run(out,masks,smoke=False,model=None):
     meta=json.loads((out/'build.json').read_text()); pl=meta['plan']; off=pl['offsets']; sizes=pl['sizes']
     if meta['sources']!=sources(): raise ValueError('stale source build')
@@ -228,15 +311,27 @@ def run(out,masks,smoke=False,model=None):
             if p.attention.sha(out/name/file)!=layout[key]: raise ValueError('changed artifact')
     if p.attention.sha(out/'coefficients.npz')!=meta['coefficients_sha256']: raise ValueError('changed coefficients')
     tables=np.load(out/'coefficients.npz'); masks_data=np.load(masks)
-    model_weight=None; weight_provenance=None
+    model_weight=None; model_out_weight=None; model_affine=None; weight_provenance=None
     if model:
         import onnx
         if p.attention.sha(model)!=meta['model_sha256']: raise ValueError('model graph changed')
         graph=onnx.load(str(model),load_external_data=False); initial={t.name:t for t in graph.graph.initializer}
-        tensor=next(initial[node.input[1]] for node in graph.graph.node if node.op_type=='MatMul' and node.input[1] in initial and tuple(initial[node.input[1]].dims)==(1024,3072))
+        products=[node for node in graph.graph.node if node.op_type=='MatMul' and node.input[1] in initial]
+        index=next(i for i,node in enumerate(products) if tuple(initial[node.input[1]].dims)==(1024,3072))
+        tensor=initial[products[index].input[1]]; out_tensor=initial[products[index+1].input[1]]
+        if tuple(out_tensor.dims)!=(1024,1024): raise ValueError('attention output projection changed')
         original=onnx.numpy_helper.to_array(tensor,base_dir=str(model.parent))
         model_weight=p.attention.rounded(original)
-        weight_provenance=dict(name=tensor.name,sha256=hashlib.sha256(original.tobytes()).hexdigest())
+        out_original=onnx.numpy_helper.to_array(out_tensor,base_dir=str(model.parent))
+        model_out_weight=p.attention.rounded(out_original)
+        weight_provenance={t.name:hashlib.sha256(a.tobytes()).hexdigest() for t,a in ((tensor,original),(out_tensor,out_original))}
+        norm_node=next(node for node in graph.graph.node if node.op_type=='LayerNormalization' and node.input[1]=='m.encoder.layers.0.mlp_norm.weight')
+        attributes={attr.name:onnx.helper.get_attribute_value(attr) for attr in norm_node.attribute}
+        if attributes.get('axis',-1)!=-1 or not np.isclose(attributes.get('epsilon',1e-5),1e-5): raise ValueError('norm semantics changed')
+        gamma=onnx.numpy_helper.to_array(initial[norm_node.input[1]],base_dir=str(model.parent)).copy()
+        beta=onnx.numpy_helper.to_array(initial[norm_node.input[2]],base_dir=str(model.parent)).copy() if len(norm_node.input)>2 else np.zeros_like(gamma)
+        model_affine=(gamma,beta)
+        for tensor_name,array in zip(norm_node.input[1:],model_affine): weight_provenance[tensor_name]=hashlib.sha256(array.tobytes()).hexdigest()
     sys.path.insert(0,str(p.ROOT/'tools')); from laya_hybrid import idle
     if not idle(): raise RuntimeError('foreign context')
     sys.path.insert(0,'C:/Xilinx/XRT/xrt_sdk/xrt/python'); import pyxrt as xrt
@@ -254,7 +349,9 @@ def run(out,masks,smoke=False,model=None):
     checks=0
     print('ROTARY_RUN '+json.dumps(dict(build=meta,masks_sha256=p.attention.sha(masks),
       kernel_calls_per_chain=1,interstage_host_reads=0,interstage_host_writes=0,interstage_host_syncs=0,
-      model_weight=weight_provenance,scope='projection through attention, synthetic activations; not full Laya')) ,flush=True)
+      gates=dict(attention=[p.attention.ATOL,p.attention.RTOL,p.attention.L2],norm=[p.norm.ATOL,p.norm.RTOL,p.norm.L2],
+        residual='FP32 RNE bits exact',conversions='attention/norm to GEMM BF16 RNE bits exact'),
+      model_weight=weight_provenance,scope='attention through output projection/residual/norm, synthetic activations; not full Laya')) ,flush=True)
     try:
         for seed in (((11,) if smoke else (11,29,47))+((71,) if model_weight is not None else ())):
             kinds=('actual-first-qkv',) if seed==71 else (('random',) if smoke else ('random','zero','basis'))
@@ -263,34 +360,58 @@ def run(out,masks,smoke=False,model=None):
                 layout=meta['layouts'][name]; table=tables[layout['mode']]; mask=masks_data[name]
                 local=int(layout['mode']=='local'); valid=layout['valid']; ib,nb=instructions[name]
                 a,b=p.gemm_case(seed,kind,1024,3072)
+                if kind in ('random','actual-first-qkv'):
+                    # Preserve non-bf16 residual bits while rounding only the
+                    # activation supplied to each bf16 matrix product.
+                    a=np.add(a,np.random.default_rng(seed+207).normal(0,.000173,a.shape).astype(np.float32),dtype=np.float32)
+                rounded_input=p.attention.rounded(a)
                 # Keep finite-mask oracle assumptions and attention tolerance
                 # consistent with the existing synthetic attention qualification.
                 b*=np.float32(.0625)
-                if seed==71: b=model_weight
-                projected=a.astype(np.float64)@b.astype(np.float64)
+                _,out_weight=p.gemm_case(seed+101,'random',1024,1024)
+                out_weight*=np.float32(.0625)
+                _,_,gamma,beta=p.norm.fixture(seed,'random')
+                if seed==71:
+                    b,out_weight=model_weight,model_out_weight
+                    gamma,beta=model_affine
+                projected=rounded_input.astype(np.float64)@b.astype(np.float64)
                 qr,kr,vr=reference_rotary(projected,table)
                 qr[:,np.all(mask==2,axis=1)]=0
                 ref=p.attention.oracle(qr,kr,vr,mask)
+                refout=p.attention.rounded(ref.transpose(1,0,2).reshape(512,1024)).astype(np.float64)@out_weight.astype(np.float64)
+                _,refnorm=p.norm.oracle(refout.astype(np.float32),a,gamma,beta)
                 previous=None
                 for fill in (0x7fc12345,0x7fc54321):
                     payload=np.full(pl['words'],fill,np.uint32)
-                    payload[off['input']:off['input']+sizes['input']]=p.gemm_packet(a,b,fill)
+                    payload[off['input']:off['input']+sizes['input']]=p.gemm_packet(rounded_input,b,fill)
                     payload[off['coeff']:off['coeff']+sizes['coeff']]=table.ravel()
+                    weight_packet=p.gemm_packet(np.zeros((1,1024),np.float32),out_weight,fill)[64*p.QWORDS:]
+                    if len(weight_packet)!=sizes['projection_weight']: raise ValueError('output weight geometry')
+                    payload[off['projection_weight']:off['projection_weight']+sizes['projection_weight']]=weight_packet
+                    norm_packet=payload[off['norm_input']:off['norm_input']+sizes['norm_input']].reshape(512,p.OUT)
+                    norm_packet[:,1040:2064]=a.copy().view(np.uint32)
+                    affine=payload[off['affine']:off['affine']+sizes['affine']]
+                    affine.fill(0); affine[:1024]=gamma.copy().view(np.uint32); affine[1024:2048]=beta.copy().view(np.uint32)
                     av[:]=payload; arena.sync(S.XCL_BO_SYNC_BO_TO_DEVICE)
                     start=time.perf_counter_ns(); hrun=kernel(3,ib,nb,arena,arena)
                     if hrun.wait(15000)!=xrt.ert_cmd_state.ERT_CMD_STATE_COMPLETED: raise RuntimeError('chain dispatch failed; no retry')
                     ms=(time.perf_counter_ns()-start)/1e6
                     arena.sync(S.XCL_BO_SYNC_BO_FROM_DEVICE); observed=av.copy(); regions={}
                     written=np.zeros(pl['words'],bool)
-                    for region_name in ('projection','queries','keys','kv','attention'):
+                    for region_name in ('projection','queries','keys','kv','attention','packed_attention','norm','packed_norm'):
                         regions[region_name]=observed[off[region_name]:off[region_name]+sizes[region_name]].reshape(-1,p.OUT)
                         written[off[region_name]:off[region_name]+sizes[region_name]]=True
+                    norm_words=observed[off['norm_input']:off['norm_input']+sizes['norm_input']].reshape(512,p.OUT)
+                    written[off['norm_input']:off['norm_input']+sizes['norm_input']].reshape(512,p.OUT)[:,:1040]=True
+                    tiled=norm_words[:,:1040].reshape(512,16,65)
+                    if not np.all(tiled[:,:,64]==mlp.POISON): raise ValueError('norm feature-tile guards')
+                    if np.any(tiled[:,:,:64]==mlp.POISON) or np.any(tiled[:,:,:64]==fill): raise ValueError('norm input unwritten')
                     if not np.array_equal(observed[~written],payload[~written]): raise ValueError('input/weights/coefficients/gaps changed')
                     expected_headers=np.full((512,16),mlp.POISON,np.uint32)
                     expected_headers[:,0]=np.tile(np.arange(32)*16,16); expected_headers[:,1]=valid
                     expected_headers[:,2]=mlp.POISON; expected_headers[:,3]=local; expected_headers[:,4]=0
                     if not np.array_equal(regions['queries'][:,:16],expected_headers): raise ValueError('query metadata')
-                    for region_name,used in [('projection',2048),('queries',512),('keys',1024),('kv',2064),('attention',1024)]:
+                    for region_name,used in [('projection',2048),('queries',512),('keys',1024),('kv',2064),('attention',1024),('packed_attention',1024),('packed_norm',1024)]:
                         rows=regions[region_name]
                         if region_name!='queries' and not np.all(rows[:,:16]==mlp.POISON): raise ValueError(region_name+' prefix guard')
                         if not np.all(rows[:,16+used:]==mlp.POISON): raise ValueError(region_name+' tail guard')
@@ -300,19 +421,35 @@ def run(out,masks,smoke=False,model=None):
                     gotp=packet_matrix(regions['projection'],3072)
                     gotq=unpack_query(regions['queries']); gotk,gotv=unpack_kv(regions['kv'])
                     got=regions['attention'][:,16:1040].copy().view(np.float32).reshape(16,512,64)
+                    activation=unpack_activation(regions['packed_attention'])
+                    expected=p.attention.rounded(got.transpose(1,0,2).reshape(512,1024))
+                    if not np.array_equal(activation.view(np.uint32),expected.view(np.uint32)): raise ValueError('attention to GEMM conversion is not exact RNE')
+                    gotout=tiled[:,:,:64].copy().view(np.float32).reshape(512,1024)
+                    outref=activation.astype(np.float64)@out_weight.astype(np.float64)
+                    if not np.all(regions['norm'][:,1024:1040]==mlp.POISON) or not np.all(regions['norm'][:,2064:]==mlp.POISON): raise ValueError('norm output guards')
+                    if np.any(regions['norm'][:,:1024]==mlp.POISON) or np.any(regions['norm'][:,1040:2064]==mlp.POISON): raise ValueError('norm output unwritten')
+                    gotnorm=regions['norm'][:,:1024].copy().view(np.float32)
+                    gotz=regions['norm'][:,1040:2064].copy().view(np.float32)
+                    packed_norm=unpack_activation(regions['packed_norm'])
+                    if not np.array_equal(packed_norm.view(np.uint32),p.attention.rounded(gotnorm).view(np.uint32)): raise ValueError('norm to GEMM conversion is not exact RNE')
+                    refz,direct_norm=p.norm.oracle(gotout,a,gamma,beta)
                     # Diagnose the attention core against its actual device-
                     # prepared operands only after the complete chain finishes.
                     attention_ref=p.attention.oracle(gotq,gotk,gotv,mask)
                     verdicts=dict(projection=p.attention.numeric(gotp,projected),q=p.attention.numeric(gotq,qr),
                       k=p.attention.numeric(gotk,kr),v=p.attention.numeric(gotv,vr),
-                      attention=p.attention.numeric(got,attention_ref),chain=p.attention.numeric(got,ref))
-                    if previous is not None and not np.array_equal(got,previous): raise ValueError('poison dependence')
+                      attention=p.attention.numeric(got,attention_ref),chain=p.attention.numeric(got,ref),
+                      output_gemm=p.attention.numeric(gotout,outref),output_chain=p.attention.numeric(gotout,refout),
+                      norm=norm_verdict(gotz,gotnorm,refz,direct_norm),norm_chain=p.attention.numeric(gotnorm,refnorm),
+                      attention_pack=dict(ok=True,bit_mismatches=0),norm_pack=dict(ok=True,bit_mismatches=0))
+                    current=(gotout,gotz,gotnorm,packed_norm)
+                    if previous is not None and not all(np.array_equal(x,y) for x,y in zip(current,previous)): raise ValueError('poison dependence')
                     print('ROTARY_CHECK '+json.dumps(dict(seed=seed,kind=kind,layout=name,fill=fill,dispatch_ms_correctness_only=ms,verdicts=verdicts)),flush=True)
                     if not all(v['ok'] for v in verdicts.values()): raise ValueError('composed attention numerical gate')
-                    previous=got; checks+=1
+                    previous=current; checks+=1
         print('ROTARY_RESULT '+json.dumps(dict(checks=checks,contexts_created=1,kernel_calls_per_chain=1,
           interstage_host_reads=0,interstage_host_writes=0,interstage_host_syncs=0,
-          layouts=list(meta['layouts']),scope='projection/RoPE/attention only; full model unverified')),flush=True)
+          layouts=list(meta['layouts']),scope='QKV/RoPE/attention/output projection/residual/norm only; full model unverified')),flush=True)
     finally:
         hrun=None; instructions.clear(); ib=None; del av,arena,kernel,ctx,xb,dev
         gc.collect(); print('ROTARY_IDLE '+str(idle()),flush=True)
