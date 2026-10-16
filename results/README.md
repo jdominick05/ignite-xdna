@@ -483,3 +483,10 @@ Backs [compact collector preparation](../docs/BENCHMARKS.md#laya-compact-normali
 
 - [Build](laya/compact_pack_v1_build_desktop2_20261016.log): gather/packing candidate compiles and passes linked code/stack/span audits; partial-object descriptor ordering remains unverified on hardware.
 - [199-check validation](laya/compact_pack_v1_validation_desktop2_20261016.log): every gathered/filler word, live descriptor slots, unchanged query/output transfers, plus legacy gates. No device accuracy or speed claim.
+
+## Laya shorter heads measured
+
+Backs [shorter head fixture latency](../docs/BENCHMARKS.md#laya-shorter-heads-reduce-complete-fixture-latency-2026-10-16-desktop-2).
+
+- [Fresh fixtures](laya/bucket_head_v1_fresh_desktop2_20261016.log), [all boundaries](laya/bucket_head_v2_boundaries_desktop2_20261016.log): complete outputs bit-exact, zero CPU neural/oracle calls, idle after close.
+- [Eligible same-sitting comparison](laya/bucket_head_v3_same_sitting_desktop2_20261016.log): shorter heads with encoder buffering, CPU FP32 at actual length, no foreign contention. Full frozen accuracy for the shorter-head arm is still pending.

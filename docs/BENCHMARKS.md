@@ -19172,3 +19172,37 @@ prepares a serialized complete-model comparison using its own compiled instructi
 control-map patches and allocation groups. It replaces the previous candidate attention
 context before opening the new one. The numerical and partial-descriptor ordering gates
 must pass on device before any eligible speed run or adoption; none has run yet.
+
+## Laya shorter heads reduce complete fixture latency (2026-10-16, Desktop 2)
+
+The [fresh head qualification](../results/laya/bucket_head_v1_fresh_desktop2_20261016.log)
+and [all-boundary run](../results/laya/bucket_head_v2_boundaries_desktop2_20261016.log)
+preserve logits and action probabilities bit-for-bit on all 25 fixture/synthetic cases.
+Actual old/new head-context setup comparisons also pass on the unlabelled fixtures.
+The candidate shortens both head blocks to the selected row bucket, retaining original
+arithmetic objects, physical pitches, masks and marker semantics. It adds no context,
+CPU neural computation or inter-stage host activation transfer.
+
+The [eligible seven-repetition comparison](../results/laya/bucket_head_v3_same_sitting_desktop2_20261016.log)
+alternates complete-model arm order in one resident session on the length-91 fixture.
+Setup is excluded; CPU FP32 uses the actual token length and the same sitting.
+
+| Complete-model arm | Median ms | Observed range ms |
+|---|---:|---:|
+| Full-512 encoder/head schedule | 2570.2201 | 2566.3692–2577.2546 |
+| Original short encoder, full heads | 841.6332 | 830.5768–845.2329 |
+| Buffered encoder, full heads | 662.9055 | 627.1824–687.2993 |
+| Original short encoder, shorter heads | 735.2861 | 724.3103–745.9105 |
+| Buffered encoder and shorter heads | 571.2002 | 555.2824–589.9966 |
+| CPU FP32, actual token length | 174.7354 | 172.6555–181.6673 |
+
+Shorter heads reduce median complete latency by 13.83% against the buffered full-head
+arm in this sitting. The combined candidate is 4.4997 times faster than the full-512
+schedule and remains 3.2689 times slower than CPU. It executes 66 device dispatches
+through five contexts, observes zero CPU neural/oracle calls, and leaves the device idle
+after close. The wrapper records timing eligibility and no foreign contention.
+
+This is a complete-model fixture performance result with exact development comparisons,
+not the candidate's full frozen accuracy result. The separately qualified buffered arm
+retains its own full-set C0–C5 and bit-equivalence evidence. A new registration and full
+frozen validation remain required for an arm serving shorter heads before adoption.
