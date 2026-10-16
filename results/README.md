@@ -244,3 +244,14 @@ performance result: [method and qualification](../docs/BENCHMARKS.md#laya-fused-
 - [Matrix/host sitting](laya/attention_unroll_host_race_desktop2_20261016T0143Z.log): loop unrolling, less host clearing, prevalidated mask parameters and combined variant, all numerical cases pass.
 - [Paired host sitting](laya/attention_host_paired_desktop2_20261016T0152Z.log): ABBA on one unchanged loaded NPU program; packing improves, end-to-end interval includes zero.
 - [Optimization validation](laya/attention_optimization_validation_desktop2_20261016T0158Z.log): syntax/import gate, offline tests, native-packer byte parity and derived paired intervals.
+
+## Laya residual and LayerNorm
+
+[Method, arithmetic failures and qualification](../docs/BENCHMARKS.md#laya-residual-and-layernorm-exact-residuals-standalone-path-still-slower-2026-10-16-desktop-2).
+
+- Exact-residual failures: [first run](laya/norm_v1_desktop2_20261016.log), [diagnostic](laya/norm_diagnostic_desktop2_20261016.log), [rounding mode](laya/norm_rne_desktop2_20261016.log).
+- Centering probes: [in-loop anchor failure](laya/norm_centered_diagnostic_desktop2_20261016.log), [outside-loop anchor failure](laya/norm_anchor_diagnostic_desktop2_20261016.log), [four-pass diagnostics](laya/norm_fourpass_diagnostic_desktop2_20261016.log), [TwoSum failure](laya/norm_twosum_diagnostic_desktop2_20261016.log).
+- [First integer-add qualification](laya/norm_integer_desktop2_20261016.log): arithmetic passes; context remains alive until process exit.
+- [Model-affine qualification](laya/norm_qualified_desktop2_20261016.log): all model affine sets on synthetic inputs, idle witnessed before exit.
+- [Expanded qualification](laya/norm_edges_qualified_desktop2_20261016T0213Z.log): signed zero, rounding edges and subnormals included; standalone NPU path loses to CPU.
+- [Validation](laya/norm_validation_desktop2_20261016.log): syntax/import gate, offline tests and derived error summary.

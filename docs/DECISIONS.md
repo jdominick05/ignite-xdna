@@ -2423,3 +2423,17 @@ Current bf16 kernels have no AutoRound packed-weight/group-scale importer or on-
 unpacking path; expanding weights to bf16 before upload would only screen accuracy.
 No AutoRound quantization, accuracy evaluation or NPU measurement was run. ModernBERT
 adapter compatibility is also unverified.
+
+## Laya residual and LayerNorm: preserve exact residual addition (2026-10-16)
+
+The standalone fused kernel retains exact CPU FP32 residual bits. Native vector addition
+failed that gate; changing the rounding mode and a TwoSum correction did not fix all
+tested sums. Use vector integer significand addition with guard/round/sticky bits and
+ties-to-even for this prototype, and keep the centered LayerNorm statistics and original
+norm error gates. The observed behavior does not establish a complete hardware rounding
+specification. NaN/Inf semantics and arbitrary finite inputs remain unqualified.
+
+Do not deploy it as another host packet boundary per norm: the standalone path loses to
+CPU, including in dispatch-only timing. Its purpose is a validated building block for
+joining transformer stages on the NPU. No current served or hybrid path changes.
+See [method, failures and qualification](BENCHMARKS.md#laya-residual-and-layernorm-exact-residuals-standalone-path-still-slower-2026-10-16-desktop-2).

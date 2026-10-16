@@ -17551,3 +17551,95 @@ Registrations bind current source/dependency hashes; rebuild before registering 
 changed. `--variant base` retains the default, `mask`/`bank` retain the rejected screens,
 `unroll` tests matrix scheduling, `host` enables the packing change, and `combined` enables
 both unrolling and host packing. The paired program always loads the baseline NPU binary.
+
+## Laya residual and LayerNorm: exact residuals, standalone path still slower (2026-10-16, Desktop 2)
+
+The full-NPU dependency work adds a standalone fused residual-add and LayerNormalization
+kernel in `kernels/laya_norm/`. It is not integrated into Laya or the graph engine.
+The current `tools/laya_hybrid.py` still executes its intervening host segments on CPU.
+All affine sets from the model's 62 LayerNormalization nodes were tested, using synthetic
+activations rather than captured model activations. No decision-accuracy gate was rerun.
+
+The operation is `sum = fp32(x + residual)`, followed by last-axis LayerNorm with 1024
+channels and epsilon `1e-5`, scale and optional bias. It emits both the residual sum and
+normalized activation. Sixteen cores each process 32 rows; the affine vector is acquired
+once per core per dispatch and reused across those rows. Four MemTiles split and join
+groups of four rows. Input packets contain a header and two FP32 rows; output packets
+contain two FP32 rows with 64-byte guards at either end. Parameters are multicast to the
+four cores in each column. This first qualification intentionally retains a host packet
+boundary; it does not establish zero physical DDR traffic or compatibility with the
+existing GEMM/attention overlays.
+
+### Arithmetic failures and correction
+
+The [first run](../results/laya/norm_v1_desktop2_20261016.log) failed exact residual
+comparison, despite small norm error. The [diagnostic](../results/laya/norm_diagnostic_desktop2_20261016.log)
+records 85,607 differing residual elements for the first random case, maximum absolute
+error `4.76837158203125e-07`. Explicit [convergent rounding mode](../results/laya/norm_rne_desktop2_20261016.log)
+did not remove those differences. These observations do not identify every detail of the
+hardware's FP32 addition semantics.
+
+An initial [in-loop anchor](../results/laya/norm_centered_diagnostic_desktop2_20261016.log)
+produced corrupted first vectors and nonfinite normalized outputs; moving the anchor
+[outside the loop](../results/laya/norm_anchor_diagnostic_desktop2_20261016.log) left
+nonfinite normalized outputs. The [four-pass form](../results/laya/norm_fourpass_diagnostic_desktop2_20261016.log)
+computes the anchor from the completed residual buffer and resolves those failures.
+Compiler scheduling, load addressing and alias analysis were not isolated as causes.
+A [TwoSum midpoint correction](../results/laya/norm_twosum_diagnostic_desktop2_20261016.log)
+still left 60,790 residual mismatches on the first random case and was rejected.
+
+The retained implementation computes finite residual addition using vector integer
+significands, exponent alignment with sticky bits, normalization and ties-to-even
+rounding. It preserves the exact residual gate. LayerNorm uses statistics centered around
+one completed residual sample, then a vector reciprocal-square-root seed and refinement.
+The [initial integer qualification](../results/laya/norm_integer_desktop2_20261016.log)
+passed its synthetic cases, but its last timed run handle kept the hardware context alive
+until process exit. The runner now drops that handle before checking idle.
+
+### Qualified result and limits
+
+The [expanded qualification](../results/laya/norm_edges_qualified_desktop2_20261016T0213Z.log)
+uses the current source hashes, linked-image audits and fixed gates: residual FP32 bits
+must match CPU round-to-nearest-even exactly; normalized absolute error must be at most
+`0.0002 + 0.0002*abs(reference)` and relative L2 at most `0.0002`.
+The reference adds residuals in FP32, then computes centered normalization in float64.
+All 196 comparisons pass: three seeds, twelve synthetic patterns, two output poisons,
+plus both poisons for all 62 model affine sets. Patterns cover constant and near-constant
+rows, cancellation, offset rows, absent residual/bias, small and large scales, mixed
+exponents, signed zero, rounding edges and subnormals. Every transferred output element,
+both guards, input immutability and independence from output poison are checked.
+The [validation summary](../results/laya/norm_validation_desktop2_20261016.log) records
+maximum normalized absolute error `6.834568264224572e-06`, maximum relative L2
+`1.8285592471669035e-07`, and zero residual bit mismatches. This does not qualify arbitrary
+NaN/Inf inputs, every finite bit pattern, or whole-model accumulated error.
+
+| Scope, 512 rows by 1024 channels | Median ms |
+|---|---:|
+| NPU submit/wait, prepared resident host BOs | 0.71275 |
+| NPU host packing, input sync, submit/wait, output sync and detached outputs | 2.55170 |
+| CPU ONNX Runtime Add + LayerNorm, eight threads, spinning disabled | 0.22375 |
+
+These are 30 timed calls after three warm-ups. CPU and NPU end-to-end samples are
+interleaved in the same sitting; the dispatch-only samples precede them. Both CPU and
+NPU return the sum and normalized output. No cross-day speed ratio is inferred.
+The NPU packet path loses even before its host packing and transfer costs are included.
+This result establishes a correctness building block, not a reason to deploy another
+standalone dispatch per normalization. Joining neighboring NPU stages and retaining their
+activations on device remains necessary work, with no measured full-model gain yet.
+
+Each linked core has 7,408 bytes of program and a 1,376-byte recorded frame, within the
+reserved 4,096-byte stack. The build checks all sixteen linked cores, accessible memory
+spans and overlaps, code size, stack reservation and unresolved/software-float helpers.
+The sitting reports no foreign contention and timing eligible; the process witnesses idle
+after close while still alive. The earlier [178-comparison sitting](../results/laya/norm_qualified_desktop2_20261016.log)
+is retained; the expanded signed-zero/rounding-edge/subnormal sitting is the quoted one.
+
+Reproduce with a fresh output directory and unique log name:
+
+```bash
+bash scripts/research-iron.sh kernels/laya_norm/probe.py build --out scratch/laya_norm/UNIQUE
+bash scripts/research-lowlevel.sh --log results/laya/norm_UNIQUE.log --npu --wait-clear 30 --seconds 90 -- bash scripts/research-iron.sh kernels/laya_norm/probe.py run --out scratch/laya_norm/UNIQUE --model scratch/laya/laya-onnx/laya_az0_noguard.onnx --calls 30
+```
+
+The [validation log](../results/laya/norm_validation_desktop2_20261016.log) records the
+legacy syntax/import and shell syntax gate, 30 offline tests, and the derived summary.
