@@ -3148,3 +3148,35 @@ formula preservation, explicit state/FIFO geometry, and generated-source/table h
 The live packing accuracy source/artifact map remains unchanged. No context was opened
 for this candidate. It still requires compiled descriptor/packet/lock checks, guarded
 primitive qualification, device numerical gates and same-sitting performance evidence.
+
+## Laya two-output lookup GEMM primitive prepared offline (2026-10-16, Desktop 2)
+
+`window_lookup_primitive.py` prepares two ordinary one-output streams from the qualified
+lookup image and one two-output stream from the query-reuse candidate. The standalone
+case uses one column/four cores, two K blocks and separate guarded destinations.
+Inputs and weights are identical: the ordinary streams replay the query for each
+output; the window retains it and visits weights in K-major, output-slot-minor order.
+The integer-valued fixture has an independent exact FP32 product reference.
+
+The [initial primitive build](../results/laya/window_lookup_primitive_v1_build_desktop2_20261016.log)
+passes code/init identity against each parent and compiled address/whole-packet checks.
+The [build with explicit control validation](../results/laya/window_lookup_primitive_v2_controls_build_desktop2_20261016.log)
+also checks all mode, K-count, row, poison and window-width control values. Every
+compiled operand address matches the intended schedule and stays within the guarded
+arena. Only the active column has an output-completion wait. These are offline gates;
+no primitive or complete-model device execution has occurred for this candidate.
+
+[Validation](../results/laya/window_lookup_primitive_v1_validation_desktop2_20261016.log)
+passes 45 offline/privacy checks and legacy gates. New checks decode the packed input
+and recompute both products, preserve both outputs' exact operand/K order, and reject
+corrupted window-width controls, packet lengths and repeat counts. The independent
+packing accuracy arm's registered hashes remain unchanged while it owns the NPU.
+
+The [lowered lock/descriptor census](../results/laya/window_lookup_primitive_v1_lock_census_desktop2_20261016.log)
+retains physical-IR hashes for the ordinary and window images. The candidate's declared
+query depth lowers to three physical core query objects, while core KV depth lowers
+to one; the working image has two of each. These are observed compiler allocations,
+not a general depth rule. Parent-init identity and whole-packet checks do not prove
+the cross-image dynamic lock relation. That relation remains an explicit prerequisite
+to a bounded guarded device test. Paired-query GeGLU/normalization also need their own
+primitive coverage before full-model use. No parity or speed claim follows yet.

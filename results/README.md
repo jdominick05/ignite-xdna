@@ -599,3 +599,9 @@ Windowed MLP with lookup: [initial SRAM link failure](laya/window_lookup_v1_buil
 Two-output lookup MLP: [single core-KV-buffer build](laya/window_lookup_v2_single_kv_build_desktop2_20261016.log),
 [offline/legacy validation and live packing identity](laya/window_lookup_v2_validation_desktop2_20261016.log),
 [compile-only scope and remaining gates](../docs/DECISIONS.md#laya-two-output-lookup-mlp-fits-with-one-core-kv-buffer-2026-10-16-desktop-2).
+
+Two-output lookup GEMM primitive: [initial build](laya/window_lookup_primitive_v1_build_desktop2_20261016.log),
+[explicit control/address build](laya/window_lookup_primitive_v2_controls_build_desktop2_20261016.log),
+[offline validation and live packing identity](laya/window_lookup_primitive_v1_validation_desktop2_20261016.log),
+[lowered lock census](laya/window_lookup_primitive_v1_lock_census_desktop2_20261016.log).
+[Offline scope and remaining device gates](../docs/DECISIONS.md#laya-two-output-lookup-gemm-primitive-prepared-offline-2026-10-16-desktop-2).
