@@ -19906,3 +19906,31 @@ and observes idle contexts after close. Timing is ineligible.
 pass 18 cases, and [legacy validation](../results/laya/small_lookup_v3_full_validation_desktop2_20261016.log)
 passes. This establishes development parity. It supplies no speed or full frozen
 accuracy verdict, and qualified packing remains adopted.
+
+## Laya smaller-query lookup/KV2 first timing favors the candidate (2026-10-16, Desktop 2)
+
+The [first eligible comparison](../results/laya/small_lookup_compare_v1_timing_desktop2_20261016.log)
+follows the [preregistration](../results/laya/small_lookup_compare_v1_prereg_desktop2_20261016.json)
+committed as `68cdd47` before timing. The same length-91/M128 complete request uses
+six fresh serialized profiles, two warmups and five timed inferences per profile,
+giving 15 samples per arm with setup excluded.
+
+| Complete native arm | Median ms | Sample range ms |
+|---|---:|---:|
+| Qualified packing | 471.2098 | 394.7088–481.1424 |
+| One-state smaller-query lookup/KV2 | 447.0998 | 396.4689–468.0496 |
+
+The candidate's pooled median is lower. Round medians for packing/candidate are
+473.1933/449.9988, 471.2098/443.1597 and 440.7313/441.9076 ms: two favor the
+candidate and the third is nearly tied. Broad sample overlap and the shifted
+third packing profile warrant an independent repeat before frozen scoring or
+adoption. This does not establish a universal ordering or assign the gain to
+query traffic alone; the image also changes query capacity, control placement
+and stack layout while preserving KV depth and arithmetic.
+
+Every timed output is bit-exact. All profiles retain zero CPU neural/oracle calls,
+five contexts and 66 dispatches, and release to idle before the next starts.
+Sources, artifacts and qualification records remain unchanged. The bounded run
+exits zero with no foreign contention and `timing_eligible: true`. The summary
+retains every sample and the raw archive hash. No CPU/hybrid ratio, cross-sitting
+pool or new full frozen accuracy result is supplied. Packing remains adopted.

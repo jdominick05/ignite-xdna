@@ -3494,3 +3494,12 @@ contexts, 66 dispatches, unchanged identities and idle contexts after each profi
 The [registration record](../results/laya/small_lookup_compare_v1_registration_desktop2_20261016.log)
 carries its hash. Keep the original frozen accuracy gates before adoption, and
 supply no CPU/hybrid ratio or cross-sitting pool from this incremental comparison.
+
+The [first timing result](BENCHMARKS.md#laya-smaller-query-lookupkv2-first-timing-favors-the-candidate-2026-10-16-desktop-2)
+has a lower candidate pooled median, two favorable round pairs and a nearly tied
+third. Register a [separate repeat](../results/laya/small_lookup_compare_repeat_v1_prereg_desktop2_20261016.json)
+with the same source/artifact identities and protocol before spending the full
+frozen score on adoption. The repeat explicitly discloses that first outcomes
+were observed, pins that result's hash, and preserves each sitting separately.
+Its [registration record](../results/laya/small_lookup_compare_repeat_v1_registration_desktop2_20261016.log)
+also carries the new preregistration hash. Keep packing adopted pending evidence.

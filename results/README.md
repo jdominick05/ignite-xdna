@@ -701,6 +701,11 @@ Full model: [development parity](laya/small_lookup_v3_full_desktop2_20261016.log
 Timing [preregistration](laya/small_lookup_compare_v1_prereg_desktop2_20261016.json)
 and [registration record](laya/small_lookup_compare_v1_registration_desktop2_20261016.log)
 back the [protocol](../docs/DECISIONS.md#laya-smaller-query-lookupkv2-timing-protocol-2026-10-16-desktop-2).
+The [first eligible samples](laya/small_lookup_compare_v1_timing_desktop2_20261016.log)
+support the [initial result](../docs/BENCHMARKS.md#laya-smaller-query-lookupkv2-first-timing-favors-the-candidate-2026-10-16-desktop-2).
+A separate [repeat preregistration](laya/small_lookup_compare_repeat_v1_prereg_desktop2_20261016.json)
+and [registration record](laya/small_lookup_compare_repeat_v1_registration_desktop2_20261016.log)
+pin the unchanged protocol and disclose the first outcomes.
 
 Two-output lookup GEMM primitive: [initial build](laya/window_lookup_primitive_v1_build_desktop2_20261016.log),
 [explicit control/address build](laya/window_lookup_primitive_v2_controls_build_desktop2_20261016.log),
