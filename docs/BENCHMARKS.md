@@ -19284,3 +19284,56 @@ The retained [intermediate test failure](../results/laya/small_query_v2_descript
 incorrectly checked raw MLIR dimensions against normalized hardware field limits.
 The corrected test checks the emitted query forms; the successful compile remains the
 evidence that the compiler accepts their normalized descriptor fields.
+
+## Laya lookup and shorter heads reach 458.6 ms on the fixture (2026-10-16, Desktop 2)
+
+After an administrator device restart, the [known-working recovery run](../results/laya/recovery_head_v1_fresh_desktop2_20261016.log)
+completes its three fixtures with exact outputs and idle cleanup. The separately
+versioned lookup MLP and shorter-head combination then passes its
+[fresh fixtures](../results/laya/optimized_lut_head_v2_recovered_desktop2_20261016.log)
+and [all 23 development cases](../results/laya/optimized_lut_head_v3_boundaries_desktop2_20261016.log).
+The latter includes row-bucket boundaries and repeated transitions. Logits change
+within the existing development numerical gates; action probabilities remain exact
+on the three fixtures. Encoder lookup arithmetic applies only in the M128 bucket;
+larger encoder buckets retain their original arithmetic, with shorter heads selected
+for every bucket. These checks-only runs establish no eligible performance result.
+
+`profile_compare.py` compares the buffered shorter-head baseline, lookup combination,
+then that same baseline again, using separate serialized contexts in one process.
+Each profile excludes setup, warms up twice, measures the same length-91 fixture,
+checks complete outputs against the first baseline, and closes before the next opens.
+CPU FP32 at actual token length runs before and after the NPU profiles. All profiles
+use five contexts and 66 dispatches, observe zero CPU neural/oracle calls during NPU
+inference, and leave the device idle after close. Runner and build identities remain
+unchanged across the comparison. A [three-repetition harness check](../results/laya/profile_compare_lut_v1_fresh_desktop2_20261016.log)
+precedes the [eligible seven-repetition run](../results/laya/profile_compare_lut_v2_same_sitting_desktop2_20261016.log).
+
+| Complete-model profile, in run order | Median ms | Observed range ms |
+|---|---:|---:|
+| Buffered encoder and shorter heads, before | 568.2303 | 541.3116–573.5984 |
+| Lookup MLP, buffered attention and shorter heads | 458.6362 | 427.1509–488.0271 |
+| Buffered encoder and shorter heads, after | 576.2313 | 536.6582–585.5631 |
+| CPU FP32, before NPU profiles | 120.7720 | 109.1290–138.6975 |
+| CPU FP32, after NPU profiles | 187.4545 | 184.4164–195.1974 |
+
+The lookup combination reduces median latency against both surrounding NPU baselines.
+CPU drift is substantial despite no detected foreign contention, so both CPU brackets
+are retained; the NPU remains slower than either. This result supersedes no frozen
+accuracy claim and does not qualify the changed approximation for serving.
+
+A [new frozen registration](../results/laya/lookup_head_accuracy_v1_prereg_desktop2_20261016.json)
+pins 234 source/artifact hashes before this arm has any labelled final scores. Its
+[registration log](../results/laya/lookup_head_accuracy_v1_registration_desktop2_20261016.log)
+records identity `ecb80153b5563d3838d2896a30cbb81706bf456c9b9cdbbfb5da10da6d2d2cda`.
+The original items, FP32 reference, C1–C5 thresholds and temperature policy remain
+unchanged. Prior native full-set outcomes are disclosed; this is not an independent
+held-out study. Bit equivalence to the original native outputs is not required for
+this changed approximation. Complete frozen decision/calibration validation remains
+pending. The adapter reuses the existing buffered scoring/checkpoint machinery through
+a local module proxy, preserving the original runtime module's `Session` binding.
+
+[Comparison validation](../results/laya/profile_compare_v1_validation_desktop2_20261016.log)
+and [registration validation](../results/laya/lookup_head_accuracy_v1_validation_desktop2_20261016.log)
+cover the existing offline and legacy gates, original decision thresholds, exclusive
+registration writes and safe adapter binding. No compact-pack or smaller-query image
+is used in these serving measurements.

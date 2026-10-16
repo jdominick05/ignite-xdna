@@ -509,3 +509,13 @@ Backs [smaller-query preparation](../docs/BENCHMARKS.md#laya-smaller-query-mlp-c
 - [Corrected grouped build](laya/small_query_v2_grouped_build_desktop2_20261016.log): reduced GEMM query packet, full weight packet retained; code/stack/span audit passes. Never executed.
 - [Validation](laya/small_query_v1_validation_desktop2_20261016.log): all-bucket input/output address coverage, core pairing, controller checks and previous offline/legacy gates; no device access or speed claim.
 - Expanded descriptor checks: [incorrect raw-extent assertion](laya/small_query_v2_descriptor_validation_desktop2_20261016.log), [corrected 18-check pass](laya/small_query_v3_descriptor_validation_desktop2_20261016.log). The compiler normalizes MLIR dimensions before hardware field checks.
+
+## Laya lookup and shorter heads measured
+
+Backs [lookup/shorter-head fixture comparison](../docs/BENCHMARKS.md#laya-lookup-and-shorter-heads-reach-4586-ms-on-the-fixture-2026-10-16-desktop-2).
+
+- [Recovery witness](laya/recovery_head_v1_fresh_desktop2_20261016.log): known-working model completes after restart, exact outputs and idle cleanup.
+- Lookup combination: [fresh fixtures](laya/optimized_lut_head_v2_recovered_desktop2_20261016.log), [23 boundary cases](laya/optimized_lut_head_v3_boundaries_desktop2_20261016.log). Development numerical gates pass; changed logits, full frozen accuracy pending.
+- A/B/A comparison: [harness qualification](laya/profile_compare_lut_v1_fresh_desktop2_20261016.log), [eligible seven-repetition sitting](laya/profile_compare_lut_v2_same_sitting_desktop2_20261016.log). Both NPU baselines and both drifting CPU brackets retained.
+- [Comparison validation](laya/profile_compare_v1_validation_desktop2_20261016.log): previous offline checks and legacy gates.
+- Frozen lookup/head arm: [registration](laya/lookup_head_accuracy_v1_prereg_desktop2_20261016.json), [registration log](laya/lookup_head_accuracy_v1_registration_desktop2_20261016.log), [validation](laya/lookup_head_accuracy_v1_validation_desktop2_20261016.log). Original decision/calibration gates unchanged; labelled scoring not yet complete.
