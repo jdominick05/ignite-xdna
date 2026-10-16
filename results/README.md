@@ -394,3 +394,11 @@ Backs [short attention schedules and CPU comparison](../docs/BENCHMARKS.md#laya-
 - [Fresh-short qualification](laya/bucket_attention_v1_fresh_short_desktop2_20261016.log): three fixtures, exact final outputs, checks-only.
 - [Boundary qualification and eligible CPU/NPU comparison](laya/bucket_attention_v2_same_sitting_desktop2_20261016.log): complete model, exact schedule equivalence, CPU neural/oracle calls forbidden during native execution.
 - [Validation](laya/bucket_attention_validation_desktop2_20261016.log): 138 offline checks and legacy gates.
+
+## Laya GEMM compiler tuning
+
+Backs [small overlapping compiler-tuning result](../docs/BENCHMARKS.md#laya-gemm-compiler-tuning-small-overlapping-timing-change-2026-10-16-desktop-2).
+
+- [Object size screen](laya/gemm_codegen_v1_screen_desktop2_20261016.log) and [vector candidate ABI/code audit](laya/gemm_tune_v1_o3_build_desktop2_20261016.log).
+- [Checks-only fresh-short fixtures](laya/gemm_tune_v1_o3_fresh_short_desktop2_20261016.log), [eligible same-session comparison](laya/gemm_tune_v2_o3_same_sitting_desktop2_20261016.log): tuned encoder MLP GEMM versus original, exact fixture outputs, no substantial repeatable speedup established.
+- [Validation](laya/gemm_tune_validation_desktop2_20261016.log): existing 138 offline checks and legacy gates.

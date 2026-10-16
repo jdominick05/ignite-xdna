@@ -18736,3 +18736,44 @@ This improves the preceding serving result; it does not establish the speed goal
 frozen labelled accuracy. Shortening head schedules, improving matrix execution,
 registering a native accuracy arm, and the full frozen decision/calibration gates remain
 open. No native labelled class scores were produced.
+
+## Laya GEMM compiler tuning: small overlapping timing change (2026-10-16, Desktop 2)
+
+An [offline object screen](../results/laya/gemm_codegen_v1_screen_desktop2_20261016.log)
+compares the unchanged GEMM source under size and speed optimization. `gemm_tune.py`
+then [builds a candidate vector image](../results/laya/gemm_tune_v1_o3_build_desktop2_20261016.log)
+with only GEMM compiled at `-O3`; the five other object files are unchanged. The image
+uses 15,328 code bytes per core. Physical buffer spans, control addresses and the original
+runtime instruction bytes match the original vector image. This establishes its checked
+ABI, not a numerical or performance result by itself.
+
+[Fresh-short fixture checks](../results/laya/gemm_tune_v1_o3_fresh_short_desktop2_20261016.log)
+are followed by a [timing-eligible same-session comparison](../results/laya/gemm_tune_v2_o3_same_sitting_desktop2_20261016.log).
+Each uses all three unlabelled fixtures, both final outputs bit-exact to the native
+baseline, CPU neural/oracle calls forbidden during native setup/inference, and zero such
+calls. The tuned image executes encoder MLP stages only; stem, heads and all other
+stages retain their previous images. The comparison keeps both vector images and both
+attention images alive, for five contexts total, with 66 dispatches per complete frame.
+
+| Complete-model path, 91-token fixture | Median ms | Min–max ms |
+|---|---:|---:|
+| Short encoder with original GEMM | 832.3829 | 815.3721–838.4884 |
+| Short encoder with tuned MLP GEMM | 819.5820 | 804.7238–842.1869 |
+| CPU, original model at actual length | 178.2744 | 172.2158–180.3299 |
+
+The eligible run has nine measured calls per configuration, alternating NPU order after
+fixture qualification. CPU uses two warmups, eight threads and ONNX Runtime 1.30.0;
+its session closes before native setup. Setup is excluded and per-call preparation /
+final readback included. CPU FP32 and NPU BF16 matrix arithmetic retain the preceding
+qualifications. The measured median difference is small and the ranges overlap; this
+experiment does not establish a repeatable substantial gain from compiler flags. The
+tuned image remains a diagnostic candidate, not a replacement for the preceding
+25-case-qualified shorter encoder. No full boundary or labelled accuracy run used it.
+
+The wrapper records exit 0, timing eligibility, no observed foreign contention, and no
+contexts after close. [Validation](../results/laya/gemm_tune_validation_desktop2_20261016.log)
+passes the existing 138 offline checks, legacy syntax/import/shell gate and previous
+artifact/operator audits. Arithmetic, data traffic and synchronization contributions
+remain unresolved; the next useful diagnostic separates phase costs before attributing
+the remaining latency to a mechanism. Native accuracy preregistration and the complete
+frozen decision/calibration gates remain open.

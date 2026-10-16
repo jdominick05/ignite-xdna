@@ -25,7 +25,7 @@ def stats(values):
     return dict(median_ms=statistics.median(values),min_ms=min(values),max_ms=max(values),samples_ms=values)
 
 
-def run(base,model,mlp_folder,folder,items_path,reps,quick):
+def run(base,model,mlp_folder,folder,items_path,reps,quick,*,session_factory=None,variants=None):
     if not 3<=reps<=20: raise ValueError('bounded timing repetitions')
     prereg=json.loads((p.ROOT/'results/laya/laya_accuracy_prereg_desktop2_20260926.json').read_text())
     if p.attention.sha(items_path)!=prereg['items']['file_sha256']: raise ValueError('frozen items changed')
@@ -51,7 +51,8 @@ def run(base,model,mlp_folder,folder,items_path,reps,quick):
       (n.action.s,'reference'),(n.action.s,'verify'),(n.action.s.second,'reference'),(n.action.s.second.post,'reference')]
     with ExitStack() as stack:
         for module,name in functions: stack.enter_context(patch.object(module,name,forbidden))
-        with ba.Session(bundle,mlp_folder,folder) as session:
+        factory=ba.Session if session_factory is None else session_factory
+        with factory(bundle,mlp_folder,folder) as session:
             cases=[(f'fixture{i}',item['ids'],item['markers'],item['qtype']) for i,item in enumerate(items)]
             if not quick:
                 for length in (512,1,511,31,385,32,384,33,383,63,257,64,256,65,255,91,193,127,129,128,512,91):
@@ -65,13 +66,15 @@ def run(base,model,mlp_folder,folder,items_path,reps,quick):
                 comparisons={name:p.attention.numeric(short[name],original[name]) for name in original}
                 print('SHORT_ATTENTION_CHECK '+json.dumps(dict(case=key,valid=len(ids),m=ba.bm.bucket(len(ids)),exact=exact,comparisons=comparisons)),flush=True)
                 if not all(exact.values()): raise ValueError('short attention changed complete outputs: '+key)
-            item=items[0]; timings={key:[] for key in ('baseline','mlp_only','short_encoder')}; outputs={}
+            item=items[0]
+            if variants is None: variants=dict(baseline=dict(baseline=True),mlp_only=dict(mlp_only=True),short_encoder={})
+            timings={key:[] for key in variants}; outputs={}
             for rep in range(reps):
                 order=list(timings)
                 if rep%2: order.reverse()
                 for key in order:
                     started=time.perf_counter()
-                    result=session.run(item['ids'],item['markers'],item['qtype'],baseline=key=='baseline',mlp_only=key=='mlp_only')
+                    result=session.run(item['ids'],item['markers'],item['qtype'],**variants[key])
                     timings[key].append((time.perf_counter()-started)*1000)
                     outputs[key]=result
             session.run(item['ids'],item['markers'],item['qtype'],profile=True)
