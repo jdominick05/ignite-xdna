@@ -620,6 +620,12 @@ Paired-query vector primitives: [offline builds and raw hashes](laya/window_vect
 [engineering gates](../docs/DECISIONS.md#laya-paired-query-vector-transport-qualification-2026-10-16-desktop-2),
 [device scope](../docs/BENCHMARKS.md#laya-paired-query-normalization-and-geglu-match-the-working-image-2026-10-16-desktop-2).
 
+Complete window MLP layer: [qualification and retained cleanup failure](laya/window_mlp_layer_v1_qualification_and_cleanup_desktop2_20261016.log),
+[working-image check after cleanup failure](laya/window_vector_post_layer_cleanup_check_desktop2_20261016.log),
+[validation](laya/window_mlp_layer_v1_validation_desktop2_20261016.log),
+[compiled transport and BO lifetime](../docs/DECISIONS.md#laya-complete-mlp-transport-and-diagnostic-bo-lifetime-2026-10-16-desktop-2),
+[device scope](../docs/BENCHMARKS.md#laya-complete-window-mlp-layer-matches-the-qualified-arena-2026-10-16-desktop-2).
+
 Two-output lookup GEMM primitive: [initial build](laya/window_lookup_primitive_v1_build_desktop2_20261016.log),
 [explicit control/address build](laya/window_lookup_primitive_v2_controls_build_desktop2_20261016.log),
 [offline validation and live packing identity](laya/window_lookup_primitive_v1_validation_desktop2_20261016.log),

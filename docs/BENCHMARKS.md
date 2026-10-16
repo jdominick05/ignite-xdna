@@ -19556,3 +19556,34 @@ they establish no full-model accuracy or speed result. Together with the separat
 GEMM primitive, they permit the next guarded complete-MLP-layer test. The original
 full-model thresholds, reference, temperatures and zero-CPU-neural-call policy remain
 unchanged.
+
+## Laya complete window MLP layer matches the qualified arena (2026-10-16, Desktop 2)
+
+The [layer qualification and retained cleanup failure](../results/laya/window_mlp_layer_v1_qualification_and_cleanup_desktop2_20261016.log)
+checks complete encoder MLP layers 0 and 1 on all three unlabelled fixtures. A qualified
+packing/lookup session runs each model prefix on the NPU and captures the arena before
+and after the target MLP. After closing that session, a separate one-context process
+stage replays each captured input through the complete window MLP with layer-specific
+weight and next-affine bindings. Every word of all six output arenas matches the
+qualified reference exactly, including unchanged data outside the layer's writes.
+No CPU neural/oracle call supplies either result.
+
+These are explicit host-copy diagnostics: they do not establish the final serving
+path's inter-stage traffic or latency. The qualified prefix uses five contexts; it
+closes before the candidate context opens. The corrected bounded run completes all
+six cases, emits normal resource cleanup and confirms an idle device while alive,
+then exits zero. The preceding attempt also passed its six numeric comparisons but
+exited 139 during cleanup, so it remains a failed run. The
+[lifetime investigation](DECISIONS.md#laya-complete-mlp-transport-and-diagnostic-bo-lifetime-2026-10-16-desktop-2)
+records the correction, the working-image check after failure, and the unlocalized
+native fault site. Raw logs remain unchanged in ignored scratch with hashes in the
+summary.
+
+Before dispatch, the complete M128 stream passes all 375 queued transfers, 125
+completion waits and 10,872,384 word-address checks, effective controls and complete
+FIFO packets, using the same core/init as the qualified primitives. The
+[validation](../results/laya/window_mlp_layer_v1_validation_desktop2_20261016.log)
+passes the offline/privacy and legacy gates. This qualifies these complete MLP layer
+cases only; all-layer model fixtures, row/mask boundaries, frozen accuracy and an
+eligible same-sitting end-to-end comparison remain required. All diagnostic timing
+is ineligible.

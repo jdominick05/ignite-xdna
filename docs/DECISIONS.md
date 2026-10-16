@@ -3249,3 +3249,33 @@ covers 83 offline/privacy tests and the legacy gates, with all 497 packing hashe
 unchanged. The [device result](BENCHMARKS.md#laya-paired-query-normalization-and-geglu-match-the-working-image-2026-10-16-desktop-2)
 qualifies these vector primitives; the complete MLP and model still require their
 own gates. No change is made to qualified lookup arithmetic or serving defaults.
+
+## Laya complete MLP transport and diagnostic BO lifetime (2026-10-16, Desktop 2)
+
+`window_mlp_transport.py` checks the compiled complete M128 MLP stream against its
+generated schedule: every word address, complete FIFO packet and effective mode,
+K count, poison, core selection and window width at every queued transfer. Completion
+waits must occur at the expected points and target the intended column/channel/direction,
+using the local compiler's `TxnEncoding.h` field layout. The checked image retains
+the exact core object, audited allocations and CDO initialization of the qualified
+GEMM and paired-query vector primitives. The
+[layer qualification summary](../results/laya/window_mlp_layer_v1_qualification_and_cleanup_desktop2_20261016.log)
+records the compiled coverage and primitive prerequisite hashes.
+
+The first layer diagnostic matched all six captured reference arenas, then exited
+139 before a successful cleanup/result witness. The harness dropped its device before
+clearing the dictionary holding instruction BOs. The corrected harness releases BO
+references first, then arena/kernel/context, with collection while the device remains
+alive, and releases the device last. It emits each cleanup phase. A
+[bounded working-image vector check](../results/laya/window_vector_post_layer_cleanup_check_desktop2_20261016.log)
+passed after the failure without a device restart. The corrected layer run then
+completed normally with idle witnesses. This supports a host-lifetime explanation;
+the first run's native fault site remains unlocalized and its terminal failure stays
+in the record. Numeric checks alone did not qualify that failed run.
+
+[Validation](../results/laya/window_mlp_layer_v1_validation_desktop2_20261016.log)
+passes 90 offline/privacy tests and the legacy gates. New mutations change a query
+length, effective mode/width or completion column and must fail. Capture-hook tests
+require authoritative completion before marking an intentional diagnostic stop
+healthy; an incomplete wait retains the failed/in-flight state. These tests check
+host control semantics, not simulated hardware inference.
