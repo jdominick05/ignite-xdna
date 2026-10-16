@@ -454,3 +454,11 @@ Backs [dedicated compiler experiment](../docs/BENCHMARKS.md#laya-dedicated-geglu
 
 - Builds: [O3](laya/geglu_tune_v1_o3_build_desktop2_20261016.log), [Oz control](laya/geglu_tune_v2_oz_control_build_desktop2_20261016.log).
 - Device fixtures: [O3](laya/geglu_tune_v1_o3_m128_fresh_desktop2_20261016.log), [Oz control](laya/geglu_tune_v2_oz_m128_control_desktop2_20261016.log). Exact outputs on three fixtures, checks-only and timing-ineligible.
+
+## Laya next GeGLU candidates offline
+
+Backs [combined compiler/FIFO and lookup candidates](../docs/BENCHMARKS.md#laya-next-geglu-candidates-prepared-offline-2026-10-16-desktop-2).
+
+- [O3 plus deeper FIFOs](laya/geglu_fifo_v1_o3_double_build_desktop2_20261016.log): original polynomial arithmetic, compile/audit only.
+- [Interpolated GELU lookup](laya/geglu_lut_v1_double_build_desktop2_20261016.log): code/table/stack audit and offline formula sample error; changed approximation, hardware accuracy and speed unverified.
+- [175-check validation](laya/geglu_next_v1_validation_desktop2_20261016.log): offline checks and legacy gates. The buffered full accuracy run retains sole device ownership.

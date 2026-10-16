@@ -19049,3 +19049,36 @@ logits and action probabilities exactly on the three unlabelled fixtures, with n
 neural/oracle calls and idle device after close. These runs are checks-only and
 timing-ineligible; neither a qualified speedup nor full frozen accuracy is established.
 The dedicated dispatch and compiler changes are separate from the measured buffering arm.
+
+## Laya next GeGLU candidates prepared offline (2026-10-16, Desktop 2)
+
+The [combined O3/FIFO build](../results/laya/geglu_fifo_v1_o3_double_build_desktop2_20261016.log)
+retains unchanged polynomial arithmetic and the original other MLP helper objects, while
+doubling the dedicated image's query/KV paths. Linked code is 11,792 bytes per core and
+the conservative stack bound is 3,456 bytes. `fast_buffered_probe.py` prepares an
+M128 complete-model comparison, releasing the earlier buffered MLP context before
+opening this candidate so it stays within the demonstrated context count. It has not
+run on the NPU; no additional speedup is established.
+
+The separate [lookup build](../results/laya/geglu_lut_v1_double_build_desktop2_20261016.log)
+changes GELU to linear interpolation of Gaussian tail-CDF samples. It keeps the existing
+BF16 RNE operand packing and other MLP helper objects. Each core has two bank-formatted
+lookup copies of 4,096 bytes, 8,384 bytes of linked code and a conservative 2,816-byte
+stack bound within the explicit 5,376-byte reservation. All linked code, physical spans
+and stack audits pass. Its offline FP32 formula, including fixed-point fractional
+indexing, has sampled maximum absolute GELU error 0.00003897316236636805 over 200,001
+points from −16 to 16. This is an **offline formula observation**, not an on-device
+numerical bound, full-model accuracy measurement or speed result.
+
+`geglu_lut_probe.py` prepares separate unlabelled fixture/synthetic development checks
+against qualified native NPU outputs, forbids CPU neural/oracle calls, and retains
+explicit numerical tolerances. The lookup candidate does not inherit the original
+arithmetic arm's bit-equivalence claim. It must pass device development checks, receive
+a new registration before labelled final scores and satisfy the original frozen full
+decision/calibration gates before any adoption. The active buffered accuracy run uses
+none of these new files or artifacts and remains unchanged.
+
+[Validation](../results/laya/geglu_next_v1_validation_desktop2_20261016.log) passes 175
+offline checks and legacy syntax/import gates. New checks independently compare the
+lookup formula against erfc, cover bin/asymptote edges and signed zero, prove correct
+four-entry bank duplication and preserve the dedicated program outside FIFO declarations.
