@@ -19147,3 +19147,28 @@ The full scoring run itself is checks-only and timing-ineligible because offline
 compilation and validation ran concurrently. Subsequent head, lookup and compact-pack
 candidates have their own qualification requirements; the complete-model speed goal
 remains open.
+
+## Laya compact normalization packing prepared offline (2026-10-16, Desktop 2)
+
+The [compact-pack build](../results/laya/compact_pack_v1_build_desktop2_20261016.log)
+replaces the encoder's full-row normalization collector with DMA feature gathers.
+Each unchanged KV object contains a contiguous FP32 matrix for a core's selected rows
+and features plus unused filler words. A pair of distinct Shim DMA descriptors sends
+the payload and filler; four multicast objects replace the previous collector loop.
+Query and output transfers are unchanged. The kernel retains the same integer BF16
+ties-to-even packing and all other arithmetic objects from the existing attention image.
+
+The candidate compiles with 15,776 linked code bytes per core and a conservative
+4,672-byte stack bound within the unchanged 4,864-byte reservation. Code, physical spans,
+tables and initialization audit successfully. Compilation does not establish that
+partial-object Shim descriptors arrive in the required order on hardware.
+
+[Validation](../results/laya/compact_pack_v1_validation_desktop2_20261016.log) passes 199
+offline checks and legacy syntax/import gates. New checks enumerate every gathered and
+filler word for all row buckets, check core/row/feature ownership, require distinct live
+descriptor slots for each column, and preserve original query/output streams and core
+program outside the packing function/loop-count changes. `compact_pack_probe.py`
+prepares a serialized complete-model comparison using its own compiled instructions,
+control-map patches and allocation groups. It replaces the previous candidate attention
+context before opening the new one. The numerical and partial-descriptor ordering gates
+must pass on device before any eligible speed run or adoption; none has run yet.

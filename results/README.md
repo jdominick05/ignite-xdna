@@ -476,3 +476,10 @@ Backs [buffered full accuracy and bit equivalence](../docs/BENCHMARKS.md#laya-bu
 
 - [Full scores](laya/buffered_accuracy_v1_full_score_desktop2_20261016.log): all 2,403 items, registered identities unchanged, zero CPU neural/oracle calls, idle after close. Accuracy run timing-ineligible.
 - [Full report](laya/buffered_accuracy_v1_full_report_desktop2_20261016.log): original C0–C5 pass and both complete output arrays bit-identical to the already qualified native arm.
+
+## Laya compact norm packing offline
+
+Backs [compact collector preparation](../docs/BENCHMARKS.md#laya-compact-normalization-packing-prepared-offline-2026-10-16-desktop-2).
+
+- [Build](laya/compact_pack_v1_build_desktop2_20261016.log): gather/packing candidate compiles and passes linked code/stack/span audits; partial-object descriptor ordering remains unverified on hardware.
+- [199-check validation](laya/compact_pack_v1_validation_desktop2_20261016.log): every gathered/filler word, live descriptor slots, unchanged query/output transfers, plus legacy gates. No device accuracy or speed claim.
