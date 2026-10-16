@@ -20069,3 +20069,29 @@ identities remain unchanged, cleanup releases instruction BOs before the context
 and device, and the bounded process exits zero with idle contexts while alive.
 Timing is ineligible. This establishes complete isolated-layer equivalence;
 full-model phase-split parity and split/unsplit latency perturbation remain open.
+
+## Laya current MLP phase split passes full-model parity (2026-10-16, Desktop 2)
+
+The [complete-model qualification](../results/laya/small_lookup_phase_full_v1_desktop2_20261016.log)
+passes all 25 development cases against the qualified smaller-query control:
+three fixtures, 20 length/bucket transitions including 512 back to 91, and both
+option masks. Complete logits and action probabilities remain bit-exact. The
+diagnostic replaces each of the 28 M128 MLP dispatches with its four qualified
+phase streams in the existing context. M128 requests therefore perform 150
+physical dispatches; larger buckets retain 66. All requests retain five contexts
+and zero CPU neural/oracle calls. Three additional unsplit fixture controls also
+remain exact and use 66 dispatches.
+
+A step-list adapter handles both assignment and the append pattern used by the
+bucket controller; it expands only exact M128 MLP names. Parent source files and
+serving images remain unchanged. Instruction BOs use the existing MLP context,
+without extra activation readbacks. All source/artifact identities remain
+unchanged across qualification. The bounded process exits zero and releases to
+idle before timing. Correctness-run timing is ineligible.
+
+[Full-wrapper/privacy checks](../results/laya/small_lookup_phase_full_v1_validation_desktop2_20261016.log)
+pass 19 cases; [combined attribution/privacy checks](../results/laya/small_lookup_phase_compare_v1_validation_desktop2_20261016.log)
+pass 25. Legacy checks pass for [the wrapper](../results/laya/small_lookup_phase_full_v1_legacy_validation_desktop2_20261016.log)
+and [comparison runner](../results/laya/small_lookup_phase_compare_v1_legacy_validation_desktop2_20261016.log).
+This qualifies a diagnostic decomposition, with no new speed or frozen-accuracy
+claim and no change to the adopted unsplit serving stream.

@@ -3626,3 +3626,24 @@ also passes. The [complete-layer replay](BENCHMARKS.md#laya-smaller-query-mlp-ph
 qualifies the phase concatenation on device. Full-model parity and a preregistered
 split/unsplit comparison are still required before interpreting phase timings.
 The diagnostic adds dispatches and does not replace the qualified serving stream.
+
+## Laya current MLP phase timing protocol (2026-10-16, Desktop 2)
+
+After [full-model split parity](BENCHMARKS.md#laya-current-mlp-phase-split-passes-full-model-parity-2026-10-16-desktop-2),
+the [comparison registration](../results/laya/small_lookup_phase_compare_v1_prereg_desktop2_20261016.json)
+pins the diagnostic sources, images and qualification records. In three fresh
+serialized sessions, rotate unsplit/split, split/unsplit and unsplit/split order
+on the same length-91/M128 complete request. Both arms use the same allocated
+instruction BOs and contexts. Each arm profile has two warmups and five measured
+requests, with setup excluded. Require exact outputs, the expected physical
+dispatch counts, zero CPU neural/oracle calls and idle after every session.
+
+After both arm profiles, collect one additional profiled split request per
+session. Preserve all 150 physical stage intervals and require every MLP layer
+to contribute exactly one input projection, GeGLU, output projection and
+normalization. Compare complete split and unsplit latency in the same sitting
+to expose perturbation from the extra 84 dispatches. Phase wall intervals include
+driver, scheduling and DMA work as well as arithmetic; neither those intervals
+nor the split path's latency are a new serving speedup. All registered identities
+are checked again after execution.
+[Registration record](../results/laya/small_lookup_phase_compare_v1_registration_desktop2_20261016.log).
