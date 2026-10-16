@@ -3399,3 +3399,22 @@ ordering reversal. Retain qualified packing; fixed-shape specialization and fold
 reset have not established a substantial, repeatable complete-inference gain.
 Keep the new arithmetic image as a development control, without frozen adoption
 scoring or a performance claim beyond the recorded samples.
+
+## Laya L1 arithmetic slope diagnostic (2026-10-16, Desktop 2)
+
+Use the existing L1 call-loop harness to compare the actual serving and specialized
+GEMM objects with an empty-call control. Direct cycle-counter reads remain unsupported
+on this toolchain; this diagnostic reports wall-time slopes in nanoseconds per call,
+without a clock or peak conversion. The zero-call reference correction and device
+qualification are [recorded separately](BENCHMARKS.md#laya-l1-resident-gemm-diagnostic-qualifies-after-signed-zero-oracle-fix-2026-10-16-desktop-2).
+
+The [preregistration](../results/laya/l1_gemm_v3_prereg_desktop2_20261016.json)
+pins source, artifacts and qualification evidence before the slope run. Empty,
+generic, specialized, specialized, generic, empty profiles each use three samples
+at zero, 32,768, 65,536 and 131,072 calls. BF16 operands are integers in [-1,1], so
+even intermediate accumulated partial sums stay below the exact FP32 integer limit.
+Check every output bit, both inputs and output-tail guards after every dispatch;
+stop on any mismatch or timeout. Fit wall seconds against call count, then subtract
+the empty-call slope. Keep per-profile observations and fit quality. This is a
+one-core resident arithmetic diagnostic; it supplies no full-model, array-throughput
+or streamed-memory claim. See the [registration hash](../results/laya/l1_gemm_v3_registration_desktop2_20261016.log).

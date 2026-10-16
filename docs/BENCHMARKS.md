@@ -19789,3 +19789,32 @@ This separate sitting supplies no CPU/hybrid ratio or cross-sitting pool.
 Qualified packing remains adopted. No new full frozen scoring is started for this
 small overlapping change; the specialized candidate retains development parity
 only and must pass the original gates before any future adoption.
+
+## Laya L1-resident GEMM diagnostic qualifies after signed-zero oracle fix (2026-10-16, Desktop 2)
+
+The [L1 diagnostic qualification](../results/laya/l1_gemm_v3_qualification_desktop2_20261016.log)
+places Laya's unchanged serving GEMM object and the specialized object in the
+existing one-core L1 harness, alongside an empty-call control. All use the same
+32-by-64-by-64 tiled operands, three FIFO allocations and compiled transaction
+bytes. The repeated call loop contains no DMA. This removes streamed operand
+transfers from the per-call slope, but changes placement relative to serving and
+cannot alone explain complete-inference latency.
+
+The first two attempts stopped on the zero-call bit check. The captured diagnostic
+identifies a reference bug: multiplying a negative CPU product by zero manufactured
+negative-zero expected bits; the core correctly returned its explicit positive-zero
+initialization. Actual words are zero, whereas the failing expected words are
+2,147,483,648. No kernel arithmetic or serving accuracy gate changes. Both failed
+attempts and the capture hash remain in the record. The corrected reference passes
+zero, one and three calls on all three images, checking every output bit, unchanged
+inputs and output-tail guards. Processes exit zero and release all contexts. These
+qualification wall times are ineligible for performance claims.
+
+Before device use, offline checks validate every Shim word address and completion
+token, whole FIFO objects, six hardware lock initializations and three compiled
+core DMA lock fields per image. All images have identical SRAM spans and transport;
+code and conservative stack bounds fit their reserved memory. The
+[19 offline/privacy checks](../results/laya/l1_gemm_v3_offline_tests_desktop2_20261016.log)
+include the signed-zero regression and corrupted packet/completion rejection;
+[legacy validation](../results/laya/l1_gemm_v3_validation_desktop2_20261016.log) passes.
+The original serving image and frozen decision/accuracy gates remain unchanged.

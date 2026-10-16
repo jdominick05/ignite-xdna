@@ -672,6 +672,14 @@ back the [protocol](../docs/DECISIONS.md#laya-specialized-gemm-complete-inferenc
 The [eligible timing samples](laya/gemm_specialized_compare_v1_timing_desktop2_20261016.log)
 support the [small overlapping change](../docs/BENCHMARKS.md#laya-specialized-gemm-yields-a-small-overlapping-timing-change-2026-10-16-desktop-2).
 
+Laya L1 GEMM: [qualification and retained reference failures](laya/l1_gemm_v3_qualification_desktop2_20261016.log),
+[offline checks](laya/l1_gemm_v3_offline_tests_desktop2_20261016.log),
+[legacy validation](laya/l1_gemm_v3_validation_desktop2_20261016.log),
+[qualification scope](../docs/BENCHMARKS.md#laya-l1-resident-gemm-diagnostic-qualifies-after-signed-zero-oracle-fix-2026-10-16-desktop-2).
+[Preregistration](laya/l1_gemm_v3_prereg_desktop2_20261016.json) and
+[registration hash](laya/l1_gemm_v3_registration_desktop2_20261016.log) back the
+[slope protocol](../docs/DECISIONS.md#laya-l1-arithmetic-slope-diagnostic-2026-10-16-desktop-2).
+
 Two-output lookup GEMM primitive: [initial build](laya/window_lookup_primitive_v1_build_desktop2_20261016.log),
 [explicit control/address build](laya/window_lookup_primitive_v2_controls_build_desktop2_20261016.log),
 [offline validation and live packing identity](laya/window_lookup_primitive_v1_validation_desktop2_20261016.log),

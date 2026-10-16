@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "folder": "scratch/laya_transformer/l1_gemm_v3",
+  "files": {
+    "tools/laya_l1_gemm.py": "19e52e1433076d8da8400053783061d189e67431ba56fb4f7039cf191168daca",
+    "tools/l1_tile_bench.py": "8855fef4fd31b7791f1894f1767a5db32d3bbefada3cee3747956a3b118f08a6",
+    "kernels/laya_transformer/transport_walk.py": "c41078675d6ea5a54266043cfe4c771e0d3944a14e134fbab4cc4c12ece14eed",
+    "kernels/laya_transformer/window_lock_check.py": "93f223c7c62273453f885960c40674ad13a1bd1ffd4b2a4fa1f4f7060e966c9a",
+    "src/ignite_xdna/runtime/driver.py": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d",
+    "kernels/laya_transformer/gemm.cc": "dc9e72f728feda917328597ec1139fe794abcd236fcca3c9461d267605210399",
+    "kernels/l1_tile_bench/empty_call.s": "1d7efc16871dd12926deb5f16e3e0c1217893ee8835efe21fd78ef00a33db074",
+    "tools/laya_l1_gemm_run.py": "d424f8fb1ce3f11b9645634696d0127ad0252287b8493b489e29d6b9b777378d",
+    "scratch/laya_transformer/l1_gemm_v3/build.json": "70581a12a0f9e022fbf563d8a624dcd0a8e48f46ca76e0c2ec316fe846f819d3",
+    "scratch/laya_transformer/l1_gemm_v3/empty/kernel.o": "1c38a229fc35bc31e7d2a7b701cb9696c64e60fb7c5b80902bf8f3a6c9ea083b",
+    "scratch/laya_transformer/l1_gemm_v3/empty/insts.bin": "10854221543b839ff287e98b6a9065d338abb622dff39b8ea9f7a0c4fa053dc1",
+    "scratch/laya_transformer/l1_gemm_v3/empty/final.xclbin": "896695b9aaacbb3609059ca34cd0c75fcd477fc905c87ad5f7492acb1e49544e",
+    "scratch/laya_transformer/l1_gemm_v3/generic/kernel.o": "0c102255288c870986e262e82cdf02290e4ac900139ce8566134ffba167b9fb5",
+    "scratch/laya_transformer/l1_gemm_v3/generic/insts.bin": "10854221543b839ff287e98b6a9065d338abb622dff39b8ea9f7a0c4fa053dc1",
+    "scratch/laya_transformer/l1_gemm_v3/generic/final.xclbin": "2c81fccfcaf81c0601239f5d5fd577b3457106c9629bb1b7be32889f02590775",
+    "scratch/laya_transformer/l1_gemm_v3/specialized/kernel.o": "9c3524f315ad45d156441d970aae31d573b8751d56241682472d4c1719f3d296",
+    "scratch/laya_transformer/l1_gemm_v3/specialized/insts.bin": "10854221543b839ff287e98b6a9065d338abb622dff39b8ea9f7a0c4fa053dc1",
+    "scratch/laya_transformer/l1_gemm_v3/specialized/final.xclbin": "3548166500e03cab81fa58dae541122c88c8fed20d73240694dd8f3426c2c371",
+    "results/laya/l1_gemm_v3_qualification_desktop2_20261016.log": "58cdf18769cf8ca6d065bb077c0d44d0bba563a685433b105707c6b858a40f31"
+  },
+  "protocol": {
+    "calls": [
+      0,
+      32768,
+      65536,
+      131072
+    ],
+    "reps": 3,
+    "order": [
+      "empty",
+      "generic",
+      "specialized",
+      "specialized",
+      "generic",
+      "empty"
+    ],
+    "reset": 0,
+    "scope": "L1 resident one-core 32x64x64 accumulated GEMM; DMA outside repeated call loop; no serving speed claim",
+    "arithmetic": "integer-valued BF16 operands in [-1,1]; partial sums below 2^24; every output bit and guard checked",
+    "fit": "wall seconds against call count; slope in ns/call; empty-call subtraction; no clock or peak conversion"
+  }
+}
