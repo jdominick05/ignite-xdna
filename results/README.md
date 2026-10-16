@@ -431,3 +431,9 @@ Backs [native C0–C5 pass](../docs/BENCHMARKS.md#laya-native-frozen-accuracy-c0
 
 - [Full native scores](laya/native_accuracy_v1_full_score_desktop2_20261016.log): all 2,403 frozen items, zero CPU neural/oracle calls, registered identities unchanged, device idle after close.
 - [Full original-gate report](laya/native_accuracy_v1_full_report_desktop2_20261016.log): all C0–C5 pass; full per-task metrics and ancillary shifts retained. Accuracy run is timing-ineligible.
+
+## Laya MLP phase device diagnostic
+
+Backs [split-phase diagnostic](../docs/BENCHMARKS.md#laya-mlp-phase-diagnostic-on-silicon-2026-10-16-desktop-2).
+
+- [Fresh split comparison](laya/mlp_phases_v1_fresh_split_desktop2_20261016.log): both outputs exact on three fixtures, zero CPU neural/oracle calls, final idle. Checks-only counters identify GeGLU for investigation; timing-ineligible.

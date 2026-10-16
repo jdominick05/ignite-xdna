@@ -18951,3 +18951,18 @@ Both score and report wrappers exit 0. The scoring run's elapsed time is not eli
 latency: it is checks-only and offline compilation/validation ran concurrently on the
 host. The preceding same-sitting eligible timing remains the speed evidence. Native
 accuracy is now established at these gates; the complete-model speed goal remains open.
+
+## Laya MLP phase diagnostic on silicon (2026-10-16, Desktop 2)
+
+The [fresh split-phase run](../results/laya/mlp_phases_v1_fresh_split_desktop2_20261016.log)
+executes split MLP first, then compares both complete outputs against the qualified
+unsplit arm. All three unlabelled fixtures are bit-exact, with zero CPU neural/oracle
+calls and no contexts remaining after close. Core arithmetic and initialization are
+unchanged; splitting raises complete-model dispatches from 66 to 150.
+
+This checks-only run is **timing-ineligible**. Its diagnostic median phase sums across
+28 encoder layers are Wi 115.9129 ms, GeGLU 237.6714 ms, Wo 36.6667 ms and normalization
+12.8706 ms. Paired complete-model counters are 793.1261 ms unsplit and 827.4905 ms split.
+These counters include dispatch/wait overhead and do not establish eligible latency,
+physical DDR bandwidth or a causal bottleneck. They identify GeGLU as the next target
+for isolated compiler and buffering experiments. Frozen accuracy artifacts are retained.
