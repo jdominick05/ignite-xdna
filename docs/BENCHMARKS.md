@@ -20141,3 +20141,27 @@ with no foreign contention and `timing_eligible: true`. The compact log retains
 all complete-request samples, every physical phase stage and the raw archive hash.
 No new serving speedup, fresh CPU/hybrid ratio or cross-sitting pool is claimed.
 The qualified unsplit control remains the serving research configuration.
+
+## Laya first MemTile-cached Wi primitive passes (2026-10-16, Desktop 2)
+
+The [first device primitive](../results/laya/cached_wi_v5_primitive_first_desktop2_20261016.log)
+passes one cold-context case on one column/four cores. It preloads each core's
+query sequence into segmented MemTile storage, then replays it for all 21 input-
+projection output groups and 16 K blocks, using the exact qualified core code.
+Input values vary with core row and K block; weights vary with output group and
+K block. Integer-valued BF16 operands keep products and FP32 sums exact, enabling
+an independent closed-form expected result without learned-model inference.
+
+All 174,720 output and packet words match exactly. The entire source buffer hash
+remains unchanged, and every target word outside the declared output packets
+retains its poison value. The bounded process exits zero, releases its context
+and verifies idle while still alive. The raw hash, source identities and compiled
+preconditions are retained in the compact log. Timing is ineligible.
+
+The [compiled transport and lock proof](DECISIONS.md#laya-wi-query-residency-proof-and-first-cache-prototype-2026-10-16-desktop-2)
+precedes device use and preserves the qualified code/data-loading and enable
+CDOs bit-for-bit. This is the first correctness primitive, with a restricted
+integer fixture. It establishes neither general model accuracy nor a speedup.
+The finite cache tasks currently support only one load per initialized context;
+rearming, broader fixtures and real model layer parity remain open. The qualified
+unsplit full-model control and its original frozen gates remain unchanged.

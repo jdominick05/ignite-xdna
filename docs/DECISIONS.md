@@ -3663,3 +3663,53 @@ compiled descriptor addresses, packet boundaries and lock behavior, followed by
 a bounded primitive and complete-layer replay before full-model execution. Keep
 the original frozen criteria and qualification chain; changing a schedule is not
 permission to relax them. The slower split stream remains a diagnostic.
+
+## Laya Wi query residency proof and first cache prototype (2026-10-16, Desktop 2)
+
+The [offline inventory](../results/laya/wi_query_inventory_v1_offline_desktop2_20261016.log)
+checks the actual qualified compiled transaction against every source-schedule
+word, then proves that input projection repeats the same query address sequence
+21 times per column. Every column reads the same sequence, and all input-
+projection writes are disjoint from its live query source. DERIVED scheduled
+Shim bytes are 22,364,160 query, 11,096,064 weight and 2,795,520 output bytes.
+Loading one query sequence per column would require 1,064,960 scheduled query
+bytes in total. These are descriptor counts, not physical DDR traffic, measured
+bandwidth or a latency prediction.
+
+Each column needs a 266,240-byte query cache. The placed MemTile has 441,216
+unused bytes but its largest free interval is only 253,888 bytes. The
+[SILICON memory capacity](SILICON.md#13-one-mem-tile) remains SPEC: 512 KB in eight
+banks, not a new measured capacity. The prototype uses eight bank-contained
+segments in existing gaps, retaining every parent buffer address. Three cores
+each use a 15-K-block segment plus one K block; the fourth uses seven plus nine.
+The preload gathers one complete per-core sequence at a time. Each consumer
+then reads the same per-core K sequence 21 times, preserving all headers,
+reset operands and accumulation order.
+
+The [build history](../results/laya/cached_wi_v5_build_summary_desktop2_20261016.log)
+retains all failed attempts and raw hashes. Initial compilation rejected
+descriptors lacking paired acquire/release operations. A zero GE acquire was
+then canonicalized away. The working protocol uses a dedicated always-zero
+lock for inactive handshake halves, with exact acquire-zero and release-zero
+operations. Recompiling the already lowered core wrapper changed its ELF bytes
+and was rejected. The final build instead uses the qualified external ELF files,
+with their inherited linker layouts explicitly retained as provenance; it does
+not claim a new link generated those layouts.
+
+The [compiled proof](../results/laya/cached_wi_v5_compiled_proof_desktop2_20261016.log)
+requires identical core code/data-loading and enable CDO files. It checks every
+changed initialization field, all 16 changed MemTile descriptors, lock IDs and
+values, finite replay counts and 1,397,760 delivered query-word addresses against
+the qualified per-core sequence. All other initialization words remain unchanged.
+The per-core cache ledger starts done=21/ready=0; fill takes and publishes 21,
+and each complete replay takes and returns one. This assumes delivery/drain;
+it is not a global deadlock proof.
+
+[Offline mutation/privacy checks](../results/laya/cached_wi_v5_validation_desktop2_20261016.log)
+pass 32 cases, and [legacy validation](../results/laya/cached_wi_v5_legacy_validation_desktop2_20261016.log)
+passes. The [first bounded device primitive](BENCHMARKS.md#laya-first-memtile-cached-wi-primitive-passes-2026-10-16-desktop-2)
+now passes. The image supports one cold cache fill in one active column;
+rearming these finite tasks for another run in the same context is not yet
+implemented. Do not use it as a repeatable serving configuration or a full MLP
+replacement. Wider fixtures, real layer inputs, rearming, full-model parity,
+matched timing and the original frozen adoption gates remain required.
