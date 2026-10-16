@@ -369,3 +369,11 @@ Backs [fixture qualification and corrected graph wiring](../docs/BENCHMARKS.md#l
 - Tail math: [lane-index failure](laya/tail_probe_v1_operators_desktop2_20261016.log), [corrected indices](laya/tail_probe_v2_fixed_indices_desktop2_20261016.log), [rebuilt-image repeat](laya/tail_probe_v3_carry_image_desktop2_20261016.log).
 - Corrected graph: [all-layout rebuild](laya/full_rebuild_carry_desktop2_20261016.log), [vector/carry qualification](laya/vector_v4_carry_operators_desktop2_20261016.log), [full fixture with normalized initial residual](laya/action_v2_normalized_residual_fixture_desktop2_20261016.log).
 - [Frozen FP32 fixture comparison](laya/full_fixture_fp32_comparison_desktop2_20261016.log) and [offline/import/syntax validation](laya/full_model_validation_desktop2_20261016.log). Full labelled criteria and eligible speed remain open.
+
+## Laya resident serving baseline
+
+Backs [complete serving and paired timing](../docs/BENCHMARKS.md#laya-resident-serving-baseline-complete-outputs-slow-execution-2026-10-16-desktop-2).
+
+- [Serving qualification](laya/native_serving_v1_probe_desktop2_20261016.log): three unlabelled fixtures, repeated requests, partial/full output readback and CPU neural/oracle calls forbidden.
+- [Same-sitting CPU/NPU timing](laya/native_serving_v2_same_sitting_desktop2_20261016.log): complete outputs, stage profile, eligible negative speed result; frozen labelled accuracy remains open.
+- [Serving validation](laya/native_serving_validation_desktop2_20261016.log): 128 offline checks, legacy syntax/import/shell gate and existing artifact/operator audits.

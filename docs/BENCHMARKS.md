@@ -18588,3 +18588,47 @@ idle while alive; no foreign context is observed. These are checks-only runs wit
 oracles and large verification reads, so their durations establish no inference latency.
 Production serving, native-arm registration, the frozen full-set decision/calibration
 criteria and eligible paired whole-model speed remain unverified.
+
+## Laya resident serving baseline: complete outputs, slow execution (2026-10-16, Desktop 2)
+
+`kernels/laya_transformer/native.py` reuses three device contexts and resident model
+constants across calls. Each frame updates integer token/marker addresses, valid lengths,
+question type and boolean option metadata, then executes the complete model with no CPU
+neural operations. The initial residual remains the normalized embedding. Only logits
+and action probabilities return to the host; static parameter packing is setup work.
+
+[Serving qualification](../results/laya/native_serving_v1_probe_desktop2_20261016.log)
+ran all three unlabelled fixtures and returned to the first fixture in the same session.
+CPU neural/oracle functions and ONNX Runtime execution were patched to raise throughout
+initialization and inference: zero calls occurred. Full and partial output readback were
+bit-identical, as were repeated first-fixture results. All fixture output tolerances
+passed. Partial readback transferred 16–24 bytes per frame instead of the full arena.
+This checks-only qualification supplies no eligible latency measurement.
+
+The [same-sitting benchmark](../results/laya/native_serving_v2_same_sitting_desktop2_20261016.log)
+is timing-eligible, exits successfully, observes no foreign contention and confirms no
+remaining hardware contexts. It uses the first unlabelled fixture, actual length 91,
+original pinned weights, two warmups and five measured calls per configuration. Setup
+is excluded. CPU uses ONNX Runtime 1.30.0 with eight threads and FP32; the device uses
+the qualified BF16 matrix path with FP32 accumulation. These are different arithmetic
+paths, with final output tolerances checked rather than bit-exact cross-device claims.
+
+| Complete inference configuration | Median ms | Min–max ms |
+|---|---:|---:|
+| CPU, actual 91 tokens | 194.3114 | 190.3393–194.8332 |
+| CPU, padded to 512 with attention mask | 5309.6317 | 5296.4347–5393.9701 |
+| NPU, current fixed 512-token schedule | 2555.0765 | 2548.1006–2560.1271 |
+
+The NPU is 13.1494 times slower than the actual-length CPU baseline. Padding CPU inputs
+is a control, not the fair baseline for the speed goal. A separate instrumented frame
+attributes 1356.9231 ms to encoder MLP stages and 1036.9860 ms to encoder attention,
+projection and norm stages. Preparation is 0.6932 ms and readback 0.0521 ms in that frame;
+these stage timings include driver waits and context transitions, not just core time.
+The evidence points to device-stage work as the next optimization target. Shorter M/KV
+schedules remain an unmeasured proposal, not a claimed speedup.
+
+This baseline supersedes the earlier statement that serving and eligible timing were
+absent. Native-arm preregistration and the complete frozen labelled decision/calibration
+gates remain open. No labelled native class scores were produced by these experiments;
+three unlabelled fixtures cannot establish model accuracy. Earlier intermediate
+composition and strict MLP failures remain retained in the preceding sections.
