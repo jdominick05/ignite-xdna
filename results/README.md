@@ -518,7 +518,7 @@ Backs [lookup/shorter-head fixture comparison](../docs/BENCHMARKS.md#laya-lookup
 - Lookup combination: [fresh fixtures](laya/optimized_lut_head_v2_recovered_desktop2_20261016.log), [23 boundary cases](laya/optimized_lut_head_v3_boundaries_desktop2_20261016.log). Development numerical gates pass; changed logits, full frozen accuracy pending.
 - A/B/A comparison: [harness qualification](laya/profile_compare_lut_v1_fresh_desktop2_20261016.log), [eligible seven-repetition sitting](laya/profile_compare_lut_v2_same_sitting_desktop2_20261016.log). Both NPU baselines and both drifting CPU brackets retained.
 - [Comparison validation](laya/profile_compare_v1_validation_desktop2_20261016.log): previous offline checks and legacy gates.
-- Frozen lookup/head arm: [registration](laya/lookup_head_accuracy_v1_prereg_desktop2_20261016.json), [registration log](laya/lookup_head_accuracy_v1_registration_desktop2_20261016.log), [validation](laya/lookup_head_accuracy_v1_validation_desktop2_20261016.log). Original decision/calibration gates unchanged; labelled scoring not yet complete.
+- Frozen lookup/head arm: [registration](laya/lookup_head_accuracy_v1_prereg_desktop2_20261016.json), [registration log](laya/lookup_head_accuracy_v1_registration_desktop2_20261016.log), [validation](laya/lookup_head_accuracy_v1_validation_desktop2_20261016.log). Original decision/calibration gates unchanged; [complete frozen verdict](#laya-lookup-and-shorter-heads-complete-frozen-accuracy) now passes.
 
 ## Laya output-window query reuse offline
 
@@ -527,3 +527,10 @@ Backs [output-window MLP preparation](../docs/BENCHMARKS.md#laya-output-window-q
 - Builds: [output-slot scope failure](laya/window_mlp_v1_build_desktop2_20261016.log), [SRAM allocation failure](laya/window_mlp_v2_output_slots_build_desktop2_20261016.log), [corrected stack reservation](laya/window_mlp_v3_stack_build_desktop2_20261016.log). Final image passes code/stack/span audits; no device execution.
 - [Validation](laya/window_mlp_v1_validation_desktop2_20261016.log): every query/weight/output address and original K order across all row buckets, plus previous offline and legacy gates.
 - [Lookup arm live identity](laya/lookup_head_accuracy_v1_live_map_desktop2_20261016.log): registered hashes remain unchanged while separate offline work proceeds; no output inspection or device context.
+
+## Laya lookup and shorter heads complete frozen accuracy
+
+Backs [complete lookup/head gate verdict](../docs/BENCHMARKS.md#laya-lookup-and-shorter-heads-pass-complete-frozen-gates-2026-10-16-desktop-2).
+
+- [Full scores](laya/lookup_head_accuracy_v1_full_score_desktop2_20261016.log): all 2,403 items, registered identities unchanged, zero CPU neural/oracle calls, idle cleanup. Timing-ineligible.
+- [Full report](laya/lookup_head_accuracy_v1_full_report_desktop2_20261016.log): original C0–C5 pass on all 2,400 labelled items; re-validation on the known frozen set. Native versus hybrid at matching schedules remains open.

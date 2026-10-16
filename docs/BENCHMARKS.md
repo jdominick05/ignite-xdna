@@ -19317,7 +19317,7 @@ precedes the [eligible seven-repetition run](../results/laya/profile_compare_lut
 | CPU FP32, after NPU profiles | 187.4545 | 184.4164–195.1974 |
 
 The lookup combination reduces median latency against both surrounding NPU baselines.
-CPU drift is substantial despite no detected foreign contention, so both CPU brackets
+CPU drift is substantial and unexplained despite no detected foreign contention, so both CPU brackets
 are retained; the NPU remains slower than either. This result supersedes no frozen
 accuracy claim and does not qualify the changed approximation for serving.
 
@@ -19372,3 +19372,36 @@ The ongoing lookup/short-head frozen scoring run retains sole NPU ownership duri
 this offline work. A [live identity check](../results/laya/lookup_head_accuracy_v1_live_map_desktop2_20261016.log)
 confirms all 234 registered hashes remain unchanged. That scoring run is checks-only;
 these concurrent builds supply no eligible timing evidence for it.
+
+## Laya lookup and shorter heads pass complete frozen gates (2026-10-16, Desktop 2)
+
+The [completed score](../results/laya/lookup_head_accuracy_v1_full_score_desktop2_20261016.log)
+and [full report](../results/laya/lookup_head_accuracy_v1_full_report_desktop2_20261016.log)
+cover all 2,403 items, including 2,400 labelled items. All original C0–C5 gates pass.
+Pooled decision agreement with the frozen FP32 reference is 2,387/2,400
+(0.9945833333333334). Pooled accuracy remains 0.6266666666666667, with delta 0.
+Pooled T=1 ECE changes from 0.19241223949833575 to 0.1922929246302012,
+a delta of −0.00011931486813454573. The largest task accuracy loss is
+−0.0025 on Emotion; the largest task T=1 ECE increase is +0.0032609697380168445
+on XNLI. The original thresholds, temperatures, items and reference are unchanged.
+
+All 234 registered source/artifact hashes match before and after scoring. The run
+observes zero CPU neural/oracle calls, uses five contexts and 66 dispatches per item,
+and verifies the NPU is idle after close while the process is still alive. The scored
+NPZ SHA256 is `2ee6ee22f2a9d50022ea9d65bb1dfa2de2c5593955f738efb1122f426def4312`.
+It carries registration identity
+`ecb80153b5563d3838d2896a30cbb81706bf456c9b9cdbbfb5da10da6d2d2cda`.
+The scoring run is timing-ineligible because separate offline work ran concurrently;
+the [458.6362 ms fixture result](#laya-lookup-and-shorter-heads-reach-4586-ms-on-the-fixture-2026-10-16-desktop-2)
+comes from its own eligible comparison and applies to this now accuracy-qualified arm.
+
+The original native, buffered and lookup arms reuse the same frozen labelled set.
+After the first complete native score, its outcomes were known; the later buffered
+and lookup results are re-validations on that known set, not independent held-out
+tests. Passing the unchanged gates preserves the result without establishing a new
+held-out accuracy claim.
+
+Performance against the hybrid remains unmeasured at matching row schedules. The
+earlier native speedups compare native schedules with each other; they do not prove
+a win over the hybrid. CPU clock/load effects behind the prior timing drift remain
+unexplained, and no NPU/CPU ratio from that sitting is an accepted result.
