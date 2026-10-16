@@ -19639,3 +19639,22 @@ control or another cost erased the query-traffic saving. Full frozen window scor
 is not run for adoption on the strength of this negative speed result. The qualified
 packing arm remains available with its original C0–C5 verdict. No new CPU/hybrid
 comparison or ratio is supplied, and this sitting is not merged with earlier ones.
+
+## Laya one-output window model passes correctness gates (2026-10-16, Desktop 2)
+
+The [complete-model check](../results/laya/window_single_v1_full_desktop2_20261016.log)
+passes all 25 fixture, row/length boundary and option-mask cases against qualified
+packing, with bit-exact logits and action probabilities, zero CPU neural/oracle
+calls, five contexts and 66 dispatches. Source identities remain unchanged; the
+bounded process exits zero and witnesses idle after close. This serving path does
+not use the host activation copies of the separate layer diagnostic.
+
+The [one-output schedule](DECISIONS.md#laya-one-output-schedule-on-the-same-window-core-2026-10-16-desktop-2)
+uses the same kernel object, state capacity, FIFO allocations and CDO initialization
+as the preceding two-output window arm. Compiled coverage checks all 519 queued
+transfers, 173 completion waits and 14,899,264 word addresses. The
+[layer result](../results/laya/window_single_v1_layer_desktop2_20261016.log) also matches
+all six captured arenas on the device. Qualification timing is ineligible; these
+results establish correctness for development cases, not full frozen C0–C5 or speed.
+The qualified packing arm remains the adopted control while the registered three-arm
+comparison is pending.

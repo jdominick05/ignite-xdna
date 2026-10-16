@@ -637,6 +637,17 @@ Window versus packing comparison: [registration](laya/window_compare_v1_prereg_d
 Window complete-model timing: [eligible comparison and raw hash](laya/window_full_v1_timing_desktop2_20261016.log),
 [negative result and retained control](../docs/BENCHMARKS.md#laya-window-query-reuse-does-not-improve-complete-model-latency-2026-10-16-desktop-2).
 
+One-output window control: [same-core build](laya/window_single_v1_build_desktop2_20261016.log),
+[user interruption record](laya/window_single_v1_pause_desktop2_20261016.log),
+[resumed layer qualification](laya/window_single_v1_layer_desktop2_20261016.log),
+[full model](laya/window_single_v1_full_desktop2_20261016.log),
+[validation](laya/window_single_v1_validation_desktop2_20261016.log),
+[correctness scope](../docs/BENCHMARKS.md#laya-one-output-window-model-passes-correctness-gates-2026-10-16-desktop-2).
+
+Three-arm window comparison: [registration](laya/window_single_compare_v1_prereg_desktop2_20261016.json),
+[registration evidence](laya/window_single_compare_v1_registration_desktop2_20261016.log),
+[engineering protocol](../docs/DECISIONS.md#laya-one-output-schedule-on-the-same-window-core-2026-10-16-desktop-2).
+
 Two-output lookup GEMM primitive: [initial build](laya/window_lookup_primitive_v1_build_desktop2_20261016.log),
 [explicit control/address build](laya/window_lookup_primitive_v2_controls_build_desktop2_20261016.log),
 [offline validation and live packing identity](laya/window_lookup_primitive_v1_validation_desktop2_20261016.log),

@@ -3303,3 +3303,33 @@ speed claim. Query traffic and core buffering changed together; their performanc
 effects remain unseparated. Any follow-up must preserve the qualified packing control
 and use a new pinned comparison, rather than treating fewer transferred query words
 as proof of a faster model.
+
+## Laya one-output schedule on the same window core (2026-10-16, Desktop 2)
+
+The [one-output build](../results/laya/window_single_v1_build_desktop2_20261016.log)
+retains the two-output candidate's exact kernel object, physical allocations and CDO
+initialization, including its two state slots and single core KV buffer. Only the
+runtime output width becomes one. All compiled addresses, effective controls, whole
+packets and completion waits pass. This provides a control for the effect of query
+reuse on that core; comparison with packing still changes several layout/buffering
+properties and cannot isolate the KV depth alone.
+
+The [resumed layer check](../results/laya/window_single_v1_layer_desktop2_20261016.log)
+matches complete captured arenas for layers 0 and 1 on three fixtures and closes
+normally. The [first attempt](../results/laya/window_single_v1_pause_desktop2_20261016.log)
+was interrupted at the user's pause request during reference setup; it supplies no
+candidate verdict. Its raw bytes remain unchanged, and resumption uses a new log.
+[Validation](../results/laya/window_single_v1_validation_desktop2_20261016.log) passes
+93 offline/privacy tests and the legacy gates, retaining all frozen packing hashes.
+New checks preserve every small-query operand/K order and reject a changed width,
+including restoration of the parent module's globals on validation failure.
+
+The [three-arm registration](../results/laya/window_single_compare_v1_prereg_desktop2_20261016.json)
+pins 277 identities plus the successful layer/full-model qualification logs. Its
+SHA256 is `d7c06b8b1a9e8f7af1410712f3cd7d707ceaf1e136085b639a4b1e1b8eaa5d1a`;
+the [registration evidence](../results/laya/window_single_compare_v1_registration_desktop2_20261016.log)
+retains its canonical identity. Packing, two-output window and one-output window
+rotate through three orders, each with fresh serialized sessions, two warmups and
+five timed complete inferences. The same length-91/M128 request, bit-exact outputs,
+zero CPU neural/oracle calls, five contexts and 66 dispatches are required. Setup is
+excluded. No performance or new frozen accuracy verdict follows from registration.
