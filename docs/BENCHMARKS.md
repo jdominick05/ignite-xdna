@@ -17229,19 +17229,19 @@ dense masked product. Both arms exclude RoPE and the rest of the host segment.
 
 | Attention, 512 tokens x 64 channels per head | NPU, one core | ORT CPU, eight threads |
 |---|---:|---:|
-| Global, 1 head | 273.719 | 0.184 |
+| Global, 1 head | 273.7187 | 0.184 |
 | Local, 1 head | 71.391 | 0.197 |
 | Global, 16 heads | 4369.552 | 3.275 |
 | Local, 16 heads | 1129.686 | 3.333 |
 
 Packing itself also costs time: across the correctness fixtures, the 16-head global
 and local means were 285.098 and
-91.661 ms. The window reduces work and bytes but
+91.6605 ms. The window reduces work and bytes but
 does not make this implementation competitive with the CPU.
 
 **Resident control.** Repeating one 16x32 random-input block, resetting its state on every
 call, gives 0.492444 ms/call (R-squared 0.999790) at
-0/25/50/100 calls. The empty control's slope is -0.000710309 ms/call with
+0, 25, 50 and 100 calls. The empty control's slope is -0.000710309 ms/call with
 R-squared 0.491425. No empty-control subtraction is used. The resident
 slope includes the call loop and is not full-head latency.
 There is substantial cost with operands resident; attributing a precise fraction to
@@ -17313,7 +17313,7 @@ inside the measurement log. The scalar's helper symbols remain visible in its re
 **Numerics.** The previous per-element `0.01 + 0.02 * abs(reference)` and relative-L2
 0.02 gates are unchanged. All 240 vector output comparisons and all 48 scalar-control
 comparisons passed, along with every guard, input-immutability and poison-independence
-check. Coverage is global/local, 512/193/1/0 valid keys on one head, and both full-length
+check. Coverage is global/local, 512, 193, 1 and 0 valid keys on one head, and both full-length
 masks across 16 heads, at three seeds, four distributions and two poisons. Worst vector
 absolute error was 0.007760363. The vector and scalar resident blocks also passed their
 one- and three-call numerical checks. Inputs remain synthetic post-RoPE bf16 Q/K/V,
@@ -17328,20 +17328,20 @@ separately, as in the earlier sitting.
 | Attention | Scalar NPU | Vector NPU | Scalar / vector (DERIVED) | ORT CPU |
 |---|---:|---:|---:|---:|
 | Global | 4367.844 | 147.093 | 29.69x | 3.337 |
-| Local | 1128.353 | 45.584 | 24.75x | 3.288 |
+| Local | 1128.3528 | 45.584 | 24.75x | 3.288 |
 
 Vector dispatch remains 44.08x and 13.86x the
 matching CPU time (DERIVED). This is not an NPU-versus-CPU win. Across correctness
 fixtures, vector-path host packing alone averaged
 295.814 ms global and
-93.859 ms local for 16 heads. The new dispatch
+93.8588 ms local for 16 heads. The new dispatch
 speedup is not an end-to-end speedup of that magnitude. Multi-core head parallelism and
 removing host packing were unimplemented in this sitting; the array sitting below measures both.
 
 **Resident measurement.** One resident 16-query by 32-key random-input block, reset on
 each call, measures 0.014194263 ms/call in the vector kernel
 (R-squared 0.999849) against 0.497611749 ms/call
-in the scalar control (R-squared 0.999965). Calls are 0/25/50/100,
+in the scalar control (R-squared 0.999965). Calls are 0, 25, 50 and 100,
 five repetitions each. These slopes include the call loop. The empty-control slope is
 reported in the log and is not subtracted. The update changes arithmetic, layout and
 matrix scheduling together; it does not isolate the cost of exp alone. Further diagnosis
@@ -17403,7 +17403,7 @@ as the xclbin, instructions and masks. The original packet packer remains as an 
 byte oracle; its vectorized replacement tiles each unique operand once.
 
 **Numerical qualification.** All 192 new complete-output comparisons pass: both masks,
-512/193/1/0 valid keys, all sixteen heads, three seeds, four input distributions, two
+512, 193, 1 and 0 valid keys, all sixteen heads, three seeds, four input distributions, two
 poisons. All 48 vector-control comparisons also pass. Every guard, input-immutability,
 full-write and poison-independence check passes. The fixed limits remain per-element
 `0.01 + 0.02 * abs(reference)` and relative L2 `0.02`. The new worst absolute error is
@@ -17517,6 +17517,9 @@ includes fresh packing, input sync, dispatch, output sync and detached output. A
 complete-output checks pass, including input-byte identity against an independent layout
 oracle, guards, complete writes and both poisons. The pre-registration hash is
 `3d24b93495b32f06ad6c52ce6a84bda84889f3b8742870e6ef1787e0f61f1ccb`.
+The [captured registration](../results/laya/attention_host_paired_prereg_desktop2_20261016T0152Z.json)
+is now archived byte-for-byte with that logged SHA256, including its original CRLF.
+The registration hash was logged before inference; this archival commit occurred later.
 
 | Attention | Baseline pack ms | Faster pack ms | Baseline end-to-end ms | Faster end-to-end ms | CPU ms |
 |---|---:|---:|---:|---:|---:|
@@ -17543,8 +17546,8 @@ directory; register all build subdirectories and run `probe.py suite` through th
 research wrapper. For the paired check, register and run:
 
 ```bash
-bash scripts/research-iron.sh kernels/laya_attention/paired_host.py register --from-prereg scratch/laya_attention/unroll_host_prereg.json --out scratch/laya_attention/host_paired_prereg_UNIQUE.json
-bash scripts/research-lowlevel.sh --log results/laya/attention_host_paired_UNIQUE.log --npu --wait-clear 30 --seconds 120 -- bash scripts/research-iron.sh kernels/laya_attention/paired_host.py run --builds scratch/laya_attention/unroll_host_race --masks scratch/laya_attention/semantics/masks.npz --prereg scratch/laya_attention/host_paired_prereg_UNIQUE.json
+bash scripts/research-iron.sh kernels/laya_attention/paired_host.py register --from-prereg scratch/laya_attention/unroll_host_prereg.json --out results/laya/attention_host_paired_prereg_UNIQUE.json
+bash scripts/research-lowlevel.sh --log results/laya/attention_host_paired_UNIQUE.log --npu --wait-clear 30 --seconds 120 -- bash scripts/research-iron.sh kernels/laya_attention/paired_host.py run --builds scratch/laya_attention/unroll_host_race --masks scratch/laya_attention/semantics/masks.npz --prereg results/laya/attention_host_paired_prereg_UNIQUE.json
 ```
 
 Registrations bind current source/dependency hashes; rebuild before registering if sources
@@ -17897,7 +17900,7 @@ model activations or complete model predictions.
 | First matrix product | 74 / 74 | 0.00001006200909614563 | 0.00000024801637034534055 |
 | GeGLU including bf16 output conversion | 74 / 74 | 0.41497044447720555 | 0.001672879531625274 |
 | Second matrix product against device-GeGLU operands | 74 / 74 | 0.001150188036262989 | 0.00000081831224464871 |
-| Complete chain against independent reference | 12 / 74 | 0.03418919383227603 | 0.00006962958481509391 |
+| Complete chain against independent reference | 12 of 74 (DERIVED from logged verdicts) | 0.03418919383227603 | 0.00006962958481509391 |
 
 Each linear check requires `abs <= 0.0002 + 0.0002*abs(ref)` and relative L2 at most
 `0.00001`. GeGLU, including its intentional bf16 rounding, requires

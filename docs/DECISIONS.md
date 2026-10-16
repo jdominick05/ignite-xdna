@@ -2926,3 +2926,28 @@ The ongoing lookup/short-head frozen scoring run retains sole NPU ownership duri
 this offline work. A [live identity check](../results/laya/lookup_head_accuracy_v1_live_map_desktop2_20261016.log)
 confirms all 234 registered hashes remain unchanged. That scoring run is checks-only;
 these concurrent builds supply no eligible timing evidence for it.
+
+## Laya device failure and resident-context constraint (2026-10-16, Desktop 2)
+
+The [split compact-pack attempt](../results/laya/compact_pack_v1_fresh_desktop2_20261016.log)
+failed its first candidate attention dispatch (`attention_0_m128`) after a bounded
+15,000 ms wait and exited 139. The wrapper reported no remaining contexts afterward.
+A [subsequent combined attempt](../results/laya/optimized_lut_head_v1_fresh_desktop2_20261016.log)
+failed context creation with `0xc01e0009` before inference. An administrator device
+restart preceded the [known-working recovery](../results/laya/recovery_head_v1_fresh_desktop2_20261016.log).
+The descriptor scheme remains unqualified; the physical failure cause is unexplained.
+An idle context report alone did not establish that a new context could be created.
+
+Before another compact/wide DMA experiment, check offline that buffer descriptors,
+packet boundaries and lock ordering match a working image. Qualify the smallest
+one-core, one-layer transport primitive with guards and a bounded timeout before a
+complete-model attempt. Retain failures and use idle checks after every device run.
+Compilation and address-range checks alone do not qualify a new transfer scheme.
+
+The [original combined buffering attempt](../results/laya/buffered_v1_double_m128_boundaries_desktop2_20261016.log)
+failed while creating its sixth resident context, with `0xc01e0009`. Five contexts
+worked and six failed in that configuration; this is an observed configuration limit,
+not a universal silicon limit or a proved physical explanation. Consolidate resident
+programs or release the replaced context before opening another. The subsequent
+[serialized comparison](../results/laya/native_hybrid_compare_v1_same_sitting_desktop2_20261016.log)
+used at most five native contexts, completed normally and left the device idle.
