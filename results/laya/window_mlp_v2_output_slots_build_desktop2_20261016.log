@@ -1,0 +1,69 @@
+RESEARCH_PLATFORM {"machine": "Desktop 2", "cpu": "AMD Ryzen 7 8700G w/ Radeon 780M Graphics", "os": "Windows-11-10.0.26200-SP0", "ram_bytes": 33381138432, "source_sha256": {"tools/research_process.py": "ffeb1857f190b482eed101b5f5a928f455de26bfa61d23f78a2eacec08e2663e", "tools/quant_calib_alphabet.py": "2dc0b2878c564853f340880209a425dfcf63b8536b2b8e9fd32344daade58d37", "tools/xint8_arithmetic_probe.py": "6aa3df08b9870c3c2264b868459d7ffbac3070dddc1349d7c6f3f480075f7041", "scripts/research-lowlevel.sh": "3455ad7933697936487712665505c216891865c6deada647302785f6e37020bd", "scripts/research-iron.sh": "4c863a262646ddab39b5005006ba8e03809895e6386c6310e2fd9d0a9e9609ee", "kernels/memory_placement/probe.py": "e8d990169ad6091fa1b53852e9f61eff495b5def72d35165a5c5cf1759e38898", "kernels/memory_placement/memory_kernels.cc": "182e7af7071a1e851afb4a7ca266069c489aea1fbaaa85eca129708daeba5ba6", "scripts/research-matrix.sh": "739254171629deae822b0ad7dabc875aee19ace56dde77d3e8aab61663f97516", "kernels/memory_placement/gemm.py": "17c905ad66110d3346bbf0db898dfc6b780df59fae1dfb0c1747057ce1e5844e", "kernels/memory_placement/gemm_placement.cc": "f21acf7250b12914ea30cc1f77613239dfa18421a85a1b9a5199017dd916278a", "tools/research_summary.py": "0c00dcceef07053d06731b41a1f1ed58d3ba4ea09f82497de354ce9cef17da20", "tools/research_toolchain.py": "f0a126a24ae213acfaa43460cfd9def0c86d9cb70cfee0228aa271688467b314"}, "commit": "4eb400207dfa1da2cb39f8b6ffca64cda0417811", "command": ["bash", "scripts/research-iron.sh", "kernels/laya_transformer/window_mlp.py", "--base", "scratch/laya_transformer", "--model", "scratch/laya/laya-onnx/laya_az0_noguard.onnx", "--out", "scratch/laya_transformer/window_mlp_v2_m128", "--m", "128"], "seconds_limit": 180.0, "rss_gib_limit": 8, "checks_only": true, "free_ram_bytes": 16996667392}
+HOST_TIMELINE {"elapsed_seconds": 2.656, "tree_rss_bytes": 174125056, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 5.172, "tree_rss_bytes": 164016128, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 7.687, "tree_rss_bytes": 165941248, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 10.265, "tree_rss_bytes": 157466624, "foreign_peers": []}
+
+(0/37) input.mlir
+(1/37)           
+(1/37) [0/1] placed.mlir
+(2/37)                  
+(2/37) [0/1] traced.mlir
+(3/37)                  
+(3/37) [0/1] input_with_addresses.mlirC:\Users\<user>\PycharmProjects\ignite-xdna\scratch\laya_transformer\window_mlp_v2_m128\harness.mlir:22:15: warning: Failed to allocate buffer: "attn_state_0" with size: 24576 bytes.
+    %state0 = aie.buffer(%t0) {sym_name = "attn_state_0"} : memref<6144xi32>
+              ^
+C:\Users\<user>\PycharmProjects\ignite-xdna\scratch\laya_transformer\window_mlp_v2_m128\harness.mlir:22:15: note: see current operation: %attn_state_0 = aie.buffer(%tile_0_2) {sym_name = "attn_state_0"} : memref<6144xi32> 
+C:\Users\<user>\PycharmProjects\ignite-xdna\scratch\laya_transformer\window_mlp_v2_m128\harness.mlir:13:11: warning: Not all requested buffers fit in the available memory.
+
+    %t0 = aie.tile(0,2)
+          ^
+C:\Users\<user>\PycharmProjects\ignite-xdna\scratch\laya_transformer\window_mlp_v2_m128\harness.mlir:13:11: note: see current operation: %tile_0_2 = aie.tile(0, 2) {controller_id = #aie.packet_info<pkt_type = 0, pkt_id = 27>}
+C:\Users\<user>\PycharmProjects\ignite-xdna\scratch\laya_transformer\window_mlp_v2_m128\harness.mlir:13:11: note: Current configuration of buffers in bank(s) : MemoryMap:
+		(stack) 	: 0x0-0x14FF 	(5376 bytes)
+	bank : 0	0x0-0x3FFF
+	bank : 1	0x4000-0x7FFF
+	bank : 2	0x8000-0xBFFF
+	bank : 3	0xC000-0xFFFF
+
+C:\Users\<user>\PycharmProjects\ignite-xdna\scratch\laya_transformer\window_mlp_v2_m128\harness.mlir:13:11: warning: Bank-aware allocation failed, trying basic sequential allocation.
+    %t0 = aie.tile(0,2)
+          ^
+C:\Users\<user>\PycharmProjects\ignite-xdna\scratch\laya_transformer\window_mlp_v2_m128\harness.mlir:13:11: note: see current operation: %tile_0_2 = aie.tile(0, 2) {controller_id = #aie.packet_info<pkt_type = 0, pkt_id = 27>}
+C:\Users\<user>\PycharmProjects\ignite-xdna\scratch\laya_transformer\window_mlp_v2_m128\harness.mlir:13:11: error: 'aie.tile' op allocated buffers exceeded available memory
+
+    %t0 = aie.tile(0,2)
+          ^
+C:\Users\<user>\PycharmProjects\ignite-xdna\scratch\laya_transformer\window_mlp_v2_m128\harness.mlir:13:11: note: see current operation: %2 = "aie.tile"() <{col = 0 : i32, row = 2 : i32}> {controller_id = #aie.packet_info<pkt_type = 0, pkt_id = 27>} : () -> index
+C:\Users\<user>\PycharmProjects\ignite-xdna\scratch\laya_transformer\window_mlp_v2_m128\harness.mlir:13:11: note: MemoryMap:
+	(stack) 	: 0x0-0x14FF 	(5376 bytes)
+	attn_state_0 	: 0x1500-0x74FF 	(24576 bytes)
+	outF_0_buff_0 	: 0x7500-0x957F 	(8320 bytes)
+	kvF_0_0_cons_buff_0 	: 0x9580-0xB5BF 	(8256 bytes)
+	kvF_0_0_cons_buff_1 	: 0xB5C0-0xD5FF 	(8256 bytes)
+	qF_0_cons_buff_0 	: 0xD600-0xE63F 	(4160 bytes)
+	qF_0_cons_buff_1 	: 0xE640-0xF67F 	(4160 bytes)
+	qF_0_cons_buff_2 	: 0xF680-0x106BF 	(4160 bytes)
+	chain_control_0 	: 0x106C0-0x106FF 	(64 bytes)
+
+C:\Users\<user>\PycharmProjects\ignite-xdna\scratch\laya_transformer\window_mlp_v2_m128\harness.mlir:13:11: error: 'aie.tile' op Basic sequential allocation also failed.
+    %t0 = aie.tile(0,2)
+          ^
+C:\Users\<user>\PycharmProjects\ignite-xdna\scratch\laya_transformer\window_mlp_v2_m128\harness.mlir:13:11: note: see current operation: %2 = "aie.tile"() <{col = 0 : i32, row = 2 : i32}> {controller_id = #aie.packet_info<pkt_type = 0, pkt_id = 27>} : () -> index
+
+aiecc: edge 'input_with_addresses.mlir' (key 'input.mlir') failed
+aiecc: pipeline failed
+
+Traceback (most recent call last):
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\<tooling>\worktrees\laya-testing\kernels\laya_transformer\window_mlp.py", line 140, in <module>
+    args=ap.parse_args(); build(args.base,args.model,args.out,args.m)
+                          ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\<tooling>\worktrees\laya-testing\kernels\laya_transformer\window_mlp.py", line 122, in build
+    p.attention.command([p.attention.IRON/'Scripts/aiecc.exe',out/'harness.mlir',f'--peano={p.attention.PEANO}',
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      '--get-npu-insts','--npu-insts-name=insts.bin','--get-xclbin','--xclbin-name=final.xclbin',f'--tmpdir={out/"prj"}'],out)
+      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\<tooling>\worktrees\laya-testing\kernels\laya_attention\probe.py", line 53, in command
+    raise RuntimeError(f"subprocess failed: {Path(args[0]).name} ({p.returncode})")
+RuntimeError: subprocess failed: aiecc.exe (1)
+RESEARCH_PROCESS_RESULT {"exit_code": 1, "stop": null, "peak_tree_rss_bytes": 1803997184, "rss_measurement": "maximum observed across sampled descendant working sets; zero observations reported as null", "elapsed_seconds": 12.311999999990803, "foreign_contention_observed": false, "timing_eligible": false}

@@ -19337,3 +19337,38 @@ and [registration validation](../results/laya/lookup_head_accuracy_v1_validation
 cover the existing offline and legacy gates, original decision thresholds, exclusive
 registration writes and safe adapter binding. No compact-pack or smaller-query image
 is used in these serving measurements.
+
+## Laya output-window query reuse compiled offline (2026-10-16, Desktop 2)
+
+`window_mlp.py` prepares another independent MLP image. Each GEMM query is retained
+while up to three consecutive output-column tiles consume their full weight packets.
+Every output tile has a separate accumulator state and follows the original K order;
+only the independent tiles are interleaved. The device helper delegates arithmetic to
+the existing GEMM step and finish functions. Input and output DMA mappings preserve
+the original global tensor pitches. Norm and polynomial GeGLU retain the smaller-query
+candidate's paired input streams. No lookup approximation is introduced by this image.
+
+The [first build](../results/laya/window_mlp_v1_build_desktop2_20261016.log) finds an
+out-of-scope output-slot SSA value. The [second build](../results/laya/window_mlp_v2_output_slots_build_desktop2_20261016.log)
+adds a separate final-K output loop, then fails SRAM allocation: query acquisition
+lowering reserves an additional buffer beyond the declared FIFO depth. Retain this
+failure as evidence that summing declared FIFO capacities is insufficient to prove
+the linked image fits. The [corrected build](../results/laya/window_mlp_v3_stack_build_desktop2_20261016.log)
+reserves a smaller stack and passes all code, physical-span and initialization audits.
+It has 15,472 code bytes and a 2,848-byte conservative stack bound within its explicit
+3,328-byte reservation. It has never executed on the NPU.
+
+[Offline validation](../results/laya/window_mlp_v1_validation_desktop2_20261016.log)
+enumerates every gathered query, weight and output address across all row buckets and
+columns, maps each output slot back to its original tile, and checks unchanged weight
+order along K. It also preserves non-GEMM streams and checks separate state addressing,
+counter reset and final-K output loops. The prepared `window_mlp_probe.py` uses its own
+validated image and instruction buffers, replacing the earlier MLP candidate context
+before opening the new one. A primitive device gate, exact complete outputs, original
+frozen accuracy and eligible same-sitting timing remain required. Programmed-read reuse
+does not establish physical DDR savings or a speedup.
+
+The ongoing lookup/short-head frozen scoring run retains sole NPU ownership during
+this offline work. A [live identity check](../results/laya/lookup_head_accuracy_v1_live_map_desktop2_20261016.log)
+confirms all 234 registered hashes remain unchanged. That scoring run is checks-only;
+these concurrent builds supply no eligible timing evidence for it.
