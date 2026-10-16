@@ -19026,6 +19026,9 @@ output bit equivalence to the already qualified native arm. Prior native outcome
 been observed; this is explicitly not a new independent held-out study. Full buffered
 accuracy is pending, so the original qualified accuracy arm remains available unchanged.
 
+**Follow-up:** the buffered arm subsequently passes the complete frozen gates and full
+native output bit equivalence; see [the completed run](#laya-buffered-native-accuracy-c0c5-and-full-bit-equivalence-pass-2026-10-16-desktop-2).
+
 [Validation](../results/laya/buffered_accuracy_v1_validation_desktop2_20261016.log) passes
 171 offline checks plus legacy syntax/import gates. The earlier
 [initial](../results/laya/buffered_geglu_v1_validation_desktop2_20261016.log) and
@@ -19116,3 +19119,31 @@ checks cover metadata switching through repeated bucket transitions and rejectio
 invalid markers before selection. None of these shorter head streams has run on the
 NPU. Complete output equivalence, latency and the original frozen accuracy gates remain
 required. The active buffered accuracy arm retains its registered full head schedules.
+
+## Laya buffered native accuracy: C0–C5 and full bit equivalence pass (2026-10-16, Desktop 2)
+
+The [complete buffered scoring run](../results/laya/buffered_accuracy_v1_full_score_desktop2_20261016.log)
+and [original-gate report](../results/laya/buffered_accuracy_v1_full_report_desktop2_20261016.log)
+complete all 2,403 frozen items. The registered source/artifact map remains unchanged
+before and after scoring. The process observes zero CPU neural/oracle calls and no
+contexts after close while still alive, using five contexts and 66 dispatches per item.
+
+All original C0–C5 criteria pass. Agreement with the frozen FP32 reference remains
+0.99375, pooled accuracy delta 0, and pooled T=1 ECE delta +0.00014430245755273075.
+Every captured logit and action-probability bit, including unused logit padding, is
+identical to the prior qualified native arm across the entire frozen set. Its per-task
+metrics and ancillary shipped-temperature shifts therefore remain the same as the
+[original native report](#laya-native-frozen-accuracy-c0c5-pass-2026-10-16-desktop-2).
+This equivalence is to qualified native outputs, not bit equivalence to FP32.
+
+The final scored NPZ SHA256 is
+`5d370c55f200672aabde8d71fcd102d2c48ed2cdf2bb504e8617dc6e62830914`.
+Its committed registration identity is
+`4264a16654fbd774be1ea83f6928d2320efa151bf1b7e8b472217fd7f13b9458`.
+The original items, FP32 reference, thresholds and temperatures are unchanged; prior
+native outcomes remain disclosed. The full-set result supports the buffered serving
+arm whose [eligible fixture timing is recorded separately](#laya-deeper-encoder-buffering-reduces-complete-latency-2026-10-16-desktop-2).
+The full scoring run itself is checks-only and timing-ineligible because offline
+compilation and validation ran concurrently. Subsequent head, lookup and compact-pack
+candidates have their own qualification requirements; the complete-model speed goal
+remains open.

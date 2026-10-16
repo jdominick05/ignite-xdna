@@ -2196,6 +2196,7 @@ question open: the eligible same-sitting CPU comparison still wins. The next wor
 phase costs and transfer overlap while retaining the frozen accuracy contract. See
 [full native accuracy and limits](docs/BENCHMARKS.md#laya-native-frozen-accuracy-c0c5-pass-2026-10-16-desktop-2).
 Deeper encoder buffering now reduces eligible complete-model fixture latency, while the
-same-sitting CPU remains faster. A separate buffered accuracy arm retains the original
-gates; its full-set qualification is pending. See
+same-sitting CPU remains faster. The separately registered buffered arm passes the
+original full-set gates and preserves both complete native output arrays bit-for-bit.
+See [buffered full accuracy](docs/BENCHMARKS.md#laya-buffered-native-accuracy-c0c5-and-full-bit-equivalence-pass-2026-10-16-desktop-2) and
 [buffering result and limits](docs/BENCHMARKS.md#laya-deeper-encoder-buffering-reduces-complete-latency-2026-10-16-desktop-2).
