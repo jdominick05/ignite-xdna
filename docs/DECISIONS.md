@@ -2540,3 +2540,16 @@ the actual core control allocations. Match other instruction bytes and live quer
 controls against separately compiled references; matching raw numeric words is insufficient.
 Separate offline length coverage from measured mask coverage and retain the numerical
 failures. See [dynamic mask evidence](BENCHMARKS.md#dynamic-mask-instructions-without-recompiling-the-core-image).
+
+## Repeated Laya encoder layers (2026-10-16)
+
+Pack the previous MLP norm output before the next QKV consumes it, then reuse its dead
+Y region for the following output projection while preserving R. Keep every layer's
+constants resident and relocate only decoded constant-bank DDR reads. Reuse a resident
+core image only after comparing all executable cores and initialization payloads.
+
+Whole-trunk execution is not whole-model accuracy: the synthetic boundary omits embedding
+and head, and accumulated error fails the composed gates. The first runner omitted the
+strict MLP report; the repeat restores that comparison and preserves its failures. Keep
+the frozen full-model decision criteria and perform that evaluation before any accuracy
+claim. See [execution, tests and numerical failures](BENCHMARKS.md#laya-encoder-trunk-28-layer-execution-composed-accuracy-fails-2026-10-16-desktop-2).

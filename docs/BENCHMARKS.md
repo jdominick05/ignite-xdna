@@ -18225,3 +18225,70 @@ passes 66 offline tests and the full legacy syntax/import/shell checks. The new 
 exercise relocated register allocations, wrong live values despite otherwise identical
 operations, corrupt framing, missing cores and already-patched bases. No eligible timing
 was collected. Arbitrary lengths on silicon and repeated encoder layers remain open.
+
+## Laya encoder trunk: 28-layer execution, composed accuracy fails (2026-10-16, Desktop 2)
+
+The [two-layer smoke](../results/laya/chain_v3_two_layers_smoke_desktop2_20261016.log)
+connects successive attention/MLP blocks without a host activation handoff. Before the
+next QKV projection, the attention program packs the preceding MLP norm output on
+device. Its output projection then overwrites that buffer's dead Y region while
+preserving the FP32 residual alongside it. The old packed-input region can be reused
+after QKV has consumed it. No new activation copy operator is required.
+
+The second QKV output passes a direct comparison against the separately observed
+first-prefix output. That observation supplies an oracle only; it is never fed back
+to the device. Both prefixes start from the same fresh initial buffer. All inputs,
+constants and instructions are uploaded before the prefix's first dispatch, and its
+first host activation read follows its final completion. Shared input, constant banks
+and arena borders remain unchanged; output guards and poison independence pass.
+
+The [first complete-trunk run](../results/laya/chain_v4_28_layers_desktop2_20261016.log)
+executes all 28 encoder layers, using the exported graph's actual weights and rotary
+dependencies: ten global and 18 local attention layers. Constant banks are resident in
+one shared arena; decoded DDR_PATCH fields relocate their reads by bank and preserve
+activation/output addresses. The repeated instruction stream has identical executable
+cores and initialization payloads to the initial attention stream, allowing both in
+one attention context. The MLP uses a second context. Each complete trunk executes
+56 serialized dispatches with zero interstage host reads, writes or syncs.
+
+This is a boundary experiment, not complete Laya inference. It supplies one synthetic
+array as both the initial normalized-input operand and initial residual. It does not
+perform token embedding or embedding normalization, use a real token sequence, or run
+the type embedding, head, scorer or action/decision tail. Its independent CPU reference
+uses rounded bf16 GEMM operands and the existing attention/nonlinear/norm oracles;
+it is not the frozen full-model FP32 logits comparison.
+
+Runs inspect prefixes of one, two and 28 layers, each with two initial buffer poisons.
+The [second sequence length](../results/laya/chain_v4_28_layers_valid512_desktop2_20261016.log)
+also completes the trunk. Both runs pass direct final projection/norm checks, the
+two-layer QKV handoff check, exact final residual addition, guards and unchanged-bank
+checks. Full-trunk composition fails at both lengths:
+
+| Valid keys | Normalized-output relative L2 | Bad normalized elements | Residual relative L2 | Bad residual elements |
+|---|---:|---:|---:|---:|
+| 193 | 0.05404254057113863 | 54,327 | 0.0428159162402153 | 224,951 |
+| 512 | 0.038391644857506416 | 60,280 | 0.04756646230816841 | 207,801 |
+
+Keep those failures. The initial chain runner did not report the earlier strict MLP
+gate, so its absence must not be read as a pass. The [retained-gate repeat](../results/laya/chain_v5_28_retained_gates_desktop2_20261016.log)
+adds direct Wi/GeGLU checks and that unchanged strict MLP comparison. At valid length
+193, all direct operator and handoff checks pass; normalized composition fails both
+28-layer comparisons, residual composition fails both two- and 28-layer comparisons,
+and strict MLP also fails both two- and 28-layer comparisons. Numerical outputs match
+the earlier length-193 run. The process exits nonzero and releases idle while alive.
+No tolerance, frozen item/reference file or complete-model decision criterion changed.
+
+The [validation record](../results/laya/chain_validation_desktop2_20261016.log) passes
+70 offline tests and the legacy syntax/import/shell gates. Tests independently cover
+every repeated-stream output word, preservation of residual/constant regions, all QKV
+feature/core addresses, all constant-bank bounds and constant-only instruction edits.
+Default compiled cores, initialization payloads and instruction bytes remain identical
+after factoring the existing norm packer. Repeated attention remains 15,600 bytes per
+core, MLP 15,152, with the previous stack/SRAM/helper audits retained. The shared
+28-layer arena occupies 754,752,448 bytes. CPU verification no longer retains the
+materialized original FP32 model graph after extracting its independent constants.
+
+All measurements here are checks-only. Wrapper durations include CPU oracles, transfers
+and extensive buffer verification; they establish neither trunk inference latency nor
+end-to-end speed. Accuracy accumulation remains unresolved. Embedding/head coverage,
+real-input frozen decision evaluation and eligible complete-model performance remain open.

@@ -144,15 +144,37 @@ def prefix():
     return text
 
 
-def runtime(pl,local,valid):
+def pack_norm(seq,pl,source):
+    off=pl['offsets']
+    for group in range(4):
+        seq.control(10,position=tuple(group*4+col for col in range(4)))
+        for mg in range(4):
+            for col in range(4):
+                start=source+mg*128*p.OUT; feature=group*4+col
+                seq.dma(col,'q',start,[1,1,4,p.QWORDS],[0,0,p.OUT,1])
+                seq.dma(col,'out',off['packed_norm']+(feature*16+mg*4)*p.OUT,[1,1,p.OUT//4,16],[0,0,16,1],True)
+                seq.dma(col,'kv',start,[1,1,128,p.KVWORDS],[0,0,p.OUT,1])
+            seq.wait()
+
+
+def runtime(pl,local,valid,*,packed_input=False):
     seq=Sequence(pl['words']); off=pl['offsets']; size=16*p.OUT
+    if packed_input: pack_norm(seq,pl,off['norm_input'])
     seq.control(2,16)
     for group in range(12):
-        for col in range(4):
-            seq.dma(col,'q',off['input'],[1,4,16,4*p.QWORDS],[0,64*p.QWORDS,4*p.QWORDS,1])
-            seq.dma(col,'out',off['projection']+(col*12+group)*size,[1,1,size//16,16],[0,0,16,1],True)
-            seq.dma(col,'kv',off['input']+256*p.QWORDS+(col*12+group)*16*p.KVWORDS,[4,1,16,p.KVWORDS],[0,0,p.KVWORDS,1])
-        seq.wait()
+        if packed_input:
+            for mg in range(4):
+                for col in range(4):
+                    seq.dma(col,'q',off['packed_norm']+mg*4*p.OUT,[1,16,4,p.QWORDS],[0,16*p.OUT,p.OUT,1])
+                    seq.dma(col,'out',off['projection']+((col*12+group)*4+mg)*4*p.OUT,[1,1,p.OUT//4,16],[0,0,16,1],True)
+                    seq.dma(col,'kv',off['input']+256*p.QWORDS+(col*12+group)*16*p.KVWORDS,[1,1,16,p.KVWORDS],[0,0,p.KVWORDS,1])
+                seq.wait()
+        else:
+            for col in range(4):
+                seq.dma(col,'q',off['input'],[1,4,16,4*p.QWORDS],[0,64*p.QWORDS,4*p.QWORDS,1])
+                seq.dma(col,'out',off['projection']+(col*12+group)*size,[1,1,size//16,16],[0,0,16,1],True)
+                seq.dma(col,'kv',off['input']+256*p.QWORDS+(col*12+group)*16*p.KVWORDS,[4,1,16,p.KVWORDS],[0,0,p.KVWORDS,1])
+            seq.wait()
     for mode in (4,5,6,7):
         for which in range(4):
             for mg in range(4):
@@ -207,15 +229,7 @@ def runtime(pl,local,valid):
         seq.dma(col,'out',off['norm']+col*128*p.OUT,[1,1,128*p.OUT//16,16],[0,0,16,1],True)
         seq.dma(col,'kv',off['affine'],[32,1,1,p.KVWORDS],[0,0,0,1])
     seq.wait()
-    for group in range(4):
-        seq.control(10,position=tuple(group*4+col for col in range(4)))
-        for mg in range(4):
-            for col in range(4):
-                source=off['norm']+mg*128*p.OUT; feature=group*4+col
-                seq.dma(col,'q',source,[1,1,4,p.QWORDS],[0,0,p.OUT,1])
-                seq.dma(col,'out',off['packed_norm']+(feature*16+mg*4)*p.OUT,[1,1,p.OUT//4,16],[0,0,16,1],True)
-                seq.dma(col,'kv',source,[1,1,128,p.KVWORDS],[0,0,p.OUT,1])
-            seq.wait()
+    pack_norm(seq,pl,off['norm'])
     return seq.finish()
 
 

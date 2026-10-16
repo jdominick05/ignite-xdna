@@ -326,3 +326,12 @@ Precision follow-up backs [the FP32 exponential and two-part probability investi
 - [Validation and default object identity](laya/block_precision_validation_desktop2_20261016.log).
 
 Dynamic masks back [the instruction-control investigation](../docs/BENCHMARKS.md#dynamic-mask-instructions-without-recompiling-the-core-image): [eight-mask device smoke with retained numerical failures](laya/block_dynamic_v1_smoke_desktop2_20261016.log) and [offline/syntax/import validation](laya/block_dynamic_validation_desktop2_20261016.log).
+
+## Laya repeated encoder layers
+
+Backs [28-layer execution and retained accuracy failures](../docs/BENCHMARKS.md#laya-encoder-trunk-28-layer-execution-composed-accuracy-fails-2026-10-16-desktop-2).
+
+- [Two-layer handoff](laya/chain_v3_two_layers_smoke_desktop2_20261016.log): direct QKV handoff passes; composed residual fails.
+- Complete trunk on synthetic input: [valid length 193](laya/chain_v4_28_layers_desktop2_20261016.log), [valid length 512](laya/chain_v4_28_layers_valid512_desktop2_20261016.log); execution completes, composition fails. These initial logs omit the strict MLP comparison.
+- [Retained-gate repeat](laya/chain_v5_28_retained_gates_desktop2_20261016.log): explicit Wi/GeGLU and strict MLP checks, unchanged thresholds; composition/strict failures remain.
+- [Validation](laya/chain_validation_desktop2_20261016.log): offline tests, syntax/import/shell gates, default artifact identity and numerical summaries.
