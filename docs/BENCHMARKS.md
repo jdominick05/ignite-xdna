@@ -19437,3 +19437,39 @@ fixtures. All encoder layers together, mask/length boundaries, full frozen accur
 and any same-sitting end-to-end gain remain unqualified for the new packing arm.
 The qualified serving configuration and original decision/calibration criteria remain
 unchanged. This result does not explain the earlier split-descriptor device failure.
+
+## Laya complete packing arm improves the native fixture comparison (2026-10-16, Desktop 2)
+
+The [all-layer qualification and incremental native comparison](../results/laya/pack_full_v1_qualification_and_timing_desktop2_20261016.log)
+first checks the three unlabelled fixtures, the existing row/bucket boundary sweep,
+a short input after a full input, and two option masks. All 25 cases preserve complete
+output bits against a fresh qualified lookup session. Both sessions forbid CPU
+neural/oracle calls, retain five contexts and execute 66 dispatches. Registered source
+and artifact identities remain unchanged; processes exit normally and leave idle
+context witnesses. Qualification timing is ineligible.
+
+The subsequent timing run follows the
+[preregistered protocol](../results/laya/pack_compare_v1_prereg_desktop2_20261016.json),
+committed as `28157bd` before comparison inference. Its SHA256 is
+`2e42d9770bf66356aeebe170f7b6bc73c2180631ae1aaba6d45383bf9b891ad1`.
+Three rounds rotate lookup/wide, wide/lookup and lookup/wide. Each arm uses a fresh
+session, two warmups and five measured complete inferences, excluding setup. The
+following medians pool 15 samples per arm on the same length-91 request using M128.
+
+| Native configuration | Median ms | Observed sample range ms | Accuracy status |
+|---|---:|---:|---|
+| Qualified lookup and shorter heads | 506.1077 | 430.5416–515.8923 | Original full frozen gates passed |
+| Lookup, shorter heads and single-BD packing | 470.5533 | 411.7220–486.1397 | Fixture/boundary exact; full frozen gates pending |
+
+This sitting establishes a lower median for the packing development arm against the
+qualified native control. Every timed output remains bit-exact, with zero CPU neural
+calls and unchanged files. Profiles close before the next opens, the wrapper detects
+no foreign contention and records `timing_eligible: true`. Raw logs remain in ignored
+scratch; the committed summary retains raw hashes, all samples and terminal eligibility.
+
+This is an incremental native comparison. It supplies no new CPU or hybrid ratio and
+must not be combined with another sitting to claim one. Sample ranges overlap, and
+this run does not establish a distribution-free speed guarantee or a physical
+bandwidth cause. Full frozen known-set decision/calibration qualification is still
+required before adopting this candidate; the original thresholds, temperatures and
+reference remain fixed. Complete Laya speed remains an open objective.

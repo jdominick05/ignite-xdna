@@ -583,3 +583,6 @@ Expanded packing and layer integration: [sweep build](laya/pack_sweep_v1_build_d
 All-layer packing protocol: [comparison registration](laya/pack_compare_v1_prereg_desktop2_20261016.json),
 [validation](laya/pack_full_v1_validation_desktop2_20261016.log),
 [engineering protocol](../docs/DECISIONS.md#laya-all-layer-packing-comparison-protocol-2026-10-16-desktop-2).
+
+All-layer packing: [qualification and eligible native comparison](laya/pack_full_v1_qualification_and_timing_desktop2_20261016.log),
+with [full method, samples and accuracy caveat](../docs/BENCHMARKS.md#laya-complete-packing-arm-improves-the-native-fixture-comparison-2026-10-16-desktop-2).
