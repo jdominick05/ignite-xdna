@@ -19459,7 +19459,7 @@ following medians pool 15 samples per arm on the same length-91 request using M1
 | Native configuration | Median ms | Observed sample range ms | Accuracy status |
 |---|---:|---:|---|
 | Qualified lookup and shorter heads | 506.1077 | 430.5416–515.8923 | Original full frozen gates passed |
-| Lookup, shorter heads and single-BD packing | 470.5533 | 411.7220–486.1397 | Fixture/boundary exact; full frozen gates pending |
+| Lookup, shorter heads and single-BD packing | 470.5533 | 411.7220–486.1397 | Full frozen gates subsequently passed; see below |
 
 This sitting establishes a lower median for the packing development arm against the
 qualified native control. Every timed output remains bit-exact, with zero CPU neural
@@ -19470,9 +19470,9 @@ scratch; the committed summary retains raw hashes, all samples and terminal elig
 This is an incremental native comparison. It supplies no new CPU or hybrid ratio and
 must not be combined with another sitting to claim one. Sample ranges overlap, and
 this run does not establish a distribution-free speed guarantee or a physical
-bandwidth cause. Full frozen known-set decision/calibration qualification is still
-required before adopting this candidate; the original thresholds, temperatures and
-reference remain fixed. Complete Laya speed remains an open objective.
+bandwidth cause. Full frozen known-set decision/calibration qualification was still
+pending at the time of this timing run; its subsequent verdict is below. The original
+thresholds, temperatures and reference remain fixed. Complete Laya speed remains open.
 
 The subsequent [packing accuracy registration](../results/laya/pack_accuracy_v1_prereg_desktop2_20261016.json)
 binds 497 source/artifact/reference hashes before labelled packing scores. It preserves
@@ -19480,3 +19480,25 @@ the original C0–C5 and adds full scored-output bit equivalence to qualified lo
 The [registration log](../results/laya/pack_accuracy_v1_registration_desktop2_20261016.log)
 records the identity and prior-outcome disclosure. This is known-set revalidation;
 registration alone supplies no accuracy verdict for the faster development arm.
+
+### Packing full frozen qualification
+
+The [completed score summary](../results/laya/pack_accuracy_v1_full_score_summary_desktop2_20261016.log)
+and [full report](../results/laya/pack_accuracy_v1_full_report_desktop2_20261016.log)
+subsequently qualify `native_lookup_wide_pack_bf16_v1`: all 2,403 items complete,
+including 2,400 labelled items, with zero CPU neural/oracle calls and an idle device
+after close while the scorer remains alive. The original preregistered C0–C5 all pass.
+Pooled decisions agree with FP32 on 2,387/2,400 items (99.46%); pooled accuracy is
+0.6267 on both arms, and T=1 ECE is 0.1923 against FP32 0.1924. The additional
+packing criterion also passes: every logit and action-probability bit, including
+unused padding, matches the qualified lookup output over the complete frozen set.
+The output NPZ SHA256 is
+`e686edfede41c34598f43711cbf2ee377af7b8221f94ba41cf4bb5d48f89cd97`.
+
+This is revalidation on a known set, with unchanged thresholds, temperatures and
+reference, not a new held-out test. It resolves the pending accuracy caveat above;
+the earlier eligible comparison remains the timing evidence. The accuracy wrapper
+reports foreign contention and `timing_eligible: false`, so no latency is inferred
+from scoring duration. Its completed untracked raw log was moved unchanged to
+ignored scratch; the summary retains its SHA256, checkpoint identities, completion,
+CPU-call count and idle witnesses. No CPU or hybrid ratio is added by this result.

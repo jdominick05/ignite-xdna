@@ -590,6 +590,9 @@ with [full method, samples and accuracy caveat](../docs/BENCHMARKS.md#laya-compl
 Packing frozen arm: [registration](laya/pack_accuracy_v1_prereg_desktop2_20261016.json),
 [registration evidence](laya/pack_accuracy_v1_registration_desktop2_20261016.log),
 [validation](laya/pack_accuracy_v1_validation_desktop2_20261016.log),
+[completed full score summary](laya/pack_accuracy_v1_full_score_summary_desktop2_20261016.log),
+[full original-gate and bit-equivalence report](laya/pack_accuracy_v1_full_report_desktop2_20261016.log),
+[qualification verdict](../docs/BENCHMARKS.md#packing-full-frozen-qualification),
 [original gates and additional equivalence requirement](../docs/DECISIONS.md#laya-packing-frozen-qualification-2026-10-16-desktop-2).
 
 Windowed MLP with lookup: [initial SRAM link failure](laya/window_lookup_v1_build_desktop2_20261016.log),
