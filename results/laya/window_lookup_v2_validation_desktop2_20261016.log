@@ -1,0 +1,17 @@
+RESEARCH_PLATFORM {"machine": "Desktop 2", "cpu": "AMD Ryzen 7 8700G w/ Radeon 780M Graphics", "os": "Windows-11-10.0.26200-SP0", "ram_bytes": 33381138432, "source_sha256": {"tools/research_process.py": "ffeb1857f190b482eed101b5f5a928f455de26bfa61d23f78a2eacec08e2663e", "tools/quant_calib_alphabet.py": "2dc0b2878c564853f340880209a425dfcf63b8536b2b8e9fd32344daade58d37", "tools/xint8_arithmetic_probe.py": "6aa3df08b9870c3c2264b868459d7ffbac3070dddc1349d7c6f3f480075f7041", "scripts/research-lowlevel.sh": "3455ad7933697936487712665505c216891865c6deada647302785f6e37020bd", "scripts/research-iron.sh": "4c863a262646ddab39b5005006ba8e03809895e6386c6310e2fd9d0a9e9609ee", "kernels/memory_placement/probe.py": "e8d990169ad6091fa1b53852e9f61eff495b5def72d35165a5c5cf1759e38898", "kernels/memory_placement/memory_kernels.cc": "182e7af7071a1e851afb4a7ca266069c489aea1fbaaa85eca129708daeba5ba6", "scripts/research-matrix.sh": "739254171629deae822b0ad7dabc875aee19ace56dde77d3e8aab61663f97516", "kernels/memory_placement/gemm.py": "17c905ad66110d3346bbf0db898dfc6b780df59fae1dfb0c1747057ce1e5844e", "kernels/memory_placement/gemm_placement.cc": "f21acf7250b12914ea30cc1f77613239dfa18421a85a1b9a5199017dd916278a", "tools/research_summary.py": "0c00dcceef07053d06731b41a1f1ed58d3ba4ea09f82497de354ce9cef17da20", "tools/research_toolchain.py": "f0a126a24ae213acfaa43460cfd9def0c86d9cb70cfee0228aa271688467b314"}, "commit": "2fea7a3b02cf7f629b5c170c55030396c576e074", "command": ["bash", "scratch/laya_transformer/window_lookup_v2_validation.sh"], "seconds_limit": 180.0, "rss_gib_limit": 8.0, "checks_only": true, "free_ram_bytes": 19405328384}
+[2m    env: resnet_env17  (3.12.11)[0m
+HOST_TIMELINE {"elapsed_seconds": 2.36, "tree_rss_bytes": 10895360, "foreign_peers": []}
+PIPELINE CHECKS PASS
+STAGE PROFILE IMPORT PASS
+HOST_TIMELINE {"elapsed_seconds": 4.703, "tree_rss_bytes": 134881280, "foreign_peers": []}
+[2m    env: mlir-aie-iron  (3.13.15)[0m
+HOST_TIMELINE {"elapsed_seconds": 7.078, "tree_rss_bytes": 118595584, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 9.406, "tree_rss_bytes": 115707904, "foreign_peers": []}
+............................................                             [100%]
+44 passed in 5.40s
+HOST_TIMELINE {"elapsed_seconds": 11.781, "tree_rss_bytes": 11177984, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 14.094, "tree_rss_bytes": 11177984, "foreign_peers": []}
+LIVE_PACKING_C0_CHECK {"hashes": 497, "unchanged": true, "registration_id": "cc1faafa3d62981c769018e92c008350485acaa826c66a01f615c774a37aee7e"}
+WINDOW_LOOKUP_SOURCE {"sha256": "2e6650ae6cbfe2d9bcf3bc03decf5ad5cc7a7cb9359126bd5ac8cb0ec24c28fe", "width": 2, "device_tested": false}
+WINDOW_LOOKUP_GENERATED_ARTIFACT_CHECK PASS
+RESEARCH_PROCESS_RESULT {"exit_code": 0, "stop": null, "peak_tree_rss_bytes": 134881280, "rss_measurement": "maximum observed across sampled descendant working sets; zero observations reported as null", "elapsed_seconds": 16.01599999999962, "foreign_contention_observed": false, "timing_eligible": false}

@@ -3126,3 +3126,25 @@ The [validation and live file-map check](../results/laya/window_lookup_v1_valida
 pass the legacy gates and confirm all packing accuracy registration hashes are
 unchanged while that independent full accuracy run owns the NPU. The current packing
 arm and original frozen criteria remain untouched.
+
+## Laya two-output lookup MLP fits with one core KV buffer (2026-10-16, Desktop 2)
+
+The [revised offline build](../results/laya/window_lookup_v2_single_kv_build_desktop2_20261016.log)
+reduces the core KV FIFO depth to one while retaining two MemTile KV buffers. Query
+packet size, KV packet size and per-output accumulation order are unchanged from the
+separate query-reuse design. Two independent output states reuse each query. The
+qualified lookup table source is copied byte-for-byte; its formula changes only the
+pointer used for the second query half, alongside split normalization addressing.
+
+This M128 build passes linked code, physical-span/non-overlap and conservative stack
+audits: code is 12,032 bytes per core, stack bound 2,208 bytes within the 3,328-byte
+reservation. The earlier data-region failure remains retained. These are compiler
+resource checks, not device measurements or a claim that the reduced buffering pays.
+
+[Validation](../results/laya/window_lookup_v2_validation_desktop2_20261016.log)
+passes 44 offline/privacy checks and the legacy gates. New checks cover all generated
+row buckets, every original weight/output address and K index, shared queries, lookup
+formula preservation, explicit state/FIFO geometry, and generated-source/table hashes.
+The live packing accuracy source/artifact map remains unchanged. No context was opened
+for this candidate. It still requires compiled descriptor/packet/lock checks, guarded
+primitive qualification, device numerical gates and same-sitting performance evidence.

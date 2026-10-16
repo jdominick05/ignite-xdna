@@ -595,3 +595,7 @@ Packing frozen arm: [registration](laya/pack_accuracy_v1_prereg_desktop2_2026101
 Windowed MLP with lookup: [initial SRAM link failure](laya/window_lookup_v1_build_desktop2_20261016.log),
 [legacy validation and live packing identity check](laya/window_lookup_v1_validation_desktop2_20261016.log),
 [offline engineering record](../docs/DECISIONS.md#laya-windowed-mlp-with-lookup-first-sram-limit-2026-10-16-desktop-2).
+
+Two-output lookup MLP: [single core-KV-buffer build](laya/window_lookup_v2_single_kv_build_desktop2_20261016.log),
+[offline/legacy validation and live packing identity](laya/window_lookup_v2_validation_desktop2_20261016.log),
+[compile-only scope and remaining gates](../docs/DECISIONS.md#laya-two-output-lookup-mlp-fits-with-one-core-kv-buffer-2026-10-16-desktop-2).

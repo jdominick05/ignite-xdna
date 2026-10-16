@@ -5,6 +5,7 @@
 import argparse
 import json
 from pathlib import Path
+import re
 import shutil
 from unittest.mock import patch
 
@@ -21,7 +22,10 @@ def sources():
 def prefix():
     text=window.prefix()
     if text.count('memref<6144xi32>')==0:raise ValueError('window state declaration missing')
-    return text.replace('memref<6144xi32>','memref<4096xi32>')
+    text=text.replace('memref<6144xi32>','memref<4096xi32>')
+    text,count=re.subn(r'(aie.objectfifo @kvF_\d+\([^\n]*),2 : i32\)',lambda match:match[1]+',1 : i32)',text)
+    if count!=4:raise ValueError('core KV FIFO declaration coverage')
+    return text
 
 
 def runtime(plan,m):
@@ -69,7 +73,8 @@ def build(base,model,parent,out,m):
     cdo={file.name:p.attention.sha(file) for file in (out/'prj').rglob('*_aie_cdo_*.bin')}
     if len(cdo)!=3 or sources()!=frozen:raise ValueError('missing init or changed source')
     result=dict(sources=frozen,base_identity=bundle.identity,lookup_parent_sha256=p.attention.sha(parent/'build.json'),
-        policy=dict(m=m,width=WIDTH,qwords=1040,kvwords=2064,q_depth=2,kv_depth=2,l2_q_depth=2,stack_bytes=window.STACK),
+        policy=dict(m=m,width=WIDTH,qwords=1040,kvwords=2064,q_depth=2,kv_depth=1,l2_kv_depth=2,l2_q_depth=2,stack_bytes=window.STACK),
+        compiler_flags=[flag for flag in flags if not flag.startswith('-I')],compiler_sha256=p.attention.sha(clang),
         generated_sources=generated,unchanged_objects=unchanged,audits=audits,cdo=cdo,
         table_source_sha256=meta['table_source_sha256'],instructions=p.attention.sha(out/'insts.bin'),
         xclbin=p.attention.sha(out/'final.xclbin'),kernel_object_sha256=p.attention.sha(out/'kernel.o'),
