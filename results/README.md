@@ -561,3 +561,8 @@ Build history: [relative-path failure](laya/attention_phases_v1_build_desktop2_2
 [compiled equivalence gate](laya/attention_phases_v3_equivalence_build_desktop2_20261016.log),
 [offline/privacy/legacy validation](laya/attention_phases_v1_validation_desktop2_20261016.log).
 See the [engineering record](../docs/DECISIONS.md#laya-attention-phase-diagnostic-transport-2026-10-16-desktop-2).
+
+Fine attention preparation: [build/equivalence](laya/attention_fine_phases_v1_build_desktop2_20261016.log),
+[validation](laya/attention_fine_phases_v1_validation_desktop2_20261016.log),
+[layer checks and full diagnostic](laya/attention_fine_phases_v1_device_diagnostic_desktop2_20261016.log).
+[Methods and timing-ineligible counters](../docs/BENCHMARKS.md#laya-attention-preparation-split-further-2026-10-16-desktop-2).

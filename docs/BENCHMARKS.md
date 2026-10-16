@@ -19322,3 +19322,43 @@ identify which of those operations or physical resources limits the group. The
 score/softmax/value phase is smaller in this M128 diagnostic; no conclusion about
 full-512 attention cost follows. Additional dispatches perturb the measured program,
 so these counters neither supersede nor combine with the eligible serving comparison.
+
+## Laya attention preparation split further (2026-10-16, Desktop 2)
+
+The [fine phase diagnostic](../results/laya/attention_fine_phases_v1_device_diagnostic_desktop2_20261016.log)
+further separates the preceding preparation phase into input normalization packing,
+QKV projection and RoPE/KV formation. The other attention phases retain their existing
+boundaries. The [build](../results/laya/attention_fine_phases_v1_build_desktop2_20261016.log)
+proves the concatenated streams preserve every non-RTP descriptor/queue/wait operation
+byte and effective controls at each operand patch, with unchanged core/init images.
+
+Single-layer checks for the first global and local layers precede the full run. All
+three complete fixture outputs remain bit-exact in both checks, with zero CPU
+neural/oracle calls. Splitting one layer uses 70 dispatches; splitting all encoder
+attention uses 178. Five contexts remain resident, registered artifacts stay unchanged,
+and both processes exit normally with idle context witnesses. The
+[validation](../results/laya/attention_fine_phases_v1_validation_desktop2_20261016.log)
+passes 27 offline/privacy checks plus the legacy syntax/import/shell gate.
+
+These checks-only counters are **timing-ineligible** host wall-time sums across the
+encoder layers, from three profiled complete calls after fixture qualification.
+Additional dispatches perturb the program. The table identifies the next target;
+it establishes neither a speedup nor device-only execution time. Rounded entries are
+transcribed from the summary, which also preserves full precision and per-stage data.
+
+| Phase | Median wall time ms | Observed range ms |
+|---|---:|---:|
+| pack | 84.9323 | 75.0547–99.6433 |
+| qkv | 50.1025 | 49.3069–54.4442 |
+| rope | 47.0720 | 44.5318–52.2141 |
+| attend | 26.7137 | 24.7176–32.1291 |
+| finish | 60.1015 | 58.6213–64.0003 |
+
+Input packing is the largest isolated preparation stage. The current packing program
+broadcasts complete normalized rows and each core selects its own features/rows.
+This makes a smaller gather packet a candidate, but does not prove a bandwidth limit
+or predict its speed. The prior compact split-descriptor failure remains unqualified.
+Any reduced-traffic alternative must first prove packet/descriptor/lock behavior
+offline and pass a bounded guarded transport primitive, before complete inference.
+Raw logs remain in ignored scratch with their hashes in the committed summary.
+The original decision/calibration criteria and serving configuration are retained.

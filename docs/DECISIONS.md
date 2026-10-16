@@ -2980,3 +2980,22 @@ existing qualified context, preserving five resident contexts. A bounded one-lay
 check for each attention mode precedes the full diagnostic; no compact/wide transfer
 scheme is enabled. [Device results](BENCHMARKS.md#laya-attention-phase-diagnostic-on-the-qualified-lookup-arm-2026-10-16-desktop-2)
 remain explicitly timing-ineligible and do not qualify a serving optimization.
+
+## Laya finer preparation boundaries (2026-10-16, Desktop 2)
+
+`attention_fine_phases.py` reuses the coarse compiler/equivalence checks without
+changing the earlier builder. Input pack, QKV and RoPE/KV are separated at existing
+completion waits. Each stream independently initializes all seven control fields.
+The [compiled verification](../results/laya/attention_fine_phases_v1_build_desktop2_20261016.log)
+retains the qualified program's non-RTP operations and effective operand controls,
+with identical core, buffer and lock initialization. No reduced-traffic scheme is
+executed. The previous coarse artifacts remain valid with their original builder.
+
+The [device diagnostic](BENCHMARKS.md#laya-attention-preparation-split-further-2026-10-16-desktop-2)
+selects input packing as the next isolated optimization target. Investigate a guarded
+packing transport primitive before any compact/wide full graph. A single-column
+primitive may retain the existing broadcast topology; changing topology solely to
+obtain a one-core test would itself introduce a different transfer scheme. Compare
+all packed payload bits, complete writes and guards against an independent packing
+reference, under bounded waits and with idle checks after context close. No physical
+failure cause or expected gain is established by the phase counters.

@@ -40,7 +40,8 @@ class Session(op.Session):
                 raw=(phase_folder/phase/'insts.bin').read_bytes()
                 for index,spec in enumerate(self.bundle.meta['chain']['spec']):
                     relocated,_,used=n.c.l.relocate(raw,n.c.l.bindings(self.plan,0,'global'),n.c.l.bindings(self.plan,index,spec['mode']))
-                    expected={'prepare':{'qkv','coeff'},'attend':set(),'finish':{'projection','affine'}}[phase]
+                    expected={'prepare':{'qkv','coeff'},'pack':set(),'qkv':{'qkv'},'rope':{'coeff'},
+                        'attend':set(),'finish':{'projection','affine'}}[phase]
                     if used!=expected:
                         raise ValueError('phase constant relocation coverage: '+phase+' '+str(used))
                     relocated,changes=n.c.txn.patch(relocated,layout['audits'],512,spec['mode']=='local')
@@ -63,8 +64,13 @@ class Session(op.Session):
 
 
 def main():
+    global phases
     ap=argparse.ArgumentParser(); ap.add_argument('--phase-folder',type=Path,required=True)
+    ap.add_argument('--fine',action='store_true')
     ap.add_argument('--mode',choices=('layer','full'),required=True); args=ap.parse_args()
+    if args.fine:
+        import attention_fine_phases
+        phases=attention_fine_phases
     prereg=compare.ROOT/'results/laya/native_hybrid_compare_v1_prereg_desktop2_20261016.json'
     _,paths,bundle,fixtures=compare.load_registration(prereg)
     compare.emit('ATTENTION_PHASE_PROFILE_IDENTITY',dict(runner_sha256=compare.sha(Path(__file__)),
