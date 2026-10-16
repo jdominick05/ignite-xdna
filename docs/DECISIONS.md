@@ -3371,3 +3371,9 @@ now qualifies the unchanged transport and the two guarded output groups on devic
 The new builder rejects changed transaction bytes or physical SRAM spans; it keeps
 the original modules and registrations intact. Continue with complete real-valued
 layer parity before using the specialized core in full-model experiments.
+
+The [complete real-valued layer result](BENCHMARKS.md#laya-fixed-shape-gemm-passes-complete-mlp-layer-parity-2026-10-16-desktop-2)
+now passes with the same guarded primitive core and the original full MLP runtime.
+Keep capture/replay host copies confined to diagnostics. A complete-model candidate
+must replace the existing MLP context during construction and retain the observed
+five-context policy; full development and adoption gates remain required.

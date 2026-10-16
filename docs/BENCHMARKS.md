@@ -19717,3 +19717,27 @@ pass 18 cases including privacy checks. The legacy syntax/import gate passes.
 All runs are timing-ineligible. Complete real-valued MLP layers, full development
 cases, quiet timing and the original frozen adoption gates remain open. Qualified
 packing remains the serving configuration; this result makes no speed claim.
+
+## Laya fixed-shape GEMM passes complete MLP layer parity (2026-10-16, Desktop 2)
+
+The [complete layer result](../results/laya/gemm_specialized_mlp_v1_layer_desktop2_20261016.log)
+compares specialized MLP layers 0 and 1 against activations captured from the
+qualified packing model on three development fixtures. All six complete arenas
+match bit for bit, including unchanged regions. These real-valued activations
+exercise both global and local layer relocation. No CPU neural/oracle call supplies
+an activation. Capturing and replaying the arenas uses explicit diagnostic host
+copies, so this is not a serving path or a speed measurement.
+
+The full MLP image uses the exact guarded primitive core, allocations and all CDO
+records. Its complete transaction bytes match the working lookup MLP. The capture
+session closes its five contexts before the isolated one-context candidate opens.
+Cleanup releases instruction BOs, then the arena/kernel/context, then the device;
+the process exits zero and observes idle contexts while alive. Peak sampled process
+tree memory is 11,582,779,392 bytes within the bounded run's limit. Timing is
+ineligible. Sources and registered identities remain unchanged across the run.
+
+[Offline prerequisite checks](../results/laya/gemm_specialized_mlp_v1_offline_tests_desktop2_20261016.log)
+pass 18 cases including privacy checks; missing output-group verdicts, unsuccessful
+exits and failed numeric checks block the layer gate. Legacy syntax/import checks
+also pass. The specialized image still needs full-model development parity,
+preregistered quiet timing and the original frozen gates before adoption.

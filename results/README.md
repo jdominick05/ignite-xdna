@@ -658,6 +658,10 @@ Specialized GEMM primitive: [build and both guarded device groups](laya/gemm_spe
 [offline regression checks](laya/gemm_specialized_primitive_v2_offline_tests_desktop2_20261016.log),
 [qualification and limits](../docs/BENCHMARKS.md#laya-fixed-shape-gemm-passes-guarded-integer-primitives-2026-10-16-desktop-2).
 
+Specialized GEMM complete MLP layers: [build, captured layer parity and cleanup](laya/gemm_specialized_mlp_v1_layer_desktop2_20261016.log),
+[prerequisite regression checks](laya/gemm_specialized_mlp_v1_offline_tests_desktop2_20261016.log),
+[development scope](../docs/BENCHMARKS.md#laya-fixed-shape-gemm-passes-complete-mlp-layer-parity-2026-10-16-desktop-2).
+
 Two-output lookup GEMM primitive: [initial build](laya/window_lookup_primitive_v1_build_desktop2_20261016.log),
 [explicit control/address build](laya/window_lookup_primitive_v2_controls_build_desktop2_20261016.log),
 [offline validation and live packing identity](laya/window_lookup_primitive_v1_validation_desktop2_20261016.log),
