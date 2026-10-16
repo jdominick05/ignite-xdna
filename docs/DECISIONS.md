@@ -3480,3 +3480,17 @@ also passes with the exact guarded core/init and the full small-query transactio
 Keep diagnostic capture/replay copies outside serving. A complete-model candidate
 must replace the existing MLP context and retain five contexts; full development
 parity, quiet same-sitting timing and original frozen adoption gates remain open.
+
+## Laya smaller-query lookup/KV2 timing protocol (2026-10-16, Desktop 2)
+
+After [full development parity](BENCHMARKS.md#laya-smaller-query-lookupkv2-full-development-parity-2026-10-16-desktop-2),
+the [preregistration](../results/laya/small_lookup_compare_v1_prereg_desktop2_20261016.json)
+pins 316 source/artifact/qualification identities before timing. Compare qualified
+packing and the smaller-query image on the same length-91/M128 complete request.
+Use fresh serialized sessions in packing/small-query, small-query/packing,
+packing/small-query order, with two warmups and five timed inferences per profile;
+setup is excluded. Require bit-exact outputs, zero CPU neural/oracle calls, five
+contexts, 66 dispatches, unchanged identities and idle contexts after each profile.
+The [registration record](../results/laya/small_lookup_compare_v1_registration_desktop2_20261016.log)
+carries its hash. Keep the original frozen accuracy gates before adoption, and
+supply no CPU/hybrid ratio or cross-sitting pool from this incremental comparison.

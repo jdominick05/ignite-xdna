@@ -694,6 +694,13 @@ Small-query lookup/KV2: [builds and primitive measurements](laya/small_lookup_v3
 Complete layers: [captured arena parity and cleanup](laya/small_lookup_v3_layer_desktop2_20261016.log),
 [prerequisite checks](laya/small_lookup_v3_layer_tests_desktop2_20261016.log),
 [scope](../docs/BENCHMARKS.md#laya-smaller-query-lookupkv2-passes-complete-mlp-layers-2026-10-16-desktop-2).
+Full model: [development parity](laya/small_lookup_v3_full_desktop2_20261016.log),
+[prerequisite checks](laya/small_lookup_v3_full_tests_desktop2_20261016.log),
+[legacy validation](laya/small_lookup_v3_full_validation_desktop2_20261016.log),
+[scope](../docs/BENCHMARKS.md#laya-smaller-query-lookupkv2-full-development-parity-2026-10-16-desktop-2).
+Timing [preregistration](laya/small_lookup_compare_v1_prereg_desktop2_20261016.json)
+and [registration record](laya/small_lookup_compare_v1_registration_desktop2_20261016.log)
+back the [protocol](../docs/DECISIONS.md#laya-smaller-query-lookupkv2-timing-protocol-2026-10-16-desktop-2).
 
 Two-output lookup GEMM primitive: [initial build](laya/window_lookup_primitive_v1_build_desktop2_20261016.log),
 [explicit control/address build](laya/window_lookup_primitive_v2_controls_build_desktop2_20261016.log),

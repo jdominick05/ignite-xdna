@@ -19889,3 +19889,20 @@ and records idle contexts while alive. Sources and registered identities remain
 unchanged. [Layer prerequisite/privacy checks](../results/laya/small_lookup_v3_layer_tests_desktop2_20261016.log)
 pass 18 cases. Timing is ineligible. These layer results do not establish full-model
 development parity, speed or frozen adoption accuracy.
+
+## Laya smaller-query lookup/KV2 full development parity (2026-10-16, Desktop 2)
+
+The [complete-model result](../results/laya/small_lookup_v3_full_desktop2_20261016.log)
+passes all 25 development cases: three fixtures, 20 length/bucket transitions
+through 512 and back to 91, and two option masks. Complete logits and action
+probabilities are bit-exact to qualified packing. The smaller-query image replaces
+all 28 M128 MLP stages, and larger buckets retain their control images. Serving
+uses the common NPU arena without the layer probe's diagnostic activation copies.
+Each case records five contexts and 66 dispatches, with zero CPU neural/oracle
+calls. All sources and artifacts remain unchanged; the bounded process exits zero
+and observes idle contexts after close. Timing is ineligible.
+
+[Full prerequisite/privacy checks](../results/laya/small_lookup_v3_full_tests_desktop2_20261016.log)
+pass 18 cases, and [legacy validation](../results/laya/small_lookup_v3_full_validation_desktop2_20261016.log)
+passes. This establishes development parity. It supplies no speed or full frozen
+accuracy verdict, and qualified packing remains adopted.
