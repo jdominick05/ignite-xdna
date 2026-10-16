@@ -2567,3 +2567,20 @@ too. The first stem emitted an extra GEMM packet despite a completed dispatch. G
 row-order and exact-bit tests catch this; completion alone does not establish semantics.
 Real-input encoder execution still fails composed and strict MLP gates. See
 [evidence and remaining scope](BENCHMARKS.md#laya-token-embeddings-through-the-encoder-real-inputs-accuracy-still-fails-2026-10-16-desktop-2).
+
+## Laya head/vector image and instruction compatibility (2026-10-16)
+
+Remove the unreachable attention branch from the MLP image before adding head operators;
+the resident attention image retains that responsibility. Sharing GELU code avoids
+duplicating it in the linked vector program. Audit the final executable and conservative
+stack, then reserve the larger stack explicitly. Its output-buffer address moves, so do
+not reuse the old physical-layout identity claim. Independently compile identical stem
+and encoder instruction streams against the new program and require new core/init
+identity across every layout, with unchanged RTP addresses. Load the new image fresh.
+
+Type embeddings use integer host-selected constant addresses and device addition/norm.
+Compare the subsequent biased QKV against actual device-packed head input only after the
+entire chain completes. Separate stopped-prefix observations are references, never feeds.
+Keep the old encoder and strict MLP failures and the new composed head-norm failures;
+direct head-operator agreement does not establish full decisions or speed. See
+[qualification and limits](BENCHMARKS.md#laya-first-head-prelude-device-type-embedding-norm-and-biased-qkv-2026-10-16-desktop-2).

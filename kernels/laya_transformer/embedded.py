@@ -31,15 +31,21 @@ def relocate_output(raw,source,target,words):
     return bytes(output),changed
 
 
-def run(out,stem,model,tokens_file,token_key,collect):
+def run(out,stem,model,tokens_file,token_key,collect,head_folder=None):
     out=out.resolve(); model=model.resolve(); meta=json.loads((out/'build.json').read_text())
     stem=stem.resolve(); sm=json.loads((stem/'build.json').read_text())
-    if sm['sources']!=s.sources() or len(sm['tokens'])!=512: raise ValueError('stale or partial embedding build')
+    vector_image=sm.get('kind')=='vector-without-attention'
+    if not vector_image and sm['sources']!=s.sources(): raise ValueError('stale embedding build')
+    if len(sm['tokens'])!=512: raise ValueError('partial embedding build')
     for file,field in [('final.xclbin','xclbin'),('insts.bin','instructions')]:
         if p.attention.sha(stem/file)!=sm[field]: raise ValueError('changed embedding artifact')
     mlp=meta['artifacts']['mlp']
-    if [a['spans'] for a in sm['audits']]!=[a['spans'] for a in mlp['audits']]: raise ValueError('embedding/MLP physical ABI differs')
-    if any(sm['cdo'][name]!=mlp['cdo'][name] for name in ('main_aie_cdo_init.bin','main_aie_cdo_enable.bin')): raise ValueError('embedding/MLP initialization differs')
+    if vector_image:
+        import vector
+        vector.validate_compatibility(stem,sm,mlp)
+    else:
+        if [a['spans'] for a in sm['audits']]!=[a['spans'] for a in mlp['audits']]: raise ValueError('embedding/MLP physical ABI differs')
+        if any(sm['cdo'][name]!=mlp['cdo'][name] for name in ('main_aie_cdo_init.bin','main_aie_cdo_enable.bin')): raise ValueError('embedding/MLP initialization differs')
     if meta['sources']!=c.sources() or meta['model_sha256']!=p.attention.sha(model): raise ValueError('stale chain build/model')
     if meta['coefficients_sha256']!=p.attention.sha(out/'coefficients.npz'): raise ValueError('changed coefficient table')
     for name,artifact in meta['artifacts'].items():
@@ -61,7 +67,19 @@ def run(out,stem,model,tokens_file,token_key,collect):
     embedding_reference=embedding_table[tokens].copy()
     _,stem_reference=p.norm.oracle(np.zeros_like(embedding_reference),embedding_reference,embedding_gamma,np.zeros(1024,np.float32))
     refs=cr.references(stem_reference,parameters,spec,tables,mask_values,valid,initial_residual=embedding_reference)
-    pl=meta['plan']; off=pl['offsets']; sizes=pl['sizes']; count=len(spec)
+    pl=meta['plan']; head=None; head_values=None; head_meta=None
+    if head_folder is not None:
+        import head_pre as head
+        if not vector_image: raise ValueError('head prelude needs the vector image')
+        head_folder=head_folder.resolve(); head_meta=json.loads((head_folder/'build.json').read_text())
+        if head_meta['sources']!=head.sources() or head_meta['vector_build_sha256']!=p.attention.sha(stem/'build.json') or head_meta['chain_build_sha256']!=p.attention.sha(out/'build.json'): raise ValueError('stale head prelude')
+        if head_meta['cdo']!=sm['cdo'] or head_meta['audits']!=sm['audits']: raise ValueError('head prelude image differs')
+        for file,key in [('final.xclbin','xclbin'),('insts.bin','instructions')]:
+            if p.attention.sha(head_folder/file)!=head_meta[key]: raise ValueError('changed head artifact')
+        pl=head_meta['plan']; head_values,head_hashes=head.parameters(model)
+        if token_key+'_qtype' not in fixtures: raise ValueError('missing qtype')
+        qtype=int(fixtures[token_key+'_qtype'])
+    off=pl['offsets']; sizes=pl['sizes']; count=len(spec)
     sys.path.insert(0,str(p.ROOT/'tools')); from laya_hybrid import idle
     if not idle(): raise RuntimeError('foreign context')
     sys.path.insert(0,'C:/Xilinx/XRT/xrt_sdk/xrt/python'); import pyxrt as xrt
@@ -90,6 +108,10 @@ def run(out,stem,model,tokens_file,token_key,collect):
         stem_data,stem_relocations=relocate_output(stem_data,sm['target'],off['mlp_norm'],pl['words'])
         ib=xrt.bo(dev,len(stem_data),xrt.bo.cacheable,states['mlp']['kernel'].group_id(1)); ib.write(stem_data,0); ib.sync(sync.XCL_BO_SYNC_BO_TO_DEVICE)
         states['mlp']['instructions']['stem']=(ib,len(stem_data))
+        if head is not None:
+            head_data=head.prepare((head_folder/'insts.bin').read_bytes(),pl,qtype)
+            ib=xrt.bo(dev,len(head_data),xrt.bo.cacheable,states['mlp']['kernel'].group_id(1)); ib.write(head_data,0); ib.sync(sync.XCL_BO_SYNC_BO_TO_DEVICE)
+            states['mlp']['instructions']['head_pre']=(ib,len(head_data))
         del xb,ctx,kernel,ib
         arena=xrt.bo(dev,pl['words']*4,xrt.bo.host_only,groups[0]); av=np.frombuffer(arena.map(),np.uint32)
         embedding_bo=xrt.bo(dev,s.INPUT_WORDS*4,xrt.bo.host_only,states['mlp']['kernel'].group_id(3)); embedding_view=np.frombuffer(embedding_bo.map(),np.uint32)
@@ -99,12 +121,15 @@ def run(out,stem,model,tokens_file,token_key,collect):
           key=token_key,valid=valid,tokens_file_sha256=p.attention.sha(tokens_file),tokens_sha256=hashlib.sha256(tokens.tobytes()).hexdigest(),prepared=prepared,stem_output_relocations=stem_relocations,
           allocation_group=groups[0],argument_groups=groups,contexts_created=2,
           interstage_host_reads=0,interstage_host_writes=0,interstage_host_syncs=0,
-          host_work='token-address DMA scheduling, no embedding activation gather',scope='real token embeddings and encoder; type/head/decisions absent; correctness only')),flush=True)
+          head_build=head_meta,head_weights=head_hashes if head is not None else None,qtype=qtype if head is not None else None,
+          host_work='token/type-address DMA scheduling, no embedding activation gather',scope='real embeddings and encoder; optional first head prelude; full decisions absent; correctness only')),flush=True)
         prefixes=sorted({0,1,2,count})
+        if head is not None: prefixes.append(count+1)
         for prefix in prefixes:
             previous=None
             for fill in (0x7fc12345,0x7fc54321):
                 data=np.full(pl['words'],fill,np.uint32); cr.initialize_constants(data,pl,parameters,tables,fill)
+                if head is not None: head.initialize(data,pl,head_values,fill)
                 av[:]=data; arena.sync(sync.XCL_BO_SYNC_BO_TO_DEVICE)
                 embedding_packet=sr.constant_packet(embedding_table,embedding_gamma,fill)
                 embedding_view[:]=embedding_packet; embedding_bo.sync(sync.XCL_BO_SYNC_BO_TO_DEVICE)
@@ -120,13 +145,23 @@ def run(out,stem,model,tokens_file,token_key,collect):
                     failed=True; hrun=states[family]['kernel'](3,ib,nb,arena,arena)
                     if hrun.wait(15000)!=xrt.ert_cmd_state.ERT_CMD_STATE_COMPLETED: raise RuntimeError('chain dispatch failed; no retry')
                     failed=False; hrun=None
+                if prefix>count:
+                    ib,nb=states['mlp']['instructions']['head_pre']
+                    failed=True; hrun=states['mlp']['kernel'](3,ib,nb,arena,arena)
+                    if hrun.wait(15000)!=xrt.ert_cmd_state.ERT_CMD_STATE_COMPLETED: raise RuntimeError('head prelude dispatch failed; no retry')
+                    failed=False; hrun=None
                 arena.sync(sync.XCL_BO_SYNC_BO_FROM_DEVICE); observed=av.copy()
                 final=observed[off['mlp_norm']:off['mlp_norm']+sizes['mlp_norm']].reshape(512,p.OUT)
                 if not np.all(final[:,1024:1040]==b.r.mlp.POISON) or not np.all(final[:,2064:]==b.r.mlp.POISON): raise ValueError('final norm guards')
                 y=final[:,:1024].copy().view(np.float32); residual=final[:,1040:2064].copy().view(np.float32)
                 if previous is not None and not np.array_equal(final,previous): raise ValueError('chain poison dependence')
                 previous=final.copy()
-                if prefix:
+                if prefix>count:
+                    verdicts=head.verify(observed,pl,head_values,qtype,snapshots[count])
+                    composed_r,composed_y=p.norm.oracle(refs[-1][1],np.broadcast_to(head_values[0][qtype],refs[-1][1].shape),head_values[1],head_values[2])
+                    verdicts['chain_y']=p.attention.numeric(y,composed_y)
+                    verdicts['chain_residual']=p.attention.numeric(residual,composed_r)
+                elif prefix:
                     norm_input=observed[off['norm']:off['norm']+sizes['norm']].reshape(512,p.OUT)
                     wo=norm_input[:,:1040].reshape(512,16,65)[:,:,:64].copy().view(np.float32).reshape(512,1024)
                     prior=norm_input[:,1040:2064].copy().view(np.float32)
@@ -152,21 +187,23 @@ def run(out,stem,model,tokens_file,token_key,collect):
                     verdicts['handoff_qkv']=b.numeric(projected,independent,.0002,.0002,.00001)
                 mutable=np.zeros(pl['words'],bool)
                 fields=('projection','queries','keys','kv','attention','packed_attention','norm','packed_norm','mlp_wi','mlp_geglu','mlp_norm') if prefix else ('mlp_norm',)
+                if prefix>count: fields=fields+('norm_input',)
                 for field in fields:
                     start=off[field]; mutable[start:start+sizes[field]]=True
                 if not np.array_equal(observed[~mutable],data[~mutable]): raise ValueError('constant, input or arena border overwritten')
                 embedding_bo.sync(sync.XCL_BO_SYNC_BO_FROM_DEVICE)
                 if not np.array_equal(embedding_view,embedding_packet): raise ValueError('embedding constants modified')
                 if not all(v['ok'] for k,v in verdicts.items() if k not in ('chain_y','chain_residual','retained_mlp_strict')): raise ValueError('direct operator/handoff gate')
-                print('EMBEDDED_CHECK '+json.dumps(dict(prefix=prefix,fill=fill,dispatches=prefix*2+1,verdicts=verdicts)),flush=True)
-                if prefix and not verdicts['retained_mlp_strict']['ok']: strict_failures.append(dict(prefix=prefix,fill=fill,**verdicts['retained_mlp_strict']))
+                print('EMBEDDED_CHECK '+json.dumps(dict(prefix=prefix,fill=fill,dispatches=min(prefix,count)*2+1+int(prefix>count),verdicts=verdicts)),flush=True)
+                if 0<prefix<=count and not verdicts['retained_mlp_strict']['ok']: strict_failures.append(dict(prefix=prefix,fill=fill,**verdicts['retained_mlp_strict']))
                 if not verdicts['chain_y']['ok'] or not verdicts['chain_residual']['ok']:
                     failures.append(dict(prefix=prefix,fill=fill,verdicts=verdicts))
                     if not collect: raise ValueError('composed encoder-prefix gate')
                 snapshots[prefix]=y.copy(); checks+=1
         print('EMBEDDED_RESULT '+json.dumps(dict(checks=checks,layers=count,prefixes=prefixes,composition_failures=failures,strict_mlp_failures=strict_failures,
           contexts_created=2,interstage_host_reads=0,interstage_host_writes=0,interstage_host_syncs=0,
-          scope='embedding and encoder on real tokens; type/head/decisions and eligible performance unverified')),flush=True)
+          scope='embedding and encoder on real tokens; first head type/norm/QKV included' if head is not None else 'embedding and encoder on real tokens; type/head absent',
+          remaining='complete heads, both decisions, frozen accuracy and eligible performance unverified')),flush=True)
         if failures or strict_failures: raise ValueError('retained prefix gates failed; thresholds unchanged')
     finally:
         if failed: globals()['_quarantined']=(dev,states,arena,av,embedding_bo,embedding_view,hrun)
@@ -182,5 +219,6 @@ def run(out,stem,model,tokens_file,token_key,collect):
 if __name__=='__main__':
     ap=argparse.ArgumentParser(); ap.add_argument('--out',type=Path,required=True); ap.add_argument('--stem',type=Path,required=True)
     ap.add_argument('--model',type=Path,required=True); ap.add_argument('--tokens',type=Path,required=True); ap.add_argument('--key',default='fixture')
+    ap.add_argument('--head-pre',type=Path)
     ap.add_argument('--collect-composition-failures',action='store_true'); args=ap.parse_args()
-    run(args.out,args.stem,args.model,args.tokens,args.key,args.collect_composition_failures)
+    run(args.out,args.stem,args.model,args.tokens,args.key,args.collect_composition_failures,args.head_pre)

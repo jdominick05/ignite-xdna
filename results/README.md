@@ -344,3 +344,11 @@ Backs [token embeddings through the encoder](../docs/BENCHMARKS.md#laya-token-em
 - Corrected embedding/norm: [edge-ID and row-order probe](laya/stem_v3_probe_desktop2_20261016.log), [512-token suite](laya/stem_v4_full_desktop2_20261016.log).
 - Integration: [pre-device fixture-key error](laya/embedded_v1_fixture_encoder_desktop2_20261016.log), [frozen fixture tokens](laya/embedded_v2_fixture_encoder_desktop2_20261016.log), [first labelled-item tokens](laya/embedded_v3_labelled_encoder_desktop2_20261016.log). Embedding and the full encoder execute; composed and strict MLP failures remain.
 - [Validation](laya/stem_validation_desktop2_20261016.log): offline/syntax/import checks, frozen input provenance, mask-oracle identity and numerical summaries.
+
+## Laya first head prelude
+
+Backs [device type embedding, norm and biased QKV](../docs/BENCHMARKS.md#laya-first-head-prelude-device-type-embedding-norm-and-biased-qkv-2026-10-16-desktop-2).
+
+- Vector operators: [initial qualification](laya/vector_v2_operators_desktop2_20261016.log), [repeat with strict GELU gates](laya/vector_v3_strict_operators_desktop2_20261016.log); the repeat supersedes the initial GELU tolerance.
+- Complete encoder into the first head prelude: [fixture](laya/head_pre_v2_fixture_desktop2_20261016.log), [first labelled item](laya/head_pre_v3_labelled_desktop2_20261016.log). Direct operators pass; composition and strict MLP failures remain nonzero exits.
+- [Validation](laya/vector_head_validation_desktop2_20261016.log): offline/syntax/import/shell checks, linked code/stack audits, runtime compatibility and numerical summaries.

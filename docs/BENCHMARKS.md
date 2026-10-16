@@ -18366,3 +18366,64 @@ bound 4,480 within 4,608; SRAM/helper audits pass. All device runs release idle 
 their processes remain alive. All runs are checks-only and include CPU reference work
 and extensive verification, so their wrapper durations establish no inference latency
 or speedup. Complete-model coverage, frozen decisions and eligible performance remain open.
+
+## Laya first head prelude: device type embedding, norm and biased QKV (2026-10-16, Desktop 2)
+
+The [fixture run](../results/laya/head_pre_v2_fixture_desktop2_20261016.log) and
+[first labelled-item run](../results/laya/head_pre_v3_labelled_desktop2_20261016.log)
+extend real-token inference through the first head's QKV projection. After the entire
+encoder, device code combines its normalized output with the resident type embedding,
+applies the head's learned LayerNorm gamma and beta, packs the result, computes QKV and
+adds its original FP32 bias. The host selects constant-table DMA addresses from qtype;
+it supplies no floating activation for this handoff. All constants and instructions are
+resident before the first dispatch. Each complete prelude run uses 58 serial dispatches,
+two resident contexts and zero interstage host activation reads, writes or syncs.
+
+The new vector/MLP image removes its unreachable attention branch; the attention image
+continues to execute attention. Linked executable code occupies 14,624 bytes per core.
+The conservative stack bound is 5,184 bytes within a 5,376-byte reservation. Physical
+output buffers move with the larger stack. Compatibility therefore uses independently
+compiled, byte-identical original stem and encoder instruction streams, unchanged RTP
+addresses, and identical executable/initialization payloads across the **new** stem,
+encoder and head layouts. It does not claim old and new physical buffer allocations
+match. The new image is loaded into its own fresh context. All linked cores pass the
+SRAM, helper and stack audits in the [validation record](../results/laya/vector_head_validation_desktop2_20261016.log).
+
+The [initial operator suite](../results/laya/vector_v2_operators_desktop2_20261016.log)
+passes 42 comparisons. Its GELU tolerance is superseded by the
+[strict repeat](../results/laya/vector_v3_strict_operators_desktop2_20261016.log), which
+also passes 42: seven commands, three seeds and two buffer poisons. Bias/ReLU packing,
+plain and tiled biased FP32 outputs, type-seed formatting, residual sum and norm packing
+match the independent expected bits. GELU compares its BF16 output with independently
+rounded erf-GELU using absolute 0.000002, relative 0.0078125 and relative-L2 0.004 gates;
+it is not bit-exact. Guards, unowned output words, read-only inputs and poison independence
+pass. These synthetic inputs do not establish complete head accuracy.
+
+Both integrated inputs retain their frozen token IDs, padding and qtype zero. Prefixes
+stop after the stem, encoder layers one, two and 28, and the new head prelude, each with
+both poisons. The separate encoder-prefix observation is an oracle only; it never feeds
+the later device run. Type-seed X matches those encoder output bits, the selected type
+row matches exactly, head norm retains exact residual-add bits, packed head input matches
+BF16 rounding, and the biased QKV passes the original direct linear tolerances. Maximum
+direct norm absolute errors are 2.3956211592235377e-06 (fixture) and
+3.1703985552411496e-06 (labelled item); maximum biased-QKV absolute error is
+1.71661376953125e-05 on both.
+
+**Composition still fails.** The original encoder and strict MLP failures remain
+explicit nonzero exits. The head norm also fails the composed pointwise comparison
+against the independent encoder reference:
+
+| Input | Head normalized relative L2 | Bad normalized elements | Head residual relative L2 | Bad residual elements |
+|---|---:|---:|---:|---:|
+| Fixture, valid keys 91 | 0.016681330971853172 | 7,841 | 0.015403006225824356 | 21,316 |
+| AG News, valid keys 83 | 0.02479055972651689 | 20,778 | 0.023254385218024254 | 40,023 |
+
+The [validation](../results/laya/vector_head_validation_desktop2_20261016.log) passes
+90 offline tests and the full legacy syntax/import/shell gates. New tests cover every
+head output word, in-place projection ownership, constant-only type address patches,
+invalid types, activation packing and dispatch-family output suppression. Both device
+processes release idle while still alive; no foreign device owner is observed. All
+runs are checks-only and their durations include CPU references and extensive checking.
+The remaining two head attention/MLP blocks, scorer and action tail still prevent
+complete model outputs. Frozen decision accuracy and eligible whole-model speed remain
+unmeasured; this checkpoint establishes neither a speedup nor complete-model correctness.
