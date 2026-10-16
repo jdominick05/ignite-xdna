@@ -3550,3 +3550,25 @@ and extra packing-output bit-equivalence requirement remain unchanged. Disclose
 the observed partial outcomes; this is still known-set revalidation. The new
 protocol is committed before starting the new attempt. No timing claim or
 serving adoption follows from starting it.
+
+## Laya smaller-query stage attribution protocol (2026-10-16, Desktop 2)
+
+The [stage-profile registration](../results/laya/small_lookup_profile_v1_prereg_desktop2_20261016.json)
+pins the complete smaller-query/packing configuration and a separate diagnostic
+runner. After the current accuracy score releases the device, use fresh
+serialized sessions and bracket profiled requests with unprofiled requests in
+each session. Preserve all individual request totals and stage observations.
+The runner uses the existing serving profile flag and adds no neural operations
+or activation readbacks. Require complete dispatch-name coverage, including both
+head-attention invocations, finite durations, exact repeat outputs, the existing
+CPU neural/oracle guards, unchanged registered files and idle after every close.
+
+These stage durations surround submission and completed wait on the host. They
+include scheduling, driver and DMA work; they are not arithmetic-only time or
+core-cycle measurements. The diagnostic chooses the next bottleneck to investigate
+and cannot establish a new model speedup or replace full frozen qualification.
+[Offline attribution/privacy checks](../results/laya/small_lookup_profile_v1_validation_desktop2_20261016.log)
+and [legacy validation](../results/laya/small_lookup_profile_v1_legacy_validation_desktop2_20261016.log) pass;
+[registration record](../results/laya/small_lookup_profile_v1_registration_desktop2_20261016.log).
+The protocol is prepared while the accuracy scorer runs, with its registered
+sources and artifacts unchanged; the profiling device run must wait.
