@@ -18104,3 +18104,45 @@ copies an existing frozen FP32 logits archive without modifying its source workt
 Its hash matches the preregistration, as do the current original model and external
 weight file hashes. No inference was run for either restoration. These recovered inputs
 enable the eventual decision/calibration comparison; they do not validate native Laya.
+
+## Laya complete encoder-block handoff: operators pass, composition fails (2026-10-16, Desktop 2)
+
+The [collected smoke](../results/laya/block_v5_collected_smoke_desktop2_20261016.log)
+connects attention, output projection, residual/norm, Wi, GeGLU, Wo and the following
+residual/norm across two resident native programs. Both dispatches share one arena BO;
+all input/weight uploads precede the first dispatch, and the first activation read follows
+the second completion. There are no interstage host reads, writes or syncs. Preserve the
+full allocation group ID and check compatible bank bits for both kernel arguments.
+
+The MLP consumes the attention program's packed normalized output directly. Its Wo
+scatters into the now-dead normalized-Y region while preserving the FP32 residual
+alongside it. The next norm consumes that pair. This qualifies a device handoff on
+synthetic activations, not inference on a real token sequence or the complete model.
+
+Four comparisons cover random synthetic weights and the first actual encoder block's
+weights, each with two initial buffer poisons. Every per-operator gate passes; direct
+residual additions are bit-exact and final outputs agree across poisons. The independent
+composed reference still fails for both synthetic-weight comparisons: normalized output
+has 14 bad pointwise elements, maximum absolute error 0.017136947254509205 and relative
+L2 0.0020829767533175124; the carried residual has 1,589 bad pointwise elements. Both
+actual-weight comparisons pass this composed gate on their synthetic activation input.
+The stricter retained MLP comparison fails all four comparisons. No tolerances changed,
+and the runner exits nonzero after collecting those failures. Small relative L2 does not
+turn a failed pointwise gate into a pass.
+
+The [earlier attempt](../results/laya/block_v3_smoke_desktop2_20261016.log) reaches both
+dispatches and detects the same numerical failure, then crashes during PyXRT teardown.
+Release instruction BOs and kernels before their contexts, then xclbins and device.
+The [next attempt](../results/laya/block_v4_collected_smoke_desktop2_20261016.log) proves
+clean teardown but exposes a harness guard error: the untouched norm-input tail should
+retain its initial fill, rather than the output poison. The collected smoke fixes that
+expectation and reports device idle while its process is alive. Both failed logs remain.
+
+The [validation record](../results/laya/block_validation_desktop2_20261016.log) passes
+54 offline tests plus the full legacy syntax/import/shell gate. Independent tests cover
+all output bytes, residual preservation and every transferred operand byte. Linked
+programs occupy 16,192 bytes per attention core and 15,152 per MLP core; stack, helper
+and SRAM audits pass. The shared arena occupies 80,078,208 bytes. These are checks-only
+runs: dispatch durations in their logs are not eligible speed evidence. Numerical
+composition, remaining layers, embeddings, head, frozen decision accuracy and complete
+model performance remain open.

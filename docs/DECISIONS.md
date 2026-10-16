@@ -2515,3 +2515,13 @@ format command is a correctness implementation with an open traffic cost. See
 Restore missing evaluation items against the existing full-file and per-task hashes,
 using the recorded dataset revisions. Keep the frozen reference logits and C0-C5
 criteria; do not replace them with a new CPU run or a smaller evaluation slice.
+
+## Laya cross-program handoff and lifetime (2026-10-16)
+
+Two resident native programs may share an activation arena with serialized dispatches.
+Pass BO objects, retain full allocation group IDs and verify bank connectivity. Consume
+packed normalized input before overwriting its FP32 source; preserve the residual region
+for the next norm. Release instruction BOs and kernels before hardware contexts during
+PyXRT teardown. The first complete-block experiment passes individual operator checks
+but fails retained pointwise composition gates; it establishes neither full-model accuracy
+nor speed. See the [measurement and failed attempts](BENCHMARKS.md#laya-complete-encoder-block-handoff-operators-pass-composition-fails-2026-10-16-desktop-2).

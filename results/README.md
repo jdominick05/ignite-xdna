@@ -307,3 +307,12 @@ performance result: [method and qualification](../docs/BENCHMARKS.md#laya-fused-
 - [Expanded qualification](laya/attention_norm_v3_all_suite_desktop2_20261016.log): all mask layouts, first actual projection weights/affine set on synthetic activations; fixed gates pass.
 - [Validation](laya/attention_norm_validation_desktop2_20261016.log): syntax/import/shell checks, offline tests, default object identity, ELF/stack/SRAM audits and numerical summary.
 - Frozen evaluation recovery, without inference: [identical item hashes from pinned dataset revisions](laya/eval_items_restore_desktop2_20261016.log), [identical reference logits and original model hashes](laya/eval_reference_restore_desktop2_20261016.log).
+
+## Laya complete encoder-block handoff
+
+Backs [complete-block coverage and numerical failures](../docs/BENCHMARKS.md#laya-complete-encoder-block-handoff-operators-pass-composition-fails-2026-10-16-desktop-2).
+
+- [First composed check and teardown crash](laya/block_v3_smoke_desktop2_20261016.log).
+- [Clean teardown, incorrect untouched-tail expectation](laya/block_v4_collected_smoke_desktop2_20261016.log).
+- [Collected smoke](laya/block_v5_collected_smoke_desktop2_20261016.log): operator gates pass; synthetic composition and retained strict MLP gates fail.
+- [Validation](laya/block_validation_desktop2_20261016.log): offline tests, syntax/import/shell checks, program footprints and scope.
