@@ -2553,3 +2553,17 @@ and head, and accumulated error fails the composed gates. The first runner omitt
 strict MLP report; the repeat restores that comparison and preserves its failures. Keep
 the frozen full-model decision criteria and perform that evaluation before any accuracy
 claim. See [execution, tests and numerical failures](BENCHMARKS.md#laya-encoder-trunk-28-layer-execution-composed-accuracy-fails-2026-10-16-desktop-2).
+
+## Laya embedding ingress and expanded dispatch family (2026-10-16)
+
+Schedule token-indexed addresses on the host while the NPU copies resident embedding
+values and performs normalization. Disclose that control-plane work. Keep CPU reference
+gathers and mask oracles separate from device inputs; preserve the original embedding
+bits for residual carry. Bound final-row reads with explicit padding and prove every
+output row and descriptor reuse before connecting the encoder.
+
+When extending the norm command family, extend its generic-output suppression guard
+too. The first stem emitted an extra GEMM packet despite a completed dispatch. Guard,
+row-order and exact-bit tests catch this; completion alone does not establish semantics.
+Real-input encoder execution still fails composed and strict MLP gates. See
+[evidence and remaining scope](BENCHMARKS.md#laya-token-embeddings-through-the-encoder-real-inputs-accuracy-still-fails-2026-10-16-desktop-2).

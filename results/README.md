@@ -335,3 +335,12 @@ Backs [28-layer execution and retained accuracy failures](../docs/BENCHMARKS.md#
 - Complete trunk on synthetic input: [valid length 193](laya/chain_v4_28_layers_desktop2_20261016.log), [valid length 512](laya/chain_v4_28_layers_valid512_desktop2_20261016.log); execution completes, composition fails. These initial logs omit the strict MLP comparison.
 - [Retained-gate repeat](laya/chain_v5_28_retained_gates_desktop2_20261016.log): explicit Wi/GeGLU and strict MLP checks, unchanged thresholds; composition/strict failures remain.
 - [Validation](laya/chain_validation_desktop2_20261016.log): offline tests, syntax/import/shell gates, default artifact identity and numerical summaries.
+
+## Laya embedding and real-input encoder
+
+Backs [token embeddings through the encoder](../docs/BENCHMARKS.md#laya-token-embeddings-through-the-encoder-real-inputs-accuracy-still-fails-2026-10-16-desktop-2).
+
+- Stem extra-output failure: [initial probe](laya/stem_v2_probe_desktop2_20261016.log), [diagnostic](laya/stem_v2_diagnostic_desktop2_20261016.log).
+- Corrected embedding/norm: [edge-ID and row-order probe](laya/stem_v3_probe_desktop2_20261016.log), [512-token suite](laya/stem_v4_full_desktop2_20261016.log).
+- Integration: [pre-device fixture-key error](laya/embedded_v1_fixture_encoder_desktop2_20261016.log), [frozen fixture tokens](laya/embedded_v2_fixture_encoder_desktop2_20261016.log), [first labelled-item tokens](laya/embedded_v3_labelled_encoder_desktop2_20261016.log). Embedding and the full encoder execute; composed and strict MLP failures remain.
+- [Validation](laya/stem_validation_desktop2_20261016.log): offline/syntax/import checks, frozen input provenance, mask-oracle identity and numerical summaries.

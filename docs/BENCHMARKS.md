@@ -18292,3 +18292,77 @@ All measurements here are checks-only. Wrapper durations include CPU oracles, tr
 and extensive buffer verification; they establish neither trunk inference latency nor
 end-to-end speed. Accuracy accumulation remains unresolved. Embedding/head coverage,
 real-input frozen decision evaluation and eligible complete-model performance remain open.
+
+## Laya token embeddings through the encoder: real inputs, accuracy still fails (2026-10-16, Desktop 2)
+
+The embedding stage keeps the original FP32 embedding table and norm affine in a
+resident input BO. The host schedules Shim DMA addresses from token IDs; it performs
+no floating embedding gather to supply device activations. NPU code copies each selected
+row into the guarded norm packet and normalizes it on device. Integer address scheduling
+is host work and is part of the method. CPU gathers and mask extraction in this harness
+are independent references, never activation or mask inputs to the device.
+
+The copy preserves the embedding as the following encoder residual. A separate stem-norm
+command restores its original bits after normalization, including signed zero; the
+ordinary MLP residual-add/norm command keeps its previous semantics. Reads at the last
+vocabulary row use explicit padding after the table. Four distinct query descriptors
+are reused only after their group completes. Token IDs, packet bounds and destination
+rows are checked before instruction preparation.
+
+The [first probe](../results/laya/stem_v2_probe_desktop2_20261016.log) and
+[diagnostic repeat](../results/laya/stem_v2_diagnostic_desktop2_20261016.log) fail output
+guards. The new commands entered the norm family but still satisfied the old generic
+GEMM-finish guard, emitting an extra packet. Extend the complement guard to the complete
+norm family. The [corrected probe](../results/laya/stem_v3_probe_desktop2_20261016.log)
+passes eight comparisons across edge IDs, reversed order, repeated final-row IDs and
+fixture tokens, with two buffer poisons. The [full-length suite](../results/laya/stem_v4_full_desktop2_20261016.log)
+passes six comparisons over 512-token fixture, sequential and repeated-ID cases. Norm
+maximum absolute error is 1.427653117502814e-06, with the original norm tolerances
+unchanged; selected residual bits, guards, poison independence and the entire resident
+constant BO pass their checks.
+
+The [first integrated attempt](../results/laya/embedded_v1_fixture_encoder_desktop2_20261016.log)
+fails a fixture-key variable collision before opening a device context. The
+[fixture run](../results/laya/embedded_v2_fixture_encoder_desktop2_20261016.log) and
+[first labelled-item run](../results/laya/embedded_v3_labelled_encoder_desktop2_20261016.log)
+then execute the embedding/norm stage directly into the complete encoder. The stem's
+output uses the existing residual/Y arena slot. The initial QKV reads its on-device
+packed Y; unused host-input activation slots remain poisoned. Stem output addresses
+and layer-zero constant reads are relocated through decoded DDR_PATCH fields.
+
+The expanded MLP image supports the original MLP commands as well as the stem. Its
+physical FIFO/control layout and initialization connectivity match the prior MLP image,
+so two serialized contexts serve the whole path. Every embedding-plus-encoder run uses
+57 dispatches with zero interstage host activation reads, writes or syncs. Constants,
+arena borders and unused original input/residual regions remain unchanged. Independent
+first- and second-QKV checks use separately observed prefix outputs only as oracles.
+
+Input provenance is checked against the frozen item file and its existing hash. Item
+zero is the fixture with 91 valid tokens; item three is the first labelled AG News item
+with 83 valid tokens. The same padding token and original token IDs are used. Each run
+inspects stem-only and one-, two- and 28-layer prefixes under both poisons. Direct stem,
+Wi, GeGLU, Wo, final norm/residual-bit and QKV handoff checks pass. Composed accuracy
+still fails against the independent quantized-product reference:
+
+| Item | Valid keys | Full-encoder normalized relative L2 | Bad normalized elements | Residual relative L2 | Bad residual elements |
+|---|---:|---:|---:|---:|---:|
+| Fixture, index 0 | 91 | 0.020210834331721016 | 31,777 | 0.03781760111451149 | 165,220 |
+| AG News, index 3 | 83 | 0.032432899840085 | 55,843 | 0.028616247698664665 | 217,729 |
+
+For each item, both full-encoder normalized comparisons fail; residual composition and
+the retained strict MLP comparison fail all six non-stem comparisons. These failures
+remain nonzero exits with unchanged thresholds. They are encoder comparisons, not
+classification accuracy measurements or the frozen full-model logits/decision evaluation.
+The type embedding, two head layers, scorer and action/decision tail remain absent.
+
+The [validation](../results/laya/stem_validation_desktop2_20261016.log) passes 80 offline
+tests and the full legacy syntax/import/shell gates. New tests cover every stem output
+word, descriptor reuse, interleaved token-address ordering, constant-only and output-only
+instruction edits, bad token vectors and the extra-output regression. The arbitrary-length
+mask oracle matches all eight existing reference layouts; device masks still come from
+RTP controls. Factoring the original chain initializer preserves its complete buffer
+bytes. The expanded MLP/stem image occupies 16,016 bytes per core, conservative stack
+bound 4,480 within 4,608; SRAM/helper audits pass. All device runs release idle while
+their processes remain alive. All runs are checks-only and include CPU reference work
+and extensive verification, so their wrapper durations establish no inference latency
+or speedup. Complete-model coverage, frozen decisions and eligible performance remain open.

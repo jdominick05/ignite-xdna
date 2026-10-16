@@ -11,8 +11,8 @@ import chain as c
 b=c.b; p=b.p
 
 
-def references(initial,parameters,spec,tables,masks,valid):
-    y=initial; residual=initial; result=[]
+def references(initial,parameters,spec,tables,masks,valid,initial_residual=None):
+    y=initial; residual=initial if initial_residual is None else initial_residual; result=[]
     for entry,values in zip(spec,parameters):
         qkv,out,wi,wo=values['weights']; (g0,b0),(g1,b1)=values['affine']
         projected=p.attention.rounded(y).astype(np.float64)@qkv.astype(np.float64)
@@ -34,6 +34,10 @@ def initialize(data,pl,initial,parameters,tables,spec,fill):
     data[off['input']:off['input']+sizes['input']]=p.gemm_packet(p.attention.rounded(initial),parameters[0]['weights'][0],fill)
     norm=data[off['norm_input']:off['norm_input']+sizes['norm_input']].reshape(512,p.OUT)
     norm[:,1040:2064]=initial.copy().view(np.uint32)
+    initialize_constants(data,pl,parameters,tables,fill)
+
+
+def initialize_constants(data,pl,parameters,tables,fill):
     for index,values in enumerate(parameters):
         bank=pl['banks'][index]
         for key,weight in zip(('qkv','projection','wi','wo'),values['weights']):
