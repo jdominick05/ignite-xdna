@@ -377,3 +377,11 @@ Backs [complete serving and paired timing](../docs/BENCHMARKS.md#laya-resident-s
 - [Serving qualification](laya/native_serving_v1_probe_desktop2_20261016.log): three unlabelled fixtures, repeated requests, partial/full output readback and CPU neural/oracle calls forbidden.
 - [Same-sitting CPU/NPU timing](laya/native_serving_v2_same_sitting_desktop2_20261016.log): complete outputs, stage profile, eligible negative speed result; frozen labelled accuracy remains open.
 - [Serving validation](laya/native_serving_validation_desktop2_20261016.log): 128 offline checks, legacy syntax/import/shell gate and existing artifact/operator audits.
+
+## Laya shorter encoder MLP schedules
+
+Backs [exact outputs and paired speed improvement](../docs/BENCHMARKS.md#laya-shorter-encoder-mlp-schedules-exact-outputs-modest-speedup-2026-10-16-desktop-2).
+
+- Build history: [relative-path failure](laya/bucket_mlp_v1_build_desktop2_20261016.log), [audit serialization mismatch](laya/bucket_mlp_v2_build_desktop2_20261016.log), [all four layouts pass core/init identity](laya/bucket_mlp_v3_build_desktop2_20261016.log).
+- [Device qualification and paired timing](laya/bucket_mlp_v1_same_sitting_desktop2_20261016.log): exact final outputs across fixtures/boundaries, same-session baseline versus short MLP, CPU neural/oracle calls forbidden.
+- [Validation](laya/bucket_mlp_validation_desktop2_20261016.log): 133 offline checks, syntax/import/shell gate and existing artifact/operator audits.

@@ -18632,3 +18632,49 @@ absent. Native-arm preregistration and the complete frozen labelled decision/cal
 gates remain open. No labelled native class scores were produced by these experiments;
 three unlabelled fixtures cannot establish model accuracy. Earlier intermediate
 composition and strict MLP failures remain retained in the preceding sections.
+
+## Laya shorter encoder MLP schedules: exact outputs, modest speedup (2026-10-16, Desktop 2)
+
+`bucket_mlp.py` selects an encoder MLP row bucket of 128, 256, 384 or 512 using the
+actual input length. Weight banks, feature strides, arithmetic and resident vector
+image remain unchanged. Only active row prefixes are written. Attention, embeddings
+and heads still use the preceding fixed 512-token schedule. This is an experimental
+complete-model runner, not an engine compiler feature or a general model API.
+
+The [successful build](../results/laya/bucket_mlp_v3_build_desktop2_20261016.log)
+independently checks all four layouts against the resident vector ELF/initialization
+identity. The first two build attempts remain recorded: an
+[unresolved relative subprocess path](../results/laya/bucket_mlp_v1_build_desktop2_20261016.log)
+and an [audit tuple/list serialization mismatch](../results/laya/bucket_mlp_v2_build_desktop2_20261016.log).
+Neither attempt ran the NPU; the corrections resolve output paths before subprocesses
+and normalize audit serialization before comparison, without relaxing identity checks.
+
+[Device qualification and paired timing](../results/laya/bucket_mlp_v1_same_sitting_desktop2_20261016.log)
+alternate baseline and shortened complete-model calls in the same three contexts, with
+resident constants and no arena reset. All 25 comparisons are bit-exact for both final
+outputs: the three unlabelled fixtures and synthetic inputs spanning lengths 1–512,
+including both sides of tile/bucket boundaries and repeated large-to-small transitions.
+CPU neural/oracle functions are forbidden throughout session initialization and calls;
+zero calls occur. This establishes tested schedule equivalence to the native baseline,
+not frozen labelled accuracy or equivalence for every possible input.
+
+| Complete-model path, 91-token fixture | Median ms | Min–max ms |
+|---|---:|---:|
+| Original fixed 512-token schedule | 2568.4374 | 2561.0245–2570.1286 |
+| Shorter encoder MLP schedule | 1600.0193 | 1597.4431–1610.0899 |
+
+Five paired measured calls per configuration alternate order after qualification has
+warmed both paths. Setup is excluded; input preparation and final output readback remain
+inside each measured call. The complete-model speedup is 1.6053 times. A separate
+instrumented shortened frame spends 399.5067 ms in encoder MLP stages and 1206.5799 ms
+in all other stages, including driver waits/context transitions. The wrapper records
+exit 0, timing eligibility, no observed foreign contention and no contexts after close.
+An offline validation process ran during earlier boundary qualification and had exited
+before the paired timed calls. This is a same-session NPU comparison; the CPU timing in
+the preceding section was not repeated in this run.
+
+[Validation](../results/laya/bucket_mlp_validation_desktop2_20261016.log) passes 133
+offline tests, the legacy syntax/import/shell gate and existing artifact/operator audits.
+This improves the preceding serving baseline but remains slow. Shorter attention and
+head schedules, native-arm preregistration, and the frozen full-set decision/calibration
+gates remain open. No native labelled class scores were produced.
