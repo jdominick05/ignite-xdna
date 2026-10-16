@@ -3279,3 +3279,19 @@ length, effective mode/width or completion column and must fail. Capture-hook te
 require authoritative completion before marking an intentional diagnostic stop
 healthy; an incomplete wait retains the failed/in-flight state. These tests check
 host control semantics, not simulated hardware inference.
+
+## Laya window versus packing comparison protocol (2026-10-16, Desktop 2)
+
+The [comparison registration](../results/laya/window_compare_v1_prereg_desktop2_20261016.json)
+pins 271 source/artifact/reference identities after the complete-model fixture and
+boundary gate and before timing. Its SHA256 is
+`43646e5a0afb7da9b147cf7b7cf1a3f2c5693d47c0be46b55cd09ef150589c75`;
+the [registration log](../results/laya/window_compare_v1_registration_desktop2_20261016.log)
+retains the canonical identity. Arms are qualified packing and packing with window
+MLP, on the same length-91 request at M128. Three rounds rotate packing/window,
+window/packing and packing/window. Each arm opens a fresh session, executes two
+warmups and five measured complete inferences, excludes setup, closes before the next
+opens, and requires output-bit equality, zero CPU neural/oracle calls, five contexts,
+66 dispatches and unchanged identities. No CPU/hybrid ratio or held-out accuracy
+claim is part of this incremental native comparison. Registration alone supplies no
+performance result; the window arm's full frozen qualification remains open.

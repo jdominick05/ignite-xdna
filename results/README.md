@@ -626,6 +626,14 @@ Complete window MLP layer: [qualification and retained cleanup failure](laya/win
 [compiled transport and BO lifetime](../docs/DECISIONS.md#laya-complete-mlp-transport-and-diagnostic-bo-lifetime-2026-10-16-desktop-2),
 [device scope](../docs/BENCHMARKS.md#laya-complete-window-mlp-layer-matches-the-qualified-arena-2026-10-16-desktop-2).
 
+Complete window model: [fixture/boundary qualification](laya/window_full_v1_qualification_desktop2_20261016.log),
+[validation](laya/window_full_v1_validation_desktop2_20261016.log),
+[development scope](../docs/BENCHMARKS.md#laya-complete-window-mlp-model-passes-fixture-and-boundary-checks-2026-10-16-desktop-2).
+
+Window versus packing comparison: [registration](laya/window_compare_v1_prereg_desktop2_20261016.json),
+[registration evidence](laya/window_compare_v1_registration_desktop2_20261016.log),
+[protocol](../docs/DECISIONS.md#laya-window-versus-packing-comparison-protocol-2026-10-16-desktop-2).
+
 Two-output lookup GEMM primitive: [initial build](laya/window_lookup_primitive_v1_build_desktop2_20261016.log),
 [explicit control/address build](laya/window_lookup_primitive_v2_controls_build_desktop2_20261016.log),
 [offline validation and live packing identity](laya/window_lookup_primitive_v1_validation_desktop2_20261016.log),

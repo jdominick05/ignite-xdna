@@ -19587,3 +19587,27 @@ passes the offline/privacy and legacy gates. This qualifies these complete MLP l
 cases only; all-layer model fixtures, row/mask boundaries, frozen accuracy and an
 eligible same-sitting end-to-end comparison remain required. All diagnostic timing
 is ineligible.
+
+## Laya complete window MLP model passes fixture and boundary checks (2026-10-16, Desktop 2)
+
+The [full-model qualification](../results/laya/window_full_v1_qualification_desktop2_20261016.log)
+installs the window MLP in the existing replaceable MLP context alongside qualified
+single-BD attention packing. All 28 M128 encoder MLPs use the candidate; larger row
+buckets retain the control schedule. It executes the complete neural model without
+the diagnostic host activation copies used by the preceding layer test.
+
+All 25 cases match complete logits and action probabilities bit-for-bit against a
+fresh qualified packing session: three unlabelled fixtures, the existing token/row
+boundary sweep including a short request after full length, and two option masks.
+Both serialized sessions forbid CPU neural/oracle calls. The candidate retains five
+contexts and 66 dispatches, closes normally and leaves an idle device while alive.
+Source/artifact identities remain unchanged. The raw timeline is archived unchanged
+in ignored scratch with its hash in the summary. Qualification timing is ineligible;
+independent offline checks ran concurrently.
+
+[Validation](../results/laya/window_full_v1_validation_desktop2_20261016.log) passes
+90 offline/privacy tests and the legacy syntax/import gates. This is development
+qualification, not a new full frozen accuracy verdict or performance result. The
+[comparison protocol](DECISIONS.md#laya-window-versus-packing-comparison-protocol-2026-10-16-desktop-2)
+is registered before timing. Original C0–C5, temperatures and reference remain fixed;
+the new window arm must pass frozen known-set qualification before adoption.
