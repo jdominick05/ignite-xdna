@@ -3365,3 +3365,9 @@ and verify the compiled transport against a working image. Then require bounded
 primitive and layer parity, full development cases, preregistered quiet timing,
 and the original frozen gates before adoption. No frozen scoring is justified by
 this offline screen alone.
+
+The [linked integer primitive result](BENCHMARKS.md#laya-fixed-shape-gemm-passes-guarded-integer-primitives-2026-10-16-desktop-2)
+now qualifies the unchanged transport and the two guarded output groups on device.
+The new builder rejects changed transaction bytes or physical SRAM spans; it keeps
+the original modules and registrations intact. Continue with complete real-valued
+layer parity before using the specialized core in full-model experiments.

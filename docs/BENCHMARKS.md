@@ -19690,3 +19690,30 @@ the result to KV depth would overstate the evidence. Neither experimental arm is
 adopted, and no new frozen scoring is started for adoption. Packing retains its full
 C0–C5 verdict. This is a separate sitting; no CPU/hybrid ratio or cross-sitting pool
 is supplied.
+
+## Laya fixed-shape GEMM passes guarded integer primitives (2026-10-16, Desktop 2)
+
+The [specialized primitive result](../results/laya/gemm_specialized_primitive_v2_desktop2_20261016.log)
+links the fixed-shape, folded-reset object from the offline screen into the working
+lookup image. Each of two output groups passes six cases: three integer-valued
+seeds crossed with two poison patterns, using one column/four cores and two K
+blocks. Complete output and packet bits match the independent integer fixture;
+inputs and every output guard word remain unchanged. Both bounded processes exit
+zero and show idle contexts after closing while the process is alive. These checks
+exercise reset and accumulation, but do not establish general BF16 parity.
+
+Before device use, the builder reconstructs the original combined object from its
+loose objects and requires its hash to match the working image. Only GEMM changes.
+The new core uses 9,904 code bytes and has a conservative 2,912-byte summed-frame
+stack bound within 5,376 reserved bytes. Compiled transaction bytes, SRAM spans,
+non-program initialization, routes, 168 lock initializations and 192 DMA lock/BD
+fields per image match the working primitive. The lowered core token ledger also
+passes. It assumes delivery/drain of complete DMA objects; it is not a global
+deadlock proof. The first offline build rejected relative object paths before
+linking; its failed raw archive is retained alongside the corrected result.
+
+[Offline regression checks](../results/laya/gemm_specialized_primitive_v2_offline_tests_desktop2_20261016.log)
+pass 18 cases including privacy checks. The legacy syntax/import gate passes.
+All runs are timing-ineligible. Complete real-valued MLP layers, full development
+cases, quiet timing and the original frozen adoption gates remain open. Qualified
+packing remains the serving configuration; this result makes no speed claim.
