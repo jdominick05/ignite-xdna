@@ -19473,3 +19473,10 @@ this run does not establish a distribution-free speed guarantee or a physical
 bandwidth cause. Full frozen known-set decision/calibration qualification is still
 required before adopting this candidate; the original thresholds, temperatures and
 reference remain fixed. Complete Laya speed remains an open objective.
+
+The subsequent [packing accuracy registration](../results/laya/pack_accuracy_v1_prereg_desktop2_20261016.json)
+binds 497 source/artifact/reference hashes before labelled packing scores. It preserves
+the original C0–C5 and adds full scored-output bit equivalence to qualified lookup.
+The [registration log](../results/laya/pack_accuracy_v1_registration_desktop2_20261016.log)
+records the identity and prior-outcome disclosure. This is known-set revalidation;
+registration alone supplies no accuracy verdict for the faster development arm.

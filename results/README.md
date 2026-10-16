@@ -586,3 +586,8 @@ All-layer packing protocol: [comparison registration](laya/pack_compare_v1_prere
 
 All-layer packing: [qualification and eligible native comparison](laya/pack_full_v1_qualification_and_timing_desktop2_20261016.log),
 with [full method, samples and accuracy caveat](../docs/BENCHMARKS.md#laya-complete-packing-arm-improves-the-native-fixture-comparison-2026-10-16-desktop-2).
+
+Packing frozen arm: [registration](laya/pack_accuracy_v1_prereg_desktop2_20261016.json),
+[registration evidence](laya/pack_accuracy_v1_registration_desktop2_20261016.log),
+[validation](laya/pack_accuracy_v1_validation_desktop2_20261016.log),
+[original gates and additional equivalence requirement](../docs/DECISIONS.md#laya-packing-frozen-qualification-2026-10-16-desktop-2).

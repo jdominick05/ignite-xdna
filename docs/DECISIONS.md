@@ -3090,3 +3090,20 @@ a development arm until its own original frozen gates pass; timing eligibility a
 does not qualify its accuracy. The [validation](../results/laya/pack_full_v1_validation_desktop2_20261016.log)
 checks boundary coverage, exclusive registration, serial controls and prior layer gates,
 with the legacy syntax/import/shell gate. Hardware results will be recorded separately.
+
+## Laya packing frozen qualification (2026-10-16, Desktop 2)
+
+The [packing registration](../results/laya/pack_accuracy_v1_prereg_desktop2_20261016.json)
+creates a separate arm before labelled packing outputs. It retains the original
+criteria, items, FP32 reference, decisions and temperature policy, and additionally
+requires all scored logits and action probabilities to be bit-exact to the already
+qualified lookup arm, including unused padding. Original-native output bits remain
+provenance only because the inherited lookup approximation already differs from them.
+
+`pack_accuracy.py` reuses the existing bounded scorer through a local module proxy;
+it does not replace a class's module-global name used by `super()`. The actual served
+sources/artifacts are registered and checked before/after scoring. Prior frozen
+outcomes are disclosed: this is known-set revalidation, not an independent held-out
+study. [Registration evidence](../results/laya/pack_accuracy_v1_registration_desktop2_20261016.log)
+and [validation](../results/laya/pack_accuracy_v1_validation_desktop2_20261016.log)
+precede scoring; no full packing accuracy verdict exists yet.
