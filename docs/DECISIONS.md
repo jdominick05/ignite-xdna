@@ -3180,3 +3180,46 @@ not a general depth rule. Parent-init identity and whole-packet checks do not pr
 the cross-image dynamic lock relation. That relation remains an explicit prerequisite
 to a bounded guarded device test. Paired-query GeGLU/normalization also need their own
 primitive coverage before full-model use. No parity or speed claim follows yet.
+
+## Laya window GEMM compiled lock and control checks (2026-10-16, Desktop 2)
+
+The [compiled lock/control validation](../results/laya/window_lookup_compiled_locks_v2_validation_desktop2_20261016.log)
+checks the actual lowered allocations against CDO register writes for both the working
+one-output image and the two-output candidate. Each image has 168 physical lock
+initializations and 192 DMA descriptors checked. Every descriptor acquires one
+complete FIFO object and releases one, with matching emitted lock IDs, signed acquire
+values, release values, acquire enable and valid bits. The MemTile local lock-bank
+offset is checked using the local compiler/driver sources identified by hash in the
+log. Shim virtual locks are required to initialize empty and excluded from the
+physical initialization count.
+
+The normalized DMA lock roles and physical routes match across images. Only the
+accounted free-object capacities change: core query buffers from two to three, core
+KV buffers from two to one. Packet sizes and operand addresses have separate compiled
+checks in the primitive build. These relations replace the earlier declaration-only
+census; they do not establish numerical device behavior.
+
+`window_core_check.py` follows the executed basic blocks of the lowered GEMM core
+control flow, failing on unknown executed operations. It checks all four active
+cores through three repetitions, including physical query/KV ring wrap. Per window
+repetition, two queries consume four KV objects and produce two outputs, with GEMM
+reset flags `1,1,0,0` and output slots `0,1,0,1`. Each ordinary stream consumes two
+queries and two KV objects for one output, so two ordinary passes replay twice as
+many queries for the same two products. The ledger requires balanced releases,
+held operands at each helper call, the expected helper and state-buffer identities,
+a reset K counter, and parking only on the next unavailable query.
+
+The ledger assumes DMA delivery/draining of complete objects. It does not simulate
+numerical helpers or prove global concurrent DMA/core deadlock freedom. The bounded
+guarded GEMM primitive remains the next device gate; paired-query normalization and
+GeGLU still need independent primitive coverage before complete-model use. No new
+hardware context or latency measurement is introduced here.
+
+Validation passes 66 offline/privacy tests and the legacy syntax/import gates;
+mutation checks reject every compiled lock field, changed reset/slot/lock amount,
+wrong physical query ring and an unsupported executed control operation. The
+independent packing registration's 497 hashes remain unchanged. The
+[initial validation attempt](../results/laya/window_lookup_compiled_locks_v1_validation_desktop2_20261016.log)
+retains a harness environment error: it invoked pytest in the toolchain-only
+environment, where pytest is absent. The corrected run uses the engine test
+environment and preserves the failed log unchanged.
