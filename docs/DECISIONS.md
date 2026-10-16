@@ -3223,3 +3223,29 @@ independent packing registration's 497 hashes remain unchanged. The
 retains a harness environment error: it invoked pytest in the toolchain-only
 environment, where pytest is absent. The corrected run uses the engine test
 environment and preserves the failed log unchanged.
+
+## Laya paired-query vector transport qualification (2026-10-16, Desktop 2)
+
+The [vector primitive build summary](../results/laya/window_vector_primitive_build_summary_desktop2_20261016.log)
+retains both offline builds and their raw-log hashes. Both use the qualified parent
+core objects and CDO initialization unchanged, with a normalization command followed
+by GeGLU. The second build strengthens the core ledger to check the logical KV
+token ordinal at each helper call: a single physical buffer aliases successive
+broadcast values, so pointer identity alone cannot establish correct selection.
+
+The vector stream sends each original query's first 1,040 words and then its second
+1,040-word object. All live original words retain their addresses; the second object
+also includes the packet's unused final padding. Both core query objects stay held
+until the helper finishes, then release together. The mixed-mode ledger covers all
+four active cores and three repetitions, including wrap of the three-object query
+ring. It checks each core selects its own GeGLU value from the broadcast stream.
+The existing GEMM ledger remains covered by regression tests.
+
+Every compiled vector descriptor address and complete FIFO packet, all 96 control
+writes, and every effective control value at all six queues pass. Cross-image lock
+roles and routes also pass the CDO checks. The
+[validation](../results/laya/window_vector_primitive_v1_validation_desktop2_20261016.log)
+covers 83 offline/privacy tests and the legacy gates, with all 497 packing hashes
+unchanged. The [device result](BENCHMARKS.md#laya-paired-query-normalization-and-geglu-match-the-working-image-2026-10-16-desktop-2)
+qualifies these vector primitives; the complete MLP and model still require their
+own gates. No change is made to qualified lookup arithmetic or serving defaults.

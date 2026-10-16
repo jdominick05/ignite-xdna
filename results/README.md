@@ -613,6 +613,13 @@ Window GEMM device primitive: [ordinary output zero](laya/window_lookup_gemm_pri
 [runner/offline/legacy validation](laya/window_lookup_gemm_primitive_v1_validation_desktop2_20261016.log),
 [device scope and remaining full-model gates](../docs/BENCHMARKS.md#laya-two-output-query-reuse-gemm-primitive-passes-on-device-2026-10-16-desktop-2).
 
+Paired-query vector primitives: [offline builds and raw hashes](laya/window_vector_primitive_build_summary_desktop2_20261016.log),
+[working image](laya/window_vector_primitive_original_v1_desktop2_20261016.log),
+[candidate exactness](laya/window_vector_primitive_window_v1_desktop2_20261016.log),
+[validation](laya/window_vector_primitive_v1_validation_desktop2_20261016.log),
+[engineering gates](../docs/DECISIONS.md#laya-paired-query-vector-transport-qualification-2026-10-16-desktop-2),
+[device scope](../docs/BENCHMARKS.md#laya-paired-query-normalization-and-geglu-match-the-working-image-2026-10-16-desktop-2).
+
 Two-output lookup GEMM primitive: [initial build](laya/window_lookup_primitive_v1_build_desktop2_20261016.log),
 [explicit control/address build](laya/window_lookup_primitive_v2_controls_build_desktop2_20261016.log),
 [offline validation and live packing identity](laya/window_lookup_primitive_v1_validation_desktop2_20261016.log),

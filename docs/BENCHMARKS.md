@@ -19529,3 +19529,30 @@ registration hashes remain unchanged. These runs are correctness-only and timing
 ineligible. They qualify this GEMM primitive, not paired-query normalization/GeGLU,
 the complete MLP, full-model accuracy or any speed gain. The previously qualified
 complete packing arm remains the full-model configuration.
+
+## Laya paired-query normalization and GeGLU match the working image (2026-10-16, Desktop 2)
+
+The [working-image vector run](../results/laya/window_vector_primitive_original_v1_desktop2_20261016.log)
+and [paired-query candidate](../results/laya/window_vector_primitive_window_v1_desktop2_20261016.log)
+each complete six cases: three seeded finite fixtures with two target guard patterns,
+one active column/four cores and one hardware context per process. Each dispatch
+executes normalization followed by GeGLU, exercising the inherited rounding-state
+handoff. Gate fixtures include distinct query halves, distinct core values and GELU
+inputs on both sides of the lookup's asymptotic boundary.
+
+Every normalization and GeGLU output packet is bit-exact against the working lookup
+image, including unused poison words. Both arms also pass finite-payload checks,
+unchanged source BO and every target guard outside the two designated output regions.
+The working output NPZ is pinned before the candidate run by SHA256
+`73e430d9271f047d1de4c054583cfb53bbac3cc8c4c1cb085a4e5a6d8c48381f`.
+It is a device reference from the qualified image, not an independent CPU numerical
+oracle. Six repeated dispatches exercise paired-query ring wrap. Both bounded
+processes exit zero, close their context and witness an idle device while alive;
+the wrappers also record idle after exit.
+
+The [compiled transport/control gates](DECISIONS.md#laya-paired-query-vector-transport-qualification-2026-10-16-desktop-2)
+run again before context creation. These correctness runs are timing ineligible;
+they establish no full-model accuracy or speed result. Together with the separate
+GEMM primitive, they permit the next guarded complete-MLP-layer test. The original
+full-model thresholds, reference, temperatures and zero-CPU-neural-call policy remain
+unchanged.
