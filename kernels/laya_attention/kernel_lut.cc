@@ -3,11 +3,16 @@
 // One-core streamed attention. FP arithmetic stays on the vector datapath.
 #include <aie_api/aie.hpp>
 #include <stdint.h>
+#ifndef ATTENTION_FP32_EXP
 #include "lut_based_ops.h"
+#endif
 using F = aie::vector<float,16>;
 using MM = aie::mmul<4,8,4,bfloat16,bfloat16,accfloat>;
 #ifdef ATTENTION_SHARED_MATMUL
 extern "C" void transformer_matmul(const bfloat16 *,const bfloat16 *,float *,int,int,int);
+#endif
+#ifdef ATTENTION_FP32_PROBS
+extern "C" void transformer_pv(const bfloat16 *,const bfloat16 *,float *);
 #endif
 static inline __attribute__((always_inline)) F full(float x) { return aie::broadcast<float,16>(x); }
 static inline __attribute__((always_inline)) F mul(F x,F y) { return aie::mul(x,y).to_vector<float>(); }
@@ -23,6 +28,9 @@ static inline __attribute__((always_inline)) F rescale(F x,F y) {
 }
 // Index the upstream exp tables from FP32 scores directly. Converting scores
 // to bf16 before range reduction loses significant bits on peaked inputs.
+#ifdef ATTENTION_FP32_EXP
+#include "exp_fp32.h"
+#else
 static inline __attribute__((always_inline)) F exp16(F x) {
   auto tiny=aie::lt(x,full(-80.0f));
   x=aie::min(full(0),aie::max(full(-80.0f),x));
@@ -36,6 +44,7 @@ static inline __attribute__((always_inline)) F exp16(F x) {
   F e=aie::mul(il.fetch(index),fl.fetch(index)).to_vector<float>();
   return aie::select(e,full(0),tiny);
 }
+#endif
 static inline __attribute__((always_inline)) F reciprocal16(F x) {
   auto zero=aie::eq(x,full(0));
   x=aie::select(x,full(1),zero);
@@ -130,18 +139,49 @@ static inline __attribute__((always_inline)) void attention_compute(
   F sums;
   for(int i=0;i<16;++i) {
     F mx=full(newm.get(i));
+#ifdef ATTENTION_FP32_PROBS
+    F e0=exp16(aie::sub(aie::load_v<16>(scores+i*32),mx));
+    F e1=exp16(aie::sub(aie::load_v<16>(scores+i*32+16),mx));
+#else
     auto e0=bf(exp16(aie::sub(aie::load_v<16>(scores+i*32),mx)));
     auto e1=bf(exp16(aie::sub(aie::load_v<16>(scores+i*32+16),mx)));
+#endif
     if(!unmasked) {
     auto z0=aie::eq(aie::load_v<16>(mask+i*32).cast_to<int16>(),aie::zeros<int16,16>());
     auto z1=aie::eq(aie::load_v<16>(mask+i*32+16).cast_to<int16>(),aie::zeros<int16,16>());
+#ifdef ATTENTION_FP32_PROBS
+    e0=aie::select(e0,full(0),z0); e1=aie::select(e1,full(0),z1);
+#else
     e0=aie::select(e0,aie::zeros<bfloat16,16>(),z0);
     e1=aie::select(e1,aie::zeros<bfloat16,16>(),z1);
+#endif
     }
+#ifdef ATTENTION_FP32_PROBS
+    auto hi0=bf(e0),hi1=bf(e1);
+    aie::store_v(pr+i*32,hi0); aie::store_v(pr+i*32+16,hi1);
+    // Compact low parts into the already-consumed first half of scores.
+    // A row's two score vectors have both been loaded before either store.
+    auto low=reinterpret_cast<bfloat16 *>(scores);
+    aie::store_v(low+i*32,bf(aie::sub(e0,fp(hi0))));
+    aie::store_v(low+i*32+16,bf(aie::sub(e1,fp(hi1))));
+    sums.set(aie::reduce_add(aie::add(e0,e1)),i);
+#else
     aie::store_v(pr+i*32,e0); aie::store_v(pr+i*32+16,e1);
     sums.set(aie::reduce_add(aie::add(fp(e0),fp(e1))),i);
+#endif
   }
   aie::store_v(m,newm); aie::store_v(l,aie::add(mul(oldl,alpha),sums));
+#ifdef ATTENTION_FP32_PROBS
+  for(int part=0;part<2;++part) {
+    const bfloat16 *row=part ? reinterpret_cast<const bfloat16 *>(scores) : pr;
+    for(int a=0;a<4;++a) for(int k=0;k<4;++k) {
+      auto block=aie::concat(aie::load_v<8>(row+(a*4)*32+k*8),aie::load_v<8>(row+(a*4+1)*32+k*8),
+                            aie::load_v<8>(row+(a*4+2)*32+k*8),aie::load_v<8>(row+(a*4+3)*32+k*8));
+      aie::store_v(p+(a*4+k)*32,block);
+    }
+    transformer_pv(p,v,state);
+  }
+#else
   for(int a=0;a<4;++a) for(int k=0;k<4;++k) {
     auto block=aie::concat(aie::load_v<8>(pr+(a*4)*32+k*8),aie::load_v<8>(pr+(a*4+1)*32+k*8),
                            aie::load_v<8>(pr+(a*4+2)*32+k*8),aie::load_v<8>(pr+(a*4+3)*32+k*8));
@@ -171,6 +211,7 @@ static inline __attribute__((always_inline)) void attention_compute(
     aie::store_v(state+((a+1)*16+b+2)*16,c12.to_vector<float>());
     aie::store_v(state+((a+1)*16+b+3)*16,c13.to_vector<float>());
   }
+#endif
 }
 extern "C" void attention_block(const int32_t *packet,float *state,int32_t *scratch) {
   const bfloat16 *q=reinterpret_cast<const bfloat16 *>(packet+16);

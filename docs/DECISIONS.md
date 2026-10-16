@@ -2525,3 +2525,12 @@ for the next norm. Release instruction BOs and kernels before hardware contexts 
 PyXRT teardown. The first complete-block experiment passes individual operator checks
 but fails retained pointwise composition gates; it establishes neither full-model accuracy
 nor speed. See the [measurement and failed attempts](BENCHMARKS.md#laya-complete-encoder-block-handoff-operators-pass-composition-fails-2026-10-16-desktop-2).
+
+The optional precision experiment keeps the default attention and GEMM objects
+byte-identical. FP32 lookup tables duplicate four-entry groups for the physical banks;
+adjacent duplication gives alternating lane errors. Scale normal exponential results
+through exponent bits to avoid tiny floating products. Two probability parts reuse dead
+score storage and the shared product body. Check linked code, conservative stack and
+every physical SRAM span for the actual candidate; object-size sums are not that audit.
+Keep the residual/MLP failures despite normalized-output improvements, and retain the
+frozen complete-model decision criteria. See the [precision investigation](BENCHMARKS.md#experimental-fp32-exponential-and-two-part-probabilities).

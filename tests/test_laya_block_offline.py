@@ -16,6 +16,17 @@ b=importlib.util.module_from_spec(spec); spec.loader.exec_module(b)
 p=b.p
 
 
+def test_fp32_lookup_all_entries_and_physical_lanes():
+    table=b.exp_table_values()
+    for index in range(256):
+        expected=np.float32(2**(index/256))
+        for lane in range(16):
+            # Independently measured raw-index probe: even/odd lanes select
+            # the first/second four-word bank in each eight-word group.
+            physical=(index//4)*8+index%4+(lane%2)*4
+            assert table[physical].view(np.uint32)==expected.view(np.uint32)
+
+
 def test_mlp_writes_only_owned_outputs_and_preserves_attention_residual():
     pl=b.plan(); counts=np.zeros(pl['words'],np.uint8)
     entries=re.findall(r'%o\[0,0,0,(\d+)\]\[([^]]+)\]\[([^]]+)\]',b.mlp_runtime(pl))

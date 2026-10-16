@@ -23,7 +23,7 @@ HERE=Path(__file__).resolve().parent
 
 
 def sources():
-    return dict(r.sources(),**{str(f.relative_to(p.ROOT)).replace('\\','/'):p.attention.sha(f) for f in (HERE/'block.py',HERE/'block.cc')})
+    return dict(r.sources(),**{str(f.relative_to(p.ROOT)).replace('\\','/'):p.attention.sha(f) for f in (HERE/'block.py',HERE/'block.cc',HERE.parent/'laya_attention/exp_fp32.h')})
 
 
 def plan():
@@ -104,8 +104,16 @@ def mlp_runtime(pl):
     return seq.finish()
 
 
-def build(out,model,all_masks=False):
+def exp_table_values():
+    values=np.exp2(np.arange(256,dtype=np.float64)/256).astype(np.float32)
+    # The two lookup lanes select separate four-word banks in each eight-word
+    # group: [v0,v1,v2,v3,v0,v1,v2,v3], not elementwise duplication.
+    return np.tile(values.reshape(64,4),(1,2)).reshape(512)
+
+
+def build(out,model,all_masks=False,precise_exp=False,precise_probs=False):
     import onnx
+    if precise_probs and not precise_exp: raise ValueError('FP32 probabilities require the FP32 exponential')
     out.mkdir(parents=True,exist_ok=True); pl=plan()
     r.coefficients(onnx.load(str(model),load_external_data=False),out)
     flags=['-Oz','-std=c++20','--target=aie2-none-unknown-elf','-DNDEBUG','-fstack-size-section',
@@ -117,8 +125,17 @@ def build(out,model,all_masks=False):
         choices=[('rotary',HERE/'rotary.cc')] if family=='attention' else [('block',HERE/'block.cc'),('mlp',HERE/'mlp.cc')]
         choices += [('gemm',HERE/'gemm.cc'),('dispatch',HERE/'dispatch.cc'),('attention',HERE.parent/'laya_attention/kernel_shared.cc'),
           ('norm',HERE.parent/'laya_norm/kernel.cc'),('lut',p.attention.UPSTREAM/'aie_runtime_lib/AIE2/lut_based_ops.cpp')]
+        family_flags=list(flags)
+        if precise_exp and family=='attention':
+            family_flags.append('-DATTENTION_FP32_EXP=1')
+            if precise_probs: family_flags.append('-DATTENTION_FP32_PROBS=1')
+            values=exp_table_values()
+            literal=','.join(float(x).hex()+'f' for x in values)
+            table=folder/'exp_tables.cc'
+            table.write_text('extern "C" {\nalignas(32) float fp_exp_ab[512]={'+literal+'};\nalignas(32) float fp_exp_cd[512]={'+literal+'};\n}\n',encoding='utf-8')
+            choices[-1]=('lut',table)
         for name,source in choices:
-            obj=folder/f'{name}.o'; objects.append(obj); p.attention.command([clang,*flags,'-c',source,'-o',obj],folder)
+            obj=folder/f'{name}.o'; objects.append(obj); p.attention.command([clang,*family_flags,'-c',source,'-o',obj],folder)
         dis=p.attention.command([p.attention.PEANO/'bin/llvm-objdump.exe','-d',folder/'dispatch.o'],folder)
         if not re.search(r'mov\s+crRnd,\s+#0x0\b',dis): raise ValueError('rounding fence removed')
         p.attention.command([clang,'--target=aie2-none-unknown-elf','-r','-nostdlib',*objects,'-o',folder/'kernel.o'],folder)
@@ -130,13 +147,16 @@ def build(out,model,all_masks=False):
             import shutil
             shutil.copyfile(folder/'kernel.o',layout/'kernel.o')
             prefix=r.prefix() if family=='attention' else mlp_prefix()
+            stack_bytes=4864 if precise_exp and family=='attention' else r.mlp.STACK
+            prefix=prefix.replace(f'stack_size = {r.mlp.STACK} : i32',f'stack_size = {stack_bytes} : i32')
             runtime=r.runtime(pl,mode=='local',valid) if family=='attention' else mlp_runtime(pl)
             (layout/'harness.mlir').write_text(prefix+runtime,encoding='utf-8')
             p.attention.command([p.attention.IRON/'Scripts/aiecc.exe',layout/'harness.mlir',f'--peano={p.attention.PEANO}',
               '--get-npu-insts','--npu-insts-name=insts.bin','--get-xclbin','--xclbin-name=final.xclbin',f'--tmpdir={layout/"prj"}'],layout)
             before=p.STACK
             try:
-                p.STACK=r.mlp.STACK; audits=p.audit(layout)
+                p.STACK=stack_bytes
+                audits=p.audit(layout,{'fp_exp_ab':2048,'fp_exp_cd':2048} if precise_exp and family=='attention' else None)
             finally: p.STACK=before
             cdo={f.name:p.attention.sha(f) for f in (layout/'prj').rglob('*_aie_cdo_*.bin')}
             if len(cdo)!=3: raise ValueError('missing initialization')
@@ -145,7 +165,7 @@ def build(out,model,all_masks=False):
             print('BLOCK_LAYOUT '+json.dumps(dict(family=family,layout=name,code_bytes=sorted(set(a['code_bytes'] for a in audits)))),flush=True)
         families[family]=layouts
     meta=dict(sources=sources(),plan=pl,families=families,model_sha256=p.attention.sha(model),
-      coefficients_sha256=p.attention.sha(out/'coefficients.npz'),rounding_fence_machine_verified=True)
+      coefficients_sha256=p.attention.sha(out/'coefficients.npz'),rounding_fence_machine_verified=True,precise_exp=precise_exp,precise_probs=precise_probs)
     p.attention.dump(out/'build.json',meta); print('BLOCK_BUILD '+json.dumps(meta),flush=True)
 
 
@@ -349,6 +369,8 @@ def run(out,masks,model,smoke=False,collect_composition_failures=False):
 if __name__=='__main__':
     ap=argparse.ArgumentParser(); ap.add_argument('command',choices=('build','run')); ap.add_argument('--out',type=Path,required=True)
     ap.add_argument('--model',type=Path,required=True); ap.add_argument('--masks',type=Path); ap.add_argument('--smoke',action='store_true')
+    ap.add_argument('--precise-exp',action='store_true')
+    ap.add_argument('--precise-probs',action='store_true')
     ap.add_argument('--all-masks',action='store_true'); ap.add_argument('--collect-composition-failures',action='store_true'); args=ap.parse_args()
-    if args.command=='build': build(args.out.resolve(),args.model,args.all_masks)
+    if args.command=='build': build(args.out.resolve(),args.model,args.all_masks,args.precise_exp,args.precise_probs)
     else: run(args.out.resolve(),args.masks,args.model,args.smoke,args.collect_composition_failures)

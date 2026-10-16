@@ -316,3 +316,11 @@ Backs [complete-block coverage and numerical failures](../docs/BENCHMARKS.md#lay
 - [Clean teardown, incorrect untouched-tail expectation](laya/block_v4_collected_smoke_desktop2_20261016.log).
 - [Collected smoke](laya/block_v5_collected_smoke_desktop2_20261016.log): operator gates pass; synthetic composition and retained strict MLP gates fail.
 - [Validation](laya/block_validation_desktop2_20261016.log): offline tests, syntax/import/shell checks, program footprints and scope.
+
+Precision follow-up backs [the FP32 exponential and two-part probability investigation](../docs/BENCHMARKS.md#experimental-fp32-exponential-and-two-part-probabilities).
+
+- Block exponential: [incorrect lookup banks](laya/block_exp_v2_smoke_desktop2_20261016.log), [correct banks](laya/block_exp_v3_bank_layout_desktop2_20261016.log), [exact exponent scaling](laya/block_exp_v4_exponent_bits_desktop2_20261016.log).
+- Isolated diagnostics: [pre-hardware import error](laya/exp_isolation_v1_desktop2_20261016.log), [range sweep](laya/exp_isolation_v2_desktop2_20261016.log), [equal-input lanes](laya/exp_isolation_v3_lanes_desktop2_20261016.log), [raw physical indices](laya/exp_isolation_v4_raw_layout_desktop2_20261016.log), [correct banks with tiny-product error](laya/exp_isolation_v5_correct_layout_desktop2_20261016.log), [exponent-bit scaling](laya/exp_isolation_v6_exponent_bits_desktop2_20261016.log).
+- [Expanded exponential qualification](laya/exp_qualified_v1_desktop2_20261016.log): all lookup entries/lanes, range and zero, two poisons.
+- Two-part probabilities: [smoke](laya/block_probs_v1_smoke_desktop2_20261016.log), [global-mask suite](laya/block_probs_v1_global_suite_desktop2_20261016.log); normalized outputs pass, residual and strict MLP failures remain.
+- [Validation and default object identity](laya/block_precision_validation_desktop2_20261016.log).

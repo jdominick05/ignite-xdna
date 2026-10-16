@@ -167,7 +167,9 @@ def harness(mode,k=1024,n=512,m=512):
     return text+'\n'.join(lines+['    }','  }','}'])+'\n'
 
 
-def audit(out):
+def audit(out,lut_spans=None):
+    if lut_spans is None:
+        lut_spans={name:1024 for name in ('exp_ilut_ab','exp_ilut_cd','exp_flut_ab','exp_flut_cd')}
     audits=[]
     for elf in sorted((out/'prj').rglob('*.elf')):
         col,row=map(int,re.search(r'core_(\d+)_(\d+)\.elf$',elf.name).groups())
@@ -176,10 +178,10 @@ def audit(out):
         ld=(out/f'prj/ldScripts_main_core_{col}_{row}.ld.script').read_text()
         spans=[(int(a,16)-0x70000,int(a,16)-0x70000+int(n,16),name) for a,name,n in re.findall(
           r'\. = (0x[0-9A-Fa-f]+);\s*\n\s*(\w+) = \.;\s*\n\. \+= (0x[0-9A-Fa-f]+);',ld)]
-        for name in ('exp_ilut_ab','exp_ilut_cd','exp_flut_ab','exp_flut_cd'):
+        for name,size in lut_spans.items():
             m=re.search(r'^([0-9a-fA-F]+) [A-Za-z] '+name+r'$',symbols,re.M)
             if not m: raise ValueError('missing LUT')
-            a=int(m[1],16)-0x70000; spans.append((a,a+1024,name))
+            a=int(m[1],16)-0x70000; spans.append((a,a+size,name))
         spans.sort()
         if len(spans)<10 or any(a < -0x30000 or b>65536 or a//65536!=(b-1)//65536 for a,b,_ in spans): raise ValueError('memory bounds')
         if any(a[1]>b[0] for a,b in zip(spans,spans[1:])): raise ValueError('memory overlap')

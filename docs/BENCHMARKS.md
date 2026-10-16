@@ -18146,3 +18146,55 @@ and SRAM audits pass. The shared arena occupies 80,078,208 bytes. These are chec
 runs: dispatch durations in their logs are not eligible speed evidence. Numerical
 composition, remaining layers, embeddings, head, frozen decision accuracy and complete
 model performance remain open.
+
+### Experimental FP32 exponential and two-part probabilities
+
+The [first FP32-table block smoke](../results/laya/block_exp_v2_smoke_desktop2_20261016.log)
+regresses composition. Isolation exposes an implementation error rather than an accuracy
+tradeoff: the [initial isolated runner](../results/laya/exp_isolation_v1_desktop2_20261016.log)
+fails an import before opening hardware; the [wide-range probe](../results/laya/exp_isolation_v2_desktop2_20261016.log)
+and [equal-input lanes](../results/laya/exp_isolation_v3_lanes_desktop2_20261016.log)
+show alternating lookup errors. The [raw-index diagnostic](../results/laya/exp_isolation_v4_raw_layout_desktop2_20261016.log)
+measures physical table positions. FP32 lookup banks require duplicated groups of four
+entries, `[v0,v1,v2,v3,v0,v1,v2,v3]`, rather than adjacent duplicates. Its raw-index
+outputs are diagnostic values, not exponential accuracy measurements.
+
+The [corrected-layout probe](../results/laya/exp_isolation_v5_correct_layout_desktop2_20261016.log)
+still fails its relative-error gate near the small end of the range. Replace floating
+power-of-two multiplication with an exact FP32 exponent-bit adjustment on the clamped
+normal domain. The [next probe](../results/laya/exp_isolation_v6_exponent_bits_desktop2_20261016.log)
+passes. The [source-bound expanded probe](../results/laya/exp_qualified_v1_desktop2_20261016.log)
+passes 12 comparisons: a range sweep over `[-80,0]`, zero on every lane, all table
+entries on every physical lookup lane, and two buffer poisons. Maximum relative error
+is 5.652042801634955e-06 against the unchanged 0.00002 isolated gate; guards and poison
+independence pass. This is sampled operator coverage, not a proof over every FP32 input.
+
+The [bank-layout block smoke](../results/laya/block_exp_v3_bank_layout_desktop2_20261016.log)
+and [exponent-bit block smoke](../results/laya/block_exp_v4_exponent_bits_desktop2_20261016.log)
+reduce error but retain composition failures. The next candidate also stores high and
+low bf16 probability parts and accumulates both products with V, using the shared GEMM
+body with a shorter K loop. It compacts low parts into already-consumed score storage,
+retains FP32 denominator sums and requires no additional scratch arena. Its
+[smoke](../results/laya/block_probs_v1_smoke_desktop2_20261016.log) passes normalized
+output checks but retains synthetic residual and strict MLP failures.
+
+The [global-mask suite](../results/laya/block_probs_v1_global_suite_desktop2_20261016.log)
+collects 20 comparisons: three synthetic seeds with random, zero and basis patterns,
+plus the first actual encoder block's weights on synthetic activations, each with two
+poisons. Every direct operator gate and every normalized block-output gate passes.
+Composed residual and retained strict MLP gates each fail 12 comparisons; the runner
+correctly exits nonzero. For the initial synthetic random case, normalized relative L2
+falls from 0.0020829767533175124 to 0.001097905596911174 and its bad pointwise count
+falls from 14 to zero. Residual bad elements fall from 1,589 to 72. This is improved
+numerical behavior, not a fully passing block. Both actual-weight smoke comparisons
+pass all retained gates, but their input is still synthetic.
+
+The [validation](../results/laya/block_precision_validation_desktop2_20261016.log)
+passes 55 offline tests and the full legacy syntax/import/shell checks. Default attention
+and GEMM objects remain byte-identical. The candidate attention image occupies 15,600
+bytes per core, conservative stack bound 4,768 bytes within a 4,864-byte reservation;
+MLP remains 15,152 bytes with bound 4,448 within 4,608. SRAM/helper audits pass. These
+paths are opt-in through `--precise-exp --precise-probs`; existing default programs keep
+their arithmetic. All runs are checks-only. Other mask layouts, real token inputs,
+remaining layers, embeddings/head, frozen decisions and eligible end-to-end timing are
+still unverified for this candidate.
