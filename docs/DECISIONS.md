@@ -3107,3 +3107,22 @@ outcomes are disclosed: this is known-set revalidation, not an independent held-
 study. [Registration evidence](../results/laya/pack_accuracy_v1_registration_desktop2_20261016.log)
 and [validation](../results/laya/pack_accuracy_v1_validation_desktop2_20261016.log)
 precede scoring; no full packing accuracy verdict exists yet.
+
+## Laya windowed MLP with lookup: first SRAM limit (2026-10-16, Desktop 2)
+
+`window_lookup.py` prepares two independent output states sharing one small query,
+while retaining the qualified GELU lookup formula/table and each tile's original K
+order. It combines the existing split-query normalization interface with a split-query
+version of the same lookup kernel. No registered source/artifact is modified.
+
+The [first build](../results/laya/window_lookup_v1_build_desktop2_20261016.log)
+fails during linking: its generated data region cannot accommodate the lookup tables,
+with a 4,224-byte overflow. This is a compile-time placement failure, not a device
+result. The candidate has not run on hardware and has no speed or numerical claim.
+Reducing core KV FIFO depth is the next candidate tradeoff; it requires a separately
+versioned build and transport/primitive qualification before any model execution.
+
+The [validation and live file-map check](../results/laya/window_lookup_v1_validation_desktop2_20261016.log)
+pass the legacy gates and confirm all packing accuracy registration hashes are
+unchanged while that independent full accuracy run owns the NPU. The current packing
+arm and original frozen criteria remain untouched.
