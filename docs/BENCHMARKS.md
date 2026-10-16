@@ -17905,7 +17905,8 @@ Each linear check requires `abs <= 0.0002 + 0.0002*abs(ref)` and relative L2 at 
 The complete-chain check requires `abs <= 0.0002 + 0.002*abs(ref)` and relative L2
 at most `0.002`. Its relative L2 passes, but 62 comparisons fail pointwise. Small
 arithmetic differences crossing bf16 rounding boundaries are a plausible explanation;
-their contribution has not been isolated from nonlinear approximation error.
+their contribution was not isolated from nonlinear approximation error in that sitting
+(the follow-up below now decomposes it).
 The gates are not loosened, and this is not a qualified full-size MLP accuracy result.
 
 All guards, untouched arena regions, input/weight immutability, padded rows/columns,
@@ -17920,6 +17921,95 @@ full legacy syntax/import/shell checks and 41 offline tests. New independent tes
 cover arena separation, every full-shape gate/value feature address and every byte
 of the second product's activation gather, including padded token rows.
 All hardware runs here are correctness-only. Their logged dispatch durations do not
-establish a speedup or complete-Laya latency. Rotary transforms, embedding/gather,
-attention operand conversion, residual/norm composition and the decision tail remain
-required, as do complete-model pinned decision accuracy and same-sitting timing.
+establish a speedup or complete-Laya latency. At this milestone rotary transforms,
+attention operand conversion, embedding/gather, residual/norm composition and the
+decision tail remained required. The next result composes rotary and attention;
+complete-model pinned decision accuracy and same-sitting timing remain open.
+
+### MLP numerical isolation: both upstream rounding and nonlinear error contribute
+
+The [post-dispatch diagnostic sitting](../results/laya/mlp_isolation_v11_desktop2_20261016.log)
+retains the same core ELF hashes and strict gate failures. It evaluates an exact
+nonlinear reference twice: once on the independent first-product reference and once
+on the device's actual first-product output. Both are rounded to bf16. Their difference
+isolates upstream arithmetic crossing operand-rounding boundaries. Comparing the latter
+with actual device GeGLU isolates nonlinear/conversion differences. Multiplying each
+difference by the second weight matrix, then adding that product's accumulation
+residual, reconstructs the final-output error. No reference tensor feeds the device.
+
+The [derived summary](../results/laya/rotary_isolation_validation_desktop2_20261016.log)
+covers 37 distinct cases and 74 poison comparisons. Upstream arithmetic changes 12,305
+rounded activation elements; nonlinear/conversion differences change another 11,816
+transitions, across distinct cases. These are transition counts, not disjoint sets of
+positions. The first-product contribution has larger L2 than the nonlinear contribution
+in 31 cases. Maximum output contributions are `0.034179835580289364` from upstream
+rounding, `0.017221901565775632` from nonlinear/conversion differences and
+`0.001150188036262989` from final-product accumulation. The decomposition closes to
+`2.4868995751603507e-14`. This isolates error contributions under these fixtures; it
+does not establish a model decision impact or excuse the retained pointwise failure.
+
+## Laya projection through RoPE and attention: device-owned intermediates pass (2026-10-16, Desktop 2)
+
+`kernels/laya_transformer/rotary.py` composes `[512,1024]` input, a `[1024,3072]` QKV
+projection, rotary Q/K, device packet formatting and attention. All phases run in one
+kernel call on one hardware context, using a shared arena and completion waits.
+There are zero host reads, writes or syncs between phases. Intermediate tensors still
+travel through DDR. CPU oracles supply no device activation.
+
+Before inference, the builder constant-folds the exported model's rotary ancestors
+for fixed sequence positions, preserving the actual global/local frequency constants.
+It hashes the resulting FP32 coefficient packets. There is no per-call host rotary
+calculation. Q/K rotate in FP32 and convert to bf16 with explicit RNE. Separate
+query-half commands emit the existing attention headers and 4-by-8 query tiles. Keys
+transpose to 8-by-4 tiles; another device command merges K with tiled V and the key
+index ramp. Query rows with finite-mask uniform semantics are zeroed on the device.
+
+### Code budget and transfer representation
+
+The combined image including GeGLU occupies 18,064 bytes/core and is rejected before
+hardware execution. The [validation record](../results/laya/rotary_isolation_validation_desktop2_20261016.log)
+reads the retained ELF sizes. The attention image therefore omits GeGLU and occupies
+15,408 bytes/core, retaining GEMM and norm code. The MLP image is separate. Serial
+cross-image BO handoff and its scheduling cost have not been measured; neither chain
+establishes complete-model execution in one image.
+
+The compiler also rejects the first gapped KV transfer's oversized inner dimension.
+Splitting packets into vector-word chunks fits the Shim dimensions. The runtime writes
+only changed RTP values and waits before reusing descriptor slots. Every core ELF and
+all initialization CDO payloads match across the eight instruction layouts. Conservative
+stack bound is 4,064 bytes within the 4,608-byte reservation; unresolved-helper and
+physical SRAM-span checks pass. The arena occupies 27,756,032 bytes.
+
+### Qualification and scope
+
+The [first smoke](../results/laya/rotary_v3_smoke_desktop2_20261016.log) passes both initial
+poisons for global/full-valid attention. The [first expanded suite](../results/laya/rotary_v4_all_suite_desktop2_20261016.log)
+passes but its per-comparison layout label is overwritten by a region-loop variable.
+Keep that reporting failure; use the [repeated, correctly labelled suite](../results/laya/rotary_v5_all_model_suite_desktop2_20261016.log)
+for per-layout coverage. It passes 160 comparisons in one context, 20 for each of
+global/local with valid-key counts 512, 193, 1 and 0. There are three seeds times
+random/zero/basis patterns times two poisons for every layout, plus the first encoder's
+actual QKV weights on one synthetic activation fixture, again with both poisons for
+every layout. The latter accounts for 16 comparisons, not every layer's weights.
+The selected tensor is `val_164`, SHA256
+`8cda894d0d44b0bd583b51f32de7b939d66817136c39a8a2550f8ba2087d7887`.
+
+Each stage and the composed attention output use the existing attention tolerance:
+`abs <= 0.01 + 0.02*abs(ref)` and relative L2 at most `0.02`. Maximum composed absolute
+error is `0.006138631457476895`; maximum composed relative L2 is
+`0.0035116222030673453`. A separate attention-core check uses actual device-prepared
+Q/K/V after completion to distinguish attention error from preparation error. Query
+metadata, both output poisons, input/weight/coefficient immutability, arena gaps, output
+guards, written payloads and key ramps pass. The context releases idle while the process
+is alive, with no foreign contention observed.
+
+The [validation log](../results/laya/rotary_isolation_validation_desktop2_20261016.log)
+records the full legacy syntax/import/shell gates and 46 offline tests. New independent
+checks cover every output DMA word exactly once, arena separation, all Q/K/V source-tile
+addresses and all transferred query/key/value data words.
+
+All hardware runs here are correctness-only: their durations establish no latency win.
+Inputs are synthetic, including when the first actual projection weights are used.
+The output projection, residual/norm composition, embedding/gather, MLP connection and
+decision tail remain required. Complete Laya inference, pinned decision accuracy and
+same-sitting whole-model performance remain unverified.

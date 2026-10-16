@@ -242,7 +242,36 @@ def model_pairs(path,shape):
     return pairs
 
 
-def run(out,smoke=False,model=None,collect_chain_failures=False):
+def isolate(gotwi,gotg,gotout,refwi,refg,wo):
+    """Post-dispatch diagnosis only: none of these tensors feeds the device."""
+    erf=np.vectorize(math.erf,otypes=[np.float64]); hidden=gotg.shape[1]
+    gate=gotwi[:,:hidden].astype(np.float64); value=gotwi[:,hidden:].astype(np.float64)
+    from_device_wi=p.attention.rounded(gate*.5*(1+erf(gate/np.sqrt(2)))*value)
+    from_exact_wi=p.attention.rounded(refg)
+    delta_wi=(from_device_wi.astype(np.float64)-from_exact_wi.astype(np.float64))@wo.astype(np.float64)
+    delta_gelu=(gotg.astype(np.float64)-from_device_wi.astype(np.float64))@wo.astype(np.float64)
+    refout=from_exact_wi.astype(np.float64)@wo.astype(np.float64)
+    device_product_ref=gotg.astype(np.float64)@wo.astype(np.float64)
+    residual=gotout.astype(np.float64)-device_product_ref
+    total=gotout.astype(np.float64)-refout
+    error=np.max(np.abs(total-(delta_wi+delta_gelu+residual)))
+    if error>1e-10: raise ValueError('error decomposition does not close')
+    def ordered(a):
+        bits=p.attention.bits(a).astype(np.int32)
+        return np.where(bits&0x8000,0x8000-(bits&0x7fff),0x8000+bits)
+    def transition(a,b):
+        distance=np.abs(ordered(a)-ordered(b))
+        return dict(changed=int(np.count_nonzero(distance)),over_one_ulp=int(np.count_nonzero(distance>1)),max_ulp=int(distance.max()))
+    def metrics(delta):
+        return dict(maxabs=float(np.max(np.abs(delta))),l2=float(np.sqrt(np.sum(delta*delta))))
+    return dict(elements=gotg.size,linear_rounding=transition(from_exact_wi,from_device_wi),
+      nonlinear_rounding=transition(from_device_wi,gotg),first_product_contribution=metrics(delta_wi),
+      nonlinear_contribution=metrics(delta_gelu),last_product_contribution=metrics(residual),
+      total=metrics(total),decomposition_maxabs=float(error),
+      scope='diagnostic decomposition; independent complete-chain gate unchanged')
+
+
+def run(out,smoke=False,model=None,collect_chain_failures=False,isolation=False):
     meta=json.loads((out/'build.json').read_text()); pl=meta['plan']
     if meta['sources']!=sources(): raise ValueError('stale source build')
     for path,key in [('final.xclbin','xclbin'),('insts.bin','instructions')]:
@@ -268,7 +297,7 @@ def run(out,smoke=False,model=None,collect_chain_failures=False):
       interstage_host_reads=0,interstage_host_writes=0,interstage_host_syncs=0,kernel_calls_per_chain=1,
       gates=dict(linear_atol=.0002,linear_rtol=.0002,linear_l2=.00001,geglu_atol=.000002,geglu_rtol=.0078125,
         geglu_l2=.004,chain_atol=.0002,chain_rtol=.002,chain_l2=.002),
-      model_sha256=p.attention.sha(model) if model else None,model_weight_pairs=len(pairs),collect_chain_failures=collect_chain_failures,
+      model_sha256=p.attention.sha(model) if model else None,model_weight_pairs=len(pairs),collect_chain_failures=collect_chain_failures,isolation=isolation,
       activations='synthetic; model weights tested separately when requested')),flush=True)
     def check_numeric(got,ref,atol,rtol,l2):
         diff=np.abs(got-ref); rel=float(np.sqrt(np.sum(diff*diff))/max(np.sqrt(np.sum(ref*ref)),1e-30))
@@ -316,6 +345,8 @@ def run(out,smoke=False,model=None,collect_chain_failures=False):
                       geglu=check_numeric(gotg,refg,.000002,.0078125,.004),
                       wo=check_numeric(gotout,secondref,.0002,.0002,.00001),
                       chain=check_numeric(gotout,refout,.0002,.002,.002))
+                    if isolation and previous is None:
+                        print('MLP_ISOLATION '+json.dumps(dict(seed=seed,kind=kind,**isolate(gotwi,gotg,gotout,refwi,refg,wo))),flush=True)
                     if not verdicts['geglu']['ok']:
                         pos=np.unravel_index(np.argmax(np.abs(gotg-refg)),gotg.shape)
                         print('MLP_GEGLU_DIAGNOSTIC '+json.dumps(dict(position=list(map(int,pos)),
@@ -344,6 +375,6 @@ def run(out,smoke=False,model=None,collect_chain_failures=False):
 if __name__=='__main__':
     ap=argparse.ArgumentParser(); ap.add_argument('command',choices=('build','run')); ap.add_argument('--out',required=True,type=Path)
     ap.add_argument('--shape',nargs=4,type=int,default=[512,1024,2624,1024]); ap.add_argument('--smoke',action='store_true'); ap.add_argument('--model',type=Path)
-    ap.add_argument('--collect-chain-failures',action='store_true'); args=ap.parse_args()
+    ap.add_argument('--collect-chain-failures',action='store_true'); ap.add_argument('--isolation',action='store_true'); args=ap.parse_args()
     if args.command=='build': build(args.out.resolve(),args.shape)
-    else: run(args.out.resolve(),args.smoke,args.model,args.collect_chain_failures)
+    else: run(args.out.resolve(),args.smoke,args.model,args.collect_chain_failures,args.isolation)

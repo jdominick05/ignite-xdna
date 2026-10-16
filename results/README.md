@@ -287,3 +287,13 @@ performance result: [method and qualification](../docs/BENCHMARKS.md#laya-fused-
 - [Collected full-size suite](laya/mlp_full_v10_collected_desktop2_20261016.log): all actual encoder weight pairs, synthetic activations; per-stage checks pass, strict final-output gate fails and process exits nonzero.
 - [Validation](laya/mlp_validation_desktop2_20261016.log): syntax/import/shell gates, offline tests, build history and derived error/count summary.
 - Build re-audit: [tuple/list comparison mistake in the audit harness](laya/mlp_build_audit_desktop2_20261016.log), [normalized JSON comparison passes](laya/mlp_build_reaudit_desktop2_20261016.log); all ELF sizes, stack bounds and magnitude disassembly read from retained artifacts.
+
+## Laya rotary and composed attention
+
+[Composition, code budget and coverage](../docs/BENCHMARKS.md#laya-projection-through-rope-and-attention-device-owned-intermediates-pass-2026-10-16-desktop-2).
+
+- [MLP error isolation](laya/mlp_isolation_v11_desktop2_20261016.log): unchanged device code and failed strict gate; post-dispatch decomposition separates upstream and nonlinear contributions.
+- [First composed attention smoke](laya/rotary_v3_smoke_desktop2_20261016.log): global/full-valid projection, RoPE, formatting and attention in one dispatch.
+- [Expanded run with incorrect per-row layout labels](laya/rotary_v4_all_suite_desktop2_20261016.log): retained reporting error; superseded for per-layout coverage by the next log.
+- [Correctly labelled expanded suite](laya/rotary_v5_all_model_suite_desktop2_20261016.log): all mask layouts and first actual QKV weights on synthetic activations; gates pass.
+- [Validation](laya/rotary_isolation_validation_desktop2_20261016.log): full syntax/import/shell gates, offline tests, error summaries, ELF/CDO identity, stack/SRAM audits and retained combined-image overflow.

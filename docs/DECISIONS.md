@@ -2480,3 +2480,20 @@ Use explicit IEEE magnitude handling in this GELU prototype: the current vector
 than inferring float semantics from the C++ type. RTP row selection and M-group DMA
 splitting address the measured build limits without changing the existing default
 primitive program. See [failures, coverage and remaining work](BENCHMARKS.md#laya-composed-mlp-device-handoffs-work-strict-chain-gate-fails-2026-10-16-desktop-2).
+
+## Laya rotary and attention: specialize the image, preserve the whole-model gate (2026-10-16)
+
+Use a separate attention image for QKV projection, FP32 rotary, bf16 packet conversion
+and attention. The combined program with GeGLU exceeds instruction memory before device
+execution. This is a staging choice, not evidence that full Laya can run quickly through
+two images: cross-image BO handoff and serial scheduling cost remain unmeasured.
+
+Constant-fold the model's fixed rotary coefficients before inference. Keep activation
+rotation, masking and layout conversion on the device, and require identical core and
+initialization hashes across runtime mask layouts. Preserve finite-mask all-masked-row
+semantics and the existing attention gates. Passing this chain does not establish pinned
+model decisions or qualify norm transitions. See [coverage and limits](BENCHMARKS.md#laya-projection-through-rope-and-attention-device-owned-intermediates-pass-2026-10-16-desktop-2).
+
+The MLP follow-up isolates both upstream rounding and nonlinear/conversion contributions
+without changing device code or feeding reference activations back to it. Its pointwise
+failure stays a failure; small relative L2 is not a replacement for the retained gate.
