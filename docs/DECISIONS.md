@@ -3533,3 +3533,20 @@ restart a partial run under the same artifact name.
 pass 16 cases; [legacy validation](../results/laya/small_lookup_accuracy_v1_legacy_validation_desktop2_20261016.log)
 passes. No frozen result or adoption follows from registration. Keep packing
 adopted until the full report and packing bit-equivalence gate pass.
+
+## Laya smaller-query frozen score after interruption (2026-10-16, Desktop 2)
+
+The [attempt protocol](../results/laya/small_lookup_accuracy_attempt2_v1_protocol_desktop2_20261016.json)
+preserves the user-interrupted score and its raw-log/checkpoint hashes. The last
+emitted progress was 450, but the saved checkpoint contains 475 completed items;
+the persisted snapshot is authoritative. The process stopped with exit 1 and
+the device had no remaining hardware contexts. This partial score supplies no
+full accuracy verdict.
+
+Use a fresh complete attempt with separate output, checkpoint and raw-log names.
+Score every item from zero, without copying or pooling partial outputs. The
+original committed registration, scorer and source/artifact identities, C0-C5,
+and extra packing-output bit-equivalence requirement remain unchanged. Disclose
+the observed partial outcomes; this is still known-set revalidation. The new
+protocol is committed before starting the new attempt. No timing claim or
+serving adoption follows from starting it.

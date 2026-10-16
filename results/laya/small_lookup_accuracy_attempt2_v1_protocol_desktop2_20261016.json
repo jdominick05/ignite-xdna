@@ -1,0 +1,37 @@
+{
+  "protocol": "Fresh complete scoring attempt after user-requested interruption; no checkpoint reuse",
+  "machine": "Desktop 2",
+  "registered_utc": "2026-10-16T19:56:59.468619+00:00",
+  "original_registration": {
+    "path": "results/laya/small_lookup_accuracy_v1_prereg_desktop2_20261016.json",
+    "sha256": "a4b548eff41669ac2743fdf9509ed495d8e90b2814c3b8851bc8e9f99611a913",
+    "registration_id": "c52e410509aeb2337300fc43f7fd479313d3be7b7ca1a0c87ebdef669aed681b"
+  },
+  "interrupted_attempt": {
+    "checkpoint": "scratch/laya/native_accuracy/native_small_lookup_kv2_bf16_v1.checkpoint.npz",
+    "checkpoint_sha256": "c8a0e315f7a39eeca1fe9aaaba8e5a70ad69cb47528240cae217060b8b43452c",
+    "raw_log": "scratch/laya_compare/small_lookup_accuracy_v1_full_desktop2_20261016.raw.log",
+    "raw_sha256": "637e17a7764ba87f1cde4d358c9f877a9e5be41def53689179a3a5f3cc0bdd19",
+    "snapshot": {
+      "registration_id": "c52e410509aeb2337300fc43f7fd479313d3be7b7ca1a0c87ebdef669aed681b",
+      "registration_commit": "827decd411cd3e0e6bd83dffc3468135fe1cb703",
+      "items_sha256": "138b8a76ce66af5e838e2558832be3f0d33b8740c326ba35616185d079f33f59",
+      "model": "native_small_lookup_kv2_bf16_v1",
+      "completed": 475,
+      "complete": false,
+      "cpu_neural_oracle_calls": 0
+    },
+    "termination": "Ctrl+C; exec session exit 1; owned processes absent; no hardware contexts after stop; no complete accuracy verdict",
+    "progress_discrepancy": "Last emitted progress was 450; persisted checkpoint contains 475 and is authoritative"
+  },
+  "new_attempt": {
+    "output": "scratch/laya/native_accuracy/native_small_lookup_kv2_bf16_v1_attempt2.npz",
+    "raw_log": "scratch/laya_compare/small_lookup_accuracy_attempt2_v1_full_desktop2_20261016.raw.log",
+    "command_script": "scratch/laya_transformer/small_lookup_accuracy_attempt2_v1.sh",
+    "command_sha256": "b32a4361d89150da9dc170182538685b6569a899973f76a453c0d99975755fe6",
+    "scorer": "kernels/laya_transformer/small_lookup_accuracy.py",
+    "scorer_sha256": "d8e0030c43a9f90c8053dce506852bea6a154da094286535c79dab0fe12047f4",
+    "policy": "Score every original item from zero in original order; fresh sessions; no copying or pooling from partial outputs; all original 817 identities, C0-C5 and extra packing equivalence unchanged; full accuracy timing ineligible"
+  },
+  "disclosure": "First 475 partial candidate outcomes exist from the interrupted attempt. This remains known-set revalidation, with no refitting or changed criteria."
+}

@@ -719,3 +719,5 @@ Two-output lookup GEMM primitive: [initial build](laya/window_lookup_primitive_v
 [offline validation and live packing identity](laya/window_lookup_primitive_v1_validation_desktop2_20261016.log),
 [lowered lock census](laya/window_lookup_primitive_v1_lock_census_desktop2_20261016.log).
 [Offline scope and remaining device gates](../docs/DECISIONS.md#laya-two-output-lookup-gemm-primitive-prepared-offline-2026-10-16-desktop-2).
+
+- `laya/small_lookup_accuracy_attempt2_v1_protocol_desktop2_20261016.json`: preserved interrupted score and separate fresh full-attempt protocol; [decision record](../docs/DECISIONS.md#laya-smaller-query-frozen-score-after-interruption-2026-10-16-desktop-2).
