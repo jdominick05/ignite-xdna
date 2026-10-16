@@ -2534,3 +2534,9 @@ score storage and the shared product body. Check linked code, conservative stack
 every physical SRAM span for the actual candidate; object-size sums are not that audit.
 Keep the residual/MLP failures despite normalized-output improvements, and retain the
 frozen complete-model decision criteria. See the [precision investigation](BENCHMARKS.md#experimental-fp32-exponential-and-two-part-probabilities).
+
+Dynamic valid/local mask controls patch decoded WRITE fields at addresses derived from
+the actual core control allocations. Match other instruction bytes and live query-header
+controls against separately compiled references; matching raw numeric words is insufficient.
+Separate offline length coverage from measured mask coverage and retain the numerical
+failures. See [dynamic mask evidence](BENCHMARKS.md#dynamic-mask-instructions-without-recompiling-the-core-image).

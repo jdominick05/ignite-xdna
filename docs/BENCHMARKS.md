@@ -18198,3 +18198,30 @@ paths are opt-in through `--precise-exp --precise-probs`; existing default progr
 their arithmetic. All runs are checks-only. Other mask layouts, real token inputs,
 remaining layers, embeddings/head, frozen decisions and eligible end-to-end timing are
 still unverified for this candidate.
+
+### Dynamic mask instructions without recompiling the core image
+
+The [dynamic smoke](../results/laya/block_dynamic_v1_smoke_desktop2_20261016.log)
+derives the valid/local RTP addresses from each core's own audited control allocation.
+It patches only explicit WRITE value fields; no instruction word is selected by its
+numeric value. Base controls must have one initial write per core/field, and changed
+framing, missing cores, duplicate writes or unexpected register encodings are refused.
+
+Before hardware execution, the patcher compares all other operation bytes and the
+valid/local state consumed by query-header commands against eight independently
+compiled reference streams. It also checks framing and control slots for every valid
+length from zero through 512, in both global and local modes: 1,026 offline variants.
+This does not establish hardware coverage for every length. The executable cores and
+initialization image remain the source-bound precise-probability block image; only
+instruction controls differ.
+
+On Desktop 2, 32 smoke comparisons cover global/local masks at valid lengths 512, 193,
+one and zero, synthetic random weights and the first actual block weights on synthetic
+activations, and both buffer poisons. All direct operator checks pass and cleanup
+reports idle while alive. Two normalized-output, 14 residual-composition and 24 retained
+strict MLP comparisons fail. These numerical failures remain nonzero exits, not a
+qualification of complete-block accuracy. The [validation](../results/laya/block_dynamic_validation_desktop2_20261016.log)
+passes 66 offline tests and the full legacy syntax/import/shell checks. The new tests
+exercise relocated register allocations, wrong live values despite otherwise identical
+operations, corrupt framing, missing cores and already-patched bases. No eligible timing
+was collected. Arbitrary lengths on silicon and repeated encoder layers remain open.

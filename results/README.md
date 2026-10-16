@@ -324,3 +324,5 @@ Precision follow-up backs [the FP32 exponential and two-part probability investi
 - [Expanded exponential qualification](laya/exp_qualified_v1_desktop2_20261016.log): all lookup entries/lanes, range and zero, two poisons.
 - Two-part probabilities: [smoke](laya/block_probs_v1_smoke_desktop2_20261016.log), [global-mask suite](laya/block_probs_v1_global_suite_desktop2_20261016.log); normalized outputs pass, residual and strict MLP failures remain.
 - [Validation and default object identity](laya/block_precision_validation_desktop2_20261016.log).
+
+Dynamic masks back [the instruction-control investigation](../docs/BENCHMARKS.md#dynamic-mask-instructions-without-recompiling-the-core-image): [eight-mask device smoke with retained numerical failures](laya/block_dynamic_v1_smoke_desktop2_20261016.log) and [offline/syntax/import validation](laya/block_dynamic_validation_desktop2_20261016.log).
