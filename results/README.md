@@ -679,6 +679,8 @@ Laya L1 GEMM: [qualification and retained reference failures](laya/l1_gemm_v3_qu
 [Preregistration](laya/l1_gemm_v3_prereg_desktop2_20261016.json) and
 [registration hash](laya/l1_gemm_v3_registration_desktop2_20261016.log) back the
 [slope protocol](../docs/DECISIONS.md#laya-l1-arithmetic-slope-diagnostic-2026-10-16-desktop-2).
+The [eligible observations and fits](laya/l1_gemm_v3_timing_desktop2_20261016.log)
+support the [resident arithmetic result and scope](../docs/BENCHMARKS.md#laya-isolated-resident-arithmetic-improves-beyond-the-full-model-change-2026-10-16-desktop-2).
 
 Two-output lookup GEMM primitive: [initial build](laya/window_lookup_primitive_v1_build_desktop2_20261016.log),
 [explicit control/address build](laya/window_lookup_primitive_v2_controls_build_desktop2_20261016.log),

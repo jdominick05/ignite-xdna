@@ -19818,3 +19818,33 @@ code and conservative stack bounds fit their reserved memory. The
 include the signed-zero regression and corrupted packet/completion rejection;
 [legacy validation](../results/laya/l1_gemm_v3_validation_desktop2_20261016.log) passes.
 The original serving image and frozen decision/accuracy gates remain unchanged.
+
+## Laya isolated resident arithmetic improves beyond the full-model change (2026-10-16, Desktop 2)
+
+The [eligible L1 slope run](../results/laya/l1_gemm_v3_timing_desktop2_20261016.log)
+follows the [registration](../results/laya/l1_gemm_v3_prereg_desktop2_20261016.json)
+committed as `a04a1c2` before timing. Six fresh profiles use the preregistered
+empty/generic/specialized/specialized/generic/empty order. Each has three samples
+at each of four call counts. The same one-core 32-by-64-by-64 tile accumulates
+resident operands; DMA and zero initialization occur outside the repeated loop.
+
+| Object | Fitted ns/call | ns/call above empty | Fit R² |
+|---|---:|---:|---:|
+| Empty control | 15.1274 | — | 0.988150 |
+| Unchanged serving GEMM | 3305.8070 | 3290.6796 | 0.999999 |
+| Specialized GEMM | 2030.5569 | 2015.4295 | 0.999996 |
+
+Every measured output bit, both input buffers and every output-tail guard pass,
+including the largest call count. Sources, artifacts and qualification records
+remain unchanged. Each profile releases to idle; the bounded process exits zero,
+reports no foreign contention and sets `timing_eligible: true`. The log retains
+every observation, fit and raw archive hash. These are wall-time slopes without
+a core-clock or peak-rate conversion, not hardware cycle-counter observations.
+
+The specialized object speeds up resident accumulated arithmetic under this
+placement. That narrower result coexists with the [small overlapping full-inference change](#laya-specialized-gemm-yields-a-small-overlapping-timing-change-2026-10-16-desktop-2).
+The resident test excludes stream/lock waits, reset work and the other model
+operators, and uses a different SRAM placement from serving. It cannot assign
+their costs or establish array utilization. Count the actual schedule and measure
+the remaining work before attributing the full-model gap. Qualified packing
+remains adopted and all original frozen gates remain required for a candidate.

@@ -3418,3 +3418,10 @@ stop on any mismatch or timeout. Fit wall seconds against call count, then subtr
 the empty-call slope. Keep per-profile observations and fit quality. This is a
 one-core resident arithmetic diagnostic; it supplies no full-model, array-throughput
 or streamed-memory claim. See the [registration hash](../results/laya/l1_gemm_v3_registration_desktop2_20261016.log).
+
+The [eligible L1 result](BENCHMARKS.md#laya-isolated-resident-arithmetic-improves-beyond-the-full-model-change-2026-10-16-desktop-2)
+shows a lower specialized arithmetic slope despite the small overlapping full-model
+change. Do not conclude that compiler specialization failed to improve arithmetic,
+or that memory is therefore the sole bottleneck. The test changes placement and
+excludes reset, stream/lock waits and other operators. Use actual schedule counts
+and further attribution to select the next optimization.
