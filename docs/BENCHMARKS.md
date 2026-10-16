@@ -17838,3 +17838,88 @@ and invoke `paired.py run --registration ...` through the timing-eligible resear
 The [validation log](../results/laya/transformer_large_validation_desktop2_20261016.log)
 records 38 offline tests, the full legacy syntax/import and shell gates, default standalone
 attention object identity, qualified comparison counts and the paired summary.
+
+## Laya composed MLP: device handoffs work, strict chain gate fails (2026-10-16, Desktop 2)
+
+`kernels/laya_transformer/mlp.py` composes the two encoder MLP matrix products and
+GeGLU in one dispatch: `[512,1024] -> [512,5248] -> [512,2624] -> [512,1024]`.
+The first half of the first product passes through GELU and multiplies the second
+half, matching the exported graph. Both products use bf16 operands and FP32
+accumulation; GeGLU consumes FP32 and emits RNE bf16 in the next product's tiled
+operand format. Static weights and activations occupy disjoint regions of one arena
+BO. The same BO object supplies both kernel tensor arguments, preserving XRT
+dependency tracking and the full allocation group ID. No scalar device address is used.
+
+The instruction stream waits for producer DMA completion before consuming its region.
+RTP selects the operation and K-block count after query acquisition; on-core counters
+supply product reset/final flags without CPU rewriting of an intermediate header.
+Each GeGLU worker consumes the four multicast value packets and selects its own row
+packet. The second product gathers device-packed blocks directly. Its M groups use
+separate DMA transfers and completion waits to fit the Shim dimension limits.
+There are zero inter-stage host reads, writes or syncs: all three phases execute
+inside one kernel call. They still traverse DDR. Inputs and weights are initialized
+before dispatch, and CPU reference work reads results only after the complete chain.
+
+### Retained failures
+
+The [build/validation record](../results/laya/mlp_validation_desktop2_20261016.log)
+records the compile-only attempts; the [ELF/disassembly re-audit](../results/laya/mlp_build_reaudit_desktop2_20261016.log)
+recomputes their sizes and conservative stack bounds from the retained artifacts.
+A row-constant dispatcher produced cores up to
+16,736 bytes and failed CDO loading; the selector now comes from RTP. Outlining GELU
+reduces its recorded frames, and the prototype reserves a larger stack while keeping
+the conservative sum-of-frames audit. A full-shape transfer with four active dimensions
+and a long inner packet was rejected before execution; separate M-group transfers fix
+that representation. These were build failures, not NPU timing measurements.
+
+The [first smoke](../results/laya/mlp_v4_smoke_desktop2_20261016.log) stops before context
+creation because SciPy is absent. The runner now uses Python's `math.erf` for the
+qualification oracle. [Negative-input GeGLU](../results/laya/mlp_v5_smoke_desktop2_20261016.log)
+then fails while both linear checks pass. The [diagnostic](../results/laya/mlp_v6_diagnostic_desktop2_20261016.log)
+shows corrupted negative-gate results. Object disassembly shows `abs(float-vector)`
+lowering to integer `vabs_gtz.s32`. Explicit IEEE sign-bit clearing and floating
+subtraction for negation pass the [small-chain smoke](../results/laya/mlp_v7_smoke_desktop2_20261016.log).
+The two source changes were applied together; this is not an isolated negation ablation.
+
+### Full-size result remains FAIL
+
+The [first full-size run](../results/laya/mlp_full_v9_suite_desktop2_20261016.log) passes
+both linear checks and GeGLU but fails the strict final-output pointwise gate. The
+[collected suite](../results/laya/mlp_full_v10_collected_desktop2_20261016.log) keeps the
+same tolerances, visits every case, then exits with failure. It makes 74 comparisons:
+three seeds times random/zero/basis patterns times two initial poisons, plus all 28
+actual encoder weight pairs with one synthetic activation fixture and two poisons.
+The graph and each selected original weight tensor are hashed. These are not captured
+model activations or complete model predictions.
+
+| Check | Passing comparisons | Maximum absolute error | Maximum relative L2 |
+|---|---:|---:|---:|
+| First matrix product | 74 / 74 | 0.00001006200909614563 | 0.00000024801637034534055 |
+| GeGLU including bf16 output conversion | 74 / 74 | 0.41497044447720555 | 0.001672879531625274 |
+| Second matrix product against device-GeGLU operands | 74 / 74 | 0.001150188036262989 | 0.00000081831224464871 |
+| Complete chain against independent reference | 12 / 74 | 0.03418919383227603 | 0.00006962958481509391 |
+
+Each linear check requires `abs <= 0.0002 + 0.0002*abs(ref)` and relative L2 at most
+`0.00001`. GeGLU, including its intentional bf16 rounding, requires
+`abs <= 0.000002 + 0.0078125*abs(ref)` and relative L2 at most `0.004`.
+The complete-chain check requires `abs <= 0.0002 + 0.002*abs(ref)` and relative L2
+at most `0.002`. Its relative L2 passes, but 62 comparisons fail pointwise. Small
+arithmetic differences crossing bf16 rounding boundaries are a plausible explanation;
+their contribution has not been isolated from nonlinear approximation error.
+The gates are not loosened, and this is not a qualified full-size MLP accuracy result.
+
+All guards, untouched arena regions, input/weight immutability, padded rows/columns,
+written payloads and poison-independence checks pass. One context serves the suite
+and releases idle while the process is alive. The arena occupies 37,395,840 bytes.
+Every linked core is 15,488 bytes; helper, physical SRAM span and conservative stack
+audits pass with a 4,608-byte stack reservation. The program also links attention/norm,
+but their transitions through this new RTP dispatcher have not been qualified.
+
+The [validation log](../results/laya/mlp_validation_desktop2_20261016.log) records the
+full legacy syntax/import/shell checks and 41 offline tests. New independent tests
+cover arena separation, every full-shape gate/value feature address and every byte
+of the second product's activation gather, including padded token rows.
+All hardware runs here are correctness-only. Their logged dispatch durations do not
+establish a speedup or complete-Laya latency. Rotary transforms, embedding/gather,
+attention operand conversion, residual/norm composition and the decision tail remain
+required, as do complete-model pinned decision accuracy and same-sitting timing.

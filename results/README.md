@@ -275,3 +275,15 @@ performance result: [method and qualification](../docs/BENCHMARKS.md#laya-fused-
 - [Expanded geometry qualification](laya/transformer_large_all_v1_suite_desktop2_20261016.log): large projections and padded small-head matrix shapes with synthetic operands; fixed gates pass.
 - [Paired sitting](laya/transformer_large_paired_desktop2_20261016.log): serial ABBA against the frozen smaller-tile program, positive matrix-boundary saving; timing eligible.
 - [Validation](laya/transformer_large_validation_desktop2_20261016.log): syntax/import gate, offline tests, object identity and derived numerical/performance summaries.
+
+## Laya composed MLP
+
+[Device dataflow, retained failures and strict chain verdict](../docs/BENCHMARKS.md#laya-composed-mlp-device-handoffs-work-strict-chain-gate-fails-2026-10-16-desktop-2).
+
+- [Preflight dependency failure](laya/mlp_v4_smoke_desktop2_20261016.log): no context opened.
+- Negative-input GeGLU failure: [smoke](laya/mlp_v5_smoke_desktop2_20261016.log), [diagnostic](laya/mlp_v6_diagnostic_desktop2_20261016.log).
+- [Corrected small-chain smoke](laya/mlp_v7_smoke_desktop2_20261016.log): both initial poisons pass.
+- [First full-size strict gate failure](laya/mlp_full_v9_suite_desktop2_20261016.log).
+- [Collected full-size suite](laya/mlp_full_v10_collected_desktop2_20261016.log): all actual encoder weight pairs, synthetic activations; per-stage checks pass, strict final-output gate fails and process exits nonzero.
+- [Validation](laya/mlp_validation_desktop2_20261016.log): syntax/import/shell gates, offline tests, build history and derived error/count summary.
+- Build re-audit: [tuple/list comparison mistake in the audit harness](laya/mlp_build_audit_desktop2_20261016.log), [normalized JSON comparison passes](laya/mlp_build_reaudit_desktop2_20261016.log); all ELF sizes, stack bounds and magnitude disassembly read from retained artifacts.

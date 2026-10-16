@@ -2465,3 +2465,18 @@ The same-sitting paired matrix boundary wins against the frozen smaller-tile con
 It does not establish an attention-speed win or complete-model latency. Keep that control
 and its logs; remove inter-stage host packing during composition rather than extrapolating
 the isolated matrix result into a model claim. See [qualification and paired evidence](BENCHMARKS.md#laya-larger-gemm-tiles-reduce-a-complete-matrix-boundary-by-33-2026-10-16-desktop-2).
+
+## Laya composed MLP: preserve the failed final-output gate (2026-10-16)
+
+Keep the single-arena, single-dispatch MLP as an experimental device-dataflow path.
+The matrix products and GeGLU pass their individual checks with every encoder weight
+pair, but the stricter complete-chain pointwise gate fails. Do not promote stage
+success to complete-chain accuracy, or the small-chain smoke to full-model success.
+Keep the failed suite and its unchanged tolerances. Isolate the numerical difference
+and retain the pinned model decision gate before claiming deployable inference.
+
+Use explicit IEEE magnitude handling in this GELU prototype: the current vector
+`abs` API emitted integer absolute value on float bits. Read the disassembly rather
+than inferring float semantics from the C++ type. RTP row selection and M-group DMA
+splitting address the measured build limits without changing the existing default
+primitive program. See [failures, coverage and remaining work](BENCHMARKS.md#laya-composed-mlp-device-handoffs-work-strict-chain-gate-fails-2026-10-16-desktop-2).
