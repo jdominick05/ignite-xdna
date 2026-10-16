@@ -409,3 +409,11 @@ Backs [native frozen-arm registration](../docs/BENCHMARKS.md#laya-native-accurac
 
 - [Addendum](laya/native_accuracy_v1_prereg_desktop2_20261016.json) and [registration log](laya/native_accuracy_v1_registration_desktop2_20261016.log): frozen native source/artifact map, original items/reference/criteria unchanged, before native labelled final scores.
 - [Validation](laya/native_accuracy_v1_validation_desktop2_20261016.log): offline scorer/provenance/gate checks and legacy gates. Full frozen native scores remain pending.
+
+## Laya offline phase and FIFO diagnostics
+
+Backs [prepared phase and buffering diagnostics](../docs/BENCHMARKS.md#laya-phase-and-fifo-diagnostics-prepared-offline-2026-10-16-desktop-2).
+
+- Phase streams: [build](laya/mlp_phases_v1_build_desktop2_20261016.log), [151-check validation](laya/mlp_phases_v1_validation_desktop2_20261016.log). Exact resident core/init, no device run yet.
+- FIFO candidates: [pruned single](laya/mlp_fifo_v2_pruned_single_build_desktop2_20261016.log), [query depth](laya/mlp_fifo_v3_query_build_desktop2_20261016.log), [key/value depth](laya/mlp_fifo_v4_keyvalue_build_desktop2_20261016.log), [both deeper](laya/mlp_fifo_v1_double_build_desktop2_20261016.log).
+- [156-check validation](laya/mlp_fifo_v1_validation_desktop2_20261016.log): compile/audit and host checks only; numerical parity and performance remain unverified.

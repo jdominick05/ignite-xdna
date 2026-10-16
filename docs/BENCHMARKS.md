@@ -18818,3 +18818,51 @@ pass or an eligible latency measurement.
 passes 146 offline checks, including checkpoint/provenance rejection and original gate
 boundary cases, together with the legacy syntax/import/shell gate and previous artifact
 checks. These checks open no hardware context and do not establish model accuracy.
+
+## Laya phase and FIFO diagnostics prepared offline (2026-10-16, Desktop 2)
+
+Two diagnostics are prepared separately from the frozen native accuracy arm. Their
+compilation does not modify any registered source or artifact and opens no hardware
+context. Device qualification and performance measurements remain pending until the
+full accuracy run releases the single-tenant device.
+
+`mlp_phases.py` [builds four M128 streams](../results/laya/mlp_phases_v1_build_desktop2_20261016.log)
+for Wi, GeGLU, Wo and normalization. Each retains the exact existing vector core ELF
+and initialization image. Concatenating the phase streams preserves every programmed
+transfer and existing output wait in its original order, as checked offline for every
+row bucket. Standalone phases initialize their own controls rather than inheriting
+another stream's state. `mlp_phases_probe.py` prepares complete-model comparisons with
+66 original versus 150 split dispatches and separate phase wall timings. The extra
+dispatches can perturb latency; no core-cycle or bandwidth conclusion follows from the
+build. [Phase validation](../results/laya/mlp_phases_v1_validation_desktop2_20261016.log)
+passes 151 offline checks and the legacy gates. No split-stream inference has run yet.
+
+`mlp_fifo.py` removes scratch/mask buffers referenced only by the vector image's constant
+false attention branch, and varies query and key/value FIFO depths. It retains the
+original arithmetic kernel object byte-for-byte and generates fresh control/transfer
+streams for each new resident image. It does not claim the original physical buffer
+addresses or initialization image are unchanged. These are M128 buffering candidates,
+not replacements for the registered model.
+
+| Offline candidate | Core query depth | KV path depth | MemTile query depth | Linked code bytes/core |
+|---|---:|---:|---:|---:|
+| Pruned single-buffer control | 1 | 1 | 1 | 14992 |
+| Deeper query path | 2 | 1 | 2 | 15040 |
+| Deeper key/value path | 1 | 2 | 1 | 15024 |
+| Both paths deeper | 2 | 2 | 2 | 15072 |
+
+The [single-buffer control](../results/laya/mlp_fifo_v2_pruned_single_build_desktop2_20261016.log),
+[query variant](../results/laya/mlp_fifo_v3_query_build_desktop2_20261016.log),
+[key/value variant](../results/laya/mlp_fifo_v4_keyvalue_build_desktop2_20261016.log)
+and [combined variant](../results/laya/mlp_fifo_v1_double_build_desktop2_20261016.log)
+all pass linked code, stack and physical span audits; their conservative stack bound
+is 5,184 bytes inside the unchanged 5,376-byte reservation. Offline checks retain all
+live arithmetic calls, verify the requested FIFO declarations and reject invalid depths.
+[Combined validation](../results/laya/mlp_fifo_v1_validation_desktop2_20261016.log)
+passes 156 offline checks, legacy syntax/import/shell gates and prior artifact audits.
+
+`mlp_fifo_probe.py` prepares a same-session complete-model comparison using each
+candidate's own instructions and allocation groups, with CPU neural/oracle calls
+forbidden. These candidates have not run on hardware. No numerical equivalence,
+latency reduction, bandwidth bottleneck or speedup is established by these offline
+builds. The frozen native accuracy arm continues to use its original qualified images.
