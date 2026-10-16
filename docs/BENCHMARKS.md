@@ -20049,3 +20049,23 @@ head-attention invocations. Every session closes to idle and all registered
 identities remain unchanged. The bounded process exits zero, observes no foreign
 contention and records `timing_eligible: true`. The qualified accuracy result
 remains intact. No fresh hybrid/CPU ratio or cross-sitting pooled result is claimed.
+
+## Laya smaller-query MLP phase split passes complete layers (2026-10-16, Desktop 2)
+
+The [device layer gate](../results/laya/small_lookup_phase_layer_v1_desktop2_20261016.log)
+passes all six cases: complete MLP layers 0 and 1 on each of three unlabelled
+fixtures. The qualified complete smaller-query model supplies captured NPU inputs
+and expected outputs. Its five contexts close before an isolated one-context
+replay opens the same qualified core image. Input projection, GeGLU, output
+projection and normalization execute as four consecutive phase dispatches.
+Every entire arena is bit-exact to the original single MLP dispatch, including
+unchanged regions, with zero mismatched words and zero CPU neural/oracle calls.
+
+The [offline phase proof](DECISIONS.md#laya-current-smaller-query-mlp-phase-streams-2026-10-16-desktop-2)
+checks the actual compiled streams and unchanged core/init before the device run.
+Host captures and arena copies are explicit diagnostic setup. They do not enter
+the qualified serving path or supply phase timing measurements. All registered
+identities remain unchanged, cleanup releases instruction BOs before the context
+and device, and the bounded process exits zero with idle contexts while alive.
+Timing is ineligible. This establishes complete isolated-layer equivalence;
+full-model phase-split parity and split/unsplit latency perturbation remain open.

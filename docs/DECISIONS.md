@@ -3597,3 +3597,32 @@ A current phase comparison must keep the qualified core/init, check compiled
 transactions and bit-exact outputs, quantify splitting/dispatch perturbation
 against the unsplit control in the same sitting, and retain the frozen criteria
 before adopting a new arithmetic or transport image.
+
+## Laya current smaller-query MLP phase streams (2026-10-16, Desktop 2)
+
+The [offline build](../results/laya/small_lookup_phases_v1_build_desktop2_20261016.log)
+partitions the qualified smaller-query schedule into input projection, GeGLU,
+output projection and normalization. New `small_lookup_phases.py` replays the
+parent's ordered events, cutting only after complete query/KV/output queue groups
+have drained at existing waits. Concatenating the phase events exactly recovers
+the qualified schedule. The four images retain the parent's linked arithmetic
+object, complete compiled core allocation audit and initialization binaries.
+Every compiled packet address, effective control value and completion token
+passes the parent verifier against the selected event subset.
+
+DERIVED compiled transaction counts (not physical traffic or timing):
+
+| Phase | Queues | Completion waits | Word addresses checked |
+|---|---:|---:|---:|
+| Input projection | 252 | 84 | 9063936 |
+| GeGLU | 123 | 41 | 1020736 |
+| Output projection | 48 | 16 | 4216064 |
+| Normalization | 96 | 32 | 598528 |
+
+[Offline boundary, compiled mutation and privacy checks](../results/laya/small_lookup_phases_v1_validation_desktop2_20261016.log)
+pass 34 cases, including corrupted packet lengths, RTP modes and completion
+columns in every actual phase stream; [legacy validation](../results/laya/small_lookup_phases_v1_legacy_validation_desktop2_20261016.log)
+also passes. The [complete-layer replay](BENCHMARKS.md#laya-smaller-query-mlp-phase-split-passes-complete-layers-2026-10-16-desktop-2)
+qualifies the phase concatenation on device. Full-model parity and a preregistered
+split/unsplit comparison are still required before interpreting phase timings.
+The diagnostic adds dispatches and does not replace the qualified serving stream.
