@@ -352,3 +352,11 @@ Backs [device type embedding, norm and biased QKV](../docs/BENCHMARKS.md#laya-fi
 - Vector operators: [initial qualification](laya/vector_v2_operators_desktop2_20261016.log), [repeat with strict GELU gates](laya/vector_v3_strict_operators_desktop2_20261016.log); the repeat supersedes the initial GELU tolerance.
 - Complete encoder into the first head prelude: [fixture](laya/head_pre_v2_fixture_desktop2_20261016.log), [first labelled item](laya/head_pre_v3_labelled_desktop2_20261016.log). Direct operators pass; composition and strict MLP failures remain nonzero exits.
 - [Validation](laya/vector_head_validation_desktop2_20261016.log): offline/syntax/import/shell checks, linked code/stack audits, runtime compatibility and numerical summaries.
+
+## Laya both head blocks
+
+Backs [device head attention and ReLU MLPs](../docs/BENCHMARKS.md#laya-both-head-blocks-device-attention-and-relu-mlps-scorer-still-absent-2026-10-16-desktop-2).
+
+- First head: [unrotated attention](laya/head_attention_v3_fixture_desktop2_20261016.log), [output projection and ReLU MLP into next norm](laya/head_post_v1_fixture_desktop2_20261016.log).
+- Both heads after the full encoder: [fixture](laya/head_second_v1_fixture_desktop2_20261016.log), [first labelled item](laya/head_second_v2_labelled_desktop2_20261016.log). Direct operators pass, composed and strict MLP gates retain exit 1; scorer/action outputs remain absent.
+- [Validation](laya/heads_validation_desktop2_20261016.log): offline/syntax/import/shell gates, resident-core identity, numerical summaries and retained failures.

@@ -18427,3 +18427,72 @@ runs are checks-only and their durations include CPU references and extensive ch
 The remaining two head attention/MLP blocks, scorer and action tail still prevent
 complete model outputs. Frozen decision accuracy and eligible whole-model speed remain
 unmeasured; this checkpoint establishes neither a speedup nor complete-model correctness.
+
+## Laya both head blocks: device attention and ReLU MLPs, scorer still absent (2026-10-16, Desktop 2)
+
+The [first head-attention run](../results/laya/head_attention_v3_fixture_desktop2_20261016.log)
+consumes the resident biased QKV without recomputing it. Identity cosine/sine packets
+reuse the qualified conversion instructions, and the resulting unrotated Q/K/V match
+the rounded biased projection bits exactly. The head uses global valid-key attention,
+then packs its output for the following matrix product. Existing attention tolerances
+remain unchanged. Maximum direct attention absolute error is 5.5699496225747325e-05,
+relative L2 4.2171160078342885e-06. Query headers, key ramps, guards and packed output
+pass their checks. The head's exported negative-infinity mask and the encoder's finite
+mask select the same keys for nonempty input; empty head masks are explicitly refused.
+This is not a qualification of their differing all-masked semantics.
+
+The [first head post stage](../results/laya/head_post_v1_fixture_desktop2_20261016.log)
+adds its output projection and FP32 bias, residual/norm2, a biased ReLU MLP and the
+following head's norm1. Output weights are transposed according to the exported Gemm;
+the MLP retains its original ReLU and biases. A separate activation bank accommodates
+the wider ReLU result. Biased projection scatter overwrites only X, preserving R until
+the next residual operation. All direct linear, bias, ReLU and final norm checks pass.
+The packed norm2 comparison permits its BF16 rounding error; it does not claim a retained
+FP32 norm2 observation after the buffer is reused. Composition still fails: the following
+head's normalized input has relative L2 0.0023444427162116494 with 1,593 pointwise failures,
+and residual relative L2 0.00790910143405199 with 19,684 failures.
+
+The second head is then connected on the
+[fixture](../results/laya/head_second_v1_fixture_desktop2_20261016.log) and
+[first labelled AG News item](../results/laya/head_second_v2_labelled_desktop2_20261016.log).
+Its QKV reads the previous on-device norm, reuses the same attention program and follows
+with its own learned output projection, norm2 and biased ReLU MLP. The final operation
+is the graph's raw residual sum, with no added normalization. That sum is stored in both
+Y and R slots for later consumption. The observed final-sum bits match the independent
+FP32-add reference exactly on both inputs.
+
+Each complete run uses 63 serial dispatches through the stem, all 28 encoder layers
+and both head attention/MLP blocks. The same two resident core images and contexts serve
+every stage. Independently compiled new instruction layouts match their existing
+executable/initialization payloads; attention remains 15,600 bytes per core and the
+vector/MLP image 14,624. The extended arena contains 204,674,016 words. All constants
+and instructions are resident before the first dispatch; integer token/type address
+scheduling remains host work, with zero interstage host activation reads, writes or
+syncs. Stopped-prefix observations supply only independent checks, never device inputs.
+
+Both inputs run ten prefixes under two poisons. Direct operators, exact ReLU packing,
+biased sums, residual bits, guards, immutable constants and all mutable-region poison
+digests pass. The second attention's direct error on the fixture is
+0.0002746739058112624 maximum absolute, relative L2 4.822021508363176e-06. These are
+direct attention comparisons against the actual biased device QKV, not original-model
+decision accuracy. The independent quantized-product reference still exposes
+pointwise composition failures after both heads:
+
+| Input | Final raw head-sum relative L2 | Bad elements | Maximum absolute error |
+|---|---:|---:|---:|
+| Fixture, valid keys 91 | 0.005593189969658852 | 14,733 | 96.73394775390625 |
+| AG News, valid keys 83 | 0.0054298886097967625 | 32,784 | 60.755615234375 |
+
+Both complete-head runs retain six strict encoder-MLP failures and return exit 1 for
+the unchanged numerical gates. These are diagnostics on two real inputs, not the full
+frozen decision evaluation. The scorer, marker selection and action tail remain absent,
+so neither model output is available yet. No complete-model accuracy or speed claim
+follows from this checkpoint.
+
+The [validation](../results/laya/heads_validation_desktop2_20261016.log) passes 99
+offline tests plus the full syntax/import/shell gates. New tests prove every head
+transfer stays in bounds, every intended output word is covered, biased scatter
+preserves residual slots, identity coefficients preserve padding, and empty/invalid
+head masks are rejected. Device processes release idle while alive, with no foreign
+context observed. All measurements are checks-only: wrapper durations include CPU
+oracles, extensive checking and repeated stopped prefixes, and establish no latency.

@@ -31,7 +31,7 @@ def relocate_output(raw,source,target,words):
     return bytes(output),changed
 
 
-def run(out,stem,model,tokens_file,token_key,collect,head_folder=None):
+def run(out,stem,model,tokens_file,token_key,collect,head_folder=None,attention_folder=None,post_folder=None,second_folder=None):
     out=out.resolve(); model=model.resolve(); meta=json.loads((out/'build.json').read_text())
     stem=stem.resolve(); sm=json.loads((stem/'build.json').read_text())
     vector_image=sm.get('kind')=='vector-without-attention'
@@ -79,12 +79,46 @@ def run(out,stem,model,tokens_file,token_key,collect,head_folder=None):
         pl=head_meta['plan']; head_values,head_hashes=head.parameters(model)
         if token_key+'_qtype' not in fixtures: raise ValueError('missing qtype')
         qtype=int(fixtures[token_key+'_qtype'])
+    head_attention=None; attention_meta=None
+    if attention_folder is not None:
+        if head is None: raise ValueError('head attention requires the head prelude')
+        import head_attention
+        attention_folder=attention_folder.resolve(); attention_meta=json.loads((attention_folder/'build.json').read_text())
+        if not 1<=valid<=512: raise ValueError('head attention requires nonempty valid keys')
+        if attention_meta['sources']!=head_attention.sources() or attention_meta['head_pre_build_sha256']!=p.attention.sha(head_folder/'build.json') or attention_meta['chain_build_sha256']!=p.attention.sha(out/'build.json'): raise ValueError('stale head attention')
+        if attention_meta['audits']!=meta['artifacts']['first']['audits'] or attention_meta['cdo']!=meta['artifacts']['first']['cdo']: raise ValueError('head attention core/init differs')
+        for file,key in [('final.xclbin','xclbin'),('insts.bin','instructions')]:
+            if p.attention.sha(attention_folder/file)!=attention_meta[key]: raise ValueError('changed head attention artifact')
+        pl=attention_meta['plan']
+    head_post=None; post_meta=None
+    if post_folder is not None:
+        if head_attention is None: raise ValueError('head post requires head attention')
+        import head_post
+        post_folder=post_folder.resolve(); post_meta=json.loads((post_folder/'build.json').read_text())
+        if post_meta['sources']!=head_post.sources() or post_meta['head_attention_build_sha256']!=p.attention.sha(attention_folder/'build.json') or post_meta['vector_build_sha256']!=p.attention.sha(stem/'build.json'): raise ValueError('stale head post')
+        if post_meta['audits']!=sm['audits'] or post_meta['cdo']!=sm['cdo']: raise ValueError('head post core/init differs')
+        for file,key in [('final.xclbin','xclbin'),('insts.bin','instructions')]:
+            if p.attention.sha(post_folder/file)!=post_meta[key]: raise ValueError('changed head post artifact')
+        pl=post_meta['plan']; post_values,post_hashes=head_post.parameters(model)
+        post_ref=head_post.reference(refs[-1][1],head_values,post_values,qtype,valid)
+    head_second=None; second_meta=None
+    if second_folder is not None:
+        if head_post is None: raise ValueError('second head requires the first head post')
+        import head_second
+        second_folder=second_folder.resolve(); second_meta=json.loads((second_folder/'build.json').read_text())
+        if second_meta['sources']!=head_second.sources() or second_meta['head_post_build_sha256']!=p.attention.sha(post_folder/'build.json') or second_meta['vector_build_sha256']!=p.attention.sha(stem/'build.json'): raise ValueError('stale second head')
+        for name,artifact in second_meta['artifacts'].items():
+            if artifact['audits']!=sm['audits'] or artifact['cdo']!=sm['cdo']: raise ValueError('second head core/init differs')
+            for file,key in [('final.xclbin','xclbin'),('insts.bin','instructions')]:
+                if p.attention.sha(second_folder/name/file)!=artifact[key]: raise ValueError('changed second head artifact')
+        pl=second_meta['plan']; second_values,second_hashes=head_second.parameters(model)
+        second_ref=head_second.reference(post_ref,second_values,valid)
     off=pl['offsets']; sizes=pl['sizes']; count=len(spec)
     sys.path.insert(0,str(p.ROOT/'tools')); from laya_hybrid import idle
     if not idle(): raise RuntimeError('foreign context')
     sys.path.insert(0,'C:/Xilinx/XRT/xrt_sdk/xrt/python'); import pyxrt as xrt
     dev=xrt.device(0); states={}; arena=None; av=None; embedding_bo=None; embedding_view=None; hrun=None; failed=False
-    sync=xrt.xclBOSyncDirection; failures=[]; strict_failures=[]; snapshots={}; checks=0
+    sync=xrt.xclBOSyncDirection; failures=[]; strict_failures=[]; snapshots={}; residual_snapshots={}; checks=0
     try:
         for family,name in [('attention','first'),('mlp','mlp')]:
             xb=xrt.xclbin(str((stem if family=='mlp' else out/name)/'final.xclbin')); dev.register_xclbin(xb)
@@ -112,6 +146,19 @@ def run(out,stem,model,tokens_file,token_key,collect,head_folder=None):
             head_data=head.prepare((head_folder/'insts.bin').read_bytes(),pl,qtype)
             ib=xrt.bo(dev,len(head_data),xrt.bo.cacheable,states['mlp']['kernel'].group_id(1)); ib.write(head_data,0); ib.sync(sync.XCL_BO_SYNC_BO_TO_DEVICE)
             states['mlp']['instructions']['head_pre']=(ib,len(head_data))
+        if head_attention is not None:
+            attention_data,attention_changes=c.txn.patch((attention_folder/'insts.bin').read_bytes(),attention_meta['audits'],valid,False)
+            ib=xrt.bo(dev,len(attention_data),xrt.bo.cacheable,states['attention']['kernel'].group_id(1)); ib.write(attention_data,0); ib.sync(sync.XCL_BO_SYNC_BO_TO_DEVICE)
+            states['attention']['instructions']['head_attention']=(ib,len(attention_data))
+        if head_post is not None:
+            post_data=(post_folder/'insts.bin').read_bytes()
+            ib=xrt.bo(dev,len(post_data),xrt.bo.cacheable,states['mlp']['kernel'].group_id(1)); ib.write(post_data,0); ib.sync(sync.XCL_BO_SYNC_BO_TO_DEVICE)
+            states['mlp']['instructions']['head_post']=(ib,len(post_data))
+        if head_second is not None:
+            for name in ('pre','post'):
+                second_data=(second_folder/name/'insts.bin').read_bytes()
+                ib=xrt.bo(dev,len(second_data),xrt.bo.cacheable,states['mlp']['kernel'].group_id(1)); ib.write(second_data,0); ib.sync(sync.XCL_BO_SYNC_BO_TO_DEVICE)
+                states['mlp']['instructions']['second_'+name]=(ib,len(second_data))
         del xb,ctx,kernel,ib
         arena=xrt.bo(dev,pl['words']*4,xrt.bo.host_only,groups[0]); av=np.frombuffer(arena.map(),np.uint32)
         embedding_bo=xrt.bo(dev,s.INPUT_WORDS*4,xrt.bo.host_only,states['mlp']['kernel'].group_id(3)); embedding_view=np.frombuffer(embedding_bo.map(),np.uint32)
@@ -121,15 +168,23 @@ def run(out,stem,model,tokens_file,token_key,collect,head_folder=None):
           key=token_key,valid=valid,tokens_file_sha256=p.attention.sha(tokens_file),tokens_sha256=hashlib.sha256(tokens.tobytes()).hexdigest(),prepared=prepared,stem_output_relocations=stem_relocations,
           allocation_group=groups[0],argument_groups=groups,contexts_created=2,
           interstage_host_reads=0,interstage_host_writes=0,interstage_host_syncs=0,
-          head_build=head_meta,head_weights=head_hashes if head is not None else None,qtype=qtype if head is not None else None,
+          head_build=head_meta,head_attention_build=attention_meta,head_post_build=post_meta,head_post_weights=post_hashes if head_post is not None else None,
+          second_head_build=second_meta,second_head_weights=second_hashes if head_second is not None else None,
+          head_weights=head_hashes if head is not None else None,qtype=qtype if head is not None else None,
           host_work='token/type-address DMA scheduling, no embedding activation gather',scope='real embeddings and encoder; optional first head prelude; full decisions absent; correctness only')),flush=True)
         prefixes=sorted({0,1,2,count})
         if head is not None: prefixes.append(count+1)
+        if head_attention is not None: prefixes.append(count+2)
+        if head_post is not None: prefixes.append(count+3)
+        if head_second is not None: prefixes.extend((count+4,count+5,count+6))
         for prefix in prefixes:
-            previous=None
+            previous=None; previous_regions=None
             for fill in (0x7fc12345,0x7fc54321):
                 data=np.full(pl['words'],fill,np.uint32); cr.initialize_constants(data,pl,parameters,tables,fill)
                 if head is not None: head.initialize(data,pl,head_values,fill)
+                if head_attention is not None: head_attention.initialize(data,pl)
+                if head_post is not None: head_post.initialize(data,pl,post_values,fill)
+                if head_second is not None: head_second.initialize(data,pl,second_values,fill)
                 av[:]=data; arena.sync(sync.XCL_BO_SYNC_BO_TO_DEVICE)
                 embedding_packet=sr.constant_packet(embedding_table,embedding_gamma,fill)
                 embedding_view[:]=embedding_packet; embedding_bo.sync(sync.XCL_BO_SYNC_BO_TO_DEVICE)
@@ -150,17 +205,45 @@ def run(out,stem,model,tokens_file,token_key,collect,head_folder=None):
                     failed=True; hrun=states['mlp']['kernel'](3,ib,nb,arena,arena)
                     if hrun.wait(15000)!=xrt.ert_cmd_state.ERT_CMD_STATE_COMPLETED: raise RuntimeError('head prelude dispatch failed; no retry')
                     failed=False; hrun=None
+                if prefix>count+1:
+                    ib,nb=states['attention']['instructions']['head_attention']
+                    failed=True; hrun=states['attention']['kernel'](3,ib,nb,arena,arena)
+                    if hrun.wait(15000)!=xrt.ert_cmd_state.ERT_CMD_STATE_COMPLETED: raise RuntimeError('head attention dispatch failed; no retry')
+                    failed=False; hrun=None
+                if prefix>count+2:
+                    ib,nb=states['mlp']['instructions']['head_post']
+                    failed=True; hrun=states['mlp']['kernel'](3,ib,nb,arena,arena)
+                    if hrun.wait(15000)!=xrt.ert_cmd_state.ERT_CMD_STATE_COMPLETED: raise RuntimeError('head post dispatch failed; no retry')
+                    failed=False; hrun=None
+                for threshold,family,key in ((count+3,'mlp','second_pre'),(count+4,'attention','head_attention'),(count+5,'mlp','second_post')):
+                    if prefix<=threshold: continue
+                    ib,nb=states[family]['instructions'][key]
+                    failed=True; hrun=states[family]['kernel'](3,ib,nb,arena,arena)
+                    if hrun.wait(15000)!=xrt.ert_cmd_state.ERT_CMD_STATE_COMPLETED: raise RuntimeError('second head dispatch failed; no retry')
+                    failed=False; hrun=None
                 arena.sync(sync.XCL_BO_SYNC_BO_FROM_DEVICE); observed=av.copy()
                 final=observed[off['mlp_norm']:off['mlp_norm']+sizes['mlp_norm']].reshape(512,p.OUT)
                 if not np.all(final[:,1024:1040]==b.r.mlp.POISON) or not np.all(final[:,2064:]==b.r.mlp.POISON): raise ValueError('final norm guards')
                 y=final[:,:1024].copy().view(np.float32); residual=final[:,1040:2064].copy().view(np.float32)
                 if previous is not None and not np.array_equal(final,previous): raise ValueError('chain poison dependence')
                 previous=final.copy()
-                if prefix>count:
+                if prefix>count+5:
+                    verdicts=head_second.verify_post(observed,pl,second_values,residual_snapshots[count+3])
+                    verdicts['chain_y']=p.attention.numeric(y,second_ref[1]); verdicts['chain_residual']=p.attention.numeric(residual,second_ref[0])
+                elif prefix>count+3:
+                    verdicts=head_second.verify_pre(observed,pl,second_values,snapshots[count+3])
+                    if prefix>count+4: verdicts.update(head_attention.verify(observed,pl,valid))
+                    verdicts['chain_y']=p.attention.numeric(y,post_ref[1]); verdicts['chain_residual']=p.attention.numeric(residual,post_ref[0])
+                elif prefix>count+2:
+                    verdicts=head_post.verify(observed,pl,post_values,snapshots[count],head_values[0][qtype])
+                    verdicts['chain_y']=p.attention.numeric(y,post_ref[1])
+                    verdicts['chain_residual']=p.attention.numeric(residual,post_ref[0])
+                elif prefix>count:
                     verdicts=head.verify(observed,pl,head_values,qtype,snapshots[count])
                     composed_r,composed_y=p.norm.oracle(refs[-1][1],np.broadcast_to(head_values[0][qtype],refs[-1][1].shape),head_values[1],head_values[2])
                     verdicts['chain_y']=p.attention.numeric(y,composed_y)
                     verdicts['chain_residual']=p.attention.numeric(residual,composed_r)
+                    if prefix>count+1: verdicts.update(head_attention.verify(observed,pl,valid))
                 elif prefix:
                     norm_input=observed[off['norm']:off['norm']+sizes['norm']].reshape(512,p.OUT)
                     wo=norm_input[:,:1040].reshape(512,16,65)[:,:,:64].copy().view(np.float32).reshape(512,1024)
@@ -188,22 +271,26 @@ def run(out,stem,model,tokens_file,token_key,collect,head_folder=None):
                 mutable=np.zeros(pl['words'],bool)
                 fields=('projection','queries','keys','kv','attention','packed_attention','norm','packed_norm','mlp_wi','mlp_geglu','mlp_norm') if prefix else ('mlp_norm',)
                 if prefix>count: fields=fields+('norm_input',)
+                if prefix>count+2: fields=fields+('head_out','head_relu')
                 for field in fields:
                     start=off[field]; mutable[start:start+sizes[field]]=True
+                current_regions={field:hashlib.sha256(observed[off[field]:off[field]+sizes[field]]).hexdigest() for field in fields}
+                if previous_regions is not None and current_regions!=previous_regions: raise ValueError('intermediate poison dependence')
+                previous_regions=current_regions
                 if not np.array_equal(observed[~mutable],data[~mutable]): raise ValueError('constant, input or arena border overwritten')
                 embedding_bo.sync(sync.XCL_BO_SYNC_BO_FROM_DEVICE)
                 if not np.array_equal(embedding_view,embedding_packet): raise ValueError('embedding constants modified')
                 if not all(v['ok'] for k,v in verdicts.items() if k not in ('chain_y','chain_residual','retained_mlp_strict')): raise ValueError('direct operator/handoff gate')
-                print('EMBEDDED_CHECK '+json.dumps(dict(prefix=prefix,fill=fill,dispatches=min(prefix,count)*2+1+int(prefix>count),verdicts=verdicts)),flush=True)
+                print('EMBEDDED_CHECK '+json.dumps(dict(prefix=prefix,fill=fill,dispatches=min(prefix,count)*2+1+max(prefix-count,0),verdicts=verdicts)),flush=True)
                 if 0<prefix<=count and not verdicts['retained_mlp_strict']['ok']: strict_failures.append(dict(prefix=prefix,fill=fill,**verdicts['retained_mlp_strict']))
                 if not verdicts['chain_y']['ok'] or not verdicts['chain_residual']['ok']:
                     failures.append(dict(prefix=prefix,fill=fill,verdicts=verdicts))
                     if not collect: raise ValueError('composed encoder-prefix gate')
-                snapshots[prefix]=y.copy(); checks+=1
+                snapshots[prefix]=y.copy(); residual_snapshots[prefix]=residual.copy(); checks+=1
         print('EMBEDDED_RESULT '+json.dumps(dict(checks=checks,layers=count,prefixes=prefixes,composition_failures=failures,strict_mlp_failures=strict_failures,
           contexts_created=2,interstage_host_reads=0,interstage_host_writes=0,interstage_host_syncs=0,
-          scope='embedding and encoder on real tokens; first head type/norm/QKV included' if head is not None else 'embedding and encoder on real tokens; type/head absent',
-          remaining='complete heads, both decisions, frozen accuracy and eligible performance unverified')),flush=True)
+          scope='embedding, complete encoder and both head attention/MLP blocks' if head_second is not None else 'embedding and encoder with optional head prefixes',
+          remaining='scorer/action tail, both outputs, frozen accuracy and eligible performance unverified')),flush=True)
         if failures or strict_failures: raise ValueError('retained prefix gates failed; thresholds unchanged')
     finally:
         if failed: globals()['_quarantined']=(dev,states,arena,av,embedding_bo,embedding_view,hrun)
@@ -220,5 +307,8 @@ if __name__=='__main__':
     ap=argparse.ArgumentParser(); ap.add_argument('--out',type=Path,required=True); ap.add_argument('--stem',type=Path,required=True)
     ap.add_argument('--model',type=Path,required=True); ap.add_argument('--tokens',type=Path,required=True); ap.add_argument('--key',default='fixture')
     ap.add_argument('--head-pre',type=Path)
+    ap.add_argument('--head-attention',type=Path)
+    ap.add_argument('--head-post',type=Path)
+    ap.add_argument('--head-second',type=Path)
     ap.add_argument('--collect-composition-failures',action='store_true'); args=ap.parse_args()
-    run(args.out,args.stem,args.model,args.tokens,args.key,args.collect_composition_failures,args.head_pre)
+    run(args.out,args.stem,args.model,args.tokens,args.key,args.collect_composition_failures,args.head_pre,args.head_attention,args.head_post,args.head_second)

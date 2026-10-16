@@ -2584,3 +2584,20 @@ entire chain completes. Separate stopped-prefix observations are references, nev
 Keep the old encoder and strict MLP failures and the new composed head-norm failures;
 direct head-operator agreement does not establish full decisions or speed. See
 [qualification and limits](BENCHMARKS.md#laya-first-head-prelude-device-type-embedding-norm-and-biased-qkv-2026-10-16-desktop-2).
+
+## Laya complete head blocks and residual ownership (2026-10-16)
+
+Use identity rotary coefficients only after proving that Q/K/V match the unrotated
+head projections on device. Reuse the existing attention program with the same resident
+core/init image; a new instruction sequence alone does not prove compatibility. Refuse
+empty head masks until their negative-infinity semantics are qualified separately from
+the encoder's finite all-masked behavior.
+
+Biased output projection and MLP scatter may overwrite X only after the old norm Y has
+been packed and consumed. Preserve R until its corresponding residual sum. Keep the
+head's original ReLU, learned biases and Gemm transpose; the last head ends in a raw
+sum, not an invented final normalization. Prove every DMA word and audit guards and
+poison independence, including the reused intermediate regions. CPU stopped-prefix
+observations remain references only. Direct checks pass while the composed gates fail;
+retain both results before adding the scorer and action tail. See
+[head evidence and remaining outputs](BENCHMARKS.md#laya-both-head-blocks-device-attention-and-relu-mlps-scorer-still-absent-2026-10-16-desktop-2).
