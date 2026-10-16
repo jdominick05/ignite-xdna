@@ -12,7 +12,7 @@ import sys
 import numpy as np
 import vector as v
 b=v.b; p=v.p
-MODES=(10,13,14,15,16,17,18)
+MODES=(10,13,14,15,16,17,18,22)
 
 
 def plan():
@@ -29,7 +29,7 @@ def runtime():
     banks,words=plan(); seq=v.Sequence(words)
     for mode,off in banks.items():
         seq.control(mode,position=(0,1,2,3))
-        count=128 if mode==10 else 1 if mode in (17,18) else 4
+        count=128 if mode==10 else 1 if mode in (17,18,22) else 4
         for col in range(4):
             seq.dma(col,'q',off['q']+col*4*p.QWORDS,[1,1,4,p.QWORDS],[0,0,p.QWORDS,1])
             seq.dma(col,'out',off['out']+col*4*p.OUT,[1,1,p.OUT//4,16],[0,0,16,1],True)
@@ -75,12 +75,16 @@ def inputs(seed,fill):
                 raw=rng.normal(0,2,(128,1024)).astype(np.float32)
                 kv[:,:1024]=raw.view(np.uint32)
                 for row in range(4): results[col*4+row,16:1040]=packed(raw[row*32:(row+1)*32,col*64:(col+1)*64])
-            elif mode in (17,18):
+            elif mode in (17,18,22):
                 raw=rng.normal(0,2,(4,1024)).astype(np.float32); residual=rng.normal(0,1,(4,1024)).astype(np.float32)
                 kv[0,:1024]=residual[0].view(np.uint32)
                 for row in range(4):
                     result=results[col*4+row]
-                    if mode==17:
+                    if mode==22:
+                        raw[row,:2]=[0,-0.0]
+                        q[row,:1024]=raw[row].view(np.uint32)
+                        result[:1024]=raw[row].view(np.uint32); result[1040:2064]=raw[row].view(np.uint32)
+                    elif mode==17:
                         q[row,:1024]=raw[row].view(np.uint32)
                         result[:1040].reshape(16,65)[:,:64]=raw[row].reshape(16,64).view(np.uint32)
                         result[1040:2064]=residual[0].view(np.uint32)

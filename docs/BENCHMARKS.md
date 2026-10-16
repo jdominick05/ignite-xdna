@@ -18295,6 +18295,11 @@ real-input frozen decision evaluation and eligible complete-model performance re
 
 ## Laya token embeddings through the encoder: real inputs, accuracy still fails (2026-10-16, Desktop 2)
 
+**Superseded integration assumption:** these runs seed the first encoder residual from
+raw embedding E. The exported graph instead adds normalized embedding Y. Operator
+checks remain evidence for the tested inputs, but this is not the original model's
+residual wiring. See the [correction and full-output fixture](#laya-full-device-outputs-fixture-qualification-and-first-residual-correction-2026-10-16-desktop-2).
+
 The embedding stage keeps the original FP32 embedding table and norm affine in a
 resident input BO. The host schedules Shim DMA addresses from token IDs; it performs
 no floating embedding gather to supply device activations. NPU code copies each selected
@@ -18369,6 +18374,10 @@ or speedup. Complete-model coverage, frozen decisions and eligible performance r
 
 ## Laya first head prelude: device type embedding, norm and biased QKV (2026-10-16, Desktop 2)
 
+These runs inherit the raw-embedding initial-residual error above. See the
+[corrected model integration](#laya-full-device-outputs-fixture-qualification-and-first-residual-correction-2026-10-16-desktop-2);
+their direct operator comparisons do not validate that earlier graph assumption.
+
 The [fixture run](../results/laya/head_pre_v2_fixture_desktop2_20261016.log) and
 [first labelled-item run](../results/laya/head_pre_v3_labelled_desktop2_20261016.log)
 extend real-token inference through the first head's QKV projection. After the entire
@@ -18429,6 +18438,10 @@ complete model outputs. Frozen decision accuracy and eligible whole-model speed 
 unmeasured; this checkpoint establishes neither a speedup nor complete-model correctness.
 
 ## Laya both head blocks: device attention and ReLU MLPs, scorer still absent (2026-10-16, Desktop 2)
+
+These runs also inherit the initial raw-embedding residual error. Their measured direct
+checks stand, while the [later graph correction](#laya-full-device-outputs-fixture-qualification-and-first-residual-correction-2026-10-16-desktop-2)
+supersedes their integration with the original model.
 
 The [first head-attention run](../results/laya/head_attention_v3_fixture_desktop2_20261016.log)
 consumes the resident biased QKV without recomputing it. Identity cosine/sine packets
@@ -18496,3 +18509,82 @@ preserves residual slots, identity coefficients preserve padding, and empty/inva
 head masks are rejected. Device processes release idle while alive, with no foreign
 context observed. All measurements are checks-only: wrapper durations include CPU
 oracles, extensive checking and repeated stopped prefixes, and establish no latency.
+
+## Laya full device outputs: fixture qualification and first residual correction (2026-10-16, Desktop 2)
+
+The [corrected full-chain run](../results/laya/action_v2_normalized_residual_fixture_desktop2_20261016.log)
+produces both model outputs, logits and action probabilities, on the NPU. It executes
+token embedding, the complete encoder, both head blocks, marker selection and scoring,
+logits masking, softmax/entropy/top-two features, and the action head. Three serialized
+resident images share the same arena BO after full allocation-group/bank checks. The
+complete path uses 66 dispatches, with zero interstage host activation reads, writes
+or syncs. The host schedules integer token/marker addresses and supplies masks/counts;
+it performs no floating activation gather, scorer, entropy or action computation that
+feeds the device. CPU oracles are present in this qualification harness and inspect
+separately stopped prefixes; this is not yet the production serving path.
+
+The [first scorer run](../results/laya/scorer_v1_fixture_desktop2_20261016.log) and
+[first full-output attempt](../results/laya/action_v1_full_fixture_desktop2_20261016.log)
+pass their direct checks but inherit a graph-integration error: the stem preserves raw
+embedding E as R, and the earlier composed reference assumes the same initial residual.
+The exported first encoder Add consumes normalized embedding Y instead. Comparing with
+the frozen original FP32 fixture exposed this shared error. Add a device-only bit-copy
+command that keeps Y and seeds R from those same Y bits, then start the composed reference
+from normalized Y too. The graph-contract check verifies the exact producer/consumer
+edge before executing. Older logs and figures remain above with that limitation attached.
+
+The [rebuild](../results/laya/full_rebuild_carry_desktop2_20261016.log) independently
+compiles each new instruction layout and compares executable/initialization payloads
+for its resident image. The corrected vector image occupies 14,992 bytes per core,
+conservative stack bound 5,184; the new tail image 12,672 bytes with bound 4,448. Both
+reserve 5,376 stack bytes, and the unchanged attention image retains its previous
+audit. The [vector/carry probe](../results/laya/vector_v4_carry_operators_desktop2_20261016.log)
+passes 48 comparisons, including exact Y-to-R copies and signed-zero bits. This fixes
+integration without changing learned weights, quantization or numerical thresholds.
+
+Marker positions follow the graph's minimum-zero clip; out-of-range positive indices
+are rejected before address preparation. The scorer gathers selected rows through Shim
+DMA, normalizes them, packs one matrix row group and executes its two biased products
+with the original GELU. The action tail masks real options, excludes padded rows from
+reductions, clips valid count to at least two and probabilities before logarithm, then
+computes entropy, top-two margin and count scaling. It packs the device-produced CLS
+row with those features for the two original action products and final softmax.
+
+The [initial tail probe](../results/laya/tail_probe_v1_operators_desktop2_20261016.log)
+fails eight of 26 comparisons. Vector lane-update arguments were reversed, so index
+vectors for later score chunks did not advance; all-masked and padding cases exposed
+the error. The [corrected probe](../results/laya/tail_probe_v2_fixed_indices_desktop2_20261016.log)
+and [rebuilt-image repeat](../results/laya/tail_probe_v3_carry_image_desktop2_20261016.log)
+each pass all 26 with unchanged gates. Cases include real option counts from small to
+full extent, no valid markers, one valid marker, holes, ties, extreme scores and padding
+above every real score. Logits masking and action-input BF16 packing match expected
+bits; probability, logarithm and feature checks use their fixed numerical tolerances.
+
+The [original FP32 comparison](../results/laya/full_fixture_fp32_comparison_desktop2_20261016.log)
+checks the frozen model, external weights, item file and logits-file hashes before
+reading the unlabelled fixture. Its frozen reference and corrected device logits are:
+
+| Option | Frozen FP32 logit | Corrected NPU logit |
+|---|---:|---:|
+| First | 3.6975491046905518 | 3.683770179748535 |
+| Second | -2.311758041381836 | -2.3182692527770996 |
+| Third | -2.519770622253418 | -2.523902416229248 |
+
+Maximum logit difference falls from 3.0837740898132324 with the wrong residual to
+0.013778924942016602 after the correction; corrected relative L2 is
+0.0031351891811937094. Device action probabilities are [0.9999999403953552, 0.0],
+against [1.0, 0.0] from a fresh original-model CPU run. That action reference uses the
+current ORT version rather than the frozen-logits version and does not replace the
+frozen reference. These are one unlabelled fixture's outputs, not labelled accuracy.
+
+Both poisons produce identical full outputs. Direct scorer/action and final composed
+output comparisons against the independent quantized-product reference pass. Earlier
+intermediate comparisons still fail: the corrected full run retains four strict MLP
+failures and returns exit 1 with unchanged gates. The
+[validation](../results/laya/full_model_validation_desktop2_20261016.log) passes 114
+offline tests and the full syntax/import/shell gates, including address-patch limits,
+every output word, residual carry and metadata rejection. All device processes release
+idle while alive; no foreign context is observed. These are checks-only runs with CPU
+oracles and large verification reads, so their durations establish no inference latency.
+Production serving, native-arm registration, the frozen full-set decision/calibration
+criteria and eligible paired whole-model speed remain unverified.

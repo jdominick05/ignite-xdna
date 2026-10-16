@@ -1,0 +1,79 @@
+RESEARCH_PLATFORM {"machine": "Desktop 2", "cpu": "AMD Ryzen 7 8700G w/ Radeon 780M Graphics", "os": "Windows-11-10.0.26200-SP0", "ram_bytes": 33381138432, "source_sha256": {"tools/research_process.py": "ffeb1857f190b482eed101b5f5a928f455de26bfa61d23f78a2eacec08e2663e", "tools/quant_calib_alphabet.py": "2dc0b2878c564853f340880209a425dfcf63b8536b2b8e9fd32344daade58d37", "tools/xint8_arithmetic_probe.py": "6aa3df08b9870c3c2264b868459d7ffbac3070dddc1349d7c6f3f480075f7041", "scripts/research-lowlevel.sh": "3455ad7933697936487712665505c216891865c6deada647302785f6e37020bd", "scripts/research-iron.sh": "4c863a262646ddab39b5005006ba8e03809895e6386c6310e2fd9d0a9e9609ee", "kernels/memory_placement/probe.py": "e8d990169ad6091fa1b53852e9f61eff495b5def72d35165a5c5cf1759e38898", "kernels/memory_placement/memory_kernels.cc": "182e7af7071a1e851afb4a7ca266069c489aea1fbaaa85eca129708daeba5ba6", "scripts/research-matrix.sh": "739254171629deae822b0ad7dabc875aee19ace56dde77d3e8aab61663f97516", "kernels/memory_placement/gemm.py": "17c905ad66110d3346bbf0db898dfc6b780df59fae1dfb0c1747057ce1e5844e", "kernels/memory_placement/gemm_placement.cc": "f21acf7250b12914ea30cc1f77613239dfa18421a85a1b9a5199017dd916278a", "tools/research_summary.py": "0c00dcceef07053d06731b41a1f1ed58d3ba4ea09f82497de354ce9cef17da20", "tools/research_toolchain.py": "f0a126a24ae213acfaa43460cfd9def0c86d9cb70cfee0228aa271688467b314"}, "commit": "91ebec79b3f9959424eedbb42a016f19c0932bcf", "command": ["bash", "scripts/research-iron.sh", "scratch/laya_transformer/carry_rebuild.py"], "seconds_limit": 240.0, "rss_gib_limit": 8, "checks_only": true, "free_ram_bytes": 24608337920}
+REBUILD_BEGIN head_pre.py
+HOST_TIMELINE {"elapsed_seconds": 2.516, "tree_rss_bytes": 190881792, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 4.875, "tree_rss_bytes": 191582208, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 7.266, "tree_rss_bytes": 218750976, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 9.625, "tree_rss_bytes": 230219776, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 11.984, "tree_rss_bytes": 230498304, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 14.328, "tree_rss_bytes": 231858176, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 16.719, "tree_rss_bytes": 232943616, "foreign_peers": []}
+HEAD_PRE_BUILD {"words": 190380656, "same_core_and_init": true, "scope": "head type/norm/biased QKV only"}
+REBUILD_BEGIN head_attention.py
+HOST_TIMELINE {"elapsed_seconds": 19.281, "tree_rss_bytes": 190566400, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 21.641, "tree_rss_bytes": 235253760, "foreign_peers": []}
+HEAD_ATTENTION_BUILD {"same_core_and_init": true, "code_bytes": [15600], "scope": "compile/audit only; head attention needs device qualification"}
+REBUILD_BEGIN head_post.py
+HOST_TIMELINE {"elapsed_seconds": 24.047, "tree_rss_bytes": 180854784, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 26.406, "tree_rss_bytes": 183570432, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 28.781, "tree_rss_bytes": 183271424, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 31.172, "tree_rss_bytes": 184102912, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 33.562, "tree_rss_bytes": 184156160, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 35.906, "tree_rss_bytes": 184573952, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 38.281, "tree_rss_bytes": 219541504, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 40.656, "tree_rss_bytes": 233070592, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 43.094, "tree_rss_bytes": 234156032, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 45.453, "tree_rss_bytes": 233934848, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 47.859, "tree_rss_bytes": 233943040, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 50.281, "tree_rss_bytes": 233947136, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 52.656, "tree_rss_bytes": 234741760, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 55.016, "tree_rss_bytes": 234827776, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 57.375, "tree_rss_bytes": 120221696, "foreign_peers": []}
+HEAD_POST_BUILD {"words": 198033984, "same_core_and_init": true, "scope": "compile/audit only; first head post operations require device qualification"}
+REBUILD_BEGIN head_second.py
+HOST_TIMELINE {"elapsed_seconds": 59.875, "tree_rss_bytes": 182554624, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 62.219, "tree_rss_bytes": 182841344, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 64.641, "tree_rss_bytes": 211283968, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 67.062, "tree_rss_bytes": 221642752, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 69.453, "tree_rss_bytes": 221982720, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 71.812, "tree_rss_bytes": 221986816, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 74.187, "tree_rss_bytes": 473608192, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 76.875, "tree_rss_bytes": 183767040, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 79.297, "tree_rss_bytes": 184184832, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 81.672, "tree_rss_bytes": 184803328, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 84.062, "tree_rss_bytes": 184819712, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 86.453, "tree_rss_bytes": 184840192, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 88.828, "tree_rss_bytes": 220016640, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 91.172, "tree_rss_bytes": 231424000, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 93.594, "tree_rss_bytes": 234029056, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 96.0, "tree_rss_bytes": 234217472, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 98.344, "tree_rss_bytes": 234225664, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 100.656, "tree_rss_bytes": 234225664, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 103.031, "tree_rss_bytes": 234225664, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 105.469, "tree_rss_bytes": 234065920, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 107.859, "tree_rss_bytes": 379301888, "foreign_peers": []}
+HEAD_SECOND_BUILD {"words": 204674016, "same_core_and_init": true, "scope": "compile/audit only; second head needs device qualification"}
+REBUILD_BEGIN scorer.py
+HOST_TIMELINE {"elapsed_seconds": 110.484, "tree_rss_bytes": 204197888, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 112.812, "tree_rss_bytes": 120463360, "foreign_peers": []}
+SCORER_BUILD {"words": 206376432, "same_core_and_init": true, "scope": "marker gather/norm/products only; logits masking and action tail absent"}
+REBUILD_BEGIN tail.py
+HOST_TIMELINE {"elapsed_seconds": 115.422, "tree_rss_bytes": 217964544, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 117.875, "tree_rss_bytes": 180006912, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 120.25, "tree_rss_bytes": 183906304, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 122.687, "tree_rss_bytes": 199544832, "foreign_peers": []}
+TAIL_BUILD {"code_bytes": [12672], "stack_bound": 4448, "scope": "compile/audit only; device qualification required"}
+REBUILD_BEGIN tail_probe.py
+HOST_TIMELINE {"elapsed_seconds": 125.266, "tree_rss_bytes": 205795328, "foreign_peers": []}
+TAIL_PROBE_BUILD {"same_core_and_init": true}
+REBUILD_BEGIN action.py
+HOST_TIMELINE {"elapsed_seconds": 127.672, "tree_rss_bytes": 180813824, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 130.047, "tree_rss_bytes": 118448128, "foreign_peers": []}
+ACTION_BUILD {"words": 206909696, "same_qualified_core_and_init": true, "scope": "compile/audit only; full-model splice needs device qualification"}
+REBUILD_BEGIN embedding_carry.py
+HOST_TIMELINE {"elapsed_seconds": 132.656, "tree_rss_bytes": 559869952, "foreign_peers": []}
+EMBEDDING_CARRY_BUILD {"contract": {"norm_node": 7, "add_node": 93, "residual_tensor": "layer_norm", "raw_embedding_tensor": "embedding", "residual_is_normalized": true}, "same_core_and_init": true}
+REBUILD_BEGIN vector_probe.py
+HOST_TIMELINE {"elapsed_seconds": 135.344, "tree_rss_bytes": 208433152, "foreign_peers": []}
+VECTOR_PROBE_BUILD {"code_bytes": [14992], "stack_bound": 5184, "same_core_and_init": true}
+CARRY_REBUILD_RESULT PASS
+RESEARCH_PROCESS_RESULT {"exit_code": 0, "stop": null, "peak_tree_rss_bytes": 582508544, "rss_measurement": "maximum observed across sampled descendant working sets; zero observations reported as null", "elapsed_seconds": 136.40600000000268, "foreign_contention_observed": false, "timing_eligible": false}

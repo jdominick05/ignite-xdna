@@ -31,7 +31,8 @@ def relocate_output(raw,source,target,words):
     return bytes(output),changed
 
 
-def run(out,stem,model,tokens_file,token_key,collect,head_folder=None,attention_folder=None,post_folder=None,second_folder=None):
+def run(out,stem,model,tokens_file,token_key,collect,head_folder=None,attention_folder=None,post_folder=None,second_folder=None,scorer_folder=None,action_folder=None,carry_folder=None):
+    if action_folder is not None and carry_folder is None: raise ValueError('complete model requires normalized-embedding residual carry')
     out=out.resolve(); model=model.resolve(); meta=json.loads((out/'build.json').read_text())
     stem=stem.resolve(); sm=json.loads((stem/'build.json').read_text())
     vector_image=sm.get('kind')=='vector-without-attention'
@@ -66,7 +67,11 @@ def run(out,stem,model,tokens_file,token_key,collect,head_folder=None,attention_
     embedding_table,embedding_gamma=sr.parameters(model)
     embedding_reference=embedding_table[tokens].copy()
     _,stem_reference=p.norm.oracle(np.zeros_like(embedding_reference),embedding_reference,embedding_gamma,np.zeros(1024,np.float32))
-    refs=cr.references(stem_reference,parameters,spec,tables,mask_values,valid,initial_residual=embedding_reference)
+    if carry_folder is not None:
+        import embedding_carry
+        embedding_carry.graph_contract(model)
+    refs=cr.references(stem_reference,parameters,spec,tables,mask_values,valid,
+      initial_residual=stem_reference if carry_folder is not None else embedding_reference)
     pl=meta['plan']; head=None; head_values=None; head_meta=None
     if head_folder is not None:
         import head_pre as head
@@ -113,6 +118,38 @@ def run(out,stem,model,tokens_file,token_key,collect,head_folder=None,attention_
                 if p.attention.sha(second_folder/name/file)!=artifact[key]: raise ValueError('changed second head artifact')
         pl=second_meta['plan']; second_values,second_hashes=head_second.parameters(model)
         second_ref=head_second.reference(post_ref,second_values,valid)
+    scorer=None; scorer_meta=None
+    if scorer_folder is not None:
+        if head_second is None: raise ValueError('scorer requires both head blocks')
+        import scorer
+        scorer_folder=scorer_folder.resolve(); scorer_meta=json.loads((scorer_folder/'build.json').read_text())
+        if scorer_meta['sources']!=scorer.sources() or scorer_meta['head_second_build_sha256']!=p.attention.sha(second_folder/'build.json') or scorer_meta['vector_build_sha256']!=p.attention.sha(stem/'build.json'): raise ValueError('stale scorer')
+        if scorer_meta['audits']!=sm['audits'] or scorer_meta['cdo']!=sm['cdo']: raise ValueError('scorer core/init differs')
+        for file,key in [('final.xclbin','xclbin'),('insts.bin','instructions')]:
+            if p.attention.sha(scorer_folder/file)!=scorer_meta[key]: raise ValueError('changed scorer artifact')
+        pl=scorer_meta['plan']; scorer_values,scorer_hashes=scorer.parameters(model)
+        marker_positions=fixtures[token_key+'_markers']; scorer.markers(marker_positions)
+        scorer_ref=scorer.reference(second_ref[1],marker_positions,scorer_values)
+    action=None; action_meta=None
+    if action_folder is not None:
+        if scorer is None: raise ValueError('action requires scorer')
+        import action
+        action_folder=action_folder.resolve(); action_meta=json.loads((action_folder/'build.json').read_text())
+        if action_meta['sources']!=action.sources() or action_meta['scorer_build_sha256']!=p.attention.sha(scorer_folder/'build.json'): raise ValueError('stale action build')
+        for file,key in [('final.xclbin','xclbin'),('insts.bin','instructions')]:
+            if p.attention.sha(action_folder/file)!=action_meta[key]: raise ValueError('changed action artifact')
+        pl=action_meta['plan']; action_values,action_hashes=action.parameters(model)
+        option_mask=fixtures[token_key+'_marker_mask'] if token_key+'_marker_mask' in fixtures else np.ones(len(marker_positions),bool)
+        if len(option_mask)!=len(marker_positions): raise ValueError('marker mask shape')
+        action.metadata(option_mask); action_ref=action.reference(second_ref[1],scorer_ref,option_mask,action_values)
+    carry_meta=None
+    if carry_folder is not None:
+        carry_folder=carry_folder.resolve(); carry_meta=json.loads((carry_folder/'build.json').read_text())
+        if carry_meta['sources']!=embedding_carry.sources() or carry_meta['model_sha256']!=p.attention.sha(model) or carry_meta['vector_build_sha256']!=p.attention.sha(stem/'build.json'): raise ValueError('stale embedding carry')
+        if carry_meta['plan']!=pl or carry_meta['audits']!=sm['audits'] or carry_meta['cdo']!=sm['cdo']: raise ValueError('carry plan/core/init differs')
+        if carry_meta['contract']!=embedding_carry.graph_contract(model): raise ValueError('carry model contract changed')
+        for file,key in [('final.xclbin','xclbin'),('insts.bin','instructions')]:
+            if p.attention.sha(carry_folder/file)!=carry_meta[key]: raise ValueError('changed carry artifact')
     off=pl['offsets']; sizes=pl['sizes']; count=len(spec)
     sys.path.insert(0,str(p.ROOT/'tools')); from laya_hybrid import idle
     if not idle(): raise RuntimeError('foreign context')
@@ -120,8 +157,10 @@ def run(out,stem,model,tokens_file,token_key,collect,head_folder=None,attention_
     dev=xrt.device(0); states={}; arena=None; av=None; embedding_bo=None; embedding_view=None; hrun=None; failed=False
     sync=xrt.xclBOSyncDirection; failures=[]; strict_failures=[]; snapshots={}; residual_snapshots={}; checks=0
     try:
-        for family,name in [('attention','first'),('mlp','mlp')]:
-            xb=xrt.xclbin(str((stem if family=='mlp' else out/name)/'final.xclbin')); dev.register_xclbin(xb)
+        families=[('attention',out/'first'),('mlp',stem)]
+        if action is not None: families.append(('tail',action_folder))
+        for family,folder in families:
+            xb=xrt.xclbin(str(folder/'final.xclbin')); dev.register_xclbin(xb)
             ctx=xrt.hw_context(dev,xb.get_uuid()); kernel=xrt.kernel(ctx,xb.get_kernels()[0].get_name())
             states[family]=dict(xb=xb,ctx=ctx,kernel=kernel,instructions={},groups=[kernel.group_id(3),kernel.group_id(4)])
         groups=[g for state in states.values() for g in state['groups']]
@@ -159,6 +198,18 @@ def run(out,stem,model,tokens_file,token_key,collect,head_folder=None,attention_
                 second_data=(second_folder/name/'insts.bin').read_bytes()
                 ib=xrt.bo(dev,len(second_data),xrt.bo.cacheable,states['mlp']['kernel'].group_id(1)); ib.write(second_data,0); ib.sync(sync.XCL_BO_SYNC_BO_TO_DEVICE)
                 states['mlp']['instructions']['second_'+name]=(ib,len(second_data))
+        if scorer is not None:
+            scorer_data=scorer.prepare((scorer_folder/'insts.bin').read_bytes(),pl,marker_positions)
+            ib=xrt.bo(dev,len(scorer_data),xrt.bo.cacheable,states['mlp']['kernel'].group_id(1)); ib.write(scorer_data,0); ib.sync(sync.XCL_BO_SYNC_BO_TO_DEVICE)
+            states['mlp']['instructions']['scorer']=(ib,len(scorer_data))
+        if action is not None:
+            action_data=(action_folder/'insts.bin').read_bytes()
+            ib=xrt.bo(dev,len(action_data),xrt.bo.cacheable,states['tail']['kernel'].group_id(1)); ib.write(action_data,0); ib.sync(sync.XCL_BO_SYNC_BO_TO_DEVICE)
+            states['tail']['instructions']['action']=(ib,len(action_data))
+        if carry_meta is not None:
+            carry_data=(carry_folder/'insts.bin').read_bytes()
+            ib=xrt.bo(dev,len(carry_data),xrt.bo.cacheable,states['mlp']['kernel'].group_id(1)); ib.write(carry_data,0); ib.sync(sync.XCL_BO_SYNC_BO_TO_DEVICE)
+            states['mlp']['instructions']['carry']=(ib,len(carry_data))
         del xb,ctx,kernel,ib
         arena=xrt.bo(dev,pl['words']*4,xrt.bo.host_only,groups[0]); av=np.frombuffer(arena.map(),np.uint32)
         embedding_bo=xrt.bo(dev,s.INPUT_WORDS*4,xrt.bo.host_only,states['mlp']['kernel'].group_id(3)); embedding_view=np.frombuffer(embedding_bo.map(),np.uint32)
@@ -166,10 +217,13 @@ def run(out,stem,model,tokens_file,token_key,collect,head_folder=None,attention_
           helpers={str(Path(x.__file__).relative_to(p.ROOT)).replace('\\','/'):p.attention.sha(Path(x.__file__)) for x in (cr,sr,mask_reference)},
           table_sha256=hashlib.sha256(embedding_table.tobytes()).hexdigest(),gamma_sha256=hashlib.sha256(embedding_gamma.tobytes()).hexdigest(),
           key=token_key,valid=valid,tokens_file_sha256=p.attention.sha(tokens_file),tokens_sha256=hashlib.sha256(tokens.tobytes()).hexdigest(),prepared=prepared,stem_output_relocations=stem_relocations,
-          allocation_group=groups[0],argument_groups=groups,contexts_created=2,
+          allocation_group=groups[0],argument_groups=groups,contexts_created=len(states),
           interstage_host_reads=0,interstage_host_writes=0,interstage_host_syncs=0,
           head_build=head_meta,head_attention_build=attention_meta,head_post_build=post_meta,head_post_weights=post_hashes if head_post is not None else None,
           second_head_build=second_meta,second_head_weights=second_hashes if head_second is not None else None,
+          scorer_build=scorer_meta,scorer_weights=scorer_hashes if scorer is not None else None,markers=marker_positions.tolist() if scorer is not None else None,
+          action_build=action_meta,action_weights=action_hashes if action is not None else None,option_mask=option_mask.tolist() if action is not None else None,
+          embedding_carry_build=carry_meta,initial_residual='normalized embedding Y' if carry_meta is not None else 'legacy raw embedding E; not original graph semantics',
           head_weights=head_hashes if head is not None else None,qtype=qtype if head is not None else None,
           host_work='token/type-address DMA scheduling, no embedding activation gather',scope='real embeddings and encoder; optional first head prelude; full decisions absent; correctness only')),flush=True)
         prefixes=sorted({0,1,2,count})
@@ -177,6 +231,8 @@ def run(out,stem,model,tokens_file,token_key,collect,head_folder=None,attention_
         if head_attention is not None: prefixes.append(count+2)
         if head_post is not None: prefixes.append(count+3)
         if head_second is not None: prefixes.extend((count+4,count+5,count+6))
+        if scorer is not None: prefixes.append(count+7)
+        if action is not None: prefixes.append(count+8)
         for prefix in prefixes:
             previous=None; previous_regions=None
             for fill in (0x7fc12345,0x7fc54321):
@@ -185,6 +241,8 @@ def run(out,stem,model,tokens_file,token_key,collect,head_folder=None,attention_
                 if head_attention is not None: head_attention.initialize(data,pl)
                 if head_post is not None: head_post.initialize(data,pl,post_values,fill)
                 if head_second is not None: head_second.initialize(data,pl,second_values,fill)
+                if scorer is not None: scorer.initialize(data,pl,scorer_values,fill)
+                if action is not None: action.initialize(data,pl,action_values,option_mask,fill)
                 av[:]=data; arena.sync(sync.XCL_BO_SYNC_BO_TO_DEVICE)
                 embedding_packet=sr.constant_packet(embedding_table,embedding_gamma,fill)
                 embedding_view[:]=embedding_packet; embedding_bo.sync(sync.XCL_BO_SYNC_BO_TO_DEVICE)
@@ -194,6 +252,11 @@ def run(out,stem,model,tokens_file,token_key,collect,head_folder=None,attention_
                 failed=True; hrun=states['mlp']['kernel'](3,ib,nb,embedding_bo,arena)
                 if hrun.wait(15000)!=xrt.ert_cmd_state.ERT_CMD_STATE_COMPLETED: raise RuntimeError('stem dispatch failed; no retry')
                 failed=False; hrun=None
+                if carry_meta is not None:
+                    ib,nb=states['mlp']['instructions']['carry']
+                    failed=True; hrun=states['mlp']['kernel'](3,ib,nb,arena,arena)
+                    if hrun.wait(15000)!=xrt.ert_cmd_state.ERT_CMD_STATE_COMPLETED: raise RuntimeError('embedding carry dispatch failed; no retry')
+                    failed=False; hrun=None
                 for stage in meta['stages'][:prefix*2]:
                     family=stage['family']; key=(stage['layer'],family)
                     ib,nb=states[family]['instructions'][key]
@@ -221,6 +284,16 @@ def run(out,stem,model,tokens_file,token_key,collect,head_folder=None,attention_
                     failed=True; hrun=states[family]['kernel'](3,ib,nb,arena,arena)
                     if hrun.wait(15000)!=xrt.ert_cmd_state.ERT_CMD_STATE_COMPLETED: raise RuntimeError('second head dispatch failed; no retry')
                     failed=False; hrun=None
+                if prefix>count+6:
+                    ib,nb=states['mlp']['instructions']['scorer']
+                    failed=True; hrun=states['mlp']['kernel'](3,ib,nb,arena,arena)
+                    if hrun.wait(15000)!=xrt.ert_cmd_state.ERT_CMD_STATE_COMPLETED: raise RuntimeError('scorer dispatch failed; no retry')
+                    failed=False; hrun=None
+                if prefix>count+7:
+                    ib,nb=states['tail']['instructions']['action']
+                    failed=True; hrun=states['tail']['kernel'](3,ib,nb,arena,arena)
+                    if hrun.wait(15000)!=xrt.ert_cmd_state.ERT_CMD_STATE_COMPLETED: raise RuntimeError('action dispatch failed; no retry')
+                    failed=False; hrun=None
                 arena.sync(sync.XCL_BO_SYNC_BO_FROM_DEVICE); observed=av.copy()
                 final=observed[off['mlp_norm']:off['mlp_norm']+sizes['mlp_norm']].reshape(512,p.OUT)
                 if not np.all(final[:,1024:1040]==b.r.mlp.POISON) or not np.all(final[:,2064:]==b.r.mlp.POISON): raise ValueError('final norm guards')
@@ -230,6 +303,20 @@ def run(out,stem,model,tokens_file,token_key,collect,head_folder=None,attention_
                 if prefix>count+5:
                     verdicts=head_second.verify_post(observed,pl,second_values,residual_snapshots[count+3])
                     verdicts['chain_y']=p.attention.numeric(y,second_ref[1]); verdicts['chain_residual']=p.attention.numeric(residual,second_ref[0])
+                    if prefix>count+6:
+                        verdicts.update(scorer.verify(observed,pl,scorer_values,marker_positions,snapshots[count+6]))
+                        rows=observed[off['scorer_biased']:off['scorer_biased']+sizes['scorer_biased']].reshape(-1,p.OUT)
+                        scores=scorer.matrix(rows,1).ravel(); real=len(marker_positions)
+                        verdicts['scorer_composition']=p.attention.numeric(scores[:real],scorer_ref[:real])
+                        if prefix>count+7:
+                            verdicts.update(action.verify(observed,pl,action_values,option_mask))
+                            logits,act_probs=action.outputs(observed,pl,len(option_mask))
+                            verdicts['logits_composition']=p.attention.numeric(logits,action_ref[0])
+                            verdicts['action_composition']=p.attention.numeric(act_probs,action_ref[1])
+                            snapshot=action_folder/f'observed_{token_key}_{fill:x}.npz'
+                            np.savez(snapshot,logits=logits,act_probs=act_probs,reference_logits=action_ref[0],reference_act_probs=action_ref[1])
+                            print('MODEL_OUTPUTS '+json.dumps(dict(key=token_key,fill=fill,logits=logits.tolist(),act_probs=act_probs.tolist(),
+                              snapshot_sha256=p.attention.sha(snapshot),scope='qualification fixture; not frozen full-set accuracy')),flush=True)
                 elif prefix>count+3:
                     verdicts=head_second.verify_pre(observed,pl,second_values,snapshots[count+3])
                     if prefix>count+4: verdicts.update(head_attention.verify(observed,pl,valid))
@@ -261,7 +348,8 @@ def run(out,stem,model,tokens_file,token_key,collect,head_folder=None,attention_
                       final_wo=b.numeric(wo,direct_wo,.0002,.0002,.00001),retained_mlp_strict=b.numeric(wo,strict_wo,.0002,.002,.002),
                       chain_y=p.attention.numeric(y,refs[prefix-1][1]),chain_residual=p.attention.numeric(residual,refs[prefix-1][0]))
                 else:
-                    exact=bool(np.array_equal(residual.view(np.uint32),embedding_reference.view(np.uint32)))
+                    residual_reference=y if carry_meta is not None else embedding_reference
+                    exact=bool(np.array_equal(residual.view(np.uint32),residual_reference.view(np.uint32)))
                     verdicts=dict(stem_y=b.numeric(y,stem_reference,p.norm.ATOL,p.norm.RTOL,p.norm.L2),stem_residual=dict(ok=exact),
                       chain_y=b.numeric(y,stem_reference,p.norm.ATOL,p.norm.RTOL,p.norm.L2),chain_residual=dict(ok=exact))
                 if prefix in (1,2):
@@ -272,6 +360,8 @@ def run(out,stem,model,tokens_file,token_key,collect,head_folder=None,attention_
                 fields=('projection','queries','keys','kv','attention','packed_attention','norm','packed_norm','mlp_wi','mlp_geglu','mlp_norm') if prefix else ('mlp_norm',)
                 if prefix>count: fields=fields+('norm_input',)
                 if prefix>count+2: fields=fields+('head_out','head_relu')
+                if prefix>count+6: fields=fields+('scorer_input','scorer_norm','scorer_packed','scorer_hidden','scorer_activated','scorer_scores','scorer_biased')
+                if prefix>count+7: fields=fields+('tail_features','action_input','action_hidden','action_activated','action_scores','action_biased','action_probs')
                 for field in fields:
                     start=off[field]; mutable[start:start+sizes[field]]=True
                 current_regions={field:hashlib.sha256(observed[off[field]:off[field]+sizes[field]]).hexdigest() for field in fields}
@@ -280,17 +370,18 @@ def run(out,stem,model,tokens_file,token_key,collect,head_folder=None,attention_
                 if not np.array_equal(observed[~mutable],data[~mutable]): raise ValueError('constant, input or arena border overwritten')
                 embedding_bo.sync(sync.XCL_BO_SYNC_BO_FROM_DEVICE)
                 if not np.array_equal(embedding_view,embedding_packet): raise ValueError('embedding constants modified')
-                if not all(v['ok'] for k,v in verdicts.items() if k not in ('chain_y','chain_residual','retained_mlp_strict')): raise ValueError('direct operator/handoff gate')
-                print('EMBEDDED_CHECK '+json.dumps(dict(prefix=prefix,fill=fill,dispatches=min(prefix,count)*2+1+max(prefix-count,0),verdicts=verdicts)),flush=True)
+                composition=('chain_y','chain_residual','scorer_composition','logits_composition','action_composition')
+                if not all(v['ok'] for k,v in verdicts.items() if k not in (*composition,'retained_mlp_strict')): raise ValueError('direct operator/handoff gate')
+                print('EMBEDDED_CHECK '+json.dumps(dict(prefix=prefix,fill=fill,dispatches=min(prefix,count)*2+1+max(prefix-count,0)+int(carry_meta is not None),verdicts=verdicts)),flush=True)
                 if 0<prefix<=count and not verdicts['retained_mlp_strict']['ok']: strict_failures.append(dict(prefix=prefix,fill=fill,**verdicts['retained_mlp_strict']))
-                if not verdicts['chain_y']['ok'] or not verdicts['chain_residual']['ok']:
+                if any(not verdicts.get(key,{'ok':True})['ok'] for key in composition):
                     failures.append(dict(prefix=prefix,fill=fill,verdicts=verdicts))
                     if not collect: raise ValueError('composed encoder-prefix gate')
                 snapshots[prefix]=y.copy(); residual_snapshots[prefix]=residual.copy(); checks+=1
         print('EMBEDDED_RESULT '+json.dumps(dict(checks=checks,layers=count,prefixes=prefixes,composition_failures=failures,strict_mlp_failures=strict_failures,
-          contexts_created=2,interstage_host_reads=0,interstage_host_writes=0,interstage_host_syncs=0,
-          scope='embedding, complete encoder and both head attention/MLP blocks' if head_second is not None else 'embedding and encoder with optional head prefixes',
-          remaining='scorer/action tail, both outputs, frozen accuracy and eligible performance unverified')),flush=True)
+          contexts_created=len(states),interstage_host_reads=0,interstage_host_writes=0,interstage_host_syncs=0,
+          scope='both model outputs on device' if action is not None else 'embedding and encoder with optional head/scorer prefixes',
+          remaining='production serving path, frozen accuracy and eligible performance unverified')),flush=True)
         if failures or strict_failures: raise ValueError('retained prefix gates failed; thresholds unchanged')
     finally:
         if failed: globals()['_quarantined']=(dev,states,arena,av,embedding_bo,embedding_view,hrun)
@@ -310,5 +401,8 @@ if __name__=='__main__':
     ap.add_argument('--head-attention',type=Path)
     ap.add_argument('--head-post',type=Path)
     ap.add_argument('--head-second',type=Path)
+    ap.add_argument('--scorer',type=Path)
+    ap.add_argument('--action',type=Path)
+    ap.add_argument('--carry',type=Path)
     ap.add_argument('--collect-composition-failures',action='store_true'); args=ap.parse_args()
-    run(args.out,args.stem,args.model,args.tokens,args.key,args.collect_composition_failures,args.head_pre,args.head_attention,args.head_post,args.head_second)
+    run(args.out,args.stem,args.model,args.tokens,args.key,args.collect_composition_failures,args.head_pre,args.head_attention,args.head_post,args.head_second,args.scorer,args.action,args.carry)

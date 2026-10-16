@@ -360,3 +360,12 @@ Backs [device head attention and ReLU MLPs](../docs/BENCHMARKS.md#laya-both-head
 - First head: [unrotated attention](laya/head_attention_v3_fixture_desktop2_20261016.log), [output projection and ReLU MLP into next norm](laya/head_post_v1_fixture_desktop2_20261016.log).
 - Both heads after the full encoder: [fixture](laya/head_second_v1_fixture_desktop2_20261016.log), [first labelled item](laya/head_second_v2_labelled_desktop2_20261016.log). Direct operators pass, composed and strict MLP gates retain exit 1; scorer/action outputs remain absent.
 - [Validation](laya/heads_validation_desktop2_20261016.log): offline/syntax/import/shell gates, resident-core identity, numerical summaries and retained failures.
+
+## Laya full device outputs and first residual correction
+
+Backs [fixture qualification and corrected graph wiring](../docs/BENCHMARKS.md#laya-full-device-outputs-fixture-qualification-and-first-residual-correction-2026-10-16-desktop-2).
+
+- Before the graph correction: [scorer](laya/scorer_v1_fixture_desktop2_20261016.log), [both device outputs](laya/action_v1_full_fixture_desktop2_20261016.log). Direct operators pass, but these retain the wrong raw-embedding initial residual.
+- Tail math: [lane-index failure](laya/tail_probe_v1_operators_desktop2_20261016.log), [corrected indices](laya/tail_probe_v2_fixed_indices_desktop2_20261016.log), [rebuilt-image repeat](laya/tail_probe_v3_carry_image_desktop2_20261016.log).
+- Corrected graph: [all-layout rebuild](laya/full_rebuild_carry_desktop2_20261016.log), [vector/carry qualification](laya/vector_v4_carry_operators_desktop2_20261016.log), [full fixture with normalized initial residual](laya/action_v2_normalized_residual_fixture_desktop2_20261016.log).
+- [Frozen FP32 fixture comparison](laya/full_fixture_fp32_comparison_desktop2_20261016.log) and [offline/import/syntax validation](laya/full_model_validation_desktop2_20261016.log). Full labelled criteria and eligible speed remain open.

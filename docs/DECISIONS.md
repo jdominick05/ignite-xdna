@@ -2601,3 +2601,26 @@ poison independence, including the reused intermediate regions. CPU stopped-pref
 observations remain references only. Direct checks pass while the composed gates fail;
 retain both results before adding the scorer and action tail. See
 [head evidence and remaining outputs](BENCHMARKS.md#laya-both-head-blocks-device-attention-and-relu-mlps-scorer-still-absent-2026-10-16-desktop-2).
+
+## Laya full-output qualification and independent graph wiring (2026-10-16)
+
+The first encoder residual must carry the normalized embedding output. The earlier
+raw-embedding carry and its composed oracle shared a wrong graph assumption, so direct
+operator checks and their internal reference could agree while the original fixture
+logits differed substantially. Require the exact exported norm-to-Add edge, seed R from
+device Y bits and compare the final output against the frozen original reference.
+Keep the earlier runs as diagnostics with the graph error attached; do not silently
+replace their logs or use their internal agreement as original-model accuracy evidence.
+
+Marker metadata may select integer DMA addresses, while gather values, masking,
+softmax, logarithm, entropy, top-two features, concatenation and action products stay on
+device. Real masked options and padded rows have different reduction semantics: keep
+real options at the graph's masked logit and exclude padding from softmax. Lane-vector
+updates require the API's value/index ordering; nonempty random cases alone missed it.
+Keep all-masked, padding, ties, extremes and signed-zero carry in the device probes.
+
+The fixture now supplies both outputs, but the qualification harness still includes
+CPU oracles and retains intermediate numerical failures. Complete the serving path,
+freeze native-arm artifacts before labelled scoring, retain the existing decision and
+calibration criteria, and measure paired end-to-end speed before a performance claim.
+See [full outputs, correction and limits](BENCHMARKS.md#laya-full-device-outputs-fixture-qualification-and-first-residual-correction-2026-10-16-desktop-2).

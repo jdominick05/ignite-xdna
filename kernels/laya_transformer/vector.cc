@@ -53,3 +53,11 @@ extern "C" void vector_sum(const int32_t *q,int32_t *out,int poison) {
     aie::store_v(reinterpret_cast<float *>(out)+1040+i,value);
   }
 }
+extern "C" void vector_carry(const int32_t *q,int32_t *out,int poison) {
+  // The first encoder Add consumes normalized embeddings (graph node 93).
+  for(int i=0;i<2080;i+=16) aie::store_v(out+i,aie::broadcast<int32,16>(poison));
+  for(int i=0;i<1024;i+=16) {
+    auto value=aie::load_v<16>(q+i);
+    aie::store_v(out+i,value); aie::store_v(out+1040+i,value);
+  }
+}

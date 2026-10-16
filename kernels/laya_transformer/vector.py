@@ -22,6 +22,7 @@ def prefix():
     declarations=f'''    func.func private @vector_bias(memref<{p.QWORDS}xi32>,memref<{p.KVWORDS}xi32>,memref<{p.OUT}xi32>,i32,i32)
     func.func private @vector_seed(memref<{p.QWORDS}xi32>,memref<{p.KVWORDS}xi32>,memref<{p.OUT}xi32>,i32)
     func.func private @vector_sum(memref<{p.QWORDS}xi32>,memref<{p.OUT}xi32>,i32)
+    func.func private @vector_carry(memref<{p.QWORDS}xi32>,memref<{p.OUT}xi32>,i32)
     func.func private @norm_pack_step(memref<{p.KVWORDS}xi32>,memref<{p.STATE}xi32>,i32,i32,i32)
     func.func private @norm_pack_finish(memref<{p.STATE}xi32>,memref<{p.OUT}xi32>,i32)
 '''
@@ -31,12 +32,15 @@ def prefix():
         %sixteen = arith.constant 16 : i32
         %seventeen = arith.constant 17 : i32
         %eighteen = arith.constant 18 : i32
+        %twentytwo = arith.constant 22 : i32
+        %carry = arith.cmpi eq, %command,%twentytwo : i32
         %head_seed = arith.cmpi eq, %command,%seventeen : i32
         %head_sum = arith.cmpi eq, %command,%eighteen : i32
         %pack = arith.cmpi eq, %command,%ten : i32
         %geglu = arith.cmpi eq, %command,%three : i32
         %is_geglu = arith.cmpi uge, %command,%three : i32''')
-    text=text.replace('%is_norm = arith.ori %plain_norm,%stem_or_copy : i1','''%head_norm = arith.ori %head_seed,%head_sum : i1
+    text=text.replace('%is_norm = arith.ori %plain_norm,%stem_or_copy : i1','''%head_seed_or_sum = arith.ori %head_seed,%head_sum : i1
+        %head_norm = arith.ori %head_seed_or_sum,%carry : i1
         %old_norm = arith.ori %plain_norm,%stem_or_copy : i1
         %is_norm = arith.ori %old_norm,%head_norm : i1''')
     text=text.replace('        %not_geglu = arith.cmpi ne, %command,%three : i32',
@@ -51,6 +55,11 @@ def prefix():
 {old}
                     }}
                   }}''')
+    text=text.replace(old,f'''                      scf.if %carry {{
+                        func.call @vector_carry(%q,%o,%fill) : (memref<{p.QWORDS}xi32>,memref<{p.OUT}xi32>,i32) -> ()
+                      }} else {{
+{old}
+                      }}''')
     old=f'                  func.call @chain_geglu(%q,%kv,%go,%fill) : (memref<{p.QWORDS}xi32>,memref<{p.KVWORDS}xi32>,memref<{p.OUT}xi32>,i32) -> ()'
     text=text.replace(old,f'''                  scf.if %geglu {{
 {old}
@@ -86,7 +95,7 @@ def prefix():
 
 class Sequence(b.r.Sequence):
     def control(self,mode,kblocks=1,position=0,**kwargs):
-        if mode not in (1,2,3,9,10,11,12,13,14,15,16,17,18): raise ValueError('vector operator')
+        if mode not in (1,2,3,9,10,11,12,13,14,15,16,17,18,22): raise ValueError('vector operator')
         for index,value in enumerate((mode,kblocks,b.r.mlp.POISON,None,position)):
             if index in self.current and self.current[index]==value: continue
             self.current[index]=value
