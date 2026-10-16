@@ -19400,3 +19400,40 @@ These checks-only runs are **timing-ineligible**. They establish exact guarded o
 for the tested feature group and column. Other features/columns, complete attention,
 full-model accuracy and any end-to-end speed gain remain unqualified for this candidate.
 A bounded layer integration and expanded coverage precede its full-model comparison.
+
+## Laya packing sweep and single-layer integration (2026-10-16, Desktop 2)
+
+The [expanded guarded checks and layer integration](../results/laya/pack_expanded_v1_device_desktop2_20261016.log)
+extend the preceding primitive result across all 16 feature groups and four columns.
+Original and candidate each pass six inputs/poison cases. Every output packet matches
+an independent reference; input bytes, output gaps and arena guards remain unchanged.
+The sweep includes round-to-even ties in every feature. Both processes use one context
+and leave the device idle. The [build](../results/laya/pack_sweep_v1_build_desktop2_20261016.log)
+retains the parent core/init images and checks all sweep descriptors and offsets.
+
+The subsequent layer process checks compiled address walks for both complete M128
+attention streams: all 564 transfers per stream match the generated schedule and stay
+inside the arena. Widened packets outside packing retain every original live operand
+address. The earlier descriptor, packet-boundary and lock checks remain prerequisites.
+See the [engineering method](DECISIONS.md#laya-packing-sweep-and-layer-first-integration-2026-10-16-desktop-2).
+
+A fresh qualified lookup session supplies the three unlabelled fixture references,
+then closes before the candidate session opens. Empty candidate selection, one global
+layer, and one local layer each preserve complete logits and action probabilities
+bit-for-bit on all three fixtures. Every inference observes five contexts and 66
+dispatches, with zero CPU neural/oracle calls. The original registration map matches
+before and after, the bounded wrapper exits normally, and context witnesses are idle.
+
+[Initial sweep validation](../results/laya/pack_sweep_v1_validation_desktop2_20261016.log)
+passes 55 offline/privacy checks. The
+[extended layer validation](../results/laya/pack_layer_v1_validation_desktop2_20261016.log)
+passes 62, including ND iteration wrapping and candidate selection/mask coverage.
+Both pass the legacy syntax/import/shell gate. Committed summaries retain raw SHA256
+values and all checks; verbose wrapper output remains in ignored scratch.
+
+These runs are **timing-ineligible** correctness qualification. They establish the
+expanded packing primitive and individual global/local layer integration on the
+fixtures. All encoder layers together, mask/length boundaries, full frozen accuracy
+and any same-sitting end-to-end gain remain unqualified for the new packing arm.
+The qualified serving configuration and original decision/calibration criteria remain
+unchanged. This result does not explain the earlier split-descriptor device failure.

@@ -3039,3 +3039,29 @@ expand correctness coverage, use a bounded single-layer integration check, then 
 complete numerical and original frozen decision/calibration gates. Preserve the
 qualified serving arm as the same-sitting performance control. The old split-packet
 failure cause remains unexplained and that scheme is still unqualified.
+
+## Laya packing sweep and layer-first integration (2026-10-16, Desktop 2)
+
+`pack_sweep.py` expands the primitive to all feature groups and columns without
+changing its earlier builder. The standalone arena reserves separate destinations
+and guards for every feature. The [compiled sweep](../results/laya/pack_sweep_v1_build_desktop2_20261016.log)
+retains each parent's core and initialization image. Its Shim gate checks every
+feature's input/output offsets, all complete gather iterations, queue order and
+effective controls. All-word reference tests distinguish each feature and row.
+
+Before layer integration, `transport_walk.py` interprets each complete attention
+stream's compiled ND and iteration fields, then compares every address to the
+independently generated transfer schedule and checks arena bounds. Repeated transfers
+may wrap their iteration index back to zero, reusing the same KV payload; the decoder
+handles that case explicitly. Outside packing, every original live operand address
+must survive in the widened packet. These checks complement the earlier
+initialization/lock and guarded-packing gates; they establish no bandwidth claim.
+
+`laya_pack_layer_probe.py` requires completed all-feature packing evidence before
+opening a context. It serializes a fresh qualified lookup reference session and the
+candidate session, replacing only the selected global or local layer. Other attention
+layers use the retained original instructions and their original valid-mask fields.
+Tests cover selection across the complete layer list, including the empty selection.
+The device and offline results are recorded in
+[BENCHMARKS](BENCHMARKS.md#laya-packing-sweep-and-single-layer-integration-2026-10-16-desktop-2).
+All-layer and boundary qualification still precede a full-model accuracy or speed claim.

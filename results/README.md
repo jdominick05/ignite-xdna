@@ -573,3 +573,9 @@ Guarded packing primitive: [first initialization-order gate failure](laya/pack_p
 [original and single-BD device checks](laya/pack_primitive_v1_device_desktop2_20261016.log).
 [Qualification and limits](../docs/BENCHMARKS.md#laya-guarded-single-bd-packing-primitive-2026-10-16-desktop-2),
 [transport checks](../docs/DECISIONS.md#laya-packing-primitive-transport-gates-2026-10-16-desktop-2).
+
+Expanded packing and layer integration: [sweep build](laya/pack_sweep_v1_build_desktop2_20261016.log),
+[sweep validation](laya/pack_sweep_v1_validation_desktop2_20261016.log),
+[extended layer validation](laya/pack_layer_v1_validation_desktop2_20261016.log),
+[device summary](laya/pack_expanded_v1_device_desktop2_20261016.log).
+[Methods and qualification limits](../docs/BENCHMARKS.md#laya-packing-sweep-and-single-layer-integration-2026-10-16-desktop-2).

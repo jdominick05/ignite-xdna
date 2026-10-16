@@ -19,8 +19,13 @@ def emit(key,value): print(key+' '+json.dumps(value),flush=True)
 
 
 def main():
+    global primitive
     ap=argparse.ArgumentParser(); ap.add_argument('--build',type=Path,required=True)
+    ap.add_argument('--sweep',action='store_true')
     ap.add_argument('--variant',choices=('original','compact'),required=True); args=ap.parse_args()
+    if args.sweep:
+        import pack_sweep
+        primitive=pack_sweep
     meta=json.loads((args.build/'build.json').read_text()); layout=meta['layouts'][args.variant]
     if meta['sources']!=primitive.sources() or meta['plan']!=primitive.plan():
         raise ValueError('primitive source/plan changed')
@@ -38,7 +43,7 @@ def main():
         raise ValueError('Shim gate changed')
     if not idle(): raise ValueError('device occupied before primitive')
     emit('PACK_PRIMITIVE_IDENTITY',dict(variant=args.variant,build_sha256=p.attention.sha(args.build/'build.json'),
-        runner_sha256=p.attention.sha(Path(__file__)),scope='one packing group on column0/four broadcast cores; no model inference or timing claim'))
+        runner_sha256=p.attention.sha(Path(__file__)),scope=meta['scope']))
     sys.path.insert(0,'C:/Xilinx/XRT/xrt_sdk/xrt/python'); import pyxrt as xrt
     device=xrt.device(0); xb=xrt.xclbin(str(args.build/args.variant/'final.xclbin')); device.register_xclbin(xb)
     ctx=xrt.hw_context(device,xb.get_uuid()); kernel=xrt.kernel(ctx,xb.get_kernels()[0].get_name())
@@ -57,22 +62,29 @@ def main():
             values=rng.normal(0,1,(128,p.OUT)).astype(np.float32)
             # Include positive/negative round-to-even tie cases in every core's rows.
             ties=np.array([0x3f808000,0x3f818000,0xbf808000,0xbf818000],np.uint32).view(np.float32)
-            values[:,0:4]=ties
-            expected=np.full((4,p.OUT),primitive.ba.r.mlp.POISON,np.uint32)
-            expected[:,16:1040]=primitive.expected(values)
+            for feature in range(16): values[:,feature*64:feature*64+4]=ties
+            regions=primitive.output_regions() if args.sweep else [(out_start,0)]
             for poison in (0xdeadbeef,0x13579bdf):
                 av.fill(poison); av[16:16+values.size]=values.reshape(-1).view(np.uint32)
                 original=av.copy(); ov.fill(poison)
+                expected=np.full(words,poison,np.uint32)
+                designated=np.zeros(words,bool)
+                for start,feature in regions:
+                    feature_values=values.copy()
+                    feature_values[:,:64]=values[:,feature*64:feature*64+64]
+                    packet=np.full((4,p.OUT),primitive.ba.r.mlp.POISON,np.uint32)
+                    packet[:,16:1040]=primitive.expected(feature_values)
+                    expected[start:start+4*p.OUT]=packet.reshape(-1)
+                    designated[start:start+4*p.OUT]=True
                 source.sync(sync.XCL_BO_SYNC_BO_TO_DEVICE); target.sync(sync.XCL_BO_SYNC_BO_TO_DEVICE)
                 handle=kernel(3,instructions,len(raw),source,target)
                 if handle.wait(5000)!=xrt.ert_cmd_state.ERT_CMD_STATE_COMPLETED:
                     poisoned=True; raise RuntimeError('packing primitive dispatch did not complete; no retry')
                 handle=None
                 target.sync(sync.XCL_BO_SYNC_BO_FROM_DEVICE); source.sync(sync.XCL_BO_SYNC_BO_FROM_DEVICE)
-                observed=ov[out_start:out_start+4*p.OUT].reshape(4,p.OUT)
-                checks=dict(payload_and_packet_bits_exact=bool(np.array_equal(observed,expected)),
+                checks=dict(payload_and_packet_bits_exact=bool(np.array_equal(ov[designated],expected[designated])),
                     input_unchanged=bool(np.array_equal(av,original)),
-                    outside_output_unchanged=bool(np.all(ov[:out_start]==poison) and np.all(ov[out_start+4*p.OUT:]==poison)))
+                    outside_output_unchanged=bool(np.array_equal(ov[~designated],expected[~designated])))
                 emit('PACK_PRIMITIVE_CHECK',dict(variant=args.variant,seed=seed,poison=poison,checks=checks))
                 if not all(checks.values()): raise ValueError('packing primitive output/guard failure')
                 cases+=1
@@ -85,7 +97,7 @@ def main():
     if not idle(): raise ValueError('primitive context cleanup failed')
     if meta['sources']!=primitive.sources(): raise ValueError('primitive source changed during execution')
     emit('PACK_PRIMITIVE_RESULT',dict(variant=args.variant,cases=cases,contexts=1,idle_after_close=True,
-        all_guards_and_output_bits_pass=True,scope='primitive qualification only; other features/columns and full inference unqualified'))
+        all_guards_and_output_bits_pass=True,features=len(regions),scope=meta['scope']))
 
 
 if __name__=='__main__':
