@@ -3448,3 +3448,35 @@ for a newly qualified image carrying the adopted lookup arithmetic. Preserve
 original rounding and the frozen accuracy gates. Require compiled transport/lock
 checks, guarded primitives, complete layers, full development parity and a quiet
 comparison before attributing any gain or adopting the new image.
+
+## Laya small-query lookup with original KV buffering (2026-10-16, Desktop 2)
+
+`small_query_lookup.py` combines the existing split-query addressing with the
+adopted lookup arithmetic, one output state and the original two KV buffers.
+The generated norm, dispatch, lookup and table sources match the qualified split
+lookup image; original block/GEMM objects remain unchanged. This supplies the
+buffering control identified by the schedule inventory.
+
+The [build and guarded primitive record](../results/laya/small_lookup_v3_primitives_desktop2_20261016.log)
+retains two offline failures: the initial stack layout leaves the table region
+4,160 bytes short; reducing the stack leaves a 64-byte overflow. Reserving the
+control block at byte 15,872 places it in an audited gap and lets the table fit.
+The resulting image has 11,584 code bytes per core and a conservative 2,208-byte
+stack bound within 3,328 reserved bytes. Actual allocations have three query
+objects, two KV objects and one output state. Inspect compiled spans and CDOs;
+declared FIFO depths alone do not establish these capacities.
+
+The new verifier reuses the compiled lock-field decoder with an explicit BD census
+adjustment for the extra query object. It checks 168 hardware lock initializations
+and 208 DMA/lock fields, preserving normalized roles and routes. Six repeated
+control-ledger cycles verify both query and KV physical rings, reset order and
+paired norm/lookup operands, assuming complete-object DMA delivery/drain. Full
+MLP transport checks cover every queued address, effective control and completion
+wait. Numerical and global-deadlock claims remain separate. See the
+[primitive measurements](BENCHMARKS.md#laya-smaller-query-lookupkv2-passes-guarded-primitives-2026-10-16-desktop-2).
+
+The [complete layer gate](BENCHMARKS.md#laya-smaller-query-lookupkv2-passes-complete-mlp-layers-2026-10-16-desktop-2)
+also passes with the exact guarded core/init and the full small-query transaction.
+Keep diagnostic capture/replay copies outside serving. A complete-model candidate
+must replace the existing MLP context and retain five contexts; full development
+parity, quiet same-sitting timing and original frozen adoption gates remain open.

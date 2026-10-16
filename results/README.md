@@ -686,6 +686,15 @@ Laya MLP inventory: [compiled schedule counts](laya/mlp_traffic_v1_offline_deskt
 [legacy validation](laya/mlp_traffic_v1_validation_desktop2_20261016.log),
 [derived scope and next control](../docs/DECISIONS.md#laya-complete-mlp-schedule-inventory-2026-10-16-desktop-2).
 
+Small-query lookup/KV2: [builds and primitive measurements](laya/small_lookup_v3_primitives_desktop2_20261016.log),
+[offline checks](laya/small_lookup_v3_offline_tests_desktop2_20261016.log),
+[legacy validation](laya/small_lookup_v3_validation_desktop2_20261016.log),
+[engineering record](../docs/DECISIONS.md#laya-small-query-lookup-with-original-kv-buffering-2026-10-16-desktop-2),
+[scope](../docs/BENCHMARKS.md#laya-smaller-query-lookupkv2-passes-guarded-primitives-2026-10-16-desktop-2).
+Complete layers: [captured arena parity and cleanup](laya/small_lookup_v3_layer_desktop2_20261016.log),
+[prerequisite checks](laya/small_lookup_v3_layer_tests_desktop2_20261016.log),
+[scope](../docs/BENCHMARKS.md#laya-smaller-query-lookupkv2-passes-complete-mlp-layers-2026-10-16-desktop-2).
+
 Two-output lookup GEMM primitive: [initial build](laya/window_lookup_primitive_v1_build_desktop2_20261016.log),
 [explicit control/address build](laya/window_lookup_primitive_v2_controls_build_desktop2_20261016.log),
 [offline validation and live packing identity](laya/window_lookup_primitive_v1_validation_desktop2_20261016.log),

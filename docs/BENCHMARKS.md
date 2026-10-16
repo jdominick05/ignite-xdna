@@ -19848,3 +19848,44 @@ operators, and uses a different SRAM placement from serving. It cannot assign
 their costs or establish array utilization. Count the actual schedule and measure
 the remaining work before attributing the full-model gap. Qualified packing
 remains adopted and all original frozen gates remain required for a candidate.
+
+## Laya smaller-query lookup/KV2 passes guarded primitives (2026-10-16, Desktop 2)
+
+The [guarded primitive result](../results/laya/small_lookup_v3_primitives_desktop2_20261016.log)
+tests a smaller-query image with one output state and two physical KV buffers.
+Both GEMM output groups pass six cases each: three integer-valued seeds crossed
+with two poison patterns. Complete outputs and packet bits match the independent
+fixture, inputs remain unchanged, and every output guard passes. A fresh original
+norm/lookup reference passes six cases; the split-query image matches its norm
+and GeGLU packets bit for bit on all six, with intact input and output guards.
+The pinned reference archive hash is recorded before its use by the candidate.
+Every bounded process exits zero and observes idle contexts after close.
+
+Before device use, each primitive requires the exact full-image core, allocations
+and CDO initialization. The complete MLP stream also passes checks for 519 queued
+transfers, 173 completion waits and 14,899,264 word addresses. Compiled locks and
+repeated lowered control flow are checked separately; the
+[engineering record](DECISIONS.md#laya-small-query-lookup-with-original-kv-buffering-2026-10-16-desktop-2)
+retains linker failures and the necessary layout adjustment.
+[Offline/privacy checks](../results/laya/small_lookup_v3_offline_tests_desktop2_20261016.log)
+pass 21 cases and [legacy validation](../results/laya/small_lookup_v3_validation_desktop2_20261016.log)
+passes. Qualification timing is ineligible. These results establish guarded
+primitive parity; complete MLP layers, full-model development cases, quiet timing
+and original frozen adoption gates remain required. Packing remains adopted.
+
+## Laya smaller-query lookup/KV2 passes complete MLP layers (2026-10-16, Desktop 2)
+
+The [complete-layer result](../results/laya/small_lookup_v3_layer_desktop2_20261016.log)
+replays layers 0 and 1 from qualified NPU-produced inputs on three development
+fixtures. All six complete activation arenas match bit for bit, including unchanged
+regions, with zero CPU neural/oracle calls. The candidate uses the exact core,
+allocations and CDOs qualified by the guarded primitives. Its complete transaction
+stream is checked independently against the small-query schedule.
+
+Capture/replay uses explicit diagnostic host copies. The five-context reference
+session closes before the isolated candidate opens; cleanup releases instruction
+BOs before the arena/kernel/context and device. The bounded process exits zero
+and records idle contexts while alive. Sources and registered identities remain
+unchanged. [Layer prerequisite/privacy checks](../results/laya/small_lookup_v3_layer_tests_desktop2_20261016.log)
+pass 18 cases. Timing is ineligible. These layer results do not establish full-model
+development parity, speed or frozen adoption accuracy.
