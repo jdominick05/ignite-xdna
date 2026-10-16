@@ -437,3 +437,20 @@ Backs [native C0–C5 pass](../docs/BENCHMARKS.md#laya-native-frozen-accuracy-c0
 Backs [split-phase diagnostic](../docs/BENCHMARKS.md#laya-mlp-phase-diagnostic-on-silicon-2026-10-16-desktop-2).
 
 - [Fresh split comparison](laya/mlp_phases_v1_fresh_split_desktop2_20261016.log): both outputs exact on three fixtures, zero CPU neural/oracle calls, final idle. Checks-only counters identify GeGLU for investigation; timing-ineligible.
+
+## Laya encoder buffering measured
+
+Backs [complete-model buffering gain](../docs/BENCHMARKS.md#laya-deeper-encoder-buffering-reduces-complete-latency-2026-10-16-desktop-2).
+
+- MLP: [fresh qualification](laya/mlp_fifo_v1_double_m128_fresh_desktop2_20261016.log), [eligible same-sitting comparison](laya/mlp_fifo_v1_double_m128_same_sitting_desktop2_20261016.log).
+- Attention: [fresh qualification](laya/attention_fifo_v1_double_m128_fresh_desktop2_20261016.log).
+- Combined: [sixth-context failure](laya/buffered_v1_double_m128_boundaries_desktop2_20261016.log), [compact head build](laya/compact_attention_v1_build_desktop2_20261016.log), [25-case qualification](laya/buffered_v2_compact_m128_boundaries_desktop2_20261016.log), [eligible same-sitting comparison](laya/buffered_v3_compact_m128_same_sitting_desktop2_20261016.log).
+- [Initial validation](laya/buffered_geglu_v1_validation_desktop2_20261016.log), [compact validation](laya/buffered_geglu_v2_compact_validation_desktop2_20261016.log), [171-check validation](laya/buffered_accuracy_v1_validation_desktop2_20261016.log): offline checks and legacy gates.
+- Buffered frozen arm: [registration](laya/buffered_accuracy_v1_prereg_desktop2_20261016.json), [registration log](laya/buffered_accuracy_v1_registration_desktop2_20261016.log). Full scored accuracy remains pending.
+
+## Laya GeGLU compiler candidates
+
+Backs [dedicated compiler experiment](../docs/BENCHMARKS.md#laya-dedicated-geglu-compiler-candidate-2026-10-16-desktop-2).
+
+- Builds: [O3](laya/geglu_tune_v1_o3_build_desktop2_20261016.log), [Oz control](laya/geglu_tune_v2_oz_control_build_desktop2_20261016.log).
+- Device fixtures: [O3](laya/geglu_tune_v1_o3_m128_fresh_desktop2_20261016.log), [Oz control](laya/geglu_tune_v2_oz_m128_control_desktop2_20261016.log). Exact outputs on three fixtures, checks-only and timing-ineligible.

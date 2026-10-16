@@ -2195,3 +2195,7 @@ establishes the defined accuracy result for the hardware path. It leaves the spe
 question open: the eligible same-sitting CPU comparison still wins. The next work measures
 phase costs and transfer overlap while retaining the frozen accuracy contract. See
 [full native accuracy and limits](docs/BENCHMARKS.md#laya-native-frozen-accuracy-c0c5-pass-2026-10-16-desktop-2).
+Deeper encoder buffering now reduces eligible complete-model fixture latency, while the
+same-sitting CPU remains faster. A separate buffered accuracy arm retains the original
+gates; its full-set qualification is pending. See
+[buffering result and limits](docs/BENCHMARKS.md#laya-deeper-encoder-buffering-reduces-complete-latency-2026-10-16-desktop-2).

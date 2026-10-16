@@ -18966,3 +18966,86 @@ This checks-only run is **timing-ineligible**. Its diagnostic median phase sums 
 These counters include dispatch/wait overhead and do not establish eligible latency,
 physical DDR bandwidth or a causal bottleneck. They identify GeGLU as the next target
 for isolated compiler and buffering experiments. Frozen accuracy artifacts are retained.
+
+## Laya deeper encoder buffering reduces complete latency (2026-10-16, Desktop 2)
+
+The [MLP-only fresh qualification](../results/laya/mlp_fifo_v1_double_m128_fresh_desktop2_20261016.log)
+preserves both outputs bit-for-bit on three unlabelled fixtures, with zero CPU neural/oracle
+calls. Its [eligible seven-repetition comparison](../results/laya/mlp_fifo_v1_double_m128_same_sitting_desktop2_20261016.log)
+measures original short encoder 820.7809 ms versus buffered MLP 726.9808 ms median.
+The candidate removes dead attention buffers and doubles the query/KV paths while keeping
+the complete original arithmetic object byte-identical. This establishes the combined
+plumbing change's gain; it does not isolate each FIFO's contribution.
+
+The [attention-only fresh qualification](../results/laya/attention_fifo_v1_double_m128_fresh_desktop2_20261016.log)
+also preserves both fixture outputs exactly. Its checks-only counters are timing-ineligible.
+The [first combined attempt](../results/laya/buffered_v1_double_m128_boundaries_desktop2_20261016.log)
+fails when creating a sixth context, before combined inference. No contexts remain after
+cleanup. This is an observed context-creation failure, not proof of a universal silicon limit.
+
+`compact_attention.py` recompiles the unchanged full head stream for the existing
+variable-KV context, explicitly selecting sixteen KV blocks. Its
+[build](../results/laya/compact_attention_v1_build_desktop2_20261016.log) proves the linked
+core programs and initialization match that context. `buffered_probe.py` first compares
+actual original-context fixture outputs before/after consolidation, then releases the
+old attention context. It retains full allocation groups, checks bank compatibility and
+uses each candidate's own physical control map and compiled instruction stream.
+
+The [combined boundary qualification](../results/laya/buffered_v2_compact_m128_boundaries_desktop2_20261016.log)
+passes all 25 complete-output comparisons bit-for-bit, including repeated lengths and
+transitions through all row buckets. M128 alone selects the deeper encoder buffers;
+other buckets retain original short schedules. The full head stream is unchanged apart
+from its context/count plumbing. Setup consolidation independently passes on all three
+unlabelled fixtures. CPU neural/oracle calls are forbidden and zero are observed.
+
+The [eligible seven-repetition comparison](../results/laya/buffered_v3_compact_m128_same_sitting_desktop2_20261016.log)
+alternates arm order within one resident session. All arms share the same context set,
+resident weights, request and full output readback policy. Setup is excluded.
+
+| Complete-model arm, fixture length 91 | Median ms | Observed range ms |
+|---|---:|---:|
+| Full-512 encoder schedule, consolidated attention context | 2550.2073 | 2544.9696–2559.1020 |
+| Original short encoder | 832.5928 | 803.1979–836.0277 |
+| MLP buffering/pruning alone | 723.7846 | 694.7999–742.7985 |
+| Attention buffering alone | 756.9851 | 745.0018–779.1092 |
+| Both encoder buffering changes | 669.3234 | 635.9564–678.4057 |
+| CPU FP32 at actual token length, same sitting | 178.4173 | 176.0430–179.4473 |
+
+The combined arm reduces median latency by 19.61% against the original short arm and is
+3.8101 times faster than the full-512 schedule. It remains 3.7514 times slower than CPU.
+Execution uses five contexts and 66 dispatches per frame, with zero CPU neural/oracle
+calls and device idle after close. The wrapper records `timing_eligible: true` and no
+foreign contention. The CPU comparison remains FP32 versus BF16 matrix operands with
+FP32 accumulation on the NPU; this is fixture speed, not a full-dataset latency average.
+
+The [buffered-arm registration](../results/laya/buffered_accuracy_v1_prereg_desktop2_20261016.json)
+and [registration log](../results/laya/buffered_accuracy_v1_registration_desktop2_20261016.log)
+freeze 176 source/artifact hashes before this arm scores labelled final outputs. It
+retains original items, FP32 logits and C1–C5, and additionally requires full scored
+output bit equivalence to the already qualified native arm. Prior native outcomes have
+been observed; this is explicitly not a new independent held-out study. Full buffered
+accuracy is pending, so the original qualified accuracy arm remains available unchanged.
+
+[Validation](../results/laya/buffered_accuracy_v1_validation_desktop2_20261016.log) passes
+171 offline checks plus legacy syntax/import gates. The earlier
+[initial](../results/laya/buffered_geglu_v1_validation_desktop2_20261016.log) and
+[compact-context](../results/laya/buffered_geglu_v2_compact_validation_desktop2_20261016.log)
+validation stages are retained. No precision, learned weights or accuracy criteria change.
+
+## Laya dedicated GeGLU compiler candidate (2026-10-16, Desktop 2)
+
+`geglu_tune.py` builds a dedicated MLP image from unchanged `mlp.cc`, retaining the
+original GEMM, dispatch, normalization and finish objects. It removes unreachable
+attention code/buffers and unused stem/head dispatches, leaving the existing MLP packet
+and runtime emitter. The [O3 build](../results/laya/geglu_tune_v1_o3_build_desktop2_20261016.log)
+audits at 11,680 code bytes per core; the
+[Oz control](../results/laya/geglu_tune_v2_oz_control_build_desktop2_20261016.log) at 8,880.
+Both conservative stack bounds are 3,456 bytes within the explicit 5,376-byte reservation.
+No fast-math, precision substitution, changed constants or polynomial approximation is added.
+
+Both [O3](../results/laya/geglu_tune_v1_o3_m128_fresh_desktop2_20261016.log) and
+[Oz](../results/laya/geglu_tune_v2_oz_m128_control_desktop2_20261016.log) preserve full
+logits and action probabilities exactly on the three unlabelled fixtures, with no CPU
+neural/oracle calls and idle device after close. These runs are checks-only and
+timing-ineligible; neither a qualified speedup nor full frozen accuracy is established.
+The dedicated dispatch and compiler changes are separate from the measured buffering arm.
