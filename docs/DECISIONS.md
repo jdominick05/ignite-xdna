@@ -3425,3 +3425,26 @@ change. Do not conclude that compiler specialization failed to improve arithmeti
 or that memory is therefore the sole bottleneck. The test changes placement and
 excludes reset, stream/lock waits and other operators. Use actual schedule counts
 and further attribution to select the next optimization.
+
+## Laya complete MLP schedule inventory (2026-10-16, Desktop 2)
+
+The [offline inventory](../results/laya/mlp_traffic_v1_offline_desktop2_20261016.log)
+checks every compiled Shim word address in the working M128 lookup MLP against its
+generated schedule. **DERIVED:** its 435 queues schedule 68,458,752 query bytes,
+18,130,176 KV bytes and 5,757,440 output bytes per complete MLP layer. It issues
+500 GEMM calls per core, 8,000 across all cores, with 25 reset calls per core.
+Counts retain repeated scheduled words and the Shim side of broadcasts; they
+exclude core/MemTile traffic and establish no physical DDR traffic or bandwidth.
+The log pins the actual instructions, builder sources and inventory tool.
+[Legacy validation](../results/laya/mlp_traffic_v1_validation_desktop2_20261016.log) passes;
+the inventory opens no device context.
+
+Query bytes dominate this schedule. A useful controlled follow-up keeps one output
+state and the working double-buffered KV stream while reducing query packets.
+The prior window arms changed KV depth and state allocation along with packet
+size; their complete-model timings do not isolate the packet reduction. The older
+small-query image is an offline polynomial-GeGLU candidate, so it cannot substitute
+for a newly qualified image carrying the adopted lookup arithmetic. Preserve
+original rounding and the frozen accuracy gates. Require compiled transport/lock
+checks, guarded primitives, complete layers, full development parity and a quiet
+comparison before attributing any gain or adopting the new image.

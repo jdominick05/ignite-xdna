@@ -682,6 +682,10 @@ Laya L1 GEMM: [qualification and retained reference failures](laya/l1_gemm_v3_qu
 The [eligible observations and fits](laya/l1_gemm_v3_timing_desktop2_20261016.log)
 support the [resident arithmetic result and scope](../docs/BENCHMARKS.md#laya-isolated-resident-arithmetic-improves-beyond-the-full-model-change-2026-10-16-desktop-2).
 
+Laya MLP inventory: [compiled schedule counts](laya/mlp_traffic_v1_offline_desktop2_20261016.log),
+[legacy validation](laya/mlp_traffic_v1_validation_desktop2_20261016.log),
+[derived scope and next control](../docs/DECISIONS.md#laya-complete-mlp-schedule-inventory-2026-10-16-desktop-2).
+
 Two-output lookup GEMM primitive: [initial build](laya/window_lookup_primitive_v1_build_desktop2_20261016.log),
 [explicit control/address build](laya/window_lookup_primitive_v2_controls_build_desktop2_20261016.log),
 [offline validation and live packing identity](laya/window_lookup_primitive_v1_validation_desktop2_20261016.log),
