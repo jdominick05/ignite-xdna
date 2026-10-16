@@ -5,6 +5,41 @@
 > that must not be silently changed. Update it when a decision changes, not when a
 > number does.
 
+## Laya native/hybrid comparison protocol (2026-10-16)
+
+The [comparison registration](../results/laya/native_hybrid_compare_v1_prereg_desktop2_20261016.json)
+is written before new comparison inference. `tools/laya_native_hybrid_compare.py`
+compares the existing hybrid, native at the matched full-512 schedule, the qualified
+buffered native arm, and the qualified lookup/short-head native arm on the same
+91-token unlabelled fixture. The hybrid currently requires 512-row activations and
+fixed-size generic transactions; shorter activations take its host branch. Its closest
+supported row schedule is therefore 512. This experiment changes neither those
+transactions nor the hybrid's `SEQ`, and will not present native M128 as a matched
+M128 kernel comparison. Actual NPU/host product counters must corroborate placement.
+
+Three rounds rotate profile order. Each profile is separately initialized, warmed
+twice and timed five times, with setup excluded and idle checks before and after.
+Contexts are serialized: one for hybrid, at most five for native. Native profiles
+forbid CPU neural/oracle calls; hybrid explicitly retains its CPU neural segments.
+Dispatch and whole-process waits are bounded. A smaller checks-only qualification
+pass precedes the eligible run without changing the registered source/artifact map.
+
+CPU blocks occur before the first NPU profile and after every profile. They alternate
+actual-length and padded-512 inputs and rotate one-thread/no-spin, eight-thread/no-spin
+and eight-thread/default session configurations. Fresh CPU sessions are released
+before NPU execution. System CPU load, process CPU time and native thread count are
+recorded; no clock or thermal cause is inferred from them. The stability threshold is
+a preregistered maximum/minimum block-median ratio of 1.10 for every CPU configuration
+and schedule. CPU ratios are withheld if any configuration exceeds it. The earlier
+CPU drift remains unexplained until evidence resolves it.
+
+Native versus hybrid is the primary verdict, first at matched 512-row schedules and
+then for currently supported serving configurations on the same logical request.
+CPU comparisons are secondary. Raw wrapper/dispatch output remains in git-ignored
+`scratch/`; committed summaries retain protocol identity, raw SHA256, load samples,
+per-profile results, correctness failures, idle witnesses and wrapper eligibility.
+The measurement and verdict will be folded into BENCHMARKS after the run.
+
 ## LOCKED DECISIONS (do not reopen)
 
 1. **Ryzen AI 1.7.1 for NPU inference, not 1.8.0.** 1.8.0 SDK ships ZERO xclbins

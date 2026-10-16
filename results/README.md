@@ -534,3 +534,10 @@ Backs [complete lookup/head gate verdict](../docs/BENCHMARKS.md#laya-lookup-and-
 
 - [Full scores](laya/lookup_head_accuracy_v1_full_score_desktop2_20261016.log): all 2,403 items, registered identities unchanged, zero CPU neural/oracle calls, idle cleanup. Timing-ineligible.
 - [Full report](laya/lookup_head_accuracy_v1_full_report_desktop2_20261016.log): original C0–C5 pass on all 2,400 labelled items; re-validation on the known frozen set. Native versus hybrid at matching schedules remains open.
+
+## Laya native/hybrid comparison registration
+
+Backs the [comparison protocol](../docs/DECISIONS.md#laya-nativehybrid-comparison-protocol-2026-10-16).
+
+- [Preregistration](laya/native_hybrid_compare_v1_prereg_desktop2_20261016.json): matched-512 control, both qualified native serving arms, interleaved CPU thread/spinning controls and load capture; no comparison result yet.
+- [Offline validation](laya/native_hybrid_compare_v1_validation_desktop2_20261016.log): summary eligibility, CPU drift rejection, registration exclusivity, output gates, privacy and legacy checks; Win32 load/thread APIs checked without opening the NPU.
