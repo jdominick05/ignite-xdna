@@ -2185,3 +2185,13 @@ not yet measured.) (Answered the same day: on all 5,000 COCO val2017 images the 
 and 44.16 against 26.68, 37.31 and 32.64 for AMD's stack on the shipped models, and they stay faster than AMD's stack
 glass-to-glass on YOLOv8n and YOLOv8n-pose but not on YOLOv8s
 ([against AMD](docs/BENCHMARKS.md#the-sigmoid-silu-containers-against-amds-stack-more-accurate-on-all-5000-coco-images-faster-on-yolov8n-and-yolov8n-pose-slower-on-yolov8s-2026-09-17-desktop-2)).)
+
+## Complete native Laya: accuracy preserved, speed still open
+
+Can a complete transformer execute on XDNA1 without CPU neural fallback while preserving
+its decisions and calibration? The native Laya arm now passes the original frozen
+full-set gates, with its source and artifacts registered before labelled scoring. This
+establishes the defined accuracy result for the hardware path. It leaves the speed
+question open: the eligible same-sitting CPU comparison still wins. The next work measures
+phase costs and transfer overlap while retaining the frozen accuracy contract. See
+[full native accuracy and limits](docs/BENCHMARKS.md#laya-native-frozen-accuracy-c0c5-pass-2026-10-16-desktop-2).

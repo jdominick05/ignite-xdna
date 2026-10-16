@@ -2624,3 +2624,16 @@ CPU oracles and retains intermediate numerical failures. Complete the serving pa
 freeze native-arm artifacts before labelled scoring, retain the existing decision and
 calibration criteria, and measure paired end-to-end speed before a performance claim.
 See [full outputs, correction and limits](BENCHMARKS.md#laya-full-device-outputs-fixture-qualification-and-first-residual-correction-2026-10-16-desktop-2).
+
+## Laya native accuracy and subsequent optimization (2026-10-16)
+
+A native serving path needs its own registered execution identity rather than borrowing
+the earlier CPU BF16-emulation arm's hashes. Freeze the actual program/source map before
+native labelled final outputs, retain the original items, FP32 reference and decision /
+calibration thresholds, and reject partial checkpoints as complete evidence. The native
+arm now passes those full-model gates. This does not retract the earlier intermediate
+composition failures or prove every probability identical. Keep the accuracy identity
+fixed during its run and prepare independent diagnostics outside it. Qualify any later
+buffering or scheduling change before using its performance as the model result.
+
+See [full original-gate report and remaining speed work](BENCHMARKS.md#laya-native-frozen-accuracy-c0c5-pass-2026-10-16-desktop-2).

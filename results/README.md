@@ -424,3 +424,10 @@ Backs [attention buffering candidates](../docs/BENCHMARKS.md#laya-attention-fifo
 
 - Builds: [query path](laya/attention_fifo_v2_query_build_desktop2_20261016.log), [key/value path](laya/attention_fifo_v3_keyvalue_build_desktop2_20261016.log), [combined](laya/attention_fifo_v1_double_build_desktop2_20261016.log).
 - [161-check validation](laya/attention_fifo_v1_validation_desktop2_20261016.log): offline code/table/stack/span and host checks; no device qualification or speed claim.
+
+## Laya native frozen accuracy complete
+
+Backs [native C0–C5 pass](../docs/BENCHMARKS.md#laya-native-frozen-accuracy-c0c5-pass-2026-10-16-desktop-2).
+
+- [Full native scores](laya/native_accuracy_v1_full_score_desktop2_20261016.log): all 2,403 frozen items, zero CPU neural/oracle calls, registered identities unchanged, device idle after close.
+- [Full original-gate report](laya/native_accuracy_v1_full_report_desktop2_20261016.log): all C0–C5 pass; full per-task metrics and ancillary shifts retained. Accuracy run is timing-ineligible.

@@ -18899,3 +18899,55 @@ complete-model fixture/boundary comparisons with CPU neural/oracle calls forbidd
 No attention FIFO candidate has run on hardware yet. Numerical equivalence, latency
 reduction and the proposed overlap mechanism remain unverified; the active full native
 accuracy run retains sole device ownership.
+
+## Laya native frozen accuracy: C0–C5 pass (2026-10-16, Desktop 2)
+
+The registered `native_short_bf16_v1` arm completes the
+[full frozen native run](../results/laya/native_accuracy_v1_full_score_desktop2_20261016.log)
+and [original-gate report](../results/laya/native_accuracy_v1_full_report_desktop2_20261016.log).
+All 2,403 items are scored, including 2,400 labelled examples and three unlabelled
+fixtures, using the registration committed before labelled scoring. Source/artifact
+identity is unchanged at completion. Both logits and action probabilities are captured;
+CPU neural/oracle calls remain forbidden through native setup and inference, with zero
+calls observed. Execution uses four contexts and 66 device dispatches per item and
+confirms no contexts after close while the scoring process is still alive.
+
+| Original criterion | Native result | Verdict |
+|---|---|---|
+| C0: registered served source/artifact map | Exact registered identity before/after, final scored-file provenance verified | PASS |
+| C1: pooled agreement at least 0.97 | 2385 / 2400 = 0.99375 | PASS |
+| C2: pooled accuracy delta at least −0.005 | 0.00000 | PASS |
+| C3: each task's accuracy delta at least −0.015 | Worst −0.00250, Emotion | PASS |
+| C4: pooled T=1 ECE delta at most 0.010 | +0.00014430245755273075 | PASS |
+| C5: each task's T=1 ECE delta at most 0.020 | Worst +0.002049499057395321, Emotion | PASS |
+
+Pooled accuracy is 0.6266666666666667 for both native and the frozen FP32 reference.
+Pooled T=1 ECE changes from 0.19241223949833575 to 0.19255654195588848. The original
+item file, FP32 logits, thresholds, task weighting and temperatures are unchanged.
+This is the complete preregistered set, not the entirety of each public dataset.
+
+| Task | Frozen labelled items | Same decision | FP32 accuracy | Native accuracy | T=1 ECE delta |
+|---|---:|---:|---:|---:|---:|
+| AG News | 400 | 400 / 400 | 0.9500 | 0.9500 | −0.00008251433898880806 |
+| Emotion | 400 | 399 / 400 | 0.5950 | 0.5925 | +0.002049499057395321 |
+| Banking77 | 400 | 391 / 400 | 0.4250 | 0.4275 | −0.0011972537672166328 |
+| MASSIVE English | 300 | 300 / 300 | 0.7833333333333333 | 0.7833333333333333 | −0.00002100210191158247 |
+| XNLI English | 300 | 300 / 300 | 0.8600 | 0.8600 | −0.00008737322371495104 |
+| SST-5 | 600 | 595 / 600 | 0.37166666666666665 | 0.37166666666666665 | −0.0000838918318366022 |
+
+The criteria judge T=1 calibration. The report also retains shipped-temperature shifts:
+Banking77's maximum probability change is 0.7358 at the shipped temperature, and SST-5's
+maximum score-answer shift is 0.1765. These are original reported-but-not-deciding
+quantities; passing the gates does not make every answer or probability identical.
+Action probabilities are captured and finite but are not an added labelled accuracy
+criterion. Earlier intermediate composition and strict MLP failures remain retained;
+this pass is for the original full-model decision/calibration gates.
+
+The final scored NPZ SHA256 is
+`fe8920695fa1b0203d6a233ce5df8792f0bf7f8f4d61b25a86317d6dc212ed32`.
+The registration identity is
+`8700e2ad15293cdc1e69a38729bd36dd1c95d3940578e2f75dd27ba94aa9d437`.
+Both score and report wrappers exit 0. The scoring run's elapsed time is not eligible
+latency: it is checks-only and offline compilation/validation ran concurrently on the
+host. The preceding same-sitting eligible timing remains the speed evidence. Native
+accuracy is now established at these gates; the complete-model speed goal remains open.
