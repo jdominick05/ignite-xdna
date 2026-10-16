@@ -3340,3 +3340,28 @@ packing as the qualified control and stop width-only adoption work on these imag
 The same-core comparison does not isolate the KV-depth effect against packing; core
 execution or a separately qualified buffering change needs direct evidence before
 being assigned as the cause.
+
+## Laya fixed-shape GEMM code-generation screen (2026-10-16, Desktop 2)
+
+After the output-width experiment produced no demonstrated gain, screen arithmetic
+code generation separately. The earlier compiler-flag experiment already tried O3;
+repeating that flag alone is not a new optimization. `gemm_specialize.py` instead
+generates a fixed 32-by-64 product with the original eight-block K order and retains
+the generic ABI fallback for other shapes. A second variant initializes each reset
+accumulator from positive float zero, replacing the separate state-clear pass. The
+original registered source, objects and serving configuration remain unchanged.
+
+The [offline screen and validation](../results/laya/gemm_specialize_v1_offline_desktop2_20261016.log)
+record compiler, source, object and disassembly hashes. At O3 the generic object has
+1,808 text bytes, fixed-shape 3,184, and fixed-shape with folded reset 2,992. The
+specialized objects report individual stack frames of 64, 32, 64, 0 and 0 bytes;
+these are not a call-chain stack bound. Extra code is a resource cost requiring a
+linked image audit. Neither object size nor removed source operations proves speed.
+The legacy syntax/import gate passes. No hardware context was opened for this
+screen, and numerical parity, linked SRAM fit and latency remain unqualified.
+
+Before device execution, link a separate image, audit its allocations and stack,
+and verify the compiled transport against a working image. Then require bounded
+primitive and layer parity, full development cases, preregistered quiet timing,
+and the original frozen gates before adoption. No frozen scoring is justified by
+this offline screen alone.

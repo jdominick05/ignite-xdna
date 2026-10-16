@@ -651,6 +651,9 @@ Three-arm window comparison: [registration](laya/window_single_compare_v1_prereg
 Same-core width timing: [eligible three-arm samples and raw hash](laya/window_single_compare_v1_timing_desktop2_20261016.log),
 [negative result and attribution limits](../docs/BENCHMARKS.md#laya-same-core-output-width-comparison-finds-no-end-to-end-gain-2026-10-16-desktop-2).
 
+Fixed-shape GEMM offline screen: [object identities and validation](laya/gemm_specialize_v1_offline_desktop2_20261016.log),
+[engineering limits and qualification order](../docs/DECISIONS.md#laya-fixed-shape-gemm-code-generation-screen-2026-10-16-desktop-2).
+
 Two-output lookup GEMM primitive: [initial build](laya/window_lookup_primitive_v1_build_desktop2_20261016.log),
 [explicit control/address build](laya/window_lookup_primitive_v2_controls_build_desktop2_20261016.log),
 [offline validation and live packing identity](laya/window_lookup_primitive_v1_validation_desktop2_20261016.log),
