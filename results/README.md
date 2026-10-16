@@ -552,3 +552,12 @@ for method and archival timing.
 Qualified lookup stage attribution: [diagnostic summary](laya/lookup_stage_profile_v1_diagnostic_desktop2_20261016.log)
 and [validation](laya/stage_profile_v1_validation_desktop2_20261016.log), with
 [method and timing-ineligible counters](../docs/BENCHMARKS.md#laya-qualified-lookup-stage-diagnostic-2026-10-16-desktop-2).
+
+Attention phase attribution on the qualified lookup arm:
+[device checks and counters](laya/attention_phases_v1_device_diagnostic_desktop2_20261016.log),
+with [measurement scope](../docs/BENCHMARKS.md#laya-attention-phase-diagnostic-on-the-qualified-lookup-arm-2026-10-16-desktop-2).
+Build history: [relative-path failure](laya/attention_phases_v1_build_desktop2_20261016.log),
+[absolute-path correction](laya/attention_phases_v2_absolute_build_desktop2_20261016.log),
+[compiled equivalence gate](laya/attention_phases_v3_equivalence_build_desktop2_20261016.log),
+[offline/privacy/legacy validation](laya/attention_phases_v1_validation_desktop2_20261016.log).
+See the [engineering record](../docs/DECISIONS.md#laya-attention-phase-diagnostic-transport-2026-10-16-desktop-2).

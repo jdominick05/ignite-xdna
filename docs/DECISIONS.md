@@ -2951,3 +2951,32 @@ not a universal silicon limit or a proved physical explanation. Consolidate resi
 programs or release the replaced context before opening another. The subsequent
 [serialized comparison](../results/laya/native_hybrid_compare_v1_same_sitting_desktop2_20261016.log)
 used at most five native contexts, completed normally and left the device idle.
+
+## Laya attention phase diagnostic transport (2026-10-16, Desktop 2)
+
+The qualified attention stream is partitioned into prepare, attend and finish at its
+existing output-completion waits. No packet dimensions, buffer descriptors, FIFO
+layout or arithmetic objects are changed. Prepare includes normalized-input packing,
+QKV projection and RoPE/KV formation; attend includes score/softmax/value arithmetic;
+finish includes attention packing, output projection, residual normalization and the
+next normalized-input pack. Splitting adds dispatch boundaries and is diagnostic only.
+
+The [first build](../results/laya/attention_phases_v1_build_desktop2_20261016.log)
+failed because a relative output path was interpreted from the compiler's child
+working directory. The [absolute-path build](../results/laya/attention_phases_v2_absolute_build_desktop2_20261016.log)
+passes core and initialization checks. The
+[final build with compiled-stream verification](../results/laya/attention_phases_v3_equivalence_build_desktop2_20261016.log)
+compares every non-RTP operation byte, including descriptor, operand relocation,
+queue and completion-wait operations, against the qualified stream. The concatenated
+phases preserve all 2,060 operations. Effective controls match at every operand patch;
+each phase initializes its own controls rather than inheriting uninitialized fields.
+Linked code, physical spans and initialization binaries also match the qualified image.
+
+The [validation](../results/laya/attention_phases_v1_validation_desktop2_20261016.log)
+covers all row buckets' transfer order, independent control initialization, invalid
+phase rejection, and detection of corrupted compiled operand/control fields. It also
+passes privacy and legacy gates. The runtime installs phase instructions in the
+existing qualified context, preserving five resident contexts. A bounded one-layer
+check for each attention mode precedes the full diagnostic; no compact/wide transfer
+scheme is enabled. [Device results](BENCHMARKS.md#laya-attention-phase-diagnostic-on-the-qualified-lookup-arm-2026-10-16-desktop-2)
+remain explicitly timing-ineligible and do not qualify a serving optimization.

@@ -19287,3 +19287,38 @@ transport before selecting a replacement. This does not establish which resource
 limits attention, qualify a new DMA scheme or supersede the eligible comparison.
 The committed summary preserves all per-stage counters and the raw SHA256; verbose
 wrapper output remains in ignored scratch. No labelled scores or frozen gates change.
+
+## Laya attention phase diagnostic on the qualified lookup arm (2026-10-16, Desktop 2)
+
+The [bounded device checks and diagnostic](../results/laya/attention_phases_v1_device_diagnostic_desktop2_20261016.log)
+first replace attention in one layer at a time, selecting the first global and local
+layers. Each preserves complete logits and action probabilities bit-for-bit on all
+three unlabelled fixtures, with 68 dispatches per inference. Only then does a fresh
+process split all encoder attention layers, again preserving complete fixture outputs
+exactly, with 122 dispatches instead of 66. All runs forbid CPU neural/oracle calls,
+retain five contexts, verify the original registration map before/after, exit normally
+and leave the device idle. Raw logs stay in ignored scratch with both SHA256 values
+in the committed summary. No labelled accuracy scores or original criteria change.
+
+[Offline transport equivalence](DECISIONS.md#laya-attention-phase-diagnostic-transport-2026-10-16-desktop-2)
+precedes device execution. The three streams retain every descriptor/queue/wait byte
+and effective operand control from the qualified attention program, with identical
+core and initialization images. These are additional dispatch boundaries in the
+working transfer sequence, not a compact or wide descriptor experiment.
+
+The full diagnostic profiles three calls after fixture qualification. These are
+**timing-ineligible** host wall-time sums across the encoder layers, including driver
+and wait overhead. They do not establish device-only latency or a speedup.
+
+| Phase | Included work | Median wall time ms | Observed range ms |
+|---|---|---:|---:|
+| prepare | Input pack, QKV, RoPE/KV | 175.6681 | 164.3270–175.8949 |
+| attend | Score, softmax, value product | 34.7866 | 28.9977–35.4317 |
+| finish | Attention pack, projection, norm, next pack | 65.1728 | 59.8942–66.1906 |
+
+Preparation is the largest measured group. Further isolate input packing, QKV product
+and RoPE/KV formation before selecting a replacement. This measurement does not
+identify which of those operations or physical resources limits the group. The
+score/softmax/value phase is smaller in this M128 diagnostic; no conclusion about
+full-512 attention cost follows. Additional dispatches perturb the measured program,
+so these counters neither supersede nor combine with the eligible serving comparison.
