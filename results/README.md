@@ -634,6 +634,9 @@ Window versus packing comparison: [registration](laya/window_compare_v1_prereg_d
 [registration evidence](laya/window_compare_v1_registration_desktop2_20261016.log),
 [protocol](../docs/DECISIONS.md#laya-window-versus-packing-comparison-protocol-2026-10-16-desktop-2).
 
+Window complete-model timing: [eligible comparison and raw hash](laya/window_full_v1_timing_desktop2_20261016.log),
+[negative result and retained control](../docs/BENCHMARKS.md#laya-window-query-reuse-does-not-improve-complete-model-latency-2026-10-16-desktop-2).
+
 Two-output lookup GEMM primitive: [initial build](laya/window_lookup_primitive_v1_build_desktop2_20261016.log),
 [explicit control/address build](laya/window_lookup_primitive_v2_controls_build_desktop2_20261016.log),
 [offline validation and live packing identity](laya/window_lookup_primitive_v1_validation_desktop2_20261016.log),

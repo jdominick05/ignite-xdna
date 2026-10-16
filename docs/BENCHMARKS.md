@@ -19611,3 +19611,31 @@ qualification, not a new full frozen accuracy verdict or performance result. The
 [comparison protocol](DECISIONS.md#laya-window-versus-packing-comparison-protocol-2026-10-16-desktop-2)
 is registered before timing. Original C0–C5, temperatures and reference remain fixed;
 the new window arm must pass frozen known-set qualification before adoption.
+
+## Laya window query reuse does not improve complete-model latency (2026-10-16, Desktop 2)
+
+The [eligible same-sitting comparison](../results/laya/window_full_v1_timing_desktop2_20261016.log)
+follows the [registered protocol](../results/laya/window_compare_v1_prereg_desktop2_20261016.json),
+committed as `c0019f1` before timing. Each arm uses the same length-91 request at
+M128, a separate warmed session and complete neural inference with setup excluded.
+Three rotated rounds supply 15 timed samples per arm.
+
+| Complete native configuration | Median ms | Sample range ms | Accuracy status |
+|---|---:|---:|---|
+| Qualified lookup, shorter heads and single-BD packing | 470.3951 | 422.3471–485.3116 | Original full frozen gates passed |
+| Packing plus two-output window MLP, single core KV buffer | 487.1612 | 427.2143–495.9770 | Fixture/boundary exact; new full frozen gates unrun |
+
+Every timed output matches the control bit-for-bit. Both arms retain zero CPU
+neural/oracle calls, five contexts, 66 dispatches and unchanged registered identities.
+Sessions close before the next opens and witness an idle device; the bounded wrapper
+exits zero, detects no foreign contention and reports `timing_eligible: true`.
+The committed summary retains all per-profile/per-sample values and the unchanged
+raw-log hash.
+
+The window arm has the higher median in this sitting and is not adopted as a faster
+serving configuration. Sample ranges overlap; this does not establish a universal
+latency ordering. It also does not isolate whether reduced KV buffering, extra core
+control or another cost erased the query-traffic saving. Full frozen window scoring
+is not run for adoption on the strength of this negative speed result. The qualified
+packing arm remains available with its original C0–C5 verdict. No new CPU/hybrid
+comparison or ratio is supplied, and this sitting is not merged with earlier ones.

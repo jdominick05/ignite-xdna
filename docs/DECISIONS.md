@@ -3295,3 +3295,11 @@ opens, and requires output-bit equality, zero CPU neural/oracle calls, five cont
 66 dispatches and unchanged identities. No CPU/hybrid ratio or held-out accuracy
 claim is part of this incremental native comparison. Registration alone supplies no
 performance result; the window arm's full frozen qualification remains open.
+
+The [subsequent eligible comparison](BENCHMARKS.md#laya-window-query-reuse-does-not-improve-complete-model-latency-2026-10-16-desktop-2)
+does not improve complete-model latency, so this two-output/single-KV-buffer arm is
+not adopted. Its fixture and transport qualifications remain useful evidence, not a
+speed claim. Query traffic and core buffering changed together; their performance
+effects remain unseparated. Any follow-up must preserve the qualified packing control
+and use a new pinned comparison, rather than treating fewer transferred query words
+as proof of a faster model.
