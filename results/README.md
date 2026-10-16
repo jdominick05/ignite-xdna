@@ -579,3 +579,7 @@ Expanded packing and layer integration: [sweep build](laya/pack_sweep_v1_build_d
 [extended layer validation](laya/pack_layer_v1_validation_desktop2_20261016.log),
 [device summary](laya/pack_expanded_v1_device_desktop2_20261016.log).
 [Methods and qualification limits](../docs/BENCHMARKS.md#laya-packing-sweep-and-single-layer-integration-2026-10-16-desktop-2).
+
+All-layer packing protocol: [comparison registration](laya/pack_compare_v1_prereg_desktop2_20261016.json),
+[validation](laya/pack_full_v1_validation_desktop2_20261016.log),
+[engineering protocol](../docs/DECISIONS.md#laya-all-layer-packing-comparison-protocol-2026-10-16-desktop-2).

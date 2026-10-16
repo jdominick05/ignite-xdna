@@ -3065,3 +3065,28 @@ Tests cover selection across the complete layer list, including the empty select
 The device and offline results are recorded in
 [BENCHMARKS](BENCHMARKS.md#laya-packing-sweep-and-single-layer-integration-2026-10-16-desktop-2).
 All-layer and boundary qualification still precede a full-model accuracy or speed claim.
+
+## Laya all-layer packing comparison protocol (2026-10-16, Desktop 2)
+
+`laya_pack_full_probe.py` requires the preceding committed layer qualification before
+all-layer experiments. It checks complete transfer schedules and initialization,
+serializes a qualified lookup reference session and a packing candidate session,
+and compares every output bit. Its unlabelled development set includes the three
+existing fixtures, row/bucket boundaries, a return to a short input after a full input,
+and two option masks. The original frozen accuracy criteria and artifacts are retained.
+This development check does not replace full known-set decision/calibration validation.
+
+The [timing registration](../results/laya/pack_compare_v1_prereg_desktop2_20261016.json)
+binds sources, artifacts, prerequisite evidence and the same length-91 fixture before
+new comparison timing. Three rounds use lookup/wide, wide/lookup and lookup/wide order.
+Each arm gets a fresh session, two warmups and five measured complete inferences;
+setup is excluded. Sessions are serialized with idle checks before and after. Both
+native arms require five contexts, 66 dispatches and zero CPU neural/oracle calls,
+with exact output bits against the first lookup result and unchanged file identities.
+
+This is an incremental comparison against the qualified native serving configuration,
+not a fresh CPU or hybrid comparison. It yields no CPU/hybrid ratio. The candidate is
+a development arm until its own original frozen gates pass; timing eligibility alone
+does not qualify its accuracy. The [validation](../results/laya/pack_full_v1_validation_desktop2_20261016.log)
+checks boundary coverage, exclusive registration, serial controls and prior layer gates,
+with the legacy syntax/import/shell gate. Hardware results will be recorded separately.
