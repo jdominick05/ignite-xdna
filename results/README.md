@@ -255,3 +255,14 @@ performance result: [method and qualification](../docs/BENCHMARKS.md#laya-fused-
 - [Model-affine qualification](laya/norm_qualified_desktop2_20261016.log): all model affine sets on synthetic inputs, idle witnessed before exit.
 - [Expanded qualification](laya/norm_edges_qualified_desktop2_20261016T0213Z.log): signed zero, rounding edges and subnormals included; standalone NPU path loses to CPU.
 - [Validation](laya/norm_validation_desktop2_20261016.log): syntax/import gate, offline tests and derived error summary.
+
+## Laya persistent transformer commands
+
+[Method, transition controls and qualification](../docs/BENCHMARKS.md#laya-persistent-transformer-commands-attention-gemm-and-norm-in-one-context-2026-10-16-desktop-2).
+
+- Transition failures: [global first](laya/transformer_v1_smoke_desktop2_20261016.log), [local first](laya/transformer_v2_localfirst_desktop2_20261016.log), [elided API restore](laya/transformer_v3_rounding_smoke_desktop2_20261016.log).
+- Same-image traffic controls: [bounded copy passes](laya/transformer_v4_copy_control_desktop2_20261016.log), [real norm fails](laya/transformer_v4_norm_control_desktop2_20261016.log).
+- Emitted rounding reset: [smoke](laya/transformer_v6_rounding_fence_desktop2_20261016.log), [two-command suite](laya/transformer_v6_suite_desktop2_20261016.log).
+- Shared GEMM integration: [stale-source preflight rejection](laya/transformer_v8_gemm_smoke_desktop2_20261016.log), [fresh smoke](laya/transformer_v9_gemm_smoke_desktop2_20261016.log), [three-command suite](laya/transformer_v9_suite_desktop2_20261016.log).
+- [Final qualification](laya/transformer_v10_suite_desktop2_20261016.log): one context, alternating command families, all fixed numerical checks pass; correctness-only.
+- [Validation](laya/transformer_validation_desktop2_20261016.log): syntax/import gates, offline tests, legacy object identity and derived error summary.

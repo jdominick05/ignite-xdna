@@ -1,0 +1,42 @@
+// Copyright (C) 2026 The ignite-xdna contributors
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// 16x32 output tile, K64 bf16 block. State is retained across K blocks.
+#include <aie_api/aie.hpp>
+#include <stdint.h>
+using MM=aie::mmul<4,8,4,bfloat16,bfloat16,accfloat>;
+using F=aie::vector<float,16>;
+extern "C" void transformer_matmul(const bfloat16 *q,const bfloat16 *b,float *state,int reset) {
+  if(reset) for(int i=0;i<512;i+=16) aie::store_v(state+i,aie::zeros<float,16>());
+  for(int a=0;a<4;a+=2) for(int n=0;n<8;n+=4) {
+    MM c00(aie::load_v<16>(state+(a*8+n)*16)),c01(aie::load_v<16>(state+(a*8+n+1)*16));
+    MM c02(aie::load_v<16>(state+(a*8+n+2)*16)),c03(aie::load_v<16>(state+(a*8+n+3)*16));
+    MM c10(aie::load_v<16>(state+((a+1)*8+n)*16)),c11(aie::load_v<16>(state+((a+1)*8+n+1)*16));
+    MM c12(aie::load_v<16>(state+((a+1)*8+n+2)*16)),c13(aie::load_v<16>(state+((a+1)*8+n+3)*16));
+    for(int k=0;k<8;++k) {
+      auto a0=aie::load_v<32>(q+a*256+k*32),a1=aie::load_v<32>(q+(a+1)*256+k*32);
+      auto b0=aie::load_v<32>(b+k*256+n*32),b1=aie::load_v<32>(b+k*256+(n+1)*32);
+      auto b2=aie::load_v<32>(b+k*256+(n+2)*32),b3=aie::load_v<32>(b+k*256+(n+3)*32);
+      c00.mac(a0,b0); c01.mac(a0,b1); c02.mac(a0,b2); c03.mac(a0,b3);
+      c10.mac(a1,b0); c11.mac(a1,b1); c12.mac(a1,b2); c13.mac(a1,b3);
+    }
+    aie::store_v(state+(a*8+n)*16,c00.to_vector<float>());
+    aie::store_v(state+(a*8+n+1)*16,c01.to_vector<float>());
+    aie::store_v(state+(a*8+n+2)*16,c02.to_vector<float>());
+    aie::store_v(state+(a*8+n+3)*16,c03.to_vector<float>());
+    aie::store_v(state+((a+1)*8+n)*16,c10.to_vector<float>());
+    aie::store_v(state+((a+1)*8+n+1)*16,c11.to_vector<float>());
+    aie::store_v(state+((a+1)*8+n+2)*16,c12.to_vector<float>());
+    aie::store_v(state+((a+1)*8+n+3)*16,c13.to_vector<float>());
+  }
+}
+extern "C" void gemm_step(const int32_t *packet,const int32_t *weights,float *state) {
+  transformer_matmul(reinterpret_cast<const bfloat16 *>(packet+16),
+    reinterpret_cast<const bfloat16 *>(weights),state,packet[6]);
+}
+extern "C" void gemm_finish(const float *state,float *output) {
+  output+=16;
+  for(int a=0;a<4;++a) for(int b=0;b<8;++b) {
+    F value=aie::load_v<16>(state+(a*8+b)*16);
+    for(int r=0;r<4;++r) aie::store_v(output+(a*4+r)*32+b*4,value.extract<4>(r));
+  }
+}

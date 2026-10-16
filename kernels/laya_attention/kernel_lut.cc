@@ -6,6 +6,9 @@
 #include "lut_based_ops.h"
 using F = aie::vector<float,16>;
 using MM = aie::mmul<4,8,4,bfloat16,bfloat16,accfloat>;
+#ifdef ATTENTION_SHARED_MATMUL
+extern "C" void transformer_matmul(const bfloat16 *,const bfloat16 *,float *,int);
+#endif
 static inline __attribute__((always_inline)) F full(float x) { return aie::broadcast<float,16>(x); }
 static inline __attribute__((always_inline)) F mul(F x,F y) { return aie::mul(x,y).to_vector<float>(); }
 static inline __attribute__((always_inline)) F fp(aie::vector<bfloat16,16> x) { return aie::accum<accfloat,16>(x).to_vector<float>(); }
@@ -69,6 +72,14 @@ static inline __attribute__((always_inline)) void attention_compute(
     for(int i=0;i<1024;i+=16) aie::store_v(state+i,full(0));
     aie::store_v(m,full(-3.402823466e38f)); aie::store_v(l,full(0));
   }
+  // The persistent transformer program shares this product with its generic
+  // GEMM command. Scratch's second half is free until probabilities are formed.
+#ifdef ATTENTION_SHARED_MATMUL
+  float *product=reinterpret_cast<float *>(scratch+512);
+  transformer_matmul(q,kt,product,1);
+  for(int a=0;a<4;++a) for(int b=0;b<8;++b)
+    score_tile(aie::load_v<16>(product+(a*8+b)*16),scores,a,b);
+#else
   // As in the bf16 convolution/GEMM kernels, keep independent accumulators
   // live and reuse each loaded operand across four products (2x4 expansion).
   for(int a=0;a<4;a+=2) for(int b=0;b<8;b+=4) {
@@ -89,6 +100,7 @@ static inline __attribute__((always_inline)) void attention_compute(
     score_tile(c10.to_vector<float>(),scores,a+1,b); score_tile(c11.to_vector<float>(),scores,a+1,b+1);
     score_tile(c12.to_vector<float>(),scores,a+1,b+2); score_tile(c13.to_vector<float>(),scores,a+1,b+3);
   }
+#endif
   F maxima;
   for(int i=0;i<16;++i) {
     F s0=aie::load_v<16>(scores+i*32),s1=aie::load_v<16>(scores+i*32+16);

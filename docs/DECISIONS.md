@@ -2437,3 +2437,18 @@ Do not deploy it as another host packet boundary per norm: the standalone path l
 CPU, including in dispatch-only timing. Its purpose is a validated building block for
 joining transformer stages on the NPU. No current served or hybrid path changes.
 See [method, failures and qualification](BENCHMARKS.md#laya-residual-and-layernorm-exact-residuals-standalone-path-still-slower-2026-10-16-desktop-2).
+
+## Laya persistent commands: make arithmetic mode an explicit boundary (2026-10-16)
+
+The persistent attention/norm prototype exposed an arithmetic-state leak between command
+families. A source-level get/set save/restore pair was optimized away across the external
+call. Keep the rounding-sensitive volatile fence after norm and verify the emitted mode
+reset at build time. Do not infer hardware control-state restoration from API calls alone.
+The bounded copy arm preserves the same traffic and passes, while real norm fails until
+the emitted reset is retained. See [controls and qualification](BENCHMARKS.md#laya-persistent-transformer-commands-attention-gemm-and-norm-in-one-context-2026-10-16-desktop-2).
+
+Share QK's matrix-product function with the persistent GEMM command through an explicit
+compile-time option. The default standalone attention branch remains byte-identical as
+compiled. Require identical core images and initialization payloads before using alternate
+instruction streams in one context. Passing independent commands does not qualify their
+composition into a model, eliminate intermediate host transfers or establish a speedup.

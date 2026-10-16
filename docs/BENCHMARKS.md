@@ -17643,3 +17643,99 @@ bash scripts/research-lowlevel.sh --log results/laya/norm_UNIQUE.log --npu --wai
 
 The [validation log](../results/laya/norm_validation_desktop2_20261016.log) records the
 legacy syntax/import and shell syntax gate, 30 offline tests, and the derived summary.
+
+## Laya persistent transformer commands: attention, GEMM and norm in one context (2026-10-16, Desktop 2)
+
+`kernels/laya_transformer/program.py` now runs attention, a tiled bf16 matrix product,
+and fused FP32 residual/LayerNorm in one loaded program on all sixteen Phoenix cores.
+The [qualified sitting](../results/laya/transformer_v10_suite_desktop2_20261016.log)
+passes 406 full-output comparisons and a final return-to-attention check, with one
+hardware context and 201 changes between command families. This is an integration
+building block. The commands consume independent synthetic fixtures; their outputs
+are not connected into a Laya encoder block. The existing hybrid and served paths still
+have CPU neural operations. No full-model inference, pinned decision gate or eligible
+speed comparison was run in this block.
+
+### Persistent arithmetic state was a real transition failure
+
+The [first shared build](../results/laya/transformer_v1_smoke_desktop2_20261016.log)
+passed global attention and norm, then failed local attention. Reversing the order in
+the [local-first control](../results/laya/transformer_v2_localfirst_desktop2_20261016.log)
+passed local attention and norm, then failed global attention. An API-level rounding
+[save/restore attempt](../results/laya/transformer_v3_rounding_smoke_desktop2_20261016.log)
+left the same failure. Static inspection found no packet or buffer overrun and no simple
+FIFO phase/count error. It did find that norm leaves `crRnd=12`, while the compiler
+elided the wrapper's `get_rounding()` / `set_rounding(saved)` pair across the external call.
+
+The same linked image and transfer geometry then ran two arms: a
+[bounded input-copy control](../results/laya/transformer_v4_copy_control_desktop2_20261016.log)
+passed global → copy → local → global, while
+[real normalization](../results/laya/transformer_v4_norm_control_desktop2_20261016.log)
+failed the following local attention at maximum absolute error `0.64789437311183` and
+relative L2 `0.46102654930109144`. This rejects transfer geometry alone as the explanation
+for that transition. The copy arm compares raw operand bits; its printed distance from
+the norm reference is not a norm-accuracy result.
+
+The retained wrapper explicitly selects floor rounding and performs a live rounding-sensitive
+conversion with a volatile stack sink. The sink supplies no neural output. This forces an
+emitted `mov crRnd, #0`; the build refuses a dispatcher object without that instruction.
+The [corrected smoke](../results/laya/transformer_v6_rounding_fence_desktop2_20261016.log)
+and [expanded two-command suite](../results/laya/transformer_v6_suite_desktop2_20261016.log)
+pass after this change. Together with the emitted mode writes and the traffic control,
+this supports arithmetic rounding-state leakage as the mechanism. It is not a complete
+specification of every processor state or compiler behavior across external calls.
+
+### Adding a shared product and qualification
+
+The GEMM command accumulates a 16-by-32 output tile across 64-wide K blocks. Header fields
+control reset and final output, so partial sums stay on the core and the host does not
+add K-block results. Its matrix-product function also computes attention's QK tiles under
+`ATTENTION_SHARED_MATMUL`; the temporary tiled result occupies scratch space that is
+subsequently reused for probabilities. The default standalone attention branch remains
+byte-identical at the compiled object level, as recorded in the
+[validation log](../results/laya/transformer_validation_desktop2_20261016.log).
+
+The [first GEMM smoke request](../results/laya/transformer_v8_gemm_smoke_desktop2_20261016.log)
+was refused before opening hardware because the runner source changed after the build.
+Fresh artifacts pass the [GEMM smoke](../results/laya/transformer_v9_gemm_smoke_desktop2_20261016.log)
+and [three-command suite](../results/laya/transformer_v9_suite_desktop2_20261016.log).
+The final build additionally requires identical core ELF hashes, placements and all three
+initialization CDO payloads across attention, norm and GEMM layouts. It loads the attention
+xclbin once and switches instruction BOs, with no context recreation or program reload.
+
+The [final qualification](../results/laya/transformer_v10_suite_desktop2_20261016.log)
+retains the preceding fixed numerical gates. It checks 192 attention cases covering both
+masks and padding lengths, 196 norm cases including all 62 model affine sets on synthetic
+activations, and 18 GEMM cases. GEMM is qualified here only at M=512, K=1024, N=512, with
+random, zero and basis inputs, three seeds and both poisons. Its reference is float64
+matmul on the same bf16-valued operands. Other Laya matrix geometries remain unmeasured
+on this shared program. Norm residual bits must remain exact CPU FP32 RNE bits.
+
+| Command | Maximum absolute error | Maximum relative L2 |
+|---|---:|---:|
+| Attention | 0.012427686459243192 | 0.0037309001539762225 |
+| Residual/LayerNorm | 6.834568264224572e-06 | 1.8285592471669035e-07 |
+| GEMM | 3.2607465982437134e-05 | 2.4834028963781867e-07 |
+
+Every output payload byte is checked for unwritten poison, unused output space stays
+poisoned, guards survive, input buffers remain unchanged and outputs are independent of
+the two poisons. The linked program occupies 12,416 bytes per core; the largest recorded
+frame is 2,048 bytes and the conservative frame-sum check fits the 4,096-byte reservation.
+All sixteen programs pass helper and SRAM-span audits. The final process witnesses idle
+after close while still alive; no foreign NPU contention is observed.
+
+All device runs in this block are correctness-only. Their dispatch durations must not be
+used as a speed claim or compared with the earlier timing-eligible standalone results.
+The larger uniform packet ABI and host packing are still provisional. The next integration
+work must add rotary transforms, GeGLU, embedding/gather and the decision heads, retain
+activations across stages, qualify every actual matrix shape and rerun the model's pinned
+accuracy and end-to-end timing gates.
+
+```bash
+bash scripts/research-iron.sh kernels/laya_transformer/program.py build --out scratch/laya_transformer/UNIQUE --masks scratch/laya_attention/semantics/masks.npz
+bash scripts/research-lowlevel.sh --log results/laya/transformer_UNIQUE.log --checks-only --npu --wait-clear 30 --seconds 180 -- bash scripts/research-iron.sh kernels/laya_transformer/program.py run --out scratch/laya_transformer/UNIQUE --masks scratch/laya_attention/semantics/masks.npz --model scratch/laya/laya-onnx/laya_az0_noguard.onnx
+```
+
+The [validation log](../results/laya/transformer_validation_desktop2_20261016.log) records
+34 offline tests, the legacy syntax/import and shell syntax gates, default-object identity
+and the derived comparison counts and error maxima.
