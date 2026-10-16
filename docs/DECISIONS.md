@@ -2452,3 +2452,16 @@ compile-time option. The default standalone attention branch remains byte-identi
 compiled. Require identical core images and initialization payloads before using alternate
 instruction streams in one context. Passing independent commands does not qualify their
 composition into a model, eliminate intermediate host transfers or establish a speedup.
+
+## Laya GEMM tiles and padding: retain the larger-tile prototype (2026-10-16)
+
+Use 32-by-64 GEMM output tiles in the persistent prototype and retain the smaller
+attention product through explicit runtime geometry. Single-buffer KV to make room for
+the larger accumulator. Pad M/K/N with zero operands and validate the padded output,
+including the small head shapes. This changes the prototype's packet and buffering
+costs, not the graph engine's accepted model vocabulary.
+
+The same-sitting paired matrix boundary wins against the frozen smaller-tile control.
+It does not establish an attention-speed win or complete-model latency. Keep that control
+and its logs; remove inter-stage host packing during composition rather than extrapolating
+the isolated matrix result into a model claim. See [qualification and paired evidence](BENCHMARKS.md#laya-larger-gemm-tiles-reduce-a-complete-matrix-boundary-by-33-2026-10-16-desktop-2).

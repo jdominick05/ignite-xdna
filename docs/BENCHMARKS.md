@@ -17709,7 +17709,9 @@ masks and padding lengths, 196 norm cases including all 62 model affine sets on 
 activations, and 18 GEMM cases. GEMM is qualified here only at M=512, K=1024, N=512, with
 random, zero and basis inputs, three seeds and both poisons. Its reference is float64
 matmul on the same bf16-valued operands. Other Laya matrix geometries remain unmeasured
-on this shared program. Norm residual bits must remain exact CPU FP32 RNE bits.
+on this shared program at that stage. The [larger-tile follow-up](#laya-larger-gemm-tiles-reduce-a-complete-matrix-boundary-by-33-2026-10-16-desktop-2)
+extends geometry coverage; this sitting remains the historical smaller-tile result.
+Norm residual bits must remain exact CPU FP32 RNE bits.
 
 | Command | Maximum absolute error | Maximum relative L2 |
 |---|---:|---:|
@@ -17739,3 +17741,100 @@ bash scripts/research-lowlevel.sh --log results/laya/transformer_UNIQUE.log --ch
 The [validation log](../results/laya/transformer_validation_desktop2_20261016.log) records
 34 offline tests, the legacy syntax/import and shell syntax gates, default-object identity
 and the derived comparison counts and error maxima.
+
+## Laya larger GEMM tiles reduce a complete matrix boundary by 33% (2026-10-16, Desktop 2)
+
+The persistent prototype now uses 32-by-64 GEMM output tiles, with the shared product
+function still accepting attention's 16-by-32 tiles. The
+[paired sitting](../results/laya/transformer_large_paired_desktop2_20261016.log)
+measures a reduction from `12.06680703125` to `8.107720703125` ms for one M=512,
+K=1024, N=1024 bf16 matrix product, including Python packet packing, mapped input copy,
+input sync, submit/wait, output sync and detached output reconstruction. This is a
+`32.809726034998%` reduction for that operator boundary, not a full-Laya speedup.
+The existing hybrid still has CPU neural operations; independent command fixtures have
+not yet been composed into an encoder block or checked against the pinned decisions.
+
+### Implementation and geometry coverage
+
+The larger tile uses the full output payload and twice as much activation and weight
+payload per input packet. The persistent state grows to 2048 FP32 values; single-buffered
+KV FIFOs replace the preceding double buffers so the linked SRAM placements still fit.
+GEMM pads M to 128 rows, K to 64 features and N to 256 outputs with zero operands, checks
+padded outputs are zero, and returns the original extent. Padding supports the action
+head's 1028-wide input and small scorer/action outputs without a CPU matrix product.
+It does not implement those heads' bias, activation or probability operations.
+
+The [smoke](../results/laya/transformer_large_v1_smoke_desktop2_20261016.log) passes, followed
+by the [expanded sitting](../results/laya/transformer_large_all_v1_suite_desktop2_20261016.log):
+586 comparisons pass in one hardware context, with 293 instruction-layout changes and
+a return to attention. There are 192 attention, 196 norm and 198 GEMM comparisons.
+GEMM uses three seeds, random/zero/basis inputs and both output poisons for each shape:
+
+| M | K | N | Purpose |
+|---:|---:|---:|---|
+| 512 | 1024 | 512 | Prior synthetic control geometry |
+| 512 | 1024 | 3072 | QKV projection geometry |
+| 512 | 1024 | 1024 | Projection geometry |
+| 512 | 1024 | 5248 | Encoder MLP input geometry |
+| 512 | 2624 | 1024 | Encoder MLP output geometry |
+| 512 | 1024 | 4096 | Decision-head MLP input geometry |
+| 512 | 4096 | 1024 | Decision-head MLP output geometry |
+| 4 | 1024 | 1024 | Representative marker scorer geometry |
+| 4 | 1024 | 1 | Representative marker logit geometry |
+| 1 | 1028 | 256 | Action-head hidden geometry |
+| 1 | 256 | 2 | Action-head output geometry |
+
+Weights and activations are synthetic, not captured model tensors. These cases cover
+the selected linear-operation geometries, not every possible marker count or the model's
+accumulated numerical error. All previous attention and norm tolerances remain fixed;
+norm residual bits remain exact. The [validation summary](../results/laya/transformer_large_validation_desktop2_20261016.log)
+records maximum absolute GEMM error `0.00014363322407007217`, attention error
+`0.012427686459243192` and norm error `6.834568264224572e-06`. All input immutability,
+poison independence, guards and unused output checks pass. The linked core occupies
+13,168 bytes and passes the existing program, helper, stack and SRAM-span audits.
+All initialization CDOs and core ELF hashes match across instruction layouts.
+The numerical sitting is correctness-only; its durations do not qualify performance.
+
+### Same-sitting paired performance
+
+`kernels/laya_transformer/paired.py` compares the frozen `14c55c9` smaller-tile program
+against the current larger-tile program. Registration hash:
+`e3157193520919a49ebfa748d1dc6c84d06d92bddc342d43ddc0ee825f6664c3`.
+The baseline checkout is clean, and both builds' source and artifact hashes are checked.
+Both arms use the same stored bf16-valued operands and float64 reference. Each worker
+checks both poisons before timing, releases its context and verifies idle while alive.
+Workers are serial: the device never holds both comparison contexts together.
+
+The preregistration fixes 16 ABBA blocks, eight timed samples after three warm-ups per
+metric per worker. There are 256 timed samples per arm per metric. Reported means first
+average each arm's two workers within a block, then average blocks. Approximate 95%
+intervals use the 16 paired block differences and a normal approximation. Context
+creation and source/artifact checking are excluded from both metrics.
+
+| Scope | Smaller tile mean ms | Larger tile mean ms | Mean saving ms | Approximate 95% saving interval ms |
+|---|---:|---:|---:|---|
+| Prepared BO submit/wait | 5.62493046875 | 1.980509765625 | 3.644420703125 | 3.561169713604324 to 3.7276716926456763 |
+| Packing through detached output | 12.06680703125 | 8.107720703125 | 3.959086328125 | 3.9069182346868208 to 4.011254421563179 |
+
+Both preregistered reduction targets pass: at least 30% for dispatch and 20% for the
+complete packet boundary, with a positive saving interval for the latter. Input BO bytes
+fall from 8,454,144 to 4,227,072; output BO bytes from 8,519,680 to 2,129,920. This is a
+comparison of the combined implementations: tile geometry, buffering, product addressing,
+padding and packing all differ. It is not an isolated cycle-level tile-size ablation.
+The wrapper reports a clear host load, no foreign NPU contention and timing eligible.
+All 128 paired-worker correctness comparisons pass.
+
+The paired win does not quantify the cost of single buffering or dynamic product
+addressing for attention. No current whole-model latency can be inferred from this
+matrix measurement. Host packing remains a substantial part of the boundary and must
+be removed between model stages; rotary transforms, GeGLU, embedding/gather and the
+remaining decision operations still need device implementations and composition.
+
+Build all registered geometry cases with `program.py build --all-gemm`, then use
+`program.py run --model ...` through the bounded correctness wrapper. For the comparison,
+build a clean `14c55c9` control with `--gemm-n 1024`, register both directories using
+`paired.py register --baseline ... --baseline-root ... --candidate ... --registration ...`,
+and invoke `paired.py run --registration ...` through the timing-eligible research wrapper.
+The [validation log](../results/laya/transformer_large_validation_desktop2_20261016.log)
+records 38 offline tests, the full legacy syntax/import and shell gates, default standalone
+attention object identity, qualified comparison counts and the paired summary.

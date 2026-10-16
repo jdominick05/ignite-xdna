@@ -266,3 +266,12 @@ performance result: [method and qualification](../docs/BENCHMARKS.md#laya-fused-
 - Shared GEMM integration: [stale-source preflight rejection](laya/transformer_v8_gemm_smoke_desktop2_20261016.log), [fresh smoke](laya/transformer_v9_gemm_smoke_desktop2_20261016.log), [three-command suite](laya/transformer_v9_suite_desktop2_20261016.log).
 - [Final qualification](laya/transformer_v10_suite_desktop2_20261016.log): one context, alternating command families, all fixed numerical checks pass; correctness-only.
 - [Validation](laya/transformer_validation_desktop2_20261016.log): syntax/import gates, offline tests, legacy object identity and derived error summary.
+
+## Laya larger GEMM tiles
+
+[Implementation, geometry coverage and paired limits](../docs/BENCHMARKS.md#laya-larger-gemm-tiles-reduce-a-complete-matrix-boundary-by-33-2026-10-16-desktop-2).
+
+- [Smoke](laya/transformer_large_v1_smoke_desktop2_20261016.log): larger accumulators and single KV buffers; command transitions pass.
+- [Expanded geometry qualification](laya/transformer_large_all_v1_suite_desktop2_20261016.log): large projections and padded small-head matrix shapes with synthetic operands; fixed gates pass.
+- [Paired sitting](laya/transformer_large_paired_desktop2_20261016.log): serial ABBA against the frozen smaller-tile program, positive matrix-boundary saving; timing eligible.
+- [Validation](laya/transformer_large_validation_desktop2_20261016.log): syntax/import gate, offline tests, object identity and derived numerical/performance summaries.

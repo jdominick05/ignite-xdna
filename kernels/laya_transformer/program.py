@@ -31,6 +31,9 @@ QWORDS,KVWORDS,OUT=2064,2064,2080
 QCOUNT,KVCOUNT=512,256
 INPUT_WORDS=QCOUNT*QWORDS+KVCOUNT*KVWORDS
 STACK=4096
+STATE=2048
+MODEL_GEMMS=((512,1024,3072),(512,1024,1024),(512,1024,5248),(512,2624,1024),
+             (512,1024,4096),(512,4096,1024),(4,1024,1024),(4,1024,1),(1,1028,256),(1,256,2))
 
 
 def sources():
@@ -40,32 +43,38 @@ def sources():
     return {str(p.relative_to(ROOT)).replace('\\','/'):attention.sha(p) for p in paths}
 
 
-def geometry(mode,k=1024,n=512):
+def padded(value,alignment):
+    if value<=0: raise ValueError('dimensions must be positive')
+    return -(-value//alignment)*alignment
+
+
+def geometry(mode,k=1024,n=512,m=512):
     if mode!='gemm': return INPUT_WORDS,QCOUNT*OUT
-    if k%64 or n%128 or min(k,n)<=0: raise ValueError('GEMM needs K multiple64 and N multiple128')
-    return (32*(k//64)+(n//32)*(k//64))*QWORDS,32*(n//32)*OUT
+    mp,kp,npad=padded(m,128),padded(k,64),padded(n,256)
+    return ((mp//32)*(kp//64)+(npad//64)*(kp//64))*QWORDS,(mp//32)*(npad//64)*OUT
 
 
-def harness(mode,k=1024,n=512):
+def harness(mode,k=1024,n=512,m=512):
     # Share the qualified FIFO topology, but use fixed larger packets for all
     # commands. Keep modifications local so imported reference packers retain
     # their original ABI.
-    before=(shared.QWORDS,shared.INPUT_WORDS,attention.OUT)
+    before=(shared.QWORDS,shared.INPUT_WORDS,attention.OUT,attention.STATE)
     try:
-        shared.QWORDS=QWORDS; shared.INPUT_WORDS=INPUT_WORDS; attention.OUT=OUT
+        shared.QWORDS=QWORDS; shared.INPUT_WORDS=INPUT_WORDS; attention.OUT=OUT; attention.STATE=STATE
         text=shared.harness()
     finally:
-        shared.QWORDS,shared.INPUT_WORDS,attention.OUT=before
+        shared.QWORDS,shared.INPUT_WORDS,attention.OUT,attention.STATE=before
+    text,count=re.subn(r'(@kv(?:L2|F)_\d+\([^\n]*),2 : i32\)',r'\1,1 : i32)',text)
+    if count!=8: raise ValueError('unexpected KV FIFO declarations')
     text=text.replace('    func.func private @attention_finish(',
-      f'    func.func private @gemm_step(memref<{QWORDS}xi32>,memref<{KVWORDS}xi32>,memref<{attention.STATE}xi32>)\n'
-      f'    func.func private @gemm_finish(memref<{attention.STATE}xi32>,memref<{OUT}xi32>)\n'
+      f'    func.func private @gemm_step(memref<{QWORDS}xi32>,memref<{KVWORDS}xi32>,memref<{STATE}xi32>)\n'
+      f'    func.func private @gemm_finish(memref<{STATE}xi32>,memref<{OUT}xi32>)\n'
       f'    func.func private @command_norm(memref<{QWORDS}xi32>,memref<{KVWORDS}xi32>,memref<{OUT}xi32>)\n    func.func private @attention_finish(')
     for col in range(4):
         for r in range(4):
             i=col*4+r
             start=text.index(f'    %core{i} = aie.core')
             end=text.index(' {{link_with',start) if ' {{link_with' in text[start:] else text.index(' {link_with',start)
-            old=text[start:end]
             # Replace the body while preserving declarations and FIFO links.
             worker=f'''    %core{i} = aie.core(%t{i}) {{
       %c0 = arith.constant 0 : index
@@ -90,7 +99,7 @@ def harness(mode,k=1024,n=512):
           %kv = aie.objectfifo.subview.access %skv[0] : !aie.objectfifosubview<memref<{KVWORDS}xi32>> -> memref<{KVWORDS}xi32>
           scf.if %is_attention {{
             %ki = arith.index_cast %k : index to i32
-            func.call @attention_shared(%q,%kv,%state{i},%scratch{i},%mask{i},%ki) : (memref<{QWORDS}xi32>,memref<{KVWORDS}xi32>,memref<{attention.STATE}xi32>,memref<{attention.SCRATCH}xi32>,memref<256xi32>,i32) -> ()
+            func.call @attention_shared(%q,%kv,%state{i},%scratch{i},%mask{i},%ki) : (memref<{QWORDS}xi32>,memref<{KVWORDS}xi32>,memref<{STATE}xi32>,memref<{attention.SCRATCH}xi32>,memref<256xi32>,i32) -> ()
           }} else {{
             scf.if %is_norm {{
               %so = aie.objectfifo.acquire @outF_{i}(Produce,1) : !aie.objectfifosubview<memref<{OUT}xi32>>
@@ -98,7 +107,7 @@ def harness(mode,k=1024,n=512):
               func.call @command_norm(%q,%kv,%o) : (memref<{QWORDS}xi32>,memref<{KVWORDS}xi32>,memref<{OUT}xi32>) -> ()
               aie.objectfifo.release @outF_{i}(Produce,1)
             }} else {{
-              func.call @gemm_step(%q,%kv,%state{i}) : (memref<{QWORDS}xi32>,memref<{KVWORDS}xi32>,memref<{attention.STATE}xi32>) -> ()
+              func.call @gemm_step(%q,%kv,%state{i}) : (memref<{QWORDS}xi32>,memref<{KVWORDS}xi32>,memref<{STATE}xi32>) -> ()
             }}
           }}
           aie.objectfifo.release @kvF_{col}(Consume,1)
@@ -116,9 +125,9 @@ def harness(mode,k=1024,n=512):
             memref.store %poison,%o[%j] : memref<{OUT}xi32>
           }}
           scf.if %is_attention {{
-            func.call @attention_finish(%state{i},%o) : (memref<{attention.STATE}xi32>,memref<{OUT}xi32>) -> ()
+            func.call @attention_finish(%state{i},%o) : (memref<{STATE}xi32>,memref<{OUT}xi32>) -> ()
           }} else {{
-            func.call @gemm_finish(%state{i},%o) : (memref<{attention.STATE}xi32>,memref<{OUT}xi32>) -> ()
+            func.call @gemm_finish(%state{i},%o) : (memref<{STATE}xi32>,memref<{OUT}xi32>) -> ()
           }}
           aie.objectfifo.release @outF_{i}(Produce,1)
         }}
@@ -129,18 +138,18 @@ def harness(mode,k=1024,n=512):
             text=text[:start]+worker+text[end:]
     if mode=='attention': return text
     text=text[:text.index('    aie.runtime_sequence')]
-    ni,no=geometry(mode,k,n)
+    ni,no=geometry(mode,k,n,m)
     lines=[f'    aie.runtime_sequence(%a: memref<{ni}xi32>,%o: memref<{no}xi32>) {{']
     if mode=='gemm':
-        kb=k//64; ng=n//128
+        kb=padded(k,64)//64; ng=padded(n,256)//256; mg=padded(m,128)//128
         for group in range(ng):
             for col in range(4):
-                outsize=32*OUT
-                offset=32*kb*QWORDS+(col*ng+group)*kb*KVWORDS
+                outsize=mg*4*OUT
+                offset=mg*4*kb*QWORDS+(col*ng+group)*kb*KVWORDS
                 lines += [
-                  f'      aiex.npu.dma_memcpy_nd(%a[0,0,0,0][1,8,{kb},{4*QWORDS}][0,{kb*4*QWORDS},{4*QWORDS},1]) {{id = 0 : i64, metadata = @qL2_{col}}} : memref<{ni}xi32>',
+                  f'      aiex.npu.dma_memcpy_nd(%a[0,0,0,0][1,{mg},{kb},{4*QWORDS}][0,{kb*4*QWORDS},{4*QWORDS},1]) {{id = 0 : i64, metadata = @qL2_{col}}} : memref<{ni}xi32>',
                   f'      aiex.npu.dma_memcpy_nd(%o[0,0,0,{(col*ng+group)*outsize}][1,1,{outsize//16},16][0,0,16,1]) {{id = 2 : i64, metadata = @outL2_{col},issue_token = true}} : memref<{no}xi32>',
-                  f'      aiex.npu.dma_memcpy_nd(%a[0,0,0,{offset}][8,1,{kb},{KVWORDS}][0,0,{KVWORDS},1]) {{id = 3 : i64, metadata = @kvL2_{col}}} : memref<{ni}xi32>']
+                  f'      aiex.npu.dma_memcpy_nd(%a[0,0,0,{offset}][{mg},1,{kb},{KVWORDS}][0,0,{KVWORDS},1]) {{id = 3 : i64, metadata = @kvL2_{col}}} : memref<{ni}xi32>']
             # Reuse the finite Shim BD slots only after their consumers finish.
             for col in range(4): lines.append(f'      aiex.npu.dma_wait {{symbol = @outL2_{col}}}')
         return text+'\n'.join(lines+['    }','  }','}'])+'\n'
@@ -185,7 +194,7 @@ def audit(out):
     return audits
 
 
-def build(out,masks,gemm_k=1024,gemm_n=512):
+def build(out,masks,gemm_k=1024,gemm_n=512,gemm_m=512,all_gemm=False):
     out.mkdir(parents=True,exist_ok=True)
     clang=attention.PEANO/'bin/clang++.exe'
     flags=['-Oz','-std=c++20','--target=aie2-none-unknown-elf','-DNDEBUG','-fstack-size-section',
@@ -203,22 +212,25 @@ def build(out,masks,gemm_k=1024,gemm_n=512):
     undefined=attention.command([attention.PEANO/'bin/llvm-nm.exe','-u',out/'kernel.o'],out)
     if undefined.strip(): raise ValueError('unresolved program helper: '+undefined)
     layouts={}
-    for mode in ('attention','norm','gemm'):
-        folder=out/mode; folder.mkdir(exist_ok=True)
+    requested=[('attention','attention',None),('norm','norm',None),('gemm','gemm',(gemm_m,gemm_k,gemm_n))]
+    if all_gemm: requested.extend((f'gemm_{m}_{k}_{n}','gemm',(m,k,n)) for m,k,n in MODEL_GEMMS)
+    for name,mode,shape in requested:
+        m,k,n=shape if shape else (512,1024,512)
+        folder=out/name; folder.mkdir(exist_ok=True)
         import shutil
         shutil.copyfile(out/'kernel.o',folder/'kernel.o')
-        (folder/'harness.mlir').write_text(harness(mode,gemm_k,gemm_n),encoding='utf-8')
+        (folder/'harness.mlir').write_text(harness(mode,k,n,m),encoding='utf-8')
         attention.command([attention.IRON/'Scripts/aiecc.exe',folder/'harness.mlir',f'--peano={attention.PEANO}',
           '--get-npu-insts','--npu-insts-name=insts.bin','--get-xclbin','--xclbin-name=final.xclbin',f'--tmpdir={folder/"prj"}'],folder)
-        ni,no=geometry(mode,gemm_k,gemm_n)
+        ni,no=geometry(mode,k,n,m)
         cdo={p.name:attention.sha(p) for p in (folder/'prj').rglob('*_aie_cdo_*.bin')}
         if len(cdo)!=3: raise ValueError('missing initialization payloads')
-        layouts[mode]=dict(audits=audit(folder),cdo=cdo,xclbin=attention.sha(folder/'final.xclbin'),instructions=attention.sha(folder/'insts.bin'),input_words=ni,output_words=no)
+        layouts[name]=dict(kind=mode,shape=shape,audits=audit(folder),cdo=cdo,xclbin=attention.sha(folder/'final.xclbin'),instructions=attention.sha(folder/'insts.bin'),input_words=ni,output_words=no)
     if any(layouts['attention']['audits']!=value['audits'] for value in layouts.values()): raise ValueError('different persistent core programs')
     if any(layouts['attention']['cdo']!=value['cdo'] for value in layouts.values()): raise ValueError('different persistent initialization')
     meta=dict(sources=sources(),layouts=layouts,masks_sha256=attention.sha(masks),compiler_flags=[f for f in flags if not f.startswith('-I')],rounding_fence_machine_verified=True,
       gates=dict(attention=[attention.ATOL,attention.RTOL,attention.L2],norm=[norm.ATOL,norm.RTOL,norm.L2],residual='FP32 RNE bits exact'),
-      gemm_shape=[512,gemm_k,gemm_n],upstream={n:attention.sha(attention.UPSTREAM/n) for n in ('aie_runtime_lib/AIE2/lut_based_ops.cpp','aie_runtime_lib/AIE2/lut_based_ops.h')})
+      gemm_shape=[gemm_m,gemm_k,gemm_n],upstream={n:attention.sha(attention.UPSTREAM/n) for n in ('aie_runtime_lib/AIE2/lut_based_ops.cpp','aie_runtime_lib/AIE2/lut_based_ops.h')})
     attention.dump(out/'build.json',meta)
     print('TRANSFORMER_BUILD '+json.dumps(meta),flush=True)
 
@@ -244,32 +256,39 @@ def norm_packet(values,poison,copy_control=False):
 
 def gemm_packet(a,b,poison):
     k,n=b.shape
-    if a.shape!=(512,k): raise ValueError('expected activation [512,K]')
-    ni,_=geometry('gemm',k,n); kb=k//64; ng=n//128
+    m=a.shape[0]
+    if a.shape!=(m,k): raise ValueError('activation/weight dimensions disagree')
+    mp,kp,npad=padded(m,128),padded(k,64),padded(n,256)
+    ap=np.zeros((mp,kp),np.float32); bp=np.zeros((kp,npad),np.float32)
+    ap[:m,:k]=a; bp[:k,:n]=b
+    ni,_=geometry('gemm',k,n,m); kb=kp//64; ng=npad//256; mg=mp//128
     data=np.zeros(ni,np.uint32)
-    q=data[:32*kb*QWORDS].reshape(8,kb,4,QWORDS)
+    q=data[:mg*4*kb*QWORDS].reshape(mg,kb,4,QWORDS)
     q[:,:,:,2]=poison; q[:,:,:,4]=2; q[:,0,:,6]=1; q[:,-1,:,7]=1
-    abits=attention.bits(a).reshape(8,4,16,kb,64).transpose(0,3,1,2,4)
-    tiles=abits.reshape(8,kb,4,4,4,8,8).transpose(0,1,2,3,5,4,6).copy().reshape(8,kb,4,1024)
-    q[:,:,:,16:528]=tiles.view(np.uint32)
-    weights=data[32*kb*QWORDS:].reshape(4,ng,kb,KVWORDS)
-    bbits=attention.bits(b).reshape(kb,64,ng,4,32).transpose(3,2,0,1,4)
-    tiles=bbits.reshape(4,ng,kb,8,8,8,4).transpose(0,1,2,3,5,4,6).copy().reshape(4,ng,kb,2048)
-    weights[:,:,:,0:1024]=tiles.view(np.uint32)
+    abits=attention.bits(ap).reshape(mg,4,32,kb,64).transpose(0,3,1,2,4)
+    tiles=abits.reshape(mg,kb,4,8,4,8,8).transpose(0,1,2,3,5,4,6).copy().reshape(mg,kb,4,2048)
+    q[:,:,:,16:1040]=tiles.view(np.uint32)
+    weights=data[mg*4*kb*QWORDS:].reshape(4,ng,kb,KVWORDS)
+    bbits=attention.bits(bp).reshape(kb,64,ng,4,64).transpose(3,2,0,1,4)
+    tiles=bbits.reshape(4,ng,kb,8,8,16,4).transpose(0,1,2,3,5,4,6).copy().reshape(4,ng,kb,4096)
+    weights[:,:,:,0:2048]=tiles.view(np.uint32)
     return data
 
 
-def gemm_output(raw,n):
-    return raw.reshape(4,n//128,8,4,16,32).transpose(2,3,4,1,0,5).reshape(512,n)
+def gemm_output(raw,n,m=512):
+    mp,npad=padded(m,128),padded(n,256)
+    full=raw.reshape(4,npad//256,mp//128,4,32,64).transpose(2,3,4,1,0,5).reshape(mp,npad)
+    if np.any(full[m:]) or np.any(full[:m,n:]): raise ValueError('GEMM padding is not zero')
+    return full[:m,:n]
 
 
-def gemm_case(seed,kind,k,n):
+def gemm_case(seed,kind,k,n,m=512):
     rng=np.random.default_rng(seed)
-    a=attention.rounded(rng.normal(0,.5,(512,k)))
+    a=attention.rounded(rng.normal(0,.5,(m,k)))
     b=attention.rounded(rng.normal(0,.5,(k,n)))
     if kind=='zero': a.fill(0)
     if kind=='basis':
-        a.fill(0); a[np.arange(512),(np.arange(512)*37+seed)%k]=1
+        a.fill(0); a[np.arange(m),(np.arange(m)*37+seed)%k]=1
     return a,b
 
 
@@ -308,7 +327,7 @@ def run(out,masks,model,smoke=False,local_first=False,copy_control=False):
         if h.wait(5000)!=xrt.ert_cmd_state.ERT_CMD_STATE_COMPLETED: raise RuntimeError('dispatch failed; no retry')
         ms=(time.perf_counter_ns()-start)/1e6
         o.sync(S.XCL_BO_SYNC_BO_FROM_DEVICE)
-        used={'attention':1024,'norm':2048,'gemm':512}[mode]
+        used={'attention':1024,'norm':2048,'gemm':2048}[meta['layouts'][mode]['kind']]
         if not np.array_equal(av[:len(payload)],payload) or not np.all(av[len(payload):]==poison): raise ValueError('input changed')
         if not np.all(ov[:,:16]==poison) or not np.all(ov[:,16+used:]==poison): raise ValueError('guard changed')
         if np.any(ov[:,16:16+used]==poison): raise ValueError('unwritten output')
@@ -324,7 +343,8 @@ def run(out,masks,model,smoke=False,local_first=False,copy_control=False):
         norm_cases=[(s,kind,norm.fixture(s,kind)) for s in ((11,) if smoke else (11,29,47))
           for kind in (('random',) if smoke else norm.KINDS)]
         real=norm.fixture(71,'random'); norm_cases.extend((71,name,(*real[:2],g,b)) for name,g,b in params)
-        gemm_cases=[(seed,kind) for seed in ((11,) if smoke else (11,29,47))
+        gemm_cases=[(key,layout['shape'],seed,kind) for key,layout in meta['layouts'].items() if layout['kind']=='gemm'
+          for seed in ((11,) if smoke else (11,29,47))
           for kind in (('random',) if smoke else ('random','zero','basis'))]
         # Alternate command families to expose retained FIFO/lock state.
         for i in range(max(len(attention_cases),len(norm_cases),len(gemm_cases))):
@@ -341,16 +361,16 @@ def run(out,masks,model,smoke=False,local_first=False,copy_control=False):
                     previous=got; count+=1
                 samples.setdefault(f'attention/{mode}/{valid}',[]).append(ms)
             if i<len(gemm_cases):
-                seed,kind=gemm_cases[i]; _,k,n=meta['gemm_shape']
-                ga,gb=gemm_case(seed,kind,k,n); ref=ga.astype(np.float64)@gb.astype(np.float64); previous=None
+                key,shape,seed,kind=gemm_cases[i]; m,k,n=shape
+                ga,gb=gemm_case(seed,kind,k,n,m); ref=ga.astype(np.float64)@gb.astype(np.float64); previous=None
                 for poison in (0x7fc12345,0x7fc54321):
-                    raw,ms=execute('gemm',gemm_packet(ga,gb,poison),poison)
-                    got=gemm_output(raw,n); verdict=attention.numeric(got,ref)
+                    raw,ms=execute(key,gemm_packet(ga,gb,poison),poison)
+                    got=gemm_output(raw,n,m); verdict=attention.numeric(got,ref)
                     if previous is not None and not np.array_equal(got,previous): raise ValueError('GEMM poison dependence')
-                    print('TRANSFORMER_CHECK '+json.dumps(dict(command='gemm',seed=seed,kind=kind,shape=meta['gemm_shape'],poison=poison,**verdict)),flush=True)
+                    print('TRANSFORMER_CHECK '+json.dumps(dict(command='gemm',seed=seed,kind=kind,shape=shape,poison=poison,**verdict)),flush=True)
                     if not verdict['ok']: raise ValueError('GEMM numerical gate')
                     previous=got; count+=1
-                samples.setdefault('gemm',[]).append(ms)
+                samples.setdefault(key,[]).append(ms)
             if i<len(norm_cases):
                 seed,kind,values=norm_cases[i]; refz,ref=norm.oracle(*values); previous=None
                 for poison in (0x7fc12345,0x7fc54321):
@@ -385,7 +405,8 @@ if __name__=='__main__':
     ap=argparse.ArgumentParser(); ap.add_argument('command',choices=('build','run')); ap.add_argument('--out',type=Path,required=True)
     ap.add_argument('--masks',type=Path,required=True); ap.add_argument('--model',type=Path); ap.add_argument('--smoke',action='store_true')
     ap.add_argument('--local-first',action='store_true'); ap.add_argument('--copy-control',action='store_true')
-    ap.add_argument('--gemm-k',type=int,default=1024); ap.add_argument('--gemm-n',type=int,default=512); args=ap.parse_args()
+    ap.add_argument('--gemm-k',type=int,default=1024); ap.add_argument('--gemm-n',type=int,default=512)
+    ap.add_argument('--gemm-m',type=int,default=512); ap.add_argument('--all-gemm',action='store_true'); args=ap.parse_args()
     sys.path.insert(0,str(ROOT/'tools'))
-    if args.command=='build': build(args.out.resolve(),args.masks,args.gemm_k,args.gemm_n)
+    if args.command=='build': build(args.out.resolve(),args.masks,args.gemm_k,args.gemm_n,args.gemm_m,args.all_gemm)
     else: run(args.out.resolve(),args.masks,args.model,args.smoke,args.local_first,args.copy_control)

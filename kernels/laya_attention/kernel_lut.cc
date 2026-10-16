@@ -7,7 +7,7 @@
 using F = aie::vector<float,16>;
 using MM = aie::mmul<4,8,4,bfloat16,bfloat16,accfloat>;
 #ifdef ATTENTION_SHARED_MATMUL
-extern "C" void transformer_matmul(const bfloat16 *,const bfloat16 *,float *,int);
+extern "C" void transformer_matmul(const bfloat16 *,const bfloat16 *,float *,int,int,int);
 #endif
 static inline __attribute__((always_inline)) F full(float x) { return aie::broadcast<float,16>(x); }
 static inline __attribute__((always_inline)) F mul(F x,F y) { return aie::mul(x,y).to_vector<float>(); }
@@ -76,7 +76,7 @@ static inline __attribute__((always_inline)) void attention_compute(
   // GEMM command. Scratch's second half is free until probabilities are formed.
 #ifdef ATTENTION_SHARED_MATMUL
   float *product=reinterpret_cast<float *>(scratch+512);
-  transformer_matmul(q,kt,product,1);
+  transformer_matmul(q,kt,product,1,4,8);
   for(int a=0;a<4;++a) for(int b=0;b<8;++b)
     score_tile(aie::load_v<16>(product+(a*8+b)*16),scores,a,b);
 #else
