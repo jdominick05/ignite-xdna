@@ -2999,3 +2999,43 @@ obtain a one-core test would itself introduce a different transfer scheme. Compa
 all packed payload bits, complete writes and guards against an independent packing
 reference, under bounded waits and with idle checks after context close. No physical
 failure cause or expected gain is established by the phase counters.
+
+## Laya packing primitive transport gates (2026-10-16, Desktop 2)
+
+The next packing experiment uses a complete single-BD gather rather than the failed
+split-descriptor packet scheme. Before device use, `pack_primitive.py` builds original
+and candidate streams for one feature group on column zero, retaining that column's
+four-core broadcast topology. Query/output transfers and completion waits remain
+unchanged. Only that column receives operands; no wait targets an inactive column.
+Each primitive retains its parent's linked core and initialization binaries exactly.
+
+The [first build gate](../results/laya/pack_primitive_v1_build_desktop2_20261016.log)
+rejected a different global ordering of initialization writes to independent lock
+registers. Inspection showed the ordered write trace for every individual register
+matches. The [corrected gate and build](../results/laya/pack_primitive_v2_transport_build_desktop2_20261016.log)
+compare those per-register traces, including lock registers, while allowing independent
+initialization writes to interleave differently before program enable. This does not
+relax dynamic acquire/release or descriptor lock fields.
+
+The decoder follows the local bootgen CDO v2 writer in
+`third_party/bootgen/cdo-driver/cdo_driver.c` of the installed toolchain. It validates
+header checksum, length, record bounds and the allowed write opcodes. After mapping
+complete core buffers by their audited names and accounting for the KV object width,
+all other initialization register traces match, including descriptor TLAST and lock
+fields. FIFO links/depths and acquire/release structure match the working prefix;
+packing changes its consumed packet count and helper alongside the KV type.
+
+The Shim checker validates the complete KV descriptor, dimension steps/wraps, iteration
+stride, repeat queue, TLAST and lock bits. Query/output descriptor bytes, operand
+patches, queue order and completion waits match exactly. The candidate sends four
+complete gather objects, matching four receiver consumes. It does not concatenate
+partial BDs into a FIFO object. Mutation tests reject changed packet length, repeat,
+TLAST and initialization lock values. [Validation](../results/laya/pack_primitive_v1_validation_desktop2_20261016.log)
+passes offline/privacy checks and the legacy gates.
+
+[Primitive hardware qualification](BENCHMARKS.md#laya-guarded-single-bd-packing-primitive-2026-10-16-desktop-2)
+passes, but its scope is one feature group and column. Before any full-model claim,
+expand correctness coverage, use a bounded single-layer integration check, then the
+complete numerical and original frozen decision/calibration gates. Preserve the
+qualified serving arm as the same-sitting performance control. The old split-packet
+failure cause remains unexplained and that scheme is still unqualified.

@@ -566,3 +566,10 @@ Fine attention preparation: [build/equivalence](laya/attention_fine_phases_v1_bu
 [validation](laya/attention_fine_phases_v1_validation_desktop2_20261016.log),
 [layer checks and full diagnostic](laya/attention_fine_phases_v1_device_diagnostic_desktop2_20261016.log).
 [Methods and timing-ineligible counters](../docs/BENCHMARKS.md#laya-attention-preparation-split-further-2026-10-16-desktop-2).
+
+Guarded packing primitive: [first initialization-order gate failure](laya/pack_primitive_v1_build_desktop2_20261016.log),
+[corrected transport build](laya/pack_primitive_v2_transport_build_desktop2_20261016.log),
+[validation](laya/pack_primitive_v1_validation_desktop2_20261016.log),
+[original and single-BD device checks](laya/pack_primitive_v1_device_desktop2_20261016.log).
+[Qualification and limits](../docs/BENCHMARKS.md#laya-guarded-single-bd-packing-primitive-2026-10-16-desktop-2),
+[transport checks](../docs/DECISIONS.md#laya-packing-primitive-transport-gates-2026-10-16-desktop-2).

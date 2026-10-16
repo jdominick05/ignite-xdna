@@ -19362,3 +19362,41 @@ Any reduced-traffic alternative must first prove packet/descriptor/lock behavior
 offline and pass a bounded guarded transport primitive, before complete inference.
 Raw logs remain in ignored scratch with their hashes in the committed summary.
 The original decision/calibration criteria and serving configuration are retained.
+
+## Laya guarded single-BD packing primitive (2026-10-16, Desktop 2)
+
+The [bounded original and candidate runs](../results/laya/pack_primitive_v1_device_desktop2_20261016.log)
+qualify a packing-only primitive on column zero, four broadcast cores and one feature
+group. They use independent processes, one context each, with the original passing
+before the candidate is run. This is synthetic primitive qualification, not complete
+Laya inference or a speed measurement. The full-model registered artifacts and gates
+remain unchanged.
+
+Each variant passes six cases: three distinct random inputs, each with two alternating
+output poisons. Inputs also contain positive and negative round-to-even ties. Every
+bit in all four complete output packets matches an independent NumPy BF16 packing
+reference, including expected packet filler. Input bytes remain unchanged, and every
+output word outside the designated four-packet region retains its poison. The checks
+cover complete writes, payload order, input/output guards and repeated dispatches.
+Both bounded wrappers exit normally and record an idle device before and after; the
+process also checks idle after releasing its context while it remains alive.
+
+[Offline gates](DECISIONS.md#laya-packing-primitive-transport-gates-2026-10-16-desktop-2)
+precede hardware execution. The original consumes 128 full-row KV objects; the single-BD
+candidate consumes four FP32[32,66] objects, using the first 64 values in each row.
+The checked initialization covers 2,284 register traces, 424 lock writes and 48
+normalized KV descriptors. Only audited buffer relocation and the KV width differ;
+query/output descriptors and all remaining descriptor/lock fields retain their
+checked behavior. The candidate sends one complete object per descriptor iteration.
+This is a different transfer scheme from the earlier failed split-packet experiment.
+
+[Validation](../results/laya/pack_primitive_v1_validation_desktop2_20261016.log)
+passes 36 offline/privacy checks and the legacy syntax/import/shell gate. New checks
+include all-word packing identities, decoder framing, and corruption of TLAST, packet
+length, repeat count and lock initialization. The committed device summary retains
+both raw hashes; verbose raw logs stay in ignored scratch.
+
+These checks-only runs are **timing-ineligible**. They establish exact guarded output
+for the tested feature group and column. Other features/columns, complete attention,
+full-model accuracy and any end-to-end speed gain remain unqualified for this candidate.
+A bounded layer integration and expanded coverage precede its full-model comparison.
