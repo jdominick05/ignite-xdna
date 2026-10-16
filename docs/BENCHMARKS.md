@@ -18777,3 +18777,44 @@ artifact/operator audits. Arithmetic, data traffic and synchronization contribut
 remain unresolved; the next useful diagnostic separates phase costs before attributing
 the remaining latency to a mechanism. Native accuracy preregistration and the complete
 frozen decision/calibration gates remain open.
+
+## Laya native accuracy arm registration (2026-10-16, Desktop 2)
+
+The [native registration addendum](../results/laya/native_accuracy_v1_prereg_desktop2_20261016.json)
+freezes `native_short_bf16_v1` before native final class outputs are scored on any
+labelled frozen item. The [registration log](../results/laya/native_accuracy_v1_registration_desktop2_20261016.log)
+records the unchanged original preregistration, item and FP32-reference hashes, the
+source/artifact map, the original criteria, and the zero-score development disclosure.
+It pins 158 artifact/source hashes, including the serving/scoring code, both bucket
+builds and all four row layouts, original parameter files and metric helpers. It selects
+the preceding 25-case-qualified shorter encoder, not the compiler-tuning candidate.
+
+The original item file, original FP32 logits and original preregistration remain
+unchanged. The native addendum retains the original CPU reference session metadata;
+its separate `native_policy` defines actual device execution: batch one, four contexts,
+66 dispatches, integer/bool host input control and only final model-output readback.
+C0 now checks this explicit native artifact/source map against its committed registration
+before and after scoring. C1–C5 retain their original thresholds and definitions: pooled
+agreement at least 0.97, pooled accuracy loss at most 0.005, each task's loss at most
+0.015, pooled T=1 ECE increase at most 0.010 and each task's increase at most 0.020.
+No calibration fitting or temperature changes are allowed.
+
+The same 2,403 frozen items include 2,400 labelled examples and three unlabelled fixtures.
+Input metadata selects 1,666 row buckets of 128, 337 of 256 and 400 of 384. The scoring
+tool requires a committed registration before opening a device context, forbids CPU
+neural/oracle execution throughout native setup/inference, checks registered hashes at
+both ends, captures logits and action probabilities, and writes incomplete checkpoints
+separately from the final scored file. Its report rejects incomplete outputs and reuses
+the original decision/calibration functions. Original intermediate-composition and
+strict MLP failures remain retained; registration does not resolve them.
+
+The final-output development set comprises the three unlabelled fixtures. An earlier
+labelled item was used only for intermediate activation qualification before the final
+scorer existed; no native labelled class scores preceded this registration. Full-set
+native C0–C5 results remain pending. This is a registration milestone, not an accuracy
+pass or an eligible latency measurement.
+
+[Registration validation](../results/laya/native_accuracy_v1_validation_desktop2_20261016.log)
+passes 146 offline checks, including checkpoint/provenance rejection and original gate
+boundary cases, together with the legacy syntax/import/shell gate and previous artifact
+checks. These checks open no hardware context and do not establish model accuracy.

@@ -402,3 +402,10 @@ Backs [small overlapping compiler-tuning result](../docs/BENCHMARKS.md#laya-gemm
 - [Object size screen](laya/gemm_codegen_v1_screen_desktop2_20261016.log) and [vector candidate ABI/code audit](laya/gemm_tune_v1_o3_build_desktop2_20261016.log).
 - [Checks-only fresh-short fixtures](laya/gemm_tune_v1_o3_fresh_short_desktop2_20261016.log), [eligible same-session comparison](laya/gemm_tune_v2_o3_same_sitting_desktop2_20261016.log): tuned encoder MLP GEMM versus original, exact fixture outputs, no substantial repeatable speedup established.
 - [Validation](laya/gemm_tune_validation_desktop2_20261016.log): existing 138 offline checks and legacy gates.
+
+## Laya native accuracy registration
+
+Backs [native frozen-arm registration](../docs/BENCHMARKS.md#laya-native-accuracy-arm-registration-2026-10-16-desktop-2).
+
+- [Addendum](laya/native_accuracy_v1_prereg_desktop2_20261016.json) and [registration log](laya/native_accuracy_v1_registration_desktop2_20261016.log): frozen native source/artifact map, original items/reference/criteria unchanged, before native labelled final scores.
+- [Validation](laya/native_accuracy_v1_validation_desktop2_20261016.log): offline scorer/provenance/gate checks and legacy gates. Full frozen native scores remain pending.
