@@ -18821,84 +18821,11 @@ checks. These checks open no hardware context and do not establish model accurac
 
 ## Laya phase and FIFO diagnostics prepared offline (2026-10-16, Desktop 2)
 
-Two diagnostics are prepared separately from the frozen native accuracy arm. Their
-compilation does not modify any registered source or artifact and opens no hardware
-context. Device qualification and performance measurements remain pending until the
-full accuracy run releases the single-tenant device.
-
-`mlp_phases.py` [builds four M128 streams](../results/laya/mlp_phases_v1_build_desktop2_20261016.log)
-for Wi, GeGLU, Wo and normalization. Each retains the exact existing vector core ELF
-and initialization image. Concatenating the phase streams preserves every programmed
-transfer and existing output wait in its original order, as checked offline for every
-row bucket. Standalone phases initialize their own controls rather than inheriting
-another stream's state. `mlp_phases_probe.py` prepares complete-model comparisons with
-66 original versus 150 split dispatches and separate phase wall timings. The extra
-dispatches can perturb latency; no core-cycle or bandwidth conclusion follows from the
-build. [Phase validation](../results/laya/mlp_phases_v1_validation_desktop2_20261016.log)
-passes 151 offline checks and the legacy gates. No split-stream inference has run yet.
-
-`mlp_fifo.py` removes scratch/mask buffers referenced only by the vector image's constant
-false attention branch, and varies query and key/value FIFO depths. It retains the
-original arithmetic kernel object byte-for-byte and generates fresh control/transfer
-streams for each new resident image. It does not claim the original physical buffer
-addresses or initialization image are unchanged. These are M128 buffering candidates,
-not replacements for the registered model.
-
-| Offline candidate | Core query depth | KV path depth | MemTile query depth | Linked code bytes/core |
-|---|---:|---:|---:|---:|
-| Pruned single-buffer control | 1 | 1 | 1 | 14992 |
-| Deeper query path | 2 | 1 | 2 | 15040 |
-| Deeper key/value path | 1 | 2 | 1 | 15024 |
-| Both paths deeper | 2 | 2 | 2 | 15072 |
-
-The [single-buffer control](../results/laya/mlp_fifo_v2_pruned_single_build_desktop2_20261016.log),
-[query variant](../results/laya/mlp_fifo_v3_query_build_desktop2_20261016.log),
-[key/value variant](../results/laya/mlp_fifo_v4_keyvalue_build_desktop2_20261016.log)
-and [combined variant](../results/laya/mlp_fifo_v1_double_build_desktop2_20261016.log)
-all pass linked code, stack and physical span audits; their conservative stack bound
-is 5,184 bytes inside the unchanged 5,376-byte reservation. Offline checks retain all
-live arithmetic calls, verify the requested FIFO declarations and reject invalid depths.
-[Combined validation](../results/laya/mlp_fifo_v1_validation_desktop2_20261016.log)
-passes 156 offline checks, legacy syntax/import/shell gates and prior artifact audits.
-
-`mlp_fifo_probe.py` prepares a same-session complete-model comparison using each
-candidate's own instructions and allocation groups, with CPU neural/oracle calls
-forbidden. These candidates have not run on hardware. No numerical equivalence,
-latency reduction, bandwidth bottleneck or speedup is established by these offline
-builds. The frozen native accuracy arm continues to use its original qualified images.
+Offline engineering record moved to [DECISIONS](DECISIONS.md#laya-phase-and-fifo-diagnostics-prepared-offline-2026-10-16-desktop-2).
 
 ## Laya attention FIFO candidates prepared offline (2026-10-16, Desktop 2)
 
-`attention_fifo.py` prepares the same buffering question for encoder attention while
-keeping its arithmetic kernel object unchanged. All live operations, scratch/mask
-buffers, FP32 exponential tables and the explicit per-bucket KV loop count remain.
-Only FIFO depth declarations change. These builds are separate from the frozen native
-accuracy arm, whose images and source files remain untouched.
-
-| M128 offline candidate | Core query depth | KV path depth | MemTile query depth | Linked code bytes/core |
-|---|---:|---:|---:|---:|
-| Deeper query path | 2 | 1 | 2 | 15728 |
-| Deeper key/value path | 1 | 2 | 1 | 15712 |
-| Both paths deeper | 2 | 2 | 2 | 15760 |
-
-The [query](../results/laya/attention_fifo_v2_query_build_desktop2_20261016.log),
-[key/value](../results/laya/attention_fifo_v3_keyvalue_build_desktop2_20261016.log)
-and [combined](../results/laya/attention_fifo_v1_double_build_desktop2_20261016.log)
-builds pass linked-code, table, physical-span and stack audits on all cores. Their
-conservative stack bound is 4,768 bytes within the unchanged 4,864-byte reservation.
-New instructions use their own compiled physical control addresses; the comparison
-runner preserves full allocation group IDs and checks bank compatibility. It selects
-candidate encoder attention only in M128, retaining original MLP, other row buckets and
-head execution, and patches valid/local fields against each image's own audited map.
-
-[Validation](../results/laya/attention_fifo_v1_validation_desktop2_20261016.log) passes
-161 offline checks and legacy gates. New checks prove that all non-FIFO prefix lines
-remain identical, verify each depth declaration, preserve the exact original prefix
-when depths are one, and reject invalid depths. `attention_fifo_probe.py` prepares
-complete-model fixture/boundary comparisons with CPU neural/oracle calls forbidden.
-No attention FIFO candidate has run on hardware yet. Numerical equivalence, latency
-reduction and the proposed overlap mechanism remain unverified; the active full native
-accuracy run retains sole device ownership.
+Offline engineering record moved to [DECISIONS](DECISIONS.md#laya-attention-fifo-candidates-prepared-offline-2026-10-16-desktop-2).
 
 ## Laya native frozen accuracy: C0–C5 pass (2026-10-16, Desktop 2)
 
@@ -19055,70 +18982,11 @@ The dedicated dispatch and compiler changes are separate from the measured buffe
 
 ## Laya next GeGLU candidates prepared offline (2026-10-16, Desktop 2)
 
-The [combined O3/FIFO build](../results/laya/geglu_fifo_v1_o3_double_build_desktop2_20261016.log)
-retains unchanged polynomial arithmetic and the original other MLP helper objects, while
-doubling the dedicated image's query/KV paths. Linked code is 11,792 bytes per core and
-the conservative stack bound is 3,456 bytes. `fast_buffered_probe.py` prepares an
-M128 complete-model comparison, releasing the earlier buffered MLP context before
-opening this candidate so it stays within the demonstrated context count. It has not
-run on the NPU; no additional speedup is established.
-
-The separate [lookup build](../results/laya/geglu_lut_v1_double_build_desktop2_20261016.log)
-changes GELU to linear interpolation of Gaussian tail-CDF samples. It keeps the existing
-BF16 RNE operand packing and other MLP helper objects. Each core has two bank-formatted
-lookup copies of 4,096 bytes, 8,384 bytes of linked code and a conservative 2,816-byte
-stack bound within the explicit 5,376-byte reservation. All linked code, physical spans
-and stack audits pass. Its offline FP32 formula, including fixed-point fractional
-indexing, has sampled maximum absolute GELU error 0.00003897316236636805 over 200,001
-points from −16 to 16. This is an **offline formula observation**, not an on-device
-numerical bound, full-model accuracy measurement or speed result.
-
-`geglu_lut_probe.py` prepares separate unlabelled fixture/synthetic development checks
-against qualified native NPU outputs, forbids CPU neural/oracle calls, and retains
-explicit numerical tolerances. The lookup candidate does not inherit the original
-arithmetic arm's bit-equivalence claim. It must pass device development checks, receive
-a new registration before labelled final scores and satisfy the original frozen full
-decision/calibration gates before any adoption. The active buffered accuracy run uses
-none of these new files or artifacts and remains unchanged.
-
-[Validation](../results/laya/geglu_next_v1_validation_desktop2_20261016.log) passes 175
-offline checks and legacy syntax/import gates. New checks independently compare the
-lookup formula against erfc, cover bin/asymptote edges and signed zero, prove correct
-four-entry bank duplication and preserve the dedicated program outside FIFO declarations.
+Offline engineering record moved to [DECISIONS](DECISIONS.md#laya-next-geglu-candidates-prepared-offline-2026-10-16-desktop-2).
 
 ## Laya shorter head schedules prepared offline (2026-10-16, Desktop 2)
 
-`bucket_head.py` prepares shorter type embedding, normalization, biased projections,
-ReLU MLPs, residual sums and head attention for each encoder row bucket. It keeps the
-full physical tensor pitches and original arithmetic objects. Every marker is checked
-against actual input length before schedule selection; output gathers therefore remain
-within produced rows. Head attention uses the existing variable-KV image with an
-explicit bucket-dependent key count. These are experimental instruction streams, not
-an adopted model cost or accuracy result.
-
-The [initial build](../results/laya/bucket_head_v1_build_desktop2_20261016.log) reaches its
-time limit while finishing the final layout. The
-[recovered build](../results/laya/bucket_head_v2_recovered_build_desktop2_20261016.log)
-copies completed layouts only after requiring exact generated MLIR and arithmetic
-object identity, repeats every linked-core, stack, physical-span and initialization
-audit, and compiles the missing layout. All five stages in all four row buckets pass.
-Vector stages have exactly the original vector core/init identity; head attention has
-exactly the existing short-attention identity. No new hardware context is required.
-
-`bucket_head_probe.py` prepares a complete-model comparison of original short encoder,
-buffered encoder, shorter heads alone and both changes. It binds instructions to the
-existing contexts and switches each head's own type-address and valid-count patch maps
-before native request preparation. Original head instructions remain available for
-comparisons. No host activation transfer or CPU neural operation is added.
-
-[Validation](../results/laya/bucket_head_v1_validation_desktop2_20261016.log) passes 193
-offline checks and legacy syntax/import gates. The full bucket's pointwise streams
-match original text exactly; its attention stream transfers every same word in the same
-order with the same control values, despite equivalent DMA rank factoring. Additional
-checks cover metadata switching through repeated bucket transitions and rejection of
-invalid markers before selection. None of these shorter head streams has run on the
-NPU. Complete output equivalence, latency and the original frozen accuracy gates remain
-required. The active buffered accuracy arm retains its registered full head schedules.
+Offline engineering record moved to [DECISIONS](DECISIONS.md#laya-shorter-head-schedules-prepared-offline-2026-10-16-desktop-2).
 
 ## Laya buffered native accuracy: C0–C5 and full bit equivalence pass (2026-10-16, Desktop 2)
 
@@ -19150,28 +19018,7 @@ remains open.
 
 ## Laya compact normalization packing prepared offline (2026-10-16, Desktop 2)
 
-The [compact-pack build](../results/laya/compact_pack_v1_build_desktop2_20261016.log)
-replaces the encoder's full-row normalization collector with DMA feature gathers.
-Each unchanged KV object contains a contiguous FP32 matrix for a core's selected rows
-and features plus unused filler words. A pair of distinct Shim DMA descriptors sends
-the payload and filler; four multicast objects replace the previous collector loop.
-Query and output transfers are unchanged. The kernel retains the same integer BF16
-ties-to-even packing and all other arithmetic objects from the existing attention image.
-
-The candidate compiles with 15,776 linked code bytes per core and a conservative
-4,672-byte stack bound within the unchanged 4,864-byte reservation. Code, physical spans,
-tables and initialization audit successfully. Compilation does not establish that
-partial-object Shim descriptors arrive in the required order on hardware.
-
-[Validation](../results/laya/compact_pack_v1_validation_desktop2_20261016.log) passes 199
-offline checks and legacy syntax/import gates. New checks enumerate every gathered and
-filler word for all row buckets, check core/row/feature ownership, require distinct live
-descriptor slots for each column, and preserve original query/output streams and core
-program outside the packing function/loop-count changes. `compact_pack_probe.py`
-prepares a serialized complete-model comparison using its own compiled instructions,
-control-map patches and allocation groups. It replaces the previous candidate attention
-context before opening the new one. The numerical and partial-descriptor ordering gates
-must pass on device before any eligible speed run or adoption; none has run yet.
+Offline engineering record moved to [DECISIONS](DECISIONS.md#laya-compact-normalization-packing-prepared-offline-2026-10-16-desktop-2).
 
 ## Laya shorter heads reduce complete fixture latency (2026-10-16, Desktop 2)
 
@@ -19248,42 +19095,7 @@ success provides no evidence that either compact DMA scheme executes correctly.
 
 ## Laya smaller-query MLP compiled offline (2026-10-16, Desktop 2)
 
-`small_query.py` builds an independent MLP image whose GEMM query contains the original
-header and live BF16 operand, dropping the unused trailing query words. The query
-extent changes from 2,064 to 1,040 words; KV weights retain their full 2,064-word packet.
-Normalization and GeGLU consume two smaller queries per original input, with source
-addressing split across the two pointers. Their mathematical expressions, reduction
-order, polynomial and integer BF16 packing are retained. The norm dispatcher retains
-its rounding reset and volatile conversion fence. Exact device outputs remain a gate,
-including possible compiler differences in the separately compiled helpers.
-
-The [initial build](../results/laya/small_query_v1_build_desktop2_20261016.log) rejects
-the four-dimensional gather because its innermost extent exceeds the Shim descriptor's
-wrap range. The [corrected build](../results/laya/small_query_v2_grouped_build_desktop2_20261016.log)
-factors each span into vector words and completes one four-core group before reusing
-the descriptor. Norm/GeGLU send all first halves to the four cores, then all second
-halves, preserving pairing through the MemTile split. GEMM transfers keep their
-original starts and pitches. This reduces programmed query words for GEMM, while
-adding group completion waits to the other modes; physical DDR traffic and latency
-have not been measured.
-
-The corrected image passes linked code, physical-span and initialization audits with
-14,992 code bytes and a 2,848-byte conservative stack bound. Its query FIFO has depth
-four; the core waits for its first query before reading runtime control, consumes a
-second query only for norm/GeGLU, and releases the matching count. `optimized_probe.py`
-accepts this separately hashed image through `--mlp-kind small-query`, retaining the
-existing exact-output comparison path and original full native baseline.
-
-[Validation](../results/laya/small_query_v1_validation_desktop2_20261016.log) and the
-[expanded descriptor checks](../results/laya/small_query_v3_descriptor_validation_desktop2_20261016.log) cover all
-row buckets, every live query word, core/half ownership, unchanged weight and output
-address streams, descriptor completion groups, and acquisition/release structure,
-alongside the prior offline and legacy gates. No device context is opened. This is a
-compiled candidate, with no hardware parity, frozen accuracy or speed qualification.
-The retained [intermediate test failure](../results/laya/small_query_v2_descriptor_validation_desktop2_20261016.log)
-incorrectly checked raw MLIR dimensions against normalized hardware field limits.
-The corrected test checks the emitted query forms; the successful compile remains the
-evidence that the compiler accepts their normalized descriptor fields.
+Offline engineering record moved to [DECISIONS](DECISIONS.md#laya-smaller-query-mlp-compiled-offline-2026-10-16-desktop-2).
 
 ## Laya lookup and shorter heads reach 458.6 ms on the fixture (2026-10-16, Desktop 2)
 
@@ -19340,38 +19152,7 @@ is used in these serving measurements.
 
 ## Laya output-window query reuse compiled offline (2026-10-16, Desktop 2)
 
-`window_mlp.py` prepares another independent MLP image. Each GEMM query is retained
-while up to three consecutive output-column tiles consume their full weight packets.
-Every output tile has a separate accumulator state and follows the original K order;
-only the independent tiles are interleaved. The device helper delegates arithmetic to
-the existing GEMM step and finish functions. Input and output DMA mappings preserve
-the original global tensor pitches. Norm and polynomial GeGLU retain the smaller-query
-candidate's paired input streams. No lookup approximation is introduced by this image.
-
-The [first build](../results/laya/window_mlp_v1_build_desktop2_20261016.log) finds an
-out-of-scope output-slot SSA value. The [second build](../results/laya/window_mlp_v2_output_slots_build_desktop2_20261016.log)
-adds a separate final-K output loop, then fails SRAM allocation: query acquisition
-lowering reserves an additional buffer beyond the declared FIFO depth. Retain this
-failure as evidence that summing declared FIFO capacities is insufficient to prove
-the linked image fits. The [corrected build](../results/laya/window_mlp_v3_stack_build_desktop2_20261016.log)
-reserves a smaller stack and passes all code, physical-span and initialization audits.
-It has 15,472 code bytes and a 2,848-byte conservative stack bound within its explicit
-3,328-byte reservation. It has never executed on the NPU.
-
-[Offline validation](../results/laya/window_mlp_v1_validation_desktop2_20261016.log)
-enumerates every gathered query, weight and output address across all row buckets and
-columns, maps each output slot back to its original tile, and checks unchanged weight
-order along K. It also preserves non-GEMM streams and checks separate state addressing,
-counter reset and final-K output loops. The prepared `window_mlp_probe.py` uses its own
-validated image and instruction buffers, replacing the earlier MLP candidate context
-before opening the new one. A primitive device gate, exact complete outputs, original
-frozen accuracy and eligible same-sitting timing remain required. Programmed-read reuse
-does not establish physical DDR savings or a speedup.
-
-The ongoing lookup/short-head frozen scoring run retains sole NPU ownership during
-this offline work. A [live identity check](../results/laya/lookup_head_accuracy_v1_live_map_desktop2_20261016.log)
-confirms all 234 registered hashes remain unchanged. That scoring run is checks-only;
-these concurrent builds supply no eligible timing evidence for it.
+Offline engineering record moved to [DECISIONS](DECISIONS.md#laya-output-window-query-reuse-compiled-offline-2026-10-16-desktop-2).
 
 ## Laya lookup and shorter heads pass complete frozen gates (2026-10-16, Desktop 2)
 
