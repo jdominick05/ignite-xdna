@@ -669,6 +669,8 @@ Specialized GEMM full model: [development parity](laya/gemm_specialized_mlp_v1_f
 Timing [preregistration](laya/gemm_specialized_compare_v1_prereg_desktop2_20261016.json)
 and [record](laya/gemm_specialized_compare_v1_registration_desktop2_20261016.log)
 back the [protocol](../docs/DECISIONS.md#laya-specialized-gemm-complete-inference-timing-protocol-2026-10-16-desktop-2).
+The [eligible timing samples](laya/gemm_specialized_compare_v1_timing_desktop2_20261016.log)
+support the [small overlapping change](../docs/BENCHMARKS.md#laya-specialized-gemm-yields-a-small-overlapping-timing-change-2026-10-16-desktop-2).
 
 Two-output lookup GEMM primitive: [initial build](laya/window_lookup_primitive_v1_build_desktop2_20261016.log),
 [explicit control/address build](laya/window_lookup_primitive_v2_controls_build_desktop2_20261016.log),

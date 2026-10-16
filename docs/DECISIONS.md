@@ -3392,3 +3392,10 @@ The [registration record](../results/laya/gemm_specialized_compare_v1_registrati
 contains the preregistration hash. No CPU/hybrid ratio or cross-sitting pooling is
 planned. A speed result must precede any frozen scoring for adoption; the original
 frozen decision/accuracy gates remain unchanged.
+
+The [eligible result](BENCHMARKS.md#laya-specialized-gemm-yields-a-small-overlapping-timing-change-2026-10-16-desktop-2)
+has a slightly lower specialized pooled median but broad overlap and a per-round
+ordering reversal. Retain qualified packing; fixed-shape specialization and folded
+reset have not established a substantial, repeatable complete-inference gain.
+Keep the new arithmetic image as a development control, without frozen adoption
+scoring or a performance claim beyond the recorded samples.

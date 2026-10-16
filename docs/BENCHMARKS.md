@@ -19758,3 +19758,34 @@ and contexts are idle after each session closes. Timing is ineligible.
 pass 18 cases, and the [legacy validation](../results/laya/gemm_specialized_full_v1_validation_desktop2_20261016.log)
 passes. This establishes development parity only. No specialized full frozen
 accuracy or speed verdict follows; qualified packing remains adopted.
+
+## Laya specialized GEMM yields a small overlapping timing change (2026-10-16, Desktop 2)
+
+The [eligible complete-inference comparison](../results/laya/gemm_specialized_compare_v1_timing_desktop2_20261016.log)
+follows the [preregistration](../results/laya/gemm_specialized_compare_v1_prereg_desktop2_20261016.json)
+committed as `1adff84` before timing. Both arms use the same length-91/M128 request;
+six fresh serialized profiles rotate packing/specialized, specialized/packing,
+packing/specialized. Two warmups and five timed inferences per profile yield 15
+samples per arm, excluding setup.
+
+| Complete native arm | Median ms | Sample range ms |
+|---|---:|---:|
+| Qualified packing | 471.6058 | 403.6609–487.4322 |
+| Fixed-shape GEMM with folded reset | 466.1471 | 425.1912–488.7331 |
+
+The specialized pooled median is lower, but the ranges overlap broadly. Per-round
+medians for packing/specialized are 453.8371/482.4395, 471.6058/463.7944 and
+473.4130/458.2893 ms: the first round favors packing and the following two favor
+specialization. This does not establish a substantial, repeatable end-to-end gain.
+Do not infer a hardware bottleneck or compute utilization from these timings.
+
+Every timed output is bit-exact, with zero CPU neural/oracle calls, five contexts
+and 66 dispatches. All profiles close to idle before the next opens; registered
+sources/artifacts and qualification records remain unchanged. The bounded process
+exits zero, reports no foreign contention and sets `timing_eligible: true`. The
+summary retains all samples, per-profile medians and the unchanged raw-log hash.
+This separate sitting supplies no CPU/hybrid ratio or cross-sitting pool.
+
+Qualified packing remains adopted. No new full frozen scoring is started for this
+small overlapping change; the specialized candidate retains development parity
+only and must pass the original gates before any future adoption.
