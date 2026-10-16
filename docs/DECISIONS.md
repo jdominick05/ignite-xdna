@@ -2367,3 +2367,59 @@ branch. There the int8 core's stride-1 dual loop issues 8 `vmac` in 18 bundles, 
 object has 5,728 B free
 ([ptr](BENCHMARKS.md#the-ptr-loop-pattern-lands-in-the-int8-engine-and-yolov8s-overtakes-amds-stack-2026-09-22-desktop-2), [gate](BENCHMARKS.md#compiling-out-the-dispatch-no-container-reaches-frees-5408-b-and-costs-a-manifest-field-to-stay-honest-2026-09-22-desktop-2)).
 The census has not re-read either figure.
+
+## Laya attention prototype: retain the host attention path (2026-10-16)
+
+The one-core bf16 prototype passes its fixed numerical tolerance and full-buffer checks,
+but loses badly to same-sitting CPU attention. Keep it as a standalone negative performance
+result; no compiler op, runtime dispatch path or model-support claim is added. The inclusive
+local-window boundaries and finite fully masked-row semantics come from the exported graph.
+The first bf16 exp path failed the expanded numerical gate; fp32 range reduction passed
+without relaxing that gate. Vectorizing the scalar softmax/layout work is a follow-up that
+needs another measured sitting before integration. See the
+[method, failed run and qualified result](BENCHMARKS.md#laya-fused-attention-prototype-2026-10-16-desktop-2).
+
+## Laya attention vector arithmetic and a compile-time helper gate (2026-10-16)
+
+The vector implementation replaces scalar float arithmetic throughout the attention hot
+path and adopts four-accumulator operand reuse from the bf16 convolution/GEMM pattern.
+The builder rejects unresolved runtime helpers in the vector object and software-float
+helpers in its linked ELF. The fixed numerical gate passes; paired dispatch improves,
+but one-core attention still loses to the CPU and host packing remains expensive.
+Keep the scalar source as a measured control and keep the served Laya host path.
+See [the qualified comparison and limits](BENCHMARKS.md#vector-attention-software-float-helpers-removed-2026-10-16-desktop-2).
+
+## Laya attention: query residency, KV multicast and fixed numerical gates (2026-10-16)
+
+The standalone array implementation holds query tiles on the cores, multicasts K/V
+across query workers, and replays compact operands through DMA. It constructs masks on
+the device and uses mapped BOs with native host layout conversion. The expanded padding
+test rejected a rescale that discarded the alpha residual; restoring it passed the same
+numerical limits. Keep that failure as evidence and retain the scalar/vector controls.
+
+The qualified fully valid local case beats CPU including packing and output delivery;
+global attention still loses, and padding patterns change the conclusion. Keep the
+served host path until integration and task-level validation establish their own result.
+See [the array method, failure and qualified sitting](BENCHMARKS.md#laya-attention-on-the-array-local-attention-beats-the-cpu-global-still-loses-2026-10-16-desktop-2).
+
+## Laya attention: retain the baseline after small optimization probes (2026-10-16)
+
+Mask bypass, scratch banking and matrix-loop unrolling pass correctness but miss their
+predeclared performance targets. Faster host packing reduces its own cost, but the
+same-program paired end-to-end intervals include zero. Keep the baseline as the default
+and the experiments as explicit variants. A convolution reformulation remains possible,
+but it does not by itself expose a different arithmetic primitive from the one already
+used. See [the screens and paired check](BENCHMARKS.md#laya-attention-optimization-probes-packing-improves-end-to-end-gain-unproven-2026-10-16-desktop-2).
+
+**AutoRound is a separate precision candidate, not a measured result.** Intel AutoRound
+supports weight-only W8A16/W4A16 and research fake-quantized exports
+([official format documentation](https://github.com/intel/auto-round/blob/main/docs/step_by_step.md)).
+The first useful test would optimize the fixed projection/MLP weights at W8A16, preserve
+attention/norm/head precision, and run the existing pinned Laya decision gates on the
+learned weights before implementing a packed-weight NPU path. The previous coarse dynamic
+INT8 result does not reject this different scheme. Weight-only quantization leaves the
+input-dependent QK and probability-times-V products needing their own precision strategy.
+Current bf16 kernels have no AutoRound packed-weight/group-scale importer or on-device
+unpacking path; expanding weights to bf16 before upload would only screen accuracy.
+No AutoRound quantization, accuracy evaluation or NPU measurement was run. ModernBERT
+adapter compatibility is also unverified.

@@ -210,3 +210,37 @@ The checkpoint covers Desktop 2, 2026-09-09:
 | [laya/](laya/) | Laya, a 421M typed-decision model (ModernBERT-large), on the CPU and the 780M: the bar an NPU build has to beat. At 512 tokens the 780M in DirectML fp32 and the CPU in dynamic int8 tie at 633-639 ms; the 780M spends 34.2 J against 37.4 J and leaves the CPU at 8% load — [BENCHMARKS](../docs/BENCHMARKS.md#laya-on-the-cpu-and-the-780m-the-bar-an-npu-build-has-to-beat-2026-09-26-desktop-2). On 2,400 labelled items from the card's public tasks, against pre-registered criteria, emulated bf16 keeps 2,395 fp32 decisions and passes; ORT's dynamic int8 keeps 1,667 and fails (7.96 pt below fp32), so CPU int8 does not tie the 780M at equal accuracy — [BENCHMARKS](../docs/BENCHMARKS.md#laya-in-bf16-and-int8-bf16-keeps-its-decisions-orts-dynamic-int8-does-not-2026-09-26-desktop-2). The NPU in bf16, screened as parts with no hybrid built: a hybrid's floor, 810 ms and 40.0 J per 512-token sequence, beats CPU fp32 but not the 780M; with the export's Softmax NaN guards removed (bit-identical on all 2,403 items) it is 472 ms and 20.5 J against the 780M's 688 ms and 36.5 J. As built, it is slower than the 780M — [BENCHMARKS](../docs/BENCHMARKS.md#laya-on-the-npu-screened-the-floor-beats-the-cpu-and-the-780m-without-the-nan-guards-2026-09-26-desktop-2). Step 4a: one GEMM design with run-time loop counts serves all six shapes from one hardware context, bit-equal to the per-shape designs. The 120 products' device side falls from 444.5 ms (per-shape, at most five contexts resident) to 213.0 ms, and from IRON's 552.0 ms — [BENCHMARKS](../docs/BENCHMARKS.md#laya-on-the-npu-one-context-serves-all-six-gemm-shapes-and-halves-the-device-side-2026-10-13-desktop-2) |
 | [hf/verify_published_containers_desktop2_20261013.log](hf/verify_published_containers_desktop2_20261013.log) | The containers published to Hugging Face. Each was compiled at `394fc3d` and run once on the device against its ONNX, and all seven read EXACT on every readable layer. The log records the sha256 of every published ONNX and container. MODNet-Cut is the logged 2026-09-19 container and was not re-verified (dense host regions). This is a correctness check, not a latency figure — [MODEL_ZOO](../docs/MODEL_ZOO_BENCHMARKS.md#the-containers-published-on-hugging-face-each-device-verified-2026-10-13-desktop-2) |
 
+## Laya attention prototype
+
+One-core fused bf16 attention, with the numerical failure retained and the final negative
+performance result: [method and qualification](../docs/BENCHMARKS.md#laya-fused-attention-prototype-2026-10-16-desktop-2).
+
+- [Initial one-head check](laya/attention_v1_global_h1_desktop2_20261015T2341Z.log): correctness only.
+- [Expanded failure](laya/attention_v2_suite_desktop2_20261015T2352Z.log): numerical failure and interrupted CPU baseline; timing ineligible.
+- [Corrected suite](laya/attention_v3_suite_desktop2_20261016T0001Z.log): global/local and padding, all registered checks pass.
+- [Final runner qualification](laya/attention_v4_suite_desktop2_20261016T0010Z.log): qualified timing with explicit buffer cleanup, idle device after close.
+- [Initial validation](laya/attention_validation_desktop2_20261016T0007Z.log) and [final validation/derived means](laya/attention_validation_v4_desktop2_20261016T0016Z.log).
+
+## Vector Laya attention
+
+- [Initial vector smoke check](laya/attention_vector_smoke_desktop2_20261016T003750Z.log): numerical checks before 2x2 scheduling, timing ineligible.
+- [Vector/scalar sitting](laya/attention_vector_vs_scalar_desktop2_20261016T004232Z.log): identical numerical gates, no vector software-float helpers, paired scalar controls and resident slopes; [method and results](../docs/BENCHMARKS.md#vector-attention-software-float-helpers-removed-2026-10-16-desktop-2).
+- [Validation and derived ratios](laya/attention_vector_validation_desktop2_20261016T0046Z.log): syntax/import gate, offline tests and log-derived comparison.
+
+## Array Laya attention
+
+[Method, qualification and limits](../docs/BENCHMARKS.md#laya-attention-on-the-array-local-attention-beats-the-cpu-global-still-loses-2026-10-16-desktop-2).
+
+- Correctness-only development checks: [direct fp32 LUT indexing](laya/attention_lut_smoke_desktop2_20261016T0100Z.log), [eight accumulators and head parallelism](laya/attention_lut8_array_smoke_desktop2_20261016T0110Z.log), [two-term numerator rescale](laya/attention_lut_rescale_array_smoke_desktop2_20261016T0118Z.log), [compact input and KV multicast](laya/attention_shared_smoke_desktop2_20261016T0130Z.log), [direct numerator accumulation](laya/attention_shared_acc_smoke_desktop2_20261016T0140Z.log). None qualifies latency.
+- [Expanded failure](laya/attention_shared_suite_desktop2_20261016T0150Z.log): one element fails at 193 valid global keys with both poisons; timing ineligible.
+- [Corrected array qualification](laya/attention_shared_precise_suite_desktop2_20261016T0200Z.log): restored alpha residual, unchanged tolerance, mapped BOs and native packing; all registered cases pass, fully valid local end-to-end win, global still loses.
+- [Validation and summary](laya/attention_shared_validation_desktop2_20261016T0205Z.log): syntax/import gate, offline tests, native-packer byte parity and derived qualified means.
+
+## Laya attention optimization probes
+
+[Method, negative screens and paired limits](../docs/BENCHMARKS.md#laya-attention-optimization-probes-packing-improves-end-to-end-gain-unproven-2026-10-16-desktop-2).
+
+- [Mask/bank sitting](laya/attention_mask_bank_race_desktop2_20261016T0142Z.log): full-valid mask bypass and scratch relocation, fixed numerical gate passes, dispatch targets missed.
+- [Matrix/host sitting](laya/attention_unroll_host_race_desktop2_20261016T0143Z.log): loop unrolling, less host clearing, prevalidated mask parameters and combined variant, all numerical cases pass.
+- [Paired host sitting](laya/attention_host_paired_desktop2_20261016T0152Z.log): ABBA on one unchanged loaded NPU program; packing improves, end-to-end interval includes zero.
+- [Optimization validation](laya/attention_optimization_validation_desktop2_20261016T0158Z.log): syntax/import gate, offline tests, native-packer byte parity and derived paired intervals.

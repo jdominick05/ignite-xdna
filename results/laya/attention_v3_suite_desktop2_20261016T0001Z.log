@@ -1,0 +1,1341 @@
+RESEARCH_PLATFORM {"machine": "Desktop 2", "cpu": "AMD Ryzen 7 8700G w/ Radeon 780M Graphics", "os": "Windows-11-10.0.26200-SP0", "ram_bytes": 33381138432, "source_sha256": {"tools/research_process.py": "ffeb1857f190b482eed101b5f5a928f455de26bfa61d23f78a2eacec08e2663e", "tools/quant_calib_alphabet.py": "2dc0b2878c564853f340880209a425dfcf63b8536b2b8e9fd32344daade58d37", "tools/xint8_arithmetic_probe.py": "6aa3df08b9870c3c2264b868459d7ffbac3070dddc1349d7c6f3f480075f7041", "scripts/research-lowlevel.sh": "3455ad7933697936487712665505c216891865c6deada647302785f6e37020bd", "scripts/research-iron.sh": "4c863a262646ddab39b5005006ba8e03809895e6386c6310e2fd9d0a9e9609ee", "kernels/memory_placement/probe.py": "e8d990169ad6091fa1b53852e9f61eff495b5def72d35165a5c5cf1759e38898", "kernels/memory_placement/memory_kernels.cc": "182e7af7071a1e851afb4a7ca266069c489aea1fbaaa85eca129708daeba5ba6", "scripts/research-matrix.sh": "739254171629deae822b0ad7dabc875aee19ace56dde77d3e8aab61663f97516", "kernels/memory_placement/gemm.py": "17c905ad66110d3346bbf0db898dfc6b780df59fae1dfb0c1747057ce1e5844e", "kernels/memory_placement/gemm_placement.cc": "f21acf7250b12914ea30cc1f77613239dfa18421a85a1b9a5199017dd916278a", "tools/research_summary.py": "0c00dcceef07053d06731b41a1f1ed58d3ba4ea09f82497de354ce9cef17da20", "tools/research_toolchain.py": "f0a126a24ae213acfaa43460cfd9def0c86d9cb70cfee0228aa271688467b314"}, "commit": "d834d0b87e1300f3e397247a269eb8a76c009e9d", "command": ["bash", "scripts/research-iron.sh", "kernels/laya_attention/probe.py", "suite", "--out", "scratch/laya_attention/suite_v3", "--masks", "scratch/laya_attention/semantics/masks.npz", "--prereg", "scratch/laya_attention/prereg_v3.json"], "seconds_limit": 300.0, "rss_gib_limit": 8, "checks_only": false, "free_ram_bytes": 25996668928}
+HOST_LOAD busy_cores=0.2 logical_cores=16 free_ram_gb=24.2 sample_sec=1
+HOST_LOAD_TOP 0.03 RiotClientServices:11660 ws_mb=29
+HOST_LOAD_TOP 0.03 powershell:18232 ws_mb=80
+HOST_LOAD_TOP 0.03 dev-agent:17580 ws_mb=46
+HOST_LOAD_TOP 0.03 dev-agent:7624 ws_mb=408
+HOST_LOAD_TOP 0.02 WindowsTerminal:9268 ws_mb=107
+HOST_LOAD_VERDICT CLEAR
+
+PRE_NPU_CONTEXT_WITNESS "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+PREREGISTRATION {
+  "machine": "DESKTOP-CBL5NUA",
+  "shape": [
+    512,
+    16,
+    64
+  ],
+  "atol": 0.01,
+  "rtol": 0.02,
+  "relative_l2": 0.02,
+  "seeds": [
+    11,
+    29,
+    47
+  ],
+  "cases": [
+    "random",
+    "uniform",
+    "zero",
+    "peaked"
+  ],
+  "poisons": [
+    2143363909,
+    2143634209
+  ],
+  "valid_lengths": [
+    512,
+    193,
+    1,
+    0
+  ],
+  "correctness": "all outputs including padded queries; all heads; two poisons; guards and inputs",
+  "performance": "full-head and 16-head dispatch, packing, write/sync, read/sync; CPU same sitting",
+  "alternatives": [
+    "local block skipping reduces arithmetic and transfers",
+    "scalar softmax and packing dominate",
+    "unexplained"
+  ],
+  "semantics": {
+    "model_sha256": "9ab43d87c9a696c8439788addfccaff8956d4dcee36ae24549add8d5b0f638bf",
+    "graph_mask_outputs": [
+      "val_247",
+      "val_352"
+    ],
+    "scale_factors": [
+      [
+        0.3535533845424652,
+        0.3535533845424652
+      ],
+      [
+        0.3535533845424652,
+        0.3535533845424652
+      ]
+    ],
+    "scale": 0.125,
+    "local_inclusive_radius": 64,
+    "local_interior_keys": 129,
+    "padding": "keys only; padded query rows still produce outputs",
+    "all_masked": "finite -FLT_MAX yields uniform over all 512 keys",
+    "masks_sha256": "0d88b6360a7d557e4f2ecdfbc8fd1b4790d6602262d968154b959095fdeb5720"
+  },
+  "sources": {
+    "kernel.cc": "1eed053b87dd74ee1f166d4562dac76baa0a91b4dfe38503c2693f3f340998c3",
+    "probe.py": "6599b2f5aeec6254b7f403a533e08cf59689a5078a9c77dae2914882e8c587dc"
+  },
+  "resident_calls": [
+    0,
+    25,
+    50,
+    100
+  ],
+  "resident_reps": 5,
+  "builds": {
+    "global_h16_v512": {
+      "heads": 16,
+      "mode": "global",
+      "valid": 512,
+      "resident": "none",
+      "packets": 8192,
+      "outputs": 512,
+      "placement": [
+        [
+          1024,
+          12352,
+          "inF_cons_buff_0"
+        ],
+        [
+          16384,
+          20608,
+          "outF_buff_0"
+        ],
+        [
+          32768,
+          36992,
+          "attn_state"
+        ],
+        [
+          49152,
+          52224,
+          "attn_scratch"
+        ]
+      ],
+      "code_bytes": 12048,
+      "kernel_sha256": "1eed053b87dd74ee1f166d4562dac76baa0a91b4dfe38503c2693f3f340998c3",
+      "stack_sizes": [
+        448,
+        64
+      ],
+      "stack_allowance_bytes": 1024,
+      "upstream_sha256": {
+        "aie_runtime_lib/AIE2/lut_based_ops.h": "c865cfa7d9ac4af2335c765221ed5405580fdcc83b117de9e189acf2d7d6e539",
+        "aie_runtime_lib/AIE2/lut_based_ops.cpp": "64f9adb21dbdee808a6925e9f3f021fb50337db361928b0a6d08d892285582f8",
+        "aie_kernels/aie2/bf16_exp.cc": "64d6faf05bb8299a42cec1ff950b1b1d22859bc1fbc4247b4482e8b161b076f6",
+        "aie_kernels/aie2/softmax.cc": "c1627d767fc8f3cfad9a52f7c43f5122fe145b9aedae4bc381dc4f3843fe5a4c"
+      },
+      "masks_sha256": "0d88b6360a7d557e4f2ecdfbc8fd1b4790d6602262d968154b959095fdeb5720",
+      "xclbin_sha256": "78a9ba943e2d76c86ddb0218ba1452f0f0bccd4b1bfc6f93b9bf3dd03c1f54d0",
+      "instructions_sha256": "2d6e118fec5ebf567920a9ed784798f1d7becae8a198a9829a47a064fd1dbd87"
+    },
+    "global_h1_v0": {
+      "heads": 1,
+      "mode": "global",
+      "valid": 0,
+      "resident": "none",
+      "packets": 512,
+      "outputs": 32,
+      "placement": [
+        [
+          1024,
+          12352,
+          "inF_cons_buff_0"
+        ],
+        [
+          16384,
+          20608,
+          "outF_buff_0"
+        ],
+        [
+          32768,
+          36992,
+          "attn_state"
+        ],
+        [
+          49152,
+          52224,
+          "attn_scratch"
+        ]
+      ],
+      "code_bytes": 12048,
+      "kernel_sha256": "1eed053b87dd74ee1f166d4562dac76baa0a91b4dfe38503c2693f3f340998c3",
+      "stack_sizes": [
+        448,
+        64
+      ],
+      "stack_allowance_bytes": 1024,
+      "upstream_sha256": {
+        "aie_runtime_lib/AIE2/lut_based_ops.h": "c865cfa7d9ac4af2335c765221ed5405580fdcc83b117de9e189acf2d7d6e539",
+        "aie_runtime_lib/AIE2/lut_based_ops.cpp": "64f9adb21dbdee808a6925e9f3f021fb50337db361928b0a6d08d892285582f8",
+        "aie_kernels/aie2/bf16_exp.cc": "64d6faf05bb8299a42cec1ff950b1b1d22859bc1fbc4247b4482e8b161b076f6",
+        "aie_kernels/aie2/softmax.cc": "c1627d767fc8f3cfad9a52f7c43f5122fe145b9aedae4bc381dc4f3843fe5a4c"
+      },
+      "masks_sha256": "0d88b6360a7d557e4f2ecdfbc8fd1b4790d6602262d968154b959095fdeb5720",
+      "xclbin_sha256": "9fff17b77c07a7ceca334ae5b473897dc8bf88f70b8b1b0fd43075b36fc4be2d",
+      "instructions_sha256": "f6c6f97f1292b54a14d21e63a37f07be5b961b907bc0353452eceef00f32811f"
+    },
+    "global_h1_v1": {
+      "heads": 1,
+      "mode": "global",
+      "valid": 1,
+      "resident": "none",
+      "packets": 32,
+      "outputs": 32,
+      "placement": [
+        [
+          1024,
+          12352,
+          "inF_cons_buff_0"
+        ],
+        [
+          16384,
+          20608,
+          "outF_buff_0"
+        ],
+        [
+          32768,
+          36992,
+          "attn_state"
+        ],
+        [
+          49152,
+          52224,
+          "attn_scratch"
+        ]
+      ],
+      "code_bytes": 12048,
+      "kernel_sha256": "1eed053b87dd74ee1f166d4562dac76baa0a91b4dfe38503c2693f3f340998c3",
+      "stack_sizes": [
+        448,
+        64
+      ],
+      "stack_allowance_bytes": 1024,
+      "upstream_sha256": {
+        "aie_runtime_lib/AIE2/lut_based_ops.h": "c865cfa7d9ac4af2335c765221ed5405580fdcc83b117de9e189acf2d7d6e539",
+        "aie_runtime_lib/AIE2/lut_based_ops.cpp": "64f9adb21dbdee808a6925e9f3f021fb50337db361928b0a6d08d892285582f8",
+        "aie_kernels/aie2/bf16_exp.cc": "64d6faf05bb8299a42cec1ff950b1b1d22859bc1fbc4247b4482e8b161b076f6",
+        "aie_kernels/aie2/softmax.cc": "c1627d767fc8f3cfad9a52f7c43f5122fe145b9aedae4bc381dc4f3843fe5a4c"
+      },
+      "masks_sha256": "0d88b6360a7d557e4f2ecdfbc8fd1b4790d6602262d968154b959095fdeb5720",
+      "xclbin_sha256": "1af68bcd2929e2518a20cce47b03820fb0f0c18ae8da69845f129b0abeedbaf2",
+      "instructions_sha256": "0befd8d2eb8baf8b816b67c295baff58b6274d52fed5aa8413b43360ef4081e1"
+    },
+    "global_h1_v193": {
+      "heads": 1,
+      "mode": "global",
+      "valid": 193,
+      "resident": "none",
+      "packets": 224,
+      "outputs": 32,
+      "placement": [
+        [
+          1024,
+          12352,
+          "inF_cons_buff_0"
+        ],
+        [
+          16384,
+          20608,
+          "outF_buff_0"
+        ],
+        [
+          32768,
+          36992,
+          "attn_state"
+        ],
+        [
+          49152,
+          52224,
+          "attn_scratch"
+        ]
+      ],
+      "code_bytes": 12048,
+      "kernel_sha256": "1eed053b87dd74ee1f166d4562dac76baa0a91b4dfe38503c2693f3f340998c3",
+      "stack_sizes": [
+        448,
+        64
+      ],
+      "stack_allowance_bytes": 1024,
+      "upstream_sha256": {
+        "aie_runtime_lib/AIE2/lut_based_ops.h": "c865cfa7d9ac4af2335c765221ed5405580fdcc83b117de9e189acf2d7d6e539",
+        "aie_runtime_lib/AIE2/lut_based_ops.cpp": "64f9adb21dbdee808a6925e9f3f021fb50337db361928b0a6d08d892285582f8",
+        "aie_kernels/aie2/bf16_exp.cc": "64d6faf05bb8299a42cec1ff950b1b1d22859bc1fbc4247b4482e8b161b076f6",
+        "aie_kernels/aie2/softmax.cc": "c1627d767fc8f3cfad9a52f7c43f5122fe145b9aedae4bc381dc4f3843fe5a4c"
+      },
+      "masks_sha256": "0d88b6360a7d557e4f2ecdfbc8fd1b4790d6602262d968154b959095fdeb5720",
+      "xclbin_sha256": "94920a926609cd6c646ea7ab380720e38455c17862c9fd69c05698b114edb50b",
+      "instructions_sha256": "b1f8c318151fd537ad347b191a7517c4b654cd2191d326e096d451a70a8ed4d2"
+    },
+    "global_h1_v512": {
+      "heads": 1,
+      "mode": "global",
+      "valid": 512,
+      "resident": "none",
+      "packets": 512,
+      "outputs": 32,
+      "placement": [
+        [
+          1024,
+          12352,
+          "inF_cons_buff_0"
+        ],
+        [
+          16384,
+          20608,
+          "outF_buff_0"
+        ],
+        [
+          32768,
+          36992,
+          "attn_state"
+        ],
+        [
+          49152,
+          52224,
+          "attn_scratch"
+        ]
+      ],
+      "code_bytes": 12048,
+      "kernel_sha256": "1eed053b87dd74ee1f166d4562dac76baa0a91b4dfe38503c2693f3f340998c3",
+      "stack_sizes": [
+        448,
+        64
+      ],
+      "stack_allowance_bytes": 1024,
+      "upstream_sha256": {
+        "aie_runtime_lib/AIE2/lut_based_ops.h": "c865cfa7d9ac4af2335c765221ed5405580fdcc83b117de9e189acf2d7d6e539",
+        "aie_runtime_lib/AIE2/lut_based_ops.cpp": "64f9adb21dbdee808a6925e9f3f021fb50337db361928b0a6d08d892285582f8",
+        "aie_kernels/aie2/bf16_exp.cc": "64d6faf05bb8299a42cec1ff950b1b1d22859bc1fbc4247b4482e8b161b076f6",
+        "aie_kernels/aie2/softmax.cc": "c1627d767fc8f3cfad9a52f7c43f5122fe145b9aedae4bc381dc4f3843fe5a4c"
+      },
+      "masks_sha256": "0d88b6360a7d557e4f2ecdfbc8fd1b4790d6602262d968154b959095fdeb5720",
+      "xclbin_sha256": "5aa82df1aaf812cd40701d248d7d1907f4cf40ecfeb193112338b301ac370004",
+      "instructions_sha256": "f6c6f97f1292b54a14d21e63a37f07be5b961b907bc0353452eceef00f32811f"
+    },
+    "local_h16_v512": {
+      "heads": 16,
+      "mode": "local",
+      "valid": 512,
+      "resident": "none",
+      "packets": 2368,
+      "outputs": 512,
+      "placement": [
+        [
+          1024,
+          12352,
+          "inF_cons_buff_0"
+        ],
+        [
+          16384,
+          20608,
+          "outF_buff_0"
+        ],
+        [
+          32768,
+          36992,
+          "attn_state"
+        ],
+        [
+          49152,
+          52224,
+          "attn_scratch"
+        ]
+      ],
+      "code_bytes": 12048,
+      "kernel_sha256": "1eed053b87dd74ee1f166d4562dac76baa0a91b4dfe38503c2693f3f340998c3",
+      "stack_sizes": [
+        448,
+        64
+      ],
+      "stack_allowance_bytes": 1024,
+      "upstream_sha256": {
+        "aie_runtime_lib/AIE2/lut_based_ops.h": "c865cfa7d9ac4af2335c765221ed5405580fdcc83b117de9e189acf2d7d6e539",
+        "aie_runtime_lib/AIE2/lut_based_ops.cpp": "64f9adb21dbdee808a6925e9f3f021fb50337db361928b0a6d08d892285582f8",
+        "aie_kernels/aie2/bf16_exp.cc": "64d6faf05bb8299a42cec1ff950b1b1d22859bc1fbc4247b4482e8b161b076f6",
+        "aie_kernels/aie2/softmax.cc": "c1627d767fc8f3cfad9a52f7c43f5122fe145b9aedae4bc381dc4f3843fe5a4c"
+      },
+      "masks_sha256": "0d88b6360a7d557e4f2ecdfbc8fd1b4790d6602262d968154b959095fdeb5720",
+      "xclbin_sha256": "469ef07324c24b33da9d83121346d9d88e424efe375cb45b3c68fd4a8cc3d197",
+      "instructions_sha256": "9f7fa70bca0e2b915b3487d1f4d39fae887f3972f903c32318385090bdf2d7bd"
+    },
+    "local_h1_v0": {
+      "heads": 1,
+      "mode": "local",
+      "valid": 0,
+      "resident": "none",
+      "packets": 512,
+      "outputs": 32,
+      "placement": [
+        [
+          1024,
+          12352,
+          "inF_cons_buff_0"
+        ],
+        [
+          16384,
+          20608,
+          "outF_buff_0"
+        ],
+        [
+          32768,
+          36992,
+          "attn_state"
+        ],
+        [
+          49152,
+          52224,
+          "attn_scratch"
+        ]
+      ],
+      "code_bytes": 12048,
+      "kernel_sha256": "1eed053b87dd74ee1f166d4562dac76baa0a91b4dfe38503c2693f3f340998c3",
+      "stack_sizes": [
+        448,
+        64
+      ],
+      "stack_allowance_bytes": 1024,
+      "upstream_sha256": {
+        "aie_runtime_lib/AIE2/lut_based_ops.h": "c865cfa7d9ac4af2335c765221ed5405580fdcc83b117de9e189acf2d7d6e539",
+        "aie_runtime_lib/AIE2/lut_based_ops.cpp": "64f9adb21dbdee808a6925e9f3f021fb50337db361928b0a6d08d892285582f8",
+        "aie_kernels/aie2/bf16_exp.cc": "64d6faf05bb8299a42cec1ff950b1b1d22859bc1fbc4247b4482e8b161b076f6",
+        "aie_kernels/aie2/softmax.cc": "c1627d767fc8f3cfad9a52f7c43f5122fe145b9aedae4bc381dc4f3843fe5a4c"
+      },
+      "masks_sha256": "0d88b6360a7d557e4f2ecdfbc8fd1b4790d6602262d968154b959095fdeb5720",
+      "xclbin_sha256": "e270d3fc4eb58e5eb5f836dc3d705b2d873040657aed5f8e637800dfc04013d8",
+      "instructions_sha256": "f6c6f97f1292b54a14d21e63a37f07be5b961b907bc0353452eceef00f32811f"
+    },
+    "local_h1_v1": {
+      "heads": 1,
+      "mode": "local",
+      "valid": 1,
+      "resident": "none",
+      "packets": 452,
+      "outputs": 32,
+      "placement": [
+        [
+          1024,
+          12352,
+          "inF_cons_buff_0"
+        ],
+        [
+          16384,
+          20608,
+          "outF_buff_0"
+        ],
+        [
+          32768,
+          36992,
+          "attn_state"
+        ],
+        [
+          49152,
+          52224,
+          "attn_scratch"
+        ]
+      ],
+      "code_bytes": 12048,
+      "kernel_sha256": "1eed053b87dd74ee1f166d4562dac76baa0a91b4dfe38503c2693f3f340998c3",
+      "stack_sizes": [
+        448,
+        64
+      ],
+      "stack_allowance_bytes": 1024,
+      "upstream_sha256": {
+        "aie_runtime_lib/AIE2/lut_based_ops.h": "c865cfa7d9ac4af2335c765221ed5405580fdcc83b117de9e189acf2d7d6e539",
+        "aie_runtime_lib/AIE2/lut_based_ops.cpp": "64f9adb21dbdee808a6925e9f3f021fb50337db361928b0a6d08d892285582f8",
+        "aie_kernels/aie2/bf16_exp.cc": "64d6faf05bb8299a42cec1ff950b1b1d22859bc1fbc4247b4482e8b161b076f6",
+        "aie_kernels/aie2/softmax.cc": "c1627d767fc8f3cfad9a52f7c43f5122fe145b9aedae4bc381dc4f3843fe5a4c"
+      },
+      "masks_sha256": "0d88b6360a7d557e4f2ecdfbc8fd1b4790d6602262d968154b959095fdeb5720",
+      "xclbin_sha256": "66e802a70458db363aa25de49914528b4606679c750c0ac23202e03feb2a2b44",
+      "instructions_sha256": "686ecd2705ec9b768e400131a16027e727c3faa69252fb0857c246d11665f4dd"
+    },
+    "local_h1_v193": {
+      "heads": 1,
+      "mode": "local",
+      "valid": 193,
+      "resident": "none",
+      "packets": 318,
+      "outputs": 32,
+      "placement": [
+        [
+          1024,
+          12352,
+          "inF_cons_buff_0"
+        ],
+        [
+          16384,
+          20608,
+          "outF_buff_0"
+        ],
+        [
+          32768,
+          36992,
+          "attn_state"
+        ],
+        [
+          49152,
+          52224,
+          "attn_scratch"
+        ]
+      ],
+      "code_bytes": 12048,
+      "kernel_sha256": "1eed053b87dd74ee1f166d4562dac76baa0a91b4dfe38503c2693f3f340998c3",
+      "stack_sizes": [
+        448,
+        64
+      ],
+      "stack_allowance_bytes": 1024,
+      "upstream_sha256": {
+        "aie_runtime_lib/AIE2/lut_based_ops.h": "c865cfa7d9ac4af2335c765221ed5405580fdcc83b117de9e189acf2d7d6e539",
+        "aie_runtime_lib/AIE2/lut_based_ops.cpp": "64f9adb21dbdee808a6925e9f3f021fb50337db361928b0a6d08d892285582f8",
+        "aie_kernels/aie2/bf16_exp.cc": "64d6faf05bb8299a42cec1ff950b1b1d22859bc1fbc4247b4482e8b161b076f6",
+        "aie_kernels/aie2/softmax.cc": "c1627d767fc8f3cfad9a52f7c43f5122fe145b9aedae4bc381dc4f3843fe5a4c"
+      },
+      "masks_sha256": "0d88b6360a7d557e4f2ecdfbc8fd1b4790d6602262d968154b959095fdeb5720",
+      "xclbin_sha256": "ad0a0fb5ce1cae031116eea66f317a9049eda74ce3d4d45274210b25eb1ec51a",
+      "instructions_sha256": "4c29ba58844d405e7f24065c875ccc02f39af132323da9f54ba0e4d2db47206c"
+    },
+    "local_h1_v512": {
+      "heads": 1,
+      "mode": "local",
+      "valid": 512,
+      "resident": "none",
+      "packets": 148,
+      "outputs": 32,
+      "placement": [
+        [
+          1024,
+          12352,
+          "inF_cons_buff_0"
+        ],
+        [
+          16384,
+          20608,
+          "outF_buff_0"
+        ],
+        [
+          32768,
+          36992,
+          "attn_state"
+        ],
+        [
+          49152,
+          52224,
+          "attn_scratch"
+        ]
+      ],
+      "code_bytes": 12048,
+      "kernel_sha256": "1eed053b87dd74ee1f166d4562dac76baa0a91b4dfe38503c2693f3f340998c3",
+      "stack_sizes": [
+        448,
+        64
+      ],
+      "stack_allowance_bytes": 1024,
+      "upstream_sha256": {
+        "aie_runtime_lib/AIE2/lut_based_ops.h": "c865cfa7d9ac4af2335c765221ed5405580fdcc83b117de9e189acf2d7d6e539",
+        "aie_runtime_lib/AIE2/lut_based_ops.cpp": "64f9adb21dbdee808a6925e9f3f021fb50337db361928b0a6d08d892285582f8",
+        "aie_kernels/aie2/bf16_exp.cc": "64d6faf05bb8299a42cec1ff950b1b1d22859bc1fbc4247b4482e8b161b076f6",
+        "aie_kernels/aie2/softmax.cc": "c1627d767fc8f3cfad9a52f7c43f5122fe145b9aedae4bc381dc4f3843fe5a4c"
+      },
+      "masks_sha256": "0d88b6360a7d557e4f2ecdfbc8fd1b4790d6602262d968154b959095fdeb5720",
+      "xclbin_sha256": "feef0d7aafa4566fbf78bf439e6aaa0551a7653bd883f0ccb8829f4186c9809e",
+      "instructions_sha256": "d90fb6e1c12f606154e29939a8bd29e4cd5a02b95d5665c0ab8982841046f924"
+    },
+    "resident_empty": {
+      "heads": 1,
+      "mode": "global",
+      "valid": 512,
+      "resident": "empty",
+      "packets": 1,
+      "outputs": 1,
+      "placement": [
+        [
+          1024,
+          12352,
+          "inF_cons_buff_0"
+        ],
+        [
+          16384,
+          20608,
+          "outF_buff_0"
+        ],
+        [
+          32768,
+          36992,
+          "attn_state"
+        ],
+        [
+          49152,
+          52224,
+          "attn_scratch"
+        ]
+      ],
+      "code_bytes": 1536,
+      "kernel_sha256": "1eed053b87dd74ee1f166d4562dac76baa0a91b4dfe38503c2693f3f340998c3",
+      "stack_sizes": [
+        0,
+        0
+      ],
+      "stack_allowance_bytes": 1024,
+      "upstream_sha256": {
+        "aie_runtime_lib/AIE2/lut_based_ops.h": "c865cfa7d9ac4af2335c765221ed5405580fdcc83b117de9e189acf2d7d6e539",
+        "aie_runtime_lib/AIE2/lut_based_ops.cpp": "64f9adb21dbdee808a6925e9f3f021fb50337db361928b0a6d08d892285582f8",
+        "aie_kernels/aie2/bf16_exp.cc": "64d6faf05bb8299a42cec1ff950b1b1d22859bc1fbc4247b4482e8b161b076f6",
+        "aie_kernels/aie2/softmax.cc": "c1627d767fc8f3cfad9a52f7c43f5122fe145b9aedae4bc381dc4f3843fe5a4c"
+      },
+      "masks_sha256": "0d88b6360a7d557e4f2ecdfbc8fd1b4790d6602262d968154b959095fdeb5720",
+      "xclbin_sha256": "54cb69db29fdaf1a039cd086f9c932fc2dff1cc579c1043495d9cef8f51403ef",
+      "instructions_sha256": "29a47a89fbf9ae4d149239fcfae55b09fbd2e5ef236d2888816a118e2587ab24"
+    },
+    "resident_kernel": {
+      "heads": 1,
+      "mode": "global",
+      "valid": 512,
+      "resident": "kernel",
+      "packets": 1,
+      "outputs": 1,
+      "placement": [
+        [
+          1024,
+          12352,
+          "inF_cons_buff_0"
+        ],
+        [
+          16384,
+          20608,
+          "outF_buff_0"
+        ],
+        [
+          32768,
+          36992,
+          "attn_state"
+        ],
+        [
+          49152,
+          52224,
+          "attn_scratch"
+        ]
+      ],
+      "code_bytes": 12048,
+      "kernel_sha256": "1eed053b87dd74ee1f166d4562dac76baa0a91b4dfe38503c2693f3f340998c3",
+      "stack_sizes": [
+        448,
+        64
+      ],
+      "stack_allowance_bytes": 1024,
+      "upstream_sha256": {
+        "aie_runtime_lib/AIE2/lut_based_ops.h": "c865cfa7d9ac4af2335c765221ed5405580fdcc83b117de9e189acf2d7d6e539",
+        "aie_runtime_lib/AIE2/lut_based_ops.cpp": "64f9adb21dbdee808a6925e9f3f021fb50337db361928b0a6d08d892285582f8",
+        "aie_kernels/aie2/bf16_exp.cc": "64d6faf05bb8299a42cec1ff950b1b1d22859bc1fbc4247b4482e8b161b076f6",
+        "aie_kernels/aie2/softmax.cc": "c1627d767fc8f3cfad9a52f7c43f5122fe145b9aedae4bc381dc4f3843fe5a4c"
+      },
+      "masks_sha256": "0d88b6360a7d557e4f2ecdfbc8fd1b4790d6602262d968154b959095fdeb5720",
+      "xclbin_sha256": "90c24f0661af0a93d974695234b49ebfc3e54b7eddf7497ce9cbc87402e0c52b",
+      "instructions_sha256": "29a47a89fbf9ae4d149239fcfae55b09fbd2e5ef236d2888816a118e2587ab24"
+    }
+  }
+}
+
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [5656, 5904, 5924, 8076, 16364], "foreign_pids": []}
+SUITE_BEGIN global_h16_v512
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+preregistration_sha256 27f8faeb721581019d7b37c90218430e9a3248fb4c49cf99e4a556bd78eee376 build global_h16_v512
+HOST_TIMELINE {"elapsed_seconds": 2.391, "tree_rss_bytes": 472944640, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 4.688, "tree_rss_bytes": 472944640, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 154 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |5656                |111        |1           |0           |0    |Normal   |\n      |python.exe          |Active     |1           |0           |     |N/A      |\n      |154 MB              |64 KB      |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [5656], "owned_pids": [5656, 5904, 5924, 8076, 16364, 16872], "foreign_pids": []}
+{"seed": 11, "kind": "random", "poison": "0x7fc12345", "ok": true, "max_abs": 0.0019767858649616388, "relative_l2": 0.0019474327492875732, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 286.13350000523496, "write_sync_ms": 4.16630000108853, "dispatch_ms": 4420.066899998346, "read_sync_ms": 0.8997000113595277, "verdict": "PASS"}
+HOST_TIMELINE {"elapsed_seconds": 7.0, "tree_rss_bytes": 479199232, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 9.297, "tree_rss_bytes": 479199232, "foreign_peers": []}
+{"seed": 11, "kind": "random", "poison": "0x7fc54321", "ok": true, "max_abs": 0.0019767858649616388, "relative_l2": 0.0019474327492875732, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 296.5737999911653, "write_sync_ms": 3.878699993947521, "dispatch_ms": 4429.263199999696, "read_sync_ms": 0.7451999990735203, "verdict": "PASS"}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 154 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |5656                |111        |2           |0           |0    |Normal   |\n      |python.exe          |Active     |2           |0           |     |N/A      |\n      |154 MB              |64 KB      |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [5656], "owned_pids": [5656, 5904, 5924, 8076, 16364, 16872], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 11.594, "tree_rss_bytes": 477990912, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 13.86, "tree_rss_bytes": 477990912, "foreign_peers": []}
+{"seed": 11, "kind": "uniform", "poison": "0x7fc12345", "ok": true, "max_abs": 4.6566128730773926e-09, "relative_l2": 1.3838343170784197e-08, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 288.6982000054559, "write_sync_ms": 3.9247999957296997, "dispatch_ms": 3500.4734999965876, "read_sync_ms": 0.782300005084835, "verdict": "PASS"}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 154 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |5656                |111        |4           |0           |0    |Normal   |\n      |python.exe          |Active     |3           |0           |     |N/A      |\n      |154 MB              |64 KB      |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [5656], "owned_pids": [5656, 5904, 5924, 8076, 16364, 16872], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 16.204, "tree_rss_bytes": 479834112, "foreign_peers": []}
+{"seed": 11, "kind": "uniform", "poison": "0x7fc54321", "ok": true, "max_abs": 4.6566128730773926e-09, "relative_l2": 1.3838343170784197e-08, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 289.9193000048399, "write_sync_ms": 4.331500007538125, "dispatch_ms": 3507.945200006361, "read_sync_ms": 0.8031000033952296, "verdict": "PASS"}
+HOST_TIMELINE {"elapsed_seconds": 18.516, "tree_rss_bytes": 477548544, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 154 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |5656                |111        |5           |0           |0    |Normal   |\n      |python.exe          |Active     |4           |0           |     |N/A      |\n      |154 MB              |64 KB      |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [5656], "owned_pids": [5656, 5904, 5924, 8076, 16364, 16872], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 20.813, "tree_rss_bytes": 477548544, "foreign_peers": []}
+{"seed": 11, "kind": "zero", "poison": "0x7fc12345", "ok": true, "max_abs": 0.0, "relative_l2": 0.0, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 297.60580000584014, "write_sync_ms": 3.9806999993743375, "dispatch_ms": 3369.6498000063, "read_sync_ms": 0.782300005084835, "verdict": "PASS"}
+HOST_TIMELINE {"elapsed_seconds": 23.141, "tree_rss_bytes": 480129024, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 25.5, "tree_rss_bytes": 480129024, "foreign_peers": []}
+{"seed": 11, "kind": "zero", "poison": "0x7fc54321", "ok": true, "max_abs": 0.0, "relative_l2": 0.0, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 288.5783999954583, "write_sync_ms": 3.8265000039245933, "dispatch_ms": 3370.488300002762, "read_sync_ms": 0.8120999991660938, "verdict": "PASS"}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 154 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |5656                |111        |6           |0           |0    |Normal   |\n      |python.exe          |Active     |6           |0           |     |N/A      |\n      |154 MB              |64 KB      |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [5656], "owned_pids": [5656, 5904, 5924, 8076, 16364, 16872], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 27.86, "tree_rss_bytes": 478904320, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 30.204, "tree_rss_bytes": 478859264, "foreign_peers": []}
+{"seed": 11, "kind": "peaked", "poison": "0x7fc12345", "ok": true, "max_abs": 0.007182097106287505, "relative_l2": 0.00042768204394549896, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 296.86519999813754, "write_sync_ms": 3.8477000052807853, "dispatch_ms": 4374.933099999907, "read_sync_ms": 0.8338000043295324, "verdict": "PASS"}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 154 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |5656                |111        |8           |0           |0    |Normal   |\n      |python.exe          |Active     |7           |0           |     |N/A      |\n      |154 MB              |64 KB      |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [5656], "owned_pids": [5656, 5904, 5924, 8076, 16364, 16872], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 32.516, "tree_rss_bytes": 480460800, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 34.782, "tree_rss_bytes": 480460800, "foreign_peers": []}
+{"seed": 11, "kind": "peaked", "poison": "0x7fc54321", "ok": true, "max_abs": 0.007182097106287505, "relative_l2": 0.00042768204394549896, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 291.62150000047404, "write_sync_ms": 4.019300002255477, "dispatch_ms": 4362.286100003985, "read_sync_ms": 0.7541999948443845, "verdict": "PASS"}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 154 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |5656                |111        |9           |0           |0    |Normal   |\n      |python.exe          |Active     |8           |0           |     |N/A      |\n      |154 MB              |64 KB      |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [5656], "owned_pids": [5656, 5904, 5924, 8076, 16364, 16872], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 37.094, "tree_rss_bytes": 478662656, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 39.375, "tree_rss_bytes": 478662656, "foreign_peers": []}
+{"seed": 29, "kind": "random", "poison": "0x7fc12345", "ok": true, "max_abs": 0.001263591067363401, "relative_l2": 0.00198240614391867, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 284.70000000379514, "write_sync_ms": 3.8502999959746376, "dispatch_ms": 4444.933100006892, "read_sync_ms": 0.8315000013681129, "verdict": "PASS"}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 154 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |5656                |111        |10          |0           |0    |Normal   |\n      |python.exe          |Active     |9           |0           |     |N/A      |\n      |154 MB              |64 KB      |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [5656], "owned_pids": [5656, 5904, 5924, 8076, 16364, 16872], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 41.657, "tree_rss_bytes": 480792576, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 43.907, "tree_rss_bytes": 480792576, "foreign_peers": []}
+{"seed": 29, "kind": "random", "poison": "0x7fc54321", "ok": true, "max_abs": 0.001263591067363401, "relative_l2": 0.00198240614391867, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 285.84919999411795, "write_sync_ms": 4.207999998470768, "dispatch_ms": 4443.765399992117, "read_sync_ms": 0.7331999950110912, "verdict": "PASS"}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 154 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |5656                |111        |11          |0           |0    |Normal   |\n      |python.exe          |Active     |10          |0           |     |N/A      |\n      |154 MB              |64 KB      |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [5656], "owned_pids": [5656, 5904, 5924, 8076, 16364, 16872], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 46.235, "tree_rss_bytes": 478617600, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 48.5, "tree_rss_bytes": 478617600, "foreign_peers": []}
+{"seed": 29, "kind": "uniform", "poison": "0x7fc12345", "ok": true, "max_abs": 7.450580596923828e-09, "relative_l2": 1.4651854874066374e-08, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 288.2141000009142, "write_sync_ms": 3.94179999420885, "dispatch_ms": 3468.872099998407, "read_sync_ms": 0.6712000031257048, "verdict": "PASS"}
+HOST_TIMELINE {"elapsed_seconds": 50.891, "tree_rss_bytes": 480772096, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 154 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |5656                |111        |12          |0           |0    |Normal   |\n      |python.exe          |Active     |11          |0           |     |N/A      |\n      |154 MB              |64 KB      |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [5656], "owned_pids": [5656, 5904, 5924, 8076, 16364, 16872], "foreign_pids": []}
+{"seed": 29, "kind": "uniform", "poison": "0x7fc54321", "ok": true, "max_abs": 7.450580596923828e-09, "relative_l2": 1.4651854874066374e-08, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 401.70580000267364, "write_sync_ms": 3.9973999955691397, "dispatch_ms": 3482.0166999998037, "read_sync_ms": 0.6915999983903021, "verdict": "PASS"}
+HOST_TIMELINE {"elapsed_seconds": 53.141, "tree_rss_bytes": 478470144, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 55.422, "tree_rss_bytes": 478470144, "foreign_peers": []}
+{"seed": 29, "kind": "zero", "poison": "0x7fc12345", "ok": true, "max_abs": 0.0, "relative_l2": 0.0, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 293.7057000090135, "write_sync_ms": 4.14400000590831, "dispatch_ms": 3374.6511000063037, "read_sync_ms": 0.8715000003576279, "verdict": "PASS"}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 154 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |5656                |111        |13          |0           |0    |Normal   |\n      |python.exe          |Active     |13          |0           |     |N/A      |\n      |154 MB              |64 KB      |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [5656], "owned_pids": [5656, 5904, 5924, 8076, 16364, 16872], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 57.766, "tree_rss_bytes": 480829440, "foreign_peers": []}
+{"seed": 29, "kind": "zero", "poison": "0x7fc54321", "ok": true, "max_abs": 0.0, "relative_l2": 0.0, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 293.30689999915194, "write_sync_ms": 4.0539000037824735, "dispatch_ms": 3385.0569000060204, "read_sync_ms": 0.8123999868985265, "verdict": "PASS"}
+HOST_TIMELINE {"elapsed_seconds": 60.11, "tree_rss_bytes": 493547520, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 154 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |5656                |111        |15          |0           |0    |Normal   |\n      |python.exe          |Active     |14          |0           |     |N/A      |\n      |154 MB              |64 KB      |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [5656], "owned_pids": [5656, 5904, 5924, 8076, 16364, 16872], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 62.5, "tree_rss_bytes": 479014912, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 64.75, "tree_rss_bytes": 479014912, "foreign_peers": []}
+{"seed": 29, "kind": "peaked", "poison": "0x7fc12345", "ok": true, "max_abs": 0.007760124378043631, "relative_l2": 0.0004354879110976962, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 393.71879999816883, "write_sync_ms": 3.935399989131838, "dispatch_ms": 4376.73440000799, "read_sync_ms": 0.636199998552911, "verdict": "PASS"}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 154 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |5656                |111        |16          |0           |0    |Normal   |\n      |python.exe          |Active     |15          |0           |     |N/A      |\n      |154 MB              |64 KB      |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [5656], "owned_pids": [5656, 5904, 5924, 8076, 16364, 16872], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 67.141, "tree_rss_bytes": 480600064, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 69.438, "tree_rss_bytes": 480600064, "foreign_peers": []}
+{"seed": 29, "kind": "peaked", "poison": "0x7fc54321", "ok": true, "max_abs": 0.007760124378043631, "relative_l2": 0.0004354879110976962, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 346.247499997844, "write_sync_ms": 4.589700009091757, "dispatch_ms": 4379.702100006398, "read_sync_ms": 0.9424000018043444, "verdict": "PASS"}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 154 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |5656                |111        |17          |0           |0    |Normal   |\n      |python.exe          |Active     |16          |0           |     |N/A      |\n      |154 MB              |64 KB      |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [5656], "owned_pids": [5656, 5904, 5924, 8076, 16364, 16872], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 71.719, "tree_rss_bytes": 478728192, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 74.032, "tree_rss_bytes": 478728192, "foreign_peers": []}
+{"seed": 47, "kind": "random", "poison": "0x7fc12345", "ok": true, "max_abs": 0.001477578771544974, "relative_l2": 0.001959879863608042, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 295.8479999942938, "write_sync_ms": 4.096100004971959, "dispatch_ms": 4444.23559999268, "read_sync_ms": 0.5853000038769096, "verdict": "PASS"}
+HOST_TIMELINE {"elapsed_seconds": 76.344, "tree_rss_bytes": 480854016, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 154 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |5656                |111        |18          |0           |0    |Normal   |\n      |python.exe          |Active     |17          |0           |     |N/A      |\n      |154 MB              |64 KB      |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [5656], "owned_pids": [5656, 5904, 5924, 8076, 16364, 16872], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 78.61, "tree_rss_bytes": 480854016, "foreign_peers": []}
+{"seed": 47, "kind": "random", "poison": "0x7fc54321", "ok": true, "max_abs": 0.001477578771544974, "relative_l2": 0.001959879863608042, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 289.5435999962501, "write_sync_ms": 3.9770000003045425, "dispatch_ms": 4440.693800002919, "read_sync_ms": 0.8520999981556088, "verdict": "PASS"}
+HOST_TIMELINE {"elapsed_seconds": 80.954, "tree_rss_bytes": 478797824, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 154 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |5656                |111        |19          |0           |0    |Normal   |\n      |python.exe          |Active     |18          |0           |     |N/A      |\n      |154 MB              |64 KB      |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [5656], "owned_pids": [5656, 5904, 5924, 8076, 16364, 16872], "foreign_pids": []}
+{"seed": 47, "kind": "uniform", "poison": "0x7fc12345", "ok": true, "max_abs": 4.6566128730773926e-09, "relative_l2": 1.3749979865662281e-08, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 291.52780000003986, "write_sync_ms": 4.042699991259724, "dispatch_ms": 3495.4010999936145, "read_sync_ms": 1.8523999897297472, "verdict": "PASS"}
+HOST_TIMELINE {"elapsed_seconds": 83.204, "tree_rss_bytes": 482156544, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 85.579, "tree_rss_bytes": 481288192, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 154 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |5656                |111        |20          |0           |0    |Normal   |\n      |python.exe          |Active     |19          |0           |     |N/A      |\n      |154 MB              |64 KB      |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [5656], "owned_pids": [5656, 5904, 5924, 8076, 16364, 16872], "foreign_pids": []}
+{"seed": 47, "kind": "uniform", "poison": "0x7fc54321", "ok": true, "max_abs": 4.6566128730773926e-09, "relative_l2": 1.3749979865662281e-08, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 395.585399994161, "write_sync_ms": 3.8955999916652218, "dispatch_ms": 3506.1843000003137, "read_sync_ms": 0.794000006862916, "verdict": "PASS"}
+HOST_TIMELINE {"elapsed_seconds": 87.844, "tree_rss_bytes": 479223808, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 90.11, "tree_rss_bytes": 479223808, "foreign_peers": []}
+{"seed": 47, "kind": "zero", "poison": "0x7fc12345", "ok": true, "max_abs": 0.0, "relative_l2": 0.0, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 287.8636999957962, "write_sync_ms": 3.8215999957174063, "dispatch_ms": 3369.341199999326, "read_sync_ms": 0.8120999991660938, "verdict": "PASS"}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 154 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |5656                |111        |22          |0           |0    |Normal   |\n      |python.exe          |Active     |21          |0           |     |N/A      |\n      |154 MB              |64 KB      |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [5656], "owned_pids": [5656, 5904, 5924, 8076, 16364, 16872], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 92.36, "tree_rss_bytes": 480710656, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 94.625, "tree_rss_bytes": 487063552, "foreign_peers": []}
+{"seed": 47, "kind": "zero", "poison": "0x7fc54321", "ok": true, "max_abs": 0.0, "relative_l2": 0.0, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 289.72470000735484, "write_sync_ms": 4.655400000046939, "dispatch_ms": 3379.0484000055585, "read_sync_ms": 0.7781000022077933, "verdict": "PASS"}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 154 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |5656                |111        |23          |0           |0    |Normal   |\n      |python.exe          |Active     |22          |0           |     |N/A      |\n      |154 MB              |64 KB      |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [5656], "owned_pids": [5656, 5904, 5924, 8076, 16364, 16872], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 97.079, "tree_rss_bytes": 479461376, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 99.375, "tree_rss_bytes": 479461376, "foreign_peers": []}
+{"seed": 47, "kind": "peaked", "poison": "0x7fc12345", "ok": true, "max_abs": 0.00746550039968813, "relative_l2": 0.000431375618182858, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 363.50160000438336, "write_sync_ms": 3.9970999932847917, "dispatch_ms": 4376.839699994889, "read_sync_ms": 0.7942000083858147, "verdict": "PASS"}
+HOST_TIMELINE {"elapsed_seconds": 101.735, "tree_rss_bytes": 481280000, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 154 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |5656                |111        |24          |0           |0    |Normal   |\n      |python.exe          |Active     |23          |0           |     |N/A      |\n      |154 MB              |64 KB      |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [5656], "owned_pids": [5656, 5904, 5924, 8076, 16364, 16872], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 103.969, "tree_rss_bytes": 481280000, "foreign_peers": []}
+{"seed": 47, "kind": "peaked", "poison": "0x7fc54321", "ok": true, "max_abs": 0.00746550039968813, "relative_l2": 0.000431375618182858, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 329.9917000113055, "write_sync_ms": 3.850099994451739, "dispatch_ms": 4371.133500011638, "read_sync_ms": 0.7972000021254644, "verdict": "PASS"}
+HOST_TIMELINE {"elapsed_seconds": 106.219, "tree_rss_bytes": 482422784, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 154 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |5656                |111        |25          |0           |0    |Normal   |\n      |python.exe          |Active     |24          |0           |     |N/A      |\n      |154 MB              |64 KB      |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [5656], "owned_pids": [5656, 5904, 5924, 8076, 16364, 16872], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 108.454, "tree_rss_bytes": 482422784, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 110.782, "tree_rss_bytes": 482422784, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 154 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |5656                |111        |26          |0           |0    |Normal   |\n      |python.exe          |Active     |25          |0           |     |N/A      |\n      |154 MB              |64 KB      |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [5656], "owned_pids": [5656, 5904, 5924, 8076, 16364, 16872], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 113.079, "tree_rss_bytes": 482422784, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 115.36, "tree_rss_bytes": 482422784, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 154 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |5656                |111        |28          |0           |0    |Normal   |\n      |python.exe          |Active     |27          |0           |     |N/A      |\n      |154 MB              |64 KB      |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [5656], "owned_pids": [5656, 5904, 5924, 8076, 16364, 16872], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 117.594, "tree_rss_bytes": 482422784, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 119.891, "tree_rss_bytes": 482422784, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 122.157, "tree_rss_bytes": 482422784, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 154 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |5656                |111        |29          |0           |0    |Normal   |\n      |python.exe          |Active     |28          |0           |     |N/A      |\n      |154 MB              |64 KB      |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [5656], "owned_pids": [5656, 5904, 5924, 8076, 16364, 16872], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 124.407, "tree_rss_bytes": 482414592, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 126.704, "tree_rss_bytes": 482414592, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 154 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |5656                |111        |30          |0           |0    |Normal   |\n      |python.exe          |Active     |29          |0           |     |N/A      |\n      |154 MB              |64 KB      |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [5656], "owned_pids": [5656, 5904, 5924, 8076, 16364, 16872], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 129.0, "tree_rss_bytes": 482414592, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 131.25, "tree_rss_bytes": 482414592, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 154 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |5656                |111        |31          |0           |0    |Normal   |\n      |python.exe          |Active     |30          |0           |     |N/A      |\n      |154 MB              |64 KB      |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [5656], "owned_pids": [5656, 5904, 5924, 8076, 16364, 16872], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 133.547, "tree_rss_bytes": 482414592, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 135.797, "tree_rss_bytes": 482369536, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 154 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |5656                |111        |32          |0           |0    |Normal   |\n      |python.exe          |Active     |31          |0           |     |N/A      |\n      |154 MB              |64 KB      |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [5656], "owned_pids": [5656, 5904, 5924, 8076, 16364, 16872], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 138.141, "tree_rss_bytes": 482369536, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 140.407, "tree_rss_bytes": 482369536, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 154 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |5656                |111        |33          |0           |0    |Normal   |\n      |python.exe          |Active     |32          |0           |     |N/A      |\n      |154 MB              |64 KB      |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [5656], "owned_pids": [5656, 5904, 5924, 8076, 16364, 16872], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 142.766, "tree_rss_bytes": 482369536, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 145.032, "tree_rss_bytes": 482369536, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 147.329, "tree_rss_bytes": 482369536, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 154 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |5656                |111        |34          |0           |0    |Normal   |\n      |python.exe          |Active     |33          |0           |     |N/A      |\n      |154 MB              |64 KB      |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [5656], "owned_pids": [5656, 5904, 5924, 8076, 16364, 16872], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 149.657, "tree_rss_bytes": 482369536, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 151.969, "tree_rss_bytes": 482369536, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 154 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |5656                |111        |36          |0           |0    |Normal   |\n      |python.exe          |Active     |35          |0           |     |N/A      |\n      |154 MB              |64 KB      |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [5656], "owned_pids": [5656, 5904, 5924, 8076, 16364, 16872], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 154.313, "tree_rss_bytes": 482369536, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 156.594, "tree_rss_bytes": 482369536, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 154 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |5656                |111        |37          |0           |0    |Normal   |\n      |python.exe          |Active     |36          |0           |     |N/A      |\n      |154 MB              |64 KB      |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [5656], "owned_pids": [5656, 5904, 5924, 8076, 16364, 16872], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 158.829, "tree_rss_bytes": 482369536, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 161.094, "tree_rss_bytes": 484986880, "foreign_peers": []}
+{"dispatch_ms": [4369.935199996689, 4376.347199999145, 4373.395600006916, 4379.756700000144, 4372.59329999506, 4374.45000000298, 4371.494100007112, 4378.231399998185, 4378.2957999937935, 4364.830399994389], "cpu_ort_8threads_ms": [3.516600001603365, 3.2330999965779483, 3.201300001819618, 3.2146000012289733, 3.2002999942051247, 3.190599993104115, 3.2906000124057755, 3.188699993188493, 3.195500001311302, 3.175100006046705], "cpu_scope": "attention only, no RoPE; dense masked local product", "timing_scope": "one core, includes streaming/dispatch; excludes packing and BO copies"}
+correctness PASS
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+SUITE_BEGIN global_h1_v0
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+preregistration_sha256 27f8faeb721581019d7b37c90218430e9a3248fb4c49cf99e4a556bd78eee376 build global_h1_v0
+{"seed": 11, "kind": "random", "poison": "0x7fc12345", "ok": true, "max_abs": 3.725290298461914e-09, "relative_l2": 1.2102409836954444e-08, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 21.112500005983748, "write_sync_ms": 0.331900009769015, "dispatch_ms": 219.3641000048956, "read_sync_ms": 0.0560000044060871, "verdict": "PASS"}
+{"seed": 11, "kind": "random", "poison": "0x7fc54321", "ok": true, "max_abs": 3.725290298461914e-09, "relative_l2": 1.2102409836954444e-08, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 17.82449999882374, "write_sync_ms": 0.35879999632015824, "dispatch_ms": 220.44999999343418, "read_sync_ms": 0.07009999535512179, "verdict": "PASS"}
+{"seed": 11, "kind": "uniform", "poison": "0x7fc12345", "ok": true, "max_abs": 3.725290298461914e-09, "relative_l2": 1.2102409836954444e-08, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 17.379600001731887, "write_sync_ms": 0.3164000081596896, "dispatch_ms": 220.25579999899492, "read_sync_ms": 0.0754999928176403, "verdict": "PASS"}
+{"seed": 11, "kind": "uniform", "poison": "0x7fc54321", "ok": true, "max_abs": 3.725290298461914e-09, "relative_l2": 1.2102409836954444e-08, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 17.845599999418482, "write_sync_ms": 0.3419999993639067, "dispatch_ms": 220.185300000594, "read_sync_ms": 0.06659999780822545, "verdict": "PASS"}
+{"seed": 11, "kind": "zero", "poison": "0x7fc12345", "ok": true, "max_abs": 0.0, "relative_l2": 0.0, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 17.338899997412227, "write_sync_ms": 0.3536000003805384, "dispatch_ms": 209.59539999603294, "read_sync_ms": 0.06590000702999532, "verdict": "PASS"}
+{"seed": 11, "kind": "zero", "poison": "0x7fc54321", "ok": true, "max_abs": 0.0, "relative_l2": 0.0, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 18.60090000263881, "write_sync_ms": 0.3612000000430271, "dispatch_ms": 208.36760000383947, "read_sync_ms": 0.06819999543949962, "verdict": "PASS"}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 69 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |5656                |112        |7           |0           |0    |Normal   |\n      |python.exe          |Active     |6           |0           |     |N/A      |\n      |69 MB               |64 KB      |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [5656], "owned_pids": [5656, 5904, 5924, 8076, 16364, 16872], "foreign_pids": []}
+{"seed": 11, "kind": "peaked", "poison": "0x7fc12345", "ok": true, "max_abs": 3.725290298461914e-09, "relative_l2": 1.2102409836954444e-08, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 18.85420001053717, "write_sync_ms": 0.3361999988555908, "dispatch_ms": 218.1981000030646, "read_sync_ms": 0.06540000322274864, "verdict": "PASS"}
+{"seed": 11, "kind": "peaked", "poison": "0x7fc54321", "ok": true, "max_abs": 3.725290298461914e-09, "relative_l2": 1.2102409836954444e-08, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 18.28350000141654, "write_sync_ms": 0.6118000019341707, "dispatch_ms": 220.68659999058582, "read_sync_ms": 0.07019999611657113, "verdict": "PASS"}
+HOST_TIMELINE {"elapsed_seconds": 163.391, "tree_rss_bytes": 359776256, "foreign_peers": []}
+{"seed": 29, "kind": "random", "poison": "0x7fc12345", "ok": true, "max_abs": 3.725290298461914e-09, "relative_l2": 1.4263384418765406e-08, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 17.296399993938394, "write_sync_ms": 0.3316999936942011, "dispatch_ms": 218.04609999526292, "read_sync_ms": 0.06890000076964498, "verdict": "PASS"}
+{"seed": 29, "kind": "random", "poison": "0x7fc54321", "ok": true, "max_abs": 3.725290298461914e-09, "relative_l2": 1.4263384418765406e-08, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 17.726799997035414, "write_sync_ms": 0.3400999994482845, "dispatch_ms": 216.68579999823123, "read_sync_ms": 0.07229999755509198, "verdict": "PASS"}
+{"seed": 29, "kind": "uniform", "poison": "0x7fc12345", "ok": true, "max_abs": 3.725290298461914e-09, "relative_l2": 1.4263384418765406e-08, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 17.29850000992883, "write_sync_ms": 0.3643000090960413, "dispatch_ms": 221.07090000645258, "read_sync_ms": 0.06500000017695129, "verdict": "PASS"}
+{"seed": 29, "kind": "uniform", "poison": "0x7fc54321", "ok": true, "max_abs": 3.725290298461914e-09, "relative_l2": 1.4263384418765406e-08, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 18.50679999915883, "write_sync_ms": 0.34300000697840005, "dispatch_ms": 220.66380000615027, "read_sync_ms": 0.06710000161547214, "verdict": "PASS"}
+{"seed": 29, "kind": "zero", "poison": "0x7fc12345", "ok": true, "max_abs": 0.0, "relative_l2": 0.0, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 17.393699992680922, "write_sync_ms": 0.34899999445769936, "dispatch_ms": 212.62859999842476, "read_sync_ms": 0.06690000009257346, "verdict": "PASS"}
+{"seed": 29, "kind": "zero", "poison": "0x7fc54321", "ok": true, "max_abs": 0.0, "relative_l2": 0.0, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 17.152400003396906, "write_sync_ms": 0.3630999999586493, "dispatch_ms": 212.19760000531096, "read_sync_ms": 0.06220000796020031, "verdict": "PASS"}
+{"seed": 29, "kind": "peaked", "poison": "0x7fc12345", "ok": true, "max_abs": 3.725290298461914e-09, "relative_l2": 1.4263384418765406e-08, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 17.299700004514307, "write_sync_ms": 0.4248000041116029, "dispatch_ms": 220.1299000007566, "read_sync_ms": 0.06450001092161983, "verdict": "PASS"}
+{"seed": 29, "kind": "peaked", "poison": "0x7fc54321", "ok": true, "max_abs": 3.725290298461914e-09, "relative_l2": 1.4263384418765406e-08, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 17.471400002250448, "write_sync_ms": 0.33830000029411167, "dispatch_ms": 219.71799999300856, "read_sync_ms": 0.06629999552387744, "verdict": "PASS"}
+{"seed": 47, "kind": "random", "poison": "0x7fc12345", "ok": true, "max_abs": 1.862645149230957e-09, "relative_l2": 6.0774128958921265e-09, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 17.320400002063252, "write_sync_ms": 0.34810000215657055, "dispatch_ms": 219.81690000393428, "read_sync_ms": 0.0670000008540228, "verdict": "PASS"}
+HOST_TIMELINE {"elapsed_seconds": 165.672, "tree_rss_bytes": 359305216, "foreign_peers": []}
+{"seed": 47, "kind": "random", "poison": "0x7fc54321", "ok": true, "max_abs": 1.862645149230957e-09, "relative_l2": 6.0774128958921265e-09, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 17.922699989867397, "write_sync_ms": 0.34059998870361596, "dispatch_ms": 219.74369999952614, "read_sync_ms": 0.06010000652167946, "verdict": "PASS"}
+{"seed": 47, "kind": "uniform", "poison": "0x7fc12345", "ok": true, "max_abs": 1.862645149230957e-09, "relative_l2": 6.0774128958921265e-09, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 17.770100006600842, "write_sync_ms": 0.3502000035950914, "dispatch_ms": 216.09880001051351, "read_sync_ms": 0.05849999433849007, "verdict": "PASS"}
+{"seed": 47, "kind": "uniform", "poison": "0x7fc54321", "ok": true, "max_abs": 1.862645149230957e-09, "relative_l2": 6.0774128958921265e-09, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 18.11390000511892, "write_sync_ms": 0.3449000068940222, "dispatch_ms": 218.98099999816623, "read_sync_ms": 0.06890000076964498, "verdict": "PASS"}
+{"seed": 47, "kind": "zero", "poison": "0x7fc12345", "ok": true, "max_abs": 0.0, "relative_l2": 0.0, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 17.353300005197525, "write_sync_ms": 0.33379999513272196, "dispatch_ms": 209.7481999953743, "read_sync_ms": 0.062399994931183755, "verdict": "PASS"}
+{"seed": 47, "kind": "zero", "poison": "0x7fc54321", "ok": true, "max_abs": 0.0, "relative_l2": 0.0, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 18.43419999931939, "write_sync_ms": 0.35099999513477087, "dispatch_ms": 209.23300000140443, "read_sync_ms": 0.05570000212173909, "verdict": "PASS"}
+{"seed": 47, "kind": "peaked", "poison": "0x7fc12345", "ok": true, "max_abs": 1.862645149230957e-09, "relative_l2": 6.0774128958921265e-09, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 16.823300000396557, "write_sync_ms": 0.375000003259629, "dispatch_ms": 220.74249999423046, "read_sync_ms": 0.05610000516753644, "verdict": "PASS"}
+{"seed": 47, "kind": "peaked", "poison": "0x7fc54321", "ok": true, "max_abs": 1.862645149230957e-09, "relative_l2": 6.0774128958921265e-09, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 18.42810001107864, "write_sync_ms": 0.34050000249408185, "dispatch_ms": 220.54390000994317, "read_sync_ms": 0.06590000702999532, "verdict": "PASS"}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 69 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |5656                |112        |28          |0           |0    |Normal   |\n      |python.exe          |Active     |27          |0           |     |N/A      |\n      |69 MB               |64 KB      |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [5656], "owned_pids": [5656, 5904, 5924, 8076, 16364, 16872], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 168.094, "tree_rss_bytes": 203300864, "foreign_peers": []}
+{"dispatch_ms": [218.5956999892369, 216.68700000736862, 215.93450001091696, 215.942199996789, 219.48499999416526, 220.77229998831172, 219.70439999131486, 220.76800001377705, 219.57889999612235, 220.48289999656845], "cpu_ort_8threads_ms": [0.30350001179613173, 0.16850000247359276, 0.15740000526420772, 0.17780000052880496, 0.16139999206643552, 0.16260000120382756, 0.15999999595806003, 0.15870000061113387, 0.15439999697264284, 0.15579999308101833], "cpu_scope": "attention only, no RoPE; dense masked local product", "timing_scope": "one core, includes streaming/dispatch; excludes packing and BO copies"}
+correctness PASS
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+SUITE_BEGIN global_h1_v1
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+preregistration_sha256 27f8faeb721581019d7b37c90218430e9a3248fb4c49cf99e4a556bd78eee376 build global_h1_v1
+{"seed": 11, "kind": "random", "poison": "0x7fc12345", "ok": true, "max_abs": 0.0, "relative_l2": 0.0, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 1.853800000390038, "write_sync_ms": 0.05640000745188445, "dispatch_ms": 7.613399997353554, "read_sync_ms": 0.0560000044060871, "verdict": "PASS"}
+{"seed": 11, "kind": "random", "poison": "0x7fc54321", "ok": true, "max_abs": 0.0, "relative_l2": 0.0, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 2.73429999651853, "write_sync_ms": 0.13110000872984529, "dispatch_ms": 7.234700009576045, "read_sync_ms": 0.05629999213851988, "verdict": "PASS"}
+{"seed": 11, "kind": "uniform", "poison": "0x7fc12345", "ok": true, "max_abs": 0.0, "relative_l2": 0.0, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 1.8244999955641106, "write_sync_ms": 0.06150000263005495, "dispatch_ms": 6.552000006195158, "read_sync_ms": 0.033500007702969015, "verdict": "PASS"}
+{"seed": 11, "kind": "uniform", "poison": "0x7fc54321", "ok": true, "max_abs": 0.0, "relative_l2": 0.0, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 1.8010999920079485, "write_sync_ms": 0.04980000085197389, "dispatch_ms": 6.625699999858625, "read_sync_ms": 0.04100000660400838, "verdict": "PASS"}
+{"seed": 11, "kind": "zero", "poison": "0x7fc12345", "ok": true, "max_abs": 0.0, "relative_l2": 0.0, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 1.8500000005587935, "write_sync_ms": 0.05990000499878079, "dispatch_ms": 5.984200004604645, "read_sync_ms": 0.03340000694151968, "verdict": "PASS"}
+{"seed": 11, "kind": "zero", "poison": "0x7fc54321", "ok": true, "max_abs": 0.0, "relative_l2": 0.0, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 2.0271000103093684, "write_sync_ms": 0.050699993153102696, "dispatch_ms": 6.023299996741116, "read_sync_ms": 0.022799998987466097, "verdict": "PASS"}
+{"seed": 11, "kind": "peaked", "poison": "0x7fc12345", "ok": true, "max_abs": 0.0, "relative_l2": 0.0, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 1.913800006150268, "write_sync_ms": 0.07150000601541251, "dispatch_ms": 7.457600004272535, "read_sync_ms": 0.06080001185182482, "verdict": "PASS"}
+{"seed": 11, "kind": "peaked", "poison": "0x7fc54321", "ok": true, "max_abs": 0.0, "relative_l2": 0.0, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 1.8867000035243109, "write_sync_ms": 0.048999994760379195, "dispatch_ms": 7.059399998979643, "read_sync_ms": 0.04290000651963055, "verdict": "PASS"}
+{"seed": 29, "kind": "random", "poison": "0x7fc12345", "ok": true, "max_abs": 0.0, "relative_l2": 0.0, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 2.2489999973913655, "write_sync_ms": 0.06080001185182482, "dispatch_ms": 7.741200010059401, "read_sync_ms": 0.034900003811344504, "verdict": "PASS"}
+{"seed": 29, "kind": "random", "poison": "0x7fc54321", "ok": true, "max_abs": 0.0, "relative_l2": 0.0, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 2.2686000011162832, "write_sync_ms": 0.05129999772179872, "dispatch_ms": 7.064699995680712, "read_sync_ms": 0.05709999823011458, "verdict": "PASS"}
+{"seed": 29, "kind": "uniform", "poison": "0x7fc12345", "ok": true, "max_abs": 0.0, "relative_l2": 0.0, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 1.8315000052098185, "write_sync_ms": 0.0594000011915341, "dispatch_ms": 6.693399991490878, "read_sync_ms": 0.033800009987317026, "verdict": "PASS"}
+{"seed": 29, "kind": "uniform", "poison": "0x7fc54321", "ok": true, "max_abs": 0.0, "relative_l2": 0.0, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 1.9799000001512468, "write_sync_ms": 0.049300011596642435, "dispatch_ms": 6.531199993332848, "read_sync_ms": 0.03650000144261867, "verdict": "PASS"}
+{"seed": 29, "kind": "zero", "poison": "0x7fc12345", "ok": true, "max_abs": 0.0, "relative_l2": 0.0, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 1.7985000013140962, "write_sync_ms": 0.05780000356025994, "dispatch_ms": 6.02719999733381, "read_sync_ms": 0.027399990358389914, "verdict": "PASS"}
+{"seed": 29, "kind": "zero", "poison": "0x7fc54321", "ok": true, "max_abs": 0.0, "relative_l2": 0.0, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 2.1598000021185726, "write_sync_ms": 0.0518000015290454, "dispatch_ms": 6.176599999889731, "read_sync_ms": 0.03340000694151968, "verdict": "PASS"}
+{"seed": 29, "kind": "peaked", "poison": "0x7fc12345", "ok": true, "max_abs": 0.0, "relative_l2": 0.0, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 1.8240000063087791, "write_sync_ms": 0.06130000110715628, "dispatch_ms": 7.361399999354035, "read_sync_ms": 0.06019999273121357, "verdict": "PASS"}
+HOST_TIMELINE {"elapsed_seconds": 170.36, "tree_rss_bytes": 261492736, "foreign_peers": []}
+{"seed": 29, "kind": "peaked", "poison": "0x7fc54321", "ok": true, "max_abs": 0.0, "relative_l2": 0.0, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 1.8867000035243109, "write_sync_ms": 0.050000002374872565, "dispatch_ms": 6.878500003949739, "read_sync_ms": 0.047900000936351717, "verdict": "PASS"}
+{"seed": 47, "kind": "random", "poison": "0x7fc12345", "ok": true, "max_abs": 0.0, "relative_l2": 0.0, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 2.1305000118445605, "write_sync_ms": 0.0627999979769811, "dispatch_ms": 6.887999988975935, "read_sync_ms": 0.03979999746661633, "verdict": "PASS"}
+{"seed": 47, "kind": "random", "poison": "0x7fc54321", "ok": true, "max_abs": 0.0, "relative_l2": 0.0, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 2.4440999986836687, "write_sync_ms": 0.06640001083724201, "dispatch_ms": 6.911100004799664, "read_sync_ms": 0.028299997211433947, "verdict": "PASS"}
+{"seed": 47, "kind": "uniform", "poison": "0x7fc12345", "ok": true, "max_abs": 0.0, "relative_l2": 0.0, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 1.9268000032752752, "write_sync_ms": 0.06469999789260328, "dispatch_ms": 6.496200003311969, "read_sync_ms": 0.04300000728107989, "verdict": "PASS"}
+{"seed": 47, "kind": "uniform", "poison": "0x7fc54321", "ok": true, "max_abs": 0.0, "relative_l2": 0.0, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 2.3923999979160726, "write_sync_ms": 0.06330000178422779, "dispatch_ms": 6.519799993839115, "read_sync_ms": 0.032800002372823656, "verdict": "PASS"}
+{"seed": 47, "kind": "zero", "poison": "0x7fc12345", "ok": true, "max_abs": 0.0, "relative_l2": 0.0, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 1.8951000092783943, "write_sync_ms": 0.0560000044060871, "dispatch_ms": 6.001699992339127, "read_sync_ms": 0.04339999577496201, "verdict": "PASS"}
+{"seed": 47, "kind": "zero", "poison": "0x7fc54321", "ok": true, "max_abs": 0.0, "relative_l2": 0.0, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 1.9963999948231503, "write_sync_ms": 0.05250000685919076, "dispatch_ms": 5.982099988614209, "read_sync_ms": 0.03159999323543161, "verdict": "PASS"}
+{"seed": 47, "kind": "peaked", "poison": "0x7fc12345", "ok": true, "max_abs": 0.0, "relative_l2": 0.0, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 1.918100009788759, "write_sync_ms": 0.05509999755304307, "dispatch_ms": 6.899100000737235, "read_sync_ms": 0.04579999949783087, "verdict": "PASS"}
+{"seed": 47, "kind": "peaked", "poison": "0x7fc54321", "ok": true, "max_abs": 0.0, "relative_l2": 0.0, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 2.02020000142511, "write_sync_ms": 0.05990000499878079, "dispatch_ms": 6.888700008857995, "read_sync_ms": 0.04769999941345304, "verdict": "PASS"}
+{"dispatch_ms": [6.8503999937092885, 6.8278999970061705, 6.839899986516684, 6.838100001914427, 6.823199990321882, 6.846499993116595, 6.852299993624911, 6.878800006234087, 6.872600002679974, 6.855200001155026], "cpu_ort_8threads_ms": [0.3485000052023679, 0.1731999946059659, 0.16310000501107424, 0.16729999333620071, 0.15759999223519117, 0.1593000051798299, 0.1787999935913831, 0.15639999764971435, 0.1579000090714544, 0.16070000128820539], "cpu_scope": "attention only, no RoPE; dense masked local product", "timing_scope": "one core, includes streaming/dispatch; excludes packing and BO copies"}
+correctness PASS
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+SUITE_BEGIN global_h1_v193
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+preregistration_sha256 27f8faeb721581019d7b37c90218430e9a3248fb4c49cf99e4a556bd78eee376 build global_h1_v193
+{"seed": 11, "kind": "random", "poison": "0x7fc12345", "ok": true, "max_abs": 0.0016312261107238601, "relative_l2": 0.001957499277913333, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 7.5856000039493665, "write_sync_ms": 0.1306999911321327, "dispatch_ms": 112.32089999248274, "read_sync_ms": 0.05669999518431723, "verdict": "PASS"}
+{"seed": 11, "kind": "random", "poison": "0x7fc54321", "ok": true, "max_abs": 0.0016312261107238601, "relative_l2": 0.001957499277913333, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 7.877399999415502, "write_sync_ms": 0.22280000848695636, "dispatch_ms": 111.26689999946393, "read_sync_ms": 0.06050000956747681, "verdict": "PASS"}
+{"seed": 11, "kind": "uniform", "poison": "0x7fc12345", "ok": true, "max_abs": 1.0731924460216646e-08, "relative_l2": 3.670845625941635e-08, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 7.693799998378381, "write_sync_ms": 0.14009998994879425, "dispatch_ms": 89.1836999944644, "read_sync_ms": 0.06230000872164965, "verdict": "PASS"}
+{"seed": 11, "kind": "uniform", "poison": "0x7fc54321", "ok": true, "max_abs": 1.0731924460216646e-08, "relative_l2": 3.670845625941635e-08, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 7.610000000568107, "write_sync_ms": 0.15770000754855573, "dispatch_ms": 89.12889999919571, "read_sync_ms": 0.058599995099939406, "verdict": "PASS"}
+{"seed": 11, "kind": "zero", "poison": "0x7fc12345", "ok": true, "max_abs": 0.0, "relative_l2": 0.0, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 7.6111000089440495, "write_sync_ms": 0.20119998953305185, "dispatch_ms": 85.92819998739287, "read_sync_ms": 0.057199998991563916, "verdict": "PASS"}
+{"seed": 11, "kind": "zero", "poison": "0x7fc54321", "ok": true, "max_abs": 0.0, "relative_l2": 0.0, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 8.322599998791702, "write_sync_ms": 0.17899999511428177, "dispatch_ms": 85.59270000841934, "read_sync_ms": 0.0577000027988106, "verdict": "PASS"}
+{"seed": 11, "kind": "peaked", "poison": "0x7fc12345", "ok": true, "max_abs": 0.0047324194981654966, "relative_l2": 0.0004898268104747273, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 7.537700003013015, "write_sync_ms": 0.16879999020602554, "dispatch_ms": 110.16769999696407, "read_sync_ms": 0.05470000905916095, "verdict": "PASS"}
+{"seed": 11, "kind": "peaked", "poison": "0x7fc54321", "ok": true, "max_abs": 0.0047324194981654966, "relative_l2": 0.0004898268104747273, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 7.940800001961179, "write_sync_ms": 0.18420000560581684, "dispatch_ms": 110.53520000132266, "read_sync_ms": 0.05810000584460795, "verdict": "PASS"}
+{"seed": 29, "kind": "random", "poison": "0x7fc12345", "ok": true, "max_abs": 0.0012288920456356989, "relative_l2": 0.00195580787851394, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 7.589499989990145, "write_sync_ms": 0.16540000797249377, "dispatch_ms": 111.64519999874756, "read_sync_ms": 0.05649999366141856, "verdict": "PASS"}
+{"seed": 29, "kind": "random", "poison": "0x7fc54321", "ok": true, "max_abs": 0.0012288920456356989, "relative_l2": 0.00195580787851394, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 7.803799991961569, "write_sync_ms": 0.1942999952007085, "dispatch_ms": 111.39439999533352, "read_sync_ms": 0.053800002206116915, "verdict": "PASS"}
+{"seed": 29, "kind": "uniform", "poison": "0x7fc12345", "ok": true, "max_abs": 1.0963548513487353e-08, "relative_l2": 3.981488728354696e-08, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 7.606700004544109, "write_sync_ms": 0.1998000079765916, "dispatch_ms": 89.12899999995716, "read_sync_ms": 0.05639999289996922, "verdict": "PASS"}
+{"seed": 29, "kind": "uniform", "poison": "0x7fc54321", "ok": true, "max_abs": 1.0963548513487353e-08, "relative_l2": 3.981488728354696e-08, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 7.649099992704578, "write_sync_ms": 0.18319999799132347, "dispatch_ms": 89.01120000518858, "read_sync_ms": 0.05879999662283808, "verdict": "PASS"}
+{"seed": 29, "kind": "zero", "poison": "0x7fc12345", "ok": true, "max_abs": 0.0, "relative_l2": 0.0, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 7.839500001864508, "write_sync_ms": 0.19049999536946416, "dispatch_ms": 85.62520000850782, "read_sync_ms": 0.057600002037361264, "verdict": "PASS"}
+{"seed": 29, "kind": "zero", "poison": "0x7fc54321", "ok": true, "max_abs": 0.0, "relative_l2": 0.0, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 8.440000005066395, "write_sync_ms": 0.19120000069960952, "dispatch_ms": 85.55210000486113, "read_sync_ms": 0.057600002037361264, "verdict": "PASS"}
+{"seed": 29, "kind": "peaked", "poison": "0x7fc12345", "ok": true, "max_abs": 0.004982673854201369, "relative_l2": 0.0003977691336504481, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 7.601200006320141, "write_sync_ms": 0.14119999832473695, "dispatch_ms": 110.7048000121722, "read_sync_ms": 0.056200005928985775, "verdict": "PASS"}
+{"seed": 29, "kind": "peaked", "poison": "0x7fc54321", "ok": true, "max_abs": 0.004982673854201369, "relative_l2": 0.0003977691336504481, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 8.1386000092607, "write_sync_ms": 0.2049000031547621, "dispatch_ms": 110.36379999131896, "read_sync_ms": 0.05499999679159373, "verdict": "PASS"}
+HOST_TIMELINE {"elapsed_seconds": 172.657, "tree_rss_bytes": 335769600, "foreign_peers": []}
+{"seed": 47, "kind": "random", "poison": "0x7fc12345", "ok": true, "max_abs": 0.0014597180184448, "relative_l2": 0.0019352496208645711, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 7.487399998353794, "write_sync_ms": 0.14230000670067966, "dispatch_ms": 111.4330999989761, "read_sync_ms": 0.053099996875971556, "verdict": "PASS"}
+{"seed": 47, "kind": "random", "poison": "0x7fc54321", "ok": true, "max_abs": 0.0014597180184448, "relative_l2": 0.0019352496208645711, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 8.644699992146343, "write_sync_ms": 0.19299999985378236, "dispatch_ms": 109.34219999762718, "read_sync_ms": 0.05149999924469739, "verdict": "PASS"}
+{"seed": 47, "kind": "uniform", "poison": "0x7fc12345", "ok": true, "max_abs": 1.104075669777771e-08, "relative_l2": 3.939612061437088e-08, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 7.753300000331365, "write_sync_ms": 0.20629999926313758, "dispatch_ms": 86.97659999597818, "read_sync_ms": 0.05319999763742089, "verdict": "PASS"}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 66 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |5656                |114        |20          |0           |0    |Normal   |\n      |python.exe          |Active     |19          |0           |     |N/A      |\n      |66 MB               |64 KB      |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [5656], "owned_pids": [5504, 5656, 5904, 5924, 8076, 16364, 16872, 17664, 19148], "foreign_pids": []}
+{"seed": 47, "kind": "uniform", "poison": "0x7fc54321", "ok": true, "max_abs": 1.104075669777771e-08, "relative_l2": 3.939612061437088e-08, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 7.87920001312159, "write_sync_ms": 0.2125000028172508, "dispatch_ms": 87.04230000148527, "read_sync_ms": 0.0543000060133636, "verdict": "PASS"}
+{"seed": 47, "kind": "zero", "poison": "0x7fc12345", "ok": true, "max_abs": 0.0, "relative_l2": 0.0, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 7.516500001656823, "write_sync_ms": 0.19839999731630087, "dispatch_ms": 85.29199998883996, "read_sync_ms": 0.05740000051446259, "verdict": "PASS"}
+{"seed": 47, "kind": "zero", "poison": "0x7fc54321", "ok": true, "max_abs": 0.0, "relative_l2": 0.0, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 7.873800001107156, "write_sync_ms": 0.20039999799337238, "dispatch_ms": 85.40510000602808, "read_sync_ms": 0.05669999518431723, "verdict": "PASS"}
+{"seed": 47, "kind": "peaked", "poison": "0x7fc12345", "ok": true, "max_abs": 0.006550065567282548, "relative_l2": 0.0004352844478547489, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 7.7089999977033585, "write_sync_ms": 0.1604999997653067, "dispatch_ms": 110.42109999107197, "read_sync_ms": 0.05539999983739108, "verdict": "PASS"}
+{"seed": 47, "kind": "peaked", "poison": "0x7fc54321", "ok": true, "max_abs": 0.006550065567282548, "relative_l2": 0.0004352844478547489, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 8.182000005035661, "write_sync_ms": 0.1767999929143116, "dispatch_ms": 110.98829998809379, "read_sync_ms": 0.055900003644637764, "verdict": "PASS"}
+{"dispatch_ms": [109.95170001115184, 110.33920000772923, 110.82940000051167, 110.49089999869466, 110.56790000293404, 110.55430000124034, 110.66430000937544, 110.38620000181254, 110.4602999985218, 110.45690000173636], "cpu_ort_8threads_ms": [0.3640999930212274, 0.21680000645574182, 0.21159999596420676, 0.16889999096747488, 0.15829999756533653, 0.1596000074641779, 0.1615999935893342, 0.15809999604243785, 0.15410000924021006, 0.156299996888265], "cpu_scope": "attention only, no RoPE; dense masked local product", "timing_scope": "one core, includes streaming/dispatch; excludes packing and BO copies"}
+correctness PASS
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+HOST_TIMELINE {"elapsed_seconds": 174.954, "tree_rss_bytes": 326123520, "foreign_peers": []}
+SUITE_BEGIN global_h1_v512
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+preregistration_sha256 27f8faeb721581019d7b37c90218430e9a3248fb4c49cf99e4a556bd78eee376 build global_h1_v512
+{"seed": 11, "kind": "random", "poison": "0x7fc12345", "ok": true, "max_abs": 0.0008213168289302741, "relative_l2": 0.0019187393638342685, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 17.834400001447648, "write_sync_ms": 0.35930000012740493, "dispatch_ms": 276.1622999969404, "read_sync_ms": 0.058999998145736754, "verdict": "PASS"}
+{"seed": 11, "kind": "random", "poison": "0x7fc54321", "ok": true, "max_abs": 0.0008213168289302741, "relative_l2": 0.0019187393638342685, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 17.507099997601472, "write_sync_ms": 0.33540000731591135, "dispatch_ms": 279.02639999228995, "read_sync_ms": 0.06750000466126949, "verdict": "PASS"}
+{"seed": 11, "kind": "uniform", "poison": "0x7fc12345", "ok": true, "max_abs": 3.725290298461914e-09, "relative_l2": 1.2102409836954444e-08, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 17.04210000752937, "write_sync_ms": 0.3437000123085454, "dispatch_ms": 220.47179999935906, "read_sync_ms": 0.06830001075286418, "verdict": "PASS"}
+{"seed": 11, "kind": "uniform", "poison": "0x7fc54321", "ok": true, "max_abs": 3.725290298461914e-09, "relative_l2": 1.2102409836954444e-08, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 17.556400009198114, "write_sync_ms": 0.3398000117158517, "dispatch_ms": 220.8156999986386, "read_sync_ms": 0.0678999931551516, "verdict": "PASS"}
+{"seed": 11, "kind": "zero", "poison": "0x7fc12345", "ok": true, "max_abs": 0.0, "relative_l2": 0.0, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 17.0629999920493, "write_sync_ms": 0.38219999987632036, "dispatch_ms": 212.73810000275262, "read_sync_ms": 0.06659999780822545, "verdict": "PASS"}
+{"seed": 11, "kind": "zero", "poison": "0x7fc54321", "ok": true, "max_abs": 0.0, "relative_l2": 0.0, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 19.09719999821391, "write_sync_ms": 0.3412999940337613, "dispatch_ms": 212.27439999347553, "read_sync_ms": 0.06940000457689166, "verdict": "PASS"}
+{"seed": 11, "kind": "peaked", "poison": "0x7fc12345", "ok": true, "max_abs": 0.005572899158792666, "relative_l2": 0.00048104374966973906, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 17.560399996000342, "write_sync_ms": 0.35039999056607485, "dispatch_ms": 275.3288999956567, "read_sync_ms": 0.05729999975301325, "verdict": "PASS"}
+{"seed": 11, "kind": "peaked", "poison": "0x7fc54321", "ok": true, "max_abs": 0.005572899158792666, "relative_l2": 0.00048104374966973906, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 17.26760000747163, "write_sync_ms": 0.33969999640248716, "dispatch_ms": 275.0953000067966, "read_sync_ms": 0.06859999848529696, "verdict": "PASS"}
+HOST_TIMELINE {"elapsed_seconds": 177.219, "tree_rss_bytes": 268738560, "foreign_peers": []}
+{"seed": 29, "kind": "random", "poison": "0x7fc12345", "ok": true, "max_abs": 0.0008163773644480343, "relative_l2": 0.0020208720983221616, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 17.352199996821582, "write_sync_ms": 0.36469999758992344, "dispatch_ms": 274.94149999984074, "read_sync_ms": 0.06269999721553177, "verdict": "PASS"}
+{"seed": 29, "kind": "random", "poison": "0x7fc54321", "ok": true, "max_abs": 0.0008163773644480343, "relative_l2": 0.0020208720983221616, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 17.332799994619563, "write_sync_ms": 0.3400999994482845, "dispatch_ms": 278.99590000743046, "read_sync_ms": 0.06979999307077378, "verdict": "PASS"}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 69 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |5656                |115        |11          |0           |0    |Normal   |\n      |python.exe          |Active     |10          |0           |     |N/A      |\n      |69 MB               |64 KB      |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [5656], "owned_pids": [5504, 5656, 5904, 5924, 8076, 14388, 16364, 16872, 17664, 19148], "foreign_pids": []}
+{"seed": 29, "kind": "uniform", "poison": "0x7fc12345", "ok": true, "max_abs": 3.725290298461914e-09, "relative_l2": 1.4263384418765406e-08, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 17.10579999780748, "write_sync_ms": 0.3397999971639365, "dispatch_ms": 218.58679999422748, "read_sync_ms": 0.06900000153109431, "verdict": "PASS"}
+{"seed": 29, "kind": "uniform", "poison": "0x7fc54321", "ok": true, "max_abs": 3.725290298461914e-09, "relative_l2": 1.4263384418765406e-08, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 17.204000003403053, "write_sync_ms": 0.4054000019095838, "dispatch_ms": 220.42340000916738, "read_sync_ms": 0.06890000076964498, "verdict": "PASS"}
+{"seed": 29, "kind": "zero", "poison": "0x7fc12345", "ok": true, "max_abs": 0.0, "relative_l2": 0.0, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 17.466500008595176, "write_sync_ms": 0.36589999217540026, "dispatch_ms": 212.67370000714436, "read_sync_ms": 0.07110000296961516, "verdict": "PASS"}
+{"seed": 29, "kind": "zero", "poison": "0x7fc54321", "ok": true, "max_abs": 0.0, "relative_l2": 0.0, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 17.228299999260344, "write_sync_ms": 0.3684000112116337, "dispatch_ms": 212.0778000098653, "read_sync_ms": 0.060999998822808266, "verdict": "PASS"}
+{"seed": 29, "kind": "peaked", "poison": "0x7fc12345", "ok": true, "max_abs": 0.00638078997506053, "relative_l2": 0.0004264496610113814, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 16.8503999884706, "write_sync_ms": 0.35770000249613076, "dispatch_ms": 275.1528000080725, "read_sync_ms": 0.06939999002497643, "verdict": "PASS"}
+{"seed": 29, "kind": "peaked", "poison": "0x7fc54321", "ok": true, "max_abs": 0.00638078997506053, "relative_l2": 0.0004264496610113814, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 17.212999999173917, "write_sync_ms": 0.335000004270114, "dispatch_ms": 274.8384000005899, "read_sync_ms": 0.06120000034570694, "verdict": "PASS"}
+HOST_TIMELINE {"elapsed_seconds": 179.485, "tree_rss_bytes": 267423744, "foreign_peers": []}
+{"seed": 47, "kind": "random", "poison": "0x7fc12345", "ok": true, "max_abs": 0.0007360230413051214, "relative_l2": 0.0020228167131135727, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 16.900200003874488, "write_sync_ms": 0.4177000082563609, "dispatch_ms": 275.9853000025032, "read_sync_ms": 0.06219999340828508, "verdict": "PASS"}
+{"seed": 47, "kind": "random", "poison": "0x7fc54321", "ok": true, "max_abs": 0.0007360230413051214, "relative_l2": 0.0020228167131135727, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 17.567399991094135, "write_sync_ms": 0.34580001374706626, "dispatch_ms": 277.83289999933913, "read_sync_ms": 0.07189999450929463, "verdict": "PASS"}
+{"seed": 47, "kind": "uniform", "poison": "0x7fc12345", "ok": true, "max_abs": 1.862645149230957e-09, "relative_l2": 6.0774128958921265e-09, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 17.65500000328757, "write_sync_ms": 0.3470000083325431, "dispatch_ms": 220.72460000345018, "read_sync_ms": 0.061700004152953625, "verdict": "PASS"}
+{"seed": 47, "kind": "uniform", "poison": "0x7fc54321", "ok": true, "max_abs": 1.862645149230957e-09, "relative_l2": 6.0774128958921265e-09, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 17.466199991758913, "write_sync_ms": 0.41149999015033245, "dispatch_ms": 220.68009999929927, "read_sync_ms": 0.06820000999141484, "verdict": "PASS"}
+{"seed": 47, "kind": "zero", "poison": "0x7fc12345", "ok": true, "max_abs": 0.0, "relative_l2": 0.0, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 17.325499997241423, "write_sync_ms": 0.38050000148359686, "dispatch_ms": 211.74090000567958, "read_sync_ms": 0.07049999840091914, "verdict": "PASS"}
+{"seed": 47, "kind": "zero", "poison": "0x7fc54321", "ok": true, "max_abs": 0.0, "relative_l2": 0.0, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 17.34730000316631, "write_sync_ms": 0.33910000638570637, "dispatch_ms": 212.59599999757484, "read_sync_ms": 0.05729999975301325, "verdict": "PASS"}
+{"seed": 47, "kind": "peaked", "poison": "0x7fc12345", "ok": true, "max_abs": 0.004873559259813254, "relative_l2": 0.00045216455522566375, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 16.701800006558187, "write_sync_ms": 0.3406000032555312, "dispatch_ms": 274.9605999997584, "read_sync_ms": 0.06629999552387744, "verdict": "PASS"}
+{"seed": 47, "kind": "peaked", "poison": "0x7fc54321", "ok": true, "max_abs": 0.004873559259813254, "relative_l2": 0.00045216455522566375, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 17.053999996278435, "write_sync_ms": 0.334700001985766, "dispatch_ms": 274.979900001199, "read_sync_ms": 0.06690000009257346, "verdict": "PASS"}
+HOST_TIMELINE {"elapsed_seconds": 181.75, "tree_rss_bytes": 204656640, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 69 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |5656                |115        |30          |0           |0    |Normal   |\n      |python.exe          |Active     |29          |0           |     |N/A      |\n      |69 MB               |64 KB      |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [5656], "owned_pids": [5504, 5656, 5904, 5924, 8076, 14388, 16364, 16872, 17664, 19148], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 184.0, "tree_rss_bytes": 204656640, "foreign_peers": []}
+{"dispatch_ms": [275.1706999988528, 275.0149999919813, 273.19960000750143, 274.67310000793077, 274.5154000003822, 274.67840000463184, 270.69410000694916, 274.9465000088094, 274.70789999642875, 274.8178000038024], "cpu_ort_8threads_ms": [0.3480000013951212, 0.16790001245681196, 0.16340000729542226, 0.16799999866634607, 0.1615999935893342, 0.15720000374130905, 0.16490000416524708, 0.1584999990882352, 0.17949999892152846, 0.17670000670477748], "cpu_scope": "attention only, no RoPE; dense masked local product", "timing_scope": "one core, includes streaming/dispatch; excludes packing and BO copies"}
+correctness PASS
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+SUITE_BEGIN local_h16_v512
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+preregistration_sha256 27f8faeb721581019d7b37c90218430e9a3248fb4c49cf99e4a556bd78eee376 build local_h16_v512
+HOST_TIMELINE {"elapsed_seconds": 186.282, "tree_rss_bytes": 322093056, "foreign_peers": []}
+{"seed": 11, "kind": "random", "poison": "0x7fc12345", "ok": true, "max_abs": 0.002751534439498382, "relative_l2": 0.001971564456365983, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 90.79439999186434, "write_sync_ms": 1.906499994220212, "dispatch_ms": 1134.074799992959, "read_sync_ms": 0.7052000000840053, "verdict": "PASS"}
+{"seed": 11, "kind": "random", "poison": "0x7fc54321", "ok": true, "max_abs": 0.002751534439498382, "relative_l2": 0.001971564456365983, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 92.0133000036003, "write_sync_ms": 1.7453000036766753, "dispatch_ms": 1137.5546000053873, "read_sync_ms": 0.7382000039797276, "verdict": "PASS"}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 91 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |5656                |116        |3           |0           |0    |Normal   |\n      |python.exe          |Active     |2           |0           |     |N/A      |\n      |91 MB               |64 KB      |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [5656], "owned_pids": [5504, 5656, 5904, 5924, 8076, 14388, 15584, 16364, 16872, 17664, 19148], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 188.579, "tree_rss_bytes": 326397952, "foreign_peers": []}
+{"seed": 11, "kind": "uniform", "poison": "0x7fc12345", "ok": true, "max_abs": 2.8856216971462345e-08, "relative_l2": 2.984026494395508e-08, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 90.87009998620488, "write_sync_ms": 1.7628000059630722, "dispatch_ms": 905.4406000068411, "read_sync_ms": 0.797100001364015, "verdict": "PASS"}
+{"seed": 11, "kind": "uniform", "poison": "0x7fc54321", "ok": true, "max_abs": 2.8856216971462345e-08, "relative_l2": 2.984026494395508e-08, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 92.64109999639913, "write_sync_ms": 2.1305999980540946, "dispatch_ms": 913.1171999906655, "read_sync_ms": 0.7772999961161986, "verdict": "PASS"}
+HOST_TIMELINE {"elapsed_seconds": 190.86, "tree_rss_bytes": 325640192, "foreign_peers": []}
+{"seed": 11, "kind": "zero", "poison": "0x7fc12345", "ok": true, "max_abs": 0.0, "relative_l2": 0.0, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 92.77270000893623, "write_sync_ms": 1.967300006072037, "dispatch_ms": 869.393900007708, "read_sync_ms": 0.7719999994151294, "verdict": "PASS"}
+{"seed": 11, "kind": "zero", "poison": "0x7fc54321", "ok": true, "max_abs": 0.0, "relative_l2": 0.0, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 93.95009999570902, "write_sync_ms": 1.7377000040141866, "dispatch_ms": 875.6980000034673, "read_sync_ms": 0.7808999944245443, "verdict": "PASS"}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 91 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |5656                |116        |7           |0           |0    |Normal   |\n      |python.exe          |Active     |6           |0           |     |N/A      |\n      |91 MB               |64 KB      |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [5656], "owned_pids": [5504, 5656, 5904, 5924, 8076, 14388, 15584, 16364, 16872, 17664, 19148], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 193.266, "tree_rss_bytes": 280670208, "foreign_peers": []}
+{"seed": 11, "kind": "peaked", "poison": "0x7fc12345", "ok": true, "max_abs": 0.00663674374306719, "relative_l2": 0.00042196162666266603, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 90.93079999729525, "write_sync_ms": 2.1455999958561733, "dispatch_ms": 1130.1925000007031, "read_sync_ms": 0.8312999998452142, "verdict": "PASS"}
+{"seed": 11, "kind": "peaked", "poison": "0x7fc54321", "ok": true, "max_abs": 0.00663674374306719, "relative_l2": 0.00042196162666266603, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 94.23689999675844, "write_sync_ms": 1.8143000052077696, "dispatch_ms": 1130.8529000089038, "read_sync_ms": 0.7787000067764893, "verdict": "PASS"}
+HOST_TIMELINE {"elapsed_seconds": 195.547, "tree_rss_bytes": 282193920, "foreign_peers": []}
+{"seed": 29, "kind": "random", "poison": "0x7fc12345", "ok": true, "max_abs": 0.0020863243205635484, "relative_l2": 0.0019772313311467557, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 91.51049998763483, "write_sync_ms": 1.7496999935247004, "dispatch_ms": 1132.788500006427, "read_sync_ms": 0.7877999887568876, "verdict": "PASS"}
+{"seed": 29, "kind": "random", "poison": "0x7fc54321", "ok": true, "max_abs": 0.0020863243205635484, "relative_l2": 0.0019772313311467557, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 90.60480000334792, "write_sync_ms": 1.7367999971611425, "dispatch_ms": 1130.8589999971446, "read_sync_ms": 0.7659000111743808, "verdict": "PASS"}
+HOST_TIMELINE {"elapsed_seconds": 197.829, "tree_rss_bytes": 282546176, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 91 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |5656                |116        |11          |0           |0    |Normal   |\n      |python.exe          |Active     |11          |0           |     |N/A      |\n      |91 MB               |64 KB      |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [5656], "owned_pids": [5504, 5656, 5904, 5924, 8076, 14388, 15584, 16364, 16872, 17664, 19148], "foreign_pids": []}
+{"seed": 29, "kind": "uniform", "poison": "0x7fc12345", "ok": true, "max_abs": 3.702712775277561e-08, "relative_l2": 2.994183657928515e-08, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 91.66599999298342, "write_sync_ms": 1.9563999958336353, "dispatch_ms": 904.3014999915613, "read_sync_ms": 0.716800001100637, "verdict": "PASS"}
+{"seed": 29, "kind": "uniform", "poison": "0x7fc54321", "ok": true, "max_abs": 3.702712775277561e-08, "relative_l2": 2.994183657928515e-08, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 92.0687000034377, "write_sync_ms": 1.7758000030880794, "dispatch_ms": 903.274500000407, "read_sync_ms": 0.7177999941632152, "verdict": "PASS"}
+HOST_TIMELINE {"elapsed_seconds": 200.125, "tree_rss_bytes": 281804800, "foreign_peers": []}
+{"seed": 29, "kind": "zero", "poison": "0x7fc12345", "ok": true, "max_abs": 0.0, "relative_l2": 0.0, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 92.75080000224989, "write_sync_ms": 1.8875999958254397, "dispatch_ms": 871.0277000063797, "read_sync_ms": 0.712799999746494, "verdict": "PASS"}
+{"seed": 29, "kind": "zero", "poison": "0x7fc54321", "ok": true, "max_abs": 0.0, "relative_l2": 0.0, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 92.43679999781307, "write_sync_ms": 1.7361000063829124, "dispatch_ms": 871.6551999968942, "read_sync_ms": 0.7899000047473237, "verdict": "PASS"}
+HOST_TIMELINE {"elapsed_seconds": 202.375, "tree_rss_bytes": 280346624, "foreign_peers": []}
+{"seed": 29, "kind": "peaked", "poison": "0x7fc12345", "ok": true, "max_abs": 0.006969707242512002, "relative_l2": 0.00043140108262938476, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 93.23100000619888, "write_sync_ms": 2.299300002050586, "dispatch_ms": 1123.9331999968272, "read_sync_ms": 0.6857999978819862, "verdict": "PASS"}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 91 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |5656                |116        |16          |0           |0    |Normal   |\n      |python.exe          |Active     |15          |0           |     |N/A      |\n      |91 MB               |64 KB      |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [5656], "owned_pids": [5504, 5656, 5904, 5924, 8076, 14388, 15584, 16364, 16872, 17664, 19148], "foreign_pids": []}
+{"seed": 29, "kind": "peaked", "poison": "0x7fc54321", "ok": true, "max_abs": 0.006969707242512002, "relative_l2": 0.00043140108262938476, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 92.67680000630207, "write_sync_ms": 1.7299000028287992, "dispatch_ms": 1123.479399990174, "read_sync_ms": 0.8066000009421259, "verdict": "PASS"}
+HOST_TIMELINE {"elapsed_seconds": 204.719, "tree_rss_bytes": 282173440, "foreign_peers": []}
+{"seed": 47, "kind": "random", "poison": "0x7fc12345", "ok": true, "max_abs": 0.0023155950104619683, "relative_l2": 0.0019741548521409677, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 93.5371999948984, "write_sync_ms": 1.7115999944508076, "dispatch_ms": 1133.7429000122938, "read_sync_ms": 0.8162000012816861, "verdict": "PASS"}
+{"seed": 47, "kind": "random", "poison": "0x7fc54321", "ok": true, "max_abs": 0.0023155950104619683, "relative_l2": 0.0019741548521409677, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 93.11549999983981, "write_sync_ms": 1.7183000018121675, "dispatch_ms": 1139.728100009961, "read_sync_ms": 0.7997999928193167, "verdict": "PASS"}
+HOST_TIMELINE {"elapsed_seconds": 207.016, "tree_rss_bytes": 281358336, "foreign_peers": []}
+{"seed": 47, "kind": "uniform", "poison": "0x7fc12345", "ok": true, "max_abs": 3.3036682944853624e-08, "relative_l2": 2.9758180093284763e-08, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 92.49109998927452, "write_sync_ms": 1.7626000044401735, "dispatch_ms": 901.602300000377, "read_sync_ms": 0.6137000018497929, "verdict": "PASS"}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 91 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |5656                |116        |20          |0           |0    |Normal   |\n      |python.exe          |Active     |19          |0           |     |N/A      |\n      |91 MB               |64 KB      |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [5656], "owned_pids": [5504, 5656, 5904, 5924, 8076, 14388, 15584, 16364, 16872, 17664, 19148], "foreign_pids": []}
+{"seed": 47, "kind": "uniform", "poison": "0x7fc54321", "ok": true, "max_abs": 3.3036682944853624e-08, "relative_l2": 2.9758180093284763e-08, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 91.91109999665059, "write_sync_ms": 1.7725999932736158, "dispatch_ms": 911.5113000007113, "read_sync_ms": 0.8182000019587576, "verdict": "PASS"}
+HOST_TIMELINE {"elapsed_seconds": 209.282, "tree_rss_bytes": 282402816, "foreign_peers": []}
+{"seed": 47, "kind": "zero", "poison": "0x7fc12345", "ok": true, "max_abs": 0.0, "relative_l2": 0.0, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 94.10790000401903, "write_sync_ms": 1.9802000024355948, "dispatch_ms": 870.4728000011528, "read_sync_ms": 0.7653999928152189, "verdict": "PASS"}
+{"seed": 47, "kind": "zero", "poison": "0x7fc54321", "ok": true, "max_abs": 0.0, "relative_l2": 0.0, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 93.11709999747109, "write_sync_ms": 1.95720000192523, "dispatch_ms": 876.7313999996986, "read_sync_ms": 0.7774000114295632, "verdict": "PASS"}
+HOST_TIMELINE {"elapsed_seconds": 211.579, "tree_rss_bytes": 282251264, "foreign_peers": []}
+{"seed": 47, "kind": "peaked", "poison": "0x7fc12345", "ok": true, "max_abs": 0.007393213912894658, "relative_l2": 0.0004398999568039232, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 92.72780000173952, "write_sync_ms": 1.7022999963955954, "dispatch_ms": 1127.2829999943497, "read_sync_ms": 0.8424999978160486, "verdict": "PASS"}
+{"seed": 47, "kind": "peaked", "poison": "0x7fc54321", "ok": true, "max_abs": 0.007393213912894658, "relative_l2": 0.0004398999568039232, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 92.69219999259803, "write_sync_ms": 2.3310999968089163, "dispatch_ms": 1132.673000000068, "read_sync_ms": 0.7809999951859936, "verdict": "PASS"}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 91 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |5656                |116        |25          |0           |0    |Normal   |\n      |python.exe          |Active     |24          |0           |     |N/A      |\n      |91 MB               |64 KB      |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [5656], "owned_pids": [5504, 5656, 5904, 5924, 8076, 14388, 15584, 16364, 16872, 17664, 19148], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 213.844, "tree_rss_bytes": 285458432, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 216.125, "tree_rss_bytes": 285458432, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 218.375, "tree_rss_bytes": 285458432, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 91 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |5656                |116        |29          |0           |0    |Normal   |\n      |python.exe          |Active     |28          |0           |     |N/A      |\n      |91 MB               |64 KB      |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [5656], "owned_pids": [5504, 5656, 5904, 5924, 8076, 14388, 15584, 16364, 16872, 17664, 19148], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 220.625, "tree_rss_bytes": 285458432, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 222.891, "tree_rss_bytes": 285458432, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 91 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |5656                |116        |34          |0           |0    |Normal   |\n      |python.exe          |Active     |33          |0           |     |N/A      |\n      |91 MB               |64 KB      |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [5656], "owned_pids": [5504, 5656, 5904, 5924, 8076, 14388, 15584, 16364, 16872, 17664, 19148], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 225.157, "tree_rss_bytes": 285458432, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 227.438, "tree_rss_bytes": 285458432, "foreign_peers": []}
+{"dispatch_ms": [1131.386900000507, 1119.5879000006244, 1134.5272000035038, 1129.4846999953734, 1134.8202000081073, 1125.6139000033727, 1130.9957999910694, 1127.3795000015525, 1133.4462000086205, 1129.2762000084622], "cpu_ort_8threads_ms": [4.052000003866851, 3.19139999919571, 3.159200001391582, 3.1504000071436167, 3.174800003762357, 3.1863000040175393, 3.167400005622767, 3.178899991326034, 3.126299998257309, 3.1570999999530613], "cpu_scope": "attention only, no RoPE; dense masked local product", "timing_scope": "one core, includes streaming/dispatch; excludes packing and BO copies"}
+correctness PASS
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+SUITE_BEGIN local_h1_v0
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+preregistration_sha256 27f8faeb721581019d7b37c90218430e9a3248fb4c49cf99e4a556bd78eee376 build local_h1_v0
+{"seed": 11, "kind": "random", "poison": "0x7fc12345", "ok": true, "max_abs": 3.725290298461914e-09, "relative_l2": 1.2102409836954444e-08, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 18.50469999772031, "write_sync_ms": 0.305800000205636, "dispatch_ms": 221.43719998712186, "read_sync_ms": 0.05919999966863543, "verdict": "PASS"}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 69 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |5656                |117        |2           |0           |0    |Normal   |\n      |python.exe          |Active     |1           |0           |     |N/A      |\n      |69 MB               |64 KB      |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [5656], "owned_pids": [5504, 5656, 5904, 5924, 8076, 14388, 15584, 16364, 16872, 17664, 18516, 19148], "foreign_pids": []}
+{"seed": 11, "kind": "random", "poison": "0x7fc54321", "ok": true, "max_abs": 3.725290298461914e-09, "relative_l2": 1.2102409836954444e-08, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 19.1017000033753, "write_sync_ms": 0.35099999513477087, "dispatch_ms": 218.89899999951012, "read_sync_ms": 0.06310000026132911, "verdict": "PASS"}
+{"seed": 11, "kind": "uniform", "poison": "0x7fc12345", "ok": true, "max_abs": 3.725290298461914e-09, "relative_l2": 1.2102409836954444e-08, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 17.612900002859533, "write_sync_ms": 0.3615999885369092, "dispatch_ms": 220.8981000003405, "read_sync_ms": 0.05769998824689537, "verdict": "PASS"}
+{"seed": 11, "kind": "uniform", "poison": "0x7fc54321", "ok": true, "max_abs": 3.725290298461914e-09, "relative_l2": 1.2102409836954444e-08, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 18.31849999143742, "write_sync_ms": 0.305499997921288, "dispatch_ms": 219.98900000471622, "read_sync_ms": 0.05670000973623246, "verdict": "PASS"}
+{"seed": 11, "kind": "zero", "poison": "0x7fc12345", "ok": true, "max_abs": 0.0, "relative_l2": 0.0, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 16.847899998538196, "write_sync_ms": 0.38329999370034784, "dispatch_ms": 207.85520000208635, "read_sync_ms": 0.06120000034570694, "verdict": "PASS"}
+{"seed": 11, "kind": "zero", "poison": "0x7fc54321", "ok": true, "max_abs": 0.0, "relative_l2": 0.0, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 18.127500006812625, "write_sync_ms": 0.3411000070627779, "dispatch_ms": 209.5741000084672, "read_sync_ms": 0.07329999061767012, "verdict": "PASS"}
+HOST_TIMELINE {"elapsed_seconds": 229.704, "tree_rss_bytes": 298156032, "foreign_peers": []}
+{"seed": 11, "kind": "peaked", "poison": "0x7fc12345", "ok": true, "max_abs": 3.725290298461914e-09, "relative_l2": 1.2102409836954444e-08, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 17.391400004271418, "write_sync_ms": 0.35089999437332153, "dispatch_ms": 219.95939999760594, "read_sync_ms": 0.04820000322069973, "verdict": "PASS"}
+{"seed": 11, "kind": "peaked", "poison": "0x7fc54321", "ok": true, "max_abs": 3.725290298461914e-09, "relative_l2": 1.2102409836954444e-08, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 18.82909999403637, "write_sync_ms": 0.3598000039346516, "dispatch_ms": 216.39739999955054, "read_sync_ms": 0.08939999679569155, "verdict": "PASS"}
+{"seed": 29, "kind": "random", "poison": "0x7fc12345", "ok": true, "max_abs": 3.725290298461914e-09, "relative_l2": 1.4263384418765406e-08, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 17.051699993317015, "write_sync_ms": 0.37930000689812005, "dispatch_ms": 219.49730000051204, "read_sync_ms": 0.0678000069456175, "verdict": "PASS"}
+{"seed": 29, "kind": "random", "poison": "0x7fc54321", "ok": true, "max_abs": 3.725290298461914e-09, "relative_l2": 1.4263384418765406e-08, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 19.84680000168737, "write_sync_ms": 0.32959999225568026, "dispatch_ms": 220.4219999985071, "read_sync_ms": 0.06299999949987978, "verdict": "PASS"}
+{"seed": 29, "kind": "uniform", "poison": "0x7fc12345", "ok": true, "max_abs": 3.725290298461914e-09, "relative_l2": 1.4263384418765406e-08, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 18.71720000053756, "write_sync_ms": 0.31799999123904854, "dispatch_ms": 220.54549999302253, "read_sync_ms": 0.06019999273121357, "verdict": "PASS"}
+{"seed": 29, "kind": "uniform", "poison": "0x7fc54321", "ok": true, "max_abs": 3.725290298461914e-09, "relative_l2": 1.4263384418765406e-08, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 19.8645999917062, "write_sync_ms": 0.37969999539200217, "dispatch_ms": 220.6607999978587, "read_sync_ms": 0.06819999543949962, "verdict": "PASS"}
+{"seed": 29, "kind": "zero", "poison": "0x7fc12345", "ok": true, "max_abs": 0.0, "relative_l2": 0.0, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 17.264299996895716, "write_sync_ms": 0.3536000003805384, "dispatch_ms": 212.8851999877952, "read_sync_ms": 0.0577000027988106, "verdict": "PASS"}
+{"seed": 29, "kind": "zero", "poison": "0x7fc54321", "ok": true, "max_abs": 0.0, "relative_l2": 0.0, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 17.996700000367127, "write_sync_ms": 0.31990000570658594, "dispatch_ms": 212.2720999905141, "read_sync_ms": 0.05440000677481294, "verdict": "PASS"}
+{"seed": 29, "kind": "peaked", "poison": "0x7fc12345", "ok": true, "max_abs": 3.725290298461914e-09, "relative_l2": 1.4263384418765406e-08, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 16.704800000297837, "write_sync_ms": 0.35859999479725957, "dispatch_ms": 220.6062000041129, "read_sync_ms": 0.055500000598840415, "verdict": "PASS"}
+{"seed": 29, "kind": "peaked", "poison": "0x7fc54321", "ok": true, "max_abs": 3.725290298461914e-09, "relative_l2": 1.4263384418765406e-08, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 19.759000002522953, "write_sync_ms": 0.33370000892318785, "dispatch_ms": 220.51729999657255, "read_sync_ms": 0.0594000011915341, "verdict": "PASS"}
+HOST_TIMELINE {"elapsed_seconds": 232.032, "tree_rss_bytes": 298041344, "foreign_peers": []}
+{"seed": 47, "kind": "random", "poison": "0x7fc12345", "ok": true, "max_abs": 1.862645149230957e-09, "relative_l2": 6.0774128958921265e-09, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 17.430899999453686, "write_sync_ms": 0.348599991411902, "dispatch_ms": 218.07750000152737, "read_sync_ms": 0.05250000685919076, "verdict": "PASS"}
+{"seed": 47, "kind": "random", "poison": "0x7fc54321", "ok": true, "max_abs": 1.862645149230957e-09, "relative_l2": 6.0774128958921265e-09, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 17.203399998834357, "write_sync_ms": 0.3589999978430569, "dispatch_ms": 218.3316000009654, "read_sync_ms": 0.0602000072831288, "verdict": "PASS"}
+{"seed": 47, "kind": "uniform", "poison": "0x7fc12345", "ok": true, "max_abs": 1.862645149230957e-09, "relative_l2": 6.0774128958921265e-09, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 16.135499987285584, "write_sync_ms": 0.32110000029206276, "dispatch_ms": 221.0824999929173, "read_sync_ms": 0.05740000051446259, "verdict": "PASS"}
+{"seed": 47, "kind": "uniform", "poison": "0x7fc54321", "ok": true, "max_abs": 1.862645149230957e-09, "relative_l2": 6.0774128958921265e-09, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 17.07180000084918, "write_sync_ms": 0.3839999990304932, "dispatch_ms": 220.7373999990523, "read_sync_ms": 0.059300000430084765, "verdict": "PASS"}
+{"seed": 47, "kind": "zero", "poison": "0x7fc12345", "ok": true, "max_abs": 0.0, "relative_l2": 0.0, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 16.56679999723565, "write_sync_ms": 0.3786000015679747, "dispatch_ms": 212.05560000089463, "read_sync_ms": 0.06819999543949962, "verdict": "PASS"}
+{"seed": 47, "kind": "zero", "poison": "0x7fc54321", "ok": true, "max_abs": 0.0, "relative_l2": 0.0, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 19.235999992815778, "write_sync_ms": 0.40049999370239675, "dispatch_ms": 212.43240000330843, "read_sync_ms": 0.06880000000819564, "verdict": "PASS"}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 69 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |5656                |117        |23          |0           |0    |Normal   |\n      |python.exe          |Active     |22          |0           |     |N/A      |\n      |69 MB               |64 KB      |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [5656], "owned_pids": [5504, 5656, 5904, 5924, 8076, 14388, 15584, 16364, 16872, 17664, 18516, 19148], "foreign_pids": []}
+{"seed": 47, "kind": "peaked", "poison": "0x7fc12345", "ok": true, "max_abs": 1.862645149230957e-09, "relative_l2": 6.0774128958921265e-09, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 17.641400001593865, "write_sync_ms": 0.35829999251291156, "dispatch_ms": 218.37639999284875, "read_sync_ms": 0.056899996707215905, "verdict": "PASS"}
+{"seed": 47, "kind": "peaked", "poison": "0x7fc54321", "ok": true, "max_abs": 1.862645149230957e-09, "relative_l2": 6.0774128958921265e-09, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 17.89160000043921, "write_sync_ms": 0.34699999378062785, "dispatch_ms": 220.4617999959737, "read_sync_ms": 0.05950000195298344, "verdict": "PASS"}
+HOST_TIMELINE {"elapsed_seconds": 234.282, "tree_rss_bytes": 208388096, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 236.594, "tree_rss_bytes": 208388096, "foreign_peers": []}
+{"dispatch_ms": [218.80699999746867, 220.62880000157747, 220.08619998814538, 221.01529999054037, 220.00019998813514, 220.722800004296, 220.27169998909812, 220.495799992932, 220.5431999900611, 218.27440000197385], "cpu_ort_8threads_ms": [0.3601000062189996, 0.23740000324323773, 0.23099999816622585, 0.2263999922433868, 0.22510001144837588, 0.2291000128025189, 0.23280001187231392, 0.23270001111086458, 0.2255999861517921, 0.22700001136399806], "cpu_scope": "attention only, no RoPE; dense masked local product", "timing_scope": "one core, includes streaming/dispatch; excludes packing and BO copies"}
+correctness PASS
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+SUITE_BEGIN local_h1_v1
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+preregistration_sha256 27f8faeb721581019d7b37c90218430e9a3248fb4c49cf99e4a556bd78eee376 build local_h1_v1
+{"seed": 11, "kind": "random", "poison": "0x7fc12345", "ok": true, "max_abs": 3.725290298461914e-09, "relative_l2": 1.780485186763418e-09, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 15.51550001022406, "write_sync_ms": 0.29349999385885894, "dispatch_ms": 193.00579999980982, "read_sync_ms": 0.05800000508315861, "verdict": "PASS"}
+{"seed": 11, "kind": "random", "poison": "0x7fc54321", "ok": true, "max_abs": 3.725290298461914e-09, "relative_l2": 1.780485186763418e-09, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 15.863200009334832, "write_sync_ms": 0.3264999977545813, "dispatch_ms": 193.7154999905033, "read_sync_ms": 0.0585000088904053, "verdict": "PASS"}
+{"seed": 11, "kind": "uniform", "poison": "0x7fc12345", "ok": true, "max_abs": 3.725290298461914e-09, "relative_l2": 1.780485186763418e-09, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 15.486099990084767, "write_sync_ms": 0.32780000765342265, "dispatch_ms": 193.864200002281, "read_sync_ms": 0.05980000423733145, "verdict": "PASS"}
+{"seed": 11, "kind": "uniform", "poison": "0x7fc54321", "ok": true, "max_abs": 3.725290298461914e-09, "relative_l2": 1.780485186763418e-09, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 16.887499994481914, "write_sync_ms": 0.28589999419637024, "dispatch_ms": 193.81489999068435, "read_sync_ms": 0.0602000072831288, "verdict": "PASS"}
+{"seed": 11, "kind": "zero", "poison": "0x7fc12345", "ok": true, "max_abs": 0.0, "relative_l2": 0.0, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 15.210600002319552, "write_sync_ms": 0.3240000078221783, "dispatch_ms": 186.19329998909961, "read_sync_ms": 0.10479999764356762, "verdict": "PASS"}
+{"seed": 11, "kind": "zero", "poison": "0x7fc54321", "ok": true, "max_abs": 0.0, "relative_l2": 0.0, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 17.577900012838654, "write_sync_ms": 0.37730000622104853, "dispatch_ms": 187.03289999393746, "read_sync_ms": 0.05800000508315861, "verdict": "PASS"}
+{"seed": 11, "kind": "peaked", "poison": "0x7fc12345", "ok": true, "max_abs": 3.725290298461914e-09, "relative_l2": 1.780485186763418e-09, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 16.083900001831353, "write_sync_ms": 0.3156000020680949, "dispatch_ms": 193.69719999667723, "read_sync_ms": 0.058999998145736754, "verdict": "PASS"}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 69 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |5656                |118        |8           |0           |0    |Normal   |\n      |python.exe          |Active     |7           |0           |     |N/A      |\n      |69 MB               |64 KB      |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [5656], "owned_pids": [5504, 5656, 5904, 5924, 8076, 12752, 14388, 15584, 16364, 16872, 17664, 18516, 19148], "foreign_pids": []}
+{"seed": 11, "kind": "peaked", "poison": "0x7fc54321", "ok": true, "max_abs": 3.725290298461914e-09, "relative_l2": 1.780485186763418e-09, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 17.074299990781583, "write_sync_ms": 0.34500000765547156, "dispatch_ms": 191.97660000645556, "read_sync_ms": 0.05900001269765198, "verdict": "PASS"}
+{"seed": 29, "kind": "random", "poison": "0x7fc12345", "ok": true, "max_abs": 3.725290298461914e-09, "relative_l2": 1.572537486540566e-09, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 15.295599994715303, "write_sync_ms": 0.3302000113762915, "dispatch_ms": 193.5358000046108, "read_sync_ms": 0.06540000322274864, "verdict": "PASS"}
+HOST_TIMELINE {"elapsed_seconds": 238.938, "tree_rss_bytes": 269651968, "foreign_peers": []}
+{"seed": 29, "kind": "random", "poison": "0x7fc54321", "ok": true, "max_abs": 3.725290298461914e-09, "relative_l2": 1.572537486540566e-09, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 17.361599995638244, "write_sync_ms": 0.2921999985119328, "dispatch_ms": 191.59529999888036, "read_sync_ms": 0.049299997044727206, "verdict": "PASS"}
+{"seed": 29, "kind": "uniform", "poison": "0x7fc12345", "ok": true, "max_abs": 3.725290298461914e-09, "relative_l2": 1.572537486540566e-09, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 18.080600013490766, "write_sync_ms": 0.26500000967644155, "dispatch_ms": 190.90760000108276, "read_sync_ms": 0.058299992815591395, "verdict": "PASS"}
+{"seed": 29, "kind": "uniform", "poison": "0x7fc54321", "ok": true, "max_abs": 3.725290298461914e-09, "relative_l2": 1.572537486540566e-09, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 15.965799990226515, "write_sync_ms": 0.32780000765342265, "dispatch_ms": 194.15520000620745, "read_sync_ms": 0.05750000127591193, "verdict": "PASS"}
+{"seed": 29, "kind": "zero", "poison": "0x7fc12345", "ok": true, "max_abs": 0.0, "relative_l2": 0.0, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 14.97899999958463, "write_sync_ms": 0.3549000102793798, "dispatch_ms": 185.0650999986101, "read_sync_ms": 0.06159998883958906, "verdict": "PASS"}
+{"seed": 29, "kind": "zero", "poison": "0x7fc54321", "ok": true, "max_abs": 0.0, "relative_l2": 0.0, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 17.421500000637025, "write_sync_ms": 0.3062000032514334, "dispatch_ms": 182.70559998927638, "read_sync_ms": 0.05489999603014439, "verdict": "PASS"}
+{"seed": 29, "kind": "peaked", "poison": "0x7fc12345", "ok": true, "max_abs": 3.725290298461914e-09, "relative_l2": 1.572537486540566e-09, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 15.517799998633564, "write_sync_ms": 0.33209999673999846, "dispatch_ms": 193.8532999920426, "read_sync_ms": 0.057900004321709275, "verdict": "PASS"}
+{"seed": 29, "kind": "peaked", "poison": "0x7fc54321", "ok": true, "max_abs": 3.725290298461914e-09, "relative_l2": 1.572537486540566e-09, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 16.671799996402115, "write_sync_ms": 0.2722000062931329, "dispatch_ms": 193.96770000457764, "read_sync_ms": 0.056599994422867894, "verdict": "PASS"}
+{"seed": 47, "kind": "random", "poison": "0x7fc12345", "ok": true, "max_abs": 1.862645149230957e-09, "relative_l2": 7.285471652099129e-10, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 15.34489999176003, "write_sync_ms": 0.38109999150037766, "dispatch_ms": 194.18409999343567, "read_sync_ms": 0.06730000313837081, "verdict": "PASS"}
+{"seed": 47, "kind": "random", "poison": "0x7fc54321", "ok": true, "max_abs": 1.862645149230957e-09, "relative_l2": 7.285471652099129e-10, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 17.4029000045266, "write_sync_ms": 0.32080001255963, "dispatch_ms": 193.87550000101328, "read_sync_ms": 0.05729999975301325, "verdict": "PASS"}
+{"seed": 47, "kind": "uniform", "poison": "0x7fc12345", "ok": true, "max_abs": 1.862645149230957e-09, "relative_l2": 7.285471652099129e-10, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 15.016500008641742, "write_sync_ms": 0.33880000410135835, "dispatch_ms": 194.10430001153145, "read_sync_ms": 0.05779998900834471, "verdict": "PASS"}
+{"seed": 47, "kind": "uniform", "poison": "0x7fc54321", "ok": true, "max_abs": 1.862645149230957e-09, "relative_l2": 7.285471652099129e-10, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 17.15249998960644, "write_sync_ms": 0.3117000014754012, "dispatch_ms": 194.05700000061188, "read_sync_ms": 0.05729999975301325, "verdict": "PASS"}
+HOST_TIMELINE {"elapsed_seconds": 241.188, "tree_rss_bytes": 277893120, "foreign_peers": []}
+{"seed": 47, "kind": "zero", "poison": "0x7fc12345", "ok": true, "max_abs": 0.0, "relative_l2": 0.0, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 22.302900004433468, "write_sync_ms": 0.3482000029180199, "dispatch_ms": 182.31899999955203, "read_sync_ms": 0.05269999383017421, "verdict": "PASS"}
+{"seed": 47, "kind": "zero", "poison": "0x7fc54321", "ok": true, "max_abs": 0.0, "relative_l2": 0.0, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 15.211400008411147, "write_sync_ms": 0.34169999707955867, "dispatch_ms": 184.33420000656042, "read_sync_ms": 0.057600002037361264, "verdict": "PASS"}
+{"seed": 47, "kind": "peaked", "poison": "0x7fc12345", "ok": true, "max_abs": 1.862645149230957e-09, "relative_l2": 7.285471652099129e-10, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 14.440099999774247, "write_sync_ms": 0.2818000066326931, "dispatch_ms": 193.98569999611937, "read_sync_ms": 0.057900004321709275, "verdict": "PASS"}
+{"seed": 47, "kind": "peaked", "poison": "0x7fc54321", "ok": true, "max_abs": 1.862645149230957e-09, "relative_l2": 7.285471652099129e-10, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 16.99940000253264, "write_sync_ms": 0.3496999997878447, "dispatch_ms": 193.9249999995809, "read_sync_ms": 0.05729999975301325, "verdict": "PASS"}
+HOST_TIMELINE {"elapsed_seconds": 243.516, "tree_rss_bytes": 205905920, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 69 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |5656                |118        |34          |0           |0    |Normal   |\n      |python.exe          |Active     |33          |0           |     |N/A      |\n      |69 MB               |64 KB      |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [5656], "owned_pids": [5504, 5656, 5904, 5924, 8076, 12752, 14388, 15584, 16364, 16872, 17664, 18516, 19148], "foreign_pids": []}
+{"dispatch_ms": [193.8092000054894, 190.7710999948904, 190.50199999765027, 193.87600000482053, 192.10619998921175, 189.517299993895, 191.43009999243077, 193.3766000001924, 193.7686000019312, 194.29630000377074], "cpu_ort_8threads_ms": [0.3341999981785193, 0.24280000070575625, 0.22960000205785036, 0.23489999875891954, 0.2373999886913225, 0.2212999970652163, 0.22529999841935933, 0.2325000095879659, 0.2238999877590686, 0.21949999791104347], "cpu_scope": "attention only, no RoPE; dense masked local product", "timing_scope": "one core, includes streaming/dispatch; excludes packing and BO copies"}
+correctness PASS
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+SUITE_BEGIN local_h1_v193
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+preregistration_sha256 27f8faeb721581019d7b37c90218430e9a3248fb4c49cf99e4a556bd78eee376 build local_h1_v193
+{"seed": 11, "kind": "random", "poison": "0x7fc12345", "ok": true, "max_abs": 0.0026959703621012854, "relative_l2": 0.0016209090603736358, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 11.889700006577186, "write_sync_ms": 0.16539999342057854, "dispatch_ms": 138.67490000848193, "read_sync_ms": 0.05909999890718609, "verdict": "PASS"}
+{"seed": 11, "kind": "random", "poison": "0x7fc54321", "ok": true, "max_abs": 0.0026959703621012854, "relative_l2": 0.0016209090603736358, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 12.845699995523319, "write_sync_ms": 0.25260000256821513, "dispatch_ms": 137.90079999307636, "read_sync_ms": 0.07080000068526715, "verdict": "PASS"}
+{"seed": 11, "kind": "uniform", "poison": "0x7fc12345", "ok": true, "max_abs": 7.152557368605983e-08, "relative_l2": 2.9714578913562676e-08, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 10.916800005361438, "write_sync_ms": 0.23689999943599105, "dispatch_ms": 133.1062999961432, "read_sync_ms": 0.05819999205414206, "verdict": "PASS"}
+{"seed": 11, "kind": "uniform", "poison": "0x7fc54321", "ok": true, "max_abs": 7.152557368605983e-08, "relative_l2": 2.9714578913562676e-08, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 12.742499995511025, "write_sync_ms": 0.1824999926611781, "dispatch_ms": 131.91619999997783, "read_sync_ms": 0.05909999890718609, "verdict": "PASS"}
+{"seed": 11, "kind": "zero", "poison": "0x7fc12345", "ok": true, "max_abs": 0.0, "relative_l2": 0.0, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 10.793600013130344, "write_sync_ms": 0.24300000222865492, "dispatch_ms": 127.41729999834206, "read_sync_ms": 0.059600002714432776, "verdict": "PASS"}
+{"seed": 11, "kind": "zero", "poison": "0x7fc54321", "ok": true, "max_abs": 0.0, "relative_l2": 0.0, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 12.340400004177354, "write_sync_ms": 0.17520000983495265, "dispatch_ms": 127.68340000184253, "read_sync_ms": 0.06089999806135893, "verdict": "PASS"}
+{"seed": 11, "kind": "peaked", "poison": "0x7fc12345", "ok": true, "max_abs": 0.0077582561670355155, "relative_l2": 0.0003907531649351738, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 11.237200000323355, "write_sync_ms": 0.1838000025600195, "dispatch_ms": 137.62690000294242, "read_sync_ms": 0.0602000072831288, "verdict": "PASS"}
+HOST_TIMELINE {"elapsed_seconds": 245.797, "tree_rss_bytes": 268087296, "foreign_peers": []}
+{"seed": 11, "kind": "peaked", "poison": "0x7fc54321", "ok": true, "max_abs": 0.0077582561670355155, "relative_l2": 0.0003907531649351738, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 12.499300006311387, "write_sync_ms": 0.26679999427869916, "dispatch_ms": 134.78720000421163, "read_sync_ms": 0.054499992984347045, "verdict": "PASS"}
+{"seed": 29, "kind": "random", "poison": "0x7fc12345", "ok": true, "max_abs": 0.0050667517648842475, "relative_l2": 0.00173589782947238, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 15.524799993727356, "write_sync_ms": 0.2018000086536631, "dispatch_ms": 136.2647000059951, "read_sync_ms": 0.05750000127591193, "verdict": "PASS"}
+{"seed": 29, "kind": "random", "poison": "0x7fc54321", "ok": true, "max_abs": 0.0050667517648842475, "relative_l2": 0.00173589782947238, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 12.616699998034164, "write_sync_ms": 0.2479999966453761, "dispatch_ms": 135.2881999919191, "read_sync_ms": 0.057199998991563916, "verdict": "PASS"}
+{"seed": 29, "kind": "uniform", "poison": "0x7fc12345", "ok": true, "max_abs": 7.947285984855057e-08, "relative_l2": 3.012339653024571e-08, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 11.854900003527291, "write_sync_ms": 0.261799999861978, "dispatch_ms": 130.2494999981718, "read_sync_ms": 0.054799995268695056, "verdict": "PASS"}
+{"seed": 29, "kind": "uniform", "poison": "0x7fc54321", "ok": true, "max_abs": 7.947285984855057e-08, "relative_l2": 3.012339653024571e-08, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 12.5625999935437, "write_sync_ms": 0.23409999266732484, "dispatch_ms": 132.9939999995986, "read_sync_ms": 0.05989999044686556, "verdict": "PASS"}
+{"seed": 29, "kind": "zero", "poison": "0x7fc12345", "ok": true, "max_abs": 0.0, "relative_l2": 0.0, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 10.821100004250184, "write_sync_ms": 0.25579999783076346, "dispatch_ms": 127.76609999127686, "read_sync_ms": 0.05870001041330397, "verdict": "PASS"}
+{"seed": 29, "kind": "zero", "poison": "0x7fc54321", "ok": true, "max_abs": 0.0, "relative_l2": 0.0, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 12.645700000575744, "write_sync_ms": 0.26309999520890415, "dispatch_ms": 127.85099999746308, "read_sync_ms": 0.059999991208314896, "verdict": "PASS"}
+{"seed": 29, "kind": "peaked", "poison": "0x7fc12345", "ok": true, "max_abs": 0.004607757186824102, "relative_l2": 0.00046184333404902263, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 11.136300003272481, "write_sync_ms": 0.31200000375974923, "dispatch_ms": 137.98319999477826, "read_sync_ms": 0.06770000618416816, "verdict": "PASS"}
+{"seed": 29, "kind": "peaked", "poison": "0x7fc54321", "ok": true, "max_abs": 0.004607757186824102, "relative_l2": 0.00046184333404902263, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 13.484999988577329, "write_sync_ms": 0.225499999942258, "dispatch_ms": 137.59270000446122, "read_sync_ms": 0.058999998145736754, "verdict": "PASS"}
+{"seed": 47, "kind": "random", "poison": "0x7fc12345", "ok": true, "max_abs": 0.0025051498606386835, "relative_l2": 0.001650467230544863, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 11.374400011845864, "write_sync_ms": 0.24419999681413174, "dispatch_ms": 138.1130999943707, "read_sync_ms": 0.05879999662283808, "verdict": "PASS"}
+{"seed": 47, "kind": "random", "poison": "0x7fc54321", "ok": true, "max_abs": 0.0025051498606386835, "relative_l2": 0.001650467230544863, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 12.553000007756054, "write_sync_ms": 0.24979999579954892, "dispatch_ms": 137.8508000052534, "read_sync_ms": 0.0619000056758523, "verdict": "PASS"}
+{"seed": 47, "kind": "uniform", "poison": "0x7fc12345", "ok": true, "max_abs": 7.947285984855057e-08, "relative_l2": 3.0388416343351205e-08, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 11.423799995100126, "write_sync_ms": 0.1871999993454665, "dispatch_ms": 133.0247000005329, "read_sync_ms": 0.0577000027988106, "verdict": "PASS"}
+{"seed": 47, "kind": "uniform", "poison": "0x7fc54321", "ok": true, "max_abs": 7.947285984855057e-08, "relative_l2": 3.0388416343351205e-08, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 12.58100000268314, "write_sync_ms": 0.18149999959859997, "dispatch_ms": 132.9078999988269, "read_sync_ms": 0.057600002037361264, "verdict": "PASS"}
+{"seed": 47, "kind": "zero", "poison": "0x7fc12345", "ok": true, "max_abs": 0.0, "relative_l2": 0.0, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 11.221199994906783, "write_sync_ms": 0.2514999941922724, "dispatch_ms": 127.69069999922067, "read_sync_ms": 0.05849999433849007, "verdict": "PASS"}
+{"seed": 47, "kind": "zero", "poison": "0x7fc54321", "ok": true, "max_abs": 0.0, "relative_l2": 0.0, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 12.76339999458287, "write_sync_ms": 0.17860000662039965, "dispatch_ms": 127.6003000093624, "read_sync_ms": 0.060000005760230124, "verdict": "PASS"}
+HOST_TIMELINE {"elapsed_seconds": 248.063, "tree_rss_bytes": 273698816, "foreign_peers": []}
+{"seed": 47, "kind": "peaked", "poison": "0x7fc12345", "ok": true, "max_abs": 0.00527064038162639, "relative_l2": 0.0004457701898172405, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 15.921899990644306, "write_sync_ms": 0.2682000049389899, "dispatch_ms": 134.8158000037074, "read_sync_ms": 0.05729999975301325, "verdict": "PASS"}
+{"seed": 47, "kind": "peaked", "poison": "0x7fc54321", "ok": true, "max_abs": 0.00527064038162639, "relative_l2": 0.0004457701898172405, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 11.236199992708862, "write_sync_ms": 0.19120000069960952, "dispatch_ms": 135.1070999953663, "read_sync_ms": 0.055900003644637764, "verdict": "PASS"}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 67 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |5656                |119        |27          |0           |0    |Normal   |\n      |python.exe          |Active     |26          |0           |     |N/A      |\n      |67 MB               |64 KB      |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [5656], "owned_pids": [5504, 5656, 5904, 5924, 8076, 12752, 14388, 15584, 16364, 16872, 17664, 17816, 18516, 19148], "foreign_pids": []}
+{"dispatch_ms": [137.4879999930272, 137.60000000183936, 137.9476000001887, 138.1175999995321, 137.9332000069553, 138.03390000248328, 135.34860000072513, 137.96339998953044, 137.95969999046065, 137.96779999393038], "cpu_ort_8threads_ms": [0.3786000015679747, 0.2378999924985692, 0.23180000425782055, 0.22819999139755964, 0.22170000011101365, 0.2339999919058755, 0.22590000298805535, 0.2443999983370304, 0.21909999486524612, 0.22699999681208283], "cpu_scope": "attention only, no RoPE; dense masked local product", "timing_scope": "one core, includes streaming/dispatch; excludes packing and BO copies"}
+correctness PASS
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+SUITE_BEGIN local_h1_v512
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+HOST_TIMELINE {"elapsed_seconds": 250.313, "tree_rss_bytes": 257626112, "foreign_peers": []}
+preregistration_sha256 27f8faeb721581019d7b37c90218430e9a3248fb4c49cf99e4a556bd78eee376 build local_h1_v512
+{"seed": 11, "kind": "random", "poison": "0x7fc12345", "ok": true, "max_abs": 0.001866548876516605, "relative_l2": 0.001969283457285211, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 8.12959999893792, "write_sync_ms": 0.17240000306628644, "dispatch_ms": 70.49579999875277, "read_sync_ms": 0.04949999856762588, "verdict": "PASS"}
+{"seed": 11, "kind": "random", "poison": "0x7fc54321", "ok": true, "max_abs": 0.001866548876516605, "relative_l2": 0.001969283457285211, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 5.668199999490753, "write_sync_ms": 0.15490000077988952, "dispatch_ms": 70.16180000209715, "read_sync_ms": 0.04650000482797623, "verdict": "PASS"}
+{"seed": 11, "kind": "uniform", "poison": "0x7fc12345", "ok": true, "max_abs": 2.507179502897472e-08, "relative_l2": 2.9591068192356483e-08, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 8.118800004012883, "write_sync_ms": 0.12880000576842576, "dispatch_ms": 56.29410000983626, "read_sync_ms": 0.051000009989365935, "verdict": "PASS"}
+{"seed": 11, "kind": "uniform", "poison": "0x7fc54321", "ok": true, "max_abs": 2.507179502897472e-08, "relative_l2": 2.9591068192356483e-08, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 6.7608000099426135, "write_sync_ms": 0.106100007542409, "dispatch_ms": 57.35329999879468, "read_sync_ms": 0.04490000719670206, "verdict": "PASS"}
+{"seed": 11, "kind": "zero", "poison": "0x7fc12345", "ok": true, "max_abs": 0.0, "relative_l2": 0.0, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 5.651800005580299, "write_sync_ms": 0.15660001372452825, "dispatch_ms": 57.0436999987578, "read_sync_ms": 0.06059999577701092, "verdict": "PASS"}
+{"seed": 11, "kind": "zero", "poison": "0x7fc54321", "ok": true, "max_abs": 0.0, "relative_l2": 0.0, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 7.231199997477233, "write_sync_ms": 0.10840001050382853, "dispatch_ms": 55.38879999949131, "read_sync_ms": 0.06150000263005495, "verdict": "PASS"}
+{"seed": 11, "kind": "peaked", "poison": "0x7fc12345", "ok": true, "max_abs": 0.0077582561670355155, "relative_l2": 0.00041550466429127056, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 5.345300000044517, "write_sync_ms": 0.1289000065298751, "dispatch_ms": 71.38960000884254, "read_sync_ms": 0.05699999746866524, "verdict": "PASS"}
+{"seed": 11, "kind": "peaked", "poison": "0x7fc54321", "ok": true, "max_abs": 0.0077582561670355155, "relative_l2": 0.00041550466429127056, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 7.414899999275804, "write_sync_ms": 0.10390000534243882, "dispatch_ms": 70.20240000565536, "read_sync_ms": 0.1250000059371814, "verdict": "PASS"}
+{"seed": 29, "kind": "random", "poison": "0x7fc12345", "ok": true, "max_abs": 0.0015346030994251025, "relative_l2": 0.001997597688867335, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 5.629699997371063, "write_sync_ms": 0.10540000221226364, "dispatch_ms": 70.34089999797288, "read_sync_ms": 0.05780000356025994, "verdict": "PASS"}
+{"seed": 29, "kind": "random", "poison": "0x7fc54321", "ok": true, "max_abs": 0.0015346030994251025, "relative_l2": 0.001997597688867335, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 7.3272000008728355, "write_sync_ms": 0.10109999857377261, "dispatch_ms": 70.27799999923445, "read_sync_ms": 0.05339999916031957, "verdict": "PASS"}
+{"seed": 29, "kind": "uniform", "poison": "0x7fc12345", "ok": true, "max_abs": 2.0265579159239877e-08, "relative_l2": 2.9467739002301047e-08, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 5.333200009772554, "write_sync_ms": 0.10710000060498714, "dispatch_ms": 56.46179999166634, "read_sync_ms": 0.0371999922208488, "verdict": "PASS"}
+{"seed": 29, "kind": "uniform", "poison": "0x7fc54321", "ok": true, "max_abs": 2.0265579159239877e-08, "relative_l2": 2.9467739002301047e-08, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 7.256699987920001, "write_sync_ms": 0.10469999688211828, "dispatch_ms": 57.67159999231808, "read_sync_ms": 0.06080001185182482, "verdict": "PASS"}
+{"seed": 29, "kind": "zero", "poison": "0x7fc12345", "ok": true, "max_abs": 0.0, "relative_l2": 0.0, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 6.122999999206513, "write_sync_ms": 0.1103000104194507, "dispatch_ms": 55.244400005904026, "read_sync_ms": 0.05800000508315861, "verdict": "PASS"}
+{"seed": 29, "kind": "zero", "poison": "0x7fc54321", "ok": true, "max_abs": 0.0, "relative_l2": 0.0, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 7.364000004599802, "write_sync_ms": 0.09870000940281898, "dispatch_ms": 55.2041999908397, "read_sync_ms": 0.0627999979769811, "verdict": "PASS"}
+{"seed": 29, "kind": "peaked", "poison": "0x7fc12345", "ok": true, "max_abs": 0.004690169417081891, "relative_l2": 0.00043669173655266197, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 5.585599996265955, "write_sync_ms": 0.10430000838823617, "dispatch_ms": 70.97770000109449, "read_sync_ms": 0.056899996707215905, "verdict": "PASS"}
+{"seed": 29, "kind": "peaked", "poison": "0x7fc54321", "ok": true, "max_abs": 0.004690169417081891, "relative_l2": 0.00043669173655266197, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 7.404800009680912, "write_sync_ms": 0.09800000407267362, "dispatch_ms": 71.32819999242201, "read_sync_ms": 0.059999991208314896, "verdict": "PASS"}
+{"seed": 47, "kind": "random", "poison": "0x7fc12345", "ok": true, "max_abs": 0.001773949328722435, "relative_l2": 0.001969864073561276, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 5.999000000883825, "write_sync_ms": 0.1049999991664663, "dispatch_ms": 71.74959999974817, "read_sync_ms": 0.0585000088904053, "verdict": "PASS"}
+{"seed": 47, "kind": "random", "poison": "0x7fc54321", "ok": true, "max_abs": 0.001773949328722435, "relative_l2": 0.001969864073561276, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 7.400500006042421, "write_sync_ms": 0.09929999941959977, "dispatch_ms": 71.6316000034567, "read_sync_ms": 0.0577000027988106, "verdict": "PASS"}
+{"seed": 47, "kind": "uniform", "poison": "0x7fc12345", "ok": true, "max_abs": 3.606331461236678e-08, "relative_l2": 3.059216716375056e-08, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 5.283299993607216, "write_sync_ms": 0.10479999764356762, "dispatch_ms": 57.78170000121463, "read_sync_ms": 0.05699999746866524, "verdict": "PASS"}
+{"seed": 47, "kind": "uniform", "poison": "0x7fc54321", "ok": true, "max_abs": 3.606331461236678e-08, "relative_l2": 3.059216716375056e-08, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 7.704500007093884, "write_sync_ms": 0.10210000618826598, "dispatch_ms": 57.72350000916049, "read_sync_ms": 0.0602000072831288, "verdict": "PASS"}
+{"seed": 47, "kind": "zero", "poison": "0x7fc12345", "ok": true, "max_abs": 0.0, "relative_l2": 0.0, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 5.401200003689155, "write_sync_ms": 0.10799999290611595, "dispatch_ms": 55.26199999439996, "read_sync_ms": 0.058999998145736754, "verdict": "PASS"}
+{"seed": 47, "kind": "zero", "poison": "0x7fc54321", "ok": true, "max_abs": 0.0, "relative_l2": 0.0, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 7.158699998399243, "write_sync_ms": 0.09959998715203255, "dispatch_ms": 55.416500006685965, "read_sync_ms": 0.060699996538460255, "verdict": "PASS"}
+{"seed": 47, "kind": "peaked", "poison": "0x7fc12345", "ok": true, "max_abs": 0.005761418091115633, "relative_l2": 0.0004188915010490001, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 5.40779999573715, "write_sync_ms": 0.10039999324362725, "dispatch_ms": 71.32449999335222, "read_sync_ms": 0.056200005928985775, "verdict": "PASS"}
+{"seed": 47, "kind": "peaked", "poison": "0x7fc54321", "ok": true, "max_abs": 0.005761418091115633, "relative_l2": 0.0004188915010490001, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 7.247400004416704, "write_sync_ms": 0.10540000221226364, "dispatch_ms": 71.52270000369754, "read_sync_ms": 0.06089999806135893, "verdict": "PASS"}
+HOST_TIMELINE {"elapsed_seconds": 252.594, "tree_rss_bytes": 261881856, "foreign_peers": []}
+{"dispatch_ms": [71.6108000051463, 71.0244999936549, 71.65620000159834, 70.19519999448676, 69.771700000274, 69.74819999595638, 69.80649998877198, 70.98260000930168, 71.57479999295902, 71.0733000014443], "cpu_ort_8threads_ms": [0.3652000013971701, 0.2361999941058457, 0.2297000028192997, 0.23130000045057386, 0.22529999841935933, 0.23249999503605068, 0.22000000171829015, 0.2263999922433868, 0.222100003156811, 0.22990000434219837], "cpu_scope": "attention only, no RoPE; dense masked local product", "timing_scope": "one core, includes streaming/dispatch; excludes packing and BO copies"}
+correctness PASS
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+SUITE_BEGIN resident_empty
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+preregistration_sha256 27f8faeb721581019d7b37c90218430e9a3248fb4c49cf99e4a556bd78eee376 build resident_empty
+{"resident": "empty", "calls": 0, "dispatch_ms": [0.2234999992651865, 0.19070001144427806, 0.17090000619646162, 0.1767999929143116, 0.17860000662039965]}
+{"resident": "empty", "calls": 25, "dispatch_ms": [0.17559999832883477, 0.17519999528303742, 0.1433999859727919, 0.14399999054148793, 0.13699999544769526]}
+{"resident": "empty", "calls": 50, "dispatch_ms": [0.1677000109339133, 0.13889999536331743, 0.1348000077996403, 0.13410000246949494, 0.13249999028630555]}
+{"resident": "empty", "calls": 100, "dispatch_ms": [0.14090001059230417, 0.13899999612476677, 0.13859999307896942, 0.13800000306218863, 0.1379000023007393]}
+{"resident": "empty", "slope_ms": -0.00044605713337659777, "intercept_ms": 0.17541999928653237, "r_squared": 0.4640439602584845, "scope": "one resident 16x32 attention block, reset every call; not a full head"}
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+SUITE_BEGIN resident_kernel
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+preregistration_sha256 27f8faeb721581019d7b37c90218430e9a3248fb4c49cf99e4a556bd78eee376 build resident_kernel
+{"resident_correctness_calls": 1, "guards": true, "ok": true, "max_abs": 0.002450943049513765, "relative_l2": 0.001894764631906351, "bad_elements": 0}
+{"resident_correctness_calls": 3, "guards": true, "ok": true, "max_abs": 0.002450943049513765, "relative_l2": 0.001894764631906351, "bad_elements": 0}
+{"resident": "kernel", "calls": 0, "dispatch_ms": [0.2604999899631366, 0.2466999867465347, 0.2761999930953607, 0.24900000425986946, 0.225499999942258]}
+{"resident": "kernel", "calls": 25, "dispatch_ms": [12.975499994354323, 13.058299999102019, 13.221799992606975, 13.051799993263558, 13.05659998615738]}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 64 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |5656                |122        |21          |0           |0    |Normal   |\n      |python.exe          |Active     |20          |0           |     |N/A      |\n      |64 MB               |64 KB      |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [5656], "owned_pids": [5504, 5656, 5904, 5924, 8076, 12752, 13368, 14388, 15584, 16364, 16688, 16872, 17664, 17816, 18516, 18632, 19148], "foreign_pids": []}
+{"resident": "kernel", "calls": 50, "dispatch_ms": [25.383300002431497, 25.594100006856024, 25.378400008776225, 24.994299994432367, 25.264000010793097]}
+{"resident": "kernel", "calls": 100, "dispatch_ms": [50.19729999185074, 49.98929999419488, 49.990100000286475, 50.01130000164267, 50.009400001727045]}
+{"resident": "kernel", "slope_ms": 0.49679849147796623, "intercept_ms": 0.4367359954630882, "r_squared": 0.9998959076449989, "scope": "one resident 16x32 attention block, reset every call; not a full head"}
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+SUITE_RESULT {"verdict": "PASS", "failed": []}
+POST_NPU_CONTEXT_WITNESS "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+RESEARCH_PROCESS_RESULT {"exit_code": 0, "stop": null, "peak_tree_rss_bytes": 632778752, "rss_measurement": "maximum observed across sampled descendant working sets; zero observations reported as null", "elapsed_seconds": 254.29699999999139, "foreign_contention_observed": false, "timing_eligible": true}

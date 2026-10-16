@@ -17186,3 +17186,368 @@ turned a −0.48 ms NOP gain into a +0.93 ms real loss through compute exposure.
 Log: [memtile_replay_sizing_yolov8s_desktop2_20261013T214115Z.log](../results/aie/memtile_replay_sizing_yolov8s_desktop2_20261013T214115Z.log).
 Its two scripts are git-ignored scratch files; both cost models are stated in the
 log header.
+
+## Laya fused attention prototype (2026-10-16, Desktop 2)
+
+The scalar implementation in this section is retained as history; the [vector implementation below](#vector-attention-software-float-helpers-removed-2026-10-16-desktop-2) supersedes its performance result.
+
+**Correctness PASS within the registered tolerance; performance NEGATIVE.** This is a
+standalone, one-core encoder-attention prototype, with heads processed sequentially.
+It has not replaced any Laya host segment and establishes no end-to-end decision accuracy.
+
+The export's masks were executed as a small ONNX graph, without loading its external
+weights. Its nominal local window is an inclusive radius of 64: 129 keys for an interior
+token. Padding masks keys, not query outputs. A fully masked row contains finite
+`-FLT_MAX`, so the source softmax returns a uniform distribution. The prototype preserves
+that behavior by zeroing that query row and processing all keys, rather than returning
+zeros. Both scale factors are 0.3535533845424652, giving 0.125 to fp32 noise. Inputs are
+post-RoPE bf16 Q/K/V; outputs and online accumulators are fp32. RoPE is outside this kernel.
+
+The kernel uses `aie::mmul<4,8,4>` for both products, with 16-query by 32-key streaming
+blocks and online max/sum/numerator state. Wholly excluded local K/V blocks are skipped.
+Scores never form a full sequence-square buffer. Q, transposed K and V are packed into
+matrix tiles on the host; Q is repeated in each packet. Both that repetition and the
+scalar softmax/layout loops are limitations of this first implementation.
+
+**Numerical contract.** Fixed before each run, unchanged after the initial failure:
+every output must satisfy `abs(error) <= 0.01 + 0.02 * abs(reference)`, and relative L2
+error must be at most 0.02. The independent oracle is float64 over the same bf16-rounded
+inputs. Three seeds, random/uniform/zero/peaked inputs and two NaN poisons give 24 complete
+output comparisons per arm. Global and local masks were checked with 512, 193, 1 and 0
+valid keys on one head; both full-length masks were also checked across all 16 heads.
+All 240 comparisons passed, including every padded query, poison independence, input
+immutability and prefix/suffix guards. Worst absolute error was 0.007760124; worst
+relative L2 error was 0.002022817. The resident block also passed its one- and three-call
+checks. These synthetic fixtures do not establish Laya's labelled-task accuracy.
+
+**Same-sitting timing, milliseconds.** Means of ten dispatches after three warm-ups,
+using the final seeded peaked-input fixture. NPU timings include the streamed head and
+dispatch; host packing, BO writes/sync and reads/sync are separately logged and excluded
+from this table. CPU is an explicit eight-thread ONNX Runtime fp32 attention graph on the
+same bf16-rounded values and masks, with spinning disabled. Its local arm computes a
+dense masked product. Both arms exclude RoPE and the rest of the host segment.
+
+| Attention, 512 tokens x 64 channels per head | NPU, one core | ORT CPU, eight threads |
+|---|---:|---:|
+| Global, 1 head | 273.719 | 0.184 |
+| Local, 1 head | 71.391 | 0.197 |
+| Global, 16 heads | 4369.552 | 3.275 |
+| Local, 16 heads | 1129.686 | 3.333 |
+
+Packing itself also costs time: across the correctness fixtures, the 16-head global
+and local means were 285.098 and
+91.661 ms. The window reduces work and bytes but
+does not make this implementation competitive with the CPU.
+
+**Resident control.** Repeating one 16x32 random-input block, resetting its state on every
+call, gives 0.492444 ms/call (R-squared 0.999790) at
+0/25/50/100 calls. The empty control's slope is -0.000710309 ms/call with
+R-squared 0.491425. No empty-control subtraction is used. The resident
+slope includes the call loop and is not full-head latency.
+There is substantial cost with operands resident; attributing a precise fraction to
+exp versus layout/scalar work would require an ablation. The scalar exp path is the next
+optimization candidate, not a measured causal decomposition.
+
+**History and limits.** The first one-head global check passed with upstream's bf16
+lookup exp, but the expanded run failed one 16-head peaked-input output (max absolute
+error 0.017235126). It also stopped on an absent CPU timing helper dependency; that
+run's timings are ineligible. The correction uses fp32 range reduction and a sixth-degree
+exp polynomial before bf16 probability rounding; the tolerance was not relaxed. Upstream
+`bf16_exp.cc` and `softmax.cc` do compile with the runtime include directory and explicit
+lookup-table linkage. The corrected v3 suite passed. The v4 repeat qualifies the final
+runner, which explicitly releases BOs in a `finally` block before closing the hardware context; kernel
+bytes and arithmetic are unchanged. Linked kernel text is 12,048 bytes, with recorded
+C++ stack frames of 448 and 64 bytes inside the runner's conservative stack gate.
+
+The final run reports `timing_eligible: true`, no foreign contention, and an idle NPU
+after every design and after process exit. Pre-registration, artifact/source hashes,
+upstream hashes, placement and raw timings are in the log. This result does not reopen
+the separate MobileViT attention negative result.
+
+Reproduce from `laya-testing`, with the Laya export present locally:
+
+```bash
+bash scripts/research-iron.sh kernels/laya_attention/probe.py inspect --model scratch/laya/laya-onnx/laya_az0_noguard.onnx --out scratch/laya_attention/semantics
+bash scripts/research-iron.sh kernels/laya_attention/probe.py build-suite --implementation scalar --out scratch/laya_attention/rebuild --masks scratch/laya_attention/semantics/masks.npz
+bash scripts/research-iron.sh kernels/laya_attention/probe.py preregister --out scratch/laya_attention/rebuild_prereg.json --builds scratch/laya_attention/rebuild/* --semantics scratch/laya_attention/semantics/semantics.json
+bash scripts/research-lowlevel.sh --log results/laya/attention_rebuild_UNIQUE.log --npu --wait-clear 30 --seconds 360 -- bash scripts/research-iron.sh kernels/laya_attention/probe.py suite --out scratch/laya_attention/rebuild --masks scratch/laya_attention/semantics/masks.npz --prereg scratch/laya_attention/rebuild_prereg.json
+```
+
+Logs: [initial check](../results/laya/attention_v1_global_h1_desktop2_20261015T2341Z.log),
+[expanded failure](../results/laya/attention_v2_suite_desktop2_20261015T2352Z.log),
+[corrected v3 suite](../results/laya/attention_v3_suite_desktop2_20261016T0001Z.log),
+[final v4 suite](../results/laya/attention_v4_suite_desktop2_20261016T0010Z.log) and
+[validation and derived means](../results/laya/attention_validation_v4_desktop2_20261016T0016Z.log).
+
+## Vector attention: software-float helpers removed (2026-10-16, Desktop 2)
+
+Historical one-core result. The [array implementation below](#laya-attention-on-the-array-local-attention-beats-the-cpu-global-still-loses-2026-10-16-desktop-2)
+supersedes the current performance conclusion; the measurements here remain unchanged.
+
+**Correctness PASS; dispatch faster than the scalar implementation; still slower than
+the CPU on one NPU core.** This follows the scalar prototype above. All comparisons
+below are from one qualified sitting, not comparisons against the earlier day's values.
+
+The scalar C++ was compiling to `__mulsf3`, `__divsf3`, float/integer conversion and
+comparison helpers inside attention's hot loops. `kernel.cc` is retained as that control.
+`kernel_vector.cc` uses vector fp32 arithmetic for exp, range reduction, max/sum updates,
+output rescaling and normalization. Reciprocal uses a vector bit seed and three Newton
+steps; vector exp retains the degree-six polynomial. The numerator stays tiled through
+the probability-times-V product, so its update and rescale operate on full vectors.
+
+The matrix work uses the same `aie::mmul<4,8,4>` primitive as the bf16 convolution engine.
+Both products now use a 2x2 accumulator expansion, keeping four accumulators live and
+reusing each loaded operand across two products, following the convolution/GEMM scheduling
+pattern. This is matrix execution with vector attention operations; the model was not
+rewritten into ONNX Conv nodes and the graph engine gains no new op.
+
+**Static gate before hardware.** Every vector object has no unresolved runtime symbols,
+and its linked ELF contains no software-float helpers. The builder refuses either failure;
+the offline suite tests the helper-symbol detector. The linked vector program is 14,336
+bytes; recorded C++ stack frames are 2,112 and 64 bytes, with an explicit 4,096-byte stack
+reservation verified in the linker script. Scratch grew to 4,096 bytes for row and tiled
+probability buffers. The scalar controls use the same reservation and buffer placement.
+All these facts and both kernel source hashes are in the pre-registration/build records
+inside the measurement log. The scalar's helper symbols remain visible in its record.
+
+**Numerics.** The previous per-element `0.01 + 0.02 * abs(reference)` and relative-L2
+0.02 gates are unchanged. All 240 vector output comparisons and all 48 scalar-control
+comparisons passed, along with every guard, input-immutability and poison-independence
+check. Coverage is global/local, 512/193/1/0 valid keys on one head, and both full-length
+masks across 16 heads, at three seeds, four distributions and two poisons. Worst vector
+absolute error was 0.007760363. The vector and scalar resident blocks also passed their
+one- and three-call numerical checks. Inputs remain synthetic post-RoPE bf16 Q/K/V,
+with fp32 output; no labelled-task or end-to-end Laya accuracy result is claimed.
+
+**Same-sitting dispatch, milliseconds.** Each row processes 16 heads sequentially on one
+NPU core. Means of ten repetitions after three warm-ups, on the same final seeded
+peaked-input fixture. CPU is the matching eight-thread ORT attention graph with spinning
+disabled. Host packing and BO write/read/sync are excluded from NPU dispatch and logged
+separately, as in the earlier sitting.
+
+| Attention | Scalar NPU | Vector NPU | Scalar / vector (DERIVED) | ORT CPU |
+|---|---:|---:|---:|---:|
+| Global | 4367.844 | 147.093 | 29.69x | 3.337 |
+| Local | 1128.353 | 45.584 | 24.75x | 3.288 |
+
+Vector dispatch remains 44.08x and 13.86x the
+matching CPU time (DERIVED). This is not an NPU-versus-CPU win. Across correctness
+fixtures, vector-path host packing alone averaged
+295.814 ms global and
+93.859 ms local for 16 heads. The new dispatch
+speedup is not an end-to-end speedup of that magnitude. Multi-core head parallelism and
+removing host packing were unimplemented in this sitting; the array sitting below measures both.
+
+**Resident measurement.** One resident 16-query by 32-key random-input block, reset on
+each call, measures 0.014194263 ms/call in the vector kernel
+(R-squared 0.999849) against 0.497611749 ms/call
+in the scalar control (R-squared 0.999965). Calls are 0/25/50/100,
+five repetitions each. These slopes include the call loop. The empty-control slope is
+reported in the log and is not subtracted. The update changes arithmetic, layout and
+matrix scheduling together; it does not isolate the cost of exp alone. Further diagnosis
+needs an ablation rather than assigning the whole remaining gap to one operation.
+
+The pre-registered comparison passes: fixed-tolerance correctness, no software-float
+helpers in the vector program, and lower dispatch time than the paired scalar controls.
+The wrapper reports `timing_eligible: true`, no foreign contention, and an idle device
+after each design and process exit. The standalone kernel stays outside Laya's served
+pipeline. Scalar timings above remain as history, not the current default implementation.
+
+Rebuild with `probe.py build-suite --with-scalar-control` using the same `--out` and
+`--masks` arguments as the earlier reproduction commands, then register all build
+directories and run `probe.py suite` through `research-lowlevel.sh --npu`. `build` and
+`build-suite` default to `--implementation vector`; `--implementation scalar` retains
+the old arithmetic. The complete command line and pre-registration are in the log.
+
+Logs: [vector smoke check before 2x2 scheduling](../results/laya/attention_vector_smoke_desktop2_20261016T003750Z.log),
+[paired vector/scalar qualification](../results/laya/attention_vector_vs_scalar_desktop2_20261016T004232Z.log) and
+[validation and derived ratios](../results/laya/attention_vector_validation_desktop2_20261016T0046Z.log).
+
+## Laya attention on the array: local attention beats the CPU, global still loses (2026-10-16, Desktop 2)
+
+**Local attention wins including host packing and output delivery. Global attention still
+loses.** This is standalone encoder attention at 512 tokens, 16 heads of width 64, with
+synthetic post-RoPE bf16 Q/K/V and fp32 output. It adds no compiler op or served Laya
+integration, and establishes no labelled-task accuracy or full-model latency result.
+
+The [qualified sitting](../results/laya/attention_shared_precise_suite_desktop2_20261016T0200Z.log)
+contains the complete pre-registration, source and binary hashes, all core memory/stack
+audits, correctness checks, raw timing repetitions and ownership witnesses. Its registration
+SHA256 is `be9e107b6e5288c9eaadac0d9f9db24a7482471c16b133d5a36b36709618934d`.
+The wrapper reports timing eligible, no foreign contention, and the device idle after
+each design and process exit. Both the new design and unchanged one-core vector controls
+are measured in this sitting. Earlier scalar and one-core vector numbers remain history.
+
+**What changed.** `shared.py` drives all sixteen reachable cores. Four cores in each
+column work on four query tiles of one head while the columns handle different heads.
+Each query tile stays resident across the key blocks. MemTile multicasts each K/V block
+to those four cores; shim DMA replays a compact K/V buffer for subsequent query groups.
+The host provides each unique operand once. This is still physical DDR replay, not full
+head residency in SRAM or zero DDR traffic. Core code constructs the export-derived mask,
+including inclusive local radius 64 and finite fully masked-row semantics.
+
+`kernel_lut.cc` indexes the upstream exponential tables directly from fp32 scores;
+rounding the scores to bf16 before indexing had lost precision. Both matrix products
+keep eight accumulators live with 2x4 operand reuse. The value product accumulates directly
+into the running numerator, unchanged scale groups skip rescaling, and rescaling retains
+both operands' bf16 residual terms through three products. Normal score division by eight
+uses an exact exponent adjustment, with a general fallback for exceptional lanes.
+The linked shared programs are 13,776 bytes each, have no scalar software-float helpers,
+and retain the explicit 4,096-byte stack reservation. Recorded function frames are
+64 and 576 bytes; placement includes LUT data and accessible neighbouring tile buffers.
+
+`pack.c` provides MSVC AVX2 layout conversion into mapped host-only BO memory. Attention,
+masking, normalization and both products execute on the NPU; the host does layout conversion
+and dispatch. `probe.py` validates included-source hashes and the native DLL hash as well
+as the xclbin, instructions and masks. The original packet packer remains as an offline
+byte oracle; its vectorized replacement tiles each unique operand once.
+
+**Numerical qualification.** All 192 new complete-output comparisons pass: both masks,
+512/193/1/0 valid keys, all sixteen heads, three seeds, four input distributions, two
+poisons. All 48 vector-control comparisons also pass. Every guard, input-immutability,
+full-write and poison-independence check passes. The fixed limits remain per-element
+`0.01 + 0.02 * abs(reference)` and relative L2 `0.02`. The new worst absolute error is
+0.012427686 and worst relative L2 0.003730900; the elementwise relative term matters.
+These are approximate numerical results, not byte-exact attention.
+
+The [preceding suite](../results/laya/attention_shared_suite_desktop2_20261016T0150Z.log)
+failed one peaked-input element at 193 valid global keys, for both poisons, and is timing
+ineligible. Its two-product rescale rounded the alpha factor without retaining its
+residual. The qualified version restores that residual; the tolerance was not changed.
+
+**Same-sitting means, milliseconds.** Ten repetitions after three warm-ups on the final
+seeded peaked fixture. CPU is matching eight-thread fp32 ORT on the same bf16-valued
+inputs, with thread spinning disabled. Local CPU uses a dense masked product.
+
+| Attention, 16 heads, all keys valid | One-core vector dispatch | Array dispatch | Array end to end | ORT CPU |
+|---|---:|---:|---:|---:|
+| Global | 149.113 | 3.488 | 4.657 | 3.121 |
+| Local | 47.893 | 1.726 | 2.797 | 3.232 |
+
+End to end measures native packing into the mapped BO, input sync, dispatch, output sync,
+and a detached output array. It excludes fixture generation, oracle checks, allocation,
+RoPE and the surrounding transformer. Dispatch includes streaming and driver submission,
+and excludes host packing/sync/output copying. New-path packing across correctness
+fixtures averages 0.731 ms global and 0.739 ms local; these averages are not added to the
+end-to-end timing, which already measures its own packing. The end-to-end ranges are
+4.420-4.821 ms global and 2.706-2.936 ms local. DERIVED from these means: local end to end
+is 0.865 times CPU latency; global is 1.492 times CPU latency. A full attention win has
+not been established for global attention.
+
+| Valid keys | Global array end to end | Matching CPU | Local array end to end | Matching CPU |
+|---|---:|---:|---:|---:|
+| 193 | 3.116 | 3.308 | 3.428 | 3.298 |
+| 1 | 2.126 | 3.220 | 3.878 | 3.355 |
+| 0 | 4.391 | 2.414 | 4.151 | 3.285 |
+
+Padding is not automatically cheaper: under the source's finite mask, queries with no
+allowed keys still require a uniform average over all values. This design retains that
+work. Do not extrapolate the fully valid local win to every padding pattern.
+
+Rebuild and qualify from this worktree, after extracting the masks with `probe.py inspect`:
+
+```bash
+bash scripts/research-iron.sh kernels/laya_attention/probe.py build-suite --out scratch/laya_attention/vector_controls_rebuild --masks scratch/laya_attention/semantics/masks.npz
+bash scripts/research-iron.sh kernels/laya_attention/shared.py --suite --out scratch/laya_attention/shared_rebuild --masks scratch/laya_attention/semantics/masks.npz --controls scratch/laya_attention/vector_controls_rebuild
+bash scripts/research-iron.sh kernels/laya_attention/probe.py preregister --out scratch/laya_attention/shared_rebuild_prereg.json --builds scratch/laya_attention/shared_rebuild/* --semantics scratch/laya_attention/semantics/semantics.json
+bash scripts/research-lowlevel.sh --log results/laya/attention_shared_rebuild_UNIQUE.log --npu --wait-clear 30 --seconds 180 -- bash scripts/research-iron.sh kernels/laya_attention/probe.py suite --out scratch/laya_attention/shared_rebuild --masks scratch/laya_attention/semantics/masks.npz --prereg scratch/laya_attention/shared_rebuild_prereg.json
+python kernels/laya_attention/summarize.py results/laya/attention_shared_rebuild_UNIQUE.log
+```
+
+The standalone build needs MSVC Build Tools with AVX2 support in addition to the existing
+IRON/Peano tools. The one shared binary serves every registered mask and valid length
+through its query header. [Validation and derived summary](../results/laya/attention_shared_validation_desktop2_20261016T0205Z.log)
+records the offline tests, native-packer byte parity, syntax/import gate and qualified means.
+
+## Laya attention optimization probes: packing improves, end-to-end gain unproven (2026-10-16, Desktop 2)
+
+The [array qualification above](#laya-attention-on-the-array-local-attention-beats-the-cpu-global-still-loses-2026-10-16-desktop-2)
+remains the performance conclusion. Further probes preserve the fixed numerical gates,
+but establish no reliable additional end-to-end speedup. The baseline stays the default;
+the candidates are explicit `shared.py --variant` options.
+
+**Convolution formulation.** Each dynamic attention product can be expressed as a 1x1
+convolution: QK uses the current K as filters; the probability-times-V product uses the
+current V. The current implementation already uses the bf16 convolution kernel's
+`mmul<4,8,4>`, eight accumulators and 2x4 operand reuse. This establishes no distinct
+convolution-only arithmetic primitive. A generic conv rewrite was not run, so its speed
+is unverified. It would still need input-dependent filter packing, masking and softmax.
+Replacing attention with a learned convolution would change the model and is a different
+experiment.
+
+**Mask/bank probe.** The [first sitting](../results/laya/attention_mask_bank_race_desktop2_20261016T0142Z.log)
+registers a full-valid global mask bypass and a subsequent scratch relocation into bank 3.
+All 576 output comparisons pass across the three variants and all existing mask/padding
+cases. Neither meets its predeclared dispatch reduction target (10% for the mask bypass,
+5% for banking). Fully valid global dispatch means are 3.243 ms baseline, 3.316 ms mask
+bypass and 3.290 ms bank relocation. Corresponding local means are 1.723, 1.733 and
+1.788 ms. Mask/bank programs are 13,936 bytes; baseline remains 13,776 bytes.
+The mask and bank variants have identical compiled kernel objects; the linked buffer
+placement changes. Relocation also moves other buffers and LUT data, so this is not a
+cycle-level isolation of one bank conflict.
+
+**Matrix loop/host probe.** The [second sitting](../results/laya/attention_unroll_host_race_desktop2_20261016T0143Z.log)
+compares baseline, two-way matrix-loop unrolling, faster packing, and both together.
+All 768 output comparisons pass. Unrolled programs fit at 14,160 bytes, with recorded
+function frames of 64 and 608 bytes inside the existing stack reservation. Unrolling
+does not meet its 10% dispatch-reduction target. Host packing uses the already validated
+mask parameters and clears only query headers; every payload byte is still overwritten.
+The host variant retains the baseline device code and buffers.
+
+| Fully valid attention | Variant | Dispatch ms | End-to-end ms | Matching CPU ms |
+|---|---|---:|---:|---:|
+| Global | Baseline | 3.362 | 4.358 | 3.312 |
+| Global | Unroll | 3.597 | 4.310 | 3.382 |
+| Global | Host | 3.410 | 4.268 | 3.369 |
+| Global | Combined | 3.280 | 4.341 | 3.249 |
+| Local | Baseline | 1.677 | 2.721 | 3.314 |
+| Local | Unroll | 1.644 | 2.778 | 3.304 |
+| Local | Host | 1.684 | 2.609 | 3.322 |
+| Local | Combined | 1.645 | 2.585 | 3.362 |
+
+These are means of ten repetitions using the preceding method. They are a screen, not
+proof of a small improvement: the subsequent paired check below explicitly tests that
+interpretation. Do not compare these means against the earlier sitting to claim a gain.
+
+**Paired host check.** [The third sitting](../results/laya/attention_host_paired_desktop2_20261016T0152Z.log)
+holds one NPU program/context and both mapped BOs fixed. Both build records have identical
+instructions and core memory/code/stack audits; only host packing changes. Each mode has
+25 ABBA blocks, 50 samples per packer, and 25 same-sitting CPU samples. Each timed sample
+includes fresh packing, input sync, dispatch, output sync and detached output. All 96
+complete-output checks pass, including input-byte identity against an independent layout
+oracle, guards, complete writes and both poisons. The pre-registration hash is
+`3d24b93495b32f06ad6c52ce6a84bda84889f3b8742870e6ef1787e0f61f1ccb`.
+
+| Attention | Baseline pack ms | Faster pack ms | Baseline end-to-end ms | Faster end-to-end ms | CPU ms |
+|---|---:|---:|---:|---:|---:|
+| Global | 0.525760 | 0.437344 | 4.347772 | 4.305354 | 3.238156 |
+| Local | 0.527062 | 0.439616 | 2.686156 | 2.658402 | 3.342624 |
+
+DERIVED from the paired block means: packing saves 0.088416 ms global and 0.087446 ms
+local. Approximate normal 95% intervals for that saving are [0.076630, 0.100202] and
+[0.073044, 0.101848] ms. Both are below the predeclared 0.15 ms target; the smaller
+localized saving is still measured. End-to-end savings are 0.042418 and 0.027754 ms,
+with intervals [-0.006492, 0.091328] and [-0.035777, 0.091285] ms. Those intervals include
+zero. No reliable end-to-end improvement is established by this check. Intervals use
+the 25 paired block differences and a normal approximation, not independent per-sample
+confidence intervals.
+
+All three sittings report timing eligible, no foreign contention and an idle device
+after close while the process remains alive. This remains synthetic post-RoPE attention,
+with the same finite-mask semantics and no served Laya integration or task-accuracy claim.
+The [validation log](../results/laya/attention_optimization_validation_desktop2_20261016T0158Z.log)
+contains the syntax/import gate, offline tests, native packing parity and derived summaries.
+
+Reproduce the screens with `shared.py --race` or `--speed-race`, each into a new output
+directory; register all build subdirectories and run `probe.py suite` through the bounded
+research wrapper. For the paired check, register and run:
+
+```bash
+bash scripts/research-iron.sh kernels/laya_attention/paired_host.py register --from-prereg scratch/laya_attention/unroll_host_prereg.json --out scratch/laya_attention/host_paired_prereg_UNIQUE.json
+bash scripts/research-lowlevel.sh --log results/laya/attention_host_paired_UNIQUE.log --npu --wait-clear 30 --seconds 120 -- bash scripts/research-iron.sh kernels/laya_attention/paired_host.py run --builds scratch/laya_attention/unroll_host_race --masks scratch/laya_attention/semantics/masks.npz --prereg scratch/laya_attention/host_paired_prereg_UNIQUE.json
+```
+
+Registrations bind current source/dependency hashes; rebuild before registering if sources
+changed. `--variant base` retains the default, `mask`/`bank` retain the rejected screens,
+`unroll` tests matrix scheduling, `host` enables the packing change, and `combined` enables
+both unrolling and host packing. The paired program always loads the baseline NPU binary.

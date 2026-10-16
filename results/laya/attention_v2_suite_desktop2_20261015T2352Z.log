@@ -1,0 +1,719 @@
+RESEARCH_PLATFORM {"machine": "Desktop 2", "cpu": "AMD Ryzen 7 8700G w/ Radeon 780M Graphics", "os": "Windows-11-10.0.26200-SP0", "ram_bytes": 33381138432, "source_sha256": {"tools/research_process.py": "ffeb1857f190b482eed101b5f5a928f455de26bfa61d23f78a2eacec08e2663e", "tools/quant_calib_alphabet.py": "2dc0b2878c564853f340880209a425dfcf63b8536b2b8e9fd32344daade58d37", "tools/xint8_arithmetic_probe.py": "6aa3df08b9870c3c2264b868459d7ffbac3070dddc1349d7c6f3f480075f7041", "scripts/research-lowlevel.sh": "3455ad7933697936487712665505c216891865c6deada647302785f6e37020bd", "scripts/research-iron.sh": "4c863a262646ddab39b5005006ba8e03809895e6386c6310e2fd9d0a9e9609ee", "kernels/memory_placement/probe.py": "e8d990169ad6091fa1b53852e9f61eff495b5def72d35165a5c5cf1759e38898", "kernels/memory_placement/memory_kernels.cc": "182e7af7071a1e851afb4a7ca266069c489aea1fbaaa85eca129708daeba5ba6", "scripts/research-matrix.sh": "739254171629deae822b0ad7dabc875aee19ace56dde77d3e8aab61663f97516", "kernels/memory_placement/gemm.py": "17c905ad66110d3346bbf0db898dfc6b780df59fae1dfb0c1747057ce1e5844e", "kernels/memory_placement/gemm_placement.cc": "f21acf7250b12914ea30cc1f77613239dfa18421a85a1b9a5199017dd916278a", "tools/research_summary.py": "0c00dcceef07053d06731b41a1f1ed58d3ba4ea09f82497de354ce9cef17da20", "tools/research_toolchain.py": "f0a126a24ae213acfaa43460cfd9def0c86d9cb70cfee0228aa271688467b314"}, "commit": "d834d0b87e1300f3e397247a269eb8a76c009e9d", "command": ["bash", "scripts/research-iron.sh", "kernels/laya_attention/probe.py", "suite", "--out", "scratch/laya_attention/suite_v2", "--masks", "scratch/laya_attention/semantics/masks.npz", "--prereg", "scratch/laya_attention/prereg_v2.json"], "seconds_limit": 300.0, "rss_gib_limit": 8, "checks_only": false, "free_ram_bytes": 25994002432}
+HOST_LOAD busy_cores=0.1 logical_cores=16 free_ram_gb=24.2 sample_sec=1
+HOST_LOAD_TOP 0.05 powershell:17244 ws_mb=80
+HOST_LOAD_TOP 0.03 dev-agent:7584 ws_mb=254
+HOST_LOAD_TOP 0.02 dev-agent:12688 ws_mb=46
+HOST_LOAD_VERDICT CLEAR
+
+PRE_NPU_CONTEXT_WITNESS "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+PREREGISTRATION {
+  "machine": "DESKTOP-CBL5NUA",
+  "shape": [
+    512,
+    16,
+    64
+  ],
+  "atol": 0.01,
+  "rtol": 0.02,
+  "relative_l2": 0.02,
+  "seeds": [
+    11,
+    29,
+    47
+  ],
+  "cases": [
+    "random",
+    "uniform",
+    "zero",
+    "peaked"
+  ],
+  "poisons": [
+    2143363909,
+    2143634209
+  ],
+  "valid_lengths": [
+    512,
+    193,
+    1,
+    0
+  ],
+  "correctness": "all outputs including padded queries; all heads; two poisons; guards and inputs",
+  "performance": "full-head and 16-head dispatch, packing, write/sync, read/sync; CPU same sitting",
+  "alternatives": [
+    "local block skipping reduces arithmetic and transfers",
+    "scalar softmax and packing dominate",
+    "unexplained"
+  ],
+  "semantics": {
+    "model_sha256": "9ab43d87c9a696c8439788addfccaff8956d4dcee36ae24549add8d5b0f638bf",
+    "graph_mask_outputs": [
+      "val_247",
+      "val_352"
+    ],
+    "scale_factors": [
+      [
+        0.3535533845424652,
+        0.3535533845424652
+      ],
+      [
+        0.3535533845424652,
+        0.3535533845424652
+      ]
+    ],
+    "scale": 0.125,
+    "local_inclusive_radius": 64,
+    "local_interior_keys": 129,
+    "padding": "keys only; padded query rows still produce outputs",
+    "all_masked": "finite -FLT_MAX yields uniform over all 512 keys",
+    "masks_sha256": "0d88b6360a7d557e4f2ecdfbc8fd1b4790d6602262d968154b959095fdeb5720"
+  },
+  "sources": {
+    "kernel.cc": "d6bedec1d18b23aa070bd626d43d08b394ee5f5ad3e9fa7f345014053c11ae30",
+    "probe.py": "2431a9b95eeca333dd231e5b8d54b08785b2c4b0802c3c203d526e672571d2a1"
+  },
+  "resident_calls": [
+    0,
+    25,
+    50,
+    100
+  ],
+  "resident_reps": 5,
+  "builds": {
+    "global_h16_v512": {
+      "heads": 16,
+      "mode": "global",
+      "valid": 512,
+      "resident": "none",
+      "packets": 8192,
+      "outputs": 512,
+      "placement": [
+        [
+          1024,
+          12352,
+          "inF_cons_buff_0"
+        ],
+        [
+          16384,
+          20608,
+          "outF_buff_0"
+        ],
+        [
+          32768,
+          36992,
+          "attn_state"
+        ],
+        [
+          49152,
+          52224,
+          "attn_scratch"
+        ]
+      ],
+      "code_bytes": 12384,
+      "kernel_sha256": "d6bedec1d18b23aa070bd626d43d08b394ee5f5ad3e9fa7f345014053c11ae30",
+      "stack_sizes": [
+        608,
+        64
+      ],
+      "stack_allowance_bytes": 1024,
+      "upstream_sha256": {
+        "aie_runtime_lib/AIE2/lut_based_ops.h": "c865cfa7d9ac4af2335c765221ed5405580fdcc83b117de9e189acf2d7d6e539",
+        "aie_runtime_lib/AIE2/lut_based_ops.cpp": "64f9adb21dbdee808a6925e9f3f021fb50337db361928b0a6d08d892285582f8",
+        "aie_kernels/aie2/bf16_exp.cc": "64d6faf05bb8299a42cec1ff950b1b1d22859bc1fbc4247b4482e8b161b076f6",
+        "aie_kernels/aie2/softmax.cc": "c1627d767fc8f3cfad9a52f7c43f5122fe145b9aedae4bc381dc4f3843fe5a4c"
+      },
+      "masks_sha256": "0d88b6360a7d557e4f2ecdfbc8fd1b4790d6602262d968154b959095fdeb5720",
+      "xclbin_sha256": "73bf829521951a2da0a2630c21db1acbd5778a9a29b2fd3f138576f95580063e",
+      "instructions_sha256": "2d6e118fec5ebf567920a9ed784798f1d7becae8a198a9829a47a064fd1dbd87"
+    },
+    "global_h1_v0": {
+      "heads": 1,
+      "mode": "global",
+      "valid": 0,
+      "resident": "none",
+      "packets": 512,
+      "outputs": 32,
+      "placement": [
+        [
+          1024,
+          12352,
+          "inF_cons_buff_0"
+        ],
+        [
+          16384,
+          20608,
+          "outF_buff_0"
+        ],
+        [
+          32768,
+          36992,
+          "attn_state"
+        ],
+        [
+          49152,
+          52224,
+          "attn_scratch"
+        ]
+      ],
+      "code_bytes": 12384,
+      "kernel_sha256": "d6bedec1d18b23aa070bd626d43d08b394ee5f5ad3e9fa7f345014053c11ae30",
+      "stack_sizes": [
+        608,
+        64
+      ],
+      "stack_allowance_bytes": 1024,
+      "upstream_sha256": {
+        "aie_runtime_lib/AIE2/lut_based_ops.h": "c865cfa7d9ac4af2335c765221ed5405580fdcc83b117de9e189acf2d7d6e539",
+        "aie_runtime_lib/AIE2/lut_based_ops.cpp": "64f9adb21dbdee808a6925e9f3f021fb50337db361928b0a6d08d892285582f8",
+        "aie_kernels/aie2/bf16_exp.cc": "64d6faf05bb8299a42cec1ff950b1b1d22859bc1fbc4247b4482e8b161b076f6",
+        "aie_kernels/aie2/softmax.cc": "c1627d767fc8f3cfad9a52f7c43f5122fe145b9aedae4bc381dc4f3843fe5a4c"
+      },
+      "masks_sha256": "0d88b6360a7d557e4f2ecdfbc8fd1b4790d6602262d968154b959095fdeb5720",
+      "xclbin_sha256": "50b0911ccd611610aa08a420c70871f159e1c35afc3930e40c40970bfeba4e7e",
+      "instructions_sha256": "f6c6f97f1292b54a14d21e63a37f07be5b961b907bc0353452eceef00f32811f"
+    },
+    "global_h1_v1": {
+      "heads": 1,
+      "mode": "global",
+      "valid": 1,
+      "resident": "none",
+      "packets": 32,
+      "outputs": 32,
+      "placement": [
+        [
+          1024,
+          12352,
+          "inF_cons_buff_0"
+        ],
+        [
+          16384,
+          20608,
+          "outF_buff_0"
+        ],
+        [
+          32768,
+          36992,
+          "attn_state"
+        ],
+        [
+          49152,
+          52224,
+          "attn_scratch"
+        ]
+      ],
+      "code_bytes": 12384,
+      "kernel_sha256": "d6bedec1d18b23aa070bd626d43d08b394ee5f5ad3e9fa7f345014053c11ae30",
+      "stack_sizes": [
+        608,
+        64
+      ],
+      "stack_allowance_bytes": 1024,
+      "upstream_sha256": {
+        "aie_runtime_lib/AIE2/lut_based_ops.h": "c865cfa7d9ac4af2335c765221ed5405580fdcc83b117de9e189acf2d7d6e539",
+        "aie_runtime_lib/AIE2/lut_based_ops.cpp": "64f9adb21dbdee808a6925e9f3f021fb50337db361928b0a6d08d892285582f8",
+        "aie_kernels/aie2/bf16_exp.cc": "64d6faf05bb8299a42cec1ff950b1b1d22859bc1fbc4247b4482e8b161b076f6",
+        "aie_kernels/aie2/softmax.cc": "c1627d767fc8f3cfad9a52f7c43f5122fe145b9aedae4bc381dc4f3843fe5a4c"
+      },
+      "masks_sha256": "0d88b6360a7d557e4f2ecdfbc8fd1b4790d6602262d968154b959095fdeb5720",
+      "xclbin_sha256": "e5ee9b746c9af62949e0d577275c1bc545b0666ff16ef592471df0d85a982d69",
+      "instructions_sha256": "0befd8d2eb8baf8b816b67c295baff58b6274d52fed5aa8413b43360ef4081e1"
+    },
+    "global_h1_v193": {
+      "heads": 1,
+      "mode": "global",
+      "valid": 193,
+      "resident": "none",
+      "packets": 224,
+      "outputs": 32,
+      "placement": [
+        [
+          1024,
+          12352,
+          "inF_cons_buff_0"
+        ],
+        [
+          16384,
+          20608,
+          "outF_buff_0"
+        ],
+        [
+          32768,
+          36992,
+          "attn_state"
+        ],
+        [
+          49152,
+          52224,
+          "attn_scratch"
+        ]
+      ],
+      "code_bytes": 12384,
+      "kernel_sha256": "d6bedec1d18b23aa070bd626d43d08b394ee5f5ad3e9fa7f345014053c11ae30",
+      "stack_sizes": [
+        608,
+        64
+      ],
+      "stack_allowance_bytes": 1024,
+      "upstream_sha256": {
+        "aie_runtime_lib/AIE2/lut_based_ops.h": "c865cfa7d9ac4af2335c765221ed5405580fdcc83b117de9e189acf2d7d6e539",
+        "aie_runtime_lib/AIE2/lut_based_ops.cpp": "64f9adb21dbdee808a6925e9f3f021fb50337db361928b0a6d08d892285582f8",
+        "aie_kernels/aie2/bf16_exp.cc": "64d6faf05bb8299a42cec1ff950b1b1d22859bc1fbc4247b4482e8b161b076f6",
+        "aie_kernels/aie2/softmax.cc": "c1627d767fc8f3cfad9a52f7c43f5122fe145b9aedae4bc381dc4f3843fe5a4c"
+      },
+      "masks_sha256": "0d88b6360a7d557e4f2ecdfbc8fd1b4790d6602262d968154b959095fdeb5720",
+      "xclbin_sha256": "c6c179545108456b1acf0995d523a077baadc30dd8ac0f942b7473678ea0e01e",
+      "instructions_sha256": "b1f8c318151fd537ad347b191a7517c4b654cd2191d326e096d451a70a8ed4d2"
+    },
+    "global_h1_v512": {
+      "heads": 1,
+      "mode": "global",
+      "valid": 512,
+      "resident": "none",
+      "packets": 512,
+      "outputs": 32,
+      "placement": [
+        [
+          1024,
+          12352,
+          "inF_cons_buff_0"
+        ],
+        [
+          16384,
+          20608,
+          "outF_buff_0"
+        ],
+        [
+          32768,
+          36992,
+          "attn_state"
+        ],
+        [
+          49152,
+          52224,
+          "attn_scratch"
+        ]
+      ],
+      "code_bytes": 12384,
+      "kernel_sha256": "d6bedec1d18b23aa070bd626d43d08b394ee5f5ad3e9fa7f345014053c11ae30",
+      "stack_sizes": [
+        608,
+        64
+      ],
+      "stack_allowance_bytes": 1024,
+      "upstream_sha256": {
+        "aie_runtime_lib/AIE2/lut_based_ops.h": "c865cfa7d9ac4af2335c765221ed5405580fdcc83b117de9e189acf2d7d6e539",
+        "aie_runtime_lib/AIE2/lut_based_ops.cpp": "64f9adb21dbdee808a6925e9f3f021fb50337db361928b0a6d08d892285582f8",
+        "aie_kernels/aie2/bf16_exp.cc": "64d6faf05bb8299a42cec1ff950b1b1d22859bc1fbc4247b4482e8b161b076f6",
+        "aie_kernels/aie2/softmax.cc": "c1627d767fc8f3cfad9a52f7c43f5122fe145b9aedae4bc381dc4f3843fe5a4c"
+      },
+      "masks_sha256": "0d88b6360a7d557e4f2ecdfbc8fd1b4790d6602262d968154b959095fdeb5720",
+      "xclbin_sha256": "b66cdf2fe278619256b4daa622bfbcaeddcb6047057b98a536a92a610267fa75",
+      "instructions_sha256": "f6c6f97f1292b54a14d21e63a37f07be5b961b907bc0353452eceef00f32811f"
+    },
+    "local_h16_v512": {
+      "heads": 16,
+      "mode": "local",
+      "valid": 512,
+      "resident": "none",
+      "packets": 2368,
+      "outputs": 512,
+      "placement": [
+        [
+          1024,
+          12352,
+          "inF_cons_buff_0"
+        ],
+        [
+          16384,
+          20608,
+          "outF_buff_0"
+        ],
+        [
+          32768,
+          36992,
+          "attn_state"
+        ],
+        [
+          49152,
+          52224,
+          "attn_scratch"
+        ]
+      ],
+      "code_bytes": 12384,
+      "kernel_sha256": "d6bedec1d18b23aa070bd626d43d08b394ee5f5ad3e9fa7f345014053c11ae30",
+      "stack_sizes": [
+        608,
+        64
+      ],
+      "stack_allowance_bytes": 1024,
+      "upstream_sha256": {
+        "aie_runtime_lib/AIE2/lut_based_ops.h": "c865cfa7d9ac4af2335c765221ed5405580fdcc83b117de9e189acf2d7d6e539",
+        "aie_runtime_lib/AIE2/lut_based_ops.cpp": "64f9adb21dbdee808a6925e9f3f021fb50337db361928b0a6d08d892285582f8",
+        "aie_kernels/aie2/bf16_exp.cc": "64d6faf05bb8299a42cec1ff950b1b1d22859bc1fbc4247b4482e8b161b076f6",
+        "aie_kernels/aie2/softmax.cc": "c1627d767fc8f3cfad9a52f7c43f5122fe145b9aedae4bc381dc4f3843fe5a4c"
+      },
+      "masks_sha256": "0d88b6360a7d557e4f2ecdfbc8fd1b4790d6602262d968154b959095fdeb5720",
+      "xclbin_sha256": "bcc4171835d83892861b2712954fed3235852ff86ffc9bee3ab1d6a15803ecb2",
+      "instructions_sha256": "9f7fa70bca0e2b915b3487d1f4d39fae887f3972f903c32318385090bdf2d7bd"
+    },
+    "local_h1_v0": {
+      "heads": 1,
+      "mode": "local",
+      "valid": 0,
+      "resident": "none",
+      "packets": 512,
+      "outputs": 32,
+      "placement": [
+        [
+          1024,
+          12352,
+          "inF_cons_buff_0"
+        ],
+        [
+          16384,
+          20608,
+          "outF_buff_0"
+        ],
+        [
+          32768,
+          36992,
+          "attn_state"
+        ],
+        [
+          49152,
+          52224,
+          "attn_scratch"
+        ]
+      ],
+      "code_bytes": 12384,
+      "kernel_sha256": "d6bedec1d18b23aa070bd626d43d08b394ee5f5ad3e9fa7f345014053c11ae30",
+      "stack_sizes": [
+        608,
+        64
+      ],
+      "stack_allowance_bytes": 1024,
+      "upstream_sha256": {
+        "aie_runtime_lib/AIE2/lut_based_ops.h": "c865cfa7d9ac4af2335c765221ed5405580fdcc83b117de9e189acf2d7d6e539",
+        "aie_runtime_lib/AIE2/lut_based_ops.cpp": "64f9adb21dbdee808a6925e9f3f021fb50337db361928b0a6d08d892285582f8",
+        "aie_kernels/aie2/bf16_exp.cc": "64d6faf05bb8299a42cec1ff950b1b1d22859bc1fbc4247b4482e8b161b076f6",
+        "aie_kernels/aie2/softmax.cc": "c1627d767fc8f3cfad9a52f7c43f5122fe145b9aedae4bc381dc4f3843fe5a4c"
+      },
+      "masks_sha256": "0d88b6360a7d557e4f2ecdfbc8fd1b4790d6602262d968154b959095fdeb5720",
+      "xclbin_sha256": "e97515a5172a49f0b25497c630826417f42f08b8ee19e2216725b5ae05060110",
+      "instructions_sha256": "f6c6f97f1292b54a14d21e63a37f07be5b961b907bc0353452eceef00f32811f"
+    },
+    "local_h1_v1": {
+      "heads": 1,
+      "mode": "local",
+      "valid": 1,
+      "resident": "none",
+      "packets": 452,
+      "outputs": 32,
+      "placement": [
+        [
+          1024,
+          12352,
+          "inF_cons_buff_0"
+        ],
+        [
+          16384,
+          20608,
+          "outF_buff_0"
+        ],
+        [
+          32768,
+          36992,
+          "attn_state"
+        ],
+        [
+          49152,
+          52224,
+          "attn_scratch"
+        ]
+      ],
+      "code_bytes": 12384,
+      "kernel_sha256": "d6bedec1d18b23aa070bd626d43d08b394ee5f5ad3e9fa7f345014053c11ae30",
+      "stack_sizes": [
+        608,
+        64
+      ],
+      "stack_allowance_bytes": 1024,
+      "upstream_sha256": {
+        "aie_runtime_lib/AIE2/lut_based_ops.h": "c865cfa7d9ac4af2335c765221ed5405580fdcc83b117de9e189acf2d7d6e539",
+        "aie_runtime_lib/AIE2/lut_based_ops.cpp": "64f9adb21dbdee808a6925e9f3f021fb50337db361928b0a6d08d892285582f8",
+        "aie_kernels/aie2/bf16_exp.cc": "64d6faf05bb8299a42cec1ff950b1b1d22859bc1fbc4247b4482e8b161b076f6",
+        "aie_kernels/aie2/softmax.cc": "c1627d767fc8f3cfad9a52f7c43f5122fe145b9aedae4bc381dc4f3843fe5a4c"
+      },
+      "masks_sha256": "0d88b6360a7d557e4f2ecdfbc8fd1b4790d6602262d968154b959095fdeb5720",
+      "xclbin_sha256": "dec85e00d25e6312e73859dc373c5404116dd0ff140920e5241cab8bd2fd2316",
+      "instructions_sha256": "686ecd2705ec9b768e400131a16027e727c3faa69252fb0857c246d11665f4dd"
+    },
+    "local_h1_v193": {
+      "heads": 1,
+      "mode": "local",
+      "valid": 193,
+      "resident": "none",
+      "packets": 318,
+      "outputs": 32,
+      "placement": [
+        [
+          1024,
+          12352,
+          "inF_cons_buff_0"
+        ],
+        [
+          16384,
+          20608,
+          "outF_buff_0"
+        ],
+        [
+          32768,
+          36992,
+          "attn_state"
+        ],
+        [
+          49152,
+          52224,
+          "attn_scratch"
+        ]
+      ],
+      "code_bytes": 12384,
+      "kernel_sha256": "d6bedec1d18b23aa070bd626d43d08b394ee5f5ad3e9fa7f345014053c11ae30",
+      "stack_sizes": [
+        608,
+        64
+      ],
+      "stack_allowance_bytes": 1024,
+      "upstream_sha256": {
+        "aie_runtime_lib/AIE2/lut_based_ops.h": "c865cfa7d9ac4af2335c765221ed5405580fdcc83b117de9e189acf2d7d6e539",
+        "aie_runtime_lib/AIE2/lut_based_ops.cpp": "64f9adb21dbdee808a6925e9f3f021fb50337db361928b0a6d08d892285582f8",
+        "aie_kernels/aie2/bf16_exp.cc": "64d6faf05bb8299a42cec1ff950b1b1d22859bc1fbc4247b4482e8b161b076f6",
+        "aie_kernels/aie2/softmax.cc": "c1627d767fc8f3cfad9a52f7c43f5122fe145b9aedae4bc381dc4f3843fe5a4c"
+      },
+      "masks_sha256": "0d88b6360a7d557e4f2ecdfbc8fd1b4790d6602262d968154b959095fdeb5720",
+      "xclbin_sha256": "33e42f2ccae539730336935a1cf2d41b140019db2f2c35121f33f4c2a8ee5356",
+      "instructions_sha256": "4c29ba58844d405e7f24065c875ccc02f39af132323da9f54ba0e4d2db47206c"
+    },
+    "local_h1_v512": {
+      "heads": 1,
+      "mode": "local",
+      "valid": 512,
+      "resident": "none",
+      "packets": 148,
+      "outputs": 32,
+      "placement": [
+        [
+          1024,
+          12352,
+          "inF_cons_buff_0"
+        ],
+        [
+          16384,
+          20608,
+          "outF_buff_0"
+        ],
+        [
+          32768,
+          36992,
+          "attn_state"
+        ],
+        [
+          49152,
+          52224,
+          "attn_scratch"
+        ]
+      ],
+      "code_bytes": 12384,
+      "kernel_sha256": "d6bedec1d18b23aa070bd626d43d08b394ee5f5ad3e9fa7f345014053c11ae30",
+      "stack_sizes": [
+        608,
+        64
+      ],
+      "stack_allowance_bytes": 1024,
+      "upstream_sha256": {
+        "aie_runtime_lib/AIE2/lut_based_ops.h": "c865cfa7d9ac4af2335c765221ed5405580fdcc83b117de9e189acf2d7d6e539",
+        "aie_runtime_lib/AIE2/lut_based_ops.cpp": "64f9adb21dbdee808a6925e9f3f021fb50337db361928b0a6d08d892285582f8",
+        "aie_kernels/aie2/bf16_exp.cc": "64d6faf05bb8299a42cec1ff950b1b1d22859bc1fbc4247b4482e8b161b076f6",
+        "aie_kernels/aie2/softmax.cc": "c1627d767fc8f3cfad9a52f7c43f5122fe145b9aedae4bc381dc4f3843fe5a4c"
+      },
+      "masks_sha256": "0d88b6360a7d557e4f2ecdfbc8fd1b4790d6602262d968154b959095fdeb5720",
+      "xclbin_sha256": "b103d813030449cc7299e0912a520354d523e570a3e49e885d990508e2cd1eb9",
+      "instructions_sha256": "d90fb6e1c12f606154e29939a8bd29e4cd5a02b95d5665c0ab8982841046f924"
+    },
+    "resident_empty": {
+      "heads": 1,
+      "mode": "global",
+      "valid": 512,
+      "resident": "empty",
+      "packets": 1,
+      "outputs": 1,
+      "placement": [
+        [
+          1024,
+          12352,
+          "inF_cons_buff_0"
+        ],
+        [
+          16384,
+          20608,
+          "outF_buff_0"
+        ],
+        [
+          32768,
+          36992,
+          "attn_state"
+        ],
+        [
+          49152,
+          52224,
+          "attn_scratch"
+        ]
+      ],
+      "code_bytes": 1536,
+      "kernel_sha256": "d6bedec1d18b23aa070bd626d43d08b394ee5f5ad3e9fa7f345014053c11ae30",
+      "stack_sizes": [
+        0,
+        0
+      ],
+      "stack_allowance_bytes": 1024,
+      "upstream_sha256": {
+        "aie_runtime_lib/AIE2/lut_based_ops.h": "c865cfa7d9ac4af2335c765221ed5405580fdcc83b117de9e189acf2d7d6e539",
+        "aie_runtime_lib/AIE2/lut_based_ops.cpp": "64f9adb21dbdee808a6925e9f3f021fb50337db361928b0a6d08d892285582f8",
+        "aie_kernels/aie2/bf16_exp.cc": "64d6faf05bb8299a42cec1ff950b1b1d22859bc1fbc4247b4482e8b161b076f6",
+        "aie_kernels/aie2/softmax.cc": "c1627d767fc8f3cfad9a52f7c43f5122fe145b9aedae4bc381dc4f3843fe5a4c"
+      },
+      "masks_sha256": "0d88b6360a7d557e4f2ecdfbc8fd1b4790d6602262d968154b959095fdeb5720",
+      "xclbin_sha256": "ff4e4b3c751a5256d924c6b511d5b585672de592b98fc002b7f8b2488c35965c",
+      "instructions_sha256": "29a47a89fbf9ae4d149239fcfae55b09fbd2e5ef236d2888816a118e2587ab24"
+    },
+    "resident_kernel": {
+      "heads": 1,
+      "mode": "global",
+      "valid": 512,
+      "resident": "kernel",
+      "packets": 1,
+      "outputs": 1,
+      "placement": [
+        [
+          1024,
+          12352,
+          "inF_cons_buff_0"
+        ],
+        [
+          16384,
+          20608,
+          "outF_buff_0"
+        ],
+        [
+          32768,
+          36992,
+          "attn_state"
+        ],
+        [
+          49152,
+          52224,
+          "attn_scratch"
+        ]
+      ],
+      "code_bytes": 12384,
+      "kernel_sha256": "d6bedec1d18b23aa070bd626d43d08b394ee5f5ad3e9fa7f345014053c11ae30",
+      "stack_sizes": [
+        608,
+        64
+      ],
+      "stack_allowance_bytes": 1024,
+      "upstream_sha256": {
+        "aie_runtime_lib/AIE2/lut_based_ops.h": "c865cfa7d9ac4af2335c765221ed5405580fdcc83b117de9e189acf2d7d6e539",
+        "aie_runtime_lib/AIE2/lut_based_ops.cpp": "64f9adb21dbdee808a6925e9f3f021fb50337db361928b0a6d08d892285582f8",
+        "aie_kernels/aie2/bf16_exp.cc": "64d6faf05bb8299a42cec1ff950b1b1d22859bc1fbc4247b4482e8b161b076f6",
+        "aie_kernels/aie2/softmax.cc": "c1627d767fc8f3cfad9a52f7c43f5122fe145b9aedae4bc381dc4f3843fe5a4c"
+      },
+      "masks_sha256": "0d88b6360a7d557e4f2ecdfbc8fd1b4790d6602262d968154b959095fdeb5720",
+      "xclbin_sha256": "a60e31b7c5a4598164f7391e8478c628abf8a8472f96dec6a969b6651ee43d4b",
+      "instructions_sha256": "29a47a89fbf9ae4d149239fcfae55b09fbd2e5ef236d2888816a118e2587ab24"
+    }
+  }
+}
+
+SUITE_BEGIN global_h16_v512
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [3544, 14240, 15464, 18040, 18660], "foreign_pids": []}
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+preregistration_sha256 a1e874991f648154e4cb7619eb2a4e6690bc5b9cdee4b4ced483187ec60cf6cd build global_h16_v512
+HOST_TIMELINE {"elapsed_seconds": 2.406, "tree_rss_bytes": 467169280, "foreign_peers": []}
+{"seed": 11, "kind": "random", "poison": "0x7fc12345", "ok": true, "max_abs": 0.00932942334809872, "relative_l2": 0.00773741968905397, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 282.67840000626165, "write_sync_ms": 3.8114000053610653, "dispatch_ms": 1531.6755999956513, "read_sync_ms": 0.9467999916523695, "verdict": "PASS"}
+{"seed": 11, "kind": "random", "poison": "0x7fc54321", "ok": true, "max_abs": 0.00932942334809872, "relative_l2": 0.00773741968905397, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 288.1383000058122, "write_sync_ms": 3.8973999908193946, "dispatch_ms": 1551.536999992095, "read_sync_ms": 0.7512000011047348, "verdict": "PASS"}
+HOST_TIMELINE {"elapsed_seconds": 4.718, "tree_rss_bytes": 533237760, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 154 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |18040               |109        |3           |0           |0    |Normal   |\n      |python.exe          |Active     |2           |0           |     |N/A      |\n      |154 MB              |64 KB      |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [18040], "owned_pids": [3544, 14240, 14388, 15464, 18040, 18660], "foreign_pids": []}
+{"seed": 11, "kind": "uniform", "poison": "0x7fc12345", "ok": true, "max_abs": 4.6566128730773926e-09, "relative_l2": 1.3838343170784197e-08, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 288.71029999572784, "write_sync_ms": 3.9997999992920086, "dispatch_ms": 1426.7079999990528, "read_sync_ms": 0.8476999937556684, "verdict": "PASS"}
+HOST_TIMELINE {"elapsed_seconds": 7.031, "tree_rss_bytes": 473776128, "foreign_peers": []}
+{"seed": 11, "kind": "uniform", "poison": "0x7fc54321", "ok": true, "max_abs": 4.6566128730773926e-09, "relative_l2": 1.3838343170784197e-08, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 283.9473999920301, "write_sync_ms": 3.8457000046037138, "dispatch_ms": 1434.2526999971597, "read_sync_ms": 0.785099997301586, "verdict": "PASS"}
+HOST_TIMELINE {"elapsed_seconds": 9.359, "tree_rss_bytes": 471523328, "foreign_peers": []}
+{"seed": 11, "kind": "zero", "poison": "0x7fc12345", "ok": true, "max_abs": 0.0, "relative_l2": 0.0, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 288.93429999880027, "write_sync_ms": 3.813700008322485, "dispatch_ms": 1301.5574000019114, "read_sync_ms": 0.7844000065233558, "verdict": "PASS"}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 154 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |18040               |109        |6           |0           |0    |Normal   |\n      |python.exe          |Active     |5           |0           |     |N/A      |\n      |154 MB              |64 KB      |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [18040], "owned_pids": [3544, 14240, 14388, 15464, 18040, 18660], "foreign_pids": []}
+{"seed": 11, "kind": "zero", "poison": "0x7fc54321", "ok": true, "max_abs": 0.0, "relative_l2": 0.0, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 287.69529999408405, "write_sync_ms": 3.9052999927662313, "dispatch_ms": 1314.2864999972517, "read_sync_ms": 0.7962999952724203, "verdict": "PASS"}
+HOST_TIMELINE {"elapsed_seconds": 11.656, "tree_rss_bytes": 524320768, "foreign_peers": []}
+{"seed": 11, "kind": "peaked", "poison": "0x7fc12345", "ok": false, "max_abs": 0.01723512607545019, "relative_l2": 0.001370986175887351, "bad_elements": 1, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 292.69220000423957, "write_sync_ms": 3.951599996071309, "dispatch_ms": 1536.8314999941504, "read_sync_ms": 0.8010999881662428, "verdict": "FAIL"}
+HOST_TIMELINE {"elapsed_seconds": 13.953, "tree_rss_bytes": 474259456, "foreign_peers": []}
+{"seed": 11, "kind": "peaked", "poison": "0x7fc54321", "ok": false, "max_abs": 0.01723512607545019, "relative_l2": 0.001370986175887351, "bad_elements": 1, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 287.79620000568684, "write_sync_ms": 3.9317000046139583, "dispatch_ms": 1522.8343000053428, "read_sync_ms": 0.7796999998390675, "verdict": "FAIL"}
+correctness FAIL; timing withheld
+SUITE_BEGIN global_h1_v0
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+preregistration_sha256 a1e874991f648154e4cb7619eb2a4e6690bc5b9cdee4b4ced483187ec60cf6cd build global_h1_v0
+{"seed": 11, "kind": "random", "poison": "0x7fc12345", "ok": true, "max_abs": 3.725290298461914e-09, "relative_l2": 1.2102409836954444e-08, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 17.56210000894498, "write_sync_ms": 0.3243999963160604, "dispatch_ms": 92.26130000024568, "read_sync_ms": 0.057199998991563916, "verdict": "PASS"}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 69 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |18040               |110        |2           |0           |0    |Normal   |\n      |python.exe          |Active     |1           |0           |     |N/A      |\n      |69 MB               |64 KB      |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [18040], "owned_pids": [3544, 14240, 14344, 14388, 15464, 18040, 18660], "foreign_pids": []}
+{"seed": 11, "kind": "random", "poison": "0x7fc54321", "ok": true, "max_abs": 3.725290298461914e-09, "relative_l2": 1.2102409836954444e-08, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 18.08619999792427, "write_sync_ms": 0.3549999964889139, "dispatch_ms": 86.84740000171587, "read_sync_ms": 0.0610999995842576, "verdict": "PASS"}
+{"seed": 11, "kind": "uniform", "poison": "0x7fc12345", "ok": true, "max_abs": 3.725290298461914e-09, "relative_l2": 1.2102409836954444e-08, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 17.463199998019263, "write_sync_ms": 0.3496999997878447, "dispatch_ms": 89.82449999894015, "read_sync_ms": 0.053499999921768904, "verdict": "PASS"}
+{"seed": 11, "kind": "uniform", "poison": "0x7fc54321", "ok": true, "max_abs": 3.725290298461914e-09, "relative_l2": 1.2102409836954444e-08, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 18.301100004464388, "write_sync_ms": 0.4248000041116029, "dispatch_ms": 90.77099998830818, "read_sync_ms": 0.06740000389982015, "verdict": "PASS"}
+{"seed": 11, "kind": "zero", "poison": "0x7fc12345", "ok": true, "max_abs": 0.0, "relative_l2": 0.0, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 18.26650000293739, "write_sync_ms": 0.3400999994482845, "dispatch_ms": 82.77809999708552, "read_sync_ms": 0.0641999940853566, "verdict": "PASS"}
+{"seed": 11, "kind": "zero", "poison": "0x7fc54321", "ok": true, "max_abs": 0.0, "relative_l2": 0.0, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 18.34739999321755, "write_sync_ms": 0.4883999936282635, "dispatch_ms": 80.85110000683926, "read_sync_ms": 0.06510000093840063, "verdict": "PASS"}
+{"seed": 11, "kind": "peaked", "poison": "0x7fc12345", "ok": true, "max_abs": 3.725290298461914e-09, "relative_l2": 1.2102409836954444e-08, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 18.337500005145557, "write_sync_ms": 0.40180000360123813, "dispatch_ms": 90.91579999949317, "read_sync_ms": 0.055500000598840415, "verdict": "PASS"}
+HOST_TIMELINE {"elapsed_seconds": 16.297, "tree_rss_bytes": 353824768, "foreign_peers": []}
+{"seed": 11, "kind": "peaked", "poison": "0x7fc54321", "ok": true, "max_abs": 3.725290298461914e-09, "relative_l2": 1.2102409836954444e-08, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 17.8338999976404, "write_sync_ms": 0.338400001055561, "dispatch_ms": 91.10230000806041, "read_sync_ms": 0.10889999975915998, "verdict": "PASS"}
+{"seed": 29, "kind": "random", "poison": "0x7fc12345", "ok": true, "max_abs": 3.725290298461914e-09, "relative_l2": 1.4263384418765406e-08, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 18.566400001873262, "write_sync_ms": 0.3637000045273453, "dispatch_ms": 86.8618999957107, "read_sync_ms": 0.05729999975301325, "verdict": "PASS"}
+{"seed": 29, "kind": "random", "poison": "0x7fc54321", "ok": true, "max_abs": 3.725290298461914e-09, "relative_l2": 1.4263384418765406e-08, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 18.639000001712702, "write_sync_ms": 0.3628000122262165, "dispatch_ms": 87.0442000014009, "read_sync_ms": 0.055100012104958296, "verdict": "PASS"}
+{"seed": 29, "kind": "uniform", "poison": "0x7fc12345", "ok": true, "max_abs": 3.725290298461914e-09, "relative_l2": 1.4263384418765406e-08, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 17.752300002030097, "write_sync_ms": 0.35930000012740493, "dispatch_ms": 86.98539999022614, "read_sync_ms": 0.056500008213333786, "verdict": "PASS"}
+{"seed": 29, "kind": "uniform", "poison": "0x7fc54321", "ok": true, "max_abs": 3.725290298461914e-09, "relative_l2": 1.4263384418765406e-08, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 17.924200001289137, "write_sync_ms": 0.3555000002961606, "dispatch_ms": 90.87709999585059, "read_sync_ms": 0.06730000313837081, "verdict": "PASS"}
+{"seed": 29, "kind": "zero", "poison": "0x7fc12345", "ok": true, "max_abs": 0.0, "relative_l2": 0.0, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 18.038900001556613, "write_sync_ms": 0.48510001215618104, "dispatch_ms": 81.73790000728332, "read_sync_ms": 0.06500000017695129, "verdict": "PASS"}
+{"seed": 29, "kind": "zero", "poison": "0x7fc54321", "ok": true, "max_abs": 0.0, "relative_l2": 0.0, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 17.795700012356974, "write_sync_ms": 0.3294999914942309, "dispatch_ms": 82.41580000321846, "read_sync_ms": 0.0653000024612993, "verdict": "PASS"}
+{"seed": 29, "kind": "peaked", "poison": "0x7fc12345", "ok": true, "max_abs": 3.725290298461914e-09, "relative_l2": 1.4263384418765406e-08, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 17.767700002877973, "write_sync_ms": 0.32360000477638096, "dispatch_ms": 90.12119998806156, "read_sync_ms": 0.0644000101601705, "verdict": "PASS"}
+{"seed": 29, "kind": "peaked", "poison": "0x7fc54321", "ok": true, "max_abs": 3.725290298461914e-09, "relative_l2": 1.4263384418765406e-08, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 17.87930000864435, "write_sync_ms": 0.38729999505449086, "dispatch_ms": 90.85740000591613, "read_sync_ms": 0.06510000093840063, "verdict": "PASS"}
+{"seed": 47, "kind": "random", "poison": "0x7fc12345", "ok": true, "max_abs": 1.862645149230957e-09, "relative_l2": 6.0774128958921265e-09, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 18.6363000102574, "write_sync_ms": 0.4047999973408878, "dispatch_ms": 91.25230000063311, "read_sync_ms": 0.06040000880602747, "verdict": "PASS"}
+{"seed": 47, "kind": "random", "poison": "0x7fc54321", "ok": true, "max_abs": 1.862645149230957e-09, "relative_l2": 6.0774128958921265e-09, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 17.80719999806024, "write_sync_ms": 0.3845000028377399, "dispatch_ms": 90.07830001064576, "read_sync_ms": 0.06510000093840063, "verdict": "PASS"}
+{"seed": 47, "kind": "uniform", "poison": "0x7fc12345", "ok": true, "max_abs": 1.862645149230957e-09, "relative_l2": 6.0774128958921265e-09, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 17.934499992406927, "write_sync_ms": 0.570999996853061, "dispatch_ms": 90.40580000146292, "read_sync_ms": 0.05669999518431723, "verdict": "PASS"}
+{"seed": 47, "kind": "uniform", "poison": "0x7fc54321", "ok": true, "max_abs": 1.862645149230957e-09, "relative_l2": 6.0774128958921265e-09, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 18.077100001391955, "write_sync_ms": 0.3681999951368198, "dispatch_ms": 90.72290000040084, "read_sync_ms": 0.0661999947624281, "verdict": "PASS"}
+{"seed": 47, "kind": "zero", "poison": "0x7fc12345", "ok": true, "max_abs": 0.0, "relative_l2": 0.0, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 17.640400008531287, "write_sync_ms": 0.37939999310765415, "dispatch_ms": 79.724700000952, "read_sync_ms": 0.06289999873843044, "verdict": "PASS"}
+{"seed": 47, "kind": "zero", "poison": "0x7fc54321", "ok": true, "max_abs": 0.0, "relative_l2": 0.0, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 19.28020000923425, "write_sync_ms": 0.3758000093512237, "dispatch_ms": 79.15890000003856, "read_sync_ms": 0.06249999569263309, "verdict": "PASS"}
+{"seed": 47, "kind": "peaked", "poison": "0x7fc12345", "ok": true, "max_abs": 1.862645149230957e-09, "relative_l2": 6.0774128958921265e-09, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 18.076899999869056, "write_sync_ms": 0.3632000007200986, "dispatch_ms": 86.82599999883678, "read_sync_ms": 0.05319999763742089, "verdict": "PASS"}
+{"seed": 47, "kind": "peaked", "poison": "0x7fc54321", "ok": true, "max_abs": 1.862645149230957e-09, "relative_l2": 6.0774128958921265e-09, "bad_elements": 0, "guards": true, "inputs_immutable": true, "written": true, "independent": true, "packing_ms": 18.093999999109656, "write_sync_ms": 0.3412000078242272, "dispatch_ms": 89.53920000931248, "read_sync_ms": 0.06570000550709665, "verdict": "PASS"}
+HOST_TIMELINE {"elapsed_seconds": 18.625, "tree_rss_bytes": 354480128, "foreign_peers": []}
+Traceback (most recent call last):
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\<tooling>\worktrees\laya-testing\kernels\laya_attention\probe.py", line 523, in <module>
+    raise SystemExit(main())
+                     ~~~~^^
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\<tooling>\worktrees\laya-testing\kernels\laya_attention\probe.py", line 513, in main
+    result=run(directory.parent.resolve(),a.masks,a.prereg,True,10)
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\<tooling>\worktrees\laya-testing\kernels\laya_attention\probe.py", line 412, in run
+    result=run_full(h,ib,nbytes,bi,bo,meta,mask,contract,benchmark,reps,dispatch,to,fr)
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\<tooling>\worktrees\laya-testing\kernels\laya_attention\probe.py", line 465, in run_full
+    from threadpoolctl import threadpool_limits
+ModuleNotFoundError: No module named 'threadpoolctl'
+scripts/research-iron.sh: line 19:   577 Segmentation fault         python "$@"
+POST_NPU_CONTEXT_WITNESS "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+RESEARCH_PROCESS_RESULT {"exit_code": 139, "stop": null, "peak_tree_rss_bytes": 616734720, "rss_measurement": "maximum observed across sampled descendant working sets; zero observations reported as null", "elapsed_seconds": 19.389999999999418, "foreign_contention_observed": false, "timing_eligible": false}
