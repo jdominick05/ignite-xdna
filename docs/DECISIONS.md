@@ -3584,3 +3584,16 @@ are superseded by this completed accuracy result; their timing caveats remain.
 The interrupted partial attempt stays preserved and is not pooled into the full
 score. The separate stage-attribution protocol is next, before further kernel
 changes. This research qualification does not change the serving daemon.
+
+## Laya next optimization follows encoder stage costs (2026-10-16, Desktop 2)
+
+The [qualified stage diagnostic](BENCHMARKS.md#laya-qualified-smaller-query-stage-attribution-2026-10-16-desktop-2)
+places most request time in the combined attention/projection/normalization and
+MLP encoder groups. Prioritize those device paths over host request preparation
+or final readback. The wall intervals do not distinguish their core arithmetic,
+DMA or scheduling costs; preserve that uncertainty. Existing older phase splits
+used earlier images and cannot supply current packing/smaller-query phase costs.
+A current phase comparison must keep the qualified core/init, check compiled
+transactions and bit-exact outputs, quantify splitting/dispatch perturbation
+against the unsplit control in the same sitting, and retain the frozen criteria
+before adopting a new arithmetic or transport image.

@@ -20008,3 +20008,44 @@ other row buckets retain their existing images. Those sittings still support onl
 a modest gain with overlapping samples and round reversals. This score supplies
 no fresh latency measurement or CPU/hybrid ratio, and does not resolve the
 matched-512 native-versus-hybrid regression.
+
+## Laya qualified smaller-query stage attribution (2026-10-16, Desktop 2)
+
+The [eligible diagnostic](../results/laya/small_lookup_profile_v1_device_desktop2_20261016.log)
+follows the [preregistered protocol](../results/laya/small_lookup_profile_v1_prereg_desktop2_20261016.json)
+committed as `7708e7c`, using the now fully qualified smaller-query/packing arm.
+The same length-91/M128 complete request runs in three fresh serialized sessions,
+with setup excluded. Each has two warmups and the registered sequence of two
+unprofiled and three profiled requests. All individual totals and the complete
+66-stage records are retained, alongside the raw archive hash.
+
+| Host-observed interval | Median ms | Sample range ms |
+|---|---:|---:|
+| Encoder attention, projection and normalization | 201.1024 | 171.7907–207.5374 |
+| Encoder MLP | 193.2325 | 160.2361–199.6316 |
+| Host request preparation | 0.6369 | 0.4367–0.8391 |
+| Final output readback | 0.0444 | 0.0366–0.0516 |
+| Dispatch loop outside recorded stage intervals | 0.5120 | 0.3406–0.5247 |
+
+Six unprofiled requests have complete-request median 455.0317 ms,
+range 415.8288–464.0487 ms.
+Nine profiled requests have complete-request median 458.3859 ms,
+range 395.8646–467.1194 ms.
+The ranges overlap substantially and individual runs vary. These brackets do
+not establish a stable instrumentation-overhead estimate or a new model speedup.
+Group medians summarize separate sample distributions and should not be added
+to reconstruct the median complete request.
+
+The two encoder groups dominate the observed request. Host preparation and final
+readback are small in this configuration, so optimizing them is not the leading
+latency opportunity. Every stage duration surrounds submission and completed wait
+on the host: it includes driver, scheduling, DMA and core work. It cannot isolate
+arithmetic or physical DDR bandwidth, and does not resolve attention products
+from QKV/projection/normalization within the combined attention group.
+
+All outputs remain bit-exact across requests, with zero CPU neural/oracle calls,
+five contexts, 66 dispatches and complete dispatch-name coverage, including both
+head-attention invocations. Every session closes to idle and all registered
+identities remain unchanged. The bounded process exits zero, observes no foreign
+contention and records `timing_eligible: true`. The qualified accuracy result
+remains intact. No fresh hybrid/CPU ratio or cross-sitting pooled result is claimed.
