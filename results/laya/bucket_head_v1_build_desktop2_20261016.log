@@ -1,0 +1,141 @@
+RESEARCH_PLATFORM {"machine": "Desktop 2", "cpu": "AMD Ryzen 7 8700G w/ Radeon 780M Graphics", "os": "Windows-11-10.0.26200-SP0", "ram_bytes": 33381138432, "source_sha256": {"tools/research_process.py": "ffeb1857f190b482eed101b5f5a928f455de26bfa61d23f78a2eacec08e2663e", "tools/quant_calib_alphabet.py": "2dc0b2878c564853f340880209a425dfcf63b8536b2b8e9fd32344daade58d37", "tools/xint8_arithmetic_probe.py": "6aa3df08b9870c3c2264b868459d7ffbac3070dddc1349d7c6f3f480075f7041", "scripts/research-lowlevel.sh": "3455ad7933697936487712665505c216891865c6deada647302785f6e37020bd", "scripts/research-iron.sh": "4c863a262646ddab39b5005006ba8e03809895e6386c6310e2fd9d0a9e9609ee", "kernels/memory_placement/probe.py": "e8d990169ad6091fa1b53852e9f61eff495b5def72d35165a5c5cf1759e38898", "kernels/memory_placement/memory_kernels.cc": "182e7af7071a1e851afb4a7ca266069c489aea1fbaaa85eca129708daeba5ba6", "scripts/research-matrix.sh": "739254171629deae822b0ad7dabc875aee19ace56dde77d3e8aab61663f97516", "kernels/memory_placement/gemm.py": "17c905ad66110d3346bbf0db898dfc6b780df59fae1dfb0c1747057ce1e5844e", "kernels/memory_placement/gemm_placement.cc": "f21acf7250b12914ea30cc1f77613239dfa18421a85a1b9a5199017dd916278a", "tools/research_summary.py": "0c00dcceef07053d06731b41a1f1ed58d3ba4ea09f82497de354ce9cef17da20", "tools/research_toolchain.py": "f0a126a24ae213acfaa43460cfd9def0c86d9cb70cfee0228aa271688467b314"}, "commit": "cd3c5f114ddeec347b188b3e1423a3c8c342bfc6", "command": ["bash", "scripts/research-iron.sh", "kernels/laya_transformer/bucket_head.py", "--base", "scratch/laya_transformer", "--model", "scratch/laya/laya-onnx/laya_az0_noguard.onnx", "--attention-folder", "scratch/laya_transformer/bucket_attention_v2", "--out", "scratch/laya_transformer/bucket_head_v1", "--counts", "128", "256", "384", "512"], "seconds_limit": 300.0, "rss_gib_limit": 8, "checks_only": true, "free_ram_bytes": 22681399296}
+HOST_TIMELINE {"elapsed_seconds": 2.515, "tree_rss_bytes": 177811456, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 4.937, "tree_rss_bytes": 209559552, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 7.406, "tree_rss_bytes": 119336960, "foreign_peers": []}
+BUCKET_HEAD_LAYOUT {"m": 128, "stage": "head_pre", "resident_core_and_init_identical": true, "scope": "offline only"}
+HOST_TIMELINE {"elapsed_seconds": 9.843, "tree_rss_bytes": 286240768, "foreign_peers": []}
+BUCKET_HEAD_LAYOUT {"m": 128, "stage": "head_attention", "resident_core_and_init_identical": true, "scope": "offline only"}
+HOST_TIMELINE {"elapsed_seconds": 12.703, "tree_rss_bytes": 179027968, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 15.14, "tree_rss_bytes": 215035904, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 17.625, "tree_rss_bytes": 216543232, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 20.031, "tree_rss_bytes": 117620736, "foreign_peers": []}
+BUCKET_HEAD_LAYOUT {"m": 128, "stage": "head_post", "resident_core_and_init_identical": true, "scope": "offline only"}
+HOST_TIMELINE {"elapsed_seconds": 22.484, "tree_rss_bytes": 203468800, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 24.953, "tree_rss_bytes": 210489344, "foreign_peers": []}
+BUCKET_HEAD_LAYOUT {"m": 128, "stage": "second_pre", "resident_core_and_init_identical": true, "scope": "offline only"}
+HOST_TIMELINE {"elapsed_seconds": 27.703, "tree_rss_bytes": 179003392, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 30.109, "tree_rss_bytes": 212234240, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 32.578, "tree_rss_bytes": 215425024, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 35.031, "tree_rss_bytes": 123330560, "foreign_peers": []}
+BUCKET_HEAD_LAYOUT {"m": 128, "stage": "second_post", "resident_core_and_init_identical": true, "scope": "offline only"}
+HOST_TIMELINE {"elapsed_seconds": 37.718, "tree_rss_bytes": 179650560, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 40.171, "tree_rss_bytes": 205647872, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 42.687, "tree_rss_bytes": 214335488, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 45.14, "tree_rss_bytes": 215162880, "foreign_peers": []}
+BUCKET_HEAD_LAYOUT {"m": 256, "stage": "head_pre", "resident_core_and_init_identical": true, "scope": "offline only"}
+HOST_TIMELINE {"elapsed_seconds": 47.609, "tree_rss_bytes": 177917952, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 50.125, "tree_rss_bytes": 308531200, "foreign_peers": []}
+BUCKET_HEAD_LAYOUT {"m": 256, "stage": "head_attention", "resident_core_and_init_identical": true, "scope": "offline only"}
+HOST_TIMELINE {"elapsed_seconds": 52.875, "tree_rss_bytes": 181133312, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 55.328, "tree_rss_bytes": 181411840, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 57.796, "tree_rss_bytes": 181411840, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 60.25, "tree_rss_bytes": 211017728, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 62.734, "tree_rss_bytes": 222834688, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 65.218, "tree_rss_bytes": 222842880, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 67.734, "tree_rss_bytes": 222900224, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 70.203, "tree_rss_bytes": 223981568, "foreign_peers": []}
+BUCKET_HEAD_LAYOUT {"m": 256, "stage": "head_post", "resident_core_and_init_identical": true, "scope": "offline only"}
+HOST_TIMELINE {"elapsed_seconds": 72.687, "tree_rss_bytes": 177471488, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 75.14, "tree_rss_bytes": 180121600, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 77.625, "tree_rss_bytes": 210980864, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 80.078, "tree_rss_bytes": 214315008, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 82.625, "tree_rss_bytes": 214863872, "foreign_peers": []}
+BUCKET_HEAD_LAYOUT {"m": 256, "stage": "second_pre", "resident_core_and_init_identical": true, "scope": "offline only"}
+HOST_TIMELINE {"elapsed_seconds": 85.062, "tree_rss_bytes": 180269056, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 87.5, "tree_rss_bytes": 181030912, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 90.0, "tree_rss_bytes": 181575680, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 92.515, "tree_rss_bytes": 210944000, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 95.046, "tree_rss_bytes": 221515776, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 97.531, "tree_rss_bytes": 222179328, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 100.015, "tree_rss_bytes": 222519296, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 102.484, "tree_rss_bytes": 222789632, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 104.968, "tree_rss_bytes": 123203584, "foreign_peers": []}
+BUCKET_HEAD_LAYOUT {"m": 256, "stage": "second_post", "resident_core_and_init_identical": true, "scope": "offline only"}
+HOST_TIMELINE {"elapsed_seconds": 107.484, "tree_rss_bytes": 180756480, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 109.921, "tree_rss_bytes": 181391360, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 112.421, "tree_rss_bytes": 217804800, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 114.875, "tree_rss_bytes": 218923008, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 117.328, "tree_rss_bytes": 218923008, "foreign_peers": []}
+BUCKET_HEAD_LAYOUT {"m": 384, "stage": "head_pre", "resident_core_and_init_identical": true, "scope": "offline only"}
+HOST_TIMELINE {"elapsed_seconds": 119.875, "tree_rss_bytes": 173826048, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 122.312, "tree_rss_bytes": 220450816, "foreign_peers": []}
+BUCKET_HEAD_LAYOUT {"m": 384, "stage": "head_attention", "resident_core_and_init_identical": true, "scope": "offline only"}
+HOST_TIMELINE {"elapsed_seconds": 124.718, "tree_rss_bytes": 180129792, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 127.109, "tree_rss_bytes": 182898688, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 129.609, "tree_rss_bytes": 182996992, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 132.125, "tree_rss_bytes": 183500800, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 134.546, "tree_rss_bytes": 183431168, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 136.984, "tree_rss_bytes": 215285760, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 139.468, "tree_rss_bytes": 228745216, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 141.937, "tree_rss_bytes": 228880384, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 144.421, "tree_rss_bytes": 228880384, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 146.89, "tree_rss_bytes": 228904960, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 149.406, "tree_rss_bytes": 229195776, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 151.89, "tree_rss_bytes": 229195776, "foreign_peers": []}
+BUCKET_HEAD_LAYOUT {"m": 384, "stage": "head_post", "resident_core_and_init_identical": true, "scope": "offline only"}
+HOST_TIMELINE {"elapsed_seconds": 154.359, "tree_rss_bytes": 180604928, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 156.859, "tree_rss_bytes": 181776384, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 159.265, "tree_rss_bytes": 208547840, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 161.781, "tree_rss_bytes": 217387008, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 164.234, "tree_rss_bytes": 217944064, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 166.734, "tree_rss_bytes": 217944064, "foreign_peers": []}
+BUCKET_HEAD_LAYOUT {"m": 384, "stage": "second_pre", "resident_core_and_init_identical": true, "scope": "offline only"}
+HOST_TIMELINE {"elapsed_seconds": 169.421, "tree_rss_bytes": 182632448, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 171.859, "tree_rss_bytes": 183238656, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 174.281, "tree_rss_bytes": 183255040, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 176.796, "tree_rss_bytes": 183296000, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 179.25, "tree_rss_bytes": 214028288, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 181.734, "tree_rss_bytes": 225042432, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 184.203, "tree_rss_bytes": 228319232, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 186.656, "tree_rss_bytes": 228347904, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 189.156, "tree_rss_bytes": 228626432, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 191.64, "tree_rss_bytes": 228626432, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 194.14, "tree_rss_bytes": 228896768, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 196.64, "tree_rss_bytes": 484524032, "foreign_peers": []}
+BUCKET_HEAD_LAYOUT {"m": 384, "stage": "second_post", "resident_core_and_init_identical": true, "scope": "offline only"}
+HOST_TIMELINE {"elapsed_seconds": 199.453, "tree_rss_bytes": 182558720, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 201.89, "tree_rss_bytes": 183144448, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 204.39, "tree_rss_bytes": 210141184, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 206.812, "tree_rss_bytes": 221954048, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 209.25, "tree_rss_bytes": 222289920, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 211.703, "tree_rss_bytes": 222572544, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 214.25, "tree_rss_bytes": 222646272, "foreign_peers": []}
+BUCKET_HEAD_LAYOUT {"m": 512, "stage": "head_pre", "resident_core_and_init_identical": true, "scope": "offline only"}
+HOST_TIMELINE {"elapsed_seconds": 216.75, "tree_rss_bytes": 181047296, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 219.14, "tree_rss_bytes": 227295232, "foreign_peers": []}
+BUCKET_HEAD_LAYOUT {"m": 512, "stage": "head_attention", "resident_core_and_init_identical": true, "scope": "offline only"}
+HOST_TIMELINE {"elapsed_seconds": 221.515, "tree_rss_bytes": 119185408, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 223.921, "tree_rss_bytes": 184180736, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 226.312, "tree_rss_bytes": 184922112, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 228.765, "tree_rss_bytes": 185552896, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 231.234, "tree_rss_bytes": 185552896, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 233.687, "tree_rss_bytes": 185552896, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 236.109, "tree_rss_bytes": 220749824, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 238.578, "tree_rss_bytes": 232325120, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 241.046, "tree_rss_bytes": 234295296, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 243.562, "tree_rss_bytes": 234573824, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 246.015, "tree_rss_bytes": 234594304, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 248.375, "tree_rss_bytes": 234872832, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 250.828, "tree_rss_bytes": 235143168, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 253.281, "tree_rss_bytes": 234991616, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 255.781, "tree_rss_bytes": 234991616, "foreign_peers": []}
+BUCKET_HEAD_LAYOUT {"m": 512, "stage": "head_post", "resident_core_and_init_identical": true, "scope": "offline only"}
+HOST_TIMELINE {"elapsed_seconds": 258.203, "tree_rss_bytes": 119185408, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 260.656, "tree_rss_bytes": 182591488, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 263.109, "tree_rss_bytes": 183345152, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 265.609, "tree_rss_bytes": 212082688, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 268.093, "tree_rss_bytes": 222101504, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 270.578, "tree_rss_bytes": 222445568, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 273.031, "tree_rss_bytes": 223031296, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 275.531, "tree_rss_bytes": 225890304, "foreign_peers": []}
+BUCKET_HEAD_LAYOUT {"m": 512, "stage": "second_pre", "resident_core_and_init_identical": true, "scope": "offline only"}
+HOST_TIMELINE {"elapsed_seconds": 278.421, "tree_rss_bytes": 184442880, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 280.859, "tree_rss_bytes": 184885248, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 283.312, "tree_rss_bytes": 184942592, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 285.75, "tree_rss_bytes": 185516032, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 288.218, "tree_rss_bytes": 185516032, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 290.593, "tree_rss_bytes": 219045888, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 293.0, "tree_rss_bytes": 222359552, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 295.484, "tree_rss_bytes": 233684992, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 298.015, "tree_rss_bytes": 234115072, "foreign_peers": []}
+RESEARCH_PROCESS_RESULT {"exit_code": 15, "stop": "time_limit", "peak_tree_rss_bytes": 1804144640, "rss_measurement": "maximum observed across sampled descendant working sets; zero observations reported as null", "elapsed_seconds": 300.06200000000536, "foreign_contention_observed": false, "timing_eligible": false}

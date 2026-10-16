@@ -462,3 +462,10 @@ Backs [combined compiler/FIFO and lookup candidates](../docs/BENCHMARKS.md#laya-
 - [O3 plus deeper FIFOs](laya/geglu_fifo_v1_o3_double_build_desktop2_20261016.log): original polynomial arithmetic, compile/audit only.
 - [Interpolated GELU lookup](laya/geglu_lut_v1_double_build_desktop2_20261016.log): code/table/stack audit and offline formula sample error; changed approximation, hardware accuracy and speed unverified.
 - [175-check validation](laya/geglu_next_v1_validation_desktop2_20261016.log): offline checks and legacy gates. The buffered full accuracy run retains sole device ownership.
+
+## Laya shorter head schedules offline
+
+Backs [shorter head preparation](../docs/BENCHMARKS.md#laya-shorter-head-schedules-prepared-offline-2026-10-16-desktop-2).
+
+- [Initial time-limited build](laya/bucket_head_v1_build_desktop2_20261016.log), [recovered complete build](laya/bucket_head_v2_recovered_build_desktop2_20261016.log): all stages/buckets retain their original resident core/init identities; verified completed layouts reused, missing layout compiled.
+- [193-check validation](laya/bucket_head_v1_validation_desktop2_20261016.log): offline packet/control/metadata checks and legacy gates. No head candidate hardware run or speed claim.

@@ -19082,3 +19082,37 @@ none of these new files or artifacts and remains unchanged.
 offline checks and legacy syntax/import gates. New checks independently compare the
 lookup formula against erfc, cover bin/asymptote edges and signed zero, prove correct
 four-entry bank duplication and preserve the dedicated program outside FIFO declarations.
+
+## Laya shorter head schedules prepared offline (2026-10-16, Desktop 2)
+
+`bucket_head.py` prepares shorter type embedding, normalization, biased projections,
+ReLU MLPs, residual sums and head attention for each encoder row bucket. It keeps the
+full physical tensor pitches and original arithmetic objects. Every marker is checked
+against actual input length before schedule selection; output gathers therefore remain
+within produced rows. Head attention uses the existing variable-KV image with an
+explicit bucket-dependent key count. These are experimental instruction streams, not
+an adopted model cost or accuracy result.
+
+The [initial build](../results/laya/bucket_head_v1_build_desktop2_20261016.log) reaches its
+time limit while finishing the final layout. The
+[recovered build](../results/laya/bucket_head_v2_recovered_build_desktop2_20261016.log)
+copies completed layouts only after requiring exact generated MLIR and arithmetic
+object identity, repeats every linked-core, stack, physical-span and initialization
+audit, and compiles the missing layout. All five stages in all four row buckets pass.
+Vector stages have exactly the original vector core/init identity; head attention has
+exactly the existing short-attention identity. No new hardware context is required.
+
+`bucket_head_probe.py` prepares a complete-model comparison of original short encoder,
+buffered encoder, shorter heads alone and both changes. It binds instructions to the
+existing contexts and switches each head's own type-address and valid-count patch maps
+before native request preparation. Original head instructions remain available for
+comparisons. No host activation transfer or CPU neural operation is added.
+
+[Validation](../results/laya/bucket_head_v1_validation_desktop2_20261016.log) passes 193
+offline checks and legacy syntax/import gates. The full bucket's pointwise streams
+match original text exactly; its attention stream transfers every same word in the same
+order with the same control values, despite equivalent DMA rank factoring. Additional
+checks cover metadata switching through repeated bucket transitions and rejection of
+invalid markers before selection. None of these shorter head streams has run on the
+NPU. Complete output equivalence, latency and the original frozen accuracy gates remain
+required. The active buffered accuracy arm retains its registered full head schedules.
