@@ -708,6 +708,11 @@ and [registration record](laya/small_lookup_compare_repeat_v1_registration_deskt
 pin the unchanged protocol and disclose the first outcomes.
 The [independent repeat samples](laya/small_lookup_compare_repeat_v1_timing_desktop2_20261016.log)
 support the [separate-sitting result](../docs/BENCHMARKS.md#laya-smaller-query-lookupkv2-repeats-the-lower-pooled-median-2026-10-16-desktop-2).
+Frozen qualification: [registration](laya/small_lookup_accuracy_v1_prereg_desktop2_20261016.json),
+[registration record](laya/small_lookup_accuracy_v1_registration_desktop2_20261016.log),
+[offline checks](laya/small_lookup_accuracy_v1_validation_desktop2_20261016.log),
+[legacy validation](laya/small_lookup_accuracy_v1_legacy_validation_desktop2_20261016.log),
+[unchanged gates and scope](../docs/DECISIONS.md#laya-smaller-query-lookupkv2-frozen-qualification-protocol-2026-10-16-desktop-2).
 
 Two-output lookup GEMM primitive: [initial build](laya/window_lookup_primitive_v1_build_desktop2_20261016.log),
 [explicit control/address build](laya/window_lookup_primitive_v2_controls_build_desktop2_20261016.log),

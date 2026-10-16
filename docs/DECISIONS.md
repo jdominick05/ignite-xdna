@@ -3510,3 +3510,26 @@ Proceed to the original full frozen decision/accuracy gates plus complete scored
 bit equivalence to qualified packing. Disclose known-set revalidation and retain
 all prior outcomes; neither serving defaults nor the adopted arm changes before
 those gates pass.
+
+## Laya smaller-query lookup/KV2 frozen qualification protocol (2026-10-16, Desktop 2)
+
+After the lower pooled median repeats, the [accuracy registration](../results/laya/small_lookup_accuracy_v1_prereg_desktop2_20261016.json)
+pins 817 source/artifact/reference identities before this candidate produces
+labelled frozen outputs. `small_lookup_accuracy.py` reuses the original scorer,
+retains original C0–C5 thresholds, items, FP32 reference, decision rules and
+temperatures, and adds exact scored-output equivalence to qualified packing,
+including unused logit padding. The [registration record](../results/laya/small_lookup_accuracy_v1_registration_desktop2_20261016.log)
+carries the file map identity and the qualified packing reference hash.
+
+This reuses the disclosed original frozen set after earlier arm outcomes were
+observed: it is known-set revalidation, not a new held-out test. No candidate
+labelled outputs were observed before registration. Require five contexts,
+66 dispatches per item, zero CPU neural/oracle calls, unchanged identities before
+and after scoring, complete output provenance and idle contexts after close.
+Accuracy timing is ineligible. Do not overwrite observed outputs/checkpoints or
+restart a partial run under the same artifact name.
+
+[Registration/privacy checks](../results/laya/small_lookup_accuracy_v1_validation_desktop2_20261016.log)
+pass 16 cases; [legacy validation](../results/laya/small_lookup_accuracy_v1_legacy_validation_desktop2_20261016.log)
+passes. No frozen result or adoption follows from registration. Keep packing
+adopted until the full report and packing bit-equivalence gate pass.
