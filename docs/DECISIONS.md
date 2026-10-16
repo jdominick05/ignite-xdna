@@ -3647,3 +3647,19 @@ driver, scheduling and DMA work as well as arithmetic; neither those intervals
 nor the split path's latency are a new serving speedup. All registered identities
 are checked again after execution.
 [Registration record](../results/laya/small_lookup_phase_compare_v1_registration_desktop2_20261016.log).
+
+## Laya input projection is the next MLP target (2026-10-16, Desktop 2)
+
+The [current phase measurement](BENCHMARKS.md#laya-current-mlp-phase-timing-identifies-input-projection-2026-10-16-desktop-2)
+places input projection above GeGLU, output projection and normalization in every
+profile. Investigate input/weight movement and reuse in that path before another
+nonlinearity rewrite. The measurements do not isolate a bandwidth cause; any
+residency or transport optimization remains a hypothesis until measured against
+the qualified complete control in the same sitting.
+
+Preserve the adopted arithmetic and accumulation order while testing reuse.
+Any new MemTile buffering or replay scheme needs an offline proof of actual
+compiled descriptor addresses, packet boundaries and lock behavior, followed by
+a bounded primitive and complete-layer replay before full-model execution. Keep
+the original frozen criteria and qualification chain; changing a schedule is not
+permission to relax them. The slower split stream remains a diagnostic.

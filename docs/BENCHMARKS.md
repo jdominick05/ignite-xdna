@@ -20095,3 +20095,49 @@ pass 25. Legacy checks pass for [the wrapper](../results/laya/small_lookup_phase
 and [comparison runner](../results/laya/small_lookup_phase_compare_v1_legacy_validation_desktop2_20261016.log).
 This qualifies a diagnostic decomposition, with no new speed or frozen-accuracy
 claim and no change to the adopted unsplit serving stream.
+
+## Laya current MLP phase timing identifies input projection (2026-10-16, Desktop 2)
+
+The [eligible split/unsplit comparison](../results/laya/small_lookup_phase_compare_v1_timing_desktop2_20261016.log)
+follows the [registration](../results/laya/small_lookup_phase_compare_v1_prereg_desktop2_20261016.json)
+committed as `09647c5` before execution. Three fresh sessions rotate the registered
+arm order, with two warmups and five timed requests per arm profile. Both arms
+use the same allocated instruction BOs and five contexts. Each serves the same
+length-91/M128 complete request, with setup excluded.
+
+| Complete request | Physical dispatches | Median ms | Sample range ms |
+|---|---:|---:|---:|
+| Qualified unsplit control | 66 | 450.3734 | 396.2272–474.1138 |
+| Diagnostic split MLPs | 150 | 495.7704 | 398.2033–524.8756 |
+
+Each arm has 15 samples. The split median is higher in every round, with broad
+individual-sample overlap. The diagnostic adds dispatches and initializes RTP
+fields separately at each phase; this comparison does not attribute the full
+latency difference to a particular driver or control-write cost.
+
+One additional profiled split request per session records every physical stage.
+The following values sum the indicated phase across all 28 encoder MLP layers
+within each request, then summarize those three profiled requests:
+
+| MLP phase | Median ms | Sample range ms |
+|---|---:|---:|
+| Input projection | 127.6963 | 111.1378–133.0179 |
+| GeGLU | 42.5235 | 36.5338–43.4600 |
+| Output projection | 38.4449 | 31.7093–38.8792 |
+| Normalization | 27.9103 | 21.4366–28.7821 |
+
+Input projection is the largest MLP phase in every diagnostic profile. It is
+the first MLP path to optimize, alongside the previously measured combined
+attention/projection/normalization cost. The phase intervals include submission,
+completed wait, scheduling, DMA and arithmetic; they are not pure compute times
+and do not prove a bandwidth bottleneck. Separate phase medians are not additive
+components of the median unsplit request.
+
+All timed and profiled outputs remain bit-exact, with zero CPU neural/oracle
+calls. Every session closes to idle, all registered identities remain unchanged,
+and physical profile coverage checks all 150 dispatches including both head
+attentions and 28 invocations of every MLP phase. The bounded process exits zero
+with no foreign contention and `timing_eligible: true`. The compact log retains
+all complete-request samples, every physical phase stage and the raw archive hash.
+No new serving speedup, fresh CPU/hybrid ratio or cross-sitting pool is claimed.
+The qualified unsplit control remains the serving research configuration.
