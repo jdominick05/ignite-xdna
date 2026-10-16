@@ -607,6 +607,12 @@ Window GEMM lock/control checks: [initial harness environment error](laya/window
 [compiled lock fields and repeated core token ledger](laya/window_lookup_compiled_locks_v2_validation_desktop2_20261016.log),
 [offline scope and remaining device gates](../docs/DECISIONS.md#laya-window-gemm-compiled-lock-and-control-checks-2026-10-16-desktop-2).
 
+Window GEMM device primitive: [ordinary output zero](laya/window_lookup_gemm_primitive_original0_v1_desktop2_20261016.log),
+[ordinary output one](laya/window_lookup_gemm_primitive_original1_v1_desktop2_20261016.log),
+[two-output query reuse](laya/window_lookup_gemm_primitive_window_v1_desktop2_20261016.log),
+[runner/offline/legacy validation](laya/window_lookup_gemm_primitive_v1_validation_desktop2_20261016.log),
+[device scope and remaining full-model gates](../docs/BENCHMARKS.md#laya-two-output-query-reuse-gemm-primitive-passes-on-device-2026-10-16-desktop-2).
+
 Two-output lookup GEMM primitive: [initial build](laya/window_lookup_primitive_v1_build_desktop2_20261016.log),
 [explicit control/address build](laya/window_lookup_primitive_v2_controls_build_desktop2_20261016.log),
 [offline validation and live packing identity](laya/window_lookup_primitive_v1_validation_desktop2_20261016.log),

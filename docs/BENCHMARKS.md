@@ -19502,3 +19502,30 @@ reports foreign contention and `timing_eligible: false`, so no latency is inferr
 from scoring duration. Its completed untracked raw log was moved unchanged to
 ignored scratch; the summary retains its SHA256, checkpoint identities, completion,
 CPU-call count and idle witnesses. No CPU or hybrid ratio is added by this result.
+
+## Laya two-output query-reuse GEMM primitive passes on device (2026-10-16, Desktop 2)
+
+The [first ordinary output](../results/laya/window_lookup_gemm_primitive_original0_v1_desktop2_20261016.log),
+[second ordinary output](../results/laya/window_lookup_gemm_primitive_original1_v1_desktop2_20261016.log)
+and [two-output window](../results/laya/window_lookup_gemm_primitive_window_v1_desktop2_20261016.log)
+each pass six guarded cases: three integer-valued operand seeds, each with two outside
+guard patterns. Each variant runs in a separate process with one hardware context,
+one active column/four cores, two K blocks and a five-second dispatch wait inside a
+bounded wrapper. The window retains each query across two independent output states;
+the ordinary streams replay queries for the two products.
+
+Every complete output packet, including its fixed poison header/tail, matches the
+independent exact FP32 product reference bit-for-bit. The full source BO remains
+unchanged, and every target word outside the designated packets retains its guard.
+Repeated dispatches cross the candidate's three-object physical query ring. Each
+process closes normally and records an idle device while still alive; all wrappers
+exit zero. The runner rechecks compiled addresses, whole packets, RTP fields, CDO
+identities, cross-image lock roles and lowered core token ledgers before opening a
+context, following the [offline engineering gates](DECISIONS.md#laya-window-gemm-compiled-lock-and-control-checks-2026-10-16-desktop-2).
+
+The [runner validation](../results/laya/window_lookup_gemm_primitive_v1_validation_desktop2_20261016.log)
+passes 69 offline/privacy tests and the legacy syntax/import gates; all 497 packing
+registration hashes remain unchanged. These runs are correctness-only and timing
+ineligible. They qualify this GEMM primitive, not paired-query normalization/GeGLU,
+the complete MLP, full-model accuracy or any speed gain. The previously qualified
+complete packing arm remains the full-model configuration.
