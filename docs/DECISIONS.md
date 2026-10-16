@@ -3377,3 +3377,18 @@ now passes with the same guarded primitive core and the original full MLP runtim
 Keep capture/replay host copies confined to diagnostics. A complete-model candidate
 must replace the existing MLP context during construction and retain the observed
 five-context policy; full development and adoption gates remain required.
+
+## Laya specialized GEMM complete-inference timing protocol (2026-10-16, Desktop 2)
+
+After [full development parity](BENCHMARKS.md#laya-specialized-gemm-full-model-development-parity-2026-10-16-desktop-2),
+the [registration](../results/laya/gemm_specialized_compare_v1_prereg_desktop2_20261016.json)
+pins the complete serving arms and 314 identities before timing. Compare qualified
+packing with the specialized MLP on the same length-91/M128 request, rotating fresh
+serialized sessions in packing/specialized, specialized/packing,
+packing/specialized order. Each profile has two warmups and five timed inferences;
+setup is excluded. Require exact outputs, zero CPU neural/oracle calls, five
+contexts, 66 dispatches, unchanged identities and idle contexts after each close.
+The [registration record](../results/laya/gemm_specialized_compare_v1_registration_desktop2_20261016.log)
+contains the preregistration hash. No CPU/hybrid ratio or cross-sitting pooling is
+planned. A speed result must precede any frozen scoring for adoption; the original
+frozen decision/accuracy gates remain unchanged.

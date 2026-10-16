@@ -19741,3 +19741,20 @@ pass 18 cases including privacy checks; missing output-group verdicts, unsuccess
 exits and failed numeric checks block the layer gate. Legacy syntax/import checks
 also pass. The specialized image still needs full-model development parity,
 preregistered quiet timing and the original frozen gates before adoption.
+
+## Laya specialized GEMM full-model development parity (2026-10-16, Desktop 2)
+
+The [complete-model result](../results/laya/gemm_specialized_mlp_v1_full_desktop2_20261016.log)
+passes all 25 development cases: three fixtures, 20 length/bucket transitions
+including 512 back to 91, and two option masks. Complete logits and action
+probabilities match qualified packing bit for bit. The specialized image replaces
+all 28 M128 MLP stages; larger buckets retain their control images. Serving uses
+the common device arena without the diagnostic activation copies of the layer
+probe. Every case records five contexts and 66 dispatches, with zero CPU
+neural/oracle calls. Sources remain unchanged, the bounded process exits zero,
+and contexts are idle after each session closes. Timing is ineligible.
+
+[Offline prerequisite/privacy checks](../results/laya/gemm_specialized_full_v1_offline_tests_desktop2_20261016.log)
+pass 18 cases, and the [legacy validation](../results/laya/gemm_specialized_full_v1_validation_desktop2_20261016.log)
+passes. This establishes development parity only. No specialized full frozen
+accuracy or speed verdict follows; qualified packing remains adopted.

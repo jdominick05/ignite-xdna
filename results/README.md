@@ -662,6 +662,14 @@ Specialized GEMM complete MLP layers: [build, captured layer parity and cleanup]
 [prerequisite regression checks](laya/gemm_specialized_mlp_v1_offline_tests_desktop2_20261016.log),
 [development scope](../docs/BENCHMARKS.md#laya-fixed-shape-gemm-passes-complete-mlp-layer-parity-2026-10-16-desktop-2).
 
+Specialized GEMM full model: [development parity](laya/gemm_specialized_mlp_v1_full_desktop2_20261016.log),
+[offline checks](laya/gemm_specialized_full_v1_offline_tests_desktop2_20261016.log),
+[legacy validation](laya/gemm_specialized_full_v1_validation_desktop2_20261016.log),
+[scope](../docs/BENCHMARKS.md#laya-specialized-gemm-full-model-development-parity-2026-10-16-desktop-2).
+Timing [preregistration](laya/gemm_specialized_compare_v1_prereg_desktop2_20261016.json)
+and [record](laya/gemm_specialized_compare_v1_registration_desktop2_20261016.log)
+back the [protocol](../docs/DECISIONS.md#laya-specialized-gemm-complete-inference-timing-protocol-2026-10-16-desktop-2).
+
 Two-output lookup GEMM primitive: [initial build](laya/window_lookup_primitive_v1_build_desktop2_20261016.log),
 [explicit control/address build](laya/window_lookup_primitive_v2_controls_build_desktop2_20261016.log),
 [offline validation and live packing identity](laya/window_lookup_primitive_v1_validation_desktop2_20261016.log),
