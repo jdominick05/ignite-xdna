@@ -12,6 +12,7 @@ import fast_buffered_probe as fp
 import geglu_lut_probe as lp
 import compact_pack as cp
 import compact_pack_wide as cw
+import small_query as sq
 bp=hp.bp; n=hp.n; p=hp.p
 
 
@@ -27,8 +28,15 @@ class Session(hp.Session):
         candidates=[]
         if fast_folder is not None:
             folder=Path(fast_folder); meta=json.loads((folder/'build.json').read_text())
-            validator=fp.Session if mlp_kind=='polynomial' else lp.Session
-            validator.validate_candidate(None,meta,bundle)
+            if mlp_kind=='small-query':
+                expected=dict(m=128,qwords=1040,kvwords=2064,q_depth=4,kv_depth=2,l2_q_depth=2)
+                if meta['sources']!=sq.sources() or meta['base_identity']!=bundle.identity or meta['policy']!=expected:
+                    raise ValueError('stale optimized small-query candidate')
+                for name,sha in meta['generated_sources'].items():
+                    if p.attention.sha(folder/(name+'.cc'))!=sha: raise ValueError('generated small-query source changed')
+            else:
+                validator=fp.Session if mlp_kind=='polynomial' else lp.Session
+                validator.validate_candidate(None,meta,bundle)
             for name,sha in meta['unchanged_objects'].items():
                 if p.attention.sha(bundle.folders['vector']/(name+'.o'))!=sha: raise ValueError('optimized MLP changes another helper')
             candidates.append(('mlp',folder,meta,artifacts(folder,meta)))
@@ -73,12 +81,12 @@ if __name__=='__main__':
     ap=argparse.ArgumentParser()
     for name in ('base','model','mlp-folder','attention-folder','mlp-candidate','attention-candidate','compact-folder','head-folder','items'): ap.add_argument('--'+name,type=Path,required=True)
     ap.add_argument('--fast-folder',type=Path); ap.add_argument('--pack-folder',type=Path)
-    ap.add_argument('--mlp-kind',choices=('polynomial','lookup'),default='polynomial')
+    ap.add_argument('--mlp-kind',choices=('polynomial','lookup','small-query'),default='polynomial')
     ap.add_argument('--reps',type=int,default=5); ap.add_argument('--quick',action='store_true'); args=ap.parse_args()
-    if args.mlp_kind=='lookup' and args.fast_folder is None: raise ValueError('lookup profile needs its compiled image')
+    if args.mlp_kind in ('lookup','small-query') and args.fast_folder is None: raise ValueError('selected profile needs its compiled image')
     fixtures=[json.loads(row) for row in args.items.read_text().splitlines()[:3]]
     if len(fixtures)!=3 or any(item['gold']!=-1 or item['task']!='fixture' for item in fixtures): raise ValueError('unlabelled setup fixtures required')
-    modules=(hp,hp.buffered,hp.buffered.apb,hp.buffered.compact,fp,lp,cp,cw,bp)
+    modules=(hp,hp.buffered,hp.buffered.apb,hp.buffered.compact,fp,lp,cp,cw,sq,bp)
     print('OPTIMIZED_PROFILE '+json.dumps(dict(mlp_kind=args.mlp_kind,
       runner_sha256=p.attention.sha(Path(__file__)),
       sources={str(Path(module.__file__).relative_to(p.ROOT)).replace('\\','/'):p.attention.sha(Path(module.__file__)) for module in modules},

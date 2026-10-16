@@ -19245,3 +19245,42 @@ The [offline validation](../results/laya/optimized_candidates_v1_validation_desk
 checks packet coverage, preserved source strides and unused words, compiler-global
 restoration, and the existing offline suite and legacy import/syntax gates. Offline
 success provides no evidence that either compact DMA scheme executes correctly.
+
+## Laya smaller-query MLP compiled offline (2026-10-16, Desktop 2)
+
+`small_query.py` builds an independent MLP image whose GEMM query contains the original
+header and live BF16 operand, dropping the unused trailing query words. The query
+extent changes from 2,064 to 1,040 words; KV weights retain their full 2,064-word packet.
+Normalization and GeGLU consume two smaller queries per original input, with source
+addressing split across the two pointers. Their mathematical expressions, reduction
+order, polynomial and integer BF16 packing are retained. The norm dispatcher retains
+its rounding reset and volatile conversion fence. Exact device outputs remain a gate,
+including possible compiler differences in the separately compiled helpers.
+
+The [initial build](../results/laya/small_query_v1_build_desktop2_20261016.log) rejects
+the four-dimensional gather because its innermost extent exceeds the Shim descriptor's
+wrap range. The [corrected build](../results/laya/small_query_v2_grouped_build_desktop2_20261016.log)
+factors each span into vector words and completes one four-core group before reusing
+the descriptor. Norm/GeGLU send all first halves to the four cores, then all second
+halves, preserving pairing through the MemTile split. GEMM transfers keep their
+original starts and pitches. This reduces programmed query words for GEMM, while
+adding group completion waits to the other modes; physical DDR traffic and latency
+have not been measured.
+
+The corrected image passes linked code, physical-span and initialization audits with
+14,992 code bytes and a 2,848-byte conservative stack bound. Its query FIFO has depth
+four; the core waits for its first query before reading runtime control, consumes a
+second query only for norm/GeGLU, and releases the matching count. `optimized_probe.py`
+accepts this separately hashed image through `--mlp-kind small-query`, retaining the
+existing exact-output comparison path and original full native baseline.
+
+[Validation](../results/laya/small_query_v1_validation_desktop2_20261016.log) and the
+[expanded descriptor checks](../results/laya/small_query_v3_descriptor_validation_desktop2_20261016.log) cover all
+row buckets, every live query word, core/half ownership, unchanged weight and output
+address streams, descriptor completion groups, and acquisition/release structure,
+alongside the prior offline and legacy gates. No device context is opened. This is a
+compiled candidate, with no hardware parity, frozen accuracy or speed qualification.
+The retained [intermediate test failure](../results/laya/small_query_v2_descriptor_validation_desktop2_20261016.log)
+incorrectly checked raw MLIR dimensions against normalized hardware field limits.
+The corrected test checks the emitted query forms; the successful compile remains the
+evidence that the compiler accepts their normalized descriptor fields.

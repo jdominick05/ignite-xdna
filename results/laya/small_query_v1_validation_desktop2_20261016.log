@@ -1,0 +1,1529 @@
+RESEARCH_PLATFORM {"machine": "Desktop 2", "cpu": "AMD Ryzen 7 8700G w/ Radeon 780M Graphics", "os": "Windows-11-10.0.26200-SP0", "ram_bytes": 33381138432, "source_sha256": {"tools/research_process.py": "ffeb1857f190b482eed101b5f5a928f455de26bfa61d23f78a2eacec08e2663e", "tools/quant_calib_alphabet.py": "2dc0b2878c564853f340880209a425dfcf63b8536b2b8e9fd32344daade58d37", "tools/xint8_arithmetic_probe.py": "6aa3df08b9870c3c2264b868459d7ffbac3070dddc1349d7c6f3f480075f7041", "scripts/research-lowlevel.sh": "3455ad7933697936487712665505c216891865c6deada647302785f6e37020bd", "scripts/research-iron.sh": "4c863a262646ddab39b5005006ba8e03809895e6386c6310e2fd9d0a9e9609ee", "kernels/memory_placement/probe.py": "e8d990169ad6091fa1b53852e9f61eff495b5def72d35165a5c5cf1759e38898", "kernels/memory_placement/memory_kernels.cc": "182e7af7071a1e851afb4a7ca266069c489aea1fbaaa85eca129708daeba5ba6", "scripts/research-matrix.sh": "739254171629deae822b0ad7dabc875aee19ace56dde77d3e8aab61663f97516", "kernels/memory_placement/gemm.py": "17c905ad66110d3346bbf0db898dfc6b780df59fae1dfb0c1747057ce1e5844e", "kernels/memory_placement/gemm_placement.cc": "f21acf7250b12914ea30cc1f77613239dfa18421a85a1b9a5199017dd916278a", "tools/research_summary.py": "0c00dcceef07053d06731b41a1f1ed58d3ba4ea09f82497de354ce9cef17da20", "tools/research_toolchain.py": "f0a126a24ae213acfaa43460cfd9def0c86d9cb70cfee0228aa271688467b314"}, "commit": "58c9ab6e7b637a63614d8756ac964641163e4c36", "command": ["bash", "scratch/laya_transformer/small_query_verify.sh"], "seconds_limit": 180.0, "rss_gib_limit": 8, "checks_only": true, "free_ram_bytes": 23830851584}
+[2m    env: resnet_env17  (3.12.11)[0m
+HOST_TIMELINE {"elapsed_seconds": 2.485, "tree_rss_bytes": 10764288, "foreign_peers": []}
+PIPELINE CHECKS PASS
+[2m    env: mlir-aie-iron  (3.13.15)[0m
+HOST_TIMELINE {"elapsed_seconds": 5.063, "tree_rss_bytes": 10764288, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 7.469, "tree_rss_bytes": 10764288, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 9.985, "tree_rss_bytes": 10764288, "foreign_peers": []}
+........................................................................ [ 44%]
+HOST_TIMELINE {"elapsed_seconds": 12.453, "tree_rss_bytes": 10764288, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 14.875, "tree_rss_bytes": 10764288, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 17.375, "tree_rss_bytes": 10764288, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 19.813, "tree_rss_bytes": 10764288, "foreign_peers": []}
+........................................................................ [ 89%]
+HOST_TIMELINE {"elapsed_seconds": 22.235, "tree_rss_bytes": 10764288, "foreign_peers": []}
+.................                                                        [100%]
+161 passed in 17.83s
+FULL_BUILD_VALIDATION {"build": "vector_v6", "code_bytes": [14992], "stack_bound": 5184}
+FULL_BUILD_VALIDATION {"build": "head_pre_v3", "code_bytes": [14992], "stack_bound": 5184}
+FULL_BUILD_VALIDATION {"build": "head_attention_v4", "code_bytes": [15600], "stack_bound": 4768}
+FULL_BUILD_VALIDATION {"build": "head_post_v2", "code_bytes": [14992], "stack_bound": 5184}
+FULL_BUILD_VALIDATION {"build": "scorer_v2", "code_bytes": [14992], "stack_bound": 5184}
+FULL_BUILD_VALIDATION {"build": "tail_v4", "code_bytes": [12672], "stack_bound": 4448}
+FULL_BUILD_VALIDATION {"build": "action_v2", "code_bytes": [12672], "stack_bound": 4448}
+FULL_BUILD_VALIDATION {"build": "embedding_carry_v1", "code_bytes": [14992], "stack_bound": 5184}
+FIRST_RESIDUAL_GRAPH_CONTRACT {"norm_node": 7, "add_node": 93, "residual_tensor": "layer_norm", "raw_embedding_tensor": "embedding", "residual_is_normalized": true}
+FULL_OPERATOR_VALIDATION {"log": "tail_probe_v2_fixed_indices_desktop2_20261016.log", "checks": 26, "failures": 0}
+FULL_OPERATOR_VALIDATION {"log": "tail_probe_v3_carry_image_desktop2_20261016.log", "checks": 26, "failures": 0}
+FULL_OPERATOR_VALIDATION {"log": "vector_v4_carry_operators_desktop2_20261016.log", "checks": 48, "failures": 0}
+FULL_CHAIN_VALIDATION {"log": "scorer_v1_fixture_desktop2_20261016.log", "checks": 22, "contexts": 2, "dispatches": 64, "initial_residual": "legacy raw embedding E", "final": {"second_head_post_guards": {"ok": true}, "second_head_out": {"ok": true, "max_abs": 7.679197005927563e-05, "relative_l2": 4.79579806216352e-07}, "second_head_norm2_residual": {"ok": true}, "second_head_norm2_packed": {"ok": true, "max_abs": 0.0078125, "relative_l2": 1.8892415027949028e-05}, "second_head_wi": {"ok": true, "max_abs": 3.8366299122571945e-05, "relative_l2": 3.8584001853899637e-07}, "second_head_relu": {"ok": true}, "second_head_wo": {"ok": true, "max_abs": 0.00035111233592033386, "relative_l2": 2.886797034161625e-07}, "second_head_wo_bias": {"ok": true}, "second_second_final_sum": {"ok": true}, "chain_y": {"ok": false, "max_abs": 96.73394775390625, "relative_l2": 0.005593189969658852, "bad_elements": 14733}, "chain_residual": {"ok": false, "max_abs": 96.73394775390625, "relative_l2": 0.005593189969658852, "bad_elements": 14733}, "scorer_norm": {"ok": true, "max_abs": 4.7480240561448284e-07, "relative_l2": 6.818109162307138e-08, "residual_bit_mismatches": 0}, "scorer_pack": {"ok": true}, "scorer_hidden": {"ok": true, "max_abs": 1.395377330482006e-05, "relative_l2": 3.721383970075067e-07}, "scorer_gelu": {"ok": true, "max_abs": 3.814697265625e-06, "relative_l2": 3.034001139212705e-08}, "scorer_product": {"ok": true, "max_abs": 6.897798758842555e-07, "relative_l2": 6.042347447574203e-07}, "scorer_bias": {"ok": true}, "scorer_guards": {"ok": true}, "scorer_composition": {"ok": true, "max_abs": 0.003638625144958496, "relative_l2": 0.004525667056441307, "bad_elements": 0}}, "outputs": [], "normalized_failures": 16, "residual_failures": 20, "strict_mlp_failures": 6, "exit_code": 1, "peak_tree_rss_bytes": 7935229952, "scope": "fixture/operator qualification; frozen labelled accuracy and eligible speed unverified"}
+FULL_CHAIN_VALIDATION {"log": "action_v1_full_fixture_desktop2_20261016.log", "checks": 24, "contexts": 3, "dispatches": 65, "initial_residual": "legacy raw embedding E", "final": {"second_head_post_guards": {"ok": true}, "second_head_out": {"ok": true, "max_abs": 7.679197005927563e-05, "relative_l2": 4.79579806216352e-07}, "second_head_norm2_residual": {"ok": true}, "second_head_norm2_packed": {"ok": true, "max_abs": 0.0078125, "relative_l2": 1.8892415027949028e-05}, "second_head_wi": {"ok": true, "max_abs": 3.8366299122571945e-05, "relative_l2": 3.8584001853899637e-07}, "second_head_relu": {"ok": true}, "second_head_wo": {"ok": true, "max_abs": 0.00035111233592033386, "relative_l2": 2.886797034161625e-07}, "second_head_wo_bias": {"ok": true}, "second_second_final_sum": {"ok": true}, "chain_y": {"ok": false, "max_abs": 96.73394775390625, "relative_l2": 0.005593189969658852, "bad_elements": 14733}, "chain_residual": {"ok": false, "max_abs": 96.73394775390625, "relative_l2": 0.005593189969658852, "bad_elements": 14733}, "scorer_norm": {"ok": true, "max_abs": 4.7480240561448284e-07, "relative_l2": 6.818109162307138e-08, "residual_bit_mismatches": 0}, "scorer_pack": {"ok": true}, "scorer_hidden": {"ok": true, "max_abs": 1.395377330482006e-05, "relative_l2": 3.721383970075067e-07}, "scorer_gelu": {"ok": true, "max_abs": 3.814697265625e-06, "relative_l2": 3.034001139212705e-08}, "scorer_product": {"ok": true, "max_abs": 6.897798758842555e-07, "relative_l2": 6.042347447574203e-07}, "scorer_bias": {"ok": true}, "scorer_guards": {"ok": true}, "scorer_composition": {"ok": true, "max_abs": 0.003638625144958496, "relative_l2": 0.004525667056441307, "bad_elements": 0}, "masked_logits_bits": {"ok": true}, "tail_probabilities": {"ok": true, "max_abs": 6.608322306034253e-08, "relative_l2": 1.790919911398048e-07}, "tail_features": {"ok": true, "max_abs": 6.038748895376145e-08, "relative_l2": 7.055543556491967e-08}, "tail_logarithms": {"ok": true, "max_abs": 2.2921840003853333e-07, "relative_l2": 1.9125435510103686e-07}, "action_input_bits": {"ok": true}, "action_hidden": {"ok": true, "max_abs": 0.0015725134871900082, "relative_l2": 3.8571133018096084e-07}, "action_gelu": {"ok": true, "max_abs": 8.629148150153185e-21, "relative_l2": 9.402130403956861e-25}, "action_product": {"ok": true, "max_abs": 0.0002846717834472656, "relative_l2": 1.0402074478183514e-07}, "action_bias_bits": {"ok": true}, "action_softmax": {"ok": true, "max_abs": 5.960464477539063e-08, "relative_l2": 5.960464477539063e-08}, "action_guards": {"ok": true}, "logits_composition": {"ok": true, "max_abs": 0.003638625144958496, "relative_l2": 0.004525667056441307, "bad_elements": 0}, "action_composition": {"ok": true, "max_abs": 5.960464477539063e-08, "relative_l2": 5.960464477539063e-08, "bad_elements": 0}}, "outputs": [{"key": "fixture", "fill": 2143363909, "logits": [0.6137749552726746, 0.6101127862930298, 0.44539302587509155], "act_probs": [0.9999999403953552, 0.0], "snapshot_sha256": "cc3de922d815d67e2ee6e93d35b65374459076eccc88b82ff007591420cabd43", "scope": "qualification fixture; not frozen full-set accuracy"}, {"key": "fixture", "fill": 2143634209, "logits": [0.6137749552726746, 0.6101127862930298, 0.44539302587509155], "act_probs": [0.9999999403953552, 0.0], "snapshot_sha256": "cc3de922d815d67e2ee6e93d35b65374459076eccc88b82ff007591420cabd43", "scope": "qualification fixture; not frozen full-set accuracy"}], "normalized_failures": 18, "residual_failures": 22, "strict_mlp_failures": 6, "exit_code": 1, "peak_tree_rss_bytes": 8008011776, "scope": "fixture/operator qualification; frozen labelled accuracy and eligible speed unverified"}
+FULL_CHAIN_VALIDATION {"log": "action_v2_normalized_residual_fixture_desktop2_20261016.log", "checks": 24, "contexts": 3, "dispatches": 66, "initial_residual": "normalized embedding Y", "final": {"second_head_post_guards": {"ok": true}, "second_head_out": {"ok": true, "max_abs": 7.4717216193676e-05, "relative_l2": 4.2833775169641024e-07}, "second_head_norm2_residual": {"ok": true}, "second_head_norm2_packed": {"ok": true, "max_abs": 0.0078125, "relative_l2": 1.3605384083348326e-05}, "second_head_wi": {"ok": true, "max_abs": 3.546905645634979e-05, "relative_l2": 3.7837547834981586e-07}, "second_head_relu": {"ok": true}, "second_head_wo": {"ok": true, "max_abs": 0.0003414219245314598, "relative_l2": 2.843634202813152e-07}, "second_head_wo_bias": {"ok": true}, "second_second_final_sum": {"ok": true}, "chain_y": {"ok": false, "max_abs": 318.2989501953125, "relative_l2": 0.05531242489814758, "bad_elements": 74663}, "chain_residual": {"ok": false, "max_abs": 318.2989501953125, "relative_l2": 0.05531242489814758, "bad_elements": 74663}, "scorer_norm": {"ok": true, "max_abs": 5.441553501128737e-07, "relative_l2": 8.833692917108648e-08, "residual_bit_mismatches": 0}, "scorer_pack": {"ok": true}, "scorer_hidden": {"ok": true, "max_abs": 1.5839701518416405e-05, "relative_l2": 3.755190989995547e-07}, "scorer_gelu": {"ok": true, "max_abs": 3.0517578125e-05, "relative_l2": 2.2859246939788136e-07}, "scorer_product": {"ok": true, "max_abs": 1.4411620270493586e-06, "relative_l2": 2.5171986169528123e-07}, "scorer_bias": {"ok": true}, "scorer_guards": {"ok": true}, "scorer_composition": {"ok": true, "max_abs": 0.004361629486083984, "relative_l2": 0.001151136588305235, "bad_elements": 0}, "masked_logits_bits": {"ok": true}, "tail_probabilities": {"ok": true, "max_abs": 1.4479357912655644e-07, "relative_l2": 1.454436232086155e-07}, "tail_features": {"ok": true, "max_abs": 2.348568760267289e-07, "relative_l2": 2.3038466258059373e-07}, "tail_logarithms": {"ok": true, "max_abs": 2.598476895555521e-07, "relative_l2": 3.2865626908846174e-08}, "action_input_bits": {"ok": true}, "action_hidden": {"ok": true, "max_abs": 0.0018327217549085617, "relative_l2": 3.286794827784754e-07}, "action_gelu": {"ok": true, "max_abs": 0.0, "relative_l2": 0.0}, "action_product": {"ok": true, "max_abs": 0.000438690185546875, "relative_l2": 8.156130560200427e-08}, "action_bias_bits": {"ok": true}, "action_softmax": {"ok": true, "max_abs": 5.960464477539063e-08, "relative_l2": 5.960464477539063e-08}, "action_guards": {"ok": true}, "logits_composition": {"ok": true, "max_abs": 0.004361629486083984, "relative_l2": 0.001151136588305235, "bad_elements": 0}, "action_composition": {"ok": true, "max_abs": 5.960464477539063e-08, "relative_l2": 5.960464477539063e-08, "bad_elements": 0}}, "outputs": [{"key": "fixture", "fill": 2143363909, "logits": [3.683770179748535, -2.3182692527770996, -2.523902416229248], "act_probs": [0.9999999403953552, 0.0], "snapshot_sha256": "3ecf164ae0d55991b25a5ca82af250dd416eee73fc80f95bbea35ea3e9829f60", "scope": "qualification fixture; not frozen full-set accuracy"}, {"key": "fixture", "fill": 2143634209, "logits": [3.683770179748535, -2.3182692527770996, -2.523902416229248], "act_probs": [0.9999999403953552, 0.0], "snapshot_sha256": "3ecf164ae0d55991b25a5ca82af250dd416eee73fc80f95bbea35ea3e9829f60", "scope": "qualification fixture; not frozen full-set accuracy"}], "normalized_failures": 18, "residual_failures": 20, "strict_mlp_failures": 4, "exit_code": 1, "peak_tree_rss_bytes": 8005697536, "scope": "fixture/operator qualification; frozen labelled accuracy and eligible speed unverified"}
+........                                                                 [100%]
+8 passed in 0.43s
+.                                                                        [100%]
+1 passed in 0.24s
+.                                                                        [100%]
+1 passed in 0.25s
+HOST_TIMELINE {"elapsed_seconds": 24.75, "tree_rss_bytes": 10764288, "foreign_peers": []}
+....                                                                     [100%]
+4 passed in 0.35s
+..................                                                       [100%]
+18 passed in 0.87s
+HOST_TIMELINE {"elapsed_seconds": 27.235, "tree_rss_bytes": 10764288, "foreign_peers": []}
+......                                                                   [100%]
+6 passed in 1.15s
+[2m    env: mlir-aie-iron  (3.13.15)[0m
+HOST_TIMELINE {"elapsed_seconds": 29.61, "tree_rss_bytes": 10764288, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 32.078, "tree_rss_bytes": 10776576, "foreign_peers": []}
+........................                                                 [100%]
+24 passed in 2.88s
+WORKTREE_IMPORTS_PASS
+checked 60 markdown files
+all links resolve; README within budget
+========================================================================
+RETRACTION / SUPERSESSION NOTICES — check each for orphaned old figures
+========================================================================
+
+demos\README.md:157
+  **not reproduced** rather than retracted, and re-run both before quoting either.
+
+docs\BENCHMARKS.md:19
+  | XINT8 | 71.70% | 88.40% | 5.63 ms *(superseded, see below)* | NPU (393 ops NPU / 2 CPU, 1 subgraph) |
+  figures on this line: 5.63, 71.70, 88.40
+
+docs\BENCHMARKS.md:21
+  | **XINT8 + AdaRound** | **79.80%** | **92.50%** | 6.93 ms *(superseded, see below)* | **NPU** |
+  figures on this line: 6.93, 79.80, 92.50
+
+docs\BENCHMARKS.md:28
+  **The 1.3 ms AdaRound latency cost above does not reproduce, and is retracted.**
+  figures on this line: 1.3
+
+docs\BENCHMARKS.md:117
+  yolov8n at 40.49 where the full 5000 gives 36.69. The table above supersedes them.
+  figures on this line: 40.49
+
+docs\BENCHMARKS.md:319
+  > was not repeated. Both numbers stand, neither is retracted, and the 1.3-1.5× lead should
+  figures on this line: 1.3, 1.5
+
+docs\BENCHMARKS.md:326
+  the standing rule that a slice is not the answer, the full-set 4.5 supersedes it) — against
+  figures on this line: 4.5
+
+docs\BENCHMARKS.md:540
+  > **Superseded 2026-09-09 for batchable work: the threshold is ~36 µs, not 617 µs.** The
+
+docs\BENCHMARKS.md:546
+  > section measured, so it is superseded rather than retracted.
+
+docs\BENCHMARKS.md:734
+  means the floor is no longer why they lose, and kernel quality becomes the deciding question
+
+docs\BENCHMARKS.md:886
+  (C++ or pyxrt, batched 64). Nothing above is retracted — each still governs its own host path.
+
+docs\BENCHMARKS.md:985
+  **`tensor_w` = 32 was recorded here as a hard ceiling; corrected to 44 (2026-09-07).**
+
+docs\BENCHMARKS.md:996
+  `layers_conv2_x` runs still is not the network's real 56×56 shape — the corrected ceiling
+
+docs\BENCHMARKS.md:1012
+  Kernel quality is no longer an open question in the attention-kernel sense: `conv2dk1.cc`/
+
+docs\BENCHMARKS.md:1022
+  but the agreement was numerology and is retracted here.
+
+docs\BENCHMARKS.md:1297
+  **Superseded the same day (kept as written):** the C tile was single-buffered after all, once the other session had finished with `whole_array.py` — the section above — and the tile sweep it enables i
+
+docs\BENCHMARKS.md:1542
+  **The accumulator file, and two documents corrected.** `kernels/acc_spill_probe/` holds K
+
+docs\BENCHMARKS.md:1559
+  single `conv2dk3` kernel that spilled at 8, and both are now marked superseded rather than
+
+docs\BENCHMARKS.md:1584
+  a dispatch, DMA and occupancy question rather than a kernel-quality one. *(Superseded: two
+
+docs\BENCHMARKS.md:1616
+  run on the NPU. *(Superseded 2026-09-23: a hand-written `.s` kernel, Hello XDNA!'s bf16 32³ tile, was
+
+docs\BENCHMARKS.md:1739
+  `vmac`, `cm0`–`cm7`, 88.9% MAC issue density. Only the attribution was wrong, and it is
+  figures on this line: 88.9
+
+docs\BENCHMARKS.md:1740
+  corrected here rather than edited out of the log.
+
+docs\BENCHMARKS.md:1742
+  **A first reading of this was wrong, and the correction moves the answer.** The kernel was
+
+docs\BENCHMARKS.md:1751
+  Superseded numbers are kept below; backing log `results/aie/gemm_cost_model_nest.log`.
+
+docs\BENCHMARKS.md:1759
+  | *superseded, one-loop reading* | | *1323 / 738* | | *40.4% / 23.4%* | *198.1 / 177.5* |
+  figures on this line: 1323 / 738, 177.5, 198.1, 23.4, 40.4
+
+docs\BENCHMARKS.md:1794
+  corrected model changes is how full the slot is: n=32 puts 1,306 issuing cycles into a
+
+docs\BENCHMARKS.md:1799
+  the trace probe's entire measured 717 cycles per buffer. At the corrected issuing cost that
+
+docs\BENCHMARKS.md:1836
+  **Qualified 2026-09-10 (one core, a local copy):** "strictly better" does not hold on the
+
+docs\BENCHMARKS.md:1905
+  **Which pair it is — corrected 2026-09-10.** The int8 row's hazard verdict stands; the reading of
+
+docs\BENCHMARKS.md:1965
+  neither confirmed nor refuted.** Backing log `results/aie/bank_ab_h12_npu.log`; harness
+
+docs\BENCHMARKS.md:2004
+  **RETRACTED, same day: `results/aie/bank_stall_control_npu.log`'s headline.** That log
+
+docs\BENCHMARKS.md:2010
+  was the right one. Its "constant 6 cycles, no rate effect" finding is retracted with it, as a
+
+docs\BENCHMARKS.md:2026
+  **A tempting join with the driver work, tested and refuted.** Local `main` measures an NPU
+
+docs\BENCHMARKS.md:2177
+  3,735 / 6,295. "Strictly better" does not hold on this core, and a loss that size sits inside
+
+docs\BENCHMARKS.md:2185
+  tile, 944 cycles, would be at most ~1.18× if nothing else moved (DERIVED). *(Superseded the
+  figures on this line: 1.18
+
+docs\BENCHMARKS.md:2299
+  corrected YOLOv8n and YOLOv8s figures, and every shipped container manifest's
+
+docs\BENCHMARKS.md:2416
+  narrow miss: the pre-registered expectation of "several points" was wrong by an order of
+
+docs\BENCHMARKS.md:2485
+  **Retraction: the FP32 baseline is 68.30%, not the 75.0% previously published here.**
+  figures on this line: 68.30, 75.0
+
+docs\BENCHMARKS.md:2872
+  **Superseded 2026-09-09, same correction as RegNetX-002:** the shift-cut adjustments are
+
+docs\BENCHMARKS.md:2875
+  (`results/quant/eval_resnext50_32x4d_quark_nocle_c64_cpu.log`), and the corrected analyzer
+
+docs\BENCHMARKS.md:3218
+  **Retracted: every absolute %-of-16-TOPS number this repo previously reported from
+
+docs\BENCHMARKS.md:3257
+  Ryzen AI 1.5 — "no longer supported and should not be used," per AMD's own release
+  figures on this line: 1.5
+
+docs\BENCHMARKS.md:3329
+  Two things fall out of this table that the retracted GOPS numbers never showed:
+
+docs\BENCHMARKS.md:3343
+  best number this repo has measured** — nearly 6× yolov8n's old, now-retracted "~1.1"
+  figures on this line: 1.1
+
+docs\BENCHMARKS.md:3906
+  **Superseded in part (2026-09-16):** the collapse does not come from the attention blocks.
+
+docs\BENCHMARKS.md:4310
+  the corrected contract and phase gates are in [`quant/DESIGN.md`](../quant/DESIGN.md).
+
+docs\BENCHMARKS.md:4354
+  the corrected design and the table above.
+
+docs\BENCHMARKS.md:4691
+  is **superseded**: it joined CPU audits by model hash alone and incorrectly reused the
+
+docs\BENCHMARKS.md:4693
+  [corrected summary](../results/quant/probe_resnet50_acceptance_summary_v2.log) binds an
+
+docs\BENCHMARKS.md:4982
+  **The boldest prediction is refuted, twice.** Both SESR artifacts were called infeasible on
+
+docs\BENCHMARKS.md:5123
+  Ignition reproduces itself too, and its sidecar carries the corrected version
+
+docs\BENCHMARKS.md:6189
+  | MODNet Cut XINT8 (PIL, superseded) | Ryzen AI NPU (Phoenix 4x4) | 26.44 ms | 37.8 fps | 502 / 507 (99.0%) | 0.19022 | 50.75 | `results/modnet/eval_modnet_cut_xint8_npu.log` |
+  figures on this line: 26.44, 37.8, 50.75, 502 / 507, 99.0
+
+docs\BENCHMARKS.md:6191
+  | MODNet Zero-Concat XINT8 (PIL, superseded) | Ryzen AI NPU (Phoenix 4x4) | 17.75 ms | 56.3 fps | 533 / 538 (99.1%) | 0.35269 | 93.18 | `results/modnet/eval_modnet_zero_concat_xint8_npu.log` |
+  figures on this line: 17.75, 533 / 538, 56.3, 93.18, 99.1
+
+docs\BENCHMARKS.md:6306
+  > **Superseded on 2026-09-09, in two ways.** The figures below are a 200-image slice; the full
+
+docs\BENCHMARKS.md:6331
+  - **The DPU shift-cut clamp mechanism** — *observation stands, attribution retracted
+
+docs\BENCHMARKS.md:6342
+  `eval_regnetx_002_quark_cle_full1000_cpu.log`). The corrected analyzer finds **zero sigma
+
+docs\BENCHMARKS.md:6461
+  > **The "single node" reading below is superseded (same day).** Cuts 181 and 182 differ by **60
+
+docs\BENCHMARKS.md:6602
+  > **Superseded the same day.** These spans were computed by reading Quark's pattern list as
+
+docs\BENCHMARKS.md:6947
+  > the BiSeNetV2 row is **retracted** — no log backs it. The superseded figures are kept
+
+docs\BENCHMARKS.md:6989
+  **Superseded FastDepth listing** (kept for the record; the percentages are a byte-scan
+
+docs\BENCHMARKS.md:6995
+  **Retracted: the BiSeNetV2 row.** It reported 4,630 packets at 43.17% opcode 3, 32.61%
+  figures on this line: 32.61, 43.17
+
+docs\BENCHMARKS.md:7001
+  semantic decode the six-entry guess table cannot support. Retracted rather than revised:
+
+docs\BENCHMARKS.md:7023
+  > **Substantially retracted on 2026-09-09 (Desktop 2). The section is kept in full,
+
+docs\BENCHMARKS.md:7024
+  > superseded numbers included, because what it got wrong is the useful part.**
+
+docs\BENCHMARKS.md:7026
+  > 1. **The audit does not reproduce.** The corrected analyzer over eleven quantized models
+
+docs\BENCHMARKS.md:7031
+  >    "shift clamp" case rests on. `results/quant/shift_cut_feasibility.log` no longer matches
+
+docs\BENCHMARKS.md:7069
+  Supersedes neither log below — every violation count in them still reads zero — but it is
+
+docs\BENCHMARKS.md:7071
+  - `results/quant/shift_cut_reaudit_20260909_desktop2.log`: the corrected audit across eleven
+
+docs\BENCHMARKS.md:7072
+  quantized ONNX models, zero violations on all of them. **This supersedes the log below.**
+
+docs\BENCHMARKS.md:7074
+  models. **Superseded — it no longer matches its own tool.**
+
+docs\BENCHMARKS.md:7079
+  `research/windows-lowlevel`, imported here as the evidence for the retraction above).
+
+docs\BENCHMARKS.md:7099
+  (**hypothesis, not a result — see the retraction at the top of this section; neither edge has
+
+docs\BENCHMARKS.md:7120
+  > **Superseded 2026-09-09 — this whole table.** Re-running `check-shift-cut` over these
+
+docs\BENCHMARKS.md:7121
+  > same files with the corrected analyzer gives **zero violations on every model**
+
+docs\BENCHMARKS.md:7138
+  > [the audit re-run](#the-shift-cut-audit-re-run-theorem-3-retracted-and-three-defects-in-the-verifier-2026-09-09-desktop-2).
+
+docs\BENCHMARKS.md:7151
+  Diagnosis of identified violations — **all three retracted 2026-09-09, kept as the record**:
+
+docs\BENCHMARKS.md:7152
+  - **RegNetX-002**: Layer `/s1/b1/conv2/conv/Conv` has scale factor A = 2.028241e+31, yielding M = 16384 and sigma = -90. Because sigma < 0, the post-accumulator ALU cannot scale the 32-bit register do
+  figures on this line: 0.10, 0.50, 66.20, 69.50
+
+docs\BENCHMARKS.md:7153
+  - **FastDepth**: Layer `Conv_96` has scale factor A = 3.814697e-06, yielding M = 16384 and sigma = 32. The hardware shifter is 5 bits wide (maximum shift 31); sigma = 32 overflows by exactly 1 bit, cl
+
+docs\BENCHMARKS.md:7170
+  ### The shift-cut audit re-run: Theorem 3 retracted, and three defects in the verifier (2026-09-09, Desktop 2)
+
+docs\BENCHMARKS.md:7196
+  **Theorem 3 is retracted.** It held that positions must lie in [0, 31] and that `pos < 0`
+
+docs\BENCHMARKS.md:7237
+  > claims are RETRACTED.** Every fixture built outside the producer's shift-cut rule was refused by
+
+docs\BENCHMARKS.md:7287
+  **On the retracted upper-bound row.** At sigma = 32 the fixture produced five distinct output
+
+docs\BENCHMARKS.md:7291
+  **On the retracted lower-bound row.** Sigma = 0 showed 3,052 elements wrong against the plain CPU
+
+docs\BENCHMARKS.md:7332
+  in [DECISIONS](DECISIONS.md#aie-ml-systolic-shift-cut-bound-0-31--substantially-retracted-2026-09-09) that every emitted graph be
+
+docs\BENCHMARKS.md:7350
+  > **Retracted 2026-09-09.** This projection was measured to move layers that were already
+
+docs\BENCHMARKS.md:7354
+  > MODNet-Cut 1 and RegNetX-002 5 — all of which drop to 0 once the analyzer is corrected,
+
+docs\BENCHMARKS.md:7487
+  - **YOLOv8s on the graph engine is slower than AMD's stack, and no runtime lever is left to close it.** *(Superseded 2026-09-22: still true of every TRANSPORT lever, and no longer true of the frame - 
+  figures on this line: 0.094, 17.240
+
+docs\BENCHMARKS.md:7503
+  (Superseded 2026-09-17: the core program computes it for containers compiled with `--silu-sigmoid`, an opt-in. They
+
+docs\BENCHMARKS.md:7893
+  used fresh command allocation per dispatch and is superseded for timing by the
+
+docs\BENCHMARKS.md:8052
+  used as the core selector; its corrected selector is 49
+
+docs\BENCHMARKS.md:8056
+  loop. The temporary 2.63% wider result with that slower scheduler is superseded
+  figures on this line: 2.63
+
+docs\BENCHMARKS.md:8407
+  (Superseded 2026-09-16: both were sized and neither is available; see
+
+docs\BENCHMARKS.md:8841
+  and 9,888,768 B on YOLOv8n (14 of 66), DERIVED from the scheduled patterns. That estimate supersedes an earlier
+
+docs\BENCHMARKS.md:8843
+  corrected figure is 1.018 ms on YOLOv8s. It did not convert into time. Its first containers hung on silicon
+  figures on this line: 1.018
+
+docs\BENCHMARKS.md:8864
+  larger figure. **Retracted:** the inference in `notes_yolov8s_gap.md`, recorded earlier the same day, that a MemTile
+
+docs\BENCHMARKS.md:8895
+  **Superseded:** "The next levers are fewer fill tasks for multi-chunk rounds and less over-read per packet", in
+
+docs\BENCHMARKS.md:9351
+  tensor (until `1a56120`, below). **Corrected 2026-09-16:** 63 of the 67 convolutions reach the NPU; each attention
+
+docs\BENCHMARKS.md:9388
+  disparity is across input channels. **Superseded as the mechanism (2026-09-16, same day):** the disparity is real,
+
+docs\BENCHMARKS.md:9908
+  with fewer images, which would have changed the recipe. (Superseded 2026-09-17: retried on 100 calibration images at
+
+docs\BENCHMARKS.md:9924
+  - **A first version of the oracle was wrong.** It clamped the sigmoid at 127/128, which the expression does not do, and
+  figures on this line: 127/128
+
+docs\BENCHMARKS.md:9950
+  - The epilogue on the NPU: the core program is unchanged and waits on the maintainer's decision. (Superseded
+
+docs\BENCHMARKS.md:9954
+  (Superseded 2026-09-17: the synthetic NPU sequence checks the C++ against the emulator on every uint8 value.)
+
+docs\BENCHMARKS.md:9955
+  - The compiler fit and the container header field. (Superseded 2026-09-17: built.)
+
+docs\BENCHMARKS.md:9956
+  - Latency and energy. (Superseded 2026-09-17 for dispatch latency; energy is still not measured.)
+
+docs\BENCHMARKS.md:9960
+  - YOLOv8s with Sigmoid kept: its quantization ran out of memory (above). (Superseded 2026-09-17: 47.26 with 100
+  figures on this line: 47.26
+
+docs\BENCHMARKS.md:10042
+  are more accurate than AMD's stack is made. (Superseded 2026-09-17: measured on all 5,000 images and re-scored on
+
+docs\BENCHMARKS.md:10044
+  - Glass-to-glass through Ignition, and energy, with the sigmoid containers. (Superseded 2026-09-17: next section.)
+
+docs\BENCHMARKS.md:10045
+  - The full 5,000 images. (Superseded 2026-09-17: next section.)
+
+docs\BENCHMARKS.md:10046
+  - The HardSigmoid containers through COCO on the NPU in this round. (Superseded 2026-09-17: next section.)
+
+docs\BENCHMARKS.md:10172
+  stays exact against ONNX Runtime on whatever input it is given, but SESR's image is no longer the image ONNX Runtime
+
+docs\BENCHMARKS.md:10377
+  - YOLOv8n (100 timed iterations, 20 warmup): NPU dispatch drops from 7.572 +/- 0.215 ms (min 7.344) down to **7.412 +/- 0.111 ms (min 7.299)** (-0.160 ms mean, -0.044 ms min). *Superseded attribution:
+  figures on this line: 0.044, 0.111, 0.160, 0.215, 0.94, 7.299, 7.336, 7.344, 7.412, 7.572
+
+docs\BENCHMARKS.md:10386
+  The persistent conv-engine core (`kernels/aie2/conv_engine/engine.cc`) is one program serving every packet, opcode selected by header word 0. The spatial-stencil-fusion work already on this branch lef
+
+docs\BENCHMARKS.md:10393
+  | all three | final committed program | **15,280 B** | **+1,856 B**, 1,104 B still free *(superseded 2026-09-21: 224 B free once linked, [below](#the-census-prices-the-kernel-object-and-the-core-holds
+
+docs\BENCHMARKS.md:10416
+  - **What this corrects.** "15,280 B of 16,384 B, 1,104 B still free" is true of the object and was read as true of the core. The committed engine has **224 B** of program memory left, and the section 
+
+docs\BENCHMARKS.md:10475
+  - **The win is placement, not speed.** The Vitis AI EP cannot place a terminal Gemm on Phoenix silicon — the same wall that made detection users ship `yolov8n_cut.onnx` — so in AMD's stack a classifie
+
+docs\BENCHMARKS.md:10563
+  **Held-out test of the traffic story, and it fails the other way.** The MemTile activation ring was rejected on 2026-09-16 for YOLOv8s and never measured on SESR — the one container whose dispatch is 
+  figures on this line: 0.358, 1.05, 2.151, 2.629, 3.228, 4.311, 4.5, 5.254, 5.952, 6.310
+
+docs\BENCHMARKS.md:10744
+  waiting. "Closing the 1.05 ms needs fewer bytes on the wire" is superseded on that line; see the
+  figures on this line: 1.05
+
+docs\BENCHMARKS.md:10782
+  are the over-read itself. *[Mechanism retracted the same day, next section: the merger is offered these chains and collapses 87% of SESR's patterns, so what stands alone is the descriptor's four-dimen
+
+docs\BENCHMARKS.md:10787
+  10.892 ms G2G) leaves roughly 496 pushes on the table in this size class alone. *[Retracted the same day: 1,869 of those 2,146 activation patterns are already four-dimensional, so no merge was availab
+  figures on this line: 10.892
+
+docs\BENCHMARKS.md:10822
+  That inference was wrong in its mechanism, and the correction is measured rather than argued:
+
+docs\BENCHMARKS.md:10845
+  **What this retracts, and what survives.** Retracted: the flagship "leaves roughly 496 pushes on the
+
+docs\BENCHMARKS.md:10848
+  method cannot establish either way and which `tools/fill_merge_audit.py` no longer claims.
+
+docs\BENCHMARKS.md:11025
+  numbers are superseded, not retracted, and their logs are kept beside the new ones.
+
+docs\BENCHMARKS.md:11318
+  2. **RETRACTED before publication: the 2.40x to 5.23x "wins over AMD" this section first claimed.**
+
+docs\BENCHMARKS.md:11351
+  transport lever closed. *(Superseded 2026-09-22: the gap is closed, by a lever that is not a transport one - see [the ptr port](#the-ptr-loop-pattern-lands-in-the-int8-engine-and-yolov8s-overtakes-amd
+
+docs\BENCHMARKS.md:11524
+  and 5.51%, because a banded tensor and a plane-major one of the same geometry can no longer
+  figures on this line: 5.51
+
+docs\BENCHMARKS.md:11729
+  rather than an overstatement - but the corrected figure **was not measured** and none is invented here.
+
+docs\BENCHMARKS.md:11735
+  The same applies to the 3.488 ms decode corrected in the section above: both were this tool's host
+  figures on this line: 3.488
+
+docs\BENCHMARKS.md:11742
+  **Retracted 2026-09-21.** It is about 2.0 ms against a 17.4 ms dispatch, and only about 0.05 ms of
+  figures on this line: 0.05, 17.4, 2.0
+
+docs\BENCHMARKS.md:11749
+  remaining host cost in this tool", at about 3.4 ms. **That was wrong**, and the error is worth
+  figures on this line: 3.4
+
+docs\BENCHMARKS.md:11822
+  comparison re-measured with the corrected benchmark.
+
+docs\BENCHMARKS.md:11858
+  | engine, corrected tool | **17.414** | 17.596, 17.232 | 0.768 | 12.133 | 4.513 | 6 |
+  figures on this line: 0.768, 12.133, 17.232, 17.414, 17.596, 4.513
+
+docs\BENCHMARKS.md:11866
+  arm. It stands as measured and is superseded by 2.53x, not deleted.
+
+docs\BENCHMARKS.md:12128
+  supersedes a figure measured from it. No Ignition-side change was made or proposed; switching the
+
+docs\BENCHMARKS.md:12136
+  **What the earlier "byte-exact on five shapes" did and did not establish.** [`engine_bf16_npu_20260921.log`](../results/aie/engine_bf16_npu_20260921.log) compared float values, which calls -0.0 and +0
+  figures on this line: 0.0
+
+docs\BENCHMARKS.md:12164
+  > **Superseded on 2026-09-22.** `OP_RESIDUAL` now exists, so `F_HOLD` is observable and both have
+
+docs\BENCHMARKS.md:12166
+  > The held tile also no longer lives in `psum`: it is its own `scratch` buffer, which is what lets a
+
+docs\BENCHMARKS.md:12183
+  > **Superseded 2026-09-21, same day, by [the section that follows](#the-bf16-hot-loop-rewrites-do-reach-the-wall-clock-10-and-18-percent-off-a-k3-pass-and-the-earlier-sitting-timed-one-kernel-under-fi
+
+docs\BENCHMARKS.md:12225
+  **What was wrong.** `@iron.jit` computes a design's cache key from the generator's bytecode, its `CompileTime` values and the decorator's `source_files` list, *before* the generator body runs (`aie/ut
+
+docs\BENCHMARKS.md:12322
+  docstring is corrected: its float32 accumulation is right, and the reason it gave for it was not.
+
+docs\BENCHMARKS.md:12661
+  Backing logs: [`engine_dispatch_gate_census_desktop2_20260922_02.log`](../results/aie/engine_dispatch_gate_census_desktop2_20260922_02.log) (static, no device; supersedes [the first census run](../res
+
+docs\BENCHMARKS.md:12682
+  *(Superseded 2026-09-22, same day, by the measurement below. The retracted claim: "byte identity also settles the latency question without an A/B: every function that survives compiled to identical by
+
+docs\BENCHMARKS.md:12790
+  **This has not run on the NPU.** *(Superseded the same day by the section below, which ran it: 53 of 53 engine layers exact on silicon over 50 images, and the frame measured against AMD. The second re
+
+docs\BENCHMARKS.md:12792
+  **Correction to the sentence above (2026-09-22).** "`dense_compare.py` runs on pinned artifacts that do not include this model" is true of the file that was built for the census, and false as a *reaso
+
+docs\BENCHMARKS.md:13057
+  > **Both halves of that last paragraph were superseded the same day.** Sixteen-core byte-exactness
+
+docs\BENCHMARKS.md:13061
+  > assumption that reading the code refuted.
+
+docs\BENCHMARKS.md:13109
+  The plan recorded this step as blocked on parameterising the packer. Reading the code refuted that:
+
+docs\BENCHMARKS.md:13138
+  The `count_acc` contract is no longer only argued: the harness refuses to build a plan that counts
+
+docs\BENCHMARKS.md:13311
+  **SUPERSEDED 2026-09-22 by the corrected activation rule below. Kept for the record:**
+
+docs\BENCHMARKS.md:13315
+  | low (superseded) | x1.03 | 43.00 ms | 59.89 ms | 128.84 ms | 4.14x |
+  figures on this line: 128.84, 43.00, 59.89
+
+docs\BENCHMARKS.md:13316
+  | high (superseded) | x2.00 | 83.14 ms | 59.89 ms | 168.98 ms | 5.43x |
+  figures on this line: 168.98, 59.89, 83.14
+
+docs\BENCHMARKS.md:13337
+  **The corrected floor is above the old ceiling.** The bracket is also narrower now, because the
+
+docs\BENCHMARKS.md:13399
+  Runtime fp32 on the CPU. *(Corrected 2026-09-22 from 125.4-165.5 ms, which used the superseded
+  figures on this line: 125.4, 165.5
+
+docs\BENCHMARKS.md:13408
+  ### SESR is the only candidate still standing, and the corrected geometry helps it
+
+docs\BENCHMARKS.md:13624
+  ([the bars](#sesr-is-the-only-candidate-still-standing-and-the-corrected-geometry-helps-it)). A bf16
+
+docs\BENCHMARKS.md:13757
+  at int8. This is what [the recount](#sesr-is-the-only-candidate-still-standing-and-the-corrected-geometry-helps-it)
+
+docs\BENCHMARKS.md:14080
+  and there the device no longer equals the emulator
+
+docs\BENCHMARKS.md:14502
+  and is refuted. This is a deduction from a logged equality, not a new measurement.
+
+docs\BENCHMARKS.md:14569
+  - **S2.** The device equals aligned everywhere, and the sitting exits 0. exp_sum is refuted on the
+
+docs\BENCHMARKS.md:14572
+  rule, and it is refuted at those other values.
+
+docs\BENCHMARKS.md:14581
+  - `engine_bf16_npu_20260921.log`, milestone 2's first run. It is superseded as evidence, its lines
+
+docs\BENCHMARKS.md:14636
+  | C2: the vectors separating exp_sum from aligned come back aligned | exp_sum is refuted on fresh operands. If B1 held for it anyway, that is unexplained. |
+
+docs\BENCHMARKS.md:15079
+  - **Superseded log lines.** The log's "MACs per call" lines come from an earlier counter: fp32 188.0 G, int8 0.0 G
+  figures on this line: 0.0, 188.0
+
+docs\BENCHMARKS.md:15289
+  - **Two causes were refuted:**
+
+docs\BENCHMARKS.md:15647
+  > the engine moves about twice AMD's bytes, and the paragraph above does not hold. The figures
+
+docs\BENCHMARKS.md:16064
+  - **Corrected figure.** A first version of this analysis
+
+docs\BENCHMARKS.md:16066
+  per AMD `Split` half. It read 279.0 / 93.9 MB and 4.6x / 3.3x, which is superseded. AMD's own
+  figures on this line: 279.0, 93.9
+
+docs\BENCHMARKS.md:16082
+  - [amd_tiling_decode_yolov8s_n_desktop2_20261013T034053Z.log](../results/aie/amd_tiling_decode_yolov8s_n_desktop2_20261013T034053Z.log), the first version, superseded on the engine totals only.
+
+docs\BENCHMARKS.md:16506
+  measurements support. *[Superseded the same day by the measured q = 1 ratio: about 1.07 ms, in the next subsection.]*
+  figures on this line: 1.07
+
+docs\BENCHMARKS.md:16583
+  supersedes the 1.3 ms (cap-scaled model) and 1.85 ms (uncapped) estimates above.
+  figures on this line: 1.3, 1.85
+
+docs\BENCHMARKS.md:16652
+  DECISIONS). Any rule that ships rb3 must carry SESR M7 and YOLOv8n in the same sitting. *[Superseded the same
+
+docs\BENCHMARKS.md:16654
+  YOLOv8n, YOLOv8n-pose and YOLOv8s; the default is no longer a flat 2.]*
+
+docs\BENCHMARKS.md:17065
+  - **The expectation written beforehand was wrong.** It was a rise of 0.1–0.4 µs per object at 400 B or below, and
+  figures on this line: 0.1, 0.4
+
+docs\BENCHMARKS.md:17073
+  and the next are superseded the same day; see the correction below.)* With the tasks-are-issue
+
+docs\BENCHMARKS.md:17192
+  The scalar implementation in this section is retained as history; the [vector implementation below](#vector-attention-software-float-helpers-removed-2026-10-16-desktop-2) supersedes its performance re
+
+docs\BENCHMARKS.md:17257
+  lookup-table linkage. The corrected v3 suite passed. The v4 repeat qualifies the final
+
+docs\BENCHMARKS.md:17278
+  [corrected v3 suite](../results/laya/attention_v3_suite_desktop2_20261016T0001Z.log),
+
+docs\BENCHMARKS.md:17285
+  supersedes the current performance conclusion; the measurements here remain unchanged.
+
+docs\BENCHMARKS.md:17682
+  The [corrected smoke](../results/laya/transformer_v6_rounding_fence_desktop2_20261016.log)
+
+docs\BENCHMARKS.md:18162
+  The [corrected-layout probe](../results/laya/exp_isolation_v5_correct_layout_desktop2_20261016.log)
+
+docs\BENCHMARKS.md:18288
+  28-layer arena occupies 754,752,448 bytes. CPU verification no longer retains the
+
+docs\BENCHMARKS.md:18298
+  **Superseded integration assumption:** these runs seed the first encoder residual from
+
+docs\BENCHMARKS.md:18321
+  norm family. The [corrected probe](../results/laya/stem_v3_probe_desktop2_20261016.log)
+
+docs\BENCHMARKS.md:18378
+  [corrected model integration](#laya-full-device-outputs-fixture-qualification-and-first-residual-correction-2026-10-16-desktop-2);
+
+docs\BENCHMARKS.md:18402
+  passes 42 comparisons. Its GELU tolerance is superseded by the
+
+docs\BENCHMARKS.md:18444
+  supersedes their integration with the original model.
+
+docs\BENCHMARKS.md:18515
+  The [corrected full-chain run](../results/laya/action_v2_normalized_residual_fixture_desktop2_20261016.log)
+
+docs\BENCHMARKS.md:18538
+  for its resident image. The corrected vector image occupies 14,992 bytes per core,
+
+docs\BENCHMARKS.md:18556
+  the error. The [corrected probe](../results/laya/tail_probe_v2_fixed_indices_desktop2_20261016.log)
+
+docs\BENCHMARKS.md:18565
+  reading the unlabelled fixture. Its frozen reference and corrected device logits are:
+
+docs\BENCHMARKS.md:18567
+  | Option | Frozen FP32 logit | Corrected NPU logit |
+
+docs\BENCHMARKS.md:18574
+  0.013778924942016602 after the correction; corrected relative L2 is
+
+docs\BENCHMARKS.md:18582
+  intermediate comparisons still fail: the corrected full run retains four strict MLP
+
+docs\BENCHMARKS.md:18630
+  This baseline supersedes the earlier statement that serving and eligible timing were
+
+docs\BENCHMARKS.md:19237
+  KV type mismatch; the [corrected build](../results/laya/compact_pack_wide_v2_build_desktop2_20261016.log)
+
+docs\BENCHMARKS.md:19262
+  wrap range. The [corrected build](../results/laya/small_query_v2_grouped_build_desktop2_20261016.log)
+
+docs\BENCHMARKS.md:19270
+  The corrected image passes linked code, physical-span and initialization audits with
+
+docs\DECISIONS.md:36
+  is superseded by [Ignition's controlled probes](BENCHMARKS.md#ignition-controlled-resnet-qdq-acceptance).**
+
+docs\DECISIONS.md:294
+  expose the converse failure: NPU placement with incorrect numerical execution.
+
+docs\DECISIONS.md:458
+  below 6 GB free and no longer lets one crashed model abort the rest of a matrix.
+
+docs\DECISIONS.md:783
+  if bf16 gains what int8 gained, the bf16 niche roughly doubles. **Superseded the same
+
+docs\DECISIONS.md:823
+  the corrected decoder, cross-checked against upstream on a sync-free run. Also learned
+
+docs\DECISIONS.md:832
+  retracted. They may not actually conflict — one varied *load* at a fixed power mode, the
+
+docs\DECISIONS.md:880
+  directly on the DPU is rejected. (Superseded in part, 2026-09-16: the 1.8% collapse is rounding in four C2fAttn
+  figures on this line: 1.8
+
+docs\DECISIONS.md:1060
+  - **Not the SiLU rewrite.** This was the leading hypothesis and it was wrong. Quark's
+
+docs\DECISIONS.md:1160
+  confirmation, not a retraction.
+
+docs\DECISIONS.md:1164
+  constant's value, is what was wrong.
+
+docs\DECISIONS.md:1181
+  - **SUPERSEDED 2026-09-09 for batchable work: ~36 µs.** The "hypothetical zero-overhead
+
+docs\DECISIONS.md:1201
+  argument handling. The open question is no longer dispatch — it is IRON's host path, now
+
+docs\DECISIONS.md:1209
+  now, none retracted:** 671.5 µs (IRON unbatched) · 498.5 µs (IRON batched 64) · ~108 µs
+  figures on this line: 498.5, 671.5
+
+docs\DECISIONS.md:1283
+  *(Superseded 2026-09-07 by the spatial sweep below — the op class IS now closed, on the
+
+docs\DECISIONS.md:1305
+  - **`tensor_w` = 32 was recorded as a structural ceiling here; corrected below to 44
+
+docs\DECISIONS.md:1317
+  real conv2_x (56×56) still cannot compile — the corrected ceiling of 44 is short of
+
+docs\DECISIONS.md:1322
+  but the "8 live pipelined accumulators" read below was wrong; corrected 2026-09-07.**
+
+docs\DECISIONS.md:1329
+  against a single core. **What was wrong:** the "8 live pipelined accumulators" were not
+
+docs\DECISIONS.md:1360
+  6 hardware accumulator registers. *(Superseded 2026-09-09. The count was inferred
+
+docs\DECISIONS.md:1366
+  is unchanged; only the register count named here was wrong.)* Upstream mlir-aie
+
+docs\DECISIONS.md:1477
+  - **DIAGNOSIS CORRECTED (2026-09-07) — the verdict stands, the stated cause was wrong.**
+
+docs\DECISIONS.md:1524
+  ### MobileViT-XXS accuracy: measured, and the FP32 baseline retracted
+
+docs\DECISIONS.md:1537
+  - **RETRACTED: the FP32 baseline is 68.30% top-1, not 75.0%.** 75.0% was the first 100
+  figures on this line: 68.30, 75.0
+
+docs\DECISIONS.md:1639
+  ### AIE-ML systolic shift-cut bound [0, 31] — substantially retracted 2026-09-09
+
+docs\DECISIONS.md:1643
+  Multi-Branch and Theorem 3 is the `pos_y` window. So "Theorem 3 is retracted" means
+
+docs\DECISIONS.md:1644
+  different things in the two files. What is retracted in the *code* is the rule that
+
+docs\DECISIONS.md:1645
+  positions must lie in `[0, 31]`. The `pos_y` window itself is not retracted; the
+
+docs\DECISIONS.md:1650
+  (`results/quant/shift_cut_reaudit_20260909_desktop2.log`, which supersedes
+
+docs\DECISIONS.md:1654
+  - **Theorem 1 (Shift-Cut Feasibility Bound)**: If an ONNX QDQ triad requires sigma < 0, the operation requires an arithmetic left-shift exceeding the 32-bit accumulator, resulting in immediate accumul
+  figures on this line: 0.10, 0.50, 66.20, 69.50
+
+docs\DECISIONS.md:1655
+  - **Theorem 2 (Multi-Branch Inter-Scale Alignment)**: In multi-branch elementwise operations (such as Bilateral Guided Aggregation in BiSeNetV2), divergent scale grids truncate dynamic range in hardwa
+  figures on this line: 0.687
+
+docs\DECISIONS.md:1658
+  Violations are projectable to the nearest bound via `project_scale_to_feasible_basin` (demonstrated on FastDepth `Conv_96`: pos_y 0 -> 1, bringing sigma from 32 down to 31, eliminating the clamp witho
+
+docs\DECISIONS.md:1701
+  build on any machine here can reach one. *Superseded 2026-09-10:* Desktop 1's
+
+docs\DECISIONS.md:1897
+  and less over-read per activation packet. (Superseded 2026-09-16: both were sized and neither
+
+docs\DECISIONS.md:2006
+  scaffolding (`match_stencil_fusion` has no call site on any branch) *[Superseded the same day: the wire runs at
+
+docs\DECISIONS.md:2055
+  confirms the 2026-09-16 "already at their floor" sizing; *[reason corrected the same day by
+
+docs\DECISIONS.md:2077
+  descriptors, and 280 of 938 refetches are near. *[The merge half of that sentence is retracted the same day --
+
+docs\DECISIONS.md:2079
+  See `tools/fill_premerge_audit.py` and the corrected reason above.]* Do not propose channel count, fill merging, or refetch
+
+docs\DECISIONS.md:2203
+  - **A better SiLU in the core program is sized, not built: it waits on the maintainer (2026-09-17).** (Superseded the
+
+docs\DECISIONS.md:2296
+  A bf16 packet has no reference but `compiler/engine_bf16_emulator.py`, so what that file takes the core's arithmetic to be decides what "byte-exact" means. It had contracted each kernel tap in one `ei
+  figures on this line: 0.0, 1.0
+
+docs\DECISIONS.md:2301
+  - **`engine.cc` is left alone, on measurement, and `engine_bf16.cc` with it (2026-09-21).** *(Superseded the same day by the entry below: the bf16 timing this rests on ran one kernel under five names.
+
+docs\DECISIONS.md:2303
+  - **The hot-loop lever is real on the bf16 engine, so the int8 port is open again; and a jit harness carries its kernel source in the design's key (2026-09-21; supersedes the entry above).**
+
+docs\DECISIONS.md:2329
+  - Under it, both weight sets' no-reuse dumps equal the emulator at every compared value of every tensor. The nine are therefore no longer unexplained. A model that places a product at the sum of its o
+
+docs\LOW_LEVEL_AUDIT.md:171
+  unbound and argument 0 is a host read the fused design no longer has. NOT DETERMINED on
+
+docs\MODEL_ZOO_BENCHMARKS.md:93
+  can no longer be read that way: after one dispatch a reused slot holds only its last writer,
+
+docs\MODEL_ZOO_BENCHMARKS.md:620
+  This first read 38/107 and was recorded as a broken attention carve. That was wrong. The fault
+  figures on this line: 38/107
+
+docs\MODEL_ZOO_BENCHMARKS.md:632
+  > **SUPERSEDED the same day (2026-09-21).** `decode_native.c` implements the DFL-free form as well
+
+docs\MODEL_ZOO_BENCHMARKS.md:667
+  contains none. With the guard corrected the container builds, verifies 107/107 exact and reads
+  figures on this line: 107/107
+
+docs\MODEL_ZOO_BENCHMARKS.md:703
+  **RESOLVED 2026-09-21: the corrected figure is 2.53x, and it is measured.** The model was
+
+docs\MODEL_ZOO_BENCHMARKS.md:708
+  engine through the corrected tool **17.414 ms** - **2.53x**, six detections on every arm. The
+  figures on this line: 17.414
+
+docs\MODEL_ZOO_BENCHMARKS.md:712
+  The figures below stand as measured and are superseded, not deleted.
+
+docs\MODEL_ZOO_BENCHMARKS.md:718
+  overstatement. The corrected figure was **not measured** and none is invented: the sitting could
+
+docs\MODEL_ZOO_BENCHMARKS.md:732
+  > **SUPERSEDED (2026-09-21).** Three of these caveats have been closed and one stands. Closed:
+
+docs\MODEL_ZOO_BENCHMARKS.md:736
+  > 23.64 over all 5,000 val2017 images. Still standing: the 1.43x itself, which was superseded first
+  figures on this line: 23.64
+
+docs\MODEL_ZOO_BENCHMARKS.md:737
+  > by 2.53x on the corrected benchmark and then by **3.41x** through Ignition's own pipeline
+
+docs\SILICON.md:73
+  | bf16 multiply-accumulate arithmetic | One `vmac.f` (`mmul<4,8,4>::mac`) places the accumulator at its own exponent, and each of its eight products at the **sum of its operands' exponents** (ea + ew)
+
+docs\SILICON.md:85
+  | Issue width | 6 slots per bundle: **`b` and `a` are the two load units**, `s` store, `x` scalar and control flow, `m` move/broadcast, `v` vector | MEASURED 2026-09-09 (`results/aie/aie2_isa_static.l
+
+docs\SILICON.md:93
+  | Live accumulators | **5** concurrently-live 4×8×8 int8 `aie::mmul` accumulators compile with no stack traffic; 6 is the first count that spills. The allocator names 9 accumulator registers, `cm0`–`c
+  figures on this line: 2026.1
+
+docs\SILICON.md:95
+  | Hand-written assembly | **Assembles and links.** A standalone `.s` never enters instruction selection, so it reaches the integrated assembler intact | MEASURED 2026-09-09 (`kernels/asm_probe/`, `res
+  figures on this line: 397.5, 460.8, 86.3, 99.9
+
+docs\SILICON.md:97
+  | MAC issue rate, production int8 GEMM | **107.3 MACs/cycle** over a whole kernel call, 41.9% of the 256 nameplate; 88.9% inside the hardware loop alone | MEASURED 2026-09-09 by walking the compiled o
+  figures on this line: 103.3, 107.3, 198.1, 362.3, 39.3, 39.6, 40.3, 41.9, 584.4, 604.8, 77.4, 88.9
+
+docs\SILICON.md:194
+  | Core clock | **1.80 GHz** in `default`, `performance` and `turbo`; 1.03 GHz in `balanced`; 0.80 GHz in `powersaver` (1.7983 / 1.8002 / 1.7998 / 1.0274 / 0.7985 GHz by the scalar-loop fit; 1.7990 re-
+  figures on this line: 0.33, 0.80, 1.03, 1.6, 1.80, 2.000, 7.0, 9.000
+
+docs\SILICON.md:293
+  To isolate why open AIE2 compute kernels deviate from hardware nameplate limits, the compiled machine code for eight core kernel variants across `kernels/` and `results/aie/` was audited at the VLIW b
+
+docs\SILICON.md:578
+  A 4-core column-wise K-reduction over the 512-bit vertical cascade bus (`Tile(col, r) → Tile(col, r+1)` at 115.2 GB/s per column @ 1.80 GHz) eliminates intermediate C-tile L1 memory allocation entirel
+  figures on this line: 1.000, 1.02, 1.80, 1.94, 10.2, 107.3, 115.2, 12.5, 2.16, 232.7, 41.9, 88.9, 9.8, 90.9
+
+docs\SILICON.md:737
+  supersedes the 6.19 B/cycle of the same day's first reading, which mis-modelled the kernel's
+  figures on this line: 6.19
+
+docs\SILICON.md:773
+  `kernels/clock_probe/clock_probe.py` carries a corrected decoder, cross-checked against
+
+docs\SILICON.md:789
+  2026-09-09; the hardware-counter route is unstarted.** MACs per cycle per core no longer has to
+
+docs\SILICON.md:1175
+  as written. **int8×int4 no longer belongs on this list** (it read "int16×int16, int8×int4,
+
+kernels\attention_bf16\README.md:52
+  **Why? Two reasons, and the one originally written here was wrong.**
+
+kernels\attention_bf16\README.md:110
+  > here was a 100-image slice and has been retracted. Every XINT8 variant collapses: full XINT8
+
+kernels\bf16_conv\README.md:72
+  for the same reason. *(Corrected 2026-09-21: it keeps eight - four output blocks times two column
+
+kernels\bf16_conv\README.md:124
+  inside the jit generator and so was not in the design's cache key. Superseded, kept.)* The
+
+kernels\bf16_conv\README.md:173
+  *(Superseded 2026-09-21: 15,280 B is the kernel object. The linked core is 16,160 B, so the
+
+kernels\bf16_conv\README.md:186
+  *(Corrected 2026-09-22: this line used to cite `tools/amd_float_precision_probe.py`, which was
+
+kernels\README.md:63
+  | `bank_placement/` | A local copy of `whole_array.py` plus `--stack-size`, and an alternating A/B driver | Tests H12: does separating the int8 GEMM's colliding operands into different memory banks sp
+
+kernels\README.md:240
+  **Its recorded diagnosis was wrong.** The loss was blamed on per-dispatch cost, which is
+
+kernels\README.md:259
+  **Retracted:** its host-cost claim, that "628.2 µs reproduces 617.0 µs to ~2%". Those are
+  figures on this line: 617.0, 628.2
+
+kernels\README.md:264
+  **Superseded:** its scope note that the op class is *not* closed. It closed *this design at
+
+kernels\README.md:280
+  **Corrected (2026-09-07): the `tensor_w`=32 ceiling.** The real `aiecc`/Tile(0,4) L1
+
+kernels\README.md:306
+  using 8 `MMUL4x8x8` accumulators on hardware that only has 6 accumulator registers *(superseded
+
+kernels\README.md:389
+  **Superseded 2026-09-09 for batchable work: the threshold is ~36 µs.** The zero-overhead
+
+kernels\README.md:390
+  resubmit path is no longer hypothetical — batched `pyxrt.runlist` submission amortises a
+
+quant\DESIGN.md:111
+  `align_quantize_info` path, and are superseded by the `QuantPosManager` rows above.
+
+quant\DESIGN.md:159
+  [Q] `refine.py:686-724`. The draft's ConvTranspose/MatMul cut/bias coverage was incorrect.
+
+quant\DESIGN.md:914
+  | 0 | Fingerprint | `notes_xint8_dialect.log`; §2 corrected | every [U] closed or explicitly open | any machine, no hardware |
+
+quant\DESIGN.md:973
+  before every doc commit; `tools/audit_numbers.py` when a number is superseded — the A8W8
+
+quant\TODO.md:164
+  MODNet against 42.20 on RegNetX-002 and 72.62 on ResNeXt-50 (corrected 2026-09-09: those two
+  figures on this line: 42.20, 72.62
+
+README.md:122
+  overhead. **Two earlier answers to this question are retracted**: the ~1.1 TOPS FLOPs-derived
+  figures on this line: 1.1
+
+README.md:167
+  | [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md) | Every measurement with its full working, caveats and superseded history |
+
+RESEARCH.md:83
+  off it is retracted, not revised.** `tools/gops_sweep.py`
+
+RESEARCH.md:120
+  deprecated `1x4.xclbin` starting Ryzen AI 1.5 ("no longer supported and should not
+  figures on this line: 1.5
+
+RESEARCH.md:147
+  5. **A real achieved-ops/s number now exists, replacing every retracted GOPS
+
+RESEARCH.md:189
+  for yolov8n solo elsewhere in this repo (status table, README) are retracted by
+
+RESEARCH.md:190
+  this same number, not merely superseded** — 6.6%, not "~1.1", is yolov8n's correct
+  figures on this line: 1.1, 6.6
+
+RESEARCH.md:399
+  independent of the retracted GOPS number — see the concurrency and width findings
+
+RESEARCH.md:501
+  | AdaRound at width | Does AdaRound recover less on a wider model, as the YOLO n→s pattern predicts? | **Answered: no, the prediction was wrong.** resnet50 recovers 90.0% of its quantization loss, `wi
+  figures on this line: 1.80, 16.64, 4.97, 66.7, 79.90, 80.10, 80.20, 9.66, 90.0, 90.5, 92.90, 93.90, 94.40
+
+RESEARCH.md:540
+  - **Direct NPU utilization measurement — the GOPS path is closed and retracted, but
+
+RESEARCH.md:555
+  GOPS is retracted, not revised. That same discovery opened a real lever instead:
+
+RESEARCH.md:1012
+  with a measurement: (1) DMA-floor retraction -- L is per-group length, so
+
+RESEARCH.md:1122
+  **Diagnosis corrected 2026-09-07 -- the verdict holds, the stated cause did not.**
+
+RESEARCH.md:1212
+  floor either. No verdict depends on it; the agreement was numerology and is retracted.
+
+RESEARCH.md:1233
+  corrected decoder, cross-checked against upstream on a sync-free run. Not run: the
+
+RESEARCH.md:1312
+  **Retraction: the FP32 baseline is 68.30%, not the 75.0% previously published.** 75.0%
+  figures on this line: 68.30, 75.0
+
+RESEARCH.md:1329
+  and **refuted** (`results/mobilevit/cle_pattern_count.log`, raw Quark logs in
+
+RESEARCH.md:1493
+  **The cause is superseded (2026-09-16):** the collapse reproduces on the CPU and is weight and bias rounding in four
+
+RESEARCH.md:1531
+  3. **RegNetX-002's collapse is cross-layer equalization, not a DPU shift-cut bound — the original attribution here is retracted (2026-09-09)**: RegNetX-002 (2.68M parameters, regular linear channel ca
+  figures on this line: 0.10, 2.45, 3.25, 324 / 326, 407.9, 66.20, 69.50, 99.4
+
+RESEARCH.md:1532
+  - **Falsification verdict:** Refuted for latency (neither `Concat` memory copies nor grouped conv micro-kernels stall the NPU), but confirmed as a severe failure mode for plain per-tensor INT8 PTQ and
+  figures on this line: 66.20
+
+RESEARCH.md:1586
+  retracted.** GOPS scales exactly linearly with stream count while measured completion
+
+RESEARCH.md:1611
+  retracted.** A same-sitting `--fresh` rerun of both models at 1000 images (2026-09-07)
+
+RESEARCH.md:1652
+  Those latencies had no backing log and are superseded by a same-sitting re-measurement
+
+RESEARCH.md:1669
+  10^{32}$) that integer rounding cannot recover. **Attribution corrected 2026-09-09:** the clamp is
+
+RESEARCH.md:1848
+  companion BiSeNetV2 row is retracted — no log reproduces it.
+
+RESEARCH.md:1855
+  - **The audit does not reproduce.** The corrected analyzer over eleven quantized models
+
+RESEARCH.md:1860
+  `results/quant/shift_cut_feasibility.log` no longer matches the tool that wrote it; it is
+
+RESEARCH.md:1861
+  superseded and kept, not deleted.
+
+RESEARCH.md:1955
+  **Corrected 2026-09-23 ([cross-audit](results/aie/notes_tnzr_cross_audit.md)), three points:**
+
+RESEARCH.md:2009
+  superseded the same day, modelled the kernel as one loop and reported the core as starved for
+
+RESEARCH.md:2037
+  already noted above. Also tested and refuted here: the two-process handoff floor is **not**
+
+RESEARCH.md:2046
+  cross-layer equalization, not a shift-cut bound, and the corrected analyzer finds zero
+
+results\aie\notes_a16w8_feasibility_audit.md:79
+  > **Corrected 2026-09-23 ([ledger A8](notes_tnzr_cross_audit.md)):** there is no measured "nominal 1.0 GHz"
+  figures on this line: 1.0
+
+results\aie\notes_a16w8_feasibility_audit.md:82
+  > 1.80 GHz ceilings below as the operating figures and the 1.0 GHz ones as superseded.
+  figures on this line: 1.0, 1.80
+
+results\aie\notes_accumulator_cascade_gemm_model.md:73
+  - Intermediate results remain entirely in the vector accumulator register file (`cm0`–`cm7` for INT8, `bm0`–`bm15` for BF16). *(Superseded 2026-09-23, [ledger A1](notes_tnzr_cross_audit.md): the file 
+
+results\aie\notes_im2col_hardware_bringup.md:3
+  > **CORRECTED 2026-09-23 ([ledger A7](notes_tnzr_cross_audit.md)).** §4.2 takes the int8 vector unit
+  figures on this line: 4.2
+
+results\aie\notes_im2col_kernel_vliw_audit.md:282
+  > **Superseded 2026-09-23 ([ledger A1](notes_tnzr_cross_audit.md)):** the accumulator file is **9** × 1024-bit,
+
+results\aie\notes_memtile_4d_im2col_specification.md:278
+  - An AIE2 core executes up to **256 INT8 MACs/cycle** (`aie::mmul<4,8,8>` at 1.0 GHz nameplate) [SPEC]. *(Clock superseded 2026-09-23, [ledger A8](notes_tnzr_cross_audit.md): the core clock is MEASURE
+  figures on this line: 1.0, 1.7, 1.8, 1.80
+
+results\aie\notes_memtile_activation_ring.md:128
+  So this is not a stuck hardware context that a later query would drain: the device no longer enumerates at
+
+results\aie\notes_memtile_activation_ring.md:307
+  writes, so tile 2 pushes a descriptor the hardware no longer considers valid.
+
+results\aie\notes_memtile_activation_ring.md:412
+  because a serve no longer waits on `arrived` for the pass before it. Neither layer has been dispatched with
+
+results\aie\notes_memtile_activation_ring.md:554
+  also a regression - yolov8s could no longer emit, raising `channel o queue is full of held tasks` where a
+
+results\aie\notes_memtile_activation_ring.md:557
+  **The iteration counter wrapping inside one task.** Refuted by the object map: a descriptor asked to wrap
+
+results\aie\notes_memtile_activation_ring.md:853
+  ## Tested and refuted: the barrier was never missing, and crediting the parked head does not fix it
+
+results\aie\notes_memtile_activation_ring.md:884
+  A descriptor acquires **before** it transfers, and this is no longer an inference from a hang. AMD's own
+
+results\aie\notes_memtile_activation_ring.md:967
+  in slots the new cycle never consumes, and `arrived` is balanced only by serves that no longer run. Nothing in
+
+results\aie\notes_memtile_activation_ring.md:976
+  residue-in-untouched-slots explanation is refuted, and **what leaves the ring un-re-runnable across a frame
+
+results\aie\notes_memtile_activation_ring.md:1137
+  The derived costing said yolov8s would **win** by 0.748 ms. It loses by 3.40, so the comparator was wrong by
+  figures on this line: 0.748, 3.40
+
+results\aie\notes_tnzr_cross_audit.md:32
+  - STALE: superseded, but not marked as such.
+
+results\aie\notes_tnzr_cross_audit.md:58
+  | A1 | The accumulator file is stated four ways: 9×1024-bit `cm0–cm8` (SILICON); 8 × `cm0–cm7` (two notes); **"only 6 accumulator registers"** (kernels/README, `conv2dk1.cc`), not marked superseded. T
+
+results\aie\notes_tnzr_cross_audit.md:60
+  | A3 | int8×int4 is a native `vmac` at 512 MAC/cycle; `vldb.unpack.s8.s4`; "a widespread assumption that native sub-byte execution was exclusive to AIE2P" | `results/aie/notes_w4a8_aie2_roofline.md:8,
+  figures on this line: 2024.1
+
+results\aie\notes_w4a8_aie2_roofline.md:8
+  > to AIE2P" framing is **retracted** ([ledger D11](notes_tnzr_cross_audit.md)). AMD documented the opposite:
+
+results\aie\notes_w4a8_aie2_roofline.md:69
+  Point"** (Executive Summary 1, section 1): **retracted.** It was never a widespread
+
+results\aie\notes_w4a8_aie2_roofline.md:128
+  Hardware characterization conducted on Desktop 2 (Phoenix, Ryzen 7 8700G, NPU driver 32.0.20101.3760) on 2026-09-10 (`results/aie/w4a8_probe_npu.log` on branch `worktree-w4a8-unpack`) superseded this 
+
+results\aie\notes_yolov8s_gap.md:170
+  ### Tested and refuted: an oversized consumer descriptor does not complete short
+
+results\aie\notes_yolov8s_gap.md:181
+  **That experiment is VOID, and the retraction matters more than the result.** It assumed consumer sizing was the
+
+results\aie\notes_yolov8s_gap.md:533
+  rather than as register values. Three theories were refuted by reading the MLIR; the answer was in the CDO.
+
+results\aie\notes_yolov8s_gap.md:593
+  ## RETRACTED: a MemTile hop is not slower per byte - measured in isolation, it costs nothing
+
+results\aie\README.md:67
+  | [fill_merge_attribution_sesr_m7_desktop2_20260919.log](fill_merge_attribution_sesr_m7_desktop2_20260919.log) | 355 of SESR's 412 distinct 6,400 B windows step 640 B apart and deliver 2.42x the addre
+
+results\aie\README.md:68
+  | [fill_merge_attribution_yolov8n_full_desktop2_20260919.log](fill_merge_attribution_yolov8n_full_desktop2_20260919.log) | The flagship's size class looks mostly regular in the artifact; the "496 push
+
+results\aie\README.md:92
+  | [yolov8_split_suite_phoenix_20260920.log](yolov8_split_suite_phoenix_20260920.log) | Full-family physical silicon benchmark across all six YOLOv8 variants (yolov8n, yolov8s, yolov8n-pose, yolov8m, y
+  figures on this line: 0.68, 11.24, 17.7, 19.53, 2.01, 2.29, 2.40, 25.0, 27.9, 32.95, 4.64, 49.9, 5.23, 8.67, 92.3, 95.9
+
+results\aie\README.md:99
+  is retracted**, and with it the reason given for SESR (`no repeat dimension can express an
+
+results\aie\README.md:111
+  ~2%" is retracted** as a bracket mismatch. 617.0 µs is the passthrough's *wall*
+  figures on this line: 617.0
+
+results\aie\README.md:114
+  - **`conv2x_int8_cpu_baseline.log`'s "the op class is NOT closed" is superseded** by
+
+results\aie\README.md:116
+  - **`bottleneck_spatial_sweep_npu.log`'s `tensor_w`=32 hard ceiling is superseded.** The
+
+results\aie\README.md:123
+  - **`attention_bf16_kernel_npu.log`'s diagnosis is corrected** by `dispatch_floor_npu.log`:
+
+results\aie\README.md:131
+  corrected/reversed** at the real (non-square) shape by
+
+results\aie\README.md:137
+  win at an unconstrained tile size is not retracted — it just doesn't automatically
+
+results\aie\README.md:147
+  corrected** by `bf16_matmul_k_limit_diagnosed_npu.log`: not a threshold, and not
+
+results\aie\README.md:154
+  - **`aie2_isa_static.log`'s section-5 attribution is corrected** by `gemm_cost_model.log`.
+
+results\aie\README.md:160
+  `cm7` at 88.9% MAC issue density. Only the provenance line was wrong.
+  figures on this line: 88.9
+
+results\aie\README.md:161
+  - **`gemm_cost_model.log`'s cost model is superseded** by `gemm_cost_model_nest.log`, written
+
+results\aie\README.md:169
+  - **`aie2_isa_static.log`'s VLIW slot naming is corrected** by `bank_conflict_survey.log`.
+
+results\aie\README.md:177
+  - **`dispatch_floor_npu.log`'s 617 µs go/no-go threshold is superseded for batchable work**
+
+results\aie\README.md:181
+  **not retracted**: it still governs a single unbatched IRON dispatch, which is what that log
+
+results\aie\README.md:186
+  - **`bottleneck_spatial_sweep_npu.log`'s 146.1 marginal GOPS is superseded by
+  figures on this line: 146.1
+
+results\aie\README.md:192
+  that run could not compile 56×56 at all while the new one can. 146.1 is **not retracted**; it
+  figures on this line: 146.1
+
+results\aie\README.md:193
+  is a measurement of a kernel that no longer exists in this tree. The inference that the width
+
+results\aie\README.md:201
+  costs **~531 µs** — a 1.26–1.37× gain, not 17×. 36.3 µs is **not retracted**: it is what a
+  figures on this line: 1.26, 1.37, 36.3
+
+results\aie\README.md:208
+  proposed ~0.05 ms per MB pricing term, are retracted** by `memtile_hop_phoenix_20260916T1523Z.log`, which
+  figures on this line: 0.05
+
+results\aie\README.md:211
+  The note records the retraction in its last section.
+
+results\aie\README.md:212
+  - **`notes_yolov8s_gap.md`'s 2.006 ms weight re-send lever is superseded by 1.018 ms** (27,279,360 B on
+  figures on this line: 1.018, 2.006
+
+results\aie\README.md:215
+  - **`notes_yolov8s_gap.md`'s k3s2 over-read slack of 60% is corrected to 42%** (16 × 50 = 800 pixels read against
+
+results\aie\README.md:231
+  superseded as a statement about the silicon** by `w4a8_probe_npu.log`. The log is a verbatim
+
+results\aie\README.md:238
+  (DERIVED) is superseded, in the wrong direction,** by `w4a8_array_npu.log`. The bound
+
+results\aie\README.md:307
+  restored to `default` and the clock re-measured. Supersedes the 1.6 GHz RESEARCH.md cited
+  figures on this line: 1.6
+
+results\aie\README.md:356
+  the cycles the core spent NOT issuing. **Its model numbers are superseded the same day by
+
+results\aie\README.md:362
+  that section stands and only the attribution was wrong.
+
+results\aie\README.md:369
+  64³/(4·8·8) with nothing left over. Corrected: the core issues **74.6%** of the dispatch at
+  figures on this line: 74.6
+
+results\aie\README.md:495
+  **`bank_stall_control_npu.log`** -- **RETRACTED headline** (see above). Concluded that
+
+results\aie\README.md:505
+  Its original entry is kept below verbatim as the superseded record -- every claim in it
+
+results\aie\README.md:539
+  confirmed nor refuted. A peer session held about a core throughout; repeat on a quiet machine.
+
+results\aie\README.md:576
+  every block edge, witness at most one context. Supersedes the probe's ≤ 1.18× bound (above).
+  figures on this line: 1.18
+
+results\aie\README.md:600
+  - **Cross-checks, all passed:** totals equal `engine_stream_report`, commit 5162671's corrected
+
+results\aie\README.md:706
+  a measurement: a DMA-floor arithmetic retraction (no new measurement — L is per-group
+
+results\aie\README.md:733
+  4.57 ms on Stage 3, 57.61 ms on Stage 2). Its recorded diagnosis is corrected by
+  figures on this line: 4.57, 57.61
+
+results\aie\README.md:734
+  `dispatch_floor_npu.log` — see the retraction list above.
+
+results\aie\README.md:847
+  L1. Supersedes an 18:33 screen of the same tiles taken under a running AdaRound job, kept in
+
+results\aie\README.md:917
+  call. **Four thresholds now, not three**, none of them retracted. Two limits stand: batching
+
+results\aie\README.md:1012
+  > agreement is **retracted** as a bracket mismatch, and "the op class is NOT closed" is
+
+results\aie\README.md:1013
+  > **superseded** by `bottleneck_spatial_sweep_npu.log` below — the op class **is** now
+
+results\aie\README.md:1032
+  bracket confusion is corrected — the like-for-like dispatch floor for a wall-minus-hardware
+
+results\aie\README.md:1039
+  > The op-class verdict stands. Its **`tensor_w`=32 ceiling is superseded** (the real
+
+results\aie\README.md:1069
+  **`dpu_transaction_disasm.log`** — a heuristic byte scan (not a disassembly) of the `mc_code` bytefields inside a compiled `.xmodel`, via `tools/dpu_transaction_disasm.py`. On FastDepth it finds 2,570
+  figures on this line: 0.24, 13.27, 23.97, 32.61, 37.35, 43.17, 49.38
+
+results\aie\README.md:1086
+  `02` validates the corrected full-function extraction. Neither is a timing run.
+
+results\aie\README.md:1266
+  full-byte serial parity; fresh command allocation, superseded for timing below.
+
+results\aie\README.md:1294
+  | [043839Z_29368](fused_epilogue_phoenix_20260913T043839Z_29368.log) | Initial polynomial compile; vector spills. Superseded. |
+
+results\aie\README.md:1295
+  | [044213Z_15444](fused_epilogue_phoenix_20260913T044213Z_15444.log) | Factored polynomial compile, separate one-core trace build. Superseded. |
+
+results\aie\README.md:1297
+  | [044450Z_10245](fused_epilogue_phoenix_20260913T044450Z_10245.log) | Bank-separated resident compile. Superseded. |
+
+results\aie\README.md:1300
+  | [044832Z_1665](fused_epilogue_phoenix_20260913T044832Z_1665.log) | Paired Q14 polynomial compile; spills. Superseded. |
+
+results\aie\README.md:1302
+  | [045122Z_18639](fused_epilogue_phoenix_20260913T045122Z_18639.log) | Q11 paired polynomial compile. Superseded transport. |
+
+results\aie\README.md:1306
+  | [050338Z_12394](fused_epilogue_phoenix_20260913T050338Z_12394.log) | Corrected core selector 49, chunked output compile. |
+
+results\aie\README.md:1315
+  | [051950Z_16177](fused_epilogue_phoenix_20260913T051950Z_16177.log) | Clean Cin=512 pass with slower raw scheduler; superseded performance. |
+
+results\aie\README.md:1330
+  | [sppf_20x20x256_phoenix_20260913T055728Z_17341.log](sppf_20x20x256_phoenix_20260913T055728Z_17341.log) | Compiler error; superseded diagnostic |
+
+results\aie\README.md:1332
+  | [sppf_20x20x256_phoenix_20260913T055918Z_31764.log](sppf_20x20x256_phoenix_20260913T055918Z_31764.log) | Hardware timeout; superseded diagnostic |
+
+results\aie\README.md:1337
+  | [sppf_20x20x256_phoenix_20260913T060406Z_27214.log](sppf_20x20x256_phoenix_20260913T060406Z_27214.log) | Hardware timeout; superseded diagnostic |
+
+results\aie\README.md:1338
+  | [sppf_20x20x256_phoenix_20260913T060610Z_29389.log](sppf_20x20x256_phoenix_20260913T060610Z_29389.log) | Compiler error; superseded diagnostic |
+
+results\aie\README.md:1452
+  | [program_ram_epilogue_census_phoenix_20260918T040616Z.log](program_ram_epilogue_census_phoenix_20260918T040616Z.log) | Per-opcode .text census of the persistent conv engine (tools/engine_opcode_cens
+
+results\aie\README.md:1482
+  | [merge_depth_sizing_20260920.log](merge_depth_sizing_20260920.log) | Why task count, not packet count, sets the floor: canonical/merge_quad/merge_runs each add one BD dimension and both merges refus
+  figures on this line: 0.393, 16.580, 16.588, 16.901, 16.945, 2.163, 2.17, 23.6, 39.6, 4.7, 5.15, 5.51, 66/66, 7.236, 7.371
+
+results\aie\README.md:1488
+  | [yolo26n_bringup_20260920.log](yolo26n_bringup_20260920.log) | YOLO26n on the engine: it lowers (107 layers, 2 host), compiles (12.27 MB, 3 NPU segments) and dispatches on Device 0 at 9.009 ms NPU +
+  figures on this line: 1.342, 1.380, 1.413, 107/107, 12.27, 38/107, 8.963, 9.009, 9.319
+
+results\aie\README.md:1494
+  | [yolo26n_requant_vs_amd_20260921.log](yolo26n_requant_vs_amd_20260921.log) | YOLO26n re-derived from scratch because its quantized ONNX was lost with a removed worktree, then re-measured with the co
+  figures on this line: 0.000, 0.8, 107/107, 11.29, 13.020, 17.414, 30.434, 44.039
+
+results\aie\README.md:1495
+  | [yolo26n_coco_map_20260921.log](yolo26n_coco_map_20260921.log) | The accuracy number YOLO26 never had, on the FULL val2017 5,000 at conf 0.001: engine 23.74 mAP@50-95 / 39.40 @50, AMD's EP on the sa
+  figures on this line: 0.001, 0.10, 15.92, 23.64, 23.74, 39.16, 39.40, 39.66
+
+results\aie\README.md:1511
+  | [engine_bf16_npu_20260921.log](engine_bf16_npu_20260921.log) | Milestone 2's first run: the header-parameterised engine core on five shapes, all 1,600 elements equal. Superseded as evidence of the a
+  figures on this line: 0.0
+
+results\aie\README.md:1533
+  | [amd_tiling_decode_yolov8s_n_desktop2_20261013T034053Z.log](amd_tiling_decode_yolov8s_n_desktop2_20261013T034053Z.log) | Static per-layer re-read factors, YOLOv8s + YOLOv8n, AMD default vs option vs
+  figures on this line: 0.41, 2.32
+
+results\aie\README.md:1534
+  | [amd_tiling_decode_corrected_yolov8s_n_desktop2_20261013T041500Z.log](amd_tiling_decode_corrected_yolov8s_n_desktop2_20261013T041500Z.log) | Corrected decode: engine counted once per node, so conv i
+  figures on this line: 236.4, 28.4, 61.0, 82.5
+
+results\aie\README.md:1555
+  | [engine_cadence_yolov8s_phoenix_20261013T1242Z.log](engine_cadence_yolov8s_phoenix_20261013T1242Z.log) | Retire cadence on YOLOv8s, pre-registered: rb3 dispatch 16.147 vs rb2 16.380 (-0.233 ms, lowe
+  figures on this line: 0.233, 0.59, 1.11, 16.147, 16.380, 16.441
+
+results\aie\README.md:1570
+  | [object_size_probe_phoenix_desktop2_20261013T1958Z.log](object_size_probe_phoenix_desktop2_20261013T1958Z.log) | `tools/task_issue_probe.py` core-object-size axis, prereg `e2e7a6a6...`: identical sh
+  figures on this line: 0.15, 25.7, 27.3, 28.4, 4.075, 4.209
+
+results\aie\README.md:1578
+  | [engine_bf16_loop_variants_exact_npu_20260921.log](engine_bf16_loop_variants_exact_npu_20260921.log) | The chunk variant (the largest rewrite) on the device: byte-exact on all ten sweep cases includ
+
+results\aie\README.md:1579
+  | [engine_bf16_loop_variants_bench_k3_npu_20260921.log](engine_bf16_loop_variants_bench_k3_npu_20260921.log) | Timing, k3 over 4 input blocks, five alternating rounds, 128 in-core repeats, timing_elig
+  figures on this line: 0.0, 1.3, 10.093, 10.094, 10.134, 10.168, 10.228
+
+results\aie\README.md:1580
+  | [engine_bf16_loop_variants_bench_k1_npu_20260921.log](engine_bf16_loop_variants_bench_k1_npu_20260921.log) | The same arms at k1 over 8 input blocks: base 3.198 us, ptr 3.204, chunk 3.209, hoist 3.2
+  figures on this line: 1.47, 3.198, 3.20, 3.204, 3.209, 3.239, 9.7
+
+results\aie\README.md:1592
+  | [engine_dispatch_gate_census_desktop2_20260922_02.log](engine_dispatch_gate_census_desktop2_20260922_02.log) | The census above re-run with the loop, container and survey readings the first lacked, 
+
+results\aie\README.md:1594
+  | [engine_bf16_contract_npu_20260922.log](engine_bf16_contract_npu_20260922.log) | Silicon, checks-only: the bf16 core rewritten to meet its emulator's contract (a switch with a default, the 4-to-8 in
+
+results\aie\README.md:1595
+  | [engine_bf16_contract_npu_20260922_02.log](engine_bf16_contract_npu_20260922_02.log) | The same kernel with three residual cases added, so OP_RESIDUAL and F_HOLD execute on silicon for the first tim
+  figures on this line: 1.0
+
+results\aie\README.md:1601
+  | [bf16_dispatch_estimate_corrected_20260922.log](bf16_dispatch_estimate_corrected_20260922.log) | Offline, checks-only (tools/bf16_dispatch_estimate.py with --activation-packet-ratio now REQUIRED): M
+  figures on this line: 112.84, 128.84, 163.02, 168.98, 217.28, 22.50, 31.117, 59.89, 77.19, 78.49
+
+results\aie\README.md:1629
+  | [bf16_mac_rescore_exp_sum_sesr_plain_desktop2_20260923.log](bf16_mac_rescore_exp_sum_sesr_plain_desktop2_20260923.log) | Offline, no device: tools/bf16_mac_model_rescore.py sesr on the plain XINT8 S
+
+results\dense\README.md:17
+  - **`*_20260919*` is the original run, superseded and kept.** Its numbers are not wrong; they simply
+
+results\dense\README.md:125
+  Failures and superseded attempts otherwise remain in this directory, including the 2026-09-19
+
+results\README.md:48
+  | `aie/` | `split_container_sizing_phoenix_20260920.log`, `yolov8_split_suite_phoenix_20260920.log`: empirical silicon characterization of split vs monolithic .ignite containers on Phoenix NPU (Ryzen 
+  figures on this line: 0.18, 15.8, 2.4, 29.6, 34.1, 37.3, 5.2, 8.16
+
+results\README.md:49
+  | `dense/` | Two sittings of BiSeNetV2 (`segment`) and MODNet-Cut (`matte`) through dense host regions, indexed by [its own README](dense/README.md). `*_20260921*` is the evidence, taken on the commit
+  figures on this line: 0.00, 0.30, 21.75, 23.07, 31.25, 31.39, 31.90, 41.58, 50.0, 63/63, 98.84, 99.31
+
+results\README.md:54
+  | `quant/` | `perchannel_verdict_`, `perchannel_axis_control_`, `contexts_perchannel_desktop2_20260909.log`: the per-channel weight-scale acceptance verdict, asked on 1 to 8 convolutions instead of Re
+
+results\README.md:56
+  | `quant/` | `mul_fixture_`, `bga_branches_`, `mul_repair_`, `mul_context_desktop2_20260909.log`: the four controls that take `/bga/Mul` off the hook -- the isolated operator at the failing shape, eac
+
+results\README.md:58
+  | `quant/` | `arithmetic_desktop2_20260909_s01_*` and `s02_*`: sixteen synthetic Conv fixtures probing Theorem 1's sigma window via the probe's `--out-of-contract` opt-in. Every fixture outside the pr
+
+results\README.md:59
+  | `quant/` | `shift_cut_feasibility_desktop2_20260909.log`: the shift-cut audit re-run over eleven quantized models after Theorem 3 was retracted and three verifier defects fixed. Zero sigma violation
+
+results\README.md:64
+  | `quant/` | `shift_cut_reaudit_20260909_desktop2.log`: the corrected shift-cut audit across eleven quantized models — **zero sigma violations on every one**, RegNetX-002 at min 11 / median 21 / max 3
+  figures on this line: 25 / 29, 90 / 24
+
+results\README.md:65
+  | `quant/` | `shift_cut_contract_20260909_desktop2.log`: why that zero was never evidence. Quark's own `adjust_shift_cut` clamps `shift_cut = wpos + ipos - opos` into `[0, 16]`, and the module's sigma
+
+results\README.md:68
+  | `quant/` | The cross-layer-equalization re-attribution behind that retraction (measured on branch `research/windows-lowlevel`, imported as evidence): `eval_regnetx_002_ignition_nocle_c64_cpu.log` (6
+  figures on this line: 0.10, 66.20, 68.90, 69.50
+
+results\README.md:72
+  | `quant/` | `shift_cut_forward_predictions.log`: the shift-cut hazard audit's verdict on 14 XINT8 artifacts with no NPU record, committed BEFORE any of them ran so the outcome could not be read back 
+  figures on this line: 0.999, 34.06, 50/52
+
+results\README.md:82
+  | `quant/` | `notes_xint8_dialect.log`: Quark 0.11rc1 source excerpts, source/model hashes, static XINT8/A8W8 fingerprints, corrected refinement rules and explicit remaining unknowns; no quantization 
+
+results\README.md:88
+  | `quant/` | `probe_resnet50_acceptance_summary_v2.log`: summary bound to model and input hashes; initial `probe_resnet50_acceptance_summary.log` is superseded for its full-set RMSE; `check_ignition_a
+
+results\README.md:99
+  | `mobilevit/` | `mobilevit_xxs`: the full-1000-image accuracy table behind the MobileViT quantization collapse -- `eval_fp32_cpu.log` (68.30%/88.20%, the FP32 baseline, matching the paper's ~69.0%), 
+  figures on this line: 0.00, 0.10, 0.13, 0.25, 0.5, 0.80, 1.0, 1.41, 1.71, 108.00, 108.29, 14.57, 25.0, 29/36, 3.25, 4.47, 68.30, 69.0, 7.51, 73.40, 75.00, 88.20
+
+results\README.md:101
+  | `modnet/` | MODNet portrait matting at 512²: the same-sitting NPU/iGPU/CPU capture behind Category B — `eval_modnet_zero_concat_xint8_npu.log` (17.75 ms, 533/538 nodes, MAD 0.35269), `eval_modnet_cu
+  figures on this line: 17.75, 18.46, 209.60, 26.44, 27.51, 46.14, 502/507, 533/538
+
+results\README.md:102
+  | `regnet/` | Category E RegNetX-002: FP32 baseline (`eval_regnetx_002_fp32_cpu.log`, 68.50% top-1, 1.89 ms), NPU plain XINT8 (`eval_regnetx_002_xint8_npu.log`, 2.45 ms / 407.9 FPS, 324/326 nodes, 0.5
+  figures on this line: 0.50, 1.89, 2.45, 324/326, 407.9, 66.20, 68.50
+
+results\README.md:104
+  | `aie/` | The hand-written AIE kernel work: `aiecompiler` bring-up, the mlir-aie/Peano toolchain that replaced it, and every kernel measured against a CPU baseline. **195 indexed logs of the 300 on d
+
+results\README.md:109
+  | `aie/` | `windows_xrt_driver_bench.log` (device/context floor, unified memory BO sync across 64 B–16 MB, userspace command dispatch prep, runlist batching), `windows_context_switch_bench.log` (a 5-c
+
+results\README.md:113
+  | top level | `adaround_latency_diff_{xint8,adaround}_npu.log`: same-sitting `--fresh` rerun of both ResNet50 models settling RESEARCH.md's AdaRound-latency-cost question; `adaround_latency_diff_diag_
+  figures on this line: 5.63, 6.93
+
+results\README.md:161
+  for a clear host, so its hash in their `source_sha256` manifests no longer matches the
+
+results\README.md:220
+  - [Corrected suite](laya/attention_v3_suite_desktop2_20261016T0001Z.log): global/local and padding, all registered checks pass.
+
+results\README.md:236
+  - [Corrected array qualification](laya/attention_shared_precise_suite_desktop2_20261016T0200Z.log): restored alpha residual, unchanged tolerance, mapped BOs and native packing; all registered cases pa
+
+results\README.md:285
+  - [Corrected small-chain smoke](laya/mlp_v7_smoke_desktop2_20261016.log): both initial poisons pass.
+
+results\README.md:297
+  - [Expanded run with incorrect per-row layout labels](laya/rotary_v4_all_suite_desktop2_20261016.log): retained reporting error; superseded for per-layout coverage by the next log.
+
+results\README.md:316
+  - [Clean teardown, incorrect untouched-tail expectation](laya/block_v4_collected_smoke_desktop2_20261016.log).
+
+results\README.md:322
+  - Block exponential: [incorrect lookup banks](laya/block_exp_v2_smoke_desktop2_20261016.log), [correct banks](laya/block_exp_v3_bank_layout_desktop2_20261016.log), [exact exponent scaling](laya/block_
+
+results\README.md:344
+  - Corrected embedding/norm: [edge-ID and row-order probe](laya/stem_v3_probe_desktop2_20261016.log), [512-token suite](laya/stem_v4_full_desktop2_20261016.log).
+
+results\README.md:352
+  - Vector operators: [initial qualification](laya/vector_v2_operators_desktop2_20261016.log), [repeat with strict GELU gates](laya/vector_v3_strict_operators_desktop2_20261016.log); the repeat supersed
+
+results\README.md:366
+  Backs [fixture qualification and corrected graph wiring](../docs/BENCHMARKS.md#laya-full-device-outputs-fixture-qualification-and-first-residual-correction-2026-10-16-desktop-2).
+
+results\README.md:369
+  - Tail math: [lane-index failure](laya/tail_probe_v1_operators_desktop2_20261016.log), [corrected indices](laya/tail_probe_v2_fixed_indices_desktop2_20261016.log), [rebuilt-image repeat](laya/tail_pro
+
+results\README.md:370
+  - Corrected graph: [all-layout rebuild](laya/full_rebuild_carry_desktop2_20261016.log), [vector/carry qualification](laya/vector_v4_carry_operators_desktop2_20261016.log), [full fixture with normalize
+
+results\README.md:501
+  - Wide-packet alternative: [failed first build](laya/compact_pack_wide_v1_build_desktop2_20261016.log), [corrected audited build](laya/compact_pack_wide_v2_build_desktop2_20261016.log). Compile-only; 
+
+results\README.md:509
+  - [Corrected grouped build](laya/small_query_v2_grouped_build_desktop2_20261016.log): reduced GEMM query packet, full weight packet retained; code/stack/span audit passes. Never executed.
+
+tools\hf_results_card.md:24
+  says which document section the log backs, and which logs were retracted or superseded. Superseded logs are
+
+total notices: 452
+
+For each: grep the retracted figure across all docs. If it still appears
+anywhere without the retraction attached, that's the orphan to fix.
+
+HOST_TIMELINE {"elapsed_seconds": 34.594, "tree_rss_bytes": 138260480, "foreign_peers": []}
+[2m    env: mlir-aie-iron  (3.13.15)[0m
+..........                                                               [100%]
+10 passed in 1.55s
+RESEARCH_PROCESS_RESULT {"exit_code": 0, "stop": null, "peak_tree_rss_bytes": 139730944, "rss_measurement": "maximum observed across sampled descendant working sets; zero observations reported as null", "elapsed_seconds": 36.79700000000594, "foreign_contention_observed": false, "timing_eligible": false}

@@ -500,3 +500,12 @@ Backs [lookup qualification and compact-pack failure](../docs/BENCHMARKS.md#laya
 - [Combination blocked at context creation](laya/optimized_lut_head_v1_fresh_desktop2_20261016.log): driver returns `0xc01e0009`; no inference runs.
 - Wide-packet alternative: [failed first build](laya/compact_pack_wide_v1_build_desktop2_20261016.log), [corrected audited build](laya/compact_pack_wide_v2_build_desktop2_20261016.log). Compile-only; never executed.
 - [Offline validation](laya/optimized_candidates_v1_validation_desktop2_20261016.log): existing gates, wide-packet coverage and worktree imports; no device access.
+
+## Laya smaller-query MLP offline
+
+Backs [smaller-query preparation](../docs/BENCHMARKS.md#laya-smaller-query-mlp-compiled-offline-2026-10-16-desktop-2).
+
+- [First build rejected](laya/small_query_v1_build_desktop2_20261016.log): Shim descriptor wrap limit.
+- [Corrected grouped build](laya/small_query_v2_grouped_build_desktop2_20261016.log): reduced GEMM query packet, full weight packet retained; code/stack/span audit passes. Never executed.
+- [Validation](laya/small_query_v1_validation_desktop2_20261016.log): all-bucket input/output address coverage, core pairing, controller checks and previous offline/legacy gates; no device access or speed claim.
+- Expanded descriptor checks: [incorrect raw-extent assertion](laya/small_query_v2_descriptor_validation_desktop2_20261016.log), [corrected 18-check pass](laya/small_query_v3_descriptor_validation_desktop2_20261016.log). The compiler normalizes MLIR dimensions before hardware field checks.
