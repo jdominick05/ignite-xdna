@@ -29,7 +29,7 @@ def stats(values):
     return dict(median_ms=statistics.median(values),min_ms=min(values),max_ms=max(values),samples_ms=values)
 
 
-def run(args):
+def run(args,*,session_factory=None):
     if not 3<=args.reps<=20: raise ValueError('bounded repetitions')
     prereg=json.loads((p.ROOT/'results/laya/laya_accuracy_prereg_desktop2_20260926.json').read_text())
     if p.attention.sha(args.items)!=prereg['items']['file_sha256']: raise ValueError('frozen items changed')
@@ -49,7 +49,8 @@ def run(args):
       (n.action.s,'reference'),(n.action.s,'verify'),(n.action.s.second,'reference'),(n.action.s.second.post,'reference')]
     with ExitStack() as stack:
         for module,name in functions: stack.enter_context(patch.object(module,name,forbidden))
-        with Session(bundle,args.mlp_folder,args.attention_folder,args.mlp_candidate,args.attention_candidate,args.compact_folder,fixtures,args.fast_folder) as session:
+        factory=Session if session_factory is None else session_factory
+        with factory(bundle,args.mlp_folder,args.attention_folder,args.mlp_candidate,args.attention_candidate,args.compact_folder,fixtures,args.fast_folder) as session:
             cases=[(f'fixture{i}',item['ids'],item['markers'],item['qtype']) for i,item in enumerate(fixtures)]
             if not args.quick:
                 for length in (1,31,32,33,63,64,65,91,127,128,129,255,256,257,383,384,385,511,512,91):

@@ -19206,3 +19206,42 @@ This is a complete-model fixture performance result with exact development compa
 not the candidate's full frozen accuracy result. The separately qualified buffered arm
 retains its own full-set C0–C5 and bit-equivalence evidence. A new registration and full
 frozen validation remain required for an arm serving shorter heads before adoption.
+
+## Laya lookup fixtures pass; compact DMA packing fails on device (2026-10-16, Desktop 2)
+
+The [GELU lookup fixture run](../results/laya/geglu_lut_v1_fresh_desktop2_20261016.log)
+passes the existing development numerical gates on three unlabelled fixtures. Action
+probabilities remain bit-exact; logits change, with maximum absolute differences
+0.011100530624389648, 0.02213609218597412 and 0.059857845306396484 against the original
+short native arm. Relative L2 differences are 0.002235378371551633,
+0.00980337057262659 and 0.012564300559461117. The run observes zero CPU neural/oracle
+calls, five contexts, 66 dispatches and an idle device after close. It uses full heads.
+Its checks-only counters are timing-ineligible and establish no serving speed claim.
+The lookup approximation still requires a separate registration and complete frozen
+C0–C5 validation; the qualified buffered arm's full accuracy cannot be inherited.
+
+The [split-descriptor compact-pack run](../results/laya/compact_pack_v1_fresh_desktop2_20261016.log)
+fails at the first encoder attention dispatch after the native wait, then exits 139.
+No candidate output comparison completes. The post-process device report shows no
+active contexts. A subsequent [lookup/short-head combination attempt](../results/laya/optimized_lut_head_v1_fresh_desktop2_20261016.log)
+fails during initial context creation with `0xc01e0009`, before inference. That attempt
+does not test the combination's arithmetic or performance. Hardware testing is held
+for driver recovery; the compact candidate is unqualified and must not be reused as a
+working configuration. Descriptor ordering, packet boundaries and synchronization
+remain possible causes; the timeout alone establishes none of them.
+
+A separately versioned wide-packet alternative sends each normalization packet through
+one Shim descriptor. It gathers FP32 rows of width 66, consumes the first 64 values and
+retains the original live payload and source pitches for other operations. The
+[first build](../results/laya/compact_pack_wide_v1_build_desktop2_20261016.log) fails a
+KV type mismatch; the [corrected build](../results/laya/compact_pack_wide_v2_build_desktop2_20261016.log)
+updates both compiler KV-size bindings and passes code/stack/span audits: 15,792 code
+bytes and a 4,672-byte stack bound within the unchanged reservation. It has never run
+on hardware. `optimized_probe.py` prepares serialized combinations with shorter heads,
+the polynomial or lookup MLP, and this optional wide-packet attention image, replacing
+the prior candidate context before allocating another one.
+
+The [offline validation](../results/laya/optimized_candidates_v1_validation_desktop2_20261016.log)
+checks packet coverage, preserved source strides and unused words, compiler-global
+restoration, and the existing offline suite and legacy import/syntax gates. Offline
+success provides no evidence that either compact DMA scheme executes correctly.

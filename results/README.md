@@ -490,3 +490,13 @@ Backs [shorter head fixture latency](../docs/BENCHMARKS.md#laya-shorter-heads-re
 
 - [Fresh fixtures](laya/bucket_head_v1_fresh_desktop2_20261016.log), [all boundaries](laya/bucket_head_v2_boundaries_desktop2_20261016.log): complete outputs bit-exact, zero CPU neural/oracle calls, idle after close.
 - [Eligible same-sitting comparison](laya/bucket_head_v3_same_sitting_desktop2_20261016.log): shorter heads with encoder buffering, CPU FP32 at actual length, no foreign contention. Full frozen accuracy for the shorter-head arm is still pending.
+
+## Laya lookup fixtures and compact-pack device failure
+
+Backs [lookup qualification and compact-pack failure](../docs/BENCHMARKS.md#laya-lookup-fixtures-pass-compact-dma-packing-fails-on-device-2026-10-16-desktop-2).
+
+- [Lookup fixtures](laya/geglu_lut_v1_fresh_desktop2_20261016.log): development numerical gates pass; changed logits, full frozen accuracy unverified, timing-ineligible.
+- [Split-pack dispatch failure](laya/compact_pack_v1_fresh_desktop2_20261016.log): first attention dispatch fails, process exits 139, no output qualification.
+- [Combination blocked at context creation](laya/optimized_lut_head_v1_fresh_desktop2_20261016.log): driver returns `0xc01e0009`; no inference runs.
+- Wide-packet alternative: [failed first build](laya/compact_pack_wide_v1_build_desktop2_20261016.log), [corrected audited build](laya/compact_pack_wide_v2_build_desktop2_20261016.log). Compile-only; never executed.
+- [Offline validation](laya/optimized_candidates_v1_validation_desktop2_20261016.log): existing gates, wide-packet coverage and worktree imports; no device access.
