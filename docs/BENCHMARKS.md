@@ -19656,5 +19656,37 @@ transfers, 173 completion waits and 14,899,264 word addresses. The
 [layer result](../results/laya/window_single_v1_layer_desktop2_20261016.log) also matches
 all six captured arenas on the device. Qualification timing is ineligible; these
 results establish correctness for development cases, not full frozen C0–C5 or speed.
-The qualified packing arm remains the adopted control while the registered three-arm
-comparison is pending.
+The qualified packing arm remains the adopted control. The registered three-arm
+comparison follows below.
+
+## Laya same-core output-width comparison finds no end-to-end gain (2026-10-16, Desktop 2)
+
+The [three-arm timing result](../results/laya/window_single_compare_v1_timing_desktop2_20261016.log)
+follows the [registration](../results/laya/window_single_compare_v1_prereg_desktop2_20261016.json)
+committed as `44edb2f` before timing. All arms use the same length-91/M128 complete
+request; nine fresh serialized profiles rotate the three arms through each position.
+Two warmups and five timed inferences per profile exclude setup and provide 15
+samples per arm.
+
+| Complete native arm | Median ms | Sample range ms |
+|---|---:|---:|
+| Qualified packing | 473.2115 | 423.3074–482.4226 |
+| Two-output window, one core KV buffer | 479.3554 | 428.6857–494.4567 |
+| One-output schedule on the same window core | 476.5556 | 436.7757–502.6071 |
+
+Every timed output remains bit-exact. All profiles retain zero CPU neural/oracle
+calls, five contexts and 66 dispatches; every session closes before the next opens.
+The bounded wrapper exits zero, records idle context witnesses, reports no foreign
+contention and sets `timing_eligible: true`. Registered sources/artifacts and both
+qualification logs remain unchanged. The committed summary retains every sample,
+profile and the unchanged raw-log hash.
+
+Neither window schedule has a lower pooled median than qualified packing. The two
+same-core widths have strongly overlapping ranges and change their relative ordering
+between rounds; this does not establish a universal ranking or a specific bottleneck.
+Query reuse alone has not produced an end-to-end improvement on this image. The
+packing comparison still changes several buffering/layout properties, so attributing
+the result to KV depth would overstate the evidence. Neither experimental arm is
+adopted, and no new frozen scoring is started for adoption. Packing retains its full
+C0–C5 verdict. This is a separate sitting; no CPU/hybrid ratio or cross-sitting pool
+is supplied.

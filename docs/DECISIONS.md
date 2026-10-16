@@ -3333,3 +3333,10 @@ rotate through three orders, each with fresh serialized sessions, two warmups an
 five timed complete inferences. The same length-91/M128 request, bit-exact outputs,
 zero CPU neural/oracle calls, five contexts and 66 dispatches are required. Setup is
 excluded. No performance or new frozen accuracy verdict follows from registration.
+
+The [completed same-core width comparison](BENCHMARKS.md#laya-same-core-output-width-comparison-finds-no-end-to-end-gain-2026-10-16-desktop-2)
+finds no lower pooled median than packing for either experimental schedule. Preserve
+packing as the qualified control and stop width-only adoption work on these images.
+The same-core comparison does not isolate the KV-depth effect against packing; core
+execution or a separately qualified buffering change needs direct evidence before
+being assigned as the cause.
