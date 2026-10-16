@@ -18866,3 +18866,36 @@ candidate's own instructions and allocation groups, with CPU neural/oracle calls
 forbidden. These candidates have not run on hardware. No numerical equivalence,
 latency reduction, bandwidth bottleneck or speedup is established by these offline
 builds. The frozen native accuracy arm continues to use its original qualified images.
+
+## Laya attention FIFO candidates prepared offline (2026-10-16, Desktop 2)
+
+`attention_fifo.py` prepares the same buffering question for encoder attention while
+keeping its arithmetic kernel object unchanged. All live operations, scratch/mask
+buffers, FP32 exponential tables and the explicit per-bucket KV loop count remain.
+Only FIFO depth declarations change. These builds are separate from the frozen native
+accuracy arm, whose images and source files remain untouched.
+
+| M128 offline candidate | Core query depth | KV path depth | MemTile query depth | Linked code bytes/core |
+|---|---:|---:|---:|---:|
+| Deeper query path | 2 | 1 | 2 | 15728 |
+| Deeper key/value path | 1 | 2 | 1 | 15712 |
+| Both paths deeper | 2 | 2 | 2 | 15760 |
+
+The [query](../results/laya/attention_fifo_v2_query_build_desktop2_20261016.log),
+[key/value](../results/laya/attention_fifo_v3_keyvalue_build_desktop2_20261016.log)
+and [combined](../results/laya/attention_fifo_v1_double_build_desktop2_20261016.log)
+builds pass linked-code, table, physical-span and stack audits on all cores. Their
+conservative stack bound is 4,768 bytes within the unchanged 4,864-byte reservation.
+New instructions use their own compiled physical control addresses; the comparison
+runner preserves full allocation group IDs and checks bank compatibility. It selects
+candidate encoder attention only in M128, retaining original MLP, other row buckets and
+head execution, and patches valid/local fields against each image's own audited map.
+
+[Validation](../results/laya/attention_fifo_v1_validation_desktop2_20261016.log) passes
+161 offline checks and legacy gates. New checks prove that all non-FIFO prefix lines
+remain identical, verify each depth declaration, preserve the exact original prefix
+when depths are one, and reject invalid depths. `attention_fifo_probe.py` prepares
+complete-model fixture/boundary comparisons with CPU neural/oracle calls forbidden.
+No attention FIFO candidate has run on hardware yet. Numerical equivalence, latency
+reduction and the proposed overlap mechanism remain unverified; the active full native
+accuracy run retains sole device ownership.
