@@ -18678,3 +18678,61 @@ offline tests, the legacy syntax/import/shell gate and existing artifact/operato
 This improves the preceding serving baseline but remains slow. Shorter attention and
 head schedules, native-arm preregistration, and the frozen full-set decision/calibration
 gates remain open. No native labelled class scores were produced.
+
+## Laya shorter encoder attention: exact outputs, CPU still faster (2026-10-16, Desktop 2)
+
+`bucket_attention.py` extends the preceding MLP row buckets to encoder QKV projection,
+RoPE, attention, output projection and normalization. Physical feature and head pitches
+remain unchanged. Query DMA skips inactive gaps between heads. Attention explicitly
+consumes M/32 key/value blocks, all produced inside the selected M-token bucket; it
+never reads untouched KV slots beyond that bucket. Embedding and head schedules remain
+512 tokens. The new attention image reads its KV loop count from the existing control
+field rather than using a hardcoded count.
+
+The [build](../results/laya/bucket_attention_v2_build_desktop2_20261016.log) checks the
+four row layouts share identical resident ELF/initialization images. Each core uses
+15,648 code bytes and a conservative stack bound of 4,768 bytes inside its 4,864-byte
+reservation. The vector image remains unchanged. A [prior build attempt](../results/laya/bucket_attention_v1_build_desktop2_20261016.log)
+stopped before compilation because it selected an absent copied kernel object; the
+successful build uses the audited repeated-layer object. No device run used that failed
+attempt. The comparison runner retains the original attention context alongside the new
+one, allocating four contexts in total so both schedules can alternate in one session.
+
+[Fresh-session checks](../results/laya/bucket_attention_v1_fresh_short_desktop2_20261016.log)
+start with shortened execution before any baseline populated padding. Both final outputs
+match the original native baseline bit-for-bit on all three unlabelled fixtures. That
+checks-only run is timing-ineligible.
+
+The [eligible same-sitting comparison](../results/laya/bucket_attention_v2_same_sitting_desktop2_20261016.log)
+repeats fresh short execution and all 25 fixture/synthetic boundary comparisons from the
+preceding experiment. All outputs remain bit-exact. CPU neural/oracle calls are forbidden
+through native setup and inference, with zero calls observed. All model constants remain
+resident, no activation arena reset occurs, and all 66 neural dispatches remain on the
+NPU. A separate original-model CPU session is closed before native setup.
+
+| Complete-model configuration, actual length 91 | Median ms | Min–max ms |
+|---|---:|---:|
+| Original fixed 512-token NPU schedule | 2566.9593 | 2560.6521–2571.9643 |
+| Shorter encoder MLP only | 1595.0949 | 1593.3749–1604.4717 |
+| Shorter encoder attention and MLP | 824.9203 | 809.4550–833.5963 |
+| CPU, original model and actual length | 175.4385 | 174.1856–178.3842 |
+
+Each configuration has five measured calls. NPU paths alternate order after boundary
+qualification warmed them; CPU uses two warmups, ONNX Runtime 1.30.0 and eight threads.
+Setup is excluded, while per-call preparation and final output readback are included.
+CPU uses FP32 and NPU uses the qualified BF16 matrix path with FP32 accumulation;
+fixture outputs satisfy the existing numerical comparison. The complete NPU speedup
+over its fixed schedule is 3.1118 times, but it remains 4.7020 times slower than the
+actual-length CPU. No other benchmark or compiler job ran during this comparison.
+
+An instrumented shortened frame attributes 273.9261 ms to encoder attention/projection/
+norm, 383.8343 ms to encoder MLP, and the remaining time primarily to fixed head stages.
+These are wall timings including driver waits and context transitions. The wrapper
+records timing eligibility, exit 0, no observed foreign contention, and no remaining
+contexts after close. [Validation](../results/laya/bucket_attention_validation_desktop2_20261016.log)
+passes 138 offline tests, the legacy syntax/import/shell gate and previous artifact audits.
+
+This improves the preceding serving result; it does not establish the speed goal or
+frozen labelled accuracy. Shortening head schedules, improving matrix execution,
+registering a native accuracy arm, and the full frozen decision/calibration gates remain
+open. No native labelled class scores were produced.

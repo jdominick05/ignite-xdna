@@ -385,3 +385,12 @@ Backs [exact outputs and paired speed improvement](../docs/BENCHMARKS.md#laya-sh
 - Build history: [relative-path failure](laya/bucket_mlp_v1_build_desktop2_20261016.log), [audit serialization mismatch](laya/bucket_mlp_v2_build_desktop2_20261016.log), [all four layouts pass core/init identity](laya/bucket_mlp_v3_build_desktop2_20261016.log).
 - [Device qualification and paired timing](laya/bucket_mlp_v1_same_sitting_desktop2_20261016.log): exact final outputs across fixtures/boundaries, same-session baseline versus short MLP, CPU neural/oracle calls forbidden.
 - [Validation](laya/bucket_mlp_validation_desktop2_20261016.log): 133 offline checks, syntax/import/shell gate and existing artifact/operator audits.
+
+## Laya shorter encoder attention
+
+Backs [short attention schedules and CPU comparison](../docs/BENCHMARKS.md#laya-shorter-encoder-attention-exact-outputs-cpu-still-faster-2026-10-16-desktop-2).
+
+- Build: [missing source object](laya/bucket_attention_v1_build_desktop2_20261016.log), [all four layouts and code/stack audits pass](laya/bucket_attention_v2_build_desktop2_20261016.log).
+- [Fresh-short qualification](laya/bucket_attention_v1_fresh_short_desktop2_20261016.log): three fixtures, exact final outputs, checks-only.
+- [Boundary qualification and eligible CPU/NPU comparison](laya/bucket_attention_v2_same_sitting_desktop2_20261016.log): complete model, exact schedule equivalence, CPU neural/oracle calls forbidden during native execution.
+- [Validation](laya/bucket_attention_validation_desktop2_20261016.log): 138 offline checks and legacy gates.
