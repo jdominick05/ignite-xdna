@@ -548,3 +548,7 @@ is archived with its original bytes and the SHA256 recorded before inference in 
 [paired run](laya/attention_host_paired_desktop2_20261016T0152Z.log).
 See the [paired host check](../docs/BENCHMARKS.md#laya-attention-optimization-probes-packing-improves-end-to-end-gain-unproven-2026-10-16-desktop-2)
 for method and archival timing.
+
+Qualified lookup stage attribution: [diagnostic summary](laya/lookup_stage_profile_v1_diagnostic_desktop2_20261016.log)
+and [validation](laya/stage_profile_v1_validation_desktop2_20261016.log), with
+[method and timing-ineligible counters](../docs/BENCHMARKS.md#laya-qualified-lookup-stage-diagnostic-2026-10-16-desktop-2).

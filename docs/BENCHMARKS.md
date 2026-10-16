@@ -19261,3 +19261,29 @@ SHA256 `d77ba78f5db5317edda1436b05fd24b99996a5596c50b6da5e7a750d1cab6d0e`,
 protocol identity, per-profile samples/load, correctness checks, idle witnesses and
 terminal eligibility. These measurements do not relax the original accuracy gates
 or establish a whole-model speed target beyond this fixture and its named schedules.
+
+## Laya qualified lookup stage diagnostic (2026-10-16, Desktop 2)
+
+The [stage diagnostic](../results/laya/lookup_stage_profile_v1_diagnostic_desktop2_20261016.log)
+uses the unchanged qualified lookup/short-head configuration and its first unlabelled
+91-token fixture. It checks the committed comparison registration before and after,
+warms twice and profiles three complete calls. All repeated output bits match, with
+zero CPU neural/oracle calls, five contexts and 66 dispatches. Both wrapper idle checks
+pass. The [validation](../results/laya/stage_profile_v1_validation_desktop2_20261016.log)
+passes the legacy syntax/import/shell gate and profiler import checks.
+
+This checks-only run is **timing-ineligible**. Counters measure host wall time around
+each dispatch and wait; they do not isolate device arithmetic, DMA or core cycles.
+The medians below are sums across the encoder layers within each profiled call.
+
+| Encoder group | Dispatches/call | Median wall time ms | Observed range ms |
+|---|---:|---:|---:|
+| Attention | 28 | 237.7860 | 237.5646–237.8253 |
+| MLP | 28 | 206.2935 | 205.7485–207.4480 |
+
+Attention is the larger encoder group after the lookup change. The next diagnostic
+should separate its products, attention arithmetic and normalization with unchanged
+transport before selecting a replacement. This does not establish which resource
+limits attention, qualify a new DMA scheme or supersede the eligible comparison.
+The committed summary preserves all per-stage counters and the raw SHA256; verbose
+wrapper output remains in ignored scratch. No labelled scores or frozen gates change.
