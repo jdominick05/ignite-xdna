@@ -3572,3 +3572,15 @@ and [legacy validation](../results/laya/small_lookup_profile_v1_legacy_validatio
 [registration record](../results/laya/small_lookup_profile_v1_registration_desktop2_20261016.log).
 The protocol is prepared while the accuracy scorer runs, with its registered
 sources and artifacts unchanged; the profiling device run must wait.
+
+## Laya smaller-query qualification adopted for research (2026-10-16, Desktop 2)
+
+The [full frozen result](BENCHMARKS.md#laya-smaller-query-lookupkv2-passes-full-frozen-qualification-2026-10-16-desktop-2)
+passes the original criteria and exact packing-output requirement. Use the
+one-state smaller-query/KV2 image as the qualified native M128 research control
+for subsequent profiling and candidate comparisons. Larger buckets retain their
+existing controls. The earlier timing sections' pending-qualification statements
+are superseded by this completed accuracy result; their timing caveats remain.
+The interrupted partial attempt stays preserved and is not pooled into the full
+score. The separate stage-attribution protocol is next, before further kernel
+changes. This research qualification does not change the serving daemon.

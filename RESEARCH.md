@@ -2207,5 +2207,9 @@ while the current hybrid still requires 512 rows; the qualified buffered arm tak
 693.2183 ms. The serving gain includes row bucketing, and does not establish a
 matched-M128 kernel win. Eight-thread CPU controls remain unstable despite interleaving
 and spinning controls, so the cause is unexplained and CPU ratios are withheld.
+The smaller-query lookup/KV2 arm now also passes the original full frozen gates
+and matches every qualified packing output bit. It becomes the native M128
+research control; this is known-set revalidation. [Qualification and limits](docs/BENCHMARKS.md#laya-smaller-query-lookupkv2-passes-full-frozen-qualification-2026-10-16-desktop-2).
+
 The next optimization must address the measured native-versus-hybrid gap while retaining
 the frozen gates. [Comparison, CPU investigation and limits](docs/BENCHMARKS.md#laya-native-versus-hybrid-at-matched-and-serving-schedules-2026-10-16-desktop-2).

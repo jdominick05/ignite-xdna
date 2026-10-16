@@ -19962,3 +19962,49 @@ and `timing_eligible: true`. Every sample and the raw hash are retained. No samp
 are pooled across sittings and no CPU/hybrid ratio is supplied. The candidate now
 warrants the original full frozen gates before adoption; packing remains adopted
 until that qualification completes.
+
+## Laya smaller-query lookup/KV2 passes full frozen qualification (2026-10-16, Desktop 2)
+
+The [complete score summary](../results/laya/small_lookup_accuracy_attempt2_v1_full_score_summary_desktop2_20261016.log)
+and [original-gate report](../results/laya/small_lookup_accuracy_attempt2_v1_full_report_desktop2_20261016.log)
+qualify the smaller-query arm on all 2,403 frozen items, including 2,400 labelled
+items. C0 through C5 all pass with the original thresholds, items, FP32 reference
+and temperatures unchanged. All scored logits and action probabilities, including
+unused padding, are bit-exact to the qualified packing arm.
+
+Pooled accuracy is 0.6266666667, identical to FP32; decisions agree
+on 2387/2400 items (0.9945833333). T=1 ECE is 0.1922929246
+against FP32's 0.1924122395. Per-task results are retained in the report:
+
+| Task | Labelled items | Accuracy | Accuracy change vs FP32 | T=1 ECE change |
+|---|---:|---:|---:|---:|
+| ag_news | 400 | 0.9500000000 | +0.0000000000 | -0.0013008491 |
+| emotion | 400 | 0.5925000000 | -0.0025000000 | +0.0022143104 |
+| banking77 | 400 | 0.4275000000 | +0.0025000000 | -0.0011972538 |
+| massive_en | 300 | 0.7833333333 | +0.0000000000 | -0.0000210021 |
+| xnli_en | 300 | 0.8633333333 | +0.0033333333 | +0.0032609697 |
+| sst5 | 600 | 0.3700000000 | -0.0016666667 | +0.0014561420 |
+
+The [original registration](../results/laya/small_lookup_accuracy_v1_prereg_desktop2_20261016.json)
+was committed before the first score; its source/artifact map remains unchanged
+before and after this complete attempt. The user interrupted that first attempt.
+Its persisted checkpoint contains 475 items, while its last emitted progress was
+450; the [fresh-attempt protocol](../results/laya/small_lookup_accuracy_attempt2_v1_protocol_desktop2_20261016.json)
+retains both the raw-log and checkpoint hashes and discloses those partial
+outcomes. The complete attempt starts from zero under separate output names and
+does not copy or pool partial outputs. This is known-set revalidation, with no
+refitting or claim of an independent held-out test.
+
+Every item uses five contexts and 66 dispatches with zero CPU neural/oracle calls.
+The complete process exits zero, releases keep-awake and observes idle contexts
+while still alive; the report also exits zero. The compact score record retains
+every progress/checkpoint hash and the raw archive hash. Accuracy-run timing is
+ineligible. The final scored NPZ SHA256 is
+`01ddf81f1ddb40f8da8e716fffcae76cdb3efd7af01b58bc2dcad41bdeccda3c`.
+
+This completes the qualification required by the two preceding matched timing
+sittings. The smaller-query image is now a qualified native M128 research control;
+other row buckets retain their existing images. Those sittings still support only
+a modest gain with overlapping samples and round reversals. This score supplies
+no fresh latency measurement or CPU/hybrid ratio, and does not resolve the
+matched-512 native-versus-hybrid regression.

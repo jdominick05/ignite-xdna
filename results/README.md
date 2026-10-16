@@ -723,3 +723,5 @@ Two-output lookup GEMM primitive: [initial build](laya/window_lookup_primitive_v
 - `laya/small_lookup_accuracy_attempt2_v1_protocol_desktop2_20261016.json`: preserved interrupted score and separate fresh full-attempt protocol; [decision record](../docs/DECISIONS.md#laya-smaller-query-frozen-score-after-interruption-2026-10-16-desktop-2).
 
 - `laya/small_lookup_profile_v1_{prereg,registration,validation,legacy_validation}_desktop2_20261016.*`: complete smaller-query stage-attribution protocol and offline checks; [decision record](../docs/DECISIONS.md#laya-smaller-query-stage-attribution-protocol-2026-10-16-desktop-2).
+
+- Smaller-query full frozen qualification: [complete score and raw archive hash](laya/small_lookup_accuracy_attempt2_v1_full_score_summary_desktop2_20261016.log), [C0-C5 and exact packing-equivalence report](laya/small_lookup_accuracy_attempt2_v1_full_report_desktop2_20261016.log); [measurement and limits](../docs/BENCHMARKS.md#laya-smaller-query-lookupkv2-passes-full-frozen-qualification-2026-10-16-desktop-2).
