@@ -3503,3 +3503,10 @@ frozen score on adoption. The repeat explicitly discloses that first outcomes
 were observed, pins that result's hash, and preserves each sitting separately.
 Its [registration record](../results/laya/small_lookup_compare_repeat_v1_registration_desktop2_20261016.log)
 also carries the new preregistration hash. Keep packing adopted pending evidence.
+
+The [independent repeat](BENCHMARKS.md#laya-smaller-query-lookupkv2-repeats-the-lower-pooled-median-2026-10-16-desktop-2)
+also favors the candidate by pooled median, with overlap and a per-round reversal.
+Proceed to the original full frozen decision/accuracy gates plus complete scored
+bit equivalence to qualified packing. Disclose known-set revalidation and retain
+all prior outcomes; neither serving defaults nor the adopted arm changes before
+those gates pass.

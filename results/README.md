@@ -706,6 +706,8 @@ support the [initial result](../docs/BENCHMARKS.md#laya-smaller-query-lookupkv2-
 A separate [repeat preregistration](laya/small_lookup_compare_repeat_v1_prereg_desktop2_20261016.json)
 and [registration record](laya/small_lookup_compare_repeat_v1_registration_desktop2_20261016.log)
 pin the unchanged protocol and disclose the first outcomes.
+The [independent repeat samples](laya/small_lookup_compare_repeat_v1_timing_desktop2_20261016.log)
+support the [separate-sitting result](../docs/BENCHMARKS.md#laya-smaller-query-lookupkv2-repeats-the-lower-pooled-median-2026-10-16-desktop-2).
 
 Two-output lookup GEMM primitive: [initial build](laya/window_lookup_primitive_v1_build_desktop2_20261016.log),
 [explicit control/address build](laya/window_lookup_primitive_v2_controls_build_desktop2_20261016.log),

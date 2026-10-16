@@ -19934,3 +19934,31 @@ Sources, artifacts and qualification records remain unchanged. The bounded run
 exits zero with no foreign contention and `timing_eligible: true`. The summary
 retains every sample and the raw archive hash. No CPU/hybrid ratio, cross-sitting
 pool or new full frozen accuracy result is supplied. Packing remains adopted.
+
+## Laya smaller-query lookup/KV2 repeats the lower pooled median (2026-10-16, Desktop 2)
+
+The [independent eligible repeat](../results/laya/small_lookup_compare_repeat_v1_timing_desktop2_20261016.log)
+uses the [repeat preregistration](../results/laya/small_lookup_compare_repeat_v1_prereg_desktop2_20261016.json)
+committed as `884802e` before execution. Sources, images, request and sampling
+protocol are unchanged; first outcomes are explicitly disclosed. Each sitting
+has its own matched control and remains separate:
+
+| Sitting | Packing median ms | Smaller-query median ms |
+|---|---:|---:|
+| First | 471.2098 | 447.0998 |
+| Repeat | 466.8058 | 446.7627 |
+
+The repeat's packing range is 406.3712–483.5195 ms and the candidate's is
+399.9635–463.3133 ms. Round medians for packing/candidate are
+466.8058/446.7627, 455.9237/461.1233 and 469.3321/423.3244 ms. The lower pooled
+candidate median recurs, while ranges overlap and one repeat round favors packing.
+This supports a modest gain for the registered request; it does not establish
+universal ordering, a large speedup, or a single hardware cause.
+
+All timed outputs remain bit-exact, with zero CPU neural/oracle calls, five
+contexts and 66 dispatches. Every profile closes to idle, all registered identities
+remain unchanged, and the bounded process exits zero with no foreign contention
+and `timing_eligible: true`. Every sample and the raw hash are retained. No samples
+are pooled across sittings and no CPU/hybrid ratio is supplied. The candidate now
+warrants the original full frozen gates before adoption; packing remains adopted
+until that qualification completes.
