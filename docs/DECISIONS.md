@@ -3940,3 +3940,32 @@ reset consecutive optimization kills from two to zero. Retain both prior kills a
 negative results. The matched hybrid still wins, so the end-to-end goal stays open.
 Next attribute the improved arm's stages before another candidate; do not infer the
 remaining split from the old MLP image. Original serving and M128 control stay unchanged.
+
+
+## Next full512 candidate: attention FIFO depth2 (2026-10-17, Desktop 2)
+
+The [adopted-arm profile](BENCHMARKS.md#laya-adopted-full512-path-is-now-attention-dominated-2026-10-17-desktop-2)
+makes combined encoder attention/projection/normalization the largest remaining
+stage. Try the existing attention FIFO builder at M512 with Q/KV/L2 Q depth2,
+preserving the arithmetic kernel object and the newly adopted polynomial512 MLP.
+Expected complete-model saving is 250 ms (hypothesis); kill below 100 ms or if any
+paired adoption round loses. Kill on development numerical mismatch, missing
+full frozen accuracy, changed row schedule or fallback before timing. No speed
+claim follows from compilation or diagnostic stage times. Require full512 encoder
+and heads for every logical length, original masks, five runtime state entries,
+66 dispatches and zero CPU neural fallback. Register one adoption measurement
+only after the original full frozen gates pass. Original serving and M128 control
+stay unchanged. This is a new full512 buffering experiment, not a repeat of the
+previous M128 buffering measurement; adoption kill count is currently zero.
+
+
+## Full512 attention depth2 frozen registration (2026-10-17, Desktop 2)
+
+The [complete development prerequisites](BENCHMARKS.md#laya-attention-depth2-at-full512-passes-development-2026-10-17-desktop-2)
+pass without changing arithmetic, full512 row scheduling, the adopted polynomial
+MLP or original heads. Commit the 321-identity frozen registration before the first
+labelled score. Reuse the original full-set scoring/report code with a separate arm
+name; the original criteria/items/reference/temperatures remain binding. No eligible
+timing until all C0-C5 pass. The fixed 250 ms expected / 100 ms minimum saving and
+every paired round winning remain unchanged. No new optimization kill or adoption
+is established by development or registration; consecutive kills remain zero.

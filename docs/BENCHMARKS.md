@@ -20447,3 +20447,45 @@ the consecutive optimization-kill count to zero; it does not replace the qualifi
 M128 research control or the original serving path. Earlier full512 figures remain
 historical controls. Re-profile the improved arm before choosing the next target;
 the older original-image MLP phase attribution cannot locate its remaining costs.
+
+
+## Laya adopted full512 path is now attention dominated (2026-10-17, Desktop 2)
+
+The [improved-arm diagnostic](../results/laya/polynomial512_profile_v1_desktop2_20261017.log) retains complete-output bit
+equivalence to the prior control for three fixtures and repeatability for two warmups
+plus three instrumented samples. Median complete wall is 1891.5594 ms;
+encoder attention/projection/normalization totals
+1038.2982 ms and encoder MLP totals
+694.3462 ms. These are per-group medians,
+not additive partitions of the median request. All 66 stages are accounted for,
+including 28 attention and 28 MLP stages. Five runtime state entries, zero CPU
+neural/oracle calls, unchanged registered files and idle cleanup pass. The wrapper
+is explicitly timing-ineligible. Stage wall includes driver, waits and DMA; it
+cannot identify core cycles, physical traffic or the attention subphase bottleneck.
+The record retains every stage sample and raw/legacy validation hashes.
+
+
+## Laya attention depth2 at full512 passes development (2026-10-17, Desktop 2)
+
+The [offline build](../results/laya/attention_fifo_m512_v1_build_desktop2_20261017.log)
+uses the existing attention FIFO builder at M512 with Q/KV/L2 Q depth2 and the exact
+original arithmetic object. Audited code occupies 15,760 bytes/core and conservative
+stack bound is 4,768 bytes within 4,864 reserved. The adopted polynomial512 MLP and
+original full512 heads are unchanged. The [complete development record](../results/laya/attention_fifo_m512_v1_full_desktop2_20261017.log)
+passes six local/global representative-layer checks and all 25 complete boundary,
+fixture and option-mask cases bit-for-bit against that adopted control. Every
+logical length schedules 512 encoder/head rows, with five runtime state entries,
+66 dispatches, all 28 candidate attention stages and zero CPU neural/oracle calls.
+Source/artifact maps remain unchanged; bounded wrapper exits zero with no observed
+foreign contention and closes idle. The wrapper is timing-ineligible, and no latency
+or frozen-accuracy result follows from these development passes.
+
+The [offline validation](../results/laya/attention_fifo_m512_v1_validation_desktop2_20261017.log)
+records 33 passing checks for restoration of control instructions/mask addresses,
+source/arithmetic/row policy, development prerequisites and original frozen criteria,
+plus the legacy syntax/import gate. The [frozen registration](../results/laya/attention_fifo_m512_accuracy_v1_prereg_desktop2_20261017.json)
+pins 321 identities before labelled outputs; [registration log](../results/laya/attention_fifo_m512_accuracy_v1_registration_desktop2_20261017.log).
+Original C0-C5, full item set, FP32 reference and temperatures are unchanged. This
+is known-set revalidation. Full scoring, its original report and one eligible
+registered adoption comparison remain required. Expected saving is 250 ms and
+minimum saving is 100 ms with all paired rounds winning; no adoption yet.

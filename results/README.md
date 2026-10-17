@@ -780,3 +780,10 @@ Two-output lookup GEMM primitive: [initial build](laya/window_lookup_primitive_v
 
 
 - Full512 polynomial adoption: [all nine arm profiles, 45 samples, immutable raw hashes and reconstructed verdict](laya/polynomial512_compare_v1_timing_desktop2_20261017.log); [gain, remaining hybrid gap and scope](../docs/BENCHMARKS.md#laya-full512-polynomial-adopted-speed-goal-still-open-2026-10-17-desktop-2).
+
+
+- Adopted polynomial512 wall attribution: [all stages, three complete bit checks and cleanup](laya/polynomial512_profile_v1_desktop2_20261017.log); [remaining stage costs](../docs/BENCHMARKS.md#laya-adopted-full512-path-is-now-attention-dominated-2026-10-17-desktop-2).
+
+
+- Full512 attention buffering: [build and audit](laya/attention_fifo_m512_v1_build_desktop2_20261017.log), [six representative checks and all 25 complete cases](laya/attention_fifo_m512_v1_full_desktop2_20261017.log), [33 offline checks and legacy gate](laya/attention_fifo_m512_v1_validation_desktop2_20261017.log); [development scope](../docs/BENCHMARKS.md#laya-attention-depth2-at-full512-passes-development-2026-10-17-desktop-2).
+- Full512 attention frozen validation: [321-identity preregistration](laya/attention_fifo_m512_accuracy_v1_prereg_desktop2_20261017.json), [registration record](laya/attention_fifo_m512_accuracy_v1_registration_desktop2_20261017.log); [policy before labelled scoring](../docs/DECISIONS.md#full512-attention-depth2-frozen-registration-2026-10-17-desktop-2).
