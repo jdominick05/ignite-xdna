@@ -755,3 +755,6 @@ Two-output lookup GEMM primitive: [initial build](laya/window_lookup_primitive_v
 
 - Cached-Wi full frozen qualification: [all 2,403 scored outputs and checkpoints](laya/cached_dispatch_accuracy_v1_full_score_summary_desktop2_20261017.log), [original C0-C5 and exact-control report](laya/cached_dispatch_accuracy_v1_report_desktop2_20261017.log); [accuracy result and timing limits](../docs/BENCHMARKS.md#laya-self-contained-wi-cache-passes-full-frozen-accuracy-2026-10-17-desktop-2).
 - Cached-Wi adoption comparison: [preregistration](laya/cached_dispatch_compare_v1_prereg_desktop2_20261017.json), [registration record](laya/cached_dispatch_compare_v1_registration_desktop2_20261017.log), [decision checks](laya/cached_dispatch_compare_v1_validation_desktop2_20261017.log), [legacy gate](laya/cached_dispatch_compare_v1_legacy_summary_desktop2_20261017.log); [fixed gain and kill line](../docs/DECISIONS.md#laya-cached-wi-adoption-comparison-2026-10-17-desktop-2).
+
+
+- [Cached-Wi eligible adoption timing](laya/cached_dispatch_compare_v1_timing_desktop2_20261017.log): all samples, wrapper eligibility, raw hash and validated KILL decision; [failed bar and next target](../docs/BENCHMARKS.md#laya-wi-cache-fails-its-adoption-bar-2026-10-17-desktop-2).

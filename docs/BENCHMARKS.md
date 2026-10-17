@@ -20268,3 +20268,22 @@ Scoring is explicitly timing-ineligible, and host contention was observed;
 no latency is derived from it. The [one adoption comparison](DECISIONS.md#laya-cached-wi-adoption-comparison-2026-10-17-desktop-2)
 is the next gate. Qualification alone changes neither the research speed control
 nor the original serving path. The 512-token speed objective remains open.
+
+
+## Laya Wi cache fails its adoption bar (2026-10-17, Desktop 2)
+
+The [single eligible preregistered comparison](../results/laya/cached_dispatch_compare_v1_timing_desktop2_20261017.log)
+kills the self-contained Wi cache: pooled median complete latency is 423.9359 ms
+for the qualified control and 421.2487 ms for the cache, saving only 2.6872 ms
+against the fixed 10 ms minimum. The three paired-round median savings are
+-5.2189, 21.8920 and 22.3831 ms; the first round also fails the required consistent
+win. Each arm has 15 measured requests across three alternating fresh-session
+pairs on the same 91-token/M128 input. All output bits remain exact, original
+full frozen gates passed beforehand, CPU neural calls remain zero and cleanup
+is idle; the wrapper exits zero with timing_eligible true and no observed foreign
+contention. Reduced scheduled query traffic did not establish an adoptable
+end-to-end gain; setup cost or the remaining stages may explain the outcome,
+but this run does not isolate that cause. The qualified control and original
+serving path stay unchanged. This is the first killed optimization under the
+current goal. Do not re-qualify around this result; move to matched-512 stage
+attribution and its largest changeable cost.

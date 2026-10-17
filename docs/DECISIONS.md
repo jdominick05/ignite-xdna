@@ -3841,3 +3841,9 @@ adoption. [Six parser/decision checks](../results/laya/cached_dispatch_compare_v
 and the [legacy gate](../results/laya/cached_dispatch_compare_v1_legacy_summary_desktop2_20261017.log)
 pass. This measures an incremental M128 change, not a CPU/hybrid ratio or a
 512-token speed win. Larger buckets and the original serving path are unchanged.
+
+
+The [completed cached-Wi adoption comparison](BENCHMARKS.md#laya-wi-cache-fails-its-adoption-bar-2026-10-17-desktop-2)
+returns KILL under the committed rule. Keep the qualified smaller-query control;
+do not apply this cache to other phases or reopen it around the failed timing bar.
+The next target is attribution of the matched-512 native/hybrid gap.
