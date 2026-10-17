@@ -20195,3 +20195,33 @@ explicitly timing-ineligible. This supersedes the isolated cache's one-load limi
 and its synthetic-input-only evidence; it establishes no speed gain, complete
 MLP compatibility, all-column equivalence or full-model accuracy result. Those
 gates remain open before adoption, with the original qualified control unchanged.
+
+
+## Laya all-column cached MLP layers pass but full integration stalls (2026-10-17, Desktop 2)
+
+The [complete cached MLP layer replay](../results/laya/cached_mlp_v3_layer_desktop2_20261017.log)
+passes encoder layers 0 and 1 on three qualified NPU-produced fixtures. Unlike
+the earlier Wi-only prototype, each dispatch executes all four columns and
+Wi, GeGLU, Wo and normalization. One cold dispatch followed by five warm
+dispatches in a single context matches all 206,909,696 arena words in each case,
+including outputs and untouched regions. Diagnostic host copies capture inputs
+and reference arenas; they are not serving-path operations. The harness records
+zero CPU neural/oracle calls, exits zero and verifies idle after closing while
+the process is alive. Timing is ineligible.
+
+The [full-model integration attempt](../results/laya/cached_mlp_v3_full_failure_desktop2_20261017.log)
+then fails on `mlp_1_m128`, after the first cached MLP completes and another
+context executes. It produces no completed full-model candidate fixture. The
+bounded process reports the dispatch failure, exits 139 after a segmentation
+fault and its post-run witness reports no contexts running. A later read-only
+idle check also sees no contexts; this does not establish device recovery or
+successful new context creation. No administrator restart or retry was issued.
+The exact original runner source and raw failure log have hashes in the compact
+record. All later full-model/frozen/timing gates remain unpassed.
+
+The transition from isolated warm success to interleaved failure challenges the
+runner's DMA-state persistence assumption; its precise mechanism is unproven.
+The [engineering record and offline replacement](DECISIONS.md#laya-all-column-cached-mlp-and-context-boundary-limit-2026-10-17-desktop-2)
+keep that uncertainty explicit. No speed number or adoption claim follows from
+these runs. The full-model integration failure takes precedence over the
+isolated layer success when assessing readiness.

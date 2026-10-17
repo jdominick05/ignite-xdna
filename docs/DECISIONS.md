@@ -3746,3 +3746,56 @@ or preregistered here. All-column transport proof, complete MLP/model parity and
 the original frozen full-set gates must pass before an adoption comparison counts.
 The qualified control, serving path and thresholds remain unchanged. No candidate
 has been adopted or killed by this correctness-only result.
+
+
+## Laya all-column cached MLP and context boundary limit (2026-10-17, Desktop 2)
+
+The [build history](../results/laya/cached_mlp_v3_build_summary_desktop2_20261017.log)
+extends query residency to all four columns with independent cache and normal
+query credits. Each column reserves a contiguous cache region and moves its two
+normal query buffers and two weight buffers into disjoint remaining MemTile
+space. The output buffer stays at its original address. The cache uses four
+preload descriptors and four replay descriptors per column. Qualified core ELF
+code, stack/layout audits and code/data/enable CDO files remain identical.
+Cache done/ready locks are separate from the normal query locks; no core locks
+are reset. Normal producer/consumer chains become finite and end on packet pairs.
+Their repeat counts come from actual phase traffic, including unequal GeGLU
+column counts, rather than an assumed uniform output split.
+
+The compiler removes unqueued normal descriptor blocks from initialization.
+The first working image therefore installs those descriptors in its cold
+runtime. Its [compiled proof](../results/laya/cached_mlp_v3_compiled_proof_desktop2_20261017.log)
+checks the entire CDO state, 8,927,360 delivered query-word addresses and the
+exact positions of phase queue writes. Both cold and warm streams schedule
+439 Shim queues and 173 completed waits. These are offline schedule counts,
+not measured physical DDR traffic or bandwidth. The warm stream has 80 task
+queue writes; the cold stream adds 512 descriptor writes. All other arithmetic,
+packet words and stage boundaries remain those of the qualified control.
+
+The [complete isolated layers pass](BENCHMARKS.md#laya-all-column-cached-mlp-layers-pass-but-full-integration-stalls-2026-10-17-desktop-2),
+but the full-model attempt fails at the second MLP. The runner's once-per-context
+cold/warm choice assumes initialized DMA state survives intervening contexts.
+That assumption is unqualified. Context initialization being replayed, task
+queues being restored differently, or another context interaction remain
+explanations; the failure alone does not distinguish them. The failed runner's
+default entry point is disabled before hardware setup. Do not retry it or treat
+the isolated warm-layer result as proof of cross-context residency.
+
+The replacement [self-contained dispatch build](../results/laya/cached_mlp_dispatch_v3_build_desktop2_20261017.log)
+has no query tasks queued by its initialization CDO. Every dispatch installs all
+query descriptors and queues its finite work. It adds 768 descriptor writes
+before the same 80 task queue writes, retaining the qualified core code and
+unchanged lock credits. The setup is intended to work from either initialization
+or a completed prior dispatch, without assuming a particular context-resume
+policy or resetting DMA/core locks. Its complete CDO and runtime address proof
+passes offline. The proof's context-policy flag describes that conditional
+initialization contract, not a silicon result. This replacement has not run on
+the device; it needs bounded layer and interleaved full-model checks before
+frozen qualification or timing. The extra setup cost may erase the cache gain.
+
+[74 offline/mutation/privacy checks](../results/laya/cached_mlp_v3_validation_desktop2_20261017.log)
+and the [legacy gate](../results/laya/cached_mlp_v3_legacy_summary_desktop2_20261017.log)
+pass. The provisional M128 expectation and adoption kill line from the previous
+cache protocol remain prospective. No candidate is adopted and no timing kill
+has been scored; all frozen gates, serving defaults and the qualified control
+remain unchanged.
