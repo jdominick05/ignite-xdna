@@ -3914,3 +3914,18 @@ wrapper eligibility. Foreign contention invalidates timing. No altered metric,
 shorter row schedule, relaxed numerical gate or repeated favorable timing is
 authorized by preparing this runner. The consecutive optimization-kill count
 remains two and the qualified control and serving path are unchanged.
+
+
+## Laya full512 polynomial single adoption registration (2026-10-17, Desktop 2)
+
+The [original full frozen gates now pass](BENCHMARKS.md#laya-full512-polynomial-passes-the-original-frozen-gates-2026-10-17-desktop-2).
+The [one adoption registration](../results/laya/polynomial512_compare_v1_prereg_desktop2_20261017.json)
+and [registration record](../results/laya/polynomial512_compare_v1_registration_desktop2_20261017.log)
+pin 288 comparison identities and the completed accuracy proof before timing.
+They instantiate the previously prepared protocol without changing its metric,
+expected saving, minimum gain, arm order or success rule. Expected saving remains
+350 ms, adoption requires at least 200 ms plus every native paired round winning,
+and goal success additionally requires beating the same-sitting matched hybrid.
+Qualification alone changes neither the original serving path nor the qualified
+short-row research control. The next step is the single eligible comparison;
+no timing result or new adoption is established by this registration.

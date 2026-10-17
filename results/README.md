@@ -771,3 +771,9 @@ Two-output lookup GEMM primitive: [initial build](laya/window_lookup_primitive_v
 
 
 - Fixed-512 polynomial adoption runner: [offline prerequisites, decision and log-verifier checks](laya/polynomial512_compare_v1_offline_desktop2_20261017.log); [proposed post-accuracy protocol](../docs/DECISIONS.md#laya-full512-adoption-runner-prepared-while-accuracy-runs-2026-10-17-desktop-2). No timing preregistration or performance result yet.
+
+
+- Fixed-512 polynomial full frozen validation: [all 2,403 outputs and 97 checkpoints](laya/polynomial512_accuracy_v1_full_score_summary_desktop2_20261017.log), [original C0-C5 report and prior-native bit comparison](laya/polynomial512_accuracy_v1_report_desktop2_20261017.log); [accuracy result and timing limits](../docs/BENCHMARKS.md#laya-full512-polynomial-passes-the-original-frozen-gates-2026-10-17-desktop-2).
+
+
+- Full512 polynomial adoption measurement: [single preregistration](laya/polynomial512_compare_v1_prereg_desktop2_20261017.json), [registration record](laya/polynomial512_compare_v1_registration_desktop2_20261017.log); [fixed decision after full accuracy PASS](../docs/DECISIONS.md#laya-full512-polynomial-single-adoption-registration-2026-10-17-desktop-2).

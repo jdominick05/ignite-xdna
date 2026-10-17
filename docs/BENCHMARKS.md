@@ -20388,3 +20388,31 @@ pin the original acceptance criteria and full-512 policy before labelled outputs
 The original full frozen gates are still required before one registered adoption
 timing. The qualified research control and original serving path remain unchanged;
 this development pass neither adopts the candidate nor changes the kill count.
+
+
+## Laya full512 polynomial passes the original frozen gates (2026-10-17, Desktop 2)
+
+The [complete frozen score record](../results/laya/polynomial512_accuracy_v1_full_score_summary_desktop2_20261017.log)
+finishes all 2,403 items with fixed512 encoder/head rows for every request,
+including short logical inputs. Its [original C0-C5 report](../results/laya/polynomial512_accuracy_v1_report_desktop2_20261017.log)
+passes every criterion on all 2,400 labelled items. Agreement with frozen FP32
+is 0.99375 (2,385/2,400), pooled accuracy is
+0.6266666666666667, pooled accuracy delta is zero and T=1 ECE delta
+is +0.00014430245755273. Every captured logit and action-probability bit,
+including unused score padding, is also identical to the prior qualified
+bucketed native arm; this comparison is diagnostic and does not substitute for
+the original FP32 acceptance gates.
+
+The original items, reference, temperatures and thresholds are unchanged. This
+is disclosed known-set revalidation. The committed accuracy registration pins
+289 source/artifact identities, checked before and after scoring. Execution
+retains five runtime context states, 66 dispatches and 28 original-polynomial
+MLP stages, with zero CPU neural/oracle calls and idle cleanup while the child
+is alive. The wrapper exits zero without observed foreign contention and is
+explicitly timing-ineligible. All 97 progress checkpoints and the immutable
+raw-log hash are retained. Final NPZ SHA256 is
+`58a56f72ae448c5158b91df6c962fc8d191e5f4e0dd9bf2f30025880160ad48a`.
+Qualification establishes no new speed result or serving change. The expected
+350 ms saving, 200 ms adoption minimum and consistent paired wins still require
+the single registered complete-model comparison. The consecutive optimization
+kill count remains two until that measurement decides adoption.
