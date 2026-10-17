@@ -20342,3 +20342,26 @@ No optimization is adopted by this attribution, the qualified control and servin
 path are unchanged, and the consecutive optimization-kill count remains one.
 The [legacy syntax/import gate](../results/laya/matched512_profile_v1_legacy_summary_desktop2_20261017.log)
 passes; it supplies no additional hardware evidence.
+
+
+## Laya M512 lookup GeGLU fails development parity (2026-10-17, Desktop 2)
+
+The [512-row lookup build](../results/laya/geglu_lookup_m512_v1_build_desktop2_20261017.log)
+extends the existing interpolated Gaussian-tail lookup while retaining original
+GEMM, finish, dispatch and normalization objects. The [complete-model development run](../results/laya/geglu_lookup_m512_v1_full_desktop2_20261017.log)
+is KILLED at `length255_step11`: maximum logit error 0.02707112, relative L2
+0.03238662 against the existing 0.02 limit, with one element also failing the
+existing absolute-plus-relative check (atol 0.01, rtol 0.02). Top option agrees
+and action probabilities are exact, which does not waive the numerical gate.
+Fourteen cases pass before this fifteenth attempted case fails. All requests use
+512 encoder/head rows, including shorter logical inputs; each selects 28 lookup
+MLP stages, with five runtime contexts, 66 dispatches and zero CPU neural/oracle
+calls. The checks-only wrapper exits 1, observes no foreign contention, and
+confirms no device contexts after cleanup. The unchanged helper source and
+build/source hashes remain in the record. The prospective expectation was a
+600 ms saving with a 300 ms adoption minimum; no eligible timing or full frozen
+scoring was run. This is the second consecutive optimization kill. Keep the
+qualified control, original serving path and tolerances unchanged; do not
+re-qualify this lookup candidate around the failure. [Seven offline selection
+and rejection checks plus the legacy gate](../results/laya/geglu_lookup_m512_v1_validation_desktop2_20261017.log)
+pass and do not override the device result.

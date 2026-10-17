@@ -3858,3 +3858,8 @@ frozen acceptance criteria and research control unchanged. Before development,
 the expected complete saving is 600 ms and the adoption minimum is 300 ms, with
 consistent paired wins required. Preregister the adoption measurement after full
 qualification; no further Wi-cache salvage or timing requalification is warranted.
+
+
+The [M512 lookup candidate fails complete development numerical parity](BENCHMARKS.md#laya-m512-lookup-geglu-fails-development-parity-2026-10-17-desktop-2).
+Retain the failure and original tolerances. No full frozen qualification or
+adoption timing follows this candidate; the optimization-kill count is now two.
