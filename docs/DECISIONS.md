@@ -3881,3 +3881,36 @@ the new arm has no labelled outputs at registration. All original full frozen
 gates precede the single adoption measurement. The prior bucketed native score
 is provenance and a diagnostic bit comparison, not a replacement FP32 reference.
 No serving change or new optimization kill follows this development pass.
+
+
+## Laya full512 adoption runner prepared while accuracy runs (2026-10-17, Desktop 2)
+
+`tools/laya_polynomial512_compare.py` prepares the single adoption comparison;
+no timing preregistration or measurement exists yet. Registration refuses until
+the complete original frozen report passes, the scored file is complete and its
+source map matches the committed accuracy registration. Preparation preserves
+all 289 identities of the accuracy run currently in progress. The
+[offline checks](../results/laya/polynomial512_compare_v1_offline_desktop2_20261017.log)
+pass 22 tests and the legacy syntax/import gate; this is no inference or speed
+evidence.
+
+After full qualification, the proposed adoption protocol keeps the previously
+fixed 350 ms expected saving and 200 ms minimum, requiring every native paired
+round to favor the candidate. Three serialized rounds use control/candidate/hybrid,
+hybrid/candidate/control and control/candidate/hybrid order, each with two warmups
+and five samples per arm. Both native arms force full512 scheduling for the same
+logical91-token request and retain five runtime states, 66 dispatches and zero
+CPU neural/oracle calls. Hybrid runs separately with one context and its existing
+118 NPU/two host products. The host segments are explicitly counted. The metric
+is external wall time around the existing inference entry point, excluding setup
+and output checks; hybrid feed construction remains outside as in the prior
+matched comparison.
+
+An incremental adoption does not establish the speed objective: the candidate
+must additionally beat the same-sitting hybrid pooled median and every round
+median. Log verification checks the committed timing-registration hash, accuracy
+proof, sample coverage, execution policy, summary arithmetic, idle cleanup and
+wrapper eligibility. Foreign contention invalidates timing. No altered metric,
+shorter row schedule, relaxed numerical gate or repeated favorable timing is
+authorized by preparing this runner. The consecutive optimization-kill count
+remains two and the qualified control and serving path are unchanged.
