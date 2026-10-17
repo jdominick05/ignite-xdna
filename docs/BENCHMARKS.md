@@ -20365,3 +20365,26 @@ qualified control, original serving path and tolerances unchanged; do not
 re-qualify this lookup candidate around the failure. [Seven offline selection
 and rejection checks plus the legacy gate](../results/laya/geglu_lookup_m512_v1_validation_desktop2_20261017.log)
 pass and do not override the device result.
+
+
+## Laya M512 polynomial preserves complete development outputs (2026-10-17, Desktop 2)
+
+The distinct [original-polynomial candidate](../results/laya/geglu_polynomial_m512_v1_build_desktop2_20261017.log)
+compiles unchanged `mlp.cc` at O3 with depth-two FIFOs, keeping the original GEMM,
+finish, dispatch and normalization objects. It does not use the killed lookup
+approximation. The [complete development run](../results/laya/geglu_polynomial_m512_v1_full_desktop2_20261017.log)
+passes all 25 fixture, length-boundary and option-mask cases with every output bit
+identical to the original full-512 arm. Every request schedules 512 encoder/head
+rows, including short logical inputs, and selects all 28 polynomial MLP stages.
+The run retains five runtime contexts and 66 dispatches, zero CPU neural/oracle
+calls, unchanged registered artifacts and idle cleanup. The wrapper exits zero
+and is explicitly timing-ineligible. The prospective expectation is 350 ms of
+complete saving with a 200 ms adoption minimum and consistent paired wins;
+no speed improvement is established here. [Fourteen offline checks and the
+legacy gate](../results/laya/geglu_polynomial_m512_v1_validation_desktop2_20261017.log)
+pass. The [new frozen accuracy registration](../results/laya/polynomial512_accuracy_v1_prereg_desktop2_20261017.json)
+and its [registration record](../results/laya/polynomial512_accuracy_v1_registration_desktop2_20261017.log)
+pin the original acceptance criteria and full-512 policy before labelled outputs.
+The original full frozen gates are still required before one registered adoption
+timing. The qualified research control and original serving path remain unchanged;
+this development pass neither adopts the candidate nor changes the kill count.

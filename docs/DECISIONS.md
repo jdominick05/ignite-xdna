@@ -3863,3 +3863,21 @@ qualification; no further Wi-cache salvage or timing requalification is warrante
 The [M512 lookup candidate fails complete development numerical parity](BENCHMARKS.md#laya-m512-lookup-geglu-fails-development-parity-2026-10-17-desktop-2).
 Retain the failure and original tolerances. No full frozen qualification or
 adoption timing follows this candidate; the optimization-kill count is now two.
+
+
+## Laya original-polynomial full512 accuracy registration (2026-10-17, Desktop 2)
+
+After the lookup kill, the [distinct polynomial development result](BENCHMARKS.md#laya-m512-polynomial-preserves-complete-development-outputs-2026-10-17-desktop-2)
+passes complete bit parity while retaining the original formula/constants.
+The [audited image](../results/laya/geglu_polynomial_m512_v1_build_desktop2_20261017.log)
+has 11,792 code bytes per core and a conservative 3,456-byte stack bound within
+the explicit 5,376-byte reservation; these are build audits, not a silicon timing.
+The prospective expected saving is 350 ms, with a 200 ms adoption minimum and
+consistent paired wins required. The [accuracy registration](../results/laya/polynomial512_accuracy_v1_prereg_desktop2_20261017.json)
+pins 289 identities and schedules 512 encoder/head rows for every frozen item.
+Its original C0-C5 thresholds, items, FP32 reference, temperatures and decisions
+are unchanged. Prior frozen outcomes are disclosed as known-set revalidation;
+the new arm has no labelled outputs at registration. All original full frozen
+gates precede the single adoption measurement. The prior bucketed native score
+is provenance and a diagnostic bit comparison, not a replacement FP32 reference.
+No serving change or new optimization kill follows this development pass.

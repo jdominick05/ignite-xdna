@@ -764,3 +764,7 @@ Two-output lookup GEMM primitive: [initial build](laya/window_lookup_primitive_v
 
 
 - M512 lookup GeGLU: [audited build](laya/geglu_lookup_m512_v1_build_desktop2_20261017.log), [complete-model numerical failure](laya/geglu_lookup_m512_v1_full_desktop2_20261017.log), [offline/legacy checks](laya/geglu_lookup_m512_v1_validation_desktop2_20261017.log); [KILL verdict and unchanged tolerances](../docs/BENCHMARKS.md#laya-m512-lookup-geglu-fails-development-parity-2026-10-17-desktop-2).
+
+
+- Original-polynomial M512: [O3/depth-two build](laya/geglu_polynomial_m512_v1_build_desktop2_20261017.log), [25 complete bit-parity cases](laya/geglu_polynomial_m512_v1_full_desktop2_20261017.log), [offline/legacy validation](laya/geglu_polynomial_m512_v1_validation_desktop2_20261017.log); [development scope](../docs/BENCHMARKS.md#laya-m512-polynomial-preserves-complete-development-outputs-2026-10-17-desktop-2).
+- Fixed-512 polynomial frozen arm: [original-gate registration](laya/polynomial512_accuracy_v1_prereg_desktop2_20261017.json), [registration record](laya/polynomial512_accuracy_v1_registration_desktop2_20261017.log); [policy and pre-timing gates](../docs/DECISIONS.md#laya-original-polynomial-full512-accuracy-registration-2026-10-17-desktop-2).
