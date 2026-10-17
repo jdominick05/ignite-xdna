@@ -787,3 +787,6 @@ Two-output lookup GEMM primitive: [initial build](laya/window_lookup_primitive_v
 
 - Full512 attention buffering: [build and audit](laya/attention_fifo_m512_v1_build_desktop2_20261017.log), [six representative checks and all 25 complete cases](laya/attention_fifo_m512_v1_full_desktop2_20261017.log), [33 offline checks and legacy gate](laya/attention_fifo_m512_v1_validation_desktop2_20261017.log); [development scope](../docs/BENCHMARKS.md#laya-attention-depth2-at-full512-passes-development-2026-10-17-desktop-2).
 - Full512 attention frozen validation: [321-identity preregistration](laya/attention_fifo_m512_accuracy_v1_prereg_desktop2_20261017.json), [registration record](laya/attention_fifo_m512_accuracy_v1_registration_desktop2_20261017.log); [policy before labelled scoring](../docs/DECISIONS.md#full512-attention-depth2-frozen-registration-2026-10-17-desktop-2).
+
+
+- Full512 attention adoption runner: [26 final offline decision, evidence, order and factory checks; active accuracy identities unchanged](laya/attention512_compare_v2_offline_desktop2_20261017.log), [initial 24-check preparation, superseded](laya/attention512_compare_v1_offline_desktop2_20261017.log); [proposed protocol after full accuracy](../docs/DECISIONS.md#full512-attention-adoption-runner-prepared-during-scoring-2026-10-17-desktop-2). No timing registration or speed result yet.

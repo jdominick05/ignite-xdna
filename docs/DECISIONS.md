@@ -3969,3 +3969,30 @@ name; the original criteria/items/reference/temperatures remain binding. No elig
 timing until all C0-C5 pass. The fixed 250 ms expected / 100 ms minimum saving and
 every paired round winning remain unchanged. No new optimization kill or adoption
 is established by development or registration; consecutive kills remain zero.
+
+
+## Full512 attention adoption runner prepared during scoring (2026-10-17, Desktop 2)
+
+The [final offline comparison validation](../results/laya/attention512_compare_v2_offline_desktop2_20261017.log)
+passes 26 checks, including explicit construction of the adopted polynomial512
+control and distinct attention512 candidate. It checks the fixed 100 ms adoption
+minimum, every paired round winning, separation of adoption from the matched-hybrid
+goal, incomplete/invalid samples, original full frozen report, wrapper eligibility,
+execution policy, summary consistency, serialized arm order and binding to the committed
+registration and fixed protocol. The initial 24-check preparation record is retained
+beside this 26-check final runner validation.
+The legacy syntax/import gate passes, and all 321 active accuracy identities remain
+unchanged. This preparation creates no timing registration or performance result.
+
+After original full C0-C5 pass, use one committed registration for three fresh
+serialized rounds: control/attention/hybrid, hybrid/attention/control,
+control/attention/hybrid. Two warmups and five samples per arm yield 15 samples
+per arm. Both native arms schedule full512 encoder and heads for the same logical
+91-token request. The control retains the adopted polynomial512 MLP and original
+attention, not the older unoptimized full512 control. The candidate adds only
+attention FIFO depth2. Expected saving remains 250 ms, minimum 100 ms and every
+paired native round must win. Beating same-sitting hybrid pooled and in every
+round is additionally required for the matched512 goal. Revalidate the full frozen
+source/score/report identities of both native arms before and after the measurement.
+The verifier reconstructs sample medians and checks eligibility and execution policy.
+No adoption timing before full accuracy passes; no favorable retiming or metric change.
