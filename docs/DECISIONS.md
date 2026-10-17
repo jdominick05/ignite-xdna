@@ -3819,3 +3819,25 @@ scoring, then require the complete frozen report before adoption timing.
 [83 offline/privacy checks](../results/laya/cached_dispatch_v1_validation_desktop2_20261017.log)
 and the [legacy gate](../results/laya/cached_dispatch_v1_legacy_summary_desktop2_20261017.log)
 pass. Full-set accuracy and performance are still pending at this registration.
+
+
+## Laya cached Wi adoption comparison (2026-10-17, Desktop 2)
+
+The [original full frozen gates and extra bit equivalence pass](BENCHMARKS.md#laya-self-contained-wi-cache-passes-full-frozen-accuracy-2026-10-17-desktop-2)
+before registering the [single adoption measurement](../results/laya/cached_dispatch_compare_v1_prereg_desktop2_20261017.json).
+Its [registration record](../results/laya/cached_dispatch_compare_v1_registration_desktop2_20261017.log)
+pins the qualified control, self-contained cached arm, frozen result and timing
+source. Three fresh-session pairs run control/cache, cache/control, control/cache.
+Each arm has two warmups and five measured requests per pair. The metric is
+external wall time around complete Session.run on the same 91-token/M128 request;
+setup and output validation are excluded. Outputs, 66 dispatches, five contexts,
+zero CPU neural calls and idle cleanup are checked throughout.
+
+The prospective expectation remains 20 ms saved. Adopt only if the pooled median
+saves at least 10 ms and every paired round's median favors the cache. Otherwise
+kill this candidate and move on. The sample decision is valid only when the outer
+bounded run exits zero with timing_eligible true; an ineligible run cannot decide
+adoption. [Six parser/decision checks](../results/laya/cached_dispatch_compare_v1_validation_desktop2_20261017.log)
+and the [legacy gate](../results/laya/cached_dispatch_compare_v1_legacy_summary_desktop2_20261017.log)
+pass. This measures an incremental M128 change, not a CPU/hybrid ratio or a
+512-token speed win. Larger buckets and the original serving path are unchanged.

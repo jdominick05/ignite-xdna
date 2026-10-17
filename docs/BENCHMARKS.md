@@ -20246,3 +20246,25 @@ remains evidence against the once-cold wrapper; this result qualifies the
 self-contained integration on these development cases, without proving the
 failed wrapper's precise mechanism. Original full-set frozen qualification and
 one adoption timing comparison remain open. No speed gain is claimed.
+
+
+## Laya self-contained Wi cache passes full frozen accuracy (2026-10-17, Desktop 2)
+
+The [full score record](../results/laya/cached_dispatch_accuracy_v1_full_score_summary_desktop2_20261017.log)
+completes all 2,403 original items under the committed source/artifact registration.
+The [original report](../results/laya/cached_dispatch_accuracy_v1_report_desktop2_20261017.log)
+passes C0-C5 on all 2,400 labelled items. Decisions agree with FP32 on 2,387/2,400,
+pooled accuracy is unchanged, and the original temperatures, reference files and
+thresholds are retained. Every scored logit and action-probability bit, including
+unused padding, matches the qualified smaller-query control. This is known-set
+revalidation; prior frozen results and labels were already disclosed.
+
+The run observes zero CPU neural/oracle calls, retains the registered 66-dispatch,
+five-context policy and verifies idle while alive after close. Source/artifact
+identity checks pass before and after scoring. The complete NPZ SHA-256 is
+`0187aa86da7e03585bbd5a2224def67d6bd496a3c47b64abf98ddee2d23a91ab`.
+The compact score record retains every progress checkpoint and the raw-log hash.
+Scoring is explicitly timing-ineligible, and host contention was observed;
+no latency is derived from it. The [one adoption comparison](DECISIONS.md#laya-cached-wi-adoption-comparison-2026-10-17-desktop-2)
+is the next gate. Qualification alone changes neither the research speed control
+nor the original serving path. The 512-token speed objective remains open.
