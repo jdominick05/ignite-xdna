@@ -20165,3 +20165,33 @@ integer fixture. It establishes neither general model accuracy nor a speedup.
 The finite cache tasks currently support only one load per initialized context;
 rearming, broader fixtures and real model layer parity remain open. The qualified
 unsplit full-model control and its original frozen gates remain unchanged.
+
+
+## Laya cached Wi rearms and matches real layer inputs (2026-10-17, Desktop 2)
+
+The [repeated integer primitive](../results/laya/cached_wi_rearm_v1_primitive_desktop2_20261017.log)
+passes six requests in one hardware context: one cold request followed by five
+finite-task rearms. Three integer seeds and two poison values change the query
+and weight operands between adjacent requests. Each request matches all 174,720
+output and packet words exactly, preserves the full source hash and leaves every
+target word outside its output packets unchanged. The existing cache image is
+used unchanged; only the warm instruction stream differs, under the
+[exact operation-delta proof](DECISIONS.md#laya-finite-wi-cache-rearming-and-real-input-scope-2026-10-17-desktop-2).
+
+The [real-input replay](../results/laya/cached_wi_layer_v1_desktop2_20261017.log)
+captures Wi inputs and qualified outputs for encoder layers 0 and 1 on each of
+three fixtures. The qualified model prefix executes on the NPU; diagnostic host
+copies save those already-produced values. Its five contexts close before the
+isolated cache context opens. One cold replay and five warm replays all match
+the selected column's 174,720 output/packet words exactly. Each run checks all
+206,909,696 arena words: the selected column matches the qualified Wi output,
+while every other word retains its pre-Wi value. The other three columns are
+deliberately not executed by this prototype. The harness observes zero CPU neural
+or oracle calls.
+
+Both bounded runs exit zero, retain raw hashes in compact logs and verify idle
+after closing their contexts while the processes remain alive. Both runs are
+explicitly timing-ineligible. This supersedes the isolated cache's one-load limit
+and its synthetic-input-only evidence; it establishes no speed gain, complete
+MLP compatibility, all-column equivalence or full-model accuracy result. Those
+gates remain open before adoption, with the original qualified control unchanged.

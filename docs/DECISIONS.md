@@ -3713,3 +3713,36 @@ rearming these finite tasks for another run in the same context is not yet
 implemented. Do not use it as a repeatable serving configuration or a full MLP
 replacement. Wider fixtures, real layer inputs, rearming, full-model parity,
 matched timing and the original frozen adoption gates remain required.
+
+
+## Laya finite Wi cache rearming and real-input scope (2026-10-17, Desktop 2)
+
+The [compiled restart proof](../results/laya/cached_wi_rearm_v1_build_desktop2_20261017.log)
+extends the previous one-shot cache without changing its image, core arithmetic,
+allocations or lock initialization. The compiler-generated warm stream adds exactly
+five writes: one finite MemTile preload queue and four finite replay queues. All
+235 original transaction operations remain byte-identical and ordered. The cold
+stream must run first; a warm stream is allowed only after the previous request's
+completed wait. No core FIFO locks are reset. The end-of-replay credits authorize
+the next overwrite. Offline checks also pin the parent's actual CDO files, the
+resident ELF files and inherited linker layouts, closing a provenance gap in the
+earlier one-shot checker.
+
+The [mutation and fixture checks](../results/laya/cached_wi_rearm_v1_validation_desktop2_20261017.log)
+pass 44 tests; the [legacy gate](../results/laya/cached_wi_rearm_v1_legacy_summary_desktop2_20261017.log)
+passes. They reject changed restart addresses/values, altered original operations
+and changed parent/resident provenance. Device results are in
+[BENCHMARKS](BENCHMARKS.md#laya-cached-wi-rearms-and-matches-real-layer-inputs-2026-10-17-desktop-2).
+This supersedes the earlier one-load limit for the isolated one-column Wi image.
+It does not make that image a complete MLP replacement: the current cache uses
+the normal query channels and their credits. Integrating GeGLU, Wo and norm in
+the same context still requires finite mode switching or another proved design;
+adding a sixth context is not an acceptable shortcut around the observed limit.
+
+Before these probes, the provisional full M128 optimization estimate was a 20 ms
+request saving, with adoption killed below a 10 ms same-sitting end-to-end gain.
+These are prospective estimates, not measurements. No timing experiment was run
+or preregistered here. All-column transport proof, complete MLP/model parity and
+the original frozen full-set gates must pass before an adoption comparison counts.
+The qualified control, serving path and thresholds remain unchanged. No candidate
+has been adopted or killed by this correctness-only result.
