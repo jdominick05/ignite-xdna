@@ -3799,3 +3799,23 @@ pass. The provisional M128 expectation and adoption kill line from the previous
 cache protocol remain prospective. No candidate is adopted and no timing kill
 has been scored; all frozen gates, serving defaults and the qualified control
 remain unchanged.
+
+
+## Laya cached-dispatch frozen accuracy registration (2026-10-17, Desktop 2)
+
+After [complete development parity](BENCHMARKS.md#laya-self-contained-cached-wi-passes-complete-development-inference-2026-10-17-desktop-2),
+the self-contained arm receives a separate
+[source/artifact registration](../results/laya/cached_dispatch_accuracy_v1_prereg_desktop2_20261017.json)
+with [registration record](../results/laya/cached_dispatch_accuracy_v1_registration_desktop2_20261017.log).
+It pins 832 identities and preserves the original frozen items, FP32 reference,
+decision thresholds, temperatures and C0-C5 criteria. An additional gate requires
+all scored logits and action probabilities, including unused padding, to equal
+the qualified smaller-query control bit-for-bit. This is known-set revalidation,
+not an independent held-out result. No labelled candidate outputs have been
+observed at registration. The arm changes M128 MLP query transport only; larger
+buckets and the serving path remain unchanged. Commit the registration before
+scoring, then require the complete frozen report before adoption timing.
+
+[83 offline/privacy checks](../results/laya/cached_dispatch_v1_validation_desktop2_20261017.log)
+and the [legacy gate](../results/laya/cached_dispatch_v1_legacy_summary_desktop2_20261017.log)
+pass. Full-set accuracy and performance are still pending at this registration.

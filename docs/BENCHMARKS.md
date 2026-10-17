@@ -20225,3 +20225,24 @@ The [engineering record and offline replacement](DECISIONS.md#laya-all-column-ca
 keep that uncertainty explicit. No speed number or adoption claim follows from
 these runs. The full-model integration failure takes precedence over the
 isolated layer success when assessing readiness.
+
+
+## Laya self-contained cached Wi passes complete development inference (2026-10-17, Desktop 2)
+
+The [self-contained layer replay](../results/laya/cached_dispatch_layer_v1_desktop2_20261017.log)
+passes all six saved real-layer cases, with every 206,909,696-word arena exact.
+Each dispatch installs its own query descriptors and queues its finite work;
+there is no once-per-context cold/warm choice. This run also successfully creates
+a fresh context after the earlier failed integration and releases it cleanly.
+
+The [complete development run](../results/laya/cached_dispatch_full_v1_desktop2_20261017.log)
+then matches both output arrays bit-for-bit on all 25 fixture, length-boundary
+and option-mask cases. It preserves 66 dispatches and five contexts, observes
+zero CPU neural/oracle calls and verifies idle after closing. Physical stage
+profiles check all 28 cached MLPs on M128 requests and zero on larger buckets.
+The larger buckets retain the qualified control, including the 512-row case.
+Both runs exit zero and are timing-ineligible. The earlier interleaved failure
+remains evidence against the once-cold wrapper; this result qualifies the
+self-contained integration on these development cases, without proving the
+failed wrapper's precise mechanism. Original full-set frozen qualification and
+one adoption timing comparison remain open. No speed gain is claimed.
