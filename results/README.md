@@ -758,3 +758,6 @@ Two-output lookup GEMM primitive: [initial build](laya/window_lookup_primitive_v
 
 
 - [Cached-Wi eligible adoption timing](laya/cached_dispatch_compare_v1_timing_desktop2_20261017.log): all samples, wrapper eligibility, raw hash and validated KILL decision; [failed bar and next target](../docs/BENCHMARKS.md#laya-wi-cache-fails-its-adoption-bar-2026-10-17-desktop-2).
+
+
+- Matched-512 Laya attribution: [complete native/hybrid stages](laya/matched512_profile_v1_desktop2_20261017.log), [unchanged-core MLP phase build](laya/matched512_mlp_phases_v1_build_desktop2_20261017.log), [complete-output phase parity and timing](laya/matched512_mlp_profile_v1_desktop2_20261017.log), [legacy gate](laya/matched512_profile_v1_legacy_summary_desktop2_20261017.log); [method, boundaries and GeGLU next target](../docs/BENCHMARKS.md#laya-matched-512-wall-attribution-selects-geglu-next-2026-10-17-desktop-2).

@@ -3847,3 +3847,14 @@ The [completed cached-Wi adoption comparison](BENCHMARKS.md#laya-wi-cache-fails-
 returns KILL under the committed rule. Keep the qualified smaller-query control;
 do not apply this cache to other phases or reopen it around the failed timing bar.
 The next target is attribution of the matched-512 native/hybrid gap.
+
+
+## Laya matched-512 next target is GeGLU (2026-10-17, Desktop 2)
+
+The [matched-512 stage and phase attribution](BENCHMARKS.md#laya-matched-512-wall-attribution-selects-geglu-next-2026-10-17-desktop-2)
+selects GeGLU within the encoder MLP as the next changeable cost. The new candidate
+will extend the existing lookup method to 512 scheduled rows, keeping the original
+frozen acceptance criteria and research control unchanged. Before development,
+the expected complete saving is 600 ms and the adoption minimum is 300 ms, with
+consistent paired wins required. Preregister the adoption measurement after full
+qualification; no further Wi-cache salvage or timing requalification is warranted.

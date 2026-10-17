@@ -20287,3 +20287,58 @@ but this run does not isolate that cause. The qualified control and original
 serving path stay unchanged. This is the first killed optimization under the
 current goal. Do not re-qualify around this result; move to matched-512 stage
 attribution and its largest changeable cost.
+
+
+## Laya matched-512 wall attribution selects GeGLU next (2026-10-17, Desktop 2)
+
+The [complete diagnostic](../results/laya/matched512_profile_v1_desktop2_20261017.log)
+measures the previously registered matched-512 arms on the same logical 91-token
+request, with two warmups and three measured calls per arm, native followed by
+hybrid in fresh serialized sessions. Native median external wall time is
+2557.7768 ms and hybrid is 657.2779 ms. This is an instrumented diagnostic, not
+a new adoption comparison or a replacement for the preceding preregistered result.
+All 66 native stages are retained, with five contexts and zero CPU neural/oracle
+calls. Hybrid retains all 120 product durations and 121 segment slots; actual
+placement is 118 NPU products and two host products per request, with every
+active host segment called exactly once. Outputs repeat bit-exactly within
+each arm. Cross-arm maximum absolute differences are 0.00372267 for logits and
+5.96046e-8 for action probabilities; cross-arm bit identity is not claimed.
+
+| Diagnostic group | Native median ms | Hybrid median ms | Boundary caveat |
+|---|---:|---:|---|
+| Encoder attention stages | 1038.5620 | — | Native includes QKV, attention, output projection, residual/norm and packing |
+| Encoder MLP stages | 1363.3243 | — | Native includes Wi, GeGLU, Wo and residual/norm |
+| Encoder QKV products | — | 81.3915 | Product wall includes rounding, dispatch and result handling |
+| Encoder attention output products | — | 47.9786 | Same product boundary |
+| Encoder Wi products | — | 152.3516 | Same product boundary |
+| Encoder Wo products | — | 77.5536 | Same product boundary |
+| Host attention between products | — | 177.7246 | Exported segment boundary, not a pure-op measurement |
+| Host GeGLU between products | — | 50.1137 | Exported segment boundary |
+
+The record also retains all head/stem groups, segment op inventories, internal
+product rounding/NPU/read buckets and orchestration residuals. Medians of groups
+need not sum to the median complete wall time. A stage duration includes driver
+submission/wait, context transitions, DMA and arithmetic; it is not a core cycle
+or achieved-bandwidth measurement. The wrapper exits zero, observes no foreign
+contention and confirms idle cleanup while the child is alive.
+
+To resolve the largest native group, an [offline phase build](../results/laya/matched512_mlp_phases_v1_build_desktop2_20261017.log)
+splits the original M512 MLP at existing phase waits, preserving resident core and
+initialization images. The [device phase diagnostic](../results/laya/matched512_mlp_profile_v1_desktop2_20261017.log)
+matches all complete output bits on three unlabelled fixtures, with no CPU neural
+calls and five contexts. Across three alternating split/unsplit pairs, complete
+medians are 2602.5473 and 2556.0267 ms respectively: the extra 84 dispatches
+perturb the complete time by a derived 46.5206 ms difference of medians.
+Summed over all 28 layers, split-phase medians are Wi 344.8431 ms, GeGLU
+895.8219 ms, Wo 130.8569 ms and normalization 39.7187 ms. These include the
+additional dispatch overhead; no subtraction is presented as pure kernel time.
+This diagnostic is eligible, exits zero without foreign contention and closes idle.
+
+GeGLU is the largest measured MLP phase, changing the next target from input
+projection to applying the existing lookup method at 512 rows. The prospective
+expectation is 600 ms end-to-end saving, with a 300 ms minimum adoption gain;
+original full frozen gates remain binding before one registered timing comparison.
+No optimization is adopted by this attribution, the qualified control and serving
+path are unchanged, and the consecutive optimization-kill count remains one.
+The [legacy syntax/import gate](../results/laya/matched512_profile_v1_legacy_summary_desktop2_20261017.log)
+passes; it supplies no additional hardware evidence.
