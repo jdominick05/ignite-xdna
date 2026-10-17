@@ -20416,3 +20416,34 @@ Qualification establishes no new speed result or serving change. The expected
 350 ms saving, 200 ms adoption minimum and consistent paired wins still require
 the single registered complete-model comparison. The consecutive optimization
 kill count remains two until that measurement decides adoption.
+
+
+## Laya full512 polynomial adopted; speed goal still open (2026-10-17, Desktop 2)
+
+The [single preregistered comparison](../results/laya/polynomial512_compare_v1_timing_desktop2_20261017.log) adopts the unchanged-source
+polynomial O3/depth2 candidate after the original full frozen C0-C5 pass above.
+Pooled complete-request medians are 2555.1953 ms for the original full512 native
+control, 1889.3477 ms for polynomial512 and 589.2403 ms for matched hybrid512.
+The measured saving is 665.8476 ms (26.06% derived reduction).
+Native paired-round savings are 660.2842, 668.4796, 669.8373 ms.
+All exceed zero and the pooled saving exceeds the preregistered 200 ms minimum;
+the expected saving had been 350 ms. The verifier independently reconstructs the
+decision from all 45 samples and binds it to the committed registration.
+
+Three fresh serialized rounds use the fixed arm order, two warmups and five samples
+per arm, with external wall around complete Session.run/Plan.run. Setup and output
+validation are outside timing. Every arm schedules 512 encoder/head rows for the
+same logical 91-token fixture: this is a matched scheduling result, not an actual
+512-token serving qualification. Native arms remain bit-exact, five runtime state
+entries and 66 dispatches with zero CPU neural/oracle calls. Hybrid retains one
+context, 118 NPU and two host products per request; its declared host calls are checked.
+Source/artifact identities remain unchanged, each arm closes to idle, and the bounded
+wrapper exits zero with timing eligibility and no observed foreign contention.
+
+The candidate remains 1300.1074 ms behind same-sitting hybrid (derived
+3.206 times its latency), and loses to hybrid in every round. The
+goal is therefore unfinished. Adoption makes this the full512 research arm and resets
+the consecutive optimization-kill count to zero; it does not replace the qualified
+M128 research control or the original serving path. Earlier full512 figures remain
+historical controls. Re-profile the improved arm before choosing the next target;
+the older original-image MLP phase attribution cannot locate its remaining costs.

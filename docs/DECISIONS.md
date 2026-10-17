@@ -3929,3 +3929,14 @@ and goal success additionally requires beating the same-sitting matched hybrid.
 Qualification alone changes neither the original serving path nor the qualified
 short-row research control. The next step is the single eligible comparison;
 no timing result or new adoption is established by this registration.
+
+
+## Adopt full512 polynomial after one registered comparison (2026-10-17, Desktop 2)
+
+The [complete comparison](BENCHMARKS.md#laya-full512-polynomial-adopted-speed-goal-still-open-2026-10-17-desktop-2) passes the fixed adoption rule:
+665.8476 ms pooled saving and every paired native round wins, after all original
+full frozen gates pass. Adopt the O3/depth2 unchanged-polynomial full512 research arm;
+reset consecutive optimization kills from two to zero. Retain both prior kills as
+negative results. The matched hybrid still wins, so the end-to-end goal stays open.
+Next attribute the improved arm's stages before another candidate; do not infer the
+remaining split from the old MLP image. Original serving and M128 control stay unchanged.

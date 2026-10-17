@@ -777,3 +777,6 @@ Two-output lookup GEMM primitive: [initial build](laya/window_lookup_primitive_v
 
 
 - Full512 polynomial adoption measurement: [single preregistration](laya/polynomial512_compare_v1_prereg_desktop2_20261017.json), [registration record](laya/polynomial512_compare_v1_registration_desktop2_20261017.log); [fixed decision after full accuracy PASS](../docs/DECISIONS.md#laya-full512-polynomial-single-adoption-registration-2026-10-17-desktop-2).
+
+
+- Full512 polynomial adoption: [all nine arm profiles, 45 samples, immutable raw hashes and reconstructed verdict](laya/polynomial512_compare_v1_timing_desktop2_20261017.log); [gain, remaining hybrid gap and scope](../docs/BENCHMARKS.md#laya-full512-polynomial-adopted-speed-goal-still-open-2026-10-17-desktop-2).

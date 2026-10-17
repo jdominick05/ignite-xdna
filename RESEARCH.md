@@ -2211,5 +2211,13 @@ The smaller-query lookup/KV2 arm now also passes the original full frozen gates
 and matches every qualified packing output bit. It becomes the native M128
 research control; this is known-set revalidation. [Qualification and limits](docs/BENCHMARKS.md#laya-smaller-query-lookupkv2-passes-full-frozen-qualification-2026-10-16-desktop-2).
 
+The full512 unchanged-polynomial O3/depth2 arm now passes the original frozen gates
+and wins its single preregistered adoption comparison: 1889.3477 ms against
+the original native control's 2555.1953 ms, saving 665.8476 ms. Same-sitting
+hybrid takes 589.2403 ms, so the matched512 speed goal remains open. Every arm
+schedules 512 rows for the same logical 91-token request; this does not establish
+actual 512-token serving speed. The original serving path and M128 research control
+remain unchanged. [Adoption and remaining gap](docs/BENCHMARKS.md#laya-full512-polynomial-adopted-speed-goal-still-open-2026-10-17-desktop-2).
+
 The next optimization must address the measured native-versus-hybrid gap while retaining
 the frozen gates. [Comparison, CPU investigation and limits](docs/BENCHMARKS.md#laya-native-versus-hybrid-at-matched-and-serving-schedules-2026-10-16-desktop-2).
