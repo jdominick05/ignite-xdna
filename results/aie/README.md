@@ -11,6 +11,29 @@ This file exists because these entries used to be a single cell in
 [`results/README.md`](../README.md)'s table, long enough that its three retractions were
 invisible to anyone scanning it.
 
+## Standalone BF16 transformer primitives
+
+Reusable source and replay instructions live in
+[`kernels/transformer_bf16/`](../../kernels/transformer_bf16/README.md), with
+[method and limits](../../docs/BENCHMARKS.md#standalone-bf16-transformer-primitives-2026-10-18-desktop-2).
+
+| Evidence | Scope |
+| --- | --- |
+| [transformer_bf16_checks_20261018_v2.log](transformer_bf16_checks_20261018_v2.log) | Bounded checks-only device run: all seven operations, three seeds; no speed claim |
+| [transformer_bf16_checks_20261018.json](transformer_bf16_checks_20261018.json) | Source hashes, numerical criteria and individual operation results |
+| [transformer_bf16_checks_20261018.log](transformer_bf16_checks_20261018.log) | Initial build-path failure before device execution; retained negative attempt |
+| [transformer_bf16_composed_attention_20261018.log](transformer_bf16_composed_attention_20261018.log) | The consuming workspace imports the shared ops: 16 synthetic attention cases, both models at shared-cache lengths 37 and 8192; checks only |
+| [transformer_bf16_complete_draft_first_20261018.log](transformer_bf16_complete_draft_first_20261018.log) | Original matrix-unit GEMV, one complete E2B draft step passes; synthetic input only |
+| [transformer_bf16_complete_draft_20261018.log](transformer_bf16_complete_draft_20261018.log) | Original GEMV: second complete step exceeds frozen numerical limits; retained failure |
+| [transformer_bf16_complete_draft_trace_20261018.log](transformer_bf16_complete_draft_trace_20261018.log) | Repeat of that failure with saved native intermediates for local-operation diagnosis |
+| [transformer_bf16_compensated_draft_first_20261018.log](transformer_bf16_compensated_draft_first_20261018.log) | Compensated FP32 GEMV fixes the first failing complete-step case without changing numerical gates |
+| [transformer_bf16_compensated_draft_full_20261018.log](transformer_bf16_compensated_draft_full_20261018.log) | Both assistants, three seeds, four cache lengths: 18/24 numerical passes and 23/24 matching greedy tokens; failed qualification |
+| [transformer_bf16_complete_draft_20261018.json](transformer_bf16_complete_draft_20261018.json) | Compact source provenance, per-stage errors and dispatch-completion counts for the complete-step attempts |
+| [transformer_bf16_cached_transport_20261018.log](transformer_bf16_cached_transport_20261018.log) | Bounded cached-transport check: 28 operation checks including A/B/C/A replay, cache eviction and cleanup |
+| [transformer_bf16_cached_transport_20261018.json](transformer_bf16_cached_transport_20261018.json) | Cached-transport source hashes, reference errors, 21 cache hits and released-context witnesses |
+| [transformer_bf16_cached_complete_draft_20261018.log](transformer_bf16_cached_complete_draft_20261018.log) | Four selected complete draft steps through cached transport, both assistants; all four pass and release owned contexts |
+| [transformer_bf16_cached_complete_draft_20261018.json](transformer_bf16_cached_complete_draft_20261018.json) | Per-stage errors, source identities and context/cache counters for the selected complete steps |
+
 ## Cross-audit against Hello XDNA! (2026-09-23, Desktop 2)
 
 This repo checked against Steinert and Breuer's [Hello XDNA!](https://tnzr.org/xdna/), the XDNA1 ISA
@@ -1632,3 +1655,12 @@ hardware contexts running on device"; the sweep is offline and needs no witness.
 | [bf16_mac_rescore_exp_sum_sweep_desktop2_20260923.log](bf16_mac_rescore_exp_sum_sweep_desktop2_20260923.log) | Offline, no device: tools/bf16_mac_model_rescore.py sweep on the eight one-core sweep sittings (the 2026-09-21 probe and loop-variant sittings, the 2026-09-22 contract sittings). Every case label rebuilds and every logged per-model count reproduces; over 132,800 elements no model's bits differ from aligned's. - [BENCHMARKS](../../docs/BENCHMARKS.md#a-fifth-accumulate-model-exp_sum-fits-every-bf16-engine-sitting-that-could-be-rebuilt-and-the-probe-that-can-refute-it-is-pre-registered-not-run-2026-09-23-offline) |
 | [bf16_mac_rescore_exp_sum_16core_desktop2_20260923.log](bf16_mac_rescore_exp_sum_16core_desktop2_20260923.log) | Offline, no device: tools/bf16_mac_model_rescore.py sixteen on the 2026-09-22 Gaussian sitting. The rebuild under aligned equals that build's expected.npy byte for byte; over 153,600 elements exp_sum and wide differ from aligned at 0, dot_first at 1 and sequential at 2. - [BENCHMARKS](../../docs/BENCHMARKS.md#a-fifth-accumulate-model-exp_sum-fits-every-bf16-engine-sitting-that-could-be-rebuilt-and-the-probe-that-can-refute-it-is-pre-registered-not-run-2026-09-23-offline) |
 | [bf16_mac_rescore_exp_sum_16core_integer_desktop2_20260923.log](bf16_mac_rescore_exp_sum_16core_integer_desktop2_20260923.log) | Offline, no device: the same on the integer sitting (operands 0..3, weights -1..1, bias -4..4). Every sum is an exact integer, so no model differs from aligned at any of the 153,600 elements. - [BENCHMARKS](../../docs/BENCHMARKS.md#a-fifth-accumulate-model-exp_sum-fits-every-bf16-engine-sitting-that-could-be-rebuilt-and-the-probe-that-can-refute-it-is-pre-registered-not-run-2026-09-23-offline) |
+
+
+## Additional archived work in the testing checkpoint
+
+- Earlier standalone records: [DFL context-block outcome](dfl_decode_phoenix_context_block_20260913T0839Z.log) and [SPPF probe](sppf_20x20x256_phoenix_20260913T062234Z_28355.log).
+- BF16 dispatch-image compilation: [first attempt](transformer_bf16_dispatch_compile_20261018.log), [second attempt](transformer_bf16_dispatch_compile_20261018_v2.log), [bounded single-image transport checks](transformer_bf16_single_image_checks_20261018.log). These do not reverse the failed full-draft numerical qualification.
+- [Checkpoint scope and offline validation](../../docs/BENCHMARKS.md#archived-testing-work-and-historical-evidence-2026-10-18-checkpoint).
+
+- [Later single-image replay and artifact-drift check](transformer_bf16_single_image_checks_20261018_v3.log) retains its checks-only scope; it does not qualify complete-draft numerics.

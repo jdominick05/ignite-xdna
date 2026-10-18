@@ -20195,3 +20195,130 @@ explicitly timing-ineligible. This supersedes the isolated cache's one-load limi
 and its synthetic-input-only evidence; it establishes no speed gain, complete
 MLP compatibility, all-column equivalence or full-model accuracy result. Those
 gates remain open before adoption, with the original qualified control unchanged.
+
+## Standalone BF16 transformer primitives (2026-10-18, Desktop 2)
+
+[`kernels/transformer_bf16/`](../kernels/transformer_bf16/README.md) extracts reusable
+single-token BF16 vector projections, RMSNorm, supplied-factor rotary encoding,
+streamed softmax, gated tanh GELU, residual/scaling and deterministic top-k from
+the decoder prototype. It uses the native `ignite_xdna.runtime.driver` harness,
+not ONNX Runtime. Model-specific weights, cache-window rules and orchestration
+remain in the consuming application. The graph compiler and `.ignite` operator
+vocabulary are unchanged.
+
+**MEASURED, correctness only:** the bounded
+[device check](../results/aie/transformer_bf16_checks_20261018_v2.log) passed all
+21 operation cases across seeds 11, 29 and 83, using independent PyTorch BF16
+references. [Structured evidence](../results/aie/transformer_bf16_checks_20261018.json)
+retains source hashes, criteria, per-case errors and completed dispatch witnesses.
+The GELU table's CPU preparation checks every one of the 65,280 finite BF16 bit
+patterns; that is exhaustive CPU table validation, not exhaustive NPU execution.
+Both pre/post device witnesses are idle. The wrapper marks the run timing-ineligible.
+
+The [first attempt](../results/aie/transformer_bf16_checks_20261018.log) stopped
+before device execution: a relative cache path was interpreted again from the
+build directory. Resolving the cache/build directory before compilation fixes it;
+the failed attempt is retained. The passing run uses the corrected sources.
+
+This establishes a reusable research baseline with per-operation host packing
+and context creation. It does not establish fused execution, whole-model accuracy,
+compiler BF16 support, serving latency or a hybrid GPU/NPU speedup.
+
+The consuming decoder workspace now imports `Bf16Ops` from this repository.
+A separate [bounded composition check](../results/aie/transformer_bf16_composed_attention_20261018.log)
+passed all 16 selected attention cases: the four layers of E2B and E4B, each
+with shared-cache lengths 37 and 8192. Query projection, RMSNorm, rotary
+encoding, query-key products, softmax, probability-value products and output
+projection all consume the preceding NPU output, with no reference substitution.
+Both idle witnesses pass and the run is timing-ineligible. These are synthetic
+target-state fixtures, not a complete decoder, agent evaluation or serving result.
+
+### Complete draft composition and cached transport
+
+**MEASURED, failed full-draft qualification:** the consumer now composes all four
+assistant layers, final normalization, post-projection and the original clustered
+BF16 vocabulary head. The [original GEMV attempt](../results/aie/transformer_bf16_complete_draft_20261018.log)
+passes its first synthetic case but fails the next under the frozen relative-L2
+limit 0.01 and maximum-error/reference-RMS limit 0.05. A traced repeat locates
+small local dot-product rounding differences that amplify through later layers.
+No CPU intermediate is substituted into the NPU computation.
+
+The optional `precise_projection=True` implementation uses BF16 operands and
+compensated FP32 accumulation, with one BF16 output rounding. It
+[fixes the first failing case](../results/aie/transformer_bf16_compensated_draft_first_20261018.log),
+but the [complete 24-case run](../results/aie/transformer_bf16_compensated_draft_full_20261018.log)
+still passes only 18 numerical cases. Greedy tokens match in 23 cases; this
+diagnostic does not override the six failed numerical cases. The run covers
+both assistants, seeds 11/29/83, cache lengths 1/37/513/8192, and positions
+0/36/8191/32767. Position 32767 does **not** mean a populated 32K cache.
+[Structured evidence](../results/aie/transformer_bf16_complete_draft_20261018.json)
+preserves source identities, stage errors and all 2376 completed dispatches
+from the 24-case run. All checks are synthetic target states; no target acceptance,
+agent behavior, hybrid speedup or serving readiness is established.
+
+**MEASURED, transport checks only:** `PacketSession` retains at most two complete
+images and reuses their instruction/data BOs. The caller reserves exclusive NPU
+use throughout the session; idle checks bracket it and the bounded wrapper
+monitors ownership. This removes the per-operation idle-query subprocess and
+retains contexts until eviction or explicit exit. It remains synchronous, with
+host packing and round trips between operations.
+The [cached transport check](../results/aie/transformer_bf16_cached_transport_20261018.log)
+passes 28 operation checks: three distinct inputs and an exact repeat of the first
+for each of seven operations, including compensated projections. It records 21
+cache hits, seven created contexts, five evictions and empty context state after
+exit. Replays are bit-identical, input BOs are unchanged and output guards pass.
+The [structured report](../results/aie/transformer_bf16_cached_transport_20261018.json)
+records the criteria, source hashes and dispatch witnesses. Both idle witnesses
+pass; timing is ineligible. This does not establish whole-draft qualification.
+
+The [cached complete-step check](../results/aie/transformer_bf16_cached_complete_draft_20261018.log)
+passes four selected cases: E2B and E4B at cache lengths 37 and 513, seed 11.
+Each complete step has 99 dispatches, 54 context creations, 45 cache hits and
+52 evictions; all owned contexts are released. These cases already passed with
+compensated accumulation in the uncached run. This is not a rerun or reversal of
+the failed 24-case qualification. [Structured evidence](../results/aie/transformer_bf16_cached_complete_draft_20261018.json)
+retains the exact per-stage metrics and source identities. The final case's
+diagnostic wall time is still about 2.8 seconds; it is a checks-only observation,
+not a serving benchmark. The number of context creations identifies a remaining
+transport cost before this could approach realtime use.
+
+
+## Archived testing work and historical evidence (2026-10-18 checkpoint)
+
+This checkpoint preserves pending work and historical imports. It makes no new
+on-device performance or accuracy claim. The [validation/provenance record](../results/testing_checkpoint_20261018.json)
+distinguishes newly run offline checks from older hardware evidence and records
+privacy redactions made before the affected untracked artifacts first enter history.
+Original private copies remain local; their hashes are retained.
+
+The [post-audit report](../benchmarks/benchmark_post_audit_report.md) and
+[structured output](../benchmarks/benchmark_post_audit_results.json) are unverified
+historical artifacts. Their throughput and glass-to-glass labels are not accepted
+as current performance or distinct camera-frame measurements. The
+[pose context](../pose_h2h_20261015/context.json) and
+[provider assignment report](../pose_h2h_20261015/vitisai_ep_report.json) are archived
+placement metadata, not a new timing comparison.
+
+The [laptop readiness record](../results/laptop_readiness_20260908_144321/README.md)
+retains its original smoke-test scope, slice and cross-machine caveats. Older
+[medium-model CPU](../results/yolo_cut_m_adaround_cpu_laptop.log),
+[provider report](../results/yolo_cut_m_adaround_diag_laptop.log) and
+[NPU-requested run](../results/yolo_cut_m_adaround_npu_laptop.log) remain historical
+evidence; they were not rerun for this checkpoint.
+
+The dense regression records retain observed failures:
+[baseline failures](../results/dense/baseline_regression_failures_20260919.log),
+[isolation attempt](../results/dense/current_regression_isolation_20260919.log),
+[hardware suite](../results/dense/root_tests_hardware_20260919.log) and
+[pack hardware suite](../results/dense/root_tests_hardware_pack_20260919.log).
+They are not converted into passing qualification by committing them.
+
+The new [roofline](../tools/xdna1_roofline.py),
+[audio L1 sizing](../tools/audio_l1_sizing.py) and
+[INT4 prefill](../tools/int4_prefill_model.py) tools are offline estimators.
+Their calculations do not measure silicon throughput. The
+[BF16 image compatibility audit](../tools/bf16_image_compatibility.py) checks
+compiled identities; equal image components alone do not authorize hardware dispatch.
+
+The [saved dispatch-cost summary tool](../tools/bf16_dispatch_costs.py) reports diagnostic
+checks-only wall observations; its output is not a controlled serving benchmark.

@@ -1,0 +1,1911 @@
+{
+  "scope": "Synthetic target-state checks only; no serving integration, target acceptance or performance claim",
+  "export_source_sha256": "064ac94af42ec51469b213515c8753eb52cf130c492a3bca2395e5b2f72208f9",
+  "reports": [
+    {
+      "result_sha256": "739735c027059498870690f95254b51a7309a6749304b2370e4be71f948eb84e",
+      "registration": {
+        "gates": {
+          "relative_l2": 0.01,
+          "max_abs_over_reference_rms": 0.05,
+          "scope": "Full NPU greedy draft step, synthetic target states; proposal agreement diagnostic; no serving or speed claim"
+        },
+        "source_sha256": "e867dbc08ed007829e3d715d4324e39c8bdc9d625e56dc342f7ddd286eaed31f",
+        "native_runtime_sha256": "471448b9a5e9b2f1aaadb0c03707d35f7510c826fcf1056494266709c723a9b1",
+        "shared_sources": {
+          "kernels/transformer_bf16/common.py": "e9ea9aefc2167093490bc2716ec2895f38cb13fc3852703ebd42211526c4854e",
+          "kernels/transformer_bf16/geglu.cc": "e7ed0233130e8f63bc2134502c318c87563ac48cf2308aeb7c308641666d4b34",
+          "kernels/transformer_bf16/gemv.cc": "66a1da00c319f565af9554ea516254588273f0396c3d2a1b29299a8e3039690f",
+          "kernels/transformer_bf16/ops.py": "edb5e1217edfc3531e3cbf08765d5de8e616d0c183852afdb983fba3648c733a",
+          "kernels/transformer_bf16/probe.py": "8233278ed12504807faa60ce48c08e5bb5b3bd9f95502428247f9050e4a41c5d",
+          "kernels/transformer_bf16/residual.cc": "56d6d909c9830b799263b970443f1f7b57dd4d99557db25afef036d761e8f4a2",
+          "kernels/transformer_bf16/rmsnorm.cc": "9efc3bec80f7c25e88a48ce30f851bc437e05000e7d79014cc2997399b15463f",
+          "kernels/transformer_bf16/rope.cc": "9cda05b108160f2152261eb79b61c8830aca34d0c4d4158d5c281897f1b7ce2a",
+          "kernels/transformer_bf16/softmax.cc": "2c4565cecc5832f1a1bde4968d5cde782a6faec6dae018fb298244c378f81371",
+          "kernels/transformer_bf16/stream.py": "7f1641705bc59dd1cd08bc0a0f74f66bc7a55d2487778d6609d5a21fd9fbb6e9",
+          "kernels/transformer_bf16/topk.cc": "1f680ca67d8c97a82bb41db53a6f2aad15802f16be287b9bfddbac31ca6e1868",
+          "kernels/transformer_bf16/__init__.py": "66e8ee8dbd8e1bbc4788e12fa85a161db92c666969493f6a38b5f623cb309bf4"
+        },
+        "rotations_sha256": "14d4460fe64c754ccb3c97c00c8db3365f07abbfc5a735e383a8f107c99a2c32",
+        "lut_sha256": "2a3578db96f57b7b5c2768acbfa2bffefbf5247453fbab911793728b5451465e",
+        "fixtures": {
+          "<user-home>\\gemma4-assistant\\npu\\e2b-bf16-fixtures-1792336544350126400\\manifest.json": "027df84277782e943ec972cb8264facbb2605bd8a4ec114046cdd4310300a073"
+        },
+        "limit": 1,
+        "case_indices": null
+      },
+      "passed": true,
+      "complete": false,
+      "cases": 1,
+      "passing_cases": 1,
+      "matching_tokens": 1,
+      "results": [
+        {
+          "model": "gemma-4-E2B-it-assistant",
+          "fixture": "seed-11-kv-1-pos-0.npz",
+          "passed": true,
+          "metrics": {
+            "pre_projection": {
+              "passed": true,
+              "relative_l2": 2.7633343064552343e-07,
+              "max_abs_over_reference_rms": 4.421334890328375e-06
+            },
+            "layer_0": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_1": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_2": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_3": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "hidden": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "projected": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "centroids": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "shared_head_logits": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            }
+          },
+          "token_id": 186200,
+          "reference_token_id": 186200,
+          "token_equal": true,
+          "selected_row_overlap": 3968,
+          "selected_rows": 4096,
+          "wall_seconds": 38.60504170000786,
+          "dispatches": 99
+        }
+      ],
+      "dispatch_count": 99,
+      "all_completed_inputs_unchanged": true,
+      "operations": {
+        "draft_projection": 56,
+        "draft_norm": 21,
+        "draft_rope": 4,
+        "draft_softmax": 4,
+        "draft_residual": 8,
+        "draft_geglu": 4,
+        "draft_topk": 2
+      },
+      "runtime_driver_sha256": [
+        "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+      ]
+    },
+    {
+      "result_sha256": "948621bfac891c9e922d2f5c600f388c0b5908b5413d8d7fb7283d3a02377bd5",
+      "registration": {
+        "gates": {
+          "relative_l2": 0.01,
+          "max_abs_over_reference_rms": 0.05,
+          "scope": "Full NPU greedy draft step, synthetic target states; proposal agreement diagnostic; no serving or speed claim"
+        },
+        "source_sha256": "e867dbc08ed007829e3d715d4324e39c8bdc9d625e56dc342f7ddd286eaed31f",
+        "native_runtime_sha256": "471448b9a5e9b2f1aaadb0c03707d35f7510c826fcf1056494266709c723a9b1",
+        "shared_sources": {
+          "kernels/transformer_bf16/common.py": "e9ea9aefc2167093490bc2716ec2895f38cb13fc3852703ebd42211526c4854e",
+          "kernels/transformer_bf16/geglu.cc": "e7ed0233130e8f63bc2134502c318c87563ac48cf2308aeb7c308641666d4b34",
+          "kernels/transformer_bf16/gemv.cc": "66a1da00c319f565af9554ea516254588273f0396c3d2a1b29299a8e3039690f",
+          "kernels/transformer_bf16/ops.py": "edb5e1217edfc3531e3cbf08765d5de8e616d0c183852afdb983fba3648c733a",
+          "kernels/transformer_bf16/probe.py": "8233278ed12504807faa60ce48c08e5bb5b3bd9f95502428247f9050e4a41c5d",
+          "kernels/transformer_bf16/residual.cc": "56d6d909c9830b799263b970443f1f7b57dd4d99557db25afef036d761e8f4a2",
+          "kernels/transformer_bf16/rmsnorm.cc": "9efc3bec80f7c25e88a48ce30f851bc437e05000e7d79014cc2997399b15463f",
+          "kernels/transformer_bf16/rope.cc": "9cda05b108160f2152261eb79b61c8830aca34d0c4d4158d5c281897f1b7ce2a",
+          "kernels/transformer_bf16/softmax.cc": "2c4565cecc5832f1a1bde4968d5cde782a6faec6dae018fb298244c378f81371",
+          "kernels/transformer_bf16/stream.py": "7f1641705bc59dd1cd08bc0a0f74f66bc7a55d2487778d6609d5a21fd9fbb6e9",
+          "kernels/transformer_bf16/topk.cc": "1f680ca67d8c97a82bb41db53a6f2aad15802f16be287b9bfddbac31ca6e1868",
+          "kernels/transformer_bf16/__init__.py": "66e8ee8dbd8e1bbc4788e12fa85a161db92c666969493f6a38b5f623cb309bf4"
+        },
+        "rotations_sha256": "14d4460fe64c754ccb3c97c00c8db3365f07abbfc5a735e383a8f107c99a2c32",
+        "lut_sha256": "2a3578db96f57b7b5c2768acbfa2bffefbf5247453fbab911793728b5451465e",
+        "fixtures": {
+          "<user-home>\\gemma4-assistant\\npu\\e2b-bf16-fixtures-1792336544350126400\\manifest.json": "027df84277782e943ec972cb8264facbb2605bd8a4ec114046cdd4310300a073",
+          "<user-home>\\gemma4-assistant\\npu\\e4b-bf16-fixtures-1792336549563028300\\manifest.json": "3cd61be620adce03617667367c1faa52eacc3f8a22c1c3fd5defe0b207ee643b",
+          "<user-home>\\gemma4-assistant\\npu\\e2b-bf16-fixtures-1792337387001291100\\manifest.json": "b8f9db7bf609ac2f24a683a597c8900bbabac018a12c94dba3e00fe34ac741bf",
+          "<user-home>\\gemma4-assistant\\npu\\e4b-bf16-fixtures-1792337391726200700\\manifest.json": "51739117972e81388d2ae2ba7b4cb90993b6759d68720908c0b9de4154dc2895"
+        },
+        "limit": 0,
+        "case_indices": null
+      },
+      "passed": false,
+      "complete": false,
+      "cases": 2,
+      "passing_cases": 1,
+      "matching_tokens": 2,
+      "results": [
+        {
+          "model": "gemma-4-E2B-it-assistant",
+          "fixture": "seed-11-kv-1-pos-0.npz",
+          "passed": true,
+          "metrics": {
+            "pre_projection": {
+              "passed": true,
+              "relative_l2": 2.7633343064552343e-07,
+              "max_abs_over_reference_rms": 4.421334890328375e-06
+            },
+            "layer_0": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_1": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_2": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_3": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "hidden": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "projected": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "centroids": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "shared_head_logits": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            }
+          },
+          "token_id": 186200,
+          "reference_token_id": 186200,
+          "token_equal": true,
+          "selected_row_overlap": 3968,
+          "selected_rows": 4096,
+          "wall_seconds": 14.192878400004702,
+          "dispatches": 99
+        },
+        {
+          "model": "gemma-4-E2B-it-assistant",
+          "fixture": "seed-11-kv-37-pos-36.npz",
+          "passed": false,
+          "metrics": {
+            "pre_projection": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_0": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_1": {
+              "passed": true,
+              "relative_l2": 0.0014380926561591786,
+              "max_abs_over_reference_rms": 0.008465626252011622
+            },
+            "layer_2": {
+              "passed": true,
+              "relative_l2": 0.008416823734154671,
+              "max_abs_over_reference_rms": 0.02488430607719637
+            },
+            "layer_3": {
+              "passed": false,
+              "relative_l2": 0.013082633657193901,
+              "max_abs_over_reference_rms": 0.12140325908062256
+            },
+            "hidden": {
+              "passed": false,
+              "relative_l2": 0.011013737847391897,
+              "max_abs_over_reference_rms": 0.046091623591526173
+            },
+            "projected": {
+              "passed": false,
+              "relative_l2": 0.01187458179417912,
+              "max_abs_over_reference_rms": 0.06396806173778698
+            },
+            "centroids": {
+              "passed": false,
+              "relative_l2": 0.012776890020618315,
+              "max_abs_over_reference_rms": 0.033836424505706855
+            },
+            "shared_head_logits": {
+              "passed": false,
+              "relative_l2": 0.01705039942937061,
+              "max_abs_over_reference_rms": 0.03225951441228857
+            }
+          },
+          "token_id": 227288,
+          "reference_token_id": 227288,
+          "token_equal": true,
+          "selected_row_overlap": 4096,
+          "selected_rows": 4096,
+          "wall_seconds": 14.16620169999078,
+          "dispatches": 99
+        }
+      ],
+      "dispatch_count": 198,
+      "all_completed_inputs_unchanged": true,
+      "operations": {
+        "draft_projection": 112,
+        "draft_norm": 42,
+        "draft_rope": 8,
+        "draft_softmax": 8,
+        "draft_residual": 16,
+        "draft_geglu": 8,
+        "draft_topk": 4
+      },
+      "runtime_driver_sha256": [
+        "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+      ]
+    },
+    {
+      "result_sha256": "775719d3aa5ed4c6afb5492ae068d96233b4e3fea9e4caaf6ef883d547984fba",
+      "registration": {
+        "gates": {
+          "relative_l2": 0.01,
+          "max_abs_over_reference_rms": 0.05,
+          "scope": "Full NPU greedy draft step, synthetic target states; proposal agreement diagnostic; no serving or speed claim"
+        },
+        "source_sha256": "36914ebe6170f21f967f6aac8edbf32992aacbb7a77cd31690319cc734768e6b",
+        "native_runtime_sha256": "7771b813004e9964d568f693a070e0ad3987754cc8bcaa5889d89cff2a63d955",
+        "shared_sources": {
+          "kernels/transformer_bf16/common.py": "e9ea9aefc2167093490bc2716ec2895f38cb13fc3852703ebd42211526c4854e",
+          "kernels/transformer_bf16/geglu.cc": "e7ed0233130e8f63bc2134502c318c87563ac48cf2308aeb7c308641666d4b34",
+          "kernels/transformer_bf16/gemv.cc": "66a1da00c319f565af9554ea516254588273f0396c3d2a1b29299a8e3039690f",
+          "kernels/transformer_bf16/gemv_precise.cc": "6600e21079a574c4d1d3b93f497d11d75656fc062cc123fb12013ece3436087a",
+          "kernels/transformer_bf16/ops.py": "3fb884f68e359eeea10298873682a24683d557d450a5efc4f98d97634d3677f8",
+          "kernels/transformer_bf16/probe.py": "8233278ed12504807faa60ce48c08e5bb5b3bd9f95502428247f9050e4a41c5d",
+          "kernels/transformer_bf16/residual.cc": "56d6d909c9830b799263b970443f1f7b57dd4d99557db25afef036d761e8f4a2",
+          "kernels/transformer_bf16/rmsnorm.cc": "9efc3bec80f7c25e88a48ce30f851bc437e05000e7d79014cc2997399b15463f",
+          "kernels/transformer_bf16/rope.cc": "9cda05b108160f2152261eb79b61c8830aca34d0c4d4158d5c281897f1b7ce2a",
+          "kernels/transformer_bf16/softmax.cc": "2c4565cecc5832f1a1bde4968d5cde782a6faec6dae018fb298244c378f81371",
+          "kernels/transformer_bf16/stream.py": "7f1641705bc59dd1cd08bc0a0f74f66bc7a55d2487778d6609d5a21fd9fbb6e9",
+          "kernels/transformer_bf16/topk.cc": "1f680ca67d8c97a82bb41db53a6f2aad15802f16be287b9bfddbac31ca6e1868",
+          "kernels/transformer_bf16/__init__.py": "66e8ee8dbd8e1bbc4788e12fa85a161db92c666969493f6a38b5f623cb309bf4"
+        },
+        "rotations_sha256": "14d4460fe64c754ccb3c97c00c8db3365f07abbfc5a735e383a8f107c99a2c32",
+        "lut_sha256": "2a3578db96f57b7b5c2768acbfa2bffefbf5247453fbab911793728b5451465e",
+        "fixtures": {
+          "<user-home>\\gemma4-assistant\\npu\\e2b-bf16-fixtures-1792336544350126400\\manifest.json": "027df84277782e943ec972cb8264facbb2605bd8a4ec114046cdd4310300a073"
+        },
+        "limit": 0,
+        "case_indices": [
+          1
+        ],
+        "precise_projection": true
+      },
+      "passed": true,
+      "complete": false,
+      "cases": 1,
+      "passing_cases": 1,
+      "matching_tokens": 1,
+      "results": [
+        {
+          "model": "gemma-4-E2B-it-assistant",
+          "fixture": "seed-11-kv-37-pos-36.npz",
+          "passed": true,
+          "metrics": {
+            "pre_projection": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_0": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_1": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_2": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_3": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "hidden": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "projected": {
+              "passed": true,
+              "relative_l2": 3.2344238292072814e-10,
+              "max_abs_over_reference_rms": 1.2676300789530761e-08
+            },
+            "centroids": {
+              "passed": true,
+              "relative_l2": 0.00012461440218277078,
+              "max_abs_over_reference_rms": 0.005639404084284476
+            },
+            "shared_head_logits": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            }
+          },
+          "token_id": 227288,
+          "reference_token_id": 227288,
+          "token_equal": true,
+          "selected_row_overlap": 4096,
+          "selected_rows": 4096,
+          "wall_seconds": 60.377489599981345,
+          "dispatches": 99
+        }
+      ],
+      "dispatch_count": 99,
+      "all_completed_inputs_unchanged": true,
+      "operations": {
+        "draft_projection_precise": 56,
+        "draft_norm": 21,
+        "draft_rope": 4,
+        "draft_softmax": 4,
+        "draft_residual": 8,
+        "draft_geglu": 4,
+        "draft_topk": 2
+      },
+      "runtime_driver_sha256": [
+        "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+      ]
+    },
+    {
+      "result_sha256": "82407b961d10b6f12cb6c039e1872366f8e3c8fc5bc349bc646c4fd4ead864fc",
+      "registration": {
+        "gates": {
+          "relative_l2": 0.01,
+          "max_abs_over_reference_rms": 0.05,
+          "scope": "Full NPU greedy draft step, synthetic target states; proposal agreement diagnostic; no serving or speed claim"
+        },
+        "source_sha256": "38f5e3a39ea06a208e5b59f3445f4bea2ca46f45589d8ba1139caf53ab8a9595",
+        "native_runtime_sha256": "7771b813004e9964d568f693a070e0ad3987754cc8bcaa5889d89cff2a63d955",
+        "shared_sources": {
+          "kernels/transformer_bf16/common.py": "e9ea9aefc2167093490bc2716ec2895f38cb13fc3852703ebd42211526c4854e",
+          "kernels/transformer_bf16/geglu.cc": "e7ed0233130e8f63bc2134502c318c87563ac48cf2308aeb7c308641666d4b34",
+          "kernels/transformer_bf16/gemv.cc": "66a1da00c319f565af9554ea516254588273f0396c3d2a1b29299a8e3039690f",
+          "kernels/transformer_bf16/gemv_precise.cc": "6600e21079a574c4d1d3b93f497d11d75656fc062cc123fb12013ece3436087a",
+          "kernels/transformer_bf16/ops.py": "3fb884f68e359eeea10298873682a24683d557d450a5efc4f98d97634d3677f8",
+          "kernels/transformer_bf16/probe.py": "8233278ed12504807faa60ce48c08e5bb5b3bd9f95502428247f9050e4a41c5d",
+          "kernels/transformer_bf16/residual.cc": "56d6d909c9830b799263b970443f1f7b57dd4d99557db25afef036d761e8f4a2",
+          "kernels/transformer_bf16/rmsnorm.cc": "9efc3bec80f7c25e88a48ce30f851bc437e05000e7d79014cc2997399b15463f",
+          "kernels/transformer_bf16/rope.cc": "9cda05b108160f2152261eb79b61c8830aca34d0c4d4158d5c281897f1b7ce2a",
+          "kernels/transformer_bf16/softmax.cc": "2c4565cecc5832f1a1bde4968d5cde782a6faec6dae018fb298244c378f81371",
+          "kernels/transformer_bf16/stream.py": "7f1641705bc59dd1cd08bc0a0f74f66bc7a55d2487778d6609d5a21fd9fbb6e9",
+          "kernels/transformer_bf16/topk.cc": "1f680ca67d8c97a82bb41db53a6f2aad15802f16be287b9bfddbac31ca6e1868",
+          "kernels/transformer_bf16/__init__.py": "66e8ee8dbd8e1bbc4788e12fa85a161db92c666969493f6a38b5f623cb309bf4"
+        },
+        "rotations_sha256": "14d4460fe64c754ccb3c97c00c8db3365f07abbfc5a735e383a8f107c99a2c32",
+        "lut_sha256": "2a3578db96f57b7b5c2768acbfa2bffefbf5247453fbab911793728b5451465e",
+        "fixtures": {
+          "<user-home>\\gemma4-assistant\\npu\\e2b-bf16-fixtures-1792336544350126400\\manifest.json": "027df84277782e943ec972cb8264facbb2605bd8a4ec114046cdd4310300a073",
+          "<user-home>\\gemma4-assistant\\npu\\e4b-bf16-fixtures-1792336549563028300\\manifest.json": "3cd61be620adce03617667367c1faa52eacc3f8a22c1c3fd5defe0b207ee643b",
+          "<user-home>\\gemma4-assistant\\npu\\e2b-bf16-fixtures-1792337387001291100\\manifest.json": "b8f9db7bf609ac2f24a683a597c8900bbabac018a12c94dba3e00fe34ac741bf",
+          "<user-home>\\gemma4-assistant\\npu\\e4b-bf16-fixtures-1792337391726200700\\manifest.json": "51739117972e81388d2ae2ba7b4cb90993b6759d68720908c0b9de4154dc2895"
+        },
+        "limit": 0,
+        "case_indices": null,
+        "precise_projection": true,
+        "keep_going": true
+      },
+      "passed": false,
+      "complete": true,
+      "cases": 24,
+      "passing_cases": 18,
+      "matching_tokens": 23,
+      "results": [
+        {
+          "model": "gemma-4-E2B-it-assistant",
+          "fixture": "seed-11-kv-1-pos-0.npz",
+          "passed": true,
+          "metrics": {
+            "pre_projection": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_0": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_1": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_2": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_3": {
+              "passed": true,
+              "relative_l2": 0.00010254227189916747,
+              "max_abs_over_reference_rms": 0.0016406763503866795
+            },
+            "hidden": {
+              "passed": true,
+              "relative_l2": 0.0001350155189368501,
+              "max_abs_over_reference_rms": 0.0021602483029896018
+            },
+            "projected": {
+              "passed": true,
+              "relative_l2": 0.0005459226137052235,
+              "max_abs_over_reference_rms": 0.007661147592595223
+            },
+            "centroids": {
+              "passed": true,
+              "relative_l2": 0.00040275310120022745,
+              "max_abs_over_reference_rms": 0.006062693822556794
+            },
+            "shared_head_logits": {
+              "passed": true,
+              "relative_l2": 0.0004058306831978921,
+              "max_abs_over_reference_rms": 0.008521370653375455
+            }
+          },
+          "token_id": 186200,
+          "reference_token_id": 186200,
+          "token_equal": true,
+          "selected_row_overlap": 3968,
+          "selected_rows": 4096,
+          "wall_seconds": 21.488741300010588,
+          "dispatches": 99
+        },
+        {
+          "model": "gemma-4-E2B-it-assistant",
+          "fixture": "seed-11-kv-37-pos-36.npz",
+          "passed": true,
+          "metrics": {
+            "pre_projection": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_0": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_1": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_2": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_3": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "hidden": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "projected": {
+              "passed": true,
+              "relative_l2": 3.2344238292072814e-10,
+              "max_abs_over_reference_rms": 1.2676300789530761e-08
+            },
+            "centroids": {
+              "passed": true,
+              "relative_l2": 0.00012461440218277078,
+              "max_abs_over_reference_rms": 0.005639404084284476
+            },
+            "shared_head_logits": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            }
+          },
+          "token_id": 227288,
+          "reference_token_id": 227288,
+          "token_equal": true,
+          "selected_row_overlap": 4096,
+          "selected_rows": 4096,
+          "wall_seconds": 15.467886200000066,
+          "dispatches": 99
+        },
+        {
+          "model": "gemma-4-E2B-it-assistant",
+          "fixture": "seed-11-kv-513-pos-8191.npz",
+          "passed": true,
+          "metrics": {
+            "pre_projection": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_0": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_1": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_2": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_3": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "hidden": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "projected": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "centroids": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "shared_head_logits": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            }
+          },
+          "token_id": 9189,
+          "reference_token_id": 9189,
+          "token_equal": true,
+          "selected_row_overlap": 3968,
+          "selected_rows": 4096,
+          "wall_seconds": 27.661088299995754,
+          "dispatches": 99
+        },
+        {
+          "model": "gemma-4-E2B-it-assistant",
+          "fixture": "seed-11-kv-8192-pos-32767.npz",
+          "passed": true,
+          "metrics": {
+            "pre_projection": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_0": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_1": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_2": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_3": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "hidden": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "projected": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "centroids": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "shared_head_logits": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            }
+          },
+          "token_id": 106,
+          "reference_token_id": 106,
+          "token_equal": true,
+          "selected_row_overlap": 3968,
+          "selected_rows": 4096,
+          "wall_seconds": 21.705155899981037,
+          "dispatches": 99
+        },
+        {
+          "model": "gemma-4-E2B-it-assistant",
+          "fixture": "seed-29-kv-1-pos-0.npz",
+          "passed": false,
+          "metrics": {
+            "pre_projection": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_0": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_1": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_2": {
+              "passed": true,
+              "relative_l2": 0.0023556733958818013,
+              "max_abs_over_reference_rms": 0.019193508063310574
+            },
+            "layer_3": {
+              "passed": true,
+              "relative_l2": 0.004134924620946137,
+              "max_abs_over_reference_rms": 0.014837919232680925
+            },
+            "hidden": {
+              "passed": true,
+              "relative_l2": 0.004486091471361059,
+              "max_abs_over_reference_rms": 0.024193531095115444
+            },
+            "projected": {
+              "passed": false,
+              "relative_l2": 0.009366719228230904,
+              "max_abs_over_reference_rms": 0.11231224374848718
+            },
+            "centroids": {
+              "passed": true,
+              "relative_l2": 0.00975310951148409,
+              "max_abs_over_reference_rms": 0.01985142931919079
+            },
+            "shared_head_logits": {
+              "passed": false,
+              "relative_l2": 0.035426421035750916,
+              "max_abs_over_reference_rms": 0.05600956080886058
+            }
+          },
+          "token_id": 98353,
+          "reference_token_id": 98353,
+          "token_equal": true,
+          "selected_row_overlap": 3968,
+          "selected_rows": 4096,
+          "wall_seconds": 15.133284599985927,
+          "dispatches": 99,
+          "failure_trace": {
+            "file": "gemma-4-E2B-it-assistant-seed-29-kv-1-pos-0.npz",
+            "sha256": "858f91c514e10182537af5c97f9ae655800465e22b1d781b42b02e23f58127a2"
+          }
+        },
+        {
+          "model": "gemma-4-E2B-it-assistant",
+          "fixture": "seed-29-kv-37-pos-36.npz",
+          "passed": true,
+          "metrics": {
+            "pre_projection": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_0": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_1": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_2": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_3": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "hidden": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "projected": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "centroids": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "shared_head_logits": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            }
+          },
+          "token_id": 90180,
+          "reference_token_id": 90180,
+          "token_equal": true,
+          "selected_row_overlap": 4096,
+          "selected_rows": 4096,
+          "wall_seconds": 14.477623500017216,
+          "dispatches": 99
+        },
+        {
+          "model": "gemma-4-E2B-it-assistant",
+          "fixture": "seed-29-kv-513-pos-8191.npz",
+          "passed": false,
+          "metrics": {
+            "pre_projection": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_0": {
+              "passed": true,
+              "relative_l2": 0.004681171553278074,
+              "max_abs_over_reference_rms": 0.01657628051339044
+            },
+            "layer_1": {
+              "passed": false,
+              "relative_l2": 0.012673914732973562,
+              "max_abs_over_reference_rms": 0.0483641118175424
+            },
+            "layer_2": {
+              "passed": false,
+              "relative_l2": 0.02931903844427225,
+              "max_abs_over_reference_rms": 0.10059527549705935
+            },
+            "layer_3": {
+              "passed": false,
+              "relative_l2": 0.042683087346092635,
+              "max_abs_over_reference_rms": 0.15855656218129363
+            },
+            "hidden": {
+              "passed": false,
+              "relative_l2": 0.04445345149458367,
+              "max_abs_over_reference_rms": 0.161896637480284
+            },
+            "projected": {
+              "passed": false,
+              "relative_l2": 0.04652309894883057,
+              "max_abs_over_reference_rms": 0.5712140330108503
+            },
+            "centroids": {
+              "passed": false,
+              "relative_l2": 0.11652724701614724,
+              "max_abs_over_reference_rms": 0.2738785370637736
+            },
+            "shared_head_logits": {
+              "passed": false,
+              "relative_l2": 0.03240440106845195,
+              "max_abs_over_reference_rms": 0.1061953057728597
+            }
+          },
+          "token_id": 114386,
+          "reference_token_id": 249168,
+          "token_equal": false,
+          "selected_row_overlap": 3968,
+          "selected_rows": 4096,
+          "wall_seconds": 15.648069800023222,
+          "dispatches": 99,
+          "failure_trace": {
+            "file": "gemma-4-E2B-it-assistant-seed-29-kv-513-pos-8191.npz",
+            "sha256": "b078781e0969abe2fdc0f774cebd459898c20686fddd04dfd504f8489fbc916a"
+          }
+        },
+        {
+          "model": "gemma-4-E2B-it-assistant",
+          "fixture": "seed-29-kv-8192-pos-32767.npz",
+          "passed": true,
+          "metrics": {
+            "pre_projection": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_0": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_1": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_2": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_3": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "hidden": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "projected": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "centroids": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "shared_head_logits": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            }
+          },
+          "token_id": 228,
+          "reference_token_id": 228,
+          "token_equal": true,
+          "selected_row_overlap": 4096,
+          "selected_rows": 4096,
+          "wall_seconds": 15.315669200004777,
+          "dispatches": 99
+        },
+        {
+          "model": "gemma-4-E4B-it-assistant",
+          "fixture": "seed-11-kv-1-pos-0.npz",
+          "passed": true,
+          "metrics": {
+            "pre_projection": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_0": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_1": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_2": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_3": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "hidden": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "projected": {
+              "passed": true,
+              "relative_l2": 1.0940011208885243e-09,
+              "max_abs_over_reference_rms": 5.535256487655915e-08
+            },
+            "centroids": {
+              "passed": true,
+              "relative_l2": 1.3049631696736574e-05,
+              "max_abs_over_reference_rms": 0.0005905589161439579
+            },
+            "shared_head_logits": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            }
+          },
+          "token_id": 236759,
+          "reference_token_id": 236759,
+          "token_equal": true,
+          "selected_row_overlap": 3968,
+          "selected_rows": 4096,
+          "wall_seconds": 21.532307300018147,
+          "dispatches": 99
+        },
+        {
+          "model": "gemma-4-E4B-it-assistant",
+          "fixture": "seed-11-kv-37-pos-36.npz",
+          "passed": true,
+          "metrics": {
+            "pre_projection": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_0": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_1": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_2": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_3": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "hidden": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "projected": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "centroids": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "shared_head_logits": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            }
+          },
+          "token_id": 236786,
+          "reference_token_id": 236786,
+          "token_equal": true,
+          "selected_row_overlap": 4096,
+          "selected_rows": 4096,
+          "wall_seconds": 14.898340999992797,
+          "dispatches": 99
+        },
+        {
+          "model": "gemma-4-E4B-it-assistant",
+          "fixture": "seed-11-kv-513-pos-8191.npz",
+          "passed": true,
+          "metrics": {
+            "pre_projection": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_0": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_1": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_2": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_3": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "hidden": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "projected": {
+              "passed": true,
+              "relative_l2": 0.00021304943913331403,
+              "max_abs_over_reference_rms": 0.010779461469672244
+            },
+            "centroids": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "shared_head_logits": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            }
+          },
+          "token_id": 825,
+          "reference_token_id": 825,
+          "token_equal": true,
+          "selected_row_overlap": 4096,
+          "selected_rows": 4096,
+          "wall_seconds": 15.144926500011934,
+          "dispatches": 99
+        },
+        {
+          "model": "gemma-4-E4B-it-assistant",
+          "fixture": "seed-11-kv-8192-pos-32767.npz",
+          "passed": false,
+          "metrics": {
+            "pre_projection": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_0": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_1": {
+              "passed": true,
+              "relative_l2": 6.757288597846965e-05,
+              "max_abs_over_reference_rms": 0.0010811661756555144
+            },
+            "layer_2": {
+              "passed": true,
+              "relative_l2": 0.00185631759959384,
+              "max_abs_over_reference_rms": 0.018681803687763975
+            },
+            "layer_3": {
+              "passed": true,
+              "relative_l2": 0.0074820338884645544,
+              "max_abs_over_reference_rms": 0.049625101035147015
+            },
+            "hidden": {
+              "passed": true,
+              "relative_l2": 0.00937355529191753,
+              "max_abs_over_reference_rms": 0.04883036605099947
+            },
+            "projected": {
+              "passed": false,
+              "relative_l2": 0.008078350895779554,
+              "max_abs_over_reference_rms": 0.06201699781553418
+            },
+            "centroids": {
+              "passed": false,
+              "relative_l2": 0.01370192556816902,
+              "max_abs_over_reference_rms": 0.030425232036991594
+            },
+            "shared_head_logits": {
+              "passed": false,
+              "relative_l2": 0.014706083427314425,
+              "max_abs_over_reference_rms": 0.035346249500370776
+            }
+          },
+          "token_id": 5011,
+          "reference_token_id": 5011,
+          "token_equal": true,
+          "selected_row_overlap": 4096,
+          "selected_rows": 4096,
+          "wall_seconds": 15.345923400018364,
+          "dispatches": 99,
+          "failure_trace": {
+            "file": "gemma-4-E4B-it-assistant-seed-11-kv-8192-pos-32767.npz",
+            "sha256": "75d55998658cf2cb25ed8213c42cbe2bdcca85cddb5538d405b2263c85aec35a"
+          }
+        },
+        {
+          "model": "gemma-4-E4B-it-assistant",
+          "fixture": "seed-29-kv-1-pos-0.npz",
+          "passed": false,
+          "metrics": {
+            "pre_projection": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_0": {
+              "passed": true,
+              "relative_l2": 0.0001486401167076701,
+              "max_abs_over_reference_rms": 0.0023782418673227216
+            },
+            "layer_1": {
+              "passed": true,
+              "relative_l2": 0.0032969746058572886,
+              "max_abs_over_reference_rms": 0.016276769385534465
+            },
+            "layer_2": {
+              "passed": true,
+              "relative_l2": 0.0031720659127359575,
+              "max_abs_over_reference_rms": 0.01686350666730661
+            },
+            "layer_3": {
+              "passed": false,
+              "relative_l2": 0.007326143274559747,
+              "max_abs_over_reference_rms": 0.07081015892773469
+            },
+            "hidden": {
+              "passed": true,
+              "relative_l2": 0.00512458078287607,
+              "max_abs_over_reference_rms": 0.03939550196405751
+            },
+            "projected": {
+              "passed": false,
+              "relative_l2": 0.010348001044806026,
+              "max_abs_over_reference_rms": 0.287423714780572
+            },
+            "centroids": {
+              "passed": true,
+              "relative_l2": 0.0034606821508917497,
+              "max_abs_over_reference_rms": 0.013315732823532921
+            },
+            "shared_head_logits": {
+              "passed": true,
+              "relative_l2": 0.004499861755164664,
+              "max_abs_over_reference_rms": 0.017583169901954233
+            }
+          },
+          "token_id": 50036,
+          "reference_token_id": 50036,
+          "token_equal": true,
+          "selected_row_overlap": 4096,
+          "selected_rows": 4096,
+          "wall_seconds": 15.234933600004297,
+          "dispatches": 99,
+          "failure_trace": {
+            "file": "gemma-4-E4B-it-assistant-seed-29-kv-1-pos-0.npz",
+            "sha256": "88aeb690d553badc6cde714a479c8c479fc221e97d58853ceaceea666d3dbe65"
+          }
+        },
+        {
+          "model": "gemma-4-E4B-it-assistant",
+          "fixture": "seed-29-kv-37-pos-36.npz",
+          "passed": true,
+          "metrics": {
+            "pre_projection": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_0": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_1": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_2": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_3": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "hidden": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "projected": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "centroids": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "shared_head_logits": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            }
+          },
+          "token_id": 54557,
+          "reference_token_id": 54557,
+          "token_equal": true,
+          "selected_row_overlap": 3968,
+          "selected_rows": 4096,
+          "wall_seconds": 15.536374300019816,
+          "dispatches": 99
+        },
+        {
+          "model": "gemma-4-E4B-it-assistant",
+          "fixture": "seed-29-kv-513-pos-8191.npz",
+          "passed": false,
+          "metrics": {
+            "pre_projection": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_0": {
+              "passed": true,
+              "relative_l2": 0.0017832206840480795,
+              "max_abs_over_reference_rms": 0.010789504092528731
+            },
+            "layer_1": {
+              "passed": true,
+              "relative_l2": 0.0043482452489837274,
+              "max_abs_over_reference_rms": 0.017500111725497654
+            },
+            "layer_2": {
+              "passed": false,
+              "relative_l2": 0.038089478689376954,
+              "max_abs_over_reference_rms": 0.1921996882498647
+            },
+            "layer_3": {
+              "passed": false,
+              "relative_l2": 0.0479154831935604,
+              "max_abs_over_reference_rms": 0.15527607829452628
+            },
+            "hidden": {
+              "passed": false,
+              "relative_l2": 0.05593986680975716,
+              "max_abs_over_reference_rms": 0.2713640297014521
+            },
+            "projected": {
+              "passed": false,
+              "relative_l2": 0.04425285837720035,
+              "max_abs_over_reference_rms": 0.5167561750639471
+            },
+            "centroids": {
+              "passed": false,
+              "relative_l2": 0.04532194925724528,
+              "max_abs_over_reference_rms": 0.10521260718274081
+            },
+            "shared_head_logits": {
+              "passed": false,
+              "relative_l2": 0.05821820495622444,
+              "max_abs_over_reference_rms": 0.1674926035337008
+            }
+          },
+          "token_id": 77173,
+          "reference_token_id": 77173,
+          "token_equal": true,
+          "selected_row_overlap": 3968,
+          "selected_rows": 4096,
+          "wall_seconds": 14.889467000000877,
+          "dispatches": 99,
+          "failure_trace": {
+            "file": "gemma-4-E4B-it-assistant-seed-29-kv-513-pos-8191.npz",
+            "sha256": "e201ac893b7846913cc8376f7c4e87a86055f209c017528b5790606a64da31ec"
+          }
+        },
+        {
+          "model": "gemma-4-E4B-it-assistant",
+          "fixture": "seed-29-kv-8192-pos-32767.npz",
+          "passed": false,
+          "metrics": {
+            "pre_projection": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_0": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_1": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_2": {
+              "passed": true,
+              "relative_l2": 0.003259544439116329,
+              "max_abs_over_reference_rms": 0.020236364711070844
+            },
+            "layer_3": {
+              "passed": false,
+              "relative_l2": 0.042981489543693976,
+              "max_abs_over_reference_rms": 0.24532810033062122
+            },
+            "hidden": {
+              "passed": false,
+              "relative_l2": 0.05245790708010418,
+              "max_abs_over_reference_rms": 0.1840380063168075
+            },
+            "projected": {
+              "passed": false,
+              "relative_l2": 0.040729519201905554,
+              "max_abs_over_reference_rms": 0.6859173697551615
+            },
+            "centroids": {
+              "passed": false,
+              "relative_l2": 0.02976256245680788,
+              "max_abs_over_reference_rms": 0.08148099266890334
+            },
+            "shared_head_logits": {
+              "passed": false,
+              "relative_l2": 0.011402044375267838,
+              "max_abs_over_reference_rms": 0.04942924239341793
+            }
+          },
+          "token_id": 236818,
+          "reference_token_id": 236818,
+          "token_equal": true,
+          "selected_row_overlap": 3712,
+          "selected_rows": 4096,
+          "wall_seconds": 15.666480199986836,
+          "dispatches": 99,
+          "failure_trace": {
+            "file": "gemma-4-E4B-it-assistant-seed-29-kv-8192-pos-32767.npz",
+            "sha256": "f88e886d5b01a268e30211f4d61a70ce76483572f901d5cc3cbe7a30a91a56e6"
+          }
+        },
+        {
+          "model": "gemma-4-E2B-it-assistant",
+          "fixture": "seed-83-kv-1-pos-0.npz",
+          "passed": true,
+          "metrics": {
+            "pre_projection": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_0": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_1": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_2": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_3": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "hidden": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "projected": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "centroids": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "shared_head_logits": {
+              "passed": true,
+              "relative_l2": 3.1798658828115376e-06,
+              "max_abs_over_reference_rms": 0.00017696105372956195
+            }
+          },
+          "token_id": 48726,
+          "reference_token_id": 48726,
+          "token_equal": true,
+          "selected_row_overlap": 3968,
+          "selected_rows": 4096,
+          "wall_seconds": 15.316496000014013,
+          "dispatches": 99
+        },
+        {
+          "model": "gemma-4-E2B-it-assistant",
+          "fixture": "seed-83-kv-37-pos-36.npz",
+          "passed": true,
+          "metrics": {
+            "pre_projection": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_0": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_1": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_2": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_3": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "hidden": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "projected": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "centroids": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "shared_head_logits": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            }
+          },
+          "token_id": 158528,
+          "reference_token_id": 158528,
+          "token_equal": true,
+          "selected_row_overlap": 4096,
+          "selected_rows": 4096,
+          "wall_seconds": 15.54557030001888,
+          "dispatches": 99
+        },
+        {
+          "model": "gemma-4-E2B-it-assistant",
+          "fixture": "seed-83-kv-513-pos-8191.npz",
+          "passed": true,
+          "metrics": {
+            "pre_projection": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_0": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_1": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_2": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_3": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "hidden": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "projected": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "centroids": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "shared_head_logits": {
+              "passed": true,
+              "relative_l2": 1.7856721954405192e-08,
+              "max_abs_over_reference_rms": 1.1428302050819323e-06
+            }
+          },
+          "token_id": 90976,
+          "reference_token_id": 90976,
+          "token_equal": true,
+          "selected_row_overlap": 4096,
+          "selected_rows": 4096,
+          "wall_seconds": 15.068660199991427,
+          "dispatches": 99
+        },
+        {
+          "model": "gemma-4-E2B-it-assistant",
+          "fixture": "seed-83-kv-8192-pos-32767.npz",
+          "passed": true,
+          "metrics": {
+            "pre_projection": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_0": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_1": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_2": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_3": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "hidden": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "projected": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "centroids": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "shared_head_logits": {
+              "passed": true,
+              "relative_l2": 5.2504617664255625e-08,
+              "max_abs_over_reference_rms": 3.36029553051236e-06
+            }
+          },
+          "token_id": 181743,
+          "reference_token_id": 181743,
+          "token_equal": true,
+          "selected_row_overlap": 4096,
+          "selected_rows": 4096,
+          "wall_seconds": 15.302168299996993,
+          "dispatches": 99
+        },
+        {
+          "model": "gemma-4-E4B-it-assistant",
+          "fixture": "seed-83-kv-1-pos-0.npz",
+          "passed": true,
+          "metrics": {
+            "pre_projection": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_0": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_1": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_2": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_3": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "hidden": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "projected": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "centroids": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "shared_head_logits": {
+              "passed": true,
+              "relative_l2": 7.521984485510184e-09,
+              "max_abs_over_reference_rms": 4.738253205368149e-07
+            }
+          },
+          "token_id": 42578,
+          "reference_token_id": 42578,
+          "token_equal": true,
+          "selected_row_overlap": 3968,
+          "selected_rows": 4096,
+          "wall_seconds": 14.609302800003206,
+          "dispatches": 99
+        },
+        {
+          "model": "gemma-4-E4B-it-assistant",
+          "fixture": "seed-83-kv-37-pos-36.npz",
+          "passed": true,
+          "metrics": {
+            "pre_projection": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_0": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_1": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_2": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_3": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "hidden": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "projected": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "centroids": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "shared_head_logits": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            }
+          },
+          "token_id": 54041,
+          "reference_token_id": 54041,
+          "token_equal": true,
+          "selected_row_overlap": 4096,
+          "selected_rows": 4096,
+          "wall_seconds": 14.853454399999464,
+          "dispatches": 99
+        },
+        {
+          "model": "gemma-4-E4B-it-assistant",
+          "fixture": "seed-83-kv-513-pos-8191.npz",
+          "passed": true,
+          "metrics": {
+            "pre_projection": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_0": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_1": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_2": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_3": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "hidden": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "projected": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "centroids": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "shared_head_logits": {
+              "passed": true,
+              "relative_l2": 4.612601302747492e-06,
+              "max_abs_over_reference_rms": 0.0002905572718200871
+            }
+          },
+          "token_id": 141107,
+          "reference_token_id": 141107,
+          "token_equal": true,
+          "selected_row_overlap": 3968,
+          "selected_rows": 4096,
+          "wall_seconds": 14.998381599987624,
+          "dispatches": 99
+        },
+        {
+          "model": "gemma-4-E4B-it-assistant",
+          "fixture": "seed-83-kv-8192-pos-32767.npz",
+          "passed": true,
+          "metrics": {
+            "pre_projection": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_0": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_1": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_2": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_3": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "hidden": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "projected": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "centroids": {
+              "passed": true,
+              "relative_l2": 2.1878840557699377e-09,
+              "max_abs_over_reference_rms": 9.901232974623036e-08
+            },
+            "shared_head_logits": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            }
+          },
+          "token_id": 75118,
+          "reference_token_id": 75118,
+          "token_equal": true,
+          "selected_row_overlap": 4096,
+          "selected_rows": 4096,
+          "wall_seconds": 15.695251600001939,
+          "dispatches": 99
+        }
+      ],
+      "dispatch_count": 2376,
+      "all_completed_inputs_unchanged": true,
+      "operations": {
+        "draft_projection_precise": 1344,
+        "draft_norm": 504,
+        "draft_rope": 96,
+        "draft_softmax": 96,
+        "draft_residual": 192,
+        "draft_geglu": 96,
+        "draft_topk": 48
+      },
+      "runtime_driver_sha256": [
+        "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+      ]
+    }
+  ]
+}

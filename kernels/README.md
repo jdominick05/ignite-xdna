@@ -8,6 +8,11 @@ leaves on the CPU. Nothing here changes how `resnet50`/`yolov8n`/`yolov8n-pose` 
 quantized or run; each kernel is a standalone, measured artifact with its own log
 under [`results/aie/`](../results/aie/README.md).
 
+Reusable standalone BF16 transformer primitives live in
+[`transformer_bf16/`](transformer_bf16/README.md): vector projections, RMSNorm,
+rotary encoding, streamed softmax, gated GELU, residual/scaling and top-k.
+They are experimental kernels outside the graph compiler's supported operations.
+
 These do **not** run in `resnet_env17`. They need the mlir-aie `ironenv` described in
 `RESEARCH.md` ("Custom C++ XRT / hand-written AIE kernels"), activated from
 PowerShell:

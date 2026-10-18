@@ -742,3 +742,12 @@ Two-output lookup GEMM primitive: [initial build](laya/window_lookup_primitive_v
 
 - Cached-Wi reuse: [compiler restart/delta proof](laya/cached_wi_rearm_v1_build_desktop2_20261017.log), [offline mutation/privacy checks](laya/cached_wi_rearm_v1_validation_desktop2_20261017.log), [legacy gate](laya/cached_wi_rearm_v1_legacy_summary_desktop2_20261017.log); [finite-task contract and remaining integration gates](../docs/DECISIONS.md#laya-finite-wi-cache-rearming-and-real-input-scope-2026-10-17-desktop-2).
 - [Six changed-input cached-Wi requests in one context](laya/cached_wi_rearm_v1_primitive_desktop2_20261017.log) and [six real-input Wi layer replays](laya/cached_wi_layer_v1_desktop2_20261017.log); [device results and one-column/no-timing limits](../docs/BENCHMARKS.md#laya-cached-wi-rearms-and-matches-real-layer-inputs-2026-10-17-desktop-2).
+
+
+## Archived testing checkpoint (2026-10-18)
+
+[Offline validation and privacy provenance](testing_checkpoint_20261018.json) and
+[scope of the archived work](../docs/BENCHMARKS.md#archived-testing-work-and-historical-evidence-2026-10-18-checkpoint)
+index the historical laptop, medium-model, dense regression and pose-placement
+artifacts preserved with this checkpoint. Historical failures remain failures;
+unverified post-audit figures are not promoted into accepted performance results.
