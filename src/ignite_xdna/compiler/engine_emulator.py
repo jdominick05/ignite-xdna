@@ -335,19 +335,35 @@ def run_packet(wpkt: np.ndarray, apkt: np.ndarray, state: CoreState, core_row: i
             state.psum[:] = acc
     elif hdr.op == OP_MAXPOOL:
         # Two packets per tile: the first holds blocks 0-1, the second emits all four.
+        # Stride 1 is the SPPF 5x5 pad-2 pool the core has always done. Stride 2 is the ResNet
+        # stem's 3x3 pad-1: the core unzips the even pixels of each 8-pixel input group, which
+        # is exactly input row 2r+dy, input col 2c+dx for an output tile of TILE_ROWS x TILE_COLS.
+        s2 = hdr.stride == 2
+        win = hdr.k if s2 else 5
+        if s2 and hdr.k > 3:
+            raise ValueError(f"stride-2 max pool window {hdr.k} exceeds the two-vector span (k <= 3)")
+        st = 2 if s2 else 1
+        rows = np.arange(TILE_ROWS) * st + win - 1
+        cols = np.arange(TILE_COLS) * st + win - 1
+        if int(rows.max()) >= hdr.rows_in or int(cols.max()) >= hdr.cols_in:
+            raise ValueError(f"stride-{st} k={win} pool reads a {int(rows.max()) + 1}x"
+                             f"{int(cols.max()) + 1} packet, the tile is {hdr.rows_in}x{hdr.cols_in}")
         pooled = np.zeros((2, TILE_ROWS, TILE_COLS, 8), dtype=np.uint8)
-        for b in range(2):
+        nblk = hdr.ncin if s2 else 2   # a stride-2 tile's 50-column packet carries one block
+        for b in range(nblk):
             plane = a[b * hdr.plane_bytes:(b + 1) * hdr.plane_bytes].reshape(hdr.rows_in, hdr.cols_in, 8)
             m = np.zeros((TILE_ROWS, TILE_COLS, 8), dtype=np.uint8)
-            for dy in range(5):
-                for dx in range(5):
-                    m = np.maximum(m, plane[dy:dy + TILE_ROWS, dx:dx + TILE_COLS, :])
+            for dy in range(win):
+                rr = np.arange(TILE_ROWS) * st + dy
+                for dx in range(win):
+                    cc = np.arange(TILE_COLS) * st + dx
+                    m = np.maximum(m, plane[np.ix_(rr, cc)])
             pooled[b] = m
-        if emit:
-            out[0:2] = state.hold[0:2]
-            out[2:4] = pooled
+        if emit:   # the pair covers 2*nblk blocks of the tile: hold's, then this packet's
+            out[0:nblk] = state.hold[0:nblk]
+            out[nblk:2 * nblk] = pooled[0:nblk]
         else:
-            state.hold[0:2] = pooled
+            state.hold[0:nblk] = pooled[0:nblk]
     elif hdr.op == OP_RESIDUAL:
         res = a[:OUT_BLOCKS * OUT_BLOCK_BYTES].reshape(OUT_BLOCKS, TILE_ROWS, TILE_COLS, 8)
         if hdr.flags & F_RES_SHIFTS:

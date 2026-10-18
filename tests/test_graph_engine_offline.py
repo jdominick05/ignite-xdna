@@ -848,6 +848,57 @@ class TestProgramRamEpilogueOps(unittest.TestCase):
             ref = np.concatenate([pooled(a_h), pooled(a_e)])
             self.assertTrue(np.array_equal(got.reshape(4, 5, 20, 8), ref), k)
 
+    def test_stride2_maxpool_pair_matches_onnxruntime(self):
+        """The ResNet-family stem pool (3x3, stride 2) against ONNX Runtime's own MaxPool.
+
+        The core gets there the way conv_pass already does at stride 2: an output group of 4 pixels
+        spans 8 input pixels, read as two vectors and reduced to the even ones by an unzip, which is
+        input row 2r+dy and col 2c+dx -- standard stride-2 pooling with the pad folded into the
+        packet. Feeding ORT exactly the 11x41 region the tile reads, with pads=0, leaves no padding
+        convention to argue about. One block per packet, because a 50-column block already fills
+        the 6,400 B activation packet."""
+        import onnx
+        import onnxruntime as ort
+        from onnx import TensorProto, helper
+
+        rows_in, cols_in = 16, 50                      # CHUNK_GEOMETRY["k3s2"]
+        plane_bytes = rows_in * cols_in * 8
+        self.assertEqual(plane_bytes, em.A_BYTES, "one block per stride-2 packet")
+
+        node = helper.make_node("MaxPool", ["x"], ["y"], kernel_shape=[3, 3], strides=[2, 2],
+                                pads=[0, 0, 0, 0])
+        graph = helper.make_graph(
+            [node], "stem_pool",
+            [helper.make_tensor_value_info("x", TensorProto.FLOAT, [1, 8, 11, 41])],
+            [helper.make_tensor_value_info("y", TensorProto.FLOAT, [1, 8, 5, 20])])
+        model = onnx.helper.make_model(graph, opset_imports=[onnx.helper.make_opsetid("", 17)])
+        sess = ort.InferenceSession(model.SerializeToString(), providers=["CPUExecutionProvider"])
+
+        rng = np.random.default_rng(20260918)
+        flags = dict(op=em.OP_MAXPOOL, k=3, stride=2, ncin=1, nco=4, rows_in=rows_in,
+                     cols_in=cols_in, plane_bytes=plane_bytes)
+        st = em.CoreState()
+        a_h = rng.integers(0, 256, size=em.A_BYTES, dtype=np.uint8)
+        a_e = rng.integers(0, 256, size=em.A_BYTES, dtype=np.uint8)
+        self.assertIsNone(em.run_packet(
+            em.pack_w_packet(em.PacketHeader(flags=em.F_HOLD, count_out=0, count_acc=1, **flags),
+                             np.zeros(32, np.int32), None), a_h, st, 0))
+        got = em.run_packet(
+            em.pack_w_packet(em.PacketHeader(flags=em.F_EMIT, count_out=1, **flags),
+                             np.zeros(32, np.int32), None), a_e, st, 0)
+        blocks = got.reshape(em.OUT_BLOCKS, 5, 20, 8)
+        for blk, a in ((0, a_h), (1, a_e)):   # the pair's hold block, then the emit block
+            plane = a[:plane_bytes].reshape(rows_in, cols_in, 8)[:11, :41, :]
+            ref = sess.run(None, {"x": plane.transpose(2, 0, 1)[None].astype(np.float32)})[0][0]
+            self.assertTrue(np.array_equal(blocks[blk], ref.transpose(1, 2, 0)), f"block {blk}")
+
+        # A stride-2 window wider than 3 reads past the two vectors the core loads; the emulator
+        # refuses rather than wrapping, and the same must hold for the packet the compiler emits.
+        wide = em.PacketHeader(op=em.OP_MAXPOOL, k=5, stride=2, ncin=1, nco=4, flags=em.F_EMIT,
+                               count_out=1, rows_in=rows_in, cols_in=cols_in, plane_bytes=plane_bytes)
+        with self.assertRaises(ValueError):
+            em.run_packet(em.pack_w_packet(wide, np.zeros(32, np.int32), None), a_e, em.CoreState(), 0)
+
 
 class TestDispatchGate(unittest.TestCase):
     """The compile-time dispatch gate's fail-closed check.

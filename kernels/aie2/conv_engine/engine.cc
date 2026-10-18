@@ -374,25 +374,46 @@ inline void residual_tile(const Hdr &d, const uint8_t *a, const int32_t *psum, u
 // second (F_EMIT) copies them to output blocks 0-1 and computes blocks 2-3.
 inline void maxpool_tile(const Hdr &d, const uint8_t *a, int32_t *psum, uint8_t *out) {
     uint8_t *hold = reinterpret_cast<uint8_t *>(psum) + HOLD_OFFSET_BYTES;
-    uint8_t *dst = (d.flags & F_EMIT) ? out + 2 * OUT_BLOCK_BYTES : hold;
+    // Blocks per packet: 2 for the stride-1 SPPF pair, 1 for a stride-2 tile, whose 50-column
+    // packet is already at the 6,400 B A limit for a single block (the k3s2 conv geometry). The
+    // hold/emit pair always covers 2*nblk blocks, so the emit destination follows nblk.
+    const bool s2 = d.stride == 2;
+    const int nblk = s2 ? d.ncin : 2;
+    uint8_t *dst = (d.flags & F_EMIT) ? out + nblk * OUT_BLOCK_BYTES : hold;
     if (d.flags & F_EMIT) {
-        for (int i = 0; i < 2 * OUT_BLOCK_BYTES; i += 32)
+        for (int i = 0; i < nblk * OUT_BLOCK_BYTES; i += 32)
             aie::store_v(out + i, aie::load_v<32>(hold + i));
     }
     // Unsigned bytes are compared as signed bytes after flipping the top bit
     // (q ^ 0x80 preserves the unsigned order), so the native int8 max applies.
     using V32s = aie::vector<int8, 32>;
     const V32s flip = aie::broadcast<int8, 32>(int8_t(-128));
-    for (int b = 0; b < 2; ++b) {
+    // Stride 2 is the ResNet-family stem pool (3x3, pad 1). It follows conv_pass's convention:
+    // an output group of 4 pixels spans 8 *input* pixels, read as two 4-pixel vectors reduced to
+    // the even ones by an unzip. The store side and the tile shape are then identical to stride 1
+    // -- only the addressing differs. k is capped at 3 because two vectors reach input col
+    // 8g+dx+7 while a 5-wide stride-2 window needs 8g+12. (s2 and nblk are set above, where the
+    // emit destination needs them.)
+    const int win = s2 ? d.k : 5;
+    for (int b = 0; b < nblk; ++b) {
         const uint8_t *plane = a + b * d.plane_bytes;
         for (int r = 0; r < TILE_ROWS; ++r) {
             for (int g = 0; g < TILE_COLS / 4; ++g) {
                 V32s m = aie::broadcast<int8, 32>(int8_t(-128));
-                for (int dy = 0; dy < 5; ++dy) {
-                    const uint8_t *row = plane + ((r + dy) * d.cols_in + 4 * g) * 8;
-                    for (int dx = 0; dx < 5; ++dx) {
-                        V32s v = aie::load_unaligned_v<32>(row + dx * 8).template cast_to<int8>();
-                        m = aie::max(m, aie::bit_xor(v, flip));
+                for (int dy = 0; dy < win; ++dy) {
+                    const int col0 = s2 ? 8 * g : 4 * g;
+                    const uint8_t *row = plane + (((s2 ? 2 * r + dy : r + dy) * d.cols_in) + col0) * 8;
+                    for (int dx = 0; dx < win; ++dx) {
+                        V32u px;
+                        if (s2) {
+                            auto [ev, od] = aie::interleave_unzip(aie::load_unaligned_v<32>(row + dx * 8),
+                                                                  aie::load_unaligned_v<32>(row + dx * 8 + 32), 8);
+                            px = ev;
+                            (void) od;
+                        } else {
+                            px = aie::load_unaligned_v<32>(row + dx * 8);
+                        }
+                        m = aie::max(m, aie::bit_xor(px.template cast_to<int8>(), flip));
                     }
                 }
                 aie::store_v(dst + b * OUT_BLOCK_BYTES + (r * TILE_COLS + 4 * g) * 8,
