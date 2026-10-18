@@ -21,6 +21,10 @@ Gates, fixed before any run (2026-10-18):
        to fp32 rounding).
   npu: cosine to the HF fp32 reference >= 0.9999 on every document, and every document keeps its HF nearest
        neighbour among the documents (CPU torch bf16 reached 0.999928 and the 780M 0.99998 on these documents).
+  cpu with --bf16-inputs or --attention blockwise is a device-numerics emulation, held to the npu gate.
+--attention blockwise replaces the host attention with kernels/embedgemma/attention_oracle.py (the fused kernel's
+online-softmax form: key blocks of --k-block, BF16 Q/K/V, BF16 exp and P); --bf16-inputs rounds every weight
+product's input to BF16 as the NPU GEMM does. Both are numerics checks: their timings mean nothing.
 Timing: wall time per batch divided by its documents, median per length, after one untimed warm-up batch per
 (length, batch size). Phases: ``gemm`` is the whole weight-product hook; inside it ``npu_pack`` (round to BF16
 into the mapped A), ``npu_write`` (A sync), ``npu_call`` (submit + wait), ``npu_read`` (C sync) and ``npu_unpack``
@@ -166,6 +170,9 @@ def main():
     ap.add_argument("--builds", type=Path, help="tools/embedgemma_gemm_probe.py compile --out DIR (npu)")
     ap.add_argument("--ms", type=int, nargs="+", default=[256, 512, 2048])
     ap.add_argument("--batch", type=int, default=1, help="consecutive same-length documents per row batch")
+    ap.add_argument("--attention", choices=["exact", "blockwise"], default="exact")
+    ap.add_argument("--k-block", type=int, default=32)
+    ap.add_argument("--bf16-inputs", action="store_true", help="cpu: round weight-product inputs to BF16")
     ap.add_argument("--out", type=Path, required=True)
     a = ap.parse_args()
     if a.out.exists():
@@ -176,6 +183,13 @@ def main():
         raise ValueError("reference and docs differ in count")
     t = time.perf_counter()
     enc = Encoder()
+    if a.attention == "blockwise":
+        import attention_oracle
+
+        def blockwise(q, k, v, layer, segs):   # rows are independent, so one query block per document is exact
+            return np.concatenate([attention_oracle.attention(q[x:y], k[x:y], v[x:y], layer["kind"], enc.window,
+                                                              q_block=y - x, k_block=a.k_block) for x, y in segs])
+        enc._attention = blockwise
     print(f"weights loaded in {time.perf_counter() - t:.1f} s; {len(enc.shapes())} weight products per document", flush=True)
     npu = None
     if a.backend == "npu":
@@ -184,7 +198,8 @@ def main():
             return 3
         npu = Npu(enc, a.builds, a.ms)
     matmul = npu.matmul if npu else None
-    bf16 = a.backend == "npu"
+    bf16 = a.backend == "npu" or a.bf16_inputs
+    emulation = a.backend == "cpu" and (a.bf16_inputs or a.attention != "exact")
     try:
         embeds, times, phases = [None] * len(docs), {}, {}
         groups = []   # consecutive same-length documents, up to --batch and (npu) the largest compiled M in rows
@@ -222,10 +237,12 @@ def main():
             np.fill_diagonal(s, -np.inf)
             return s.argmax(axis=1)
         nn_kept = float(np.mean(nn(e) == nn(ref)))
-        threshold = 0.99999 if a.backend == "cpu" else 0.9999
-        passed = bool(cos.min() >= threshold and (a.backend == "cpu" or nn_kept == 1.0))
-        rec = dict(backend=a.backend, docs=str(a.docs), reference=str(a.reference), batch=a.batch, passed=passed,
-                   gate=dict(cos_min=threshold, nn_kept=None if a.backend == "cpu" else 1.0),
+        strict = a.backend == "cpu" and not emulation
+        threshold = 0.99999 if strict else 0.9999
+        passed = bool(cos.min() >= threshold and (strict or nn_kept == 1.0))
+        rec = dict(backend=a.backend, docs=str(a.docs), reference=str(a.reference), batch=a.batch, attention=a.attention, k_block=a.k_block,
+                   bf16_inputs=a.bf16_inputs, passed=passed,
+                   gate=dict(cos_min=threshold, nn_kept=None if strict else 1.0),
                    cos_min=float(cos.min()), cos_mean=float(cos.mean()), nn_kept=nn_kept,
                    per_length={})
         print(f"GATE {a.backend}: cos min {cos.min():.7f} (>= {threshold}), mean {cos.mean():.7f}, NN kept {nn_kept:.1%}: "

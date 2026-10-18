@@ -24989,3 +24989,25 @@ CPU 8-11%, no NPU context.)
   kernel that skips key blocks outside the band does 44% of the local MACs that these full-score products do.
 - **Unexplained here:** per-call rates (700-2072 GFLOPS) depend on shape as in the weight probe. The small local
   products at L = 512 run at 700-716 GFLOPS.
+
+#### A fused kernel's arithmetic passes the end-to-end gate (CPU emulation, 2026-10-18)
+
+[`kernels/embedgemma/attention_oracle.py`](../kernels/embedgemma/attention_oracle.py) computes attention the way a
+fused AIE kernel would:
+- 32-key blocks in online-softmax (flash) order;
+- BF16 Q, K and V;
+- every exp rounded to BF16, as a lookup-table exp returns it;
+- probabilities rounded to BF16 before the value product, while the row sum stays fp32;
+- key blocks outside the local band skipped.
+
+`tools/embedgemma_hybrid.py --backend cpu --attention blockwise --bf16-inputs --batch 2` runs it in place of the
+host attention, with every weight product's input rounded to BF16 as the NPU GEMM does. That emulation is held to
+the NPU gate, fixed beforehand ([record](../results/aie/embedgemma_fused_attn_numerics_cpu_desktop2_20261018T210745Z.json)):
+cosine min 0.9999918, mean 0.9999966, nearest neighbour kept 100%. **PASS.**
+
+- **BF16 probabilities are precise enough for this model.** Unlike Laya's FP32-probability path, the kernel does not
+  need the hi/lo split of P.
+- **The first attempt produced NaN at 2048 tokens.** The cause was an oracle bug: a row that had seen no visible key
+  computed `exp(-inf - -inf)`. A kernel needs the same guard (select on `l == 0`).
+- **Not emulated:** the device's own exp error (the LUT's, beyond BF16 rounding) and accumulation order inside a
+  32-key block. The on-device kernel needs its own exact oracle check before its timing means anything.
