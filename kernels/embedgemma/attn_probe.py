@@ -15,10 +15,10 @@ so scores reach ~+-30, like the model's after its norms):
     band    L = 256, W = 48,  NKB = 5      partial, invisible and clamped windows
     model   L = 1088, W = 512, NKB = 33    the model's local window at full size
 The check compares against a NumPy emulation of the kernel's own arithmetic: bf16 operands, the same block order,
-P rounded to bf16, fp32 row sums, and, op for op in fp32, the core's table exp (exp_fp32.h: round-half-even
-to_fixed of x*log2(e) at 8 fraction bits, 2^(i/256) table, linear remainder, exponent added in the bits) and its
-Newton reciprocal (seed 0x7ef311c3, three steps). Matrix products are fp64 then fp32, so the emulation is not
-bit-exact: the core accumulates in its own order.
+P rounded to bf16, fp32 row sums, the lazy rescale (TAU = 8), the core's BF16 table exp exactly
+(attention_oracle.lut_exp; through v3 the core used exp_fp32.h's fp32 table exp, then emulated op for op) and its
+Newton reciprocal (seed 0x7ef311c3, three steps) in fp32. Matrix products are fp64 then fp32, so the emulation is
+not bit-exact: the core accumulates in its own order.
 
 Criterion history. Run 1 (results/aie/embedgemma_attn_local_onecore_desktop2_20261018T212916Z) used numpy exp and
 exact division and required every output within 2 bf16 ulps: it FAILED (up to 377 ulps on 0.03-0.26% of
@@ -40,13 +40,15 @@ from pathlib import Path
 import numpy as np
 
 HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
+from attention_oracle import _FLUT, _ILUT, LOF, MINIT, expfix, fixed_block, lut_exp  # noqa: E402
+
 ROOT = HERE.parents[1]
 IRON = Path.home() / "mlir-aie" / "ironenv"
 PEANO = IRON / "Lib/site-packages/llvm-aie"
 INSTALL = IRON / "Lib/site-packages/mlir_aie"
-LAYA = ROOT / "kernels" / "laya_attention"   # exp_fp32.h
 QWORDS, CHUNK, OUTW, STATE = 2064, 1024, 2048, 5424
-STACK = 2048
+STACK = 3072   # deepest frame (softmax, exp16 inlined) 1,920 B (v3) + 256 B margin, as Laya audits it
 CASES = dict(dense=(128, 512, 4), band=(256, 48, 5), model=(1088, 512, 33))
 XRT_SMI = r"C:\Windows\System32\AMD\xrt-smi.exe"
 
@@ -63,9 +65,11 @@ def command(args, cwd):
     return r.stdout
 
 
-def exp_table_values():
-    v = np.exp2(np.arange(256, dtype=np.float64) / 256).astype(np.float32)
-    return np.tile(v.reshape(64, 4), (1, 2)).reshape(512)   # two lookup banks: [v0..v3, v0..v3] per 8 words
+def lut_bank(values):
+    """256 BF16 table values -> the 512-entry layout aie::lut<4, bfloat16> reads, [v0..v7, v0..v7] per 16, as the
+    upstream exp_ilut/flut tables are laid out."""
+    bits = (np.asarray(values, np.float32).view(np.uint32) >> 16).astype(np.uint16)
+    return np.tile(bits.reshape(32, 8), (1, 2)).reshape(512)
 
 
 def harness():
@@ -135,17 +139,31 @@ def sequence(tiles, nkb):
         "      aiex.npu.dma_wait {symbol = @oF}"]), (nq, nkv, no)
 
 
-def build(out: Path):
+VARIANTS = dict(full=[], none=["SCORE", "SOFTMAX", "PV"], score=["SOFTMAX", "PV"], nosoftmax=["SOFTMAX"],
+                nopv=["PV"], nomax=["MAX"], norescale=["RESCALE"], noexp=["EXP"], upstreamlut=[], expprobe=[])   # hollowed phases; anything but "full" is a timing probe with wrong output
+
+
+def build(out: Path, variant="full", cases=None):
     out.mkdir(parents=True, exist_ok=True)
     clang = PEANO / "bin/clang++.exe"
     flags = ["-O2", "-std=c++20", "--target=aie2-none-unknown-elf", "-DNDEBUG", "-fstack-size-section",
-             "-D__AIE_API_AIE_ADF_HPP__", f"-I{INSTALL / 'include'}", f"-I{LAYA}", "-Wno-attributes",
-             "-Wno-parentheses"]
-    values = ",".join(float(x).hex() + "f" for x in exp_table_values())
-    (out / "tables.cc").write_text('extern "C" {alignas(32) float fp_exp_ab[512]={' + values +
-                                   '};alignas(32) float fp_exp_cd[512]={' + values + '};}\n', encoding="utf-8")
+             "-D__AIE_API_AIE_ADF_HPP__", f"-I{INSTALL / 'include'}", "-Wno-attributes",
+             "-Wno-parentheses"] + [f"-DEGATTN_HOLLOW_{x}" for x in VARIANTS[variant]]
+    if variant == "expprobe":
+        flags.append("-DEGATTN_EXP_PROBE")
+    upstream = variant == "upstreamlut"   # diagnostic: link upstream's lut_based_ops.cpp tables instead of tables.cc
+    if upstream:
+        flags += ["-DEGATTN_UPSTREAM_LUT", f"-I{Path.home() / 'mlir-aie' / 'aie_runtime_lib' / 'AIE2'}"]
+    il = ",".join(str(int(x)) for x in lut_bank(_ILUT))
+    fl = ",".join(str(int(x)) for x in lut_bank(_FLUT))
+    (out / "tables.cc").write_text(
+        '#include <stdint.h>\nextern "C" {\n'
+        f"alignas(32) uint16_t egexp_ilut_ab[512] = {{{il}}};\nalignas(32) uint16_t egexp_ilut_cd[512] = {{{il}}};\n"
+        f"alignas(32) uint16_t egexp_flut_ab[512] = {{{fl}}};\nalignas(32) uint16_t egexp_flut_cd[512] = {{{fl}}};\n}}\n",
+        encoding="utf-8")
     command([clang, *flags, "-c", HERE / "attn_local.cc", "-o", out / "core.o"], out)
-    command([clang, *flags, "-c", out / "tables.cc", "-o", out / "tables.o"], out)
+    command([clang, *flags, "-c", (Path.home() / "mlir-aie/aie_runtime_lib/AIE2/lut_based_ops.cpp") if upstream
+             else out / "tables.cc", "-o", out / "tables.o"], out)
     command([clang, "--target=aie2-none-unknown-elf", "-r", "-nostdlib", out / "core.o", out / "tables.o",
              "-o", out / "kernel.o"], out)
     undefined = command([PEANO / "bin/llvm-nm.exe", "-u", out / "kernel.o"], out).split()
@@ -153,8 +171,11 @@ def build(out: Path):
         raise ValueError(f"unresolved symbols in kernel.o: {undefined}")
     sizes = command([PEANO / "bin/llvm-size.exe", out / "kernel.o"], out)
     print(sizes, flush=True)
-    meta = dict(kernel_sha256=sha(out / "kernel.o"), source_sha256=sha(HERE / "attn_local.cc"), cases={})
+    meta = dict(kernel_sha256=sha(out / "kernel.o"), source_sha256=sha(HERE / "attn_local.cc"), variant=variant,
+                cases={})
     for name, (L, W, nkb) in CASES.items():
+        if cases and name not in cases:
+            continue
         d = out / name
         d.mkdir(exist_ok=True)
         seq, words = sequence(L // 16, nkb)
@@ -209,19 +230,12 @@ def pack(q, k, v, W, nkb):
     return qp, kv
 
 
+TAU, NEG = np.float32(8), np.float32(-3.402823466e38)
+
+
 def exp16(x):
-    """exp_fp32.h's exp16 in fp32, op for op (round-half-even to_fixed, as the kernel sets conv_even)."""
-    x = np.asarray(x, np.float32)
-    tiny = x < np.float32(-80)
-    x = np.minimum(np.float32(0), np.maximum(np.float32(-80), x))
-    scaled = np.round((x * np.float32(1.4426950408889634)).astype(np.float64) * 256).astype(np.int32)
-    exponent = scaled >> 8
-    address = scaled & 255
-    rem = (x - (scaled.astype(np.float32) * np.float32(.0027076061740622863)).astype(np.float32)).astype(np.float32)
-    base = np.exp2(np.arange(256, dtype=np.float64) / 256).astype(np.float32)[address]
-    mant = (base * (np.float32(1) + rem).astype(np.float32)).astype(np.float32)
-    out = (mant.view(np.int32) + (exponent << 23)).view(np.float32)
-    return np.where(tiny, np.float32(0), out).astype(np.float32)
+    """attn_local.cc's BF16 table exp, modelled exactly by attention_oracle.lut_exp (clamp [-80, TAU], floor index)."""
+    return lut_exp(x, float(TAU))
 
 
 def reciprocal16(x):
@@ -234,15 +248,17 @@ def reciprocal16(x):
     return np.where(zero, np.float32(0), y).astype(np.float32)
 
 
-def emulate(q, k, v, W, nkb):
-    """The kernel's arithmetic in NumPy: per 16-row tile, NKB 32-key blocks of its window, online softmax."""
+def emulate(q, k, v, W, nkb, mode="round"):
+    """The v5 kernel's arithmetic in NumPy: per 16-row tile, NKB 32-key blocks of its window, the integer softmax of
+    attention_oracle.fixed_block (fixed-point S and m, to_fixed rounding ``mode``), bf16 P, fp32 sums, Newton
+    reciprocal at the end."""
     L = q.shape[0]
     out = np.zeros((L, 256), np.float32)
     for t in range(L // 16):
         q0 = 16 * t
         s = window(q0, L, W, nkb)
         rows = np.arange(q0, q0 + 16)
-        m = np.full(16, -np.inf, np.float32)
+        m = np.full(16, MINIT, np.int64)
         l = np.zeros(16, np.float32)
         O = np.zeros((16, 256), np.float32)
         for b in range(nkb):
@@ -251,14 +267,7 @@ def emulate(q, k, v, W, nkb):
             if not vis.any():
                 continue
             S = (q[rows].astype(np.float64) @ k[cols].T.astype(np.float64)).astype(np.float32)
-            S = np.where(vis, S, -np.inf).astype(np.float32)
-            mn = np.maximum(m, S.max(axis=1))
-            ref = np.where(np.isfinite(mn), mn, 0).astype(np.float32)
-            alpha = np.where(l > 0, exp16(np.where(np.isfinite(m), m, -1e30) - ref), 0).astype(np.float32)
-            P = bf16(np.where(vis, exp16(np.where(vis, S, -1e30) - ref[:, None]), 0).astype(np.float32))
-            l = (alpha * l + P.sum(axis=1)).astype(np.float32)
-            O = (alpha[:, None] * O + (P.astype(np.float64) @ v[cols].astype(np.float64))).astype(np.float32)
-            m = mn
+            m, l, O = fixed_block(S, vis, m, l, O, v[cols], mode)
         out[rows] = bf16(O * reciprocal16(l)[:, None])
     return out
 
@@ -281,6 +290,8 @@ def run(out: Path, names, reps, save=None):
     sys.path.insert(0, "C:/Xilinx/XRT/xrt_sdk/xrt/python")
     import pyxrt
     meta = json.loads((out / "build.json").read_text(encoding="utf-8"))
+    if meta.get("variant", "full") != "full":
+        print(f"VARIANT {meta['variant']}: hollowed phases, timing probe only; its check is expected to FAIL", flush=True)
     if meta["source_sha256"] != sha(HERE / "attn_local.cc") or meta["kernel_sha256"] != sha(out / "kernel.o"):
         raise RuntimeError("build is stale: kernel source or object changed since build")
     if not idle():
@@ -295,7 +306,7 @@ def run(out: Path, names, reps, save=None):
             raise RuntimeError(f"{name}: build artefacts changed")
         q, k, v, L, W, nkb = case_data(name)
         qp, kv = pack(q, k, v, W, nkb)
-        ref = emulate(q, k, v, W, nkb)
+        refs = {mode: emulate(q, k, v, W, nkb, mode) for mode in ("round", "floor")}
         dev = pyxrt.device(0)
         xb = pyxrt.xclbin(str(d / "final.xclbin"))
         dev.register_xclbin(xb)
@@ -330,6 +341,17 @@ def run(out: Path, names, reps, save=None):
         if len(results) == 1 + reps:
             got = (results[0].astype(np.uint32) << 16).view(np.float32)
             saved[name] = results[0]
+
+            def worst_of(ref):
+                rowmax = np.abs(ref).max(axis=1, keepdims=True)
+                tol = 2 * np.exp2(np.floor(np.log2(np.maximum(rowmax, 1e-30))) - 7)
+                return float((np.abs(got - ref) / tol).max())
+            # to_fixed's rounding is not pinned: the run reports which model the device matches (advisor, v5)
+            fits = {mode: worst_of(r) for mode, r in refs.items()}
+            mode = min(fits, key=fits.get)
+            ref = refs[mode]
+            print(f"  to_fixed model fit: " + ", ".join(f"{k} {v:.3f}" for k, v in fits.items()) + f" -> {mode}",
+                  flush=True)
             refb = ref.view(np.uint32) >> 16
             diff = np.abs(results[0].astype(np.int64) - refb.astype(np.int64))
             same = all(np.array_equal(results[0], r) for r in results[1:])
@@ -366,8 +388,9 @@ def main():
     ap.add_argument("--case", nargs="+", default=list(CASES))
     ap.add_argument("--reps", type=int, default=3)
     ap.add_argument("--save", type=Path, help="npz of the device outputs per case")
+    ap.add_argument("--variant", choices=list(VARIANTS), default="full", help="build: hollow phases for profiling")
     a = ap.parse_args()
-    return build(a.out.resolve()) if a.cmd == "build" else run(a.out.resolve(), a.case, a.reps, a.save)
+    return build(a.out.resolve(), a.variant, a.case if a.case != list(CASES) else None) if a.cmd == "build" else run(a.out.resolve(), a.case, a.reps, a.save)
 
 
 if __name__ == "__main__":

@@ -176,6 +176,9 @@ def main():
     ap.add_argument("--batch", type=int, default=1, help="consecutive same-length documents per row batch")
     ap.add_argument("--attention", choices=["exact", "blockwise"], default="exact")
     ap.add_argument("--k-block", type=int, default=32)
+    ap.add_argument("--exp", choices=["exact", "lut", "fixed"], default="exact",
+                    help="blockwise: exp model (lut = v4 kernel table exp, fixed = v5 integer softmax)")
+    ap.add_argument("--tau", type=float, default=0.0, help="blockwise: lazy-rescale threshold (kernel: 8)")
     ap.add_argument("--bf16-inputs", action="store_true", help="cpu: round weight-product inputs to BF16")
     ap.add_argument("--round-dll", type=Path, help="npu: kernels/embedgemma/native.py build's embedgemma_round.dll "
                                                     "(AVX2 + OpenMP, bit-identical) instead of NumPy rounding")
@@ -194,7 +197,8 @@ def main():
 
         def blockwise(q, k, v, layer, segs):   # rows are independent, so one query block per document is exact
             return np.concatenate([attention_oracle.attention(q[x:y], k[x:y], v[x:y], layer["kind"], enc.window,
-                                                              q_block=y - x, k_block=a.k_block) for x, y in segs])
+                                                              q_block=y - x, k_block=a.k_block, exp=a.exp,
+                                                              tau=a.tau) for x, y in segs])
         enc._attention = blockwise
     print(f"weights loaded in {time.perf_counter() - t:.1f} s; {len(enc.shapes())} weight products per document", flush=True)
     npu = None
@@ -250,7 +254,7 @@ def main():
         strict = a.backend == "cpu" and not emulation
         threshold = 0.99999 if strict else 0.9999
         passed = bool(cos.min() >= threshold and (strict or nn_kept == 1.0))
-        rec = dict(backend=a.backend, docs=str(a.docs), reference=str(a.reference), batch=a.batch, round_dll=bool(a.round_dll), attention=a.attention, k_block=a.k_block,
+        rec = dict(backend=a.backend, docs=str(a.docs), reference=str(a.reference), batch=a.batch, round_dll=bool(a.round_dll), attention=a.attention, k_block=a.k_block, exp=a.exp, tau=a.tau,
                    bf16_inputs=a.bf16_inputs, passed=passed,
                    gate=dict(cos_min=threshold, nn_kept=None if strict else 1.0),
                    cos_min=float(cos.min()), cos_mean=float(cos.mean()), nn_kept=nn_kept,

@@ -25079,3 +25079,102 @@ the final judge, and the kernel has not met it yet.
 - Ideal MAC time is about 37 µs per tile: 2,048 `mmul` per block x 33 at 1.8 GHz.
 - Streaming the window's 1.06 MiB at one shim channel's 4 B/cycle takes about 150 µs.
 - So the kernel is about 16x off compute and 4x off that DMA bound. Where the rest goes is not yet measured.
+
+#### Fused local attention on one core: from 41.1 to 19.0 ms by moving softmax off emulated fp32 (2026-10-18, Desktop 2)
+
+All runs are the model case (L = 1088, W = 512, 68 tiles x 33 key blocks), each checked against
+[`attn_probe.py`](../kernels/embedgemma/attn_probe.py)'s emulation of the kernel version it runs. The research
+wrapper reports host CLEAR and no foreign context unless noted.
+
+**Where v1's time went.** Builds with phases hollowed out (`--variant`; their output is wrong by construction, so
+they exit 1 and read `timing_eligible: false`) timed the parts in
+[one sitting](../results/aie/embedgemma_attn_local_phases_desktop2_20261018T213352Z.log):
+
+| Variant | Model case |
+|---|---:|
+| full | 41.1 ms |
+| data movement + calls only | 11.5 ms |
+| + QK | 12.0 ms |
+| + QK and PV | 12.0 ms |
+| + QK and softmax | 40.4 ms |
+
+- **The data-movement floor matches the shim stream:** 73.5 MB at about 7.2 GB/s is about 10.2 ms.
+- **Both products together cost about 0.5 ms. Softmax cost about 29 ms**, about 14 µs a block.
+- **Two runs were discarded.** A five-variant loop under one wrapper was flagged for foreign contention twice
+  ([1](../results/aie/embedgemma_attn_local_softmax_parts_desktop2_20261018T213605Z.log),
+  [2](../results/aie/embedgemma_attn_local_softmax_parts_desktop2_20261018T213647Z.log)). The context's pid had
+  already exited, and it may have been one of the loop's own children, started after the wrapper's ownership
+  sample.
+- **Re-run with one wrapper per variant**
+  ([full](../results/aie/embedgemma_attn_local_softmax_full_desktop2_20261018T213733Z.log),
+  [no max](../results/aie/embedgemma_attn_local_softmax_nomax_desktop2_20261018T213733Z.log),
+  [no rescale](../results/aie/embedgemma_attn_local_softmax_norescale_desktop2_20261018T213733Z.log),
+  [no exp](../results/aie/embedgemma_attn_local_softmax_noexp_desktop2_20261018T213733Z.log),
+  [no layout](../results/aie/embedgemma_attn_local_softmax_nolayout_desktop2_20261018T213733Z.log)):
+
+  | Softmax part | Cost |
+  |---|---:|
+  | per-row max pass | about 7.8 ms |
+  | O rescale | about 7.1 ms |
+  | exp + P | about 11.5 ms |
+
+- **The row-major pass cost nothing measurable.** Removing it read 1.4 ms *slower*, unexplained.
+
+| Version | Change | Model case | Worst | Log |
+|---|---|---:|---:|---|
+| v1 | baseline above | 41.1 ms | 0.500 | above |
+| v2 | softmax kept in tile layout; lazy rescale | 32.7 ms | 0.500 | [v2](../results/aie/embedgemma_attn_local_onecore_v2_desktop2_20261018T214258Z.log) |
+| v3 | exp inlined | 32.4 ms | 0.500 | [v3](../results/aie/embedgemma_attn_local_onecore_v3_desktop2_20261018T214525Z.log) |
+| v4 | BF16 table exp from fp32 scores, lookups in floor mode | 31.9 ms | 0.500 | [v4](../results/aie/embedgemma_attn_local_onecore_v4_desktop2_20261018T220151Z.log) |
+| v5 | integer softmax | **19.0 ms** | 0.500 | [v5](../results/aie/embedgemma_attn_local_onecore_v5_desktop2_20261018T221557Z.log) |
+
+"Worst" is row-scaled, as before.
+
+**What each version changed:**
+- **v2:** a vector max over tiles, then `filter_even`/`filter_odd` halvings, then `interleave_zip` into the P
+  tiles. The lazy rescale's threshold is 8.
+- **v4:** the BF16 table exp is taken from fp32 scores, with the lookups in floor mode.
+- **v5:** S and the running max are fixed point (x 256), with int32 max, mask and difference. The index is split
+  by a shift and a mask, and the row sums are a BF16 MAC.
+
+**What the v2 profile showed**
+([full](../results/aie/embedgemma_attn_local_v2_full_desktop2_20261018T214349Z.log),
+[no softmax](../results/aie/embedgemma_attn_local_v2_nosoftmax_desktop2_20261018T214349Z.log),
+[no max](../results/aie/embedgemma_attn_local_v2_nomax_desktop2_20261018T214349Z.log),
+[no rescale](../results/aie/embedgemma_attn_local_v2_norescale_desktop2_20261018T214349Z.log),
+[no exp](../results/aie/embedgemma_attn_local_v2_noexp_desktop2_20261018T214349Z.log)):
+- Max and rescale fell under 1 ms each, which left the exp + P loop at about 18.8 ms.
+- **v3 and v4 barely moved that.** The assembly shows why. 426 of softmax's 1,193 bundles were NOP-only. The
+  fp32 compares and adds compiled to emulation sequences (`vlt.bf16` compares, accumulator round trips). The cost
+  was fp32 vector work in general, not the exp.
+- **v5's softmax is 849 bundles, 237 NOP-only**, and costs about 7 ms: about 3.5 µs per visible block.
+
+**A bug found on the way (v4), kept with its logs.** The BF16 table exp first failed, up to 115 row ulps:
+- with [generated tables](../results/aie/embedgemma_attn_local_onecore_v4_desktop2_20261018T215448Z.log);
+- with [upstream's byte-identical tables](../results/aie/embedgemma_attn_local_onecore_v4upl_desktop2_20261018T215752Z.log).
+
+A direct [4,096-point exp probe](../results/aie/embedgemma_attn_local_expprobe_desktop2_20261018T215844Z.log) found
+it right on 87% of inputs and exactly e times too large on the rest. The wrong ones had a high low index byte. **The
+lookup's integer-part shift follows the rounding mode**, which the kernel had set to nearest-even for its BF16
+conversions. Laya's `dispatch.cc` records the same need.
+
+Under floor mode the [probe](../results/aie/embedgemma_attn_local_expprobe_desktop2_20261018T215956Z.log) is
+bit-equal on all 4,096 points to a model with a round-half-even index and a floor split. v5 removes the dependence:
+it splits the index itself and both lookups use step 0.
+
+**The rounding of `to_fixed` is not pinned, so each run tests it.** v5's check fits both a round and a floor model.
+The device matched round on every case: worst 0.250 / 0.031 / 0.500, against floor's 0.500 / 1.000 / 1.000.
+
+**End to end, CPU emulation, same frozen gate.** Both keep every nearest neighbour:
+
+| Model | Cosine min | Record |
+|---|---:|---|
+| exact table-exp model with the lazy rescale | 0.9999936 | [record](../results/aie/embedgemma_fused_attn_numerics_lut_cpu_desktop2_20261018T214800Z.json) |
+| v5's integer softmax | 0.9999890 | [record](../results/aie/embedgemma_fused_attn_numerics_fixed_cpu_desktop2_20261018T220711Z.json) |
+
+The kernel itself has not yet run end to end on device.
+
+**For the array.**
+- At about 0.28 ms per 16-row tile, a column's four cores take about 0.28 ms per 32-row window.
+- Broadcasting that window takes about 0.15 ms on one channel.
+- So the array should be compute-bound and near its ingress bound. That is DERIVED, not measured.
