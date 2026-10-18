@@ -24867,16 +24867,17 @@ Per-document medians, attributed by phase (ms):
 | NPU read (C sync + f32 readback) | 40.0 | 127.3 | 415.9 |
 | NPU write (A write + sync) | 11.9 | 21.3 | 88.2 |
 | fp32 -> BF16 rounding of each product input (`round_in`) | 50.0 | 244.2 | 903.3 |
-| Total in `gemm` (the four rows above plus bit packing and padding) | 190.5 | 574.0 | 2051.5 |
+| Total in `gemm` (NPU rows plus a second rounding, padding and copies; excludes `round_in`, see the correction below) | 190.5 | 574.0 | 2051.5 |
 | Host attention (NumPy fp32) | 33.8 | 147.2 | 2161.5 |
 | Host GELU / norms / RoPE (NumPy fp32) | 46.1 / 27.7 / 14.1 | 204.9 / 158.5 / 70.9 | 799.1 / 598.1 / 281.2 |
 | **Whole document** | **391.3** | **1545.1** | **7277.8** |
 
-**What it shows.**
-- **The NPU's own compute is the smallest part of its share.** Reading back f32 results and converting
+**What it shows.** *(Superseded 2026-10-18 by the correction below. The phase split was mostly harness overhead:
+every input rounded twice, and every readback copied twice. The two claims marked SUPERSEDED do not stand.)*
+- **SUPERSEDED. The NPU's own compute is the smallest part of its share.** Reading back f32 results and converting
   activations to BF16 costs 2-4x the device's call time at every length: at 512 tokens, 114 ms of calls against
   about 460 ms of transfer, rounding and packing.
-- **A design that returns activations to the host between operations cannot win**, however fast the GEMMs are.
+- **SUPERSEDED. A design that returns activations to the host between operations cannot win**, however fast the GEMMs are.
   This repeats Laya's 99 ms of host rounding.
 - **The host-side ops here are single-threaded NumPy fp32**, not a tuned CPU path, so their times overstate what a
   CPU remainder must cost. The transfer and rounding rows do not depend on that.
@@ -24885,3 +24886,71 @@ Per-document medians, attributed by phase (ms):
 
 Not measured here: batching documents into one M, BF16-output GEMMs, and any CPU or GPU comparison. The
 [CPU NumPy run](../results/aie/embedgemma_hybrid_cpu_desktop2_20261018T203017Z.json) is the oracle check only.
+
+#### Correction: the split was harness overhead; torch bf16 sets the real bar (2026-10-18, Desktop 2)
+
+**What was wrong.** The first run's harness rounded every product input twice: once in the model (`round_in`) and
+again while packing it, booked inside `gemm` outside every NPU row. It also read every result through `bo.read`
+and then `.copy()`, two full copies of each f32 C. The fixed harness:
+- rounds once, nearest-even, straight into the mapped A buffer;
+- reads C through its mapped view;
+- can batch same-length documents as one row batch, with block-diagonal attention and per-document positions and
+  pooling.
+
+The batched NumPy oracle still reads cosine 1.0000000 on every document. The gates are unchanged.
+
+**Two failed runs are kept** as harness bugs, not findings:
+- [one gate FAIL](../results/aie/embedgemma_hybrid_npu_b1_desktop2_20261018T204410Z.log), cosine min 0.569. The
+  three chunks of the per-layer-input product share one (M, K, N), so the mapped views aliased one C buffer.
+- [one crash](../results/aie/embedgemma_hybrid_npu_b2_desktop2_20261018T204543Z.log): 2 x 2048 rows exceeded the
+  largest compiled M.
+
+Re-run on the same sitting's conditions (host CLEAR, no foreign contexts, exit 0, `timing_eligible: true`). Both
+pass the frozen gate with cosine min 0.9999942 and nearest neighbour kept 100%:
+[batch 1](../results/aie/embedgemma_hybrid_npu_b1_desktop2_20261018T204716Z.log)
+([record](../results/aie/embedgemma_hybrid_npu_b1_desktop2_20261018T204716Z.json)) and
+[batch 2](../results/aie/embedgemma_hybrid_npu_b2_desktop2_20261018T204849Z.log)
+([record](../results/aie/embedgemma_hybrid_npu_b2_desktop2_20261018T204849Z.json)).
+
+Per document, in ms. 128 tokens is batch 2 (M = 256); 512 and 2048 are batch 1, because two 512-token documents
+would pad to M = 2048 with no M = 1024 build.
+
+| Phase | 128 | 512 | 2048 |
+|---|---:|---:|---:|
+| NPU call (submit + wait) | 34.6 | 110.6 | 344.3 |
+| A sync / C sync (mapped) | 1.1 / 1.2 | 4.1 / 5.4 | 8.4 / 16.6 |
+| Round to BF16 into A (NumPy, once) | 60.7 | 286.8 | 1052.8 |
+| Host attention / GELU / norms / RoPE (NumPy fp32, single-threaded) | 29.9 / 46.0 / 29.4 / 18.3 | 146.4 / 212.6 / 167.6 / 74.5 | 2180.4 / 822.9 / 608.4 / 277.0 |
+| **Whole document** | **249.5** | **1155.8** | **5804.0** |
+
+- **Transfer is not the cost.** With mapped buffers, A and C syncs take 2-25 ms per document. The 40-416 ms
+  "readback" in the first table was the copies.
+- **What remains on the host is NumPy's own speed**: rounding, plus single-threaded fp32 elementwise ops.
+
+**The bar is torch bf16 on the CPU, split.**
+[`tools/embedgemma_hf_split.py`](../tools/embedgemma_hf_split.py) times HF transformers 5.19 / torch 2.14.1 bf16 on
+the same documents and 8 threads, in three passes:
+- as is;
+- with every `nn.Linear` stubbed to zeros of its output shape;
+- with eager attention stubbed too.
+
+These ops' cost does not depend on their values, so the stubs time the rest fairly.
+([record](../results/aie/embedgemma_hf_split_bf16_cpu_desktop2_20261018T205249Z.json); contention checked first,
+CPU 3-6%, no NPU context.)
+
+| Tokens | Whole model | Linear | Attention | Everything else | NPU weight GEMMs (above) |
+|---|---:|---:|---:|---:|---:|
+| 128 | 85.0 | 49.7 | 9.9 | 25.4 | 34.6 |
+| 512 | 241.6 | 144.9 | 43.9 | 52.8 | 110.6 |
+| 2048 | 1500.0 | 500.1 | 764.2 | 235.7 | 344.3 |
+
+**What it shows.**
+- **Moving the weight GEMMs alone saves little:** 15 / 34 / 156 ms against the CPU's Linear time. A hybrid with the
+  rest on a tuned CPU path is bounded near 70 / 207 / 1344 ms, before any rounding or synchronisation. That is
+  0.82 / 0.86 / 0.90 of the CPU's whole model.
+- **At 2048 tokens attention is 51% of the CPU's time**, the largest single block. Long documents are where moving
+  it pays most.
+- **At 512 tokens and below, the elementwise remainder is as large as attention.** Norms, GELU, RoPE and the
+  residuals have to move into the GEMMs' epilogues for the NPU to clear the CPU by a real margin.
+- **Not measured:** an NPU attention path, a native or vectorised rounding, BF16-output GEMMs, and an
+  M = 1024 build for batched 512-token documents.

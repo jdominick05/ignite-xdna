@@ -11,9 +11,13 @@ fp32. Weights are read straight from the checkpoint's safetensors (BF16, widened
 
 Weight products are grouped as the NPU runs them: ``qkv`` (q|k|v concatenated), ``o``, ``gate_up`` (gate|up),
 ``down``, ``ple_gate``, ``ple_proj``, ``ple_model`` (the per-layer-input projection) and ``out``. ``matmul(x, name,
-layer)`` receives fp32 activations [rows, K] and must return fp32 [rows, N]; the default is fp32 NumPy. With
-``bf16_inputs=True`` the activations are rounded to BF16 (nearest-even) before every weight product, which is what
-a BF16-in GEMM consumes; the products themselves stay whatever the backend computes.
+layer)`` receives fp32 activations [rows, K] and must return fp32 [rows, N]; the default is fp32 NumPy. A hook
+packs its own input (a BF16-in GEMM rounds it once, nearest-even, while packing), so the model never rounds for one.
+With no hook, ``bf16_inputs=True`` rounds the activations to BF16 before each fp32 product instead.
+
+``embed_documents`` runs several documents as one row batch: weight products see every document's rows at once,
+while attention, RoPE positions and pooling stay per document (a block-diagonal mask), so batching changes no
+document's result beyond the backend's own row independence.
 
 ``timings`` accumulates wall time per phase (seconds) so a caller can attribute an end-to-end run by op type.
 """
@@ -121,36 +125,43 @@ class Encoder:
         return y.astype(np.float32)
 
     def _mm(self, x, name, layer, matmul, bf16_inputs):
+        if matmul:
+            t = time.perf_counter()
+            y = matmul(x, name, layer)
+            self.timings["gemm"] += time.perf_counter() - t
+            return y
         t = time.perf_counter()
         if bf16_inputs:
             x = bf16_round(x)
         self.timings["round_in"] += time.perf_counter() - t
         t = time.perf_counter()
-        y = matmul(x, name, layer) if matmul else x @ self.weights[(name, layer)]
+        y = x @ self.weights[(name, layer)]
         self.timings["gemm"] += time.perf_counter() - t
         return y
 
-    def _attention(self, q, k, v, layer, L):
-        """q [L, H, hd], k/v [L, kv, hd] (normed, rotated): fp32 softmax attention -> [L, H*hd]."""
+    def _attention(self, q, k, v, layer, segs):
+        """q [R, H, hd], k/v [R, kv, hd] (normed, rotated), documents at row ranges ``segs``: fp32 softmax
+        attention within each document -> [R, H*hd]."""
         t = time.perf_counter()
         H, kv, hd = self.H, layer["kv"], layer["hd"]
         rep = H // kv
-        out = np.empty((L, H, hd), np.float32)
-        if layer["kind"] == "sliding_attention":
-            i = np.arange(L)
-            masked = np.abs(i[:, None] - i[None, :]) > self.window
-        else:
-            masked = None
-        for h in range(H):
-            s = q[:, h, :] @ k[:, h // rep, :].T          # scaling 1.0
-            if masked is not None:
-                s[masked] = -np.inf
-            s -= s.max(axis=1, keepdims=True)
-            np.exp(s, out=s)
-            s /= s.sum(axis=1, keepdims=True)
-            out[:, h, :] = s @ v[:, h // rep, :]
+        out = np.empty((q.shape[0], H, hd), np.float32)
+        for a, b in segs:
+            if layer["kind"] == "sliding_attention":
+                i = np.arange(b - a)
+                masked = np.abs(i[:, None] - i[None, :]) > self.window
+            else:
+                masked = None
+            for h in range(H):
+                s = q[a:b, h, :] @ k[a:b, h // rep, :].T          # scaling 1.0
+                if masked is not None:
+                    s[masked] = -np.inf
+                s -= s.max(axis=1, keepdims=True)
+                np.exp(s, out=s)
+                s /= s.sum(axis=1, keepdims=True)
+                out[a:b, h, :] = s @ v[a:b, h // rep, :]
         self.timings["attention"] += time.perf_counter() - t
-        return out.reshape(L, H * hd)
+        return out.reshape(q.shape[0], H * hd)
 
     def _rope(self, x, cos, sin):
         t = time.perf_counter()
@@ -162,14 +173,21 @@ class Encoder:
 
     # -- forward ---------------------------------------------------------------------------------------------------
     def embed_document(self, ids, matmul=None, bf16_inputs=False) -> np.ndarray:
-        ids = np.asarray(ids)
+        return self.embed_documents([ids], matmul, bf16_inputs)[0]
+
+    def embed_documents(self, docs, matmul=None, bf16_inputs=False) -> np.ndarray:
+        """[n, embedding_dim] L2-normalised embeddings of ``docs`` (token-id lists), run as one row batch."""
+        lens = [len(x) for x in docs]
+        ends = np.cumsum(lens)
+        segs = [(int(e - n), int(e)) for e, n in zip(ends, lens)]
+        ids = np.concatenate([np.asarray(x) for x in docs])
         L, d, H = len(ids), self.d, self.H
         t = time.perf_counter()
         x = (self.embed[ids] * np.float32(math.sqrt(d))).astype(np.float32)
         self.timings["embed"] += time.perf_counter() - t
         ple = self._mm(x, "ple_model", -1, matmul, bf16_inputs) * np.float32(d ** -0.5)
         ple = self._rms(ple.reshape(L, self.nl, self.ple_dim), self.ple_norm)
-        pos = np.arange(L, dtype=np.float32)
+        pos = np.concatenate([np.arange(n, dtype=np.float32) for n in lens])
         rope = {}
         for i, lay in enumerate(self.layers):
             hd, kv = lay["hd"], lay["kv"]
@@ -187,7 +205,7 @@ class Encoder:
             q = self._rope(self._rms(q, lay["q_norm"]), cos, sin)
             k = self._rope(self._rms(k, lay["k_norm"]), cos, sin)
             v = self._rms(v)
-            a = self._mm(self._attention(q, k, v, lay, L), "o", i, matmul, bf16_inputs)
+            a = self._mm(self._attention(q, k, v, lay, segs), "o", i, matmul, bf16_inputs)
             x = res + self._rms(a, lay["post_attn_norm"])
             res = x
             gu = self._mm(self._rms(x, lay["pre_ff_norm"]), "gate_up", i, matmul, bf16_inputs)
@@ -197,5 +215,5 @@ class Encoder:
             x = x + self._rms(self._mm(g, "ple_proj", i, matmul, bf16_inputs), lay["ple_norm"])
             x = (x * np.float32(lay["scalar"])).astype(np.float32)
         h = self._mm(self._rms(x, self.final_norm), "out", -1, matmul, bf16_inputs).astype(np.float64)
-        v = h.mean(axis=0)
-        return v / np.linalg.norm(v)
+        v = np.stack([h[a:b].mean(axis=0) for a, b in segs])
+        return v / np.linalg.norm(v, axis=1, keepdims=True)

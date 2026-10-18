@@ -1,0 +1,70 @@
+{
+  "backend": "npu",
+  "docs": "C:\\Users\\<user>\\gemma4-embedding-baseline\\logs\\docs-heldout-v1.json",
+  "reference": "C:\\Users\\<user>\\gemma4-embedding-baseline\\logs\\hf-fp32-cpu-20261018T174113Z.npz",
+  "batch": 1,
+  "passed": true,
+  "gate": {
+    "cos_min": 0.9999,
+    "nn_kept": 1.0
+  },
+  "cos_min": 0.9999942143033718,
+  "cos_mean": 0.9999975337194943,
+  "nn_kept": 1.0,
+  "per_length": {
+    "128": {
+      "batches": 32,
+      "median_ms_per_doc": 277.66500000143424,
+      "cos_min": 0.9999942143033718,
+      "phases_ms_per_doc": {
+        "embed": 0.10395000572316349,
+        "gemm": 132.04724999377504,
+        "norm": 27.328650146955624,
+        "rope": 13.969799998449162,
+        "attention": 31.635599982109852,
+        "gelu": 48.18554996745661,
+        "npu_pack": 58.245500025805086,
+        "npu_write": 1.7114999354816973,
+        "npu_call": 65.49119991541374,
+        "npu_read": 2.2486499074148014,
+        "npu_unpack": 1.7557499959366396
+      }
+    },
+    "512": {
+      "batches": 16,
+      "median_ms_per_doc": 1155.7528500125045,
+      "cos_min": 0.9999971500345067,
+      "phases_ms_per_doc": {
+        "embed": 0.5209999944781885,
+        "gemm": 420.2551500784466,
+        "norm": 167.56934991281014,
+        "rope": 74.50079990667291,
+        "attention": 146.43500007514376,
+        "gelu": 212.6387998869177,
+        "npu_pack": 286.82735010806937,
+        "npu_write": 4.060999883222394,
+        "npu_call": 110.5895999353379,
+        "npu_read": 5.4281499033095315,
+        "npu_unpack": 6.995649877353571
+      }
+    },
+    "2048": {
+      "batches": 8,
+      "median_ms_per_doc": 5804.038800008129,
+      "cos_min": 0.9999974979895047,
+      "phases_ms_per_doc": {
+        "embed": 1.4864499971736223,
+        "gemm": 1465.206750028301,
+        "norm": 608.35355008021,
+        "rope": 276.99205005774274,
+        "attention": 2180.3982000565156,
+        "gelu": 822.9025500186253,
+        "npu_pack": 1052.754999953322,
+        "npu_write": 8.443800077657215,
+        "npu_call": 344.3336500786245,
+        "npu_read": 16.55209992895834,
+        "npu_unpack": 27.341650071321055
+      }
+    }
+  }
+}

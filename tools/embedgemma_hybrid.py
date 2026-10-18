@@ -7,21 +7,28 @@
     python tools/embedgemma_hybrid.py --backend npu --builds DIR --docs DOCS --reference REF.npz --out OUT.json
 
 ``kernels/embedgemma/model.py`` is the model. ``cpu`` runs it with fp32 NumPy products (the oracle check);
-``npu`` routes all 148 weight products per document through ONE context of the generic GEMM design that
-tools/embedgemma_gemm_probe.py compiled (bf16 in, f32 out), activations rounded to BF16 before each product,
-weights resident in device BOs. Rows are zero-padded to the smallest compiled M >= L (128-token documents run at
-M = 256; no batching here). DOCS is the token-id json the GPU/CPU baselines used; REF is HF transformers' fp32
-embeddings of the same documents (``embeddings`` [n, 768] in DOCS order).
+``npu`` routes all 146 weight products per document (148 calls: the per-layer-input projection is three 4096-wide
+chunks) through ONE context of the generic GEMM design that tools/embedgemma_gemm_probe.py compiled (bf16 in, f32
+out), weights resident in device BOs. Each product's input is rounded to BF16 once, nearest-even, straight into
+the mapped A buffer, and C is read through its mapped view (no ``bo.read`` copy). Rows are zero-padded to the
+smallest compiled M >= rows. ``--batch N`` runs N same-length documents as one row batch (block-diagonal
+attention, per-document positions and pooling), so two 128-token documents fill M = 256. DOCS is the token-id json
+the GPU/CPU baselines used; REF is HF transformers' fp32 embeddings of the same documents (``embeddings`` [n, 768]
+in DOCS order).
 
 Gates, fixed before any run (2026-10-18):
   cpu: cosine to the HF fp32 reference >= 0.99999 on every document (an independent re-implementation must agree
        to fp32 rounding).
   npu: cosine to the HF fp32 reference >= 0.9999 on every document, and every document keeps its HF nearest
        neighbour among the documents (CPU torch bf16 reached 0.999928 and the 780M 0.99998 on these documents).
-Timing: wall time per document, median per length, after one untimed warm-up document per length, with the
-model's per-phase attribution (gemm = host rounding excluded, NPU write/call/read included; round_in = fp32 ->
-BF16 rounding of each product's input; attention, norm, rope, gelu, embed). Host-side ops are NumPy fp32, not a
-tuned CPU path. Run the npu backend under scripts/research-lowlevel.sh --npu.
+Timing: wall time per batch divided by its documents, median per length, after one untimed warm-up batch per
+(length, batch size). Phases: ``gemm`` is the whole weight-product hook; inside it ``npu_pack`` (round to BF16
+into the mapped A), ``npu_write`` (A sync), ``npu_call`` (submit + wait), ``npu_read`` (C sync) and ``npu_unpack``
+(chunk concatenation). attention, norm, rope, gelu and embed are host NumPy fp32 (single-threaded, not a tuned CPU
+path). Run the npu backend under scripts/research-lowlevel.sh --npu.
+
+History: the first run (results/aie/embedgemma_hybrid_npu_desktop2_20261018T203211Z) rounded every input twice
+(``round_in`` in the model, again while packing) and copied each C readback twice (``bo.read`` then ``.copy()``).
 """
 import argparse
 import gc
@@ -66,8 +73,8 @@ class Npu:
         self.dev.register_xclbin(self.xb)
         self.ctx = pyxrt.hw_context(self.dev, self.xb.get_uuid())
         self.kern = pyxrt.kernel(self.ctx, self.xb.get_kernels()[0].get_name())
-        self.t = dict(npu_write=0.0, npu_call=0.0, npu_read=0.0)
-        self.B, self.io, self.ins = {}, {}, {}
+        self.t = dict(npu_pack=0.0, npu_write=0.0, npu_call=0.0, npu_read=0.0, npu_unpack=0.0)
+        self.B, self.io = {}, {}
         for key, w in enc.weights.items():   # [K, N] fp32 holding exact BF16 values
             K, N = w.shape
             chunks = []
@@ -92,34 +99,51 @@ class Npu:
             ib = self.x.bo(self.dev, words.nbytes, self.x.bo.cacheable, self.kern.group_id(1))
             ib.write(words.tobytes(), 0)
             ib.sync(self.to_dev)
-            self.io[key] = (ib, words.nbytes, self._bo(M * K * 2), self._bo(M * Np * 4))
+            A, C = self._bo(M * K * 2), self._bo(M * Np * 4)
+            av = np.frombuffer(A.map(), dtype=np.uint16, count=M * K).reshape(M, K)
+            av[:] = 0   # padding rows: zero once; a shorter batch at the same M leaves stale rows, which only feed
+            #             discarded output rows (each output row depends on its own input row alone)
+            cv = np.frombuffer(C.map(), dtype=np.float32, count=M * Np).reshape(M, Np)
+            self.io[key] = (ib, words.nbytes, A, C, av, cv)
         return self.io[key]
 
     def matmul(self, x, name, layer):
+        """fp32 [L, K] -> fp32 [L, N]. A one-chunk result is a view into C's mapping, valid until the next product
+        of the same (M, K, N); every consumer in model.py derives a new array from it before that."""
         L, K = x.shape
         M = next(m for m in self.ms if m >= L)
-        t = time.perf_counter()
-        a = np.zeros((M, K), np.uint16)
-        a[:L] = bf16_bits(x)
+        chunks = self.B[(name, layer)]
         outs = []
-        for bo_w, n in self.B[(name, layer)]:
+        packed = None
+        for bo_w, n in chunks:
             Np = padded(n)
-            ib, nb, A, C = self._io(M, K, Np)
+            ib, nb, A, C, av, cv = self._io(M, K, Np)
             t0 = time.perf_counter()
-            A.write(a.tobytes(), 0)
-            A.sync(self.to_dev)
+            if packed is None:   # round once per product; every chunk shares the input
+                u = np.ascontiguousarray(x, dtype=np.float32).view(np.uint32)
+                av[:L] = (u + ((u >> 16) & 1) + 0x7FFF) >> 16
+                packed = av
+            elif packed is not av:
+                av[:L] = packed[:L]
             t1 = time.perf_counter()
+            A.sync(self.to_dev)
+            t2 = time.perf_counter()
             st = self.kern(3, ib, nb, A, bo_w, C).wait(WAIT_MS)
             if st != self.x.ert_cmd_state.ERT_CMD_STATE_COMPLETED:
                 raise RuntimeError(f"{name}[{layer}] M={M} K={K} N={Np}: {st}")
-            t2 = time.perf_counter()
-            C.sync(self.from_dev)
-            outs.append(np.frombuffer(C.read(M * Np * 4, 0), dtype=np.float32).reshape(M, Np)[:L, :n].copy())
             t3 = time.perf_counter()
-            self.t["npu_write"] += t1 - t0
-            self.t["npu_call"] += t2 - t1
-            self.t["npu_read"] += t3 - t2
-        return outs[0] if len(outs) == 1 else np.concatenate(outs, axis=1)
+            C.sync(self.from_dev)
+            t4 = time.perf_counter()
+            # chunks of one product share an (M, K, N) and so one C buffer: copy each before the next call
+            outs.append(cv[:L, :n] if len(chunks) == 1 else cv[:L, :n].copy())
+            self.t["npu_pack"] += t1 - t0
+            self.t["npu_write"] += t2 - t1
+            self.t["npu_call"] += t3 - t2
+            self.t["npu_read"] += t4 - t3
+        t5 = time.perf_counter()
+        y = outs[0] if len(outs) == 1 else np.concatenate(outs, axis=1)
+        self.t["npu_unpack"] += time.perf_counter() - t5
+        return y
 
     def close(self):
         """Release BOs, kernel, context, xclbin, device in that order (a BO outliving the device segfaults at exit)."""
@@ -141,6 +165,7 @@ def main():
     ap.add_argument("--reference", type=Path, required=True)
     ap.add_argument("--builds", type=Path, help="tools/embedgemma_gemm_probe.py compile --out DIR (npu)")
     ap.add_argument("--ms", type=int, nargs="+", default=[256, 512, 2048])
+    ap.add_argument("--batch", type=int, default=1, help="consecutive same-length documents per row batch")
     ap.add_argument("--out", type=Path, required=True)
     a = ap.parse_args()
     if a.out.exists():
@@ -161,22 +186,33 @@ def main():
     matmul = npu.matmul if npu else None
     bf16 = a.backend == "npu"
     try:
-        embeds, times, phases = [], {}, {}
+        embeds, times, phases = [None] * len(docs), {}, {}
+        groups = []   # consecutive same-length documents, up to --batch and (npu) the largest compiled M in rows
+        rows = max(a.ms) if npu else float("inf")
+        for j, d in enumerate(docs):
+            g = groups[-1] if groups else None
+            if (g and docs[g[0]]["length"] == d["length"] and len(g) < a.batch
+                    and (len(g) + 1) * d["length"] <= rows):
+                groups[-1].append(j)
+            else:
+                groups.append([j])
         warmed = set()
-        for d in docs:
-            L = d["length"]
-            if L not in warmed:   # one untimed warm-up per length
-                enc.embed_document(d["ids"], matmul, bf16)
-                warmed.add(L)
+        for g in groups:
+            L, n = docs[g[0]]["length"], len(g)
+            ids = [docs[j]["ids"] for j in g]
+            if (L, n) not in warmed:
+                enc.embed_documents(ids, matmul, bf16)
+                warmed.add((L, n))
             enc.timings.clear()
             if npu:
                 npu.t = dict.fromkeys(npu.t, 0.0)
             t0 = time.perf_counter()
-            embeds.append(enc.embed_document(d["ids"], matmul, bf16))
-            times.setdefault(L, []).append(time.perf_counter() - t0)
+            for j, v in zip(g, enc.embed_documents(ids, matmul, bf16)):
+                embeds[j] = v
+            times.setdefault(L, []).append((time.perf_counter() - t0) / n)
             ph = dict(enc.timings) | (dict(npu.t) if npu else {})
             for k, v in ph.items():
-                phases.setdefault(L, {}).setdefault(k, []).append(v)
+                phases.setdefault(L, {}).setdefault(k, []).append(v / n)
         e = np.stack(embeds)
         cos = np.sum(e * ref, axis=1) / (np.linalg.norm(e, axis=1) * np.linalg.norm(ref, axis=1))
         lengths = np.array([d["length"] for d in docs])
@@ -188,7 +224,7 @@ def main():
         nn_kept = float(np.mean(nn(e) == nn(ref)))
         threshold = 0.99999 if a.backend == "cpu" else 0.9999
         passed = bool(cos.min() >= threshold and (a.backend == "cpu" or nn_kept == 1.0))
-        rec = dict(backend=a.backend, docs=str(a.docs), reference=str(a.reference), passed=passed,
+        rec = dict(backend=a.backend, docs=str(a.docs), reference=str(a.reference), batch=a.batch, passed=passed,
                    gate=dict(cos_min=threshold, nn_kept=None if a.backend == "cpu" else 1.0),
                    cos_min=float(cos.min()), cos_mean=float(cos.mean()), nn_kept=nn_kept,
                    per_length={})
@@ -197,9 +233,9 @@ def main():
         for L in sorted(times):
             med = statistics.median(times[L]) * 1000
             ph = {k: statistics.median(v) * 1000 for k, v in phases[L].items()}
-            rec["per_length"][str(L)] = dict(docs=len(times[L]), median_ms=med, cos_min=float(cos[lengths == L].min()),
-                                             phases_ms=ph)
-            print(f"L={L:5d}: {len(times[L])} docs, median {med:8.1f} ms/doc; cos min {cos[lengths == L].min():.7f}; "
+            rec["per_length"][str(L)] = dict(batches=len(times[L]), median_ms_per_doc=med,
+                                             cos_min=float(cos[lengths == L].min()), phases_ms_per_doc=ph)
+            print(f"L={L:5d}: {len(times[L])} batches, median {med:8.1f} ms/doc; cos min {cos[lengths == L].min():.7f}; "
                   + ", ".join(f"{k} {v:.1f}" for k, v in sorted(ph.items(), key=lambda kv: -kv[1])), flush=True)
         a.out.write_text(json.dumps(rec, indent=2) + "\n", encoding="utf-8")
         print(a.out, flush=True)
