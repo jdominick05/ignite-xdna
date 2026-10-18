@@ -25178,3 +25178,77 @@ The kernel itself has not yet run end to end on device.
 - At about 0.28 ms per 16-row tile, a column's four cores take about 0.28 ms per 32-row window.
 - Broadcasting that window takes about 0.15 ms on one channel.
 - So the array should be compute-bound and near its ingress bound. That is DERIVED, not measured.
+
+#### Fused local attention on the 16-core array, and the first on-device end-to-end gate (2026-10-18, Desktop 2)
+
+[`attn_array.py`](../kernels/embedgemma/attn_array.py) runs the v5 core program unchanged on all 16 reachable cores.
+It changes only the feed:
+- **Work items.** One item is a 64-row group of one head.
+- **Per column:** four Q packets go shim → MemTile, which splits one to each core. The group's K/V window
+  (NKB = 34 blocks at W = 512) goes shim → MemTile and is broadcast to all four cores. The outputs join in the
+  MemTile on the way out.
+- **Skipping.** Each core walks the shared window and skips the blocks outside its own 16-row band, one or two of
+  the 34.
+
+Each run is checked against an emulation of the same blocks with the single-core probe's row-scaled criterion. The
+research wrapper recorded no foreign context for any run.
+
+**Round robin, one head per dispatch**
+([log](../results/aie/embedgemma_attn_local_array16_desktop2_20261018T224556Z.log)). All four cases PASS, worst
+0.500 row-scaled:
+
+| Case | 16 cores | One core |
+|---|---:|---:|
+| model, L = 1088 | **1.476 ms** | 19.0 ms (12.9x) |
+| long, L = 2048, one head | **2.365 ms** | — |
+
+- **The estimate held.** Eight groups at about 0.28 ms each per column predicted 2.24 ms. Each column streamed
+  about 4 GB/s, so the array is compute-bound, not ingress-bound.
+
+**Four heads per dispatch** (two KV heads) ([log](../results/aie/embedgemma_attn_local_array16_heads_desktop2_20261018T225138Z.log)).
+One local layer is one dispatch: all seven cases PASS.
+- **One xclbin serves every length.** All seven cases ran on doc2048's xclbin. Every case's core ELFs and
+  configuration CDOs are byte-identical; only `main.pdi` differs. So one context plus a per-length instruction
+  stream is enough.
+- **One layer, four heads:** 0.297 / 1.302 / 8.644 ms at 128 / 512 / 2048 tokens.
+
+**Strided windows** ([log](../results/aie/embedgemma_attn_local_array16_strided_desktop2_20261018T225756Z.log)).
+- **Layout.** Items in (head, group) order are split into four contiguous runs, one head per column.
+- **Transport.** Along a run the window start moves by a constant step except where it is clamped. So each column
+  reads its windows as at most three strided DMAs that overlap in a single copy of the head's K/V.
+- **Host-side K/V at 2048 tokens fell from 151 MB to 4.2 MB.** Before, each window was duplicated host side.
+- **Checks.** The DMA addressing was replayed offline against every item's window before the build. Device time is
+  unchanged: 8.976 ms at doc2048. All seven PASS.
+
+**End-to-end gate on device, the same frozen npu gate.** Weight GEMMs are on the NPU (`b2_native`
+configuration), all 20 local layers' attention is on the array (`--attention npu-local`), and the 4 global layers
+stay host fp32. Every run PASSED with cosine min 0.9999832, mean 0.9999964 and nearest neighbours 100% kept,
+against 0.9999942 with host attention.
+
+| Run | 128 | 512 | 2048 | local attention at 2048 | Log |
+|---|---:|---:|---:|---:|---|
+| host attention (`b2_native`, above) | 171.3 | 885.0 | 4789.5 | (2192.1, all layers) | [log](../results/aie/embedgemma_hybrid_npu_b2_native_desktop2_20261018T211805Z.log) |
+| duplicated windows, NumPy pack | 247.3 | 1108.6 | 5013.1 | 1798.6 | [log](../results/aie/embedgemma_hybrid_npu_b2_native_attnlocal_desktop2_20261018T225343Z.log) |
+| strided windows, NumPy pack | 236.8 | 995.2 | 3927.4 | 911.7 | [log](../results/aie/embedgemma_hybrid_npu_b2_native_attnlocal_strided_desktop2_20261018T225824Z.log) |
+| strided, native pack ([`attn_pack.c`](../kernels/embedgemma/attn_pack.c)) | **198.5** | **844.4** | **3264.9** | **286.4** | [log](../results/aie/embedgemma_hybrid_npu_b2_native_attnlocal_native_desktop2_20261018T230328Z.log) |
+
+All figures are ms per document. One earlier attempt exited 3 before running
+([log](../results/aie/embedgemma_hybrid_npu_b2_native_attnlocal_desktop2_20261018T225259Z.log)). The harness's
+own attention context failed the GEMM backend's idle check; the check now runs once, before either context opens.
+
+**Where the host time went.** The Session's own phases were timed alone, with no GEMM context
+([NumPy](../results/aie/embedgemma_attn_array16_session_phases_desktop2_20261018T230021Z.log),
+[native](../results/aie/embedgemma_attn_array16_session_native_desktop2_20261018T230304Z.log)). At 2048 tokens:
+
+| Pack | Per call | Pack | Device | Unpack |
+|---|---:|---:|---:|---:|
+| NumPy | 42.5 ms | 28.4 ms | 8.6 ms | 3.7 ms |
+| native, bit-identical (`check-native`) | 11.1 ms | 1.2 ms | 8.7 ms | 0.7 ms |
+
+- **In the hybrid, `attn_call` is 213 ms per 2048 document**, against about 174 ms of device time for 20 layers.
+- **At 128 tokens it is 19.8 ms against about 5.4.** The likely cause is the switch between the GEMM context and
+  the attention context on every call (+0.75 ms each, measured earlier). That is not isolated here: unexplained
+  until a one-context build exists.
+- **This is still not a CPU win.** The whole document is now dominated by host NumPy elementwise work: GELU 808,
+  norms 592, RoPE 278, global attention 405 ms at 2048. CPU torch bf16 does the whole document in 1,500 ms. The
+  fused MLP and the elementwise ops are next.

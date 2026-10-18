@@ -143,7 +143,8 @@ VARIANTS = dict(full=[], none=["SCORE", "SOFTMAX", "PV"], score=["SOFTMAX", "PV"
                 nopv=["PV"], nomax=["MAX"], norescale=["RESCALE"], noexp=["EXP"], upstreamlut=[], expprobe=[])   # hollowed phases; anything but "full" is a timing probe with wrong output
 
 
-def build(out: Path, variant="full", cases=None):
+def compile_kernel(out: Path, variant="full"):
+    """attn_local.cc + its exp tables -> out/kernel.o (relocatable, no unresolved symbols); returns the build meta."""
     out.mkdir(parents=True, exist_ok=True)
     clang = PEANO / "bin/clang++.exe"
     flags = ["-O2", "-std=c++20", "--target=aie2-none-unknown-elf", "-DNDEBUG", "-fstack-size-section",
@@ -171,8 +172,12 @@ def build(out: Path, variant="full", cases=None):
         raise ValueError(f"unresolved symbols in kernel.o: {undefined}")
     sizes = command([PEANO / "bin/llvm-size.exe", out / "kernel.o"], out)
     print(sizes, flush=True)
-    meta = dict(kernel_sha256=sha(out / "kernel.o"), source_sha256=sha(HERE / "attn_local.cc"), variant=variant,
+    return dict(kernel_sha256=sha(out / "kernel.o"), source_sha256=sha(HERE / "attn_local.cc"), variant=variant,
                 cases={})
+
+
+def build(out: Path, variant="full", cases=None):
+    meta = compile_kernel(out, variant)
     for name, (L, W, nkb) in CASES.items():
         if cases and name not in cases:
             continue

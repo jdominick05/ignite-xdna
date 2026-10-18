@@ -18,7 +18,8 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 
 
-def build(out: Path) -> Path:
+def build(out: Path, source="round.c", name="embedgemma_round.dll") -> Path:
+    """Compile ``source`` (round.c, or attn_pack.c -> egattn_pack.dll) with MSVC /O2 /arch:AVX2 /openmp."""
     out = out.resolve()
     out.mkdir(parents=True, exist_ok=True)
     vswhere = Path("C:/Program Files (x86)/Microsoft Visual Studio/Installer/vswhere.exe")
@@ -26,13 +27,13 @@ def build(out: Path) -> Path:
                          "Microsoft.VisualStudio.Component.VC.Tools.x86.x64", "-property", "installationPath"],
                         capture_output=True, text=True, check=True).stdout.strip()
     vcvars = Path(vs) / "VC/Auxiliary/Build/vcvars64.bat"
-    cmd = out / "build_round.cmd"
+    cmd = out / f"build_{Path(source).stem}.cmd"
     cmd.write_text(f'@echo off\ncall "{vcvars}" >nul && cl /nologo /LD /O2 /arch:AVX2 /openmp '
-                   f'"{HERE / "round.c"}" /Fe:embedgemma_round.dll\n', encoding="utf-8")
+                   f'"{HERE / source}" /Fe:{name}\n', encoding="utf-8")
     r = subprocess.run(["cmd.exe", "/d", "/c", str(cmd)], cwd=out, capture_output=True, text=True)
     if r.returncode:
         raise RuntimeError(r.stdout + r.stderr)
-    return out / "embedgemma_round.dll"
+    return out / name
 
 
 class Rounder:
@@ -57,11 +58,13 @@ class Rounder:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
-    sub.add_parser("build").add_argument("--out", type=Path, required=True)
+    b = sub.add_parser("build")
+    b.add_argument("--out", type=Path, required=True)
+    b.add_argument("--attn", action="store_true", help="build attn_pack.c -> egattn_pack.dll instead")
     sub.add_parser("check").add_argument("--dll", type=Path, required=True)
     a = ap.parse_args()
     if a.cmd == "build":
-        print(build(a.out))
+        print(build(a.out, "attn_pack.c", "egattn_pack.dll") if a.attn else build(a.out))
         return 0
     sys.path.insert(0, str(HERE))
     from model import bf16_bits

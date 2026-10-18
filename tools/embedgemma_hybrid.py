@@ -24,7 +24,10 @@ Gates, fixed before any run (2026-10-18):
   cpu with --bf16-inputs or --attention blockwise is a device-numerics emulation, held to the npu gate.
 --attention blockwise replaces the host attention with kernels/embedgemma/attention_oracle.py (the fused kernel's
 online-softmax form: key blocks of --k-block, BF16 Q/K/V, BF16 exp and P); --bf16-inputs rounds every weight
-product's input to BF16 as the NPU GEMM does. Both are numerics checks: their timings mean nothing.
+product's input to BF16 as the NPU GEMM does. --attention npu-local runs every local (sliding-window) layer's
+attention on the device: kernels/embedgemma/attn_array.py's 16-core fused kernel, one dispatch per document per
+layer (all four heads), in its own context on --attn-build's doc2048 xclbin; global layers stay host fp32. It is
+held to the npu gate. Both are numerics checks: their timings mean nothing.
 Timing: wall time per batch divided by its documents, median per length, after one untimed warm-up batch per
 (length, batch size). Phases: ``gemm`` is the whole weight-product hook; inside it ``npu_pack`` (round to BF16
 into the mapped A), ``npu_write`` (A sync), ``npu_call`` (submit + wait), ``npu_read`` (C sync) and ``npu_unpack``
@@ -174,7 +177,9 @@ def main():
     ap.add_argument("--builds", type=Path, help="tools/embedgemma_gemm_probe.py compile --out DIR (npu)")
     ap.add_argument("--ms", type=int, nargs="+", default=[256, 512, 2048])
     ap.add_argument("--batch", type=int, default=1, help="consecutive same-length documents per row batch")
-    ap.add_argument("--attention", choices=["exact", "blockwise"], default="exact")
+    ap.add_argument("--attention", choices=["exact", "blockwise", "npu-local"], default="exact")
+    ap.add_argument("--attn-build", type=Path, help="npu-local: kernels/embedgemma/attn_array.py build --out DIR")
+    ap.add_argument("--attn-pack-dll", type=Path, help="npu-local: egattn_pack.dll (native.py build --attn)")
     ap.add_argument("--k-block", type=int, default=32)
     ap.add_argument("--exp", choices=["exact", "lut", "fixed"], default="exact",
                     help="blockwise: exp model (lut = v4 kernel table exp, fixed = v5 integer softmax)")
@@ -200,10 +205,30 @@ def main():
                                                               q_block=y - x, k_block=a.k_block, exp=a.exp,
                                                               tau=a.tau) for x, y in segs])
         enc._attention = blockwise
+    attn = None
+    if a.attention == "npu-local":
+        if not idle():
+            print("NPU not idle: refusing (a foreign context is contention, not a finding)")
+            return 3
+        import attn_array
+        attn = attn_array.Session(a.attn_build, "doc2048", a.attn_pack_dll)
+        host_attention = enc._attention
+
+        def npu_local(q, k, v, layer, segs):   # q [R, H, 256], k/v [R, KV, 256]; one dispatch per document
+            if layer["kind"] != "sliding_attention":
+                return host_attention(q, k, v, layer, segs)
+            t = time.perf_counter()
+            out = np.concatenate([attn.run(q[x:y], k[x:y], v[x:y], enc.window).reshape(y - x, -1) for x, y in segs])
+            enc.timings["attn_npu"] = enc.timings.get("attn_npu", 0.0) + time.perf_counter() - t
+            for key, val in attn.t.items():
+                enc.timings[key] = enc.timings.get(key, 0.0) + val
+            attn.t = dict.fromkeys(attn.t, 0.0)
+            return out
+        enc._attention = npu_local
     print(f"weights loaded in {time.perf_counter() - t:.1f} s; {len(enc.shapes())} weight products per document", flush=True)
     npu = None
     if a.backend == "npu":
-        if not idle():
+        if attn is None and not idle():   # with npu-local, idle was checked before the attention context opened
             print("NPU not idle: refusing (a foreign context is contention, not a finding)")
             return 3
         rounder = None
@@ -213,7 +238,7 @@ def main():
         npu = Npu(enc, a.builds, a.ms, rounder)
     matmul = npu.matmul if npu else None
     bf16 = a.backend == "npu" or a.bf16_inputs
-    emulation = a.backend == "cpu" and (a.bf16_inputs or a.attention != "exact")
+    emulation = a.backend == "cpu" and (a.bf16_inputs or a.attention == "blockwise")
     try:
         embeds, times, phases = [None] * len(docs), {}, {}
         groups = []   # consecutive same-length documents, up to --batch and (npu) the largest compiled M in rows
@@ -251,7 +276,7 @@ def main():
             np.fill_diagonal(s, -np.inf)
             return s.argmax(axis=1)
         nn_kept = float(np.mean(nn(e) == nn(ref)))
-        strict = a.backend == "cpu" and not emulation
+        strict = a.backend == "cpu" and not emulation and a.attention == "exact"
         threshold = 0.99999 if strict else 0.9999
         passed = bool(cos.min() >= threshold and (strict or nn_kept == 1.0))
         rec = dict(backend=a.backend, docs=str(a.docs), reference=str(a.reference), batch=a.batch, round_dll=bool(a.round_dll), attention=a.attention, k_block=a.k_block, exp=a.exp, tau=a.tau,
@@ -272,8 +297,11 @@ def main():
         print(a.out, flush=True)
         return 0 if passed else 1
     finally:
+        if attn:
+            attn.close()
         if npu:
             npu.close()
+        if npu or attn:
             print(f"idle after: {idle()}", flush=True)
 
 

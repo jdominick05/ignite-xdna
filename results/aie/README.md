@@ -1754,3 +1754,11 @@ hardware contexts running on device"; the sweep is offline and needs no witness.
   - v4's lookup-shift bug: [FAIL](embedgemma_attn_local_onecore_v4_desktop2_20261018T215448Z.log), [FAIL with upstream tables](embedgemma_attn_local_onecore_v4upl_desktop2_20261018T215752Z.log), [exp probe](embedgemma_attn_local_expprobe_desktop2_20261018T215844Z.log), [after the fix](embedgemma_attn_local_expprobe_desktop2_20261018T215956Z.log), [small-case rerun](embedgemma_attn_local_onecore_v4_desktop2_20261018T215533Z.log).
   - Discarded as contended: [1](embedgemma_attn_local_softmax_parts_desktop2_20261018T213605Z.log), [2](embedgemma_attn_local_softmax_parts_desktop2_20261018T213647Z.log).
   - CPU end-to-end numerics: [table exp](embedgemma_fused_attn_numerics_lut_cpu_desktop2_20261018T214800Z.json), [integer softmax](embedgemma_fused_attn_numerics_fixed_cpu_desktop2_20261018T220711Z.json).
+- **Fused local attention on the 16-core array**:
+  - Round robin, one head: [log](embedgemma_attn_local_array16_desktop2_20261018T224556Z.log). Model case 1.476 ms; L = 2048 2.365 ms.
+  - Four heads, one xclbin: [log](embedgemma_attn_local_array16_heads_desktop2_20261018T225138Z.log).
+  - Strided windows: [log](embedgemma_attn_local_array16_strided_desktop2_20261018T225756Z.log).
+  - Session phases: [NumPy](embedgemma_attn_array16_session_phases_desktop2_20261018T230021Z.log), [native](embedgemma_attn_array16_session_native_desktop2_20261018T230304Z.log).
+- **End-to-end gate on device, local attention on the NPU** (all PASS, cosine min 0.9999832):
+  - [duplicated windows](embedgemma_hybrid_npu_b2_native_attnlocal_desktop2_20261018T225343Z.log), [strided](embedgemma_hybrid_npu_b2_native_attnlocal_strided_desktop2_20261018T225824Z.log), [native pack](embedgemma_hybrid_npu_b2_native_attnlocal_native_desktop2_20261018T230328Z.log).
+  - [Exit 3: harness idle-check bug](embedgemma_hybrid_npu_b2_native_attnlocal_desktop2_20261018T225259Z.log).
