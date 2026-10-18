@@ -1,0 +1,13 @@
+AUDIT tensors yolov8s | 2026-09-26T12:38:14Z | script sha256 dbc4b7bb4d2d0195f4becf479b4711732f62d0a9f3952fcbfc3c06e34741bd89 | onnxruntime 1.23.3.dev20260320 | threads 8 | ORT_DISABLE_ALL
+PIN_CHECK models/yolov8s_cut.onnx sha256 f713208d79578f41240d2ffaca96dfca711ad45bcf251326adb68da212ab04d5 == pinned
+PIN_CHECK models/yolov8s_cut_xint8.onnx sha256 065f62523000b806e47e227f0b9d71a689f10d8c5368a7c5b6d0ff3b9f733fcc == pinned
+PIN_CHECK scratch/w4v/arms/yolov8s_w4v_rtn_e1.onnx sha256 92633c4528637553de18a83821f69c560e57597b080426ce3c02d2a53b8130a3 == pinned
+PIN_CHECK scratch/w4v/arms/yolov8s_w4v_bc_e1.onnx sha256 2700ece0499075fd7bfe6321d878c30cc67a0b7123ce1ae57589a8feec15ffe4 == pinned
+INFO models/yolov8s_cut.onnx: the shipped Conv names; node order == XINT8 order True
+INFO scratch/w4v/arms/yolov8s_w4v_rtn_e1.onnx: the shipped Conv names; node order == XINT8 order False
+INFO scratch/w4v/arms/yolov8s_w4v_bc_e1.onnx: the shipped Conv names; node order == XINT8 order False
+C3_IMAGES 16 images 000000000139.jpg .. 000000001503.jpg, listing sha256 b839acbd27daaabbbe536ab9fed028524ec024b06c1386c263e20ce63c7d675f; letterbox 640
+(i) yolov8s rtn_e1: class-logit outputs at the quantizer's minimum code (uint8 0): 0/10752000 = 0.000000; per scale 0.000000, 0.000000, 0.000000
+(i) yolov8s bc_e1: class-logit outputs at the quantizer's minimum code (uint8 0): 0/10752000 = 0.000000; per scale 0.000000, 0.000000, 0.000000
+(ii) yolov8s: first Conv (XINT8 order) where bc_e1's per-channel mean error exceeds rtn_e1's in more than half its channels: none (5 s)
+IMPORTS w4_recover or quant loaded: none | END 2026-09-26T12:38:19Z

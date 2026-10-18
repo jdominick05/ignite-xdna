@@ -1,0 +1,189 @@
+PREREG_TEXT_SHA256 7ff9c2c46e9280e5002aafb6cb573646d0c920b6257b6aba4e2ff47a08caee49
+PROTOCOL_JSON_SHA256 46297af64e23a10df62c363f766bacc3f78faf121b5194ea8e6077b364710872
+VERDICT_CODE_SHA256 2fc815d93451a3be1f8403d768cddb5737218d9e58abe282cc25e77fb7eb7c64
+TOOLS_JSON {"ignite_xdna/__init__.py": "ef016e665caaf8a1f43c196632b0cddf6e8b693a4b10efba3ac2fe7301198ab2", "npu/__init__.py": "7c8079f009174f9992dc12578079959704d0cb08710f8d68c666925559b8c599", "npu/modnet.py": "d6239523a4041df1194afc6b78a24bdf9c0f6e03039e4de4126d7938f9d015ca", "npu/paths.py": "e5e05f6a3e7bbc070b059a603281478ce76ee28f036361e90985b3c424c788a1", "npu/preprocess.py": "d981eb2c9cee4b941670ebd41ceb8d4c6636e14ea5a1e78bbaa3dd7f1bbf09ab", "npu/session.py": "1f7ec8e0aba8e70000d4c704aeb11a7ece6a33b8d57b9c8c7b34642eaca0edcc", "npu/yolo.py": "04222f86d1e2da8ca2cc68e0675cd75883ce541a804be4ba916df7c4ed3abd04", "npu/yolo_decode.py": "a245363a16fc845384611c125ba60725c106622f07b69b8567afd211b2c235fb", "pipelines/yolov8n/5_eval_map.py": "fb25e914e1b28078e0a99413c14b491dfcb57a17c6fb5b740ac0eb51145a753f", "quant/__init__.py": "6a457c2b7f7de2ed3e56fa9020d171291bff4b2633a4ce16b4b028e37b7289ec", "quant/__main__.py": "b67e8ef3ca621732d04cc7f54627011e89e00ed964b932561198519f7d1cd2af", "quant/adaround.py": "60f06bd2a3f28bfcb99f55ae462c2f41b3469f9fd3565877418dde95bb6a0704", "quant/calib.py": "a68f24d9bc39fcbc51988ce7b6b9dd79bf62f7d454689886d866ab8d04a2dcd6", "quant/cle.py": "6b876fc61b66ce348cbc9053974927a16888798305096bd2ccd23ebde2285e35", "quant/cli.py": "fb05ead47ee3d0fc25c41d305ec3d6bd7e57fafde074c9266c5737f59c87a194", "quant/graph.py": "35171c86a1535a34fbfaac40e54a1c8646dadec25af287df710b9feb5ae89342", "quant/passes.py": "63df9a473fe7fc8b576e0313b8ba8124a17a0541f212b3bde1befc17d8846397", "quant/pow2.py": "2212eaa226d72ad6b54a75f97a854ec9a9589861cd92baff6fea1d8d2d752fab", "quant/qdq.py": "4c4cf421ade75c578762e373f99ca2aba2daed1bf1ab8590d8dd044783958286", "quant/quantize.py": "6fbdc88bd88bdbfbb8882f53cb3c3586e7af916dcf0d665f45b2e284bcc3b327", "quant/refine.py": "2f10e3bcaaa57c441f029af91fbe2bc87c3b07b20d63b74eaf5aca45b58fadfd", "quant/report.py": "f186e05bf38d4cb7aff66514e059e0fc7fb02abe3fd4981bfd4980272aa2d4e9", "quant/shift_cut.py": "80fa8bfc76c7c13e526107ea6917cc3cee4a0da65caa8a4305ccbbf43fe4246a", "quant/sources.py": "0ef5e110296022af5d4b9e36493099fe7be009fe49687c16a1dc30c148ed8286", "quant/verify.py": "1263884ebbd17fbbfe1a83b42e971f84a67b847e22fabd132638f83721f6dd18", "scripts/lib.sh": "325383a38b0f8cc2d5d30cab3cef0c261dca41c40b8f79c7b5e771de6daa90fd", "tools/quant_compare.py": "d193031b0e238fb9ea92bb7c8492bf08d1830c9fa17a6eb5260080a5cbc6f1bf", "tools/w4_recover.py": "8a9562972a5183689a95ab405783e59387788f459d54dcd7643b56d4a928b155", "tools/w4a8_emulate.py": "298129b5c2de794dc680f18537db7e0a07659637fe8d342d78a44694a3fceeff", "tools/w4a8_engine_gate.py": "a8a61cb805fc40aa2b5cd2a166ac32c8296ffb42c3e3b492b05fbaf94b7972c4"}
+[selftest] PASS the embedded text is the accepted v2.4 (LF sha256 7ff9c2c4...)
+[selftest] PASS the triple is stable across calls
+[selftest] PASS a changed constant changes VERDICT_CODE_SHA256
+[selftest] PASS the matrix has 17 tier-1 and 12 tier-2 arms
+[selftest] PASS delta works on the printed values
+[selftest] PASS the cut is <= 2.00
+[selftest] PASS the flag: cut on the 500, within the line on H
+[selftest] PASS K-D needs both deltas
+[selftest] PASS eligibility: F never; E1 needs form b; any form-b file needs its own C8 PASS
+[selftest] PASS PASS picks the smallest K-D delta; F never decides
+[selftest] PASS ties go to section 3.7's row order
+[selftest] PASS NARROW: no eligible pass, best K-D in (1, 2]
+[selftest] PASS KILLED without NARROW above 2
+[selftest] PASS the 10k AdaRound clause: only when NARROW and AdaRound's own best eligible arm is in (1, 2]
+[selftest] PASS EXTEND when one method passes on both models
+[selftest] PASS no EXTEND across two methods
+[selftest] PASS phase-2 cost names the int32 bias and MX
+[selftest] PASS C8 coverage: PASS when an advanced int32-bias form-b file was checked, whatever its result; FAIL when one advanced and none was checked; PASS with reasons when none advanced
+[selftest] PASS a W4V_GATE FAIL for a file is its result
+[selftest] PASS SCREEN INCOMPLETE prints no CUT_JSON or FLAG_JSON; SCREEN COMPLETE comes first, then the cut
+[selftest] PASS committed and clean: untracked no, only `git add`ed no, committed yes, edited after commit no
+[selftest] PASS VERDICT_CODE_SHA256 hashes the whole runner; TOOLS_JSON changes with quant/pow2.py
+FROZEN_JSON {"frozen": false, "prereg_logs": []}
+[selftest] PASS no prereg log: not frozen
+FROZEN_JSON {"frozen": false, "prereg_logs": ["w4v_prereg_desktop2_20260926.log"]}
+FROZEN_JSON {"frozen": true, "prereg_logs": ["w4v_prereg_desktop2_20260926.log"]}
+FROZEN_JSON {"frozen": false, "prereg_logs": ["w4v_prereg_desktop2_20260926.log"]}
+FROZEN_JSON {"frozen": false, "prereg_logs": ["w4v_prereg_desktop2_20260926.log", "w4v_prereg_desktop2_20260927.log"]}
+[selftest] PASS frozen: the one committed, clean prereg log with the same triple and TOOLS_JSON; refused when it is uncommitted, when a tool changed, or when there are two
+[selftest] PASS pins come from committed, clean logs only (an uncommitted pins log refuses them all)
+[selftest] PASS the cut: one committed, clean log per tier, CUT_JSON after SCREEN COMPLETE, and every pinned arm either advanced or cut; refused otherwise, and a CUT_JSON that is not JSON is a PROBLEM
+[selftest] PASS a stage waits for every earlier stage's committed log with its success line: ready; refused on a committed C6c FAIL, a truncated log, differing hash blocks, no hash block, an uncommitted log
+[selftest] PASS parity waits for both controls logs' PASS lines; a committed controls FAIL log refuses it
+[selftest] PASS an emit log's 14 equal hash blocks pass; --pins reads an uncommitted emit log (need_commit off), ready() wants it committed
+[selftest] PASS decisive waits for the gate log's SRC_TREE line, C8 int32 PASS and completion line (a file's W4V_GATE FAIL is not a stage failure): refused on C8 FAIL, on a log cut short and on one without SRC_TREE
+[selftest] PASS the runner's --ready also refuses a stage with a log of its own, of any date, committed or not (its load witness included); the in-stage checks leave that to it
+[selftest] PASS the verdict runs once: its --ready refuses while a verdict log exists, of any date
+[selftest] PASS SRC_TREE is HEAD:src and wants src/ clean: refused when src/ is not in HEAD, edited or holds an untracked file
+[selftest] PASS an unreadable TOOLS_JSON line makes its block match nothing, a PROBLEM line and not a traceback
+[selftest] PASS a log's hash blocks: all of them read, and a log whose blocks disagree matches nothing
+[selftest] PASS --advanced and --c8 print the triple and TOOLS_JSON first, so the gate log carries them
+[selftest] PASS the static graph: plain, from-, relative, lazy and literal importlib imports, a package's __init__, the script's own directory; nothing under src/; a non-literal importlib call is reported
+[selftest] PASS TOOL_FILES == the import graph of its 6 roots (29 repo files; this tool is VERDICT_CODE's, src/ is SRC_TREE's) plus scripts/lib.sh, which the runner sources; the one non-literal import is the eval's --decoder, which the runner never passes and whose default module the eval imports by name
+[selftest] PASS H drops coco_calib's ids
+[selftest] PASS the parser reads the row, and its triple with TOOLS_JSON
+[selftest] PASS the dets check re-scores the logged figure
+[selftest] PASS perfect detections score 100.00 on all and on H
+[selftest] PASS H scores only its ids (detections missing on two coco_calib images lower all, not H)
+[selftest] PASS shifted boxes lower both figures
+[selftest] PASS a logged figure the dets do not give fails the check, and the failure carries no H figure
+[selftest] PASS a dets file that is not the logged one fails the check
+[selftest] PASS the log name is enforced
+[selftest] PASS
+PREREG_TEXT_SHA256 7ff9c2c46e9280e5002aafb6cb573646d0c920b6257b6aba4e2ff47a08caee49
+PROTOCOL_JSON_SHA256 46297af64e23a10df62c363f766bacc3f78faf121b5194ea8e6077b364710872
+VERDICT_CODE_SHA256 2fc815d93451a3be1f8403d768cddb5737218d9e58abe282cc25e77fb7eb7c64
+TOOLS_JSON {"ignite_xdna/__init__.py": "ef016e665caaf8a1f43c196632b0cddf6e8b693a4b10efba3ac2fe7301198ab2", "npu/__init__.py": "7c8079f009174f9992dc12578079959704d0cb08710f8d68c666925559b8c599", "npu/modnet.py": "d6239523a4041df1194afc6b78a24bdf9c0f6e03039e4de4126d7938f9d015ca", "npu/paths.py": "e5e05f6a3e7bbc070b059a603281478ce76ee28f036361e90985b3c424c788a1", "npu/preprocess.py": "d981eb2c9cee4b941670ebd41ceb8d4c6636e14ea5a1e78bbaa3dd7f1bbf09ab", "npu/session.py": "1f7ec8e0aba8e70000d4c704aeb11a7ece6a33b8d57b9c8c7b34642eaca0edcc", "npu/yolo.py": "04222f86d1e2da8ca2cc68e0675cd75883ce541a804be4ba916df7c4ed3abd04", "npu/yolo_decode.py": "a245363a16fc845384611c125ba60725c106622f07b69b8567afd211b2c235fb", "pipelines/yolov8n/5_eval_map.py": "fb25e914e1b28078e0a99413c14b491dfcb57a17c6fb5b740ac0eb51145a753f", "quant/__init__.py": "6a457c2b7f7de2ed3e56fa9020d171291bff4b2633a4ce16b4b028e37b7289ec", "quant/__main__.py": "b67e8ef3ca621732d04cc7f54627011e89e00ed964b932561198519f7d1cd2af", "quant/adaround.py": "60f06bd2a3f28bfcb99f55ae462c2f41b3469f9fd3565877418dde95bb6a0704", "quant/calib.py": "a68f24d9bc39fcbc51988ce7b6b9dd79bf62f7d454689886d866ab8d04a2dcd6", "quant/cle.py": "6b876fc61b66ce348cbc9053974927a16888798305096bd2ccd23ebde2285e35", "quant/cli.py": "fb05ead47ee3d0fc25c41d305ec3d6bd7e57fafde074c9266c5737f59c87a194", "quant/graph.py": "35171c86a1535a34fbfaac40e54a1c8646dadec25af287df710b9feb5ae89342", "quant/passes.py": "63df9a473fe7fc8b576e0313b8ba8124a17a0541f212b3bde1befc17d8846397", "quant/pow2.py": "2212eaa226d72ad6b54a75f97a854ec9a9589861cd92baff6fea1d8d2d752fab", "quant/qdq.py": "4c4cf421ade75c578762e373f99ca2aba2daed1bf1ab8590d8dd044783958286", "quant/quantize.py": "6fbdc88bd88bdbfbb8882f53cb3c3586e7af916dcf0d665f45b2e284bcc3b327", "quant/refine.py": "2f10e3bcaaa57c441f029af91fbe2bc87c3b07b20d63b74eaf5aca45b58fadfd", "quant/report.py": "f186e05bf38d4cb7aff66514e059e0fc7fb02abe3fd4981bfd4980272aa2d4e9", "quant/shift_cut.py": "80fa8bfc76c7c13e526107ea6917cc3cee4a0da65caa8a4305ccbbf43fe4246a", "quant/sources.py": "0ef5e110296022af5d4b9e36493099fe7be009fe49687c16a1dc30c148ed8286", "quant/verify.py": "1263884ebbd17fbbfe1a83b42e971f84a67b847e22fabd132638f83721f6dd18", "scripts/lib.sh": "325383a38b0f8cc2d5d30cab3cef0c261dca41c40b8f79c7b5e771de6daa90fd", "tools/quant_compare.py": "d193031b0e238fb9ea92bb7c8492bf08d1830c9fa17a6eb5260080a5cbc6f1bf", "tools/w4_recover.py": "8a9562972a5183689a95ab405783e59387788f459d54dcd7643b56d4a928b155", "tools/w4a8_emulate.py": "298129b5c2de794dc680f18537db7e0a07659637fe8d342d78a44694a3fceeff", "tools/w4a8_engine_gate.py": "a8a61cb805fc40aa2b5cd2a166ac32c8296ffb42c3e3b492b05fbaf94b7972c4"}
+[selftest] PASS read-only ONNX initializers (writeable False, False) reach torch as copies: no 'not writable' warning
+[selftest] PASS choose_pow2_minmse's default == gate D's W8 choose_pos on 200 random tensors
+[selftest] PASS choose_pow2_minmse(grid [-7, 7], window -1:5) == gate D's W4 choose_pos on 200 random tensors
+[selftest] PASS pow2.quantize's default is clip(rint(x / s) + zp) to the producer range
+[selftest] PASS pow2.quantize(grid) == gate D's quantize_bounded
+[selftest] PASS pow2.sqerr(grid) == gate D's sqerr_bounded
+[selftest] PASS a grid outside the producer range and a window without 0 are refused
+[selftest] PASS im2col in ONNX (cin, kh, kw) order reproduces the convolution
+[selftest] PASS the Hessian is symmetric positive semidefinite
+[selftest] PASS blocked Cholesky GPTQ (blocks 1, 3, 128; act-order on and off) == an independent unblocked OBQ reference (a re-solve per column, its own dead-column, order and damping code) on 30 seeded cases
+[selftest] PASS the reference is not RTN: it leaves round-to-nearest in 26/30 cases, and act-order changes its integers in 26/30
+[selftest] PASS with a diagonal Hessian GPTQ is round-to-nearest
+[selftest] PASS GPTQ's loss <= RTN's in each of the 40 cases (40/40)
+[selftest] PASS GPTQ reaches the brute-force optimum (all 15^4 grid points) in 36/40 cases, floor 30/40
+[selftest] PASS GPTQ's mean loss <= RTN's over the 40 cases (0.22920 vs 0.23773)
+[selftest] PASS F takes the first minimum over alpha 0.50..1.00, and w_hat == q4 * s
+[selftest] PASS MX takes the most sensitive first, ties in Conv order, and stops at the first that overflows (b, c kept; e would overflow; d is not taken after the stop)
+[check] graph_diff vs shipped + intended rewrite (weights): empty
+[check] graph_diff vs shipped: node_delta 0, init mismatches 0, weights changed 2/4 int8 initializers
+[check] graph_diff vs shipped + intended rewrite only: empty
+[check] grid [-7, 7], multiple of 2**k with k in [0, 4] (form b), <= 15 levels per group: all groups; float identity stored * scale == q * 2**-pos on 2 convs
+[check] pos4 == choose_pos == choose_pow2_minmse(grid, window) on 2 groups: all
+[selftest] PASS RTN e1: C5 passes (gate D's check_emitted and this tool's)
+[check] graph_diff vs shipped + intended rewrite (weights): empty
+[check] graph_diff vs shipped: node_delta 0, init mismatches 0, weights changed 2/4 int8 initializers
+[check] graph_diff vs shipped + intended rewrite only: empty
+[check] grid [-7, 7], multiple of 2**k with k in [0, 4] (form b), <= 15 levels per group: all groups; float identity stored * scale == q * 2**-pos on 2 convs
+[check] pos4 == choose_pos == choose_pow2_minmse(grid, window) on 3 groups: all
+[selftest] PASS RTN e2: C5 passes (gate D's check_emitted and this tool's)
+[check] graph_diff vs shipped + intended rewrite (weights): empty
+[check] graph_diff vs shipped: node_delta 0, init mismatches 0, weights changed 2/4 int8 initializers
+[check] graph_diff vs shipped + intended rewrite only: empty
+[check] grid [-7, 7], multiple of 2**k with k in [0, 4] (form b), <= 15 levels per group: all groups; float identity stored * scale == q * 2**-pos on 2 convs
+[check] pos4 == choose_pos == choose_pow2_minmse(grid, window) on 45 groups: all
+[selftest] PASS RTN u: C5 passes (gate D's check_emitted and this tool's)
+[check] graph_diff vs shipped + intended rewrite (weights): empty
+[check] graph_diff vs shipped + intended rewrite only: empty
+[check] grid [-7, 7], multiple of 2**k with k in [0, 4] (form b), <= 15 levels per group: all groups; float identity stored * scale == q * 2**-pos on 2 convs
+[check] pos4 == choose_pos == choose_pow2_minmse(grid, window) on 0 groups: all
+[selftest] PASS RTN f: C5 passes (gate D's check_emitted and this tool's)
+[selftest] PASS RTN E1 of the synthetic model has form-b Convs (2/2)
+[selftest] PASS form a == form b, bit for bit, on 6 inputs
+[selftest] PASS the negative control: RTN E1 differs from the shipped model
+[selftest] PASS sensitivity's y_f statistics == a separate float pass, bit for bit
+[selftest] PASS the y_f file and the MX file read back unchanged
+[selftest] PASS tier 2 refuses a capture file that no prereg log pins
+[selftest] PASS MX: the budget rule keeps W8 at most 5% of the weights (W8 Convs: e1 0, e2 0, u 0)
+[selftest] PASS MX: a Conv whose float weights sit on the W4 grid scores exactly 0 in E1, E2 and U, the other Conv above 0 (the two terms share B8's input and the float bias)
+[selftest] PASS MX: each rel == the same ratio recomputed on B8's captured input (both models, every form)
+[selftest] PASS MX: on the float network's own input the ratio differs (largest relative gap 9.78e-04), so the input is B8's
+[check] graph_diff vs shipped + intended rewrite (weights, int32 biases): empty
+[check] grid [-7, 7] (form b: multiple of 2**k, k in [0, 4]): all groups; float identity on 2 convs
+[check] pos4 == choose_pos == choose_pow2_minmse(grid, window) on 2 groups: all
+[check] int32 biases at s_x * s_w, within half a step of the method's float bias: 2/2
+[selftest] PASS BC e1: C5 passes (2 int32 biases)
+[selftest] PASS BC e1: the sidecar serializes, with gate D's fields and the method's
+[selftest] PASS BC e1 twice gives the same file (C7)
+[selftest] PASS BC e1: every channel mean within half an int32 step of y_f's (worst 0.497 step)
+[check] graph_diff vs shipped + intended rewrite (weights, int32 biases): empty
+[check] grid [-7, 7] (form b: multiple of 2**k, k in [0, 4]): all groups; float identity on 2 convs
+[check] pos4 == choose_pos == choose_pow2_minmse(grid, window) on 45 groups: all
+[check] int32 biases at s_x * s_w, within half a step of the method's float bias: 2/2
+[selftest] PASS BC u: C5 passes (2 int32 biases)
+[selftest] PASS BC u: the sidecar serializes, with gate D's fields and the method's
+[selftest] PASS BC u twice gives the same file (C7)
+[selftest] PASS BC u: every channel mean within half an int32 step of y_f's (worst 0.497 step)
+[check] graph_diff vs shipped + intended rewrite (weights, int32 biases): empty
+[check] grid [-7, 7] (form b: multiple of 2**k, k in [0, 4]): all groups; float identity on 2 convs
+[check] pos4 == choose_pos == choose_pow2_minmse(grid, window) on 2 groups (on w for VC): all
+[check] int32 biases at s_x * s_w, within half a step of the method's float bias: 2/2
+[selftest] PASS VC e1: C5 passes (2 int32 biases)
+[selftest] PASS VC e1: the sidecar serializes, with gate D's fields and the method's
+[selftest] PASS VC e1 twice gives the same file (C7)
+[selftest] PASS VC e1: a_c in (0, inf) and the file runs
+[check] graph_diff vs shipped + intended rewrite (weights, int32 biases): empty
+[check] grid [-7, 7] (form b: multiple of 2**k, k in [0, 4]): all groups; float identity on 2 convs
+[check] pos4 == choose_pos == choose_pow2_minmse(grid, window) on 45 groups (on w for VC): all
+[check] int32 biases at s_x * s_w, within half a step of the method's float bias: 2/2
+[selftest] PASS VC u: C5 passes (2 int32 biases)
+[selftest] PASS VC u: the sidecar serializes, with gate D's fields and the method's
+[selftest] PASS VC u twice gives the same file (C7)
+[selftest] PASS VC u: a_c in (0, inf) and the file runs
+[check] graph_diff vs shipped + intended rewrite (weights): empty
+[check] graph_diff vs shipped: node_delta 0, init mismatches 0, weights changed 2/4 int8 initializers
+[check] graph_diff vs shipped + intended rewrite only: empty
+[check] grid [-7, 7], multiple of 2**k with k in [0, 4] (form b), <= 15 levels per group: all groups; float identity stored * scale == q * 2**-pos on 2 convs
+[check] pos4 == choose_pos == choose_pow2_minmse(grid, window) on 2 groups: all
+[selftest] PASS GPTQ e1: C5 passes (0 int32 biases)
+[selftest] PASS GPTQ e1: the sidecar serializes, with gate D's fields and the method's
+[selftest] PASS GPTQ e1 twice gives the same file (C7)
+[check] graph_diff vs shipped + intended rewrite (weights): empty
+[check] graph_diff vs shipped: node_delta 0, init mismatches 0, weights changed 2/4 int8 initializers
+[check] graph_diff vs shipped + intended rewrite only: empty
+[check] grid [-7, 7], multiple of 2**k with k in [0, 4] (form b), <= 15 levels per group: all groups; float identity stored * scale == q * 2**-pos on 2 convs
+[check] pos4 == choose_pos == choose_pow2_minmse(grid, window) on 45 groups: all
+[selftest] PASS GPTQ u: C5 passes (0 int32 biases)
+[selftest] PASS GPTQ u: the sidecar serializes, with gate D's fields and the method's
+[selftest] PASS GPTQ u twice gives the same file (C7)
+[selftest] PASS VC's rescale sets each channel's std to the target (before re-quantization)
+[selftest] PASS WeightGrid with the file's scale on [-128, 127] == the transcribed AdaRound, bit for bit
+[check] graph_diff vs shipped + intended rewrite (weights): empty
+[check] graph_diff vs shipped: node_delta 0, init mismatches 0, weights changed 2/4 int8 initializers
+[check] graph_diff vs shipped + intended rewrite only: empty
+[check] grid [-7, 7], multiple of 2**k with k in [0, 4] (form b), <= 15 levels per group: all groups; float identity stored * scale == q * 2**-pos on 2 convs
+[check] pos4 == choose_pos == choose_pow2_minmse(grid, window) on 2 groups: all
+[selftest] PASS AdaRound W4 e1: C5 passes, q4 in [-7, 7], 2 layers optimised
+[check] graph_diff vs shipped + intended rewrite (weights): empty
+[check] graph_diff vs shipped: node_delta 0, init mismatches 0, weights changed 1/4 int8 initializers
+[check] graph_diff vs shipped + intended rewrite only: empty
+[check] grid [-7, 7], multiple of 2**k with k in [0, 4] (form b), <= 15 levels per group: all groups; float identity stored * scale == q * 2**-pos on 1 convs
+[check] pos4 == choose_pos == choose_pow2_minmse(grid, window) on 1 groups: all
+[selftest] PASS AdaRound W4 e1 with one Conv kept W8: C5 passes, q4 in [-7, 7], 1 layers optimised, the kept Conv as shipped
+[check] graph_diff vs shipped + intended rewrite (weights): empty
+[check] graph_diff vs shipped: node_delta 0, init mismatches 0, weights changed 2/4 int8 initializers
+[check] graph_diff vs shipped + intended rewrite only: empty
+[check] grid [-7, 7], multiple of 2**k with k in [0, 4] (form b), <= 15 levels per group: all groups; float identity stored * scale == q * 2**-pos on 2 convs
+[check] pos4 == choose_pos == choose_pow2_minmse(grid, window) on 45 groups: all
+[selftest] PASS AdaRound W4 u: C5 passes, q4 in [-7, 7], 2 layers optimised
+[check] graph_diff vs shipped + intended rewrite (weights): empty
+[check] graph_diff vs shipped: node_delta 0, init mismatches 0, weights changed 1/4 int8 initializers
+[check] graph_diff vs shipped + intended rewrite only: empty
+[check] grid [-7, 7], multiple of 2**k with k in [0, 4] (form b), <= 15 levels per group: all groups; float identity stored * scale == q * 2**-pos on 1 convs
+[check] pos4 == choose_pos == choose_pow2_minmse(grid, window) on 6 groups: all
+[selftest] PASS AdaRound W4 u with one Conv kept W8: C5 passes, q4 in [-7, 7], 1 layers optimised, the kept Conv as shipped
+[selftest] PASS run_adaround puts torch at 8 threads before finetune (1 before the call, 8 after); ORT's intra-op setting is recorded as 0 (the default)
+[selftest] PASS AdaRound W4 twice gives the same integers (C7)
+[selftest] PASS a tier-1 file reads back as rows that rebuild it (the tier-2 base)
+[selftest] PASS

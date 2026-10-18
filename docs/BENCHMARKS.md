@@ -2333,6 +2333,14 @@ merged, plus half the weight DMA tasks' issue time.
   than the layouts it declares. The trim is still a DERIVED best case until someone builds it.
 - **Reopen int4 only with a new mechanism:** activations that stop round-tripping DDR, a
   weight-bound model, or a slower measured transport. Pricing the same bytes again is not one.
+- **Correction (2026-09-25): two denominators above were not the smallest measured dispatch.**
+  SESR-M7 also measured 4.178 ms and YOLOv8n-pose 7.527 ms (the energy sitting,
+  [the balanced default](#the-amd-comparisons-re-measured-in-the-balanced-default-2026-09-16-desktop-2)),
+  against the 4.208 and 7.548 ms used. On them, SESR-M7's int4 bound moves from 1.365% to 1.375% and
+  its ceiling from 1.674% to 1.686%; YOLOv8n-pose's from 2.762% to 2.770% and from 4.159% to 4.170%
+  (DERIVED, recomputed from the log's bytes and task counts, which the log prints to one decimal as
+  1.4 / 1.7 / 2.8 / 4.2%). Every move is under 0.02 points, the verdict stands, and the log is
+  unchanged.
 
 **Gate C: the silicon demo.** `results/aie/int4_demo_npu_desktop2_20260923.log`, with raw JSONL
 per sweep and a 1 s witness. The NPU ran 05:06–05:16Z. The driver, XRT and toolchain match the
@@ -2449,12 +2457,80 @@ the NPU.
     change.
 - **What this does not establish:**
   - whether float (non-pow2) per-channel scales survive; no such arm ran, so the cost of pow2
-    scales is unmeasured;
-  - any recovery method: GPTQ, AdaRound, bias correction, BN re-estimation or QAT;
-  - mixed precision beyond E1h's seven convs;
+    scales is unmeasured (W4V, below, has since run them as report-only form F);
+  - any recovery method: GPTQ, AdaRound, bias correction, BN re-estimation or QAT (W4V, below,
+    has since tested BC, VC, AdaRound, GPTQ, their BC stacks and MX; BN re-estimation and QAT
+    remain untested);
+  - mixed precision beyond E1h's seven convs (W4V's MX arms, below, test it within a 5% W8
+    budget);
   - E2's "compiler-only" label, which is on paper: no int4-packed engine lowering exists.
 - **Reopen int4-in-engine only** with a recovery method that brings a W4 model within 1.0 point,
   measured the same way. Byte savings and silicon speed are settled above; accuracy is the gate.
+  [W4V](#w4v-recovery-against-gate-ds-10-point-line-yolov8n-passes-only-in-form-u-which-the-engine-cannot-run-and-yolov8s-is-killed-at-the-tested-post-training-set-2026-09-26-desktop-2) is that attempt.
+
+### W4V, recovery against gate D's 1.0-point line: YOLOv8n passes only in form U, which the engine cannot run, and YOLOv8s is killed at the tested post-training set (2026-09-26, Desktop 2)
+
+`tools/w4_recover.py`, `tools/w4v_bias_audit.py`, `tools/w4v_verdict.py` (the pre-registration, v2.4
+as amended by v2.5, embedded and frozen by hash), `scripts/w4v-eval.sh`; every log in
+`results/int4/`. The NPU was not used.
+
+Scope: COCO val2017, all 5,000 and H (4,700, calibration-free), CPU EP, ORT unoptimized, Desktop 2,
+2026-09-26.
+
+- **The question, pre-registered.** Gate D (above) killed W4 at round-to-nearest. Can a post-training
+  recovery method bring a W4 model within its line: at most 1.0 point of mAP@50-95 below the shipped
+  W8A8 (B8), on all 5,000 images and on H? An arm passes iff both deltas are within 1.0; its K-D
+  delta is the larger of the two.
+- **The arms.** Tier 1, 17 per model: RTN, BC (bias correction), VC (folded variance correction),
+  AdaRound and GPTQ on E1, E2 and U, plus RTN and GPTQ on F (float32 per-channel scales). Tier 2, 12
+  per model: AdaRound + BC, GPTQ + BC, MX-AdaRound and MX-GPTQ on E1, E2 and U. MX keeps the most
+  sensitive convs at W8, their shipped weights exactly, while the W8 share stays within 5% of the
+  conv weight elements.
+- **Screens and eligibility.** Each tier was screened on the first 500 images; an arm more than 2.0
+  points below B8 there was cut, and the rest ran on all 5,000. Only E1, E2 and U decide; F is
+  report-only. A form-b file (a plain XINT8 file under the shipped per-tensor scale) decides only
+  with its own engine-gate PASS; a form-a file (`*_ortonly.onnx`) decides in E2 and U, never in E1.
+- **The controls held.** B8 and RTN at 5,000 images match gate D's figures (C9), and all 24
+  int32-bias arms passed their bias audit (C5b, `tools/w4v_bias_audit.py`).
+- **The decisive run.** B8 and every arm that survived its screen:
+
+| mAP@50-95 | all 5,000 | H (4,700) | d_all | d_H | K-D | eligible | pass |
+|---|---:|---:|---:|---:|---:|---|---|
+| YOLOv8n B8 | 27.10 | 27.00 | | | | | |
+| YOLOv8n ar_u (AdaRound, U) | 26.51 | 26.32 | 0.59 | 0.68 | 0.68 | yes | yes |
+| YOLOv8n mxar_e2 (MX-AdaRound, E2) | 23.18 | 22.94 | 3.92 | 4.06 | 4.06 | yes | no |
+| YOLOv8n mxar_u (MX-AdaRound, U) | 26.62 | 26.47 | 0.48 | 0.53 | 0.53 | yes | yes |
+| YOLOv8s B8 | 37.21 | 37.21 | | | | | |
+| YOLOv8s gptq_f (GPTQ, F) | 34.74 | 34.68 | 2.47 | 2.53 | 2.53 | no | no |
+| YOLOv8s mxar_u (MX-AdaRound, U) | 34.42 | 34.43 | 2.79 | 2.78 | 2.79 | yes | no |
+
+- **The verdict, as the frozen code printed it:**
+
+```
+VERDICT yolov8n PASS: MX-AdaRound U (mxar_u), delta 0.48 on all 5000 and 0.53 on H; phase 2: U needs a kernel change (phase 2); MX adds per-layer packet types; passing: mxar_u, ar_u
+VERDICT yolov8s KILLED: W4 killed at the tested post-training recovery set (RTN, BC, VC (folded variance correction), AdaRound, GPTQ, their BC stacks and MX; pow2 scales, this dialect); QAT untested. Best: mxar_u, K-D delta 2.79.
+EXTEND NO: no one method passes on both models; the extension does not open
+```
+
+- **What it means for the engine.** YOLOv8n passes the 1.0-point line only in form U (per-channel,
+  ortonly), which the engine cannot run without the phase-2 kernel change; the one engine-lowerable
+  arm (mxar_e2) misses at 4.06. The engine gate covers 1 of the 5 advanced arms; the other 4 hold
+  per-channel (form-a) convs the engine cannot lower. The covered arm is YOLOv8n mxar_e2 (W4V_GATE
+  PASS, `w4v_gate_desktop2_20260926.log`). C8 int32 PASS under its none-advanced clause
+  (`w4v_verdict.py:795`): no int32-bias arm advanced, so no int32-bias file was engine-checked in
+  W4V.
+- **YOLOv8s** is KILLED at the tested post-training set (RTN, BC, VC, AdaRound, GPTQ, their BC
+  stacks, MX; pow2 scales); QAT untested; best 2.79. gptq_f's 2.53 is form F: report-only, and
+  outside the line in any case.
+- **What this does not establish:**
+  - QAT, BN re-estimation, or any method outside the tested set;
+  - float per-channel scales as a deciding form: F ran only as a report-only arm;
+  - int4 accuracy on the NPU: form U needs the phase-2 kernel change before the engine can run it.
+- **The logs:** `w4v_verdict_desktop2_20260926.log` (the verdict, with C9's re-derivation),
+  `w4v_decisive_*_n5000_desktop2_20260926.log` (the 7 decisive rows), `w4v_gate_desktop2_20260926.log`
+  (C8), `w4v_cut_tier1_desktop2_20260926.log` and `w4v_cut_tier2_desktop2_20260926.log` (the screens),
+  `w4v_bias1_*`, `w4v_bias2_*` and `w4v_audit/` (C5b), and the `w4v_repro_*` rows (C9); the
+  [results index](../results/README.md) lists every stage.
 
 ### MobileViT-XXS does not survive per-tensor INT8, and AdaRound cannot save it
 

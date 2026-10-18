@@ -111,6 +111,22 @@ class QParams:
 
 
 @dataclass
+class WeightGrid:
+    """An optional per-layer weight quantizer for ``finetune`` (W4V; additive).
+
+    Per output channel c the weight is fake-quantized as clamp(round(w / scales[c]), low, high)
+    * scales[c], with zero point 0, in place of the file's scalar INT8 scale. ``q4`` holds the
+    layer's current integers (the report compares against them) and the result goes back
+    through ``finetune``'s ``write_back`` in the caller's storage form. ``finetune`` without a
+    ``weight_grid`` runs the transcribed path unchanged.
+    """
+    scales: np.ndarray    # float32 [Cout]
+    low: int
+    high: int
+    q4: np.ndarray        # int8, the weight's shape
+
+
+@dataclass
 class Layer:
     index: int
     name: str
@@ -125,9 +141,10 @@ class Layer:
     weight_float: str
     bias_float: str | None
     input_q: QParams
-    weight_q: QParams
+    weight_q: QParams | None   # None only for a WeightGrid layer, whose weight scale may be a vector
     bias_q: QParams | None
     attrs: dict
+    weight_grid: WeightGrid | None = None
 
 
 @dataclass
@@ -195,7 +212,7 @@ def _clip_bounds(qg: Graph, node: onnx.NodeProto) -> tuple[float, float]:
     return bounds[0], bounds[1]
 
 
-def layer_targets(qg: Graph, fg: Graph) -> list[Layer]:
+def layer_targets(qg: Graph, fg: Graph, weight_grid: dict | None = None) -> list[Layer]:
     """Conv/Gemm layers with their QDQ parameters, in the order Quark's finetune visits them.
 
     The order is the float graph's ``vendor_order`` (ORT's ``topological_sort``, which
@@ -203,6 +220,10 @@ def layer_targets(qg: Graph, fg: Graph) -> list[Layer]:
     Conv/Gemm of the quantized file must appear there under the same name. Quark's
     Subgraph takes a layer when its input comes through Q->DQ and its weight through a
     DQ; anything else is skipped silently there and rejected here.
+
+    ``weight_grid`` (W4V, additive) maps every layer name to a WeightGrid, or to None for a
+    layer ``finetune`` leaves as it is. A WeightGrid layer's weight DQ scale is not read (it
+    may be a per-channel vector); None as a whole is the transcribed path.
     """
     layers = []
     quant_nodes = {n.name: n for n in qg.nodes()}
@@ -259,9 +280,12 @@ def layer_targets(qg: Graph, fg: Graph) -> list[Layer]:
         if fg.initializer(fnode.input[1]) is None:
             raise ValueError(f"{node.name}: float weight is not an initializer")
         attrs = {a.name: helper.get_attribute_value(a) for a in node.attribute}
+        if weight_grid is not None and node.name not in weight_grid:
+            raise ValueError(f"{node.name}: weight_grid names no quantizer (or None) for this layer")
+        grid = None if weight_grid is None else weight_grid[node.name]
         layers.append(Layer(len(layers), node.name, node.op_type, q_in.input[0], end, f_end, has_act, act_op,
                             act_bounds, dq_w.input[0], fnode.input[1], bias_float, _qparams(qg, dq_in),
-                            _qparams(qg, dq_w), bias_q, attrs))
+                            _qparams(qg, dq_w) if grid is None else None, bias_q, attrs, grid))
     if not layers:
         raise ValueError("No Conv/Gemm layers to finetune")
     return layers
@@ -373,13 +397,23 @@ def _device_available(torch, device) -> bool:
 
 
 def finetune(float_graph: Graph, quant_graph: Graph, source: ImageFolderSource,
-             cfg: FastFinetuneConfig | None = None, log=_print) -> AdaRoundReport:
-    """Optimise every Conv/Gemm weight rounding in ``quant_graph`` in place; return the report."""
+             cfg: FastFinetuneConfig | None = None, log=_print, weight_grid: dict | None = None,
+             write_back=None) -> AdaRoundReport:
+    """Optimise every Conv/Gemm weight rounding in ``quant_graph`` in place; return the report.
+
+    ``weight_grid`` and ``write_back`` are W4V's additive override and come together: each
+    layer's WeightGrid replaces the scalar INT8 weight quantizer, ``write_back(name, q)``
+    stores the optimised integers (int8 array) in the caller's form instead of
+    ``set_initializer``, and a layer mapped to None is left as it is. Without them this is
+    the transcribed path, line for line.
+    """
     import torch
     import torch.nn.functional as F
 
     cfg = cfg or FastFinetuneConfig()
     cfg.check()
+    if (weight_grid is None) != (write_back is None):
+        raise ValueError("weight_grid and write_back come together")
     device = torch.device(cfg.OptimDevice)
     if device.type != "cpu" and not _device_available(torch, device):
         raise RuntimeError(
@@ -390,7 +424,7 @@ def finetune(float_graph: Graph, quant_graph: Graph, source: ImageFolderSource,
     input_name = quant_graph.model.graph.input[0].name
     if float_graph.model.graph.input[0].name != input_name:
         raise ValueError("Float and quantized graphs must share the input name")
-    layers = layer_targets(quant_graph, float_graph)
+    layers = layer_targets(quant_graph, float_graph, weight_grid)
     images = []
     for image in source:
         if len(images) >= cfg.DataSize:
@@ -442,6 +476,21 @@ def finetune(float_graph: Graph, quant_graph: Graph, source: ImageFolderSource,
         scale, zero_point, min_q, max_q = _consts(params, tensor.device)
         quant_t = round_func(tensor / scale) + zero_point
         return (torch.clamp(quant_t, min_q, max_q) - zero_point) * scale
+
+    def _grid_consts(grid: WeightGrid, dev):
+        """A WeightGrid's per-channel scale (broadcast over the weight's other axes) and bounds."""
+        key = (id(grid), str(dev))
+        cached = _const_cache.get(key)
+        if cached is None:
+            scales = np.asarray(grid.scales, dtype=np.float32).reshape(-1, *([1] * (grid.q4.ndim - 1)))
+            cached = (torch.from_numpy(scales).to(dev), torch.from_numpy(np.array(grid.low)).to(dev),
+                      torch.from_numpy(np.array(grid.high)).to(dev))
+            _const_cache[key] = cached
+        return cached
+
+    def grid_qdq(tensor, grid: WeightGrid, round_func):
+        scale, min_q, max_q = _grid_consts(grid, tensor.device)
+        return torch.clamp(round_func(tensor / scale), min_q, max_q) * scale
 
     class RoundHalfToEven(torch.autograd.Function):
         @staticmethod
@@ -507,7 +556,10 @@ def finetune(float_graph: Graph, quant_graph: Graph, source: ImageFolderSource,
 
         def initialize_alpha(self):
             tensor = self.compute.weight.data
-            scale = torch.from_numpy(np.array(self.layer.weight_q.scale, dtype=np.float32)).to(tensor.device)
+            if self.layer.weight_grid is None:
+                scale = torch.from_numpy(np.array(self.layer.weight_q.scale, dtype=np.float32)).to(tensor.device)
+            else:
+                scale = _grid_consts(self.layer.weight_grid, tensor.device)[0]
             tensor_floor = torch.floor(tensor / scale)
             tensor_diff = (tensor / scale) - tensor_floor
             alpha = -torch.log((ZETA - GAMMA) / (tensor_diff - GAMMA) - 1)
@@ -525,6 +577,10 @@ def finetune(float_graph: Graph, quant_graph: Graph, source: ImageFolderSource,
         def quantized_weight(self):
             """Quark's get_modules_optimized_weight: hard rounding, integer values as float."""
             self.use_soft_rounding = False
+            if self.layer.weight_grid is not None:
+                weight = self.compute.weight.detach()
+                scale, min_q, max_q = _grid_consts(self.layer.weight_grid, weight.device)
+                return torch.clamp(self.weight_round()(weight / scale), min_q, max_q).cpu().numpy()
             params = self.layer.weight_q
             weight = self.compute.weight.detach()
             scale, zero_point, min_q, max_q = _consts(params, weight.device)
@@ -535,7 +591,10 @@ def finetune(float_graph: Graph, quant_graph: Graph, source: ImageFolderSource,
 
         def forward(self, x):
             x = qdq(x, self.layer.input_q, RoundHalfToEven.apply)
-            weight = qdq(self.compute.weight, self.layer.weight_q, self.weight_round())
+            if self.layer.weight_grid is None:
+                weight = qdq(self.compute.weight, self.layer.weight_q, self.weight_round())
+            else:
+                weight = grid_qdq(self.compute.weight, self.layer.weight_grid, self.weight_round())
             weight = weight * self.w_alpha
             if self.layer.op_type == "Conv":
                 c = self.compute
@@ -582,6 +641,9 @@ def finetune(float_graph: Graph, quant_graph: Graph, source: ImageFolderSource,
         return hard
 
     for layer in layers:
+        if weight_grid is not None and layer.weight_grid is None:
+            log(f"LAYER {layer.index}/{len(layers)} {layer.name} kept as it is (weight_grid None: not optimised)")
+            continue
         data_start = time.perf_counter()
         q_input = _run_quantized_inputs(quant_graph, layer, images, input_name)
         f_input, f_output = _run_float(float_graph, layer, images, input_name)
@@ -666,12 +728,18 @@ def finetune(float_graph: Graph, quant_graph: Graph, source: ImageFolderSource,
         after = recons_metric(module, all_q, all_f_out)
         log(f"Module ({layer.start})->({layer.end}) recons metrics was optimized from {before:f} to {after:f} "
             f"(diff={after - before:f})")
-        previous = quant_graph.initializer(layer.weight_quantized)
+        if layer.weight_grid is None:
+            previous = quant_graph.initializer(layer.weight_quantized)
+        else:
+            previous = layer.weight_grid.q4
         optimized = module.quantized_weight().astype(previous.dtype)
         if optimized.shape != previous.shape:
             raise ValueError(f"{layer.name}: optimized weight shape changed")
         difference = np.abs(optimized.astype(np.int16) - previous.astype(np.int16))
-        quant_graph.set_initializer(layer.weight_quantized, optimized, np.int8)
+        if layer.weight_grid is None:
+            quant_graph.set_initializer(layer.weight_quantized, optimized, np.int8)
+        else:
+            write_back(layer.name, optimized)
         train_seconds = time.perf_counter() - train_start
         log(f"Quark_latency_profiler: finetuning layer {layer.index}, torch training time consumed {train_seconds:1f}s")
         report.layers.append(LayerReport(layer.index, layer.name, layer.start, layer.end, layer.has_act, len(images),

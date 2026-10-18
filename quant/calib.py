@@ -14,17 +14,25 @@ import onnx
 import onnxruntime as ort
 
 from .graph import Graph
-from .pow2 import TensorQ, dequantize, pos2scale, qrange, quantize, scale2pos, sqerr
+from .pow2 import TensorQ, bounds, dequantize, pos2scale, qrange, quantize, scale2pos, sqerr
 from .qdq import prunable_tensors, quantizable_tensors
 from .sources import ImageFolderSource, StreamingHistogramAccumulator
 
 
-def choose_pow2_minmse(x: np.ndarray, dtype: str) -> tuple[int, dict]:
-    """Five candidates around symmetric min/max, first minimum wins ties."""
+def choose_pow2_minmse(x: np.ndarray, dtype: str, grid: tuple[int, int] | None = None,
+                       window: tuple[int, int] | None = None) -> tuple[int, dict]:
+    """Five candidates around symmetric min/max, first minimum wins ties.
+
+    ``grid`` (bounds inside the dtype's range) and ``window`` (candidates base+lo..base+hi,
+    lo <= 0 <= hi) are additive for W4V; None keeps the producer's range and (-1, 3).
+    """
     value = np.asarray(x, dtype=np.float32)
     if not value.size or not np.all(np.isfinite(value)):
         raise ValueError("MinMSE requires nonempty finite float32 samples")
-    low, high = qrange(dtype)
+    low, high = bounds(dtype, grid)
+    before, after = (-1, 3) if window is None else (int(window[0]), int(window[1]))
+    if before > 0 or after < 0:
+        raise ValueError(f"MinMSE window {window} must satisfy lo <= 0 <= hi")
     zp = 128 if dtype == "uint8" else 0
     vmin, vmax = value.min(), value.max()
     extent = np.minimum(max(abs(vmin), abs(vmax)), np.finfo(np.float32).max / 2)
@@ -36,10 +44,10 @@ def choose_pow2_minmse(x: np.ndarray, dtype: str) -> tuple[int, dict]:
             raise ValueError("Degenerate activation range gives vendor zp0; outside the supported zp128 dialect")
         scale = np.float32(1)
     base = scale2pos(scale)
-    candidates = list(range(base - 1, base + 4))
+    candidates = list(range(base + before, base + after + 1))
     if min(candidates) < -127 or max(candidates) > 127:
         raise ValueError("MinMSE candidate range exceeds supported positions")
-    errors = [sqerr(value, pos, zp, dtype) for pos in candidates]
+    errors = [sqerr(value, pos, zp, dtype, grid) for pos in candidates]
     if not all(np.isfinite(errors)):
         raise ValueError("MinMSE float32 error accumulation overflowed")
     chosen = candidates[min(range(len(errors)), key=errors.__getitem__)]

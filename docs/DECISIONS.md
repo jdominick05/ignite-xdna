@@ -1038,6 +1038,35 @@ The measurement and verdict will be folded into BENCHMARKS after the run.
       same way (`scripts/w4a8-eval.sh`).
     - [Gate D](BENCHMARKS.md#int4-on-phoenix-gates-first-the-chip-runs-the-engines-uint8--int4-and-on-paper-the-current-weight-packets-leave-int4-little-to-save-2026-09-23-desktop-2),
       `results/int4/w4a8_accuracy_verdict_desktop2_20260923.log`.
+  - **The user paused the LLM work and turned int4 to the vision engine's models (2026-09-25).**
+    "pause the LLM work and focus on INT4 as a broader function, so i think we should use the models
+    we already know this chip is good at." (the user's direction)
+    - Criterion (b): accuracy is the gate. int4 is a capability: a W4 model within 1.0 point of its
+      B8, measured the gate-D way, in a scale form the engine can lower, with the form named. Speed
+      and energy are report-only; bytes decide nothing.
+    - YOLOv8n and YOLOv8s first; YOLOv8n-pose and YOLO26n only if a method works on that pair.
+    - **Outcome (2026-09-26):**
+      [W4V](BENCHMARKS.md#w4v-recovery-against-gate-ds-10-point-line-yolov8n-passes-only-in-form-u-which-the-engine-cannot-run-and-yolov8s-is-killed-at-the-tested-post-training-set-2026-09-26-desktop-2).
+      YOLOv8n passes the 1.0-point line only in form U, which the engine cannot lower without the
+      phase-2 kernel change, so criterion (b)'s "a scale form the engine can lower" is not met
+      today; the one engine-lowerable arm (mxar_e2) misses at 4.06. YOLOv8s is KILLED at the tested
+      post-training set (RTN, BC, VC, AdaRound, GPTQ, their BC stacks, MX; pow2 scales); QAT
+      untested; best 2.79. Scope: COCO val2017, all 5,000 and H (4,700, calibration-free), CPU EP,
+      ORT unoptimized, Desktop 2, 2026-09-26. EXTEND NO, so YOLOv8n-pose and YOLO26n do not open.
+      The phase-2 lowering is not started and needs the user's go.
+    - Gate B and gate D stand. This is gate D's reopen attempt: post-training recovery at W4, with
+      bias correction; VC (folded variance correction), a per-channel output-variance correction
+      that re-estimates no BatchNorm statistics; AdaRound; GPTQ; and mixed W4/W8. It is
+      pre-registered in `tools/w4v_verdict.py` before any method reads an image. QAT is out unless
+      every post-training method fails and the user rules for it.
+    - The methods calibrate on the first 64 images of `data/coco_calib`, which is inside val2017
+      (see the coco_calib pitfall entry). The user ruled (B) on that leakage: K-D passes a model
+      only within 1.0 point of B8 both on all 5,000 images and on H, the 4,700 images of val2017
+      outside `data/coco_calib`, each against B8 on the same images, from the same detections.
+    - A byte census ran first and decides nothing
+      (`results/int4/w4v_census_desktop2_20260925.log`).
+    - The pre-registration is embedded in `tools/w4v_verdict.py` (v2.4 as amended by v2.5);
+      branch `worktree-int4-vision`.
 
 ## The YOLOv8 partitioning failure (resolved)
 
