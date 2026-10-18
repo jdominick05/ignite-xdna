@@ -24797,3 +24797,47 @@ compiled identities; equal image components alone do not authorize hardware disp
 
 The [saved dispatch-cost summary tool](../tools/bf16_dispatch_costs.py) reports diagnostic
 checks-only wall observations; its output is not a controlled serving benchmark.
+
+## EmbeddingGemma 2's weight GEMMs on the one-context generic design (2026-10-18, Desktop 2)
+
+**The question.** EmbeddingGemma 2 (`google/embeddinggemma-2`, rev `914f7f89`) is a bidirectional BF16 text encoder:
+24 layers, width 512, 4 query heads (local layers head_dim 256 with 2 KV heads and a +-512 window, global layers
+5/11/17/23 head_dim 512 with 1 KV head), a GELU-tanh gated FFN 512 -> 2048 -> 512 and a per-layer-input block. Unlike
+a one-token drafter step, a document is a batch of rows, so its weight products are GEMMs. What do they cost on
+Phoenix when one loaded design serves every shape?
+
+**Method.** [`tools/embedgemma_gemm_probe.py`](../tools/embedgemma_gemm_probe.py) reads the shapes from the HF
+config and concatenates the products that share an input (q|k|v as one GEMM per layer, gate|up as one). The
+per-layer-input projection (512 -> 24 x 512) runs as three 4096-column chunks: N = 12288 failed to compile, a shim
+`aie.dma_bd` stride beyond the [1:1048576] range. That gives 148 products per forward pass over 7 distinct (K, N).
+All run in ONE context of `kernels/gemm_generic/whole_array_generic.py --rtp-generic` (m32 k64 n64, C
+single-buffered, bf16 in, f32 out, 4 columns), the design Laya's hybrid runs on. This tile needs M to be a
+multiple of 256, so M = 128 does not compile. M = 256 stands for two 128-token documents batched together. Every
+product is checked against numpy (relative max error < 1e-3, padded columns zero, repeat bit-equal) before any
+timing. Each product is timed as sync A in, call, wait, sync C out, with weights resident; random activations.
+
+**Result** ([log](../results/aie/embedgemma_gemm_onectx_desktop2_20261018T194330Z.log); research wrapper, host
+CLEAR, no foreign contexts, exit 0, `timing_eligible: true`). All 21 products pass, relative error <= 1.13e-6.
+
+| M (rows) | Forward-pass weight GEMMs, median of 5 | GFLOP | Effective |
+|---|---:|---:|---:|
+| 256 (two 128-token documents) | 63.1 ms (31.6 ms per document) | 70.0 | 1,109 GFLOPS |
+| 512 | 98.5 ms | 140.0 | 1,422 GFLOPS |
+| 2048 | 334.4 ms | 560.0 | 1,674 GFLOPS |
+
+Per call, the smallest product (256 x 512 x 512) takes 0.252 ms and the widest (2048 x 512 x 4096) 4.880 ms. Rates
+rise with N: at M = 512, 800 GFLOPS at N = 512 against 1,605-1,654 at N = 3072-4096. That is why concatenating
+q|k|v and gate|up pays.
+
+**Not included.** Attention's score and value products, the norms, RoPE, softmax, the GeGLU, residuals, pooling,
+and the f32 -> bf16 conversion of every output. The last of these cost Laya's hybrid 99 ms on the host. So this is
+the weight-GEMM floor of an NPU encoder, not an end-to-end latency, and not yet a comparison with the CPU or GPU.
+
+**Failed runs kept.** Three earlier runs of the same probe printed equal numbers but exited 139
+([1](../results/aie/embedgemma_gemm_onectx_desktop2_20261018T193940Z.log),
+[2](../results/aie/embedgemma_gemm_onectx_desktop2_20261018T194056Z.log),
+[3](../results/aie/embedgemma_gemm_onectx_desktop2_20261018T194231Z.log)), so the wrapper marked them not
+timing-eligible. `faulthandler` placed the crash at `cmd_run`'s return. The setup loop's own `ib`/`A`/`C` names
+still held the last M's BOs, so they were freed after the device. A staged repro (register, context, kernel, BOs,
+one call), each released in order, exited 0 at every stage, which ruled out pyxrt teardown itself. Releasing those
+names fixed it.

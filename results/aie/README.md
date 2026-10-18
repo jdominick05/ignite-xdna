@@ -1737,3 +1737,8 @@ hardware contexts running on device"; the sweep is offline and needs no witness.
 - [Later single-image replay and artifact-drift check](transformer_bf16_single_image_checks_20261018_v3.log) retains its checks-only scope; it does not qualify complete-draft numerics.
 
 - [Completed single-image draft check](transformer_bf16_single_image_draft_20261018_v2.log) retains the full bounded-run completion and idle witnesses; checks-only, with no serving-performance claim.
+
+## EmbeddingGemma 2 weight GEMMs (2026-10-18, Desktop 2)
+
+- [One-context weight GEMMs at M = 256/512/2048](embedgemma_gemm_onectx_desktop2_20261018T194330Z.log): 148 products per forward pass, all 21 exact to < 1.2e-6; 63.1 / 98.5 / 334.4 ms. [Method and limits](../../docs/BENCHMARKS.md#embeddinggemma-2s-weight-gemms-on-the-one-context-generic-design-2026-10-18-desktop-2).
+- Failed runs, same numbers, exit 139 in teardown: [193940Z](embedgemma_gemm_onectx_desktop2_20261018T193940Z.log), [194056Z](embedgemma_gemm_onectx_desktop2_20261018T194056Z.log), [194231Z](embedgemma_gemm_onectx_desktop2_20261018T194231Z.log). Not timing-eligible.
