@@ -24954,3 +24954,38 @@ CPU 3-6%, no NPU context.)
   residuals have to move into the GEMMs' epilogues for the NPU to clear the CPU by a real margin.
 - **Not measured:** an NPU attention path, a native or vectorised rounding, BF16-output GEMMs, and an
   M = 1024 build for batched 512-token documents.
+
+#### Unfused attention on the NPU only ties the CPU at 2048 tokens (2026-10-18, Desktop 2)
+
+[`tools/embedgemma_attn_gemm_probe.py`](../tools/embedgemma_attn_gemm_probe.py) issues attention's score and
+value products to the same one-context generic GEMM as the weights. Query heads that share a KV head are stacked
+along M, so one call serves them (GQA):
+- local layers, per KV head: `[2L, 256] x [256, L]` and `[2L, L] x [L, 256]`;
+- global layers: `[4L, 512] x [512, L]` and `[4L, L] x [L, 512]`.
+
+Every score is computed; the local band is not exploited. All eight products pass the numpy check (relative error
+<= 1.52e-6, repeat bit-equal).
+([log](../results/aie/embedgemma_attn_gemm_onectx_desktop2_20261018T210047Z.log); host CLEAR, no foreign
+contexts, exit 0, `timing_eligible: true`.) An
+[earlier attempt was refused](../results/aie/embedgemma_attn_gemm_onectx_desktop2_20261018T205834Z.log) with
+another session's context on the NPU, before any dispatch.
+
+[`tools/embedgemma_host_softmax.py`](../tools/embedgemma_host_softmax.py) times the host half between the two
+products: band mask, fp32 softmax, P to bf16, in torch 2.14.1 with 8 threads, at the same shapes and call counts.
+([record](../results/aie/embedgemma_host_softmax_cpu_desktop2_20261018T210131Z.json); contention checked first,
+CPU 8-11%, no NPU context.)
+
+| Per document | 512 tokens | 2048 tokens |
+|---|---:|---:|
+| NPU score + value GEMMs (local / global calls: 40 + 40 / 4 + 4) | 37.9 ms | 291.3 ms |
+| Host mask + softmax + bf16 (torch, 8 threads) | 21.4 ms | 437.5 ms |
+| **Unfused NPU attention** (sum of two measurements, same sitting, not one run) | **59.3 ms** | **728.8 ms** |
+| CPU torch bf16 attention ([split](../results/aie/embedgemma_hf_split_bf16_cpu_desktop2_20261018T205249Z.json)) | 43.9 ms | 764.2 ms |
+
+- **Unfused, NPU attention loses at 512 tokens and ties at 2048.**
+- **At 2048 tokens the host softmax costs more than the products it sits between.** A fused kernel keeps scores and
+  probabilities on the core and removes that row.
+- **The fused kernel can also skip the band.** On average 896.75 of 2048 keys are visible to a local query, so a
+  kernel that skips key blocks outside the band does 44% of the local MACs that these full-score products do.
+- **Unexplained here:** per-call rates (700-2072 GFLOPS) depend on shape as in the weight probe. The small local
+  products at L = 512 run at 700-716 GFLOPS.
