@@ -24841,3 +24841,47 @@ timing-eligible. `faulthandler` placed the crash at `cmd_run`'s return. The setu
 still held the last M's BOs, so they were freed after the device. A staged repro (register, context, kernel, BOs,
 one call), each released in order, exited 0 at every stage, which ruled out pyxrt teardown itself. Releasing those
 names fixed it.
+
+### EmbeddingGemma 2 hybrid: weight GEMMs on the NPU, the rest on the host, is correct and transport-bound (2026-10-18)
+
+[`kernels/embedgemma/model.py`](../kernels/embedgemma/model.py) is an independent NumPy encoder, written from
+`transformers` 5.19's `EmbeddingGemma2TextModel`. Every weight product goes through one `matmul` hook, and the
+weights are read straight from the checkpoint's BF16 safetensors.
+[`tools/embedgemma_hybrid.py`](../tools/embedgemma_hybrid.py) runs it on 56 held-out engineering documents (32 x
+128, 16 x 512 and 8 x 2048 tokens, `title: none | text: ` prefix). Its gates were written into the tool's
+docstring before any run.
+- **`cpu` backend (fp32 products):** cosine 1.0000000 to HF fp32 on every document, against a gate of >= 0.99999.
+  The oracle agrees.
+- **`npu` backend:** all 146 weight products per document run through one generic-GEMM context, with activations
+  rounded to BF16 before each product, f32 out, rows zero-padded to M = 256/512/2048 and weights resident.
+  - Gates: cosine >= 0.9999 and every nearest neighbour kept.
+  - Result ([log](../results/aie/embedgemma_hybrid_npu_desktop2_20261018T203211Z.log); host CLEAR, no foreign
+    contexts, exit 0, `timing_eligible: true`): cosine min 0.9999942, mean 0.9999975, nearest neighbour kept 100%.
+    **PASS.**
+
+Per-document medians, attributed by phase (ms):
+
+| Phase | 128 tokens | 512 tokens | 2048 tokens |
+|---|---:|---:|---:|
+| NPU call (submit + wait) | 67.0 | 114.0 | 346.8 |
+| NPU read (C sync + f32 readback) | 40.0 | 127.3 | 415.9 |
+| NPU write (A write + sync) | 11.9 | 21.3 | 88.2 |
+| fp32 -> BF16 rounding of each product input (`round_in`) | 50.0 | 244.2 | 903.3 |
+| Total in `gemm` (the four rows above plus bit packing and padding) | 190.5 | 574.0 | 2051.5 |
+| Host attention (NumPy fp32) | 33.8 | 147.2 | 2161.5 |
+| Host GELU / norms / RoPE (NumPy fp32) | 46.1 / 27.7 / 14.1 | 204.9 / 158.5 / 70.9 | 799.1 / 598.1 / 281.2 |
+| **Whole document** | **391.3** | **1545.1** | **7277.8** |
+
+**What it shows.**
+- **The NPU's own compute is the smallest part of its share.** Reading back f32 results and converting
+  activations to BF16 costs 2-4x the device's call time at every length: at 512 tokens, 114 ms of calls against
+  about 460 ms of transfer, rounding and packing.
+- **A design that returns activations to the host between operations cannot win**, however fast the GEMMs are.
+  This repeats Laya's 99 ms of host rounding.
+- **The host-side ops here are single-threaded NumPy fp32**, not a tuned CPU path, so their times overstate what a
+  CPU remainder must cost. The transfer and rounding rows do not depend on that.
+- **Fusion has to keep activations resident on the device** and move the elementwise work (norms, GeGLU, RoPE,
+  residuals) next to the GEMMs, and attention after them.
+
+Not measured here: batching documents into one M, BF16-output GEMMs, and any CPU or GPU comparison. The
+[CPU NumPy run](../results/aie/embedgemma_hybrid_cpu_desktop2_20261018T203017Z.json) is the oracle check only.
