@@ -1664,3 +1664,5 @@ hardware contexts running on device"; the sweep is offline and needs no witness.
 - [Checkpoint scope and offline validation](../../docs/BENCHMARKS.md#archived-testing-work-and-historical-evidence-2026-10-18-checkpoint).
 
 - [Later single-image replay and artifact-drift check](transformer_bf16_single_image_checks_20261018_v3.log) retains its checks-only scope; it does not qualify complete-draft numerics.
+
+- [Completed single-image draft check](transformer_bf16_single_image_draft_20261018_v2.log) retains the full bounded-run completion and idle witnesses; checks-only, with no serving-performance claim.
