@@ -1,0 +1,66 @@
+[env] {"hostname": "<host>", "processor": "AMD64 Family 25 Model 117 Stepping 2, AuthenticAMD", "python": "3.13.15", "numpy": "2.5.3", "onnxruntime": "1.30.0", "ignite_xdna": "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\src\\ignite_xdna\\__init__.py", "ignite_xdna_commit": "main de276fb", "npu_power_mode": "default", "cpu_count": 16, "started_utc": "2026-09-28T22:49:14Z"}
+[xrt-smi aie-partitions rc=0]
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+=== Phase 1: exactness ===
+hipnet_v0
+  hipnet_v0_noreuse.ignite: 14 layers, 0 host segments, 27 rounds, 252 activation packets, workspace 425,664 B
+    14/14 readable layers exact | output vs run_direct 0 mismatches, vs ORT CPU (QDQ) 0 mismatches | ORT runs during NPU 0 | over 16 samples -> PASS
+  hipnet_v0.ignite: 14 layers, 0 host segments, 27 rounds, 252 activation packets, workspace 146,880 B
+    5/5 readable layers exact, 9/9 reused slots hold their final tenant | output vs run_direct 0 mismatches, vs ORT CPU (QDQ) 0 mismatches | ORT runs during NPU 0 | over 16 samples -> PASS
+hipnet_v0_k5
+  hipnet_v0_k5_noreuse.ignite: 14 layers, 0 host segments, 27 rounds, 828 activation packets, workspace 496,320 B
+    14/14 readable layers exact | output vs run_direct 0 mismatches, vs ORT CPU (QDQ) 0 mismatches | ORT runs during NPU 0 | over 16 samples -> PASS
+  hipnet_v0_k5.ignite: 14 layers, 0 host segments, 27 rounds, 828 activation packets, workspace 164,544 B
+    5/5 readable layers exact, 9/9 reused slots hold their final tenant | output vs run_direct 0 mismatches, vs ORT CPU (QDQ) 0 mismatches | ORT runs during NPU 0 | over 16 samples -> PASS
+
+=== Phase 2: sitting ===
+[pass 0] hipnet_v0
+    npu dispatch  median 0.6511 ms, p99 0.6981, mean 0.6537, min 0.5482, max 0.7700 (n=1000) | process CPU 0.0469 ms/call
+    npu call      median 0.7518 ms, p99 0.8581, mean 0.7562, min 0.6564, max 0.9300 (n=1000) | process CPU 0.1094 ms/call
+    cpu fp32 1t   median 2.3204 ms, p99 3.1616, mean 2.3455, min 2.2464, max 3.3439 (n=1000) | process CPU 2.3594 ms/call
+    cpu qdq 1t    median 3.2167 ms, p99 4.0647, mean 3.2620, min 3.1468, max 4.6081 (n=1000) | process CPU 3.2656 ms/call
+    ORT runs during NPU blocks: 0
+[pass 0] hipnet_v0_k5
+    npu dispatch  median 1.4449 ms, p99 1.9717, mean 1.4552, min 1.3736, max 2.3553 (n=1000) | process CPU 0.0312 ms/call
+    npu call      median 1.5690 ms, p99 2.0566, mean 1.5817, min 1.4518, max 2.5843 (n=1000) | process CPU 0.1875 ms/call
+    cpu fp32 1t   median 6.8331 ms, p99 8.0676, mean 6.9654, min 6.6433, max 8.2897 (n=1000) | process CPU 6.9375 ms/call
+    cpu qdq 1t    median 8.5556 ms, p99 9.7532, mean 8.6774, min 8.3542, max 10.3140 (n=1000) | process CPU 8.6719 ms/call
+    ORT runs during NPU blocks: 0
+[pass 1] hipnet_v0
+    npu dispatch  median 0.6507 ms, p99 0.6992, mean 0.6534, min 0.5601, max 0.7253 (n=1000) | process CPU 0.0156 ms/call
+    npu call      median 0.7502 ms, p99 0.8479, mean 0.7537, min 0.6348, max 0.9001 (n=1000) | process CPU 0.1406 ms/call
+    cpu fp32 1t   median 2.3084 ms, p99 3.1564, mean 2.3407, min 2.2442, max 3.3857 (n=1000) | process CPU 2.3438 ms/call
+    cpu qdq 1t    median 3.2393 ms, p99 4.1160, mean 3.2865, min 3.1639, max 4.4084 (n=1000) | process CPU 3.2969 ms/call
+    ORT runs during NPU blocks: 0
+[pass 1] hipnet_v0_k5
+    npu dispatch  median 1.4465 ms, p99 1.9694, mean 1.4554, min 1.3478, max 2.2703 (n=1000) | process CPU 0.0312 ms/call
+    npu call      median 1.5699 ms, p99 1.9044, mean 1.5817, min 1.4612, max 2.3900 (n=1000) | process CPU 0.1094 ms/call
+    cpu fp32 1t   median 6.8833 ms, p99 8.0831, mean 6.9969, min 6.6536, max 8.9325 (n=1000) | process CPU 7.0000 ms/call
+    cpu qdq 1t    median 8.5935 ms, p99 9.6369, mean 8.6876, min 8.3607, max 10.8896 (n=1000) | process CPU 8.6875 ms/call
+    ORT runs during NPU blocks: 0
+[pass 2] hipnet_v0
+    npu dispatch  median 0.6500 ms, p99 0.7024, mean 0.6538, min 0.6070, max 0.8258 (n=1000) | process CPU 0.0312 ms/call
+    npu call      median 0.7492 ms, p99 0.8471, mean 0.7530, min 0.6335, max 0.9305 (n=1000) | process CPU 0.0938 ms/call
+    cpu fp32 1t   median 2.3041 ms, p99 3.1437, mean 2.3368, min 2.2479, max 3.2800 (n=1000) | process CPU 2.3438 ms/call
+    cpu qdq 1t    median 3.2296 ms, p99 4.1097, mean 3.2748, min 3.1389, max 4.4701 (n=1000) | process CPU 3.2812 ms/call
+    ORT runs during NPU blocks: 0
+[pass 2] hipnet_v0_k5
+    npu dispatch  median 1.4433 ms, p99 1.9457, mean 1.4514, min 1.3600, max 2.1947 (n=1000) | process CPU 0.0312 ms/call
+    npu call      median 1.5697 ms, p99 1.9651, mean 1.5833, min 1.4788, max 2.5785 (n=1000) | process CPU 0.1250 ms/call
+    cpu fp32 1t   median 6.8556 ms, p99 8.0111, mean 6.9724, min 6.6375, max 8.5576 (n=1000) | process CPU 6.9688 ms/call
+    cpu qdq 1t    median 8.5600 ms, p99 9.6098, mean 8.6603, min 8.3537, max 10.2199 (n=1000) | process CPU 8.6250 ms/call
+    ORT runs during NPU blocks: 0
+
+[xrt-smi aie-partitions after, rc=0]
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+[power mode after] default
+PROBE PASS

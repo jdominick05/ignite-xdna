@@ -2797,6 +2797,40 @@ object has 5,728 B free
 ([ptr](BENCHMARKS.md#the-ptr-loop-pattern-lands-in-the-int8-engine-and-yolov8s-overtakes-amds-stack-2026-09-22-desktop-2), [gate](BENCHMARKS.md#compiling-out-the-dispatch-no-container-reaches-frees-5408-b-and-costs-a-manifest-field-to-stay-honest-2026-09-22-desktop-2)).
 The census has not re-read either figure.
 
+### Five-row maps are scheduled on replicas, not on a stride-0 quad (2026-09-28)
+
+A core computes a 5x20 tile, but `schedule_layer_coarse` issues a column of four cores, stacked five rows apart, as
+one quad of twenty rows. A map one tile row tall (a 5x20 sensor window) therefore stopped at `tile_origins`. That is
+a scheduling granularity, not a core limit, so it was lifted without touching the kernel (`b58ea8f`).
+
+- **What was chosen: replicas.** `Placement.replicas` is `ROWS` for a tensor exactly `TILE_R` tall, and reserves
+  four copies of its layout, `replica_stride` apart. Core row r reads copy r of its input and drains into copy r of
+  its output.
+  - Copy 0 is the tensor at its usual base, so the runtime, the halo fill and staging are untouched.
+  - Every fill and drain keeps a positive core-row stride. `merge_quad` still folds the four fills into one task,
+    and the drain's outermost dimension stays positive.
+  - The cost is 4x the workspace for those tensors, and three cores of each column computing junk.
+  - Measured since: that junk is the price of a 20-row map. The 20x20 redesign schedules to the same byte counts
+    and the same dispatch, so a five-row model pays for twenty rows and uses five
+    ([Twenty rows cost the NPU what five did](BENCHMARKS.md#twenty-rows-cost-the-npu-what-five-did-the-same-sensor-model-at-20x20-is-31x-faster-than-one-cpu-thread-on-main-2026-09-28-desktop-2)).
+- **What was not attempted: stride 0.** The alternative points all four core rows at the same five rows: the same
+  bytes written four times, the principle SESR's overlapping edge tile already relies on. It would need a stride-0
+  core-row dimension on both the fills and the drain.
+  - `merge_quad` and `merge_runs` refuse a delta of 0.
+  - Whether a shim S2MM descriptor takes a stride-0 repeat on this part was never measured. A wrong guess there hangs
+    the device rather than raising.
+  - Replicas needed neither. This is not a rejection: nothing was measured.
+- **Still refused:**
+  - heights 10 and 15, whose real rows span several core rows, so the junk rows would need a second stride in the
+    same dimension;
+  - a short map under the activation ring or fused stencils;
+  - any stride-2 or upsampling read into a short map.
+- **No other model's schedule changes.** YOLOv8n, YOLOv8s and SESR M7 hash identically before and after
+  (`tools/schedule_fingerprint.py`).
+
+Measured:
+[Five-row maps on the existing core](BENCHMARKS.md#five-row-maps-on-the-existing-core-a-5x20-sensor-model-compiles-whole-and-layer-exact-and-is-13x-slower-than-one-cpu-thread-2026-09-28-desktop-2).
+
 ## Laya attention prototype: retain the host attention path (2026-10-16)
 
 The one-core bf16 prototype passes its fixed numerical tolerance and full-buffer checks,
@@ -4390,3 +4424,4 @@ round is additionally required for the matched512 goal. Revalidate the full froz
 source/score/report identities of both native arms before and after the measurement.
 The verifier reconstructs sample medians and checks eligibility and execution policy.
 No adoption timing before full accuracy passes; no favorable retiming or metric change.
+

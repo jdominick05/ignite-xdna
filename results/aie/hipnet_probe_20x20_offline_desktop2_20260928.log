@@ -1,0 +1,200 @@
+hipnet v2 (20x20) NPU probe, offline evidence and compile on main (Desktop 2, <host>, 2026-09-28)
+
+== 1. Plain XINT8, Quark 0.11rc1 get_default_config('XINT8') (CLE on), resnet_env, 64 calibration frames ==
+Contract per model: every Q/DQ scale a power of two, activation zero point 128, weight zero point 0; ORT 1.22.1
+CPU (optimizations off) FP32 vs QDQ over the 64 frames, whole map and the readout named by each model's sidecar
+(hip, row 6, column 19, channels 0..5). The models are untrained: a collapse check, not accuracy.
+hipnet_v0: ops {'DequantizeLinear': 49, 'QuantizeLinear': 21, 'Conv': 14, 'Relu': 7, 'Add': 6}; non-power-of-two scales 0; zero points {'int8:0': 28, 'uint8:128': 42}; input uint8 scale 2^-7 zp 128; readout {'row': 6, 'column': 19, 'channels': [0, 6]}; QDQ vs FP32 max |d| whole 0.04133, readout 0.00700 (mean readout 0.00359; FP32 readout |y| mean max 0.1543)
+hipnet_v0_k5: ops {'DequantizeLinear': 49, 'QuantizeLinear': 21, 'Conv': 14, 'Relu': 7, 'Add': 6}; non-power-of-two scales 0; zero points {'int8:0': 28, 'uint8:128': 42}; input uint8 scale 2^-7 zp 128; readout {'row': 6, 'column': 19, 'channels': [0, 6]}; QDQ vs FP32 max |d| whole 0.03426, readout 0.00664 (mean readout 0.00379; FP32 readout |y| mean max 0.1836)
+
+== 2. On ignite-xdna main (de276fb), unmodified: offline gate (tools/hipnet_probe_offline.py), then
+ignite-compile --engine graph --task segment, default and --no-workspace-reuse. Verbatim. ==
+engine: ignite-xdna main de276fb; src changes: 0
+ignite_xdna from C:\Users\<user>\PycharmProjects\ignite-xdna\src\ignite_xdna\__init__.py
+hipnet_v0 [no_reuse]: 14 layers, ws 425664 B, emulator EXACT; run_direct vs ORT CPU EXACT over 16 samples
+hipnet_v0 [reuse]: 14 layers, ws 146880 B, emulator EXACT over 16 samples
+hipnet_v0_k5 [no_reuse]: 14 layers, ws 496320 B, emulator EXACT; run_direct vs ORT CPU EXACT over 16 samples
+hipnet_v0_k5 [reuse]: 14 layers, ws 164544 B, emulator EXACT over 16 samples
+OFFLINE PASS
+offline rc=0
+=== ignite-compile --engine graph --task segment : hipnet_v0 -> work/hipnet_v0.ignite
+
+[ERROR] Compilation failed: 'transform'
+Traceback (most recent call last):
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\src\ignite_xdna\compiler\cli.py", line 549, in main
+    compile_graph_engine(parsed.input, parsed.output, parsed.build_dir, host_regions=parsed.host_region,
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                         silu_sigmoid=parsed.silu_sigmoid, topology_policy=parsed.topology_policy,
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+                         decouple_weights=parsed.decouple_weights,
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                         task=parsed.task, dense_recipe=parsed.dense_recipe)
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\src\ignite_xdna\compiler\cli.py", line 514, in compile_graph_engine
+    f"host {d['transform']['op']} x{d['transform']['blocksize']} -> image {manifest['output_shapes']['image']}")
+            ~^^^^^^^^^^^^^
+KeyError: 'transform'
+    [TOPOLOGY] high_resolution_entry: node_conv2d: first spatial convolution is stride 1; stride 2 or 4 patchification could reduce the high-resolution fill and activation traffic
+[*] Lowered 14 layers (0 on the host); workspace 0.1 MB; 27 rounds, 0.60 MB static packets
+[+] work\hipnet_v0.ignite written: 929,536 bytes in 5.3 s (xclbin 292,238 B, insts 18,148 B, packets 596,736 B)
+    [OK] shim retirement cadence: every 2 task(s) of a DMA channel whose thinnest holds 1 per layer
+compile rc=1 (hipnet_v0 default); file: -rw-r--r-- 1 <user> 197121 929536 Sep 28 18:48 work/hipnet_v0.ignite
+=== ignite-compile --engine graph --task segment --no-workspace-reuse: hipnet_v0 -> work/hipnet_v0_noreuse.ignite
+
+[ERROR] Compilation failed: 'transform'
+Traceback (most recent call last):
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\src\ignite_xdna\compiler\cli.py", line 549, in main
+    compile_graph_engine(parsed.input, parsed.output, parsed.build_dir, host_regions=parsed.host_region,
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                         silu_sigmoid=parsed.silu_sigmoid, topology_policy=parsed.topology_policy,
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+                         decouple_weights=parsed.decouple_weights,
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                         task=parsed.task, dense_recipe=parsed.dense_recipe)
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\src\ignite_xdna\compiler\cli.py", line 514, in compile_graph_engine
+    f"host {d['transform']['op']} x{d['transform']['blocksize']} -> image {manifest['output_shapes']['image']}")
+            ~^^^^^^^^^^^^^
+KeyError: 'transform'
+    [TOPOLOGY] high_resolution_entry: node_conv2d: first spatial convolution is stride 1; stride 2 or 4 patchification could reduce the high-resolution fill and activation traffic
+[*] Lowered 14 layers (0 on the host); workspace 0.4 MB; 27 rounds, 0.60 MB static packets
+[+] work\hipnet_v0_noreuse.ignite written: 929,600 bytes in 5.3 s (xclbin 292,238 B, insts 18,148 B, packets 596,736 B)
+    [OK] workspace reuse off: every tensor owns a slot, so every layer is readable after one dispatch
+    [OK] shim retirement cadence: every 2 task(s) of a DMA channel whose thinnest holds 1 per layer
+compile rc=1 (hipnet_v0 noreuse); file: -rw-r--r-- 1 <user> 197121 929600 Sep 28 18:48 work/hipnet_v0_noreuse.ignite
+=== ignite-compile --engine graph --task segment : hipnet_v0_k5 -> work/hipnet_v0_k5.ignite
+
+[ERROR] Compilation failed: 'transform'
+Traceback (most recent call last):
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\src\ignite_xdna\compiler\cli.py", line 549, in main
+    compile_graph_engine(parsed.input, parsed.output, parsed.build_dir, host_regions=parsed.host_region,
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                         silu_sigmoid=parsed.silu_sigmoid, topology_policy=parsed.topology_policy,
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+                         decouple_weights=parsed.decouple_weights,
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                         task=parsed.task, dense_recipe=parsed.dense_recipe)
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\src\ignite_xdna\compiler\cli.py", line 514, in compile_graph_engine
+    f"host {d['transform']['op']} x{d['transform']['blocksize']} -> image {manifest['output_shapes']['image']}")
+            ~^^^^^^^^^^^^^
+KeyError: 'transform'
+    [TOPOLOGY] high_resolution_entry: node_conv2d: first spatial convolution is stride 1; stride 2 or 4 patchification could reduce the high-resolution fill and activation traffic
+    [TOPOLOGY] five_by_five: node_conv2d_1: 5x5 convolution retains the engine's 3x3 packet footprint with 73% unread slack; replace it with stacked 3x3 layers when model accuracy permits
+    [TOPOLOGY] five_by_five: node_conv2d_2: 5x5 convolution retains the engine's 3x3 packet footprint with 73% unread slack; replace it with stacked 3x3 layers when model accuracy permits
+    [TOPOLOGY] five_by_five: node_conv2d_3: 5x5 convolution retains the engine's 3x3 packet footprint with 73% unread slack; replace it with stacked 3x3 layers when model accuracy permits
+    [TOPOLOGY] five_by_five: node_conv2d_4: 5x5 convolution retains the engine's 3x3 packet footprint with 73% unread slack; replace it with stacked 3x3 layers when model accuracy permits
+    [TOPOLOGY] five_by_five: node_conv2d_5: 5x5 convolution retains the engine's 3x3 packet footprint with 73% unread slack; replace it with stacked 3x3 layers when model accuracy permits
+    [TOPOLOGY] five_by_five: node_conv2d_6: 5x5 convolution retains the engine's 3x3 packet footprint with 73% unread slack; replace it with stacked 3x3 layers when model accuracy permits
+    [TOPOLOGY] five_by_five: node_conv2d_7: 5x5 convolution retains the engine's 3x3 packet footprint with 73% unread slack; replace it with stacked 3x3 layers when model accuracy permits
+    [TOPOLOGY] five_by_five: node_conv2d_8: 5x5 convolution retains the engine's 3x3 packet footprint with 73% unread slack; replace it with stacked 3x3 layers when model accuracy permits
+    [TOPOLOGY] five_by_five: node_conv2d_9: 5x5 convolution retains the engine's 3x3 packet footprint with 73% unread slack; replace it with stacked 3x3 layers when model accuracy permits
+    [TOPOLOGY] five_by_five: node_conv2d_10: 5x5 convolution retains the engine's 3x3 packet footprint with 73% unread slack; replace it with stacked 3x3 layers when model accuracy permits
+    [TOPOLOGY] five_by_five: node_conv2d_11: 5x5 convolution retains the engine's 3x3 packet footprint with 73% unread slack; replace it with stacked 3x3 layers when model accuracy permits
+    [TOPOLOGY] five_by_five: node_conv2d_12: 5x5 convolution retains the engine's 3x3 packet footprint with 73% unread slack; replace it with stacked 3x3 layers when model accuracy permits
+[*] Lowered 14 layers (0 on the host); workspace 0.2 MB; 27 rounds, 1.96 MB static packets
+[+] work\hipnet_v0_k5.ignite written: 2,290,112 bytes in 5.3 s (xclbin 292,238 B, insts 14,740 B, packets 1,960,704 B)
+    [OK] shim retirement cadence: every 2 task(s) of a DMA channel whose thinnest holds 1 per layer
+compile rc=1 (hipnet_v0_k5 default); file: -rw-r--r-- 1 <user> 197121 2290112 Sep 28 18:48 work/hipnet_v0_k5.ignite
+=== ignite-compile --engine graph --task segment --no-workspace-reuse: hipnet_v0_k5 -> work/hipnet_v0_k5_noreuse.ignite
+
+[ERROR] Compilation failed: 'transform'
+Traceback (most recent call last):
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\src\ignite_xdna\compiler\cli.py", line 549, in main
+    compile_graph_engine(parsed.input, parsed.output, parsed.build_dir, host_regions=parsed.host_region,
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                         silu_sigmoid=parsed.silu_sigmoid, topology_policy=parsed.topology_policy,
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+                         decouple_weights=parsed.decouple_weights,
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                         task=parsed.task, dense_recipe=parsed.dense_recipe)
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\src\ignite_xdna\compiler\cli.py", line 514, in compile_graph_engine
+    f"host {d['transform']['op']} x{d['transform']['blocksize']} -> image {manifest['output_shapes']['image']}")
+            ~^^^^^^^^^^^^^
+KeyError: 'transform'
+    [TOPOLOGY] high_resolution_entry: node_conv2d: first spatial convolution is stride 1; stride 2 or 4 patchification could reduce the high-resolution fill and activation traffic
+    [TOPOLOGY] five_by_five: node_conv2d_1: 5x5 convolution retains the engine's 3x3 packet footprint with 73% unread slack; replace it with stacked 3x3 layers when model accuracy permits
+    [TOPOLOGY] five_by_five: node_conv2d_2: 5x5 convolution retains the engine's 3x3 packet footprint with 73% unread slack; replace it with stacked 3x3 layers when model accuracy permits
+    [TOPOLOGY] five_by_five: node_conv2d_3: 5x5 convolution retains the engine's 3x3 packet footprint with 73% unread slack; replace it with stacked 3x3 layers when model accuracy permits
+    [TOPOLOGY] five_by_five: node_conv2d_4: 5x5 convolution retains the engine's 3x3 packet footprint with 73% unread slack; replace it with stacked 3x3 layers when model accuracy permits
+    [TOPOLOGY] five_by_five: node_conv2d_5: 5x5 convolution retains the engine's 3x3 packet footprint with 73% unread slack; replace it with stacked 3x3 layers when model accuracy permits
+    [TOPOLOGY] five_by_five: node_conv2d_6: 5x5 convolution retains the engine's 3x3 packet footprint with 73% unread slack; replace it with stacked 3x3 layers when model accuracy permits
+    [TOPOLOGY] five_by_five: node_conv2d_7: 5x5 convolution retains the engine's 3x3 packet footprint with 73% unread slack; replace it with stacked 3x3 layers when model accuracy permits
+    [TOPOLOGY] five_by_five: node_conv2d_8: 5x5 convolution retains the engine's 3x3 packet footprint with 73% unread slack; replace it with stacked 3x3 layers when model accuracy permits
+    [TOPOLOGY] five_by_five: node_conv2d_9: 5x5 convolution retains the engine's 3x3 packet footprint with 73% unread slack; replace it with stacked 3x3 layers when model accuracy permits
+    [TOPOLOGY] five_by_five: node_conv2d_10: 5x5 convolution retains the engine's 3x3 packet footprint with 73% unread slack; replace it with stacked 3x3 layers when model accuracy permits
+    [TOPOLOGY] five_by_five: node_conv2d_11: 5x5 convolution retains the engine's 3x3 packet footprint with 73% unread slack; replace it with stacked 3x3 layers when model accuracy permits
+    [TOPOLOGY] five_by_five: node_conv2d_12: 5x5 convolution retains the engine's 3x3 packet footprint with 73% unread slack; replace it with stacked 3x3 layers when model accuracy permits
+[*] Lowered 14 layers (0 on the host); workspace 0.5 MB; 27 rounds, 1.96 MB static packets
+[+] work\hipnet_v0_k5_noreuse.ignite written: 2,290,176 bytes in 5.2 s (xclbin 292,238 B, insts 14,740 B, packets 1,960,704 B)
+    [OK] workspace reuse off: every tensor owns a slot, so every layer is readable after one dispatch
+    [OK] shim retirement cadence: every 2 task(s) of a DMA channel whose thinnest holds 1 per layer
+compile rc=1 (hipnet_v0_k5 noreuse); file: -rw-r--r-- 1 <user> 197121 2290176 Sep 28 18:48 work/hipnet_v0_k5_noreuse.ignite
+
+== 3. The container snippet from the probe's summary, run on main against hipnet_v0.ignite ==
+engine: ignite-xdna main de276fb
+input scale 0.0078125 zp 128; output output_QuantizeLinear_Output scale 0.00390625 zp 128; snippet vs ORT CPU over 8 frames: 0 mismatches
+snippet rc=0
+
+== 4. Compile-time schedule size, v1 (5x20, b58ea8f) against v2 (20x20, main), from both sittings' JSON ==
+v1_5rows  hipnet_v0                  noreuse  layers=14 rounds=27 activation_packets=252 weight_fills=27 insts_bytes=18148 wpackets_bytes=596736 workspace_bytes=531264 egress_bytes=3200 host_segments=0
+v1_5rows  hipnet_v0                  reuse    layers=14 rounds=27 activation_packets=252 weight_fills=27 insts_bytes=18148 wpackets_bytes=596736 workspace_bytes=176448 egress_bytes=3200 host_segments=0
+v1_5rows  hipnet_v0_k5               noreuse  layers=14 rounds=27 activation_packets=828 weight_fills=27 insts_bytes=14740 wpackets_bytes=1960704 workspace_bytes=721728 egress_bytes=3200 host_segments=0
+v1_5rows  hipnet_v0_k5               reuse    layers=14 rounds=27 activation_packets=828 weight_fills=27 insts_bytes=14740 wpackets_bytes=1960704 workspace_bytes=224064 egress_bytes=3200 host_segments=0
+v1_5rows  hipnet_v0_relu_after_add   noreuse  layers=14 rounds=27 activation_packets=252 weight_fills=27 insts_bytes=18148 wpackets_bytes=596736 workspace_bytes=531264 egress_bytes=3200 host_segments=0
+v1_5rows  hipnet_v0_relu_after_add   reuse    layers=14 rounds=27 activation_packets=252 weight_fills=27 insts_bytes=18148 wpackets_bytes=596736 workspace_bytes=176448 egress_bytes=3200 host_segments=0
+v2_20rows hipnet_v0                  noreuse  layers=14 rounds=27 activation_packets=252 weight_fills=27 insts_bytes=18148 wpackets_bytes=596736 workspace_bytes=425664 egress_bytes=12800 host_segments=0
+v2_20rows hipnet_v0                  reuse    layers=14 rounds=27 activation_packets=252 weight_fills=27 insts_bytes=18148 wpackets_bytes=596736 workspace_bytes=146880 egress_bytes=12800 host_segments=0
+v2_20rows hipnet_v0_k5               noreuse  layers=14 rounds=27 activation_packets=828 weight_fills=27 insts_bytes=14740 wpackets_bytes=1960704 workspace_bytes=496320 egress_bytes=12800 host_segments=0
+v2_20rows hipnet_v0_k5               reuse    layers=14 rounds=27 activation_packets=828 weight_fills=27 insts_bytes=14740 wpackets_bytes=1960704 workspace_bytes=164544 egress_bytes=12800 host_segments=0
+
+== 5. Ranges over the three passes, both sittings (38 minutes apart), 4 decimals ==
+== v1_5rows: <job-tmp>\npu_probe\work\sitting.json
+   started 2026-09-28T22:11:00Z on <host>, engine b58ea8f, pmode default
+   hipnet_v0 (3 passes)
+     npu_dispatch  median 0.6514-0.6532 ms, p99 0.7022-0.7138, process CPU 0.0000-0.0625 ms/call
+     npu_call      median 0.7253-0.7260 ms, p99 0.8145-0.8242, process CPU 0.0938-0.1250 ms/call
+     cpu_fp32      median 0.5535-0.5656 ms, p99 0.7410-0.9023, process CPU 0.5625-0.5781 ms/call
+     cpu_qdq       median 0.9602-0.9640 ms, p99 1.1589-1.3973, process CPU 0.9688-0.9844 ms/call
+     cpu_fp32 / npu_call median, per pass: 0.76-0.78x
+     cpu_qdq / npu_call median, per pass: 1.32-1.33x
+     ORT runs during NPU blocks: [0]
+   hipnet_v0_k5 (3 passes)
+     npu_dispatch  median 1.4421-1.4432 ms, p99 1.4939-1.4973, process CPU 0.0156 ms/call
+     npu_call      median 1.5377-1.5394 ms, p99 1.6121-1.6178, process CPU 0.0469-0.0938 ms/call
+     cpu_fp32      median 1.4333-1.4474 ms, p99 2.0743-2.1021, process CPU 1.4219-1.4531 ms/call
+     cpu_qdq       median 2.4806-2.4899 ms, p99 3.3342-3.3415, process CPU 2.5000-2.5312 ms/call
+     cpu_fp32 / npu_call median, per pass: 0.93-0.94x
+     cpu_qdq / npu_call median, per pass: 1.61-1.62x
+     ORT runs during NPU blocks: [0]
+   hipnet_v0_relu_after_add (3 passes)
+     npu_dispatch  median 0.6665-0.6680 ms, p99 0.7127-0.7173, process CPU 0.0156-0.0469 ms/call
+     npu_call      median 0.7401-0.7440 ms, p99 0.8256-0.8364, process CPU 0.0469-0.1406 ms/call
+     cpu_fp32      median 0.5540-0.5696 ms, p99 0.7677-0.8337, process CPU 0.5625-0.5781 ms/call
+     cpu_qdq       median 0.9903-0.9998 ms, p99 1.1972-1.3438, process CPU 1.0000 ms/call
+     cpu_fp32 / npu_call median, per pass: 0.75-0.77x
+     cpu_qdq / npu_call median, per pass: 1.34x
+     ORT runs during NPU blocks: [0]
+== v2_20rows: <job-tmp>\npu_probe_v2\work\sitting.json
+   started 2026-09-28T22:49:14Z on <host>, engine main de276fb, pmode default
+   hipnet_v0 (3 passes)
+     npu_dispatch  median 0.6500-0.6511 ms, p99 0.6981-0.7024, process CPU 0.0156-0.0469 ms/call
+     npu_call      median 0.7492-0.7518 ms, p99 0.8471-0.8581, process CPU 0.0938-0.1406 ms/call
+     cpu_fp32      median 2.3041-2.3204 ms, p99 3.1437-3.1616, process CPU 2.3438-2.3594 ms/call
+     cpu_qdq       median 3.2167-3.2393 ms, p99 4.0647-4.1160, process CPU 3.2656-3.2969 ms/call
+     cpu_fp32 / npu_call median, per pass: 3.08-3.09x
+     cpu_qdq / npu_call median, per pass: 4.28-4.32x
+     ORT runs during NPU blocks: [0]
+   hipnet_v0_k5 (3 passes)
+     npu_dispatch  median 1.4433-1.4465 ms, p99 1.9457-1.9717, process CPU 0.0312 ms/call
+     npu_call      median 1.5690-1.5699 ms, p99 1.9044-2.0566, process CPU 0.1094-0.1875 ms/call
+     cpu_fp32      median 6.8331-6.8833 ms, p99 8.0111-8.0831, process CPU 6.9375-7.0000 ms/call
+     cpu_qdq       median 8.5556-8.5935 ms, p99 9.6098-9.7532, process CPU 8.6250-8.6875 ms/call
+     cpu_fp32 / npu_call median, per pass: 4.36-4.38x
+     cpu_qdq / npu_call median, per pass: 5.45-5.47x
+     ORT runs during NPU blocks: [0]

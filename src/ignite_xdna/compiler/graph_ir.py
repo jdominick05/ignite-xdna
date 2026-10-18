@@ -1011,7 +1011,12 @@ def lower_yolov8n(model_or_path, host_regions: Sequence[str] = (), silu_sigmoid:
                 add = adds[0]
                 other = [i for i in add.input if i != act_f][0]
                 res_q, s_res, _ = G.q_source(other)
-                add_q, s_add, _ = G.q_sink(add.output[0])
+                # Add -> Relu -> QuantizeLinear (a standard ResNet block): as for a convolution, the add is
+                # quantized at the ReLU's scale and the ReLU is max(q, 128) at that one quantization, which the
+                # residual packet applies as its post-add epilogue (relu_epilogue, exact for all 256 inputs).
+                add_cons = G.consumers.get(add.output[0], [])
+                add_relu = len(add_cons) == 1 and add_cons[0].op_type == "Relu"
+                add_q, s_add, z_add = G.q_sink(add_cons[0].output[0] if add_relu else add.output[0])
                 segs = resolve(res_q)
                 if len(segs) != 1:
                     raise ValueError(f"{add.name}: residual must be one segment")
@@ -1028,11 +1033,16 @@ def lower_yolov8n(model_or_path, host_regions: Sequence[str] = (), silu_sigmoid:
                 out_name, out_scale = add_q, s_add
                 if layer.residual_shift < 0:
                     raise ValueError(f"{add.name}: output scale {s_add} is finer than both operands")
+                if add_relu:
+                    if z_add != ZP:
+                        raise ValueError(f"{add.name}: ReLU output zero point {z_add}")
+                    layer.post_hswish = relu_epilogue()
+                    layer.post_act_scale = s_add
                 # HardSwish after the add (a convolution split in two exact halves, YOLO-World's C2fAttn
                 # output): the residual packet applies it at the add's output scale.
                 add_f = G.dq_of(add_q)
                 add_cons = G.float_consumers(add_f)
-                if sorted(c.op_type for c in add_cons) == ["HardSigmoid", "Mul"]:
+                if not add_relu and sorted(c.op_type for c in add_cons) == ["HardSigmoid", "Mul"]:
                     if silu_sigmoid:
                         raise ValueError(f"{add.name}: silu_sigmoid does not cover a SiLU after a residual add "
                                          f"(the residual packet applies only the HardSwish epilogue)")

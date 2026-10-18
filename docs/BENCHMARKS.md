@@ -24378,3 +24378,166 @@ Original C0-C5, full item set, FP32 reference and temperatures are unchanged. Th
 is known-set revalidation. Full scoring, its original report and one eligible
 registered adoption comparison remain required. Expected saving is 250 ms and
 minimum saving is 100 ms with all paired rounds winning; no adoption yet.
+
+## Five-row maps on the existing core: a 5x20 sensor model compiles whole and layer-exact, and is 1.3x slower than one CPU thread (2026-09-28, Desktop 2)
+
+hipnet v0 is an untrained hip-rotation estimator from a separate project, designed from Ignition's model guide. Its
+feature map is one 5x20 tile: rows are five tracker groups, columns twenty frames at 30 Hz, 32 or 64 channels. It
+uses only 3x3 and 1x1 convolutions, ReLU and residual adds, and its raw output is decoded on the host. Two variants
+ask a question each: `k5` puts 5x5 convolutions in the blocks, `relu_after_add` puts a ReLU after each add.
+
+- **Quantization:** plain XINT8, Quark 0.11rc1 `get_default_config("XINT8")` (CLE on), on the project's 64
+  calibration frames. Every scale is a power of two, activations are uint8 at zero point 128, and the input scale is
+  2^-7. On ORT CPU the QDQ output is within 0.0126 of FP32 at the readout, whose magnitude is 0.18-0.20: no
+  collapse. The models are untrained, so this is not accuracy.
+- **Tools:** `tools/hipnet_probe_silicon.py` (exactness and the sitting), `tools/hipnet_probe_offline.py` (lowering,
+  schedule emulation, ORT intermediates) and `tools/schedule_fingerprint.py` (the identical-schedule check). The
+  models, containers and calibration frames are the other project's and are not in this repository.
+
+**`main` (`de276fb`) refuses all three.** The base and `k5` models stop at scheduling with
+`ValueError: a 5-pixel map is smaller than one 20-pixel tile`. A core computes a 5x20 tile, but the scheduler issues
+a column of four cores stacked five rows apart as one quad, which covers twenty rows. `relu_after_add` stops earlier,
+in lowering: `add has 0 QuantizeLinear consumers`, because Quark writes Add -> Relu -> QuantizeLinear
+([`hipnet_probe_5x20_main_refusals_desktop2_20260928.log`](../results/aie/hipnet_probe_5x20_main_refusals_desktop2_20260928.log)).
+
+**`b58ea8f` (branch `worktree-hipnet-short-map`, not on `main`) takes both, with no kernel change.**
+- A tensor exactly five rows tall reserves four copies of its layout. Core row r of the quad reads copy r of its
+  input and drains into copy r of its output. Copy 0 is the tensor at its usual base, so the runtime is unchanged;
+  copies 1-3 hold junk. The workspace for those tensors is 4x
+  ([DECISIONS](DECISIONS.md#five-row-maps-are-scheduled-on-replicas-not-on-a-stride-0-quad-2026-09-28)).
+- ReLU after an add becomes the residual packet's post-add epilogue, the same `max(q, 128)` constants a
+  convolution's ReLU uses. No shipped model uses that epilogue.
+- Heights 10 and 15 still refuse.
+- Nothing else moves. YOLOv8n, YOLOv8s and SESR M7 hash identically under `de276fb` and `b58ea8f`, with workspace
+  reuse on and off: every placement, every column program and the weight packets.
+
+**Exact on silicon.** The ONNX graph's 27 compute nodes (33 in `relu_after_add`) lower to 14 layers:
+- each Conv is a layer, with its ReLU as the layer's epilogue;
+- each Add is the second convolution's RESIDUAL step, with the ReLU after it (`relu_after_add`) as the post-add
+  epilogue;
+- 0 host segments.
+
+Over 16 calibration frames per container:
+
+| Model | Reuse-free container | Default container | Output vs ORT CPU on the QDQ model | Activation packets |
+|---|---|---|---|---|
+| hipnet_v0 | 14/14 layers exact | 5/5 readable exact, 9/9 reused slots hold their final tenant | 0 mismatches | 252 |
+| hipnet_v0_k5 | 14/14 | 5/5, 9/9 | 0 | 828 |
+| hipnet_v0_relu_after_add | 14/14 | 5/5, 9/9 | 0 | 252 |
+
+Offline, the emulated schedule equals the reference at every layer in both workspace modes. The reference equals ORT
+CPU's uint8 intermediates at every layer
+([`hipnet_probe_5x20_offline_desktop2_20260928.log`](../results/aie/hipnet_probe_5x20_offline_desktop2_20260928.log)).
+The containers make 0 ONNX Runtime calls, counted in the harness.
+
+**The sitting.** Three passes, arms interleaved per model, 50 warm-up and 1,000 timed calls per block, NPU pmode
+`default`, xrt-smi idle before and after
+([`hipnet_probe_5x20_desktop2_20260928T2211Z.log`](../results/aie/hipnet_probe_5x20_desktop2_20260928T2211Z.log)).
+- "NPU call" is what a caller pays: float32 [1,32,5,20] in, quantize, stage, dispatch, read back, dequantize.
+- The CPU arms are ONNX Runtime 1.30.0 on one intra-op and one inter-op thread.
+
+| Median over the 3 passes (ms) | NPU dispatch | NPU call | CPU FP32 | CPU QDQ |
+|---|---|---|---|---|
+| hipnet_v0 | 0.6514-0.6532 | **0.7253-0.7260** | 0.5535-0.5656 | 0.9602-0.9640 |
+| hipnet_v0_k5 | 1.4421-1.4432 | **1.5377-1.5394** | 1.4333-1.4474 | 2.4806-2.4899 |
+| hipnet_v0_relu_after_add | 0.6665-0.6680 | **0.7401-0.7440** | 0.5540-0.5696 | 0.9903-0.9998 |
+
+- **The NPU is slower than one CPU thread on this model.** An NPU call is 1.28-1.31x the CPU's FP32 time on the base
+  model, 1.31-1.34x on `relu_after_add` and 1.06-1.07x on `k5` (DERIVED, per pass). It beats the same int8 graph
+  on the CPU by 1.32-1.34x (1.61-1.62x on `k5`).
+- **It costs the host little CPU time.** Process CPU time per NPU call was 0.0469-0.1406 ms across the nine blocks,
+  against 0.5625-0.5781 ms per FP32 call on the base model. `process_time` ticks at 15.6 ms on Windows, so 1,000
+  calls resolve it to about 0.016 ms: read that as under 0.15 ms, not as a per-pass figure.
+- **`k5` costs 2.2x the base model's dispatch** and moves 828 activation packets to its 252. That fits one packet
+  per 8 input channels for a 5x5 convolution, but nothing else was held fixed, so it is not isolated.
+- **Why 14 layers of 5x20 take 0.65 ms of dispatch** (about 47 us per layer, DERIVED) is unexplained. Nothing here
+  separates per-layer cost from transfer.
+- The p99 of an NPU call is 0.8145-0.8242 ms on the base model, against 0.7410-0.9023 for the CPU.
+
+**Not run:**
+- accuracy (the models are untrained);
+- the reuse-free containers' latency;
+- AMD's VitisAI EP on these models;
+- the laptop's Hawk Point NPU;
+- energy;
+- heights 10 and 15;
+- the stride-0 alternative to replicas (not attempted:
+  [DECISIONS](DECISIONS.md#five-row-maps-are-scheduled-on-replicas-not-on-a-stride-0-quad-2026-09-28)).
+
+**Since measured:** the same model redesigned at 20x20 has the same schedule size and the same dispatch, and its NPU
+call is 3.1x faster than one CPU thread
+([Twenty rows cost the NPU what five did](#twenty-rows-cost-the-npu-what-five-did-the-same-sensor-model-at-20x20-is-31x-faster-than-one-cpu-thread-on-main-2026-09-28-desktop-2)).
+
+## Twenty rows cost the NPU what five did: the same sensor model at 20x20 is 3.1x faster than one CPU thread, on `main` (2026-09-28, Desktop 2)
+
+hipnet v2 is the other project's redesign after the five-row result
+([above](#five-row-maps-on-the-existing-core-a-5x20-sensor-model-compiles-whole-and-layer-exact-and-is-13x-slower-than-one-cpu-thread-2026-09-28-desktop-2)).
+The map is 20x20: one row per body tracker, twenty frames at 30 Hz, 32 or 64 channels. The 12 rows with no input
+tracker are zero by design, and the model is built for that layout. The blocks are the same; there are two variants,
+the base and `k5`, and no `relu_after_add`. Everything ran on `main` (`de276fb`), unmodified: a 20-row map needs no
+branch.
+
+- **Quantization:** the same plain XINT8 preset and 64 calibration frames. Every scale is a power of two,
+  activations are uint8 at zero point 128, and the input scale is 2^-7. At the readout (the hip row), the QDQ output
+  on ORT CPU is within 0.0070 of FP32 (0.0066 for `k5`), against a readout magnitude of 0.15-0.18. The models are
+  untrained, so this is not accuracy.
+- **Tools:** `tools/hipnet_probe_silicon.py` and `tools/hipnet_probe_offline.py`, as for five rows. The offline tool
+  now reads `replicas` with a default, so it runs against `main`'s `Placement`. The quantize step now takes each
+  model's readout from its sidecar. `tools/schedule_fingerprint.py` was not rerun: nothing on `main` changed.
+- **`main` compiles both** to 14 layers, 0 on the host, 27 rounds. `ignite-compile --task segment` then exits 1 after
+  writing the container, on a `KeyError: 'transform'` in its summary print. `b58ea8f` fixes that print
+  ([`hipnet_probe_20x20_offline_desktop2_20260928.log`](../results/aie/hipnet_probe_20x20_offline_desktop2_20260928.log)).
+
+**Exact on silicon.** Over 16 calibration frames per container, xrt-smi idle before and after, pmode `default`
+([`hipnet_probe_20x20_desktop2_20260928T2249Z.log`](../results/aie/hipnet_probe_20x20_desktop2_20260928T2249Z.log)):
+
+| Model | Reuse-free container | Default container | Output vs ORT CPU on the QDQ model | Activation packets |
+|---|---|---|---|---|
+| hipnet_v0 (20x20) | 14/14 layers exact | 5/5 readable exact, 9/9 reused slots hold their final tenant | 0 mismatches | 252 |
+| hipnet_v0_k5 (20x20) | 14/14 | 5/5, 9/9 | 0 | 828 |
+
+Offline, the emulated schedule equals the reference at every layer in both workspace modes, and the reference equals
+ORT CPU's uint8 intermediates at every layer. The containers make 0 ONNX Runtime calls, counted in the harness.
+
+**The sitting.** Same method as the five-row sitting: three passes, arms interleaved per model, 50 warm-up and 1,000
+timed calls per block. "NPU call" is float32 [1,32,20,20] in to float32 out. The CPU arms are ONNX Runtime 1.30.0 on
+one intra-op and one inter-op thread.
+
+| Median over the 3 passes (ms) | NPU dispatch | NPU call | CPU FP32 | CPU QDQ | CPU FP32 / NPU call, per pass |
+|---|---|---|---|---|---|
+| hipnet_v0 (20x20) | 0.6500-0.6511 | **0.7492-0.7518** | 2.3041-2.3204 | 3.2167-3.2393 | 3.08-3.09x |
+| hipnet_v0_k5 (20x20) | 1.4433-1.4465 | **1.5690-1.5699** | 6.8331-6.8833 | 8.5556-8.5935 | 4.36-4.38x |
+
+- **At 20 rows the NPU wins on latency.** Against the int8 graph on the CPU the NPU call is 4.28-4.32x faster
+  (5.45-5.47x for `k5`, DERIVED, per pass).
+- **It still costs the host little CPU.** Process CPU time per NPU call was 0.0938-0.1875 ms across the six blocks,
+  against 2.3438-2.3594 ms per FP32 call on the base model and 6.9375-7.0000 on `k5`. The 15.6 ms `process_time`
+  tick applies as before.
+- **Twenty rows cost the NPU what five did.**
+  - At compile time, v2 matches the five-row v1 containers exactly: 27 rounds, 252 activation packets (828 for
+    `k5`), 18,148 instruction bytes (14,740) and 596,736 weight-packet bytes (1,960,704), in both sittings' JSON.
+  - Only egress grows, from 3,200 to 12,800 B. Equal sizes are not equal instructions: the five-row column programs
+    carry replica offsets.
+  - Dispatch reads 0.6500-0.6511 ms against v1's 0.6514-0.6532 (`k5` 1.4433-1.4465 against 1.4421-1.4432). The two
+    sittings are 38 minutes apart (22:11Z and 22:49Z), on the same machine and pmode with the NPU idle. That agreement
+    is consistent with the schedule; it is not a same-sitting comparison.
+  - The NPU call grew from 0.7253-0.7260 to 0.7492-0.7518 ms. That is consistent with staging and reading back four
+    times the data, but it was not isolated.
+- **So a five-row map pays for twenty.** Replicas keep all four core rows of a quad busy, three of them on junk
+  copies ([DECISIONS](DECISIONS.md#five-row-maps-are-scheduled-on-replicas-not-on-a-stride-0-quad-2026-09-28)).
+  A real 20-row map puts those rows to work at the same dispatch, while the CPU's FP32 time grows about 4x, as the
+  multiply-adds do. That is the whole difference between 1.3x slower and 3.1x faster.
+- **The 0.65 ms of dispatch does not depend on map height** between 5 and 20 rows. Why 14 layers take that long is
+  still unexplained.
+- **5x5 widens the lead.** `k5` costs 2.2x the base model's dispatch on the NPU, but 2.94-2.98x its time on the CPU
+  (DERIVED, per pass).
+- **Unexplained:** `k5`'s dispatch p99 is 1.9457-1.9717 ms here, against 1.4939-1.4973 in the five-row sitting, with
+  medians within 0.4%. The base model's p99 did not move (0.6981-0.7024 against 0.7022-0.7138).
+
+**Not run:**
+- accuracy (the models are untrained);
+- the reuse-free containers' latency;
+- AMD's VitisAI EP on these models;
+- the laptop's Hawk Point NPU;
+- energy;
+- a same-sitting run of the five-row and twenty-row containers.

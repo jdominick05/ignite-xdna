@@ -1,0 +1,136 @@
+hipnet NPU probe: ignite-compile --engine graph --task segment --no-workspace-reuse on main (de276fb),
+Desktop 2, 2026-09-28, before b58ea8f. Each model's full compiler output, verbatim.
+
+==== hipnet_v0_xint8.onnx ====
+
+[ERROR] Compilation failed: a 5-pixel map is smaller than one 20-pixel tile
+Traceback (most recent call last):
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\src\ignite_xdna\compiler\cli.py", line 549, in main
+    compile_graph_engine(parsed.input, parsed.output, parsed.build_dir, host_regions=parsed.host_region,
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                         silu_sigmoid=parsed.silu_sigmoid, topology_policy=parsed.topology_policy,
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+                         decouple_weights=parsed.decouple_weights,
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                         task=parsed.task, dense_recipe=parsed.dense_recipe)
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\src\ignite_xdna\compiler\cli.py", line 478, in compile_graph_engine
+    manifest = compile_graph_container(input_path, output_path, build_dir=build_dir,
+                                       host_regions=tuple(host_regions or ()), silu_sigmoid=silu_sigmoid,
+                                       workspace_reuse=not no_workspace_reuse, retire_batch=retire_batch,
+                                       split_layers=split_layers, decouple_weights=decouple_weights,
+                                       task=task, dense_recipe=dense_recipe)
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\src\ignite_xdna\compiler\engine_compile.py", line 399, in compile_graph_container
+    scheds, store = es.schedule_graph(ir, ws, activation_ring=activation_ring, weight_buffer=weight_buffer)
+                    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\src\ignite_xdna\compiler\engine_schedule.py", line 1234, in schedule_graph
+    scheds = [schedule_layer(ir, ws, L, store, merge_fills=merge_fills, pair_drains=pair_drains,
+              ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                             weight_runs=weight_runs, coarse=coarse, weight_repeat=weight_repeat,
+                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                             trim_ncin=trim_ncin, balance_columns=balance_columns,
+                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                             merge_group_weights=merge_group_weights, activation_ring=activation_ring,
+                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                             weight_buffer=weight_buffer)
+                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\src\ignite_xdna\compiler\engine_schedule.py", line 1162, in schedule_layer
+    return schedule_layer_coarse(ir, ws, layer, store, weight_repeat=weight_repeat, trim_ncin=trim_ncin,
+                                 balance_columns=balance_columns, merge_group_weights=merge_group_weights,
+                                 weight_buffer=weight_buffer)
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\src\ignite_xdna\compiler\engine_schedule.py", line 997, in schedule_layer_coarse
+    ys, xs = tile_origins(t.height, quad_rows), tile_origins(t.width, TILE_C)
+             ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\src\ignite_xdna\compiler\engine_schedule.py", line 484, in tile_origins
+    raise ValueError(f"a {extent}-pixel map is smaller than one {step}-pixel tile")
+ValueError: a 5-pixel map is smaller than one 20-pixel tile
+    [TOPOLOGY] high_resolution_entry: node_conv2d: first spatial convolution is stride 1; stride 2 or 4 patchification could reduce the high-resolution fill and activation traffic
+
+==== hipnet_v0_k5_xint8.onnx ====
+
+[ERROR] Compilation failed: a 5-pixel map is smaller than one 20-pixel tile
+Traceback (most recent call last):
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\src\ignite_xdna\compiler\cli.py", line 549, in main
+    compile_graph_engine(parsed.input, parsed.output, parsed.build_dir, host_regions=parsed.host_region,
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                         silu_sigmoid=parsed.silu_sigmoid, topology_policy=parsed.topology_policy,
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+                         decouple_weights=parsed.decouple_weights,
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                         task=parsed.task, dense_recipe=parsed.dense_recipe)
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\src\ignite_xdna\compiler\cli.py", line 478, in compile_graph_engine
+    manifest = compile_graph_container(input_path, output_path, build_dir=build_dir,
+                                       host_regions=tuple(host_regions or ()), silu_sigmoid=silu_sigmoid,
+                                       workspace_reuse=not no_workspace_reuse, retire_batch=retire_batch,
+                                       split_layers=split_layers, decouple_weights=decouple_weights,
+                                       task=task, dense_recipe=dense_recipe)
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\src\ignite_xdna\compiler\engine_compile.py", line 399, in compile_graph_container
+    scheds, store = es.schedule_graph(ir, ws, activation_ring=activation_ring, weight_buffer=weight_buffer)
+                    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\src\ignite_xdna\compiler\engine_schedule.py", line 1234, in schedule_graph
+    scheds = [schedule_layer(ir, ws, L, store, merge_fills=merge_fills, pair_drains=pair_drains,
+              ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                             weight_runs=weight_runs, coarse=coarse, weight_repeat=weight_repeat,
+                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                             trim_ncin=trim_ncin, balance_columns=balance_columns,
+                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                             merge_group_weights=merge_group_weights, activation_ring=activation_ring,
+                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                             weight_buffer=weight_buffer)
+                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\src\ignite_xdna\compiler\engine_schedule.py", line 1162, in schedule_layer
+    return schedule_layer_coarse(ir, ws, layer, store, weight_repeat=weight_repeat, trim_ncin=trim_ncin,
+                                 balance_columns=balance_columns, merge_group_weights=merge_group_weights,
+                                 weight_buffer=weight_buffer)
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\src\ignite_xdna\compiler\engine_schedule.py", line 997, in schedule_layer_coarse
+    ys, xs = tile_origins(t.height, quad_rows), tile_origins(t.width, TILE_C)
+             ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\src\ignite_xdna\compiler\engine_schedule.py", line 484, in tile_origins
+    raise ValueError(f"a {extent}-pixel map is smaller than one {step}-pixel tile")
+ValueError: a 5-pixel map is smaller than one 20-pixel tile
+    [TOPOLOGY] high_resolution_entry: node_conv2d: first spatial convolution is stride 1; stride 2 or 4 patchification could reduce the high-resolution fill and activation traffic
+    [TOPOLOGY] five_by_five: node_conv2d_1: 5x5 convolution retains the engine's 3x3 packet footprint with 73% unread slack; replace it with stacked 3x3 layers when model accuracy permits
+    [TOPOLOGY] five_by_five: node_conv2d_2: 5x5 convolution retains the engine's 3x3 packet footprint with 73% unread slack; replace it with stacked 3x3 layers when model accuracy permits
+    [TOPOLOGY] five_by_five: node_conv2d_3: 5x5 convolution retains the engine's 3x3 packet footprint with 73% unread slack; replace it with stacked 3x3 layers when model accuracy permits
+    [TOPOLOGY] five_by_five: node_conv2d_4: 5x5 convolution retains the engine's 3x3 packet footprint with 73% unread slack; replace it with stacked 3x3 layers when model accuracy permits
+    [TOPOLOGY] five_by_five: node_conv2d_5: 5x5 convolution retains the engine's 3x3 packet footprint with 73% unread slack; replace it with stacked 3x3 layers when model accuracy permits
+    [TOPOLOGY] five_by_five: node_conv2d_6: 5x5 convolution retains the engine's 3x3 packet footprint with 73% unread slack; replace it with stacked 3x3 layers when model accuracy permits
+    [TOPOLOGY] five_by_five: node_conv2d_7: 5x5 convolution retains the engine's 3x3 packet footprint with 73% unread slack; replace it with stacked 3x3 layers when model accuracy permits
+    [TOPOLOGY] five_by_five: node_conv2d_8: 5x5 convolution retains the engine's 3x3 packet footprint with 73% unread slack; replace it with stacked 3x3 layers when model accuracy permits
+    [TOPOLOGY] five_by_five: node_conv2d_9: 5x5 convolution retains the engine's 3x3 packet footprint with 73% unread slack; replace it with stacked 3x3 layers when model accuracy permits
+    [TOPOLOGY] five_by_five: node_conv2d_10: 5x5 convolution retains the engine's 3x3 packet footprint with 73% unread slack; replace it with stacked 3x3 layers when model accuracy permits
+    [TOPOLOGY] five_by_five: node_conv2d_11: 5x5 convolution retains the engine's 3x3 packet footprint with 73% unread slack; replace it with stacked 3x3 layers when model accuracy permits
+    [TOPOLOGY] five_by_five: node_conv2d_12: 5x5 convolution retains the engine's 3x3 packet footprint with 73% unread slack; replace it with stacked 3x3 layers when model accuracy permits
+
+==== hipnet_v0_relu_after_add_xint8.onnx ====
+
+[ERROR] Compilation failed: add has 0 QuantizeLinear consumers
+Traceback (most recent call last):
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\src\ignite_xdna\compiler\cli.py", line 549, in main
+    compile_graph_engine(parsed.input, parsed.output, parsed.build_dir, host_regions=parsed.host_region,
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                         silu_sigmoid=parsed.silu_sigmoid, topology_policy=parsed.topology_policy,
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+                         decouple_weights=parsed.decouple_weights,
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                         task=parsed.task, dense_recipe=parsed.dense_recipe)
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\src\ignite_xdna\compiler\cli.py", line 478, in compile_graph_engine
+    manifest = compile_graph_container(input_path, output_path, build_dir=build_dir,
+                                       host_regions=tuple(host_regions or ()), silu_sigmoid=silu_sigmoid,
+                                       workspace_reuse=not no_workspace_reuse, retire_batch=retire_batch,
+                                       split_layers=split_layers, decouple_weights=decouple_weights,
+                                       task=task, dense_recipe=dense_recipe)
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\src\ignite_xdna\compiler\engine_compile.py", line 395, in compile_graph_container
+    ir = lower_yolov8n(onnx_path, host_regions=host_regions, silu_sigmoid=silu_sigmoid)
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\src\ignite_xdna\compiler\graph_ir.py", line 954, in lower_yolov8n
+    add_q, s_add, _ = G.q_sink(add.output[0])
+                      ~~~~~~~~^^^^^^^^^^^^^^^
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\src\ignite_xdna\compiler\graph_ir.py", line 398, in q_sink
+    raise ValueError(f"{float_name} has {len(qs)} QuantizeLinear consumers")
+ValueError: add has 0 QuantizeLinear consumers
+    [TOPOLOGY] high_resolution_entry: node_conv2d: first spatial convolution is stride 1; stride 2 or 4 patchification could reduce the high-resolution fill and activation traffic
