@@ -1,0 +1,80 @@
+# Gate 0 of the dynamic-witness plan, Desktop 2 (DESKTOP-CBL5NUA), started 20261012T213156Z UTC, resnet_env17 (Ryzen AI 1.7.1 VitisAI EP).
+# Question: does XRT's AIE trace plugin attach to the EP process and write non-empty trace data, configured
+# only by env vars and an xrt.ini, without changing results? Tool: tools/xdp_trace_attach_probe.py (sha256 e71fd98fa00dd29e1d5f591aaeeb5dfa825b4d7e8407f67740e5e0387f1c57fa).
+# Fixture: the 32-channel shift_cut 8 / shift_bias 0 Conv of tools/xint8_arithmetic_probe.py, 7 cases, each run twice.
+# No DLL was copied or replaced anywhere; the plugin was reached through AMD_NPU_SDK_PATH.
+#
+# Pre-registration (sha256 09de2a19cf06ceb6ce15c5723f7e6058ca9a406ee8b6f576873ddee7685e7675):
+#   written_utc 2026-10-12T21:31:47Z, before either arm has run.
+#   tool: tools/xdp_trace_attach_probe.py (sha256 e71fd98fa00dd29e1d5f591aaeeb5dfa825b4d7e8407f67740e5e0387f1c57fa); traced-arm xrt.ini sha256 98a92526665f4883bda0ef74218ddce0504398362f70ec9c4a6583f387782fe7
+#   Decision A (after the untraced arm): the xrt_coreutil.dll the EP process loaded. System32 or driver store (2.21.x) -> run the traced arm. Ryzen AI 1.7.1's xrt\ (2.19.x) -> STOP, no traced arm; the private-runtime-copy option is the user's decision.
+#   Gate 0 PASS iff: xdp_aie_trace_plugin.dll in the traced arm's module list; >= 1 non-empty aie_trace* file in its cwd; outputs bit-equal to the untraced arm; cached xmodel sha256 and mtime unchanged (no recompile); device idle before both arms and after both exit. Anything else FAIL, with the loader messages, files and module list recorded.
+#   Configuration only: env AMD_NPU_SDK_PATH=C:\Xilinx\XRT\xrt_sdk\xrt, XRT_INI_PATH, cwd. No DLL is copied or replaced anywhere.
+#
+# Traced-arm xrt.ini (sha256 98a92526665f4883bda0ef74218ddce0504398362f70ec9c4a6583f387782fe7):
+#   [Runtime]
+#   verbosity=7
+#   runtime_log=console
+#   [Debug]
+#   aie_trace=true
+#   [AIE_trace_settings]
+#   tile_based_aie_tile_metrics=all:functions
+#   buffer_size=1M
+
+# ===== untraced arm (cleared and recompiled the worktree EP cache) =====
+idle_before True   env {"AMD_NPU_SDK_PATH": null, "XRT_INI_PATH": null, "XILINX_XRT": null}
+EP placement: 5 of 7 nodes on NPU, NPU:Conv = 1
+cached xmodel sha256 65afef8730cc42812759e7a2e1914313d180fef043bfcc70db568621b71a49b3
+loaded XRT / XDP / EP modules (file version, path):
+  1.7.0.0          C:\Users\<user>\miniforge3\envs\resnet_env17\Lib\site-packages\onnxruntime\capi\aiecompiler_client.dll
+  1.23.3.0         C:\Users\<user>\miniforge3\envs\resnet_env17\Lib\site-packages\onnxruntime\capi\onnxruntime_providers_shared.dll
+  None             C:\Users\<user>\miniforge3\envs\resnet_env17\Lib\site-packages\onnxruntime\capi\onnxruntime_providers_vitisai.dll
+  1.7.0.0          C:\Users\<user>\miniforge3\envs\resnet_env17\Lib\site-packages\onnxruntime\capi\onnxruntime_vitisai_ep.dll
+  32.0.20101.3761  C:\Windows\System32\DriverStore\FileRepository\kipudrv.inf_amd64_19a9c5cead79deb0\xrt_core.dll
+  32.0.20101.3761  C:\Windows\System32\xrt_coreutil.dll
+Decision A: the EP process loaded C:\Windows\System32\xrt_coreutil.dll (32.0.20101.3761; summary.csv of the
+traced arm names XRT build 2.21.0) with the driver-store xrt_core.dll, not Ryzen AI's bundled 2.19 coreutil.
+-> run the traced arm, as pre-registered.
+
+# ===== traced arm (cache NOT cleared; cwd holds xrt.ini; AMD_NPU_SDK_PATH -> the XRT SDK dir) =====
+idle_before True   env {"AMD_NPU_SDK_PATH": "C:\\Xilinx\\XRT\\xrt_sdk\\xrt", "XRT_INI_PATH": "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\scratch\\dpu_re\\gate0\\traced\\xrt.ini", "XILINX_XRT": null}
+EP placement: 5 of 7 nodes on NPU, NPU:Conv = 1
+cached xmodel sha256 65afef8730cc42812759e7a2e1914313d180fef043bfcc70db568621b71a49b3
+loaded XRT / XDP / EP modules (file version, path):
+  1.7.0.0          C:\Users\<user>\miniforge3\envs\resnet_env17\Lib\site-packages\onnxruntime\capi\aiecompiler_client.dll
+  1.23.3.0         C:\Users\<user>\miniforge3\envs\resnet_env17\Lib\site-packages\onnxruntime\capi\onnxruntime_providers_shared.dll
+  None             C:\Users\<user>\miniforge3\envs\resnet_env17\Lib\site-packages\onnxruntime\capi\onnxruntime_providers_vitisai.dll
+  1.7.0.0          C:\Users\<user>\miniforge3\envs\resnet_env17\Lib\site-packages\onnxruntime\capi\onnxruntime_vitisai_ep.dll
+  32.0.20101.3761  C:\Windows\System32\DriverStore\FileRepository\kipudrv.inf_amd64_19a9c5cead79deb0\xdp_core.dll
+  32.0.20101.3761  C:\Windows\System32\DriverStore\FileRepository\kipudrv.inf_amd64_19a9c5cead79deb0\xrt_core.dll
+  32.0.20101.3761  C:\Windows\System32\xrt_coreutil.dll
+  None             C:\Xilinx\XRT\xrt_sdk\xrt\xdp_aie_trace_plugin.dll
+files written to the traced cwd: summary.csv (0 B)
+XRT messages from the traced arm (runtime verbosity 7, plugin lines only):
+  [XRT] INFO: Calling AIE Trace updateAIEDevice.
+  [XRT] WARNING: The AIE metadata JSON file is required in the same directory as the run directory to run AIE Profile.
+  [XRT] WARNING: The AIE metadata JSON file is required in the same directory as the run directory to run AIE Profile.
+  [XRT] DEBUG: AIE metadata read failed!
+  [XRT] INFO: AIE metadataReader requested
+  [XRT] INFO: AIE metadataReader requested
+  [XRT] INFO: AIE metadataReader requested
+  [XRT] WARNING: AIE Metadata is empty for AIE Trace
+  [XRT] INFO: Beginning AIE Trace finishFlushAIEDevice.
+  [XRT] INFO: Destroying AIE Trace Plugin
+  [XRT] INFO: Beginning AIE Trace WriteAll.
+  [XRT] DEBUG: VPRunSummaryWriter: write contents
+gate0_checks: {"plugin_loaded": true, "trace_file_nonempty": false, "outputs_bit_equal": true, "xmodel_unchanged": true, "idle_before": true}
+device idle after each arm exited: checked with xrt-smi examine -r aie-partitions ("No hardware contexts
+running on device" both times).
+
+# ===== verdict =====
+# Gate 0 FAILS, on one pre-registered condition: no aie_trace* file was written. Every other condition holds.
+#   - xdp_aie_trace_plugin.dll loaded from the SDK dir through AMD_NPU_SDK_PATH, by configuration alone.
+#   - The outputs are bit-equal to the untraced arm on all 7 cases.
+#   - The cached xmodel is unchanged (sha256 and mtime), so there was no recompile.
+#   - The device was idle before and after both arms.
+# Cause (stated by XRT itself, not inferred): "AIE metadata read failed!" and "AIE Metadata is empty for AIE
+# Trace". The plugin looked for the AIE metadata JSON in the run directory. xdp_core.dll names the file
+# aie_control_config.json. The overlay xclbin does carry an AIE_METADATA section (xclbinutil --info), but on
+# this client path the plugin did not take it from there.
+# Not tested here: supplying that metadata file. That would be a new pre-registered attempt (Gate 0b).

@@ -1669,7 +1669,9 @@ sections above.
   10^{32}$) that integer rounding cannot recover. **Attribution corrected 2026-09-09:** the clamp is
   triggered by cross-layer equalization, not by a hardware shift-register limit — CLE off gives
   66.20% top-1 with no clamp firing. (The "16-bit shift register limits" phrasing here was also
-  inconsistent with the 5-bit shifter asserted elsewhere in this repo; neither width is measured.)
+  inconsistent with the 5-bit shifter asserted elsewhere in this repo; neither width is measured.
+  *Updated 2026-10-12:* the AIE2 shifter is now measured. It reads a 6-bit code, 0–59 right and
+  60–63 left by 4..1, so neither 5 nor 16 bits ([working](docs/BENCHMARKS.md#the-aie2-shifter-reads-a-6-bit-code-so-theorem-1s-5-bit-shifter-is-not-the-bound-2026-10-12-desktop-2)).)
   [Working](docs/BENCHMARKS.md#alternative-classification-topologies-densenet-121-concat-and-resnext-50-grouped-convs).
 - **Category C, first candidate: YOLOv6n (RepVGG backbone).** New pipeline
   (`pipelines/yolov6n/`), Meituan's official 0.4.0 release. The structural half of the
@@ -1880,8 +1882,9 @@ sections above.
     No fixture has executed outside the producer's own `[0, 16]` shift-cut contract: fixtures
     built to reach sigma 0, 31 and 32 are refused by the VitisAI EP and run on the CPU EP
     instead, recording `"tested_conv_on_npu": false`, so a divergence measured there is a
-    software result. **The highest sigma ever executed on this DPU is 30.** Neither register
-    width behind the theorem — the 15-bit multiplier, the 5-bit shifter — has been measured,
+    software result. **The highest sigma ever executed on this DPU is 30.** *(Superseded 2026-10-12: with the shift byte patched in a cached xmodel, the DPU executed sigma 31, 32 and 33 exactly, `results/aie/dpu_sigma_patch_desktop2_20261012T182840Z.log`.)* Neither register
+    width behind the theorem — the 15-bit multiplier, the 5-bit shifter — has been measured
+    (*shifter measured 2026-10-12, see below: it is not 5-bit*),
     and no AIE-ML or DPU ISA document in this repo states either; AMD's AI Engine
     documentation describes the path as SRS (shift-round-saturate) without giving the field
     width.
@@ -1893,11 +1896,35 @@ sections above.
     inside `[0, 31]`. Every analyzed Conv/Gemm on all eleven models lies in `[14, 30]`, as
     it must. This also explains the "highest sigma ever executed is 30" above without new
     hardware: 30 is the contract's upper edge, the producer's ceiling rather than the
-    silicon's. Separately, **166 of 1102** candidate operations were being scored on scales
+    silicon's (confirmed 2026-10-12: sigma 31–33 execute exactly on the DPU once the shift is patched past the contract). Separately, **166 of 1102** candidate operations were being scored on scales
     that were never read — the `_Scale`/`_Mul` DPU-simulation pairs, defaulted to 1.0 and
     counted as passing; they are the sub-14 minima in the tables above, and no Conv ever
     produced one.
-  Open: whether the bound is real physics at all, and what a forward test that actually
+  **Narrowed 2026-10-12: the bound is not the shifter.** The AIE2 `vsrs` shift operand is a
+  6-bit code: 0–59 shift right, 60–63 shift left by 4..1. Shifts of 32–59 execute exactly on
+  acc32 lanes. This is MEASURED on one core, with the rule fitted and then tested out of sample
+  ([working](docs/BENCHMARKS.md#the-aie2-shifter-reads-a-6-bit-code-so-theorem-1s-5-bit-shifter-is-not-the-bound-2026-10-12-desktop-2)). So the [14, 30] window comes from the producer, the compiler or the
+  DPU overlay's packet format. The overlay's requant reads its shifts from 4-bit and signed
+  6-bit packet fields. **Traced and run 2026-10-12:** sigma is not in mc_code, which is
+  byte-identical across sigma 14–30. The DPU reads it from one byte of the subgraph's `REG_0`
+  parameter blob; the weight `param_buffer` holds a copy the device ignores. Patching that
+  byte in a cached xmodel, **sigma 31, 32 and 33 execute exactly** (pre-registered, controls
+  valid), so the window's upper edge is the producer/compiler contract, not the silicon, and a
+  5-bit mask is excluded. The predicted left shifts at sigma 60–63 did not appear
+  ([working](docs/BENCHMARKS.md#the-aie2-shifter-reads-a-6-bit-code-so-theorem-1s-5-bit-shifter-is-not-the-bound-2026-10-12-desktop-2)).
+  **Explained the same day (runs 3–4):** the device does not shift by sigma. The shift_cut
+  byte `& 63` is itself the `vsrs` code. That model was fitted on run 3, then held on all 19
+  held-out arms that test it, and the sigma-wrap rival failed 8 arms. So shifts up to 23
+  (sigma 37) execute exactly, shift_cut −1 does too, −2..−4 wrap rather than saturate, and
+  −5 and below cannot be expressed. Byte `0x7B` carries shift_bias in only 4 bits. A
+  pre-registered test of "bit 7 zeroes the bias" (run 5) failed on 1 of 8 arms: `0x81` kept the
+  bias and `0xc1` did not.
+  Run 6 mapped all 64 values: bit 6 is ignored, and bit 7 removes the bias (or right-shifts it
+  by 8 or more) for every value except `0x81`, which is unexplained.
+  The bias upshift itself is not the cause: native `vups` reads its scalar as `s & 63`, and no
+  scalar removes the bias. The one overlay path traced passes the byte raw, so the fixture Conv does
+  not run it, and the code that extracts the field is not yet located.
+  Still open: why `0x81` is the exception, any shape other than one 1x1 Conv, and what a forward test that actually
   reaches the edges would look like, given the EP refuses out-of-contract scales — and note
   the constraint is now sharper, since any file the producer emits is confined to
   `[14, 30]` by construction, so reaching an edge means defeating `adjust_shift_cut` first,

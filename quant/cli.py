@@ -49,7 +49,7 @@ def main(argv=None):
     check_shift = commands.add_parser(
         "check-shift-cut",
         help="Audit ONNX QDQ models against the producer's shift-cut contract [0, 16] and the "
-             "stated (unvalidated) hardware bound sigma in [0, 31]")
+             "stated (unvalidated) bound sigma in [0, 31] (the AIE2 shifter is 6-bit; see BENCHMARKS)")
     check_shift.add_argument("models", type=Path, nargs="+", help="Quantized ONNX model paths to audit")
     check_shift.add_argument("--branches", action="store_true",
                              help="Also report inter-branch scale spread at Add/Concat (advisory only)")

@@ -1,0 +1,577 @@
+# Two parts, Desktop 2 (DESKTOP-CBL5NUA), 2026-10-12.
+# A. kernels/srs_probe/srs_probe.py --modes 4 --shifts=-128:255, started 20261012T203701Z UTC (mlir-aie ironenv, one Worker on
+#    Tile(0, 2)). Mode 4 (new) loads the same 32 int8 lanes as mode 3 from memory, so the compiler fuses load and
+#    upshift into vlda.ups.s32.s8, the form the VitisAI overlay uses. Device idle before the run (xrt-smi below).
+# B. A static, timing-aware trace of the overlay's PDI 2 (the fixture Conv's, graph_used_pdi_list [2]) with
+#    tools/aie_timing_slice.py, whose latencies are SPEC(Peano) from llvm-aie AIE2Schedule.td (snapshot a36c62b9),
+#    not measured. The overlay binary and its disassembly stay in git-ignored scratch; only addresses and
+#    mnemonics are quoted here.
+#
+# Pre-registration A (sha256 915ccda7c9f616b7a9709b4bd07beb073f13f9d578812ccac18c64959e024abf):
+#   written_utc 2026-10-12T20:37:01Z, before any mode-4 point has run.
+#   question: does the fused load+upshift vlda.ups.s32.s8 (the DPU overlay's form, pm_0002 0x24d4) decode its runtime shift scalar like register vups (mode 3: k = s & 63, saturating left)?
+#   why: a timing-aware slice of pm_0002 (scratch tslice.py, llvm-aie AIE2Schedule.td a36c62b9: lda def 7, vlda.ups shift read at 7) gives s3 = the sign-extended byte at param-struct +0x20 with nothing else writing s3 in 0x2200..0x2600. Mode 3 says vups(5) shifts by 5, the DPU shifts by 1. Either vlda.ups decodes differently, or struct+0x20 is not the raw REG_0 0x7B byte.
+#   test: srs_probe.py --modes 4 --shifts=-128:255; same 32 int8 lanes as mode 3, loaded from memory. The kernel object is disassembled afterwards to confirm the compiler emitted vlda.ups (if not, the run tests nothing new and is reported as such).
+#   decision rule: H_same holds iff every scalar's fit equals mode 3's (k = s & 63 saturating). Any scalar that differs refutes it, and the per-scalar map is recorded.
+#
+# Pre-registration B, the struct check (sha256 0b3aa113c6723d3e4ea6b46df09a3c52fd6d37d3947ff9349fb5b75869c140f4):
+#   written_utc 2026-10-12T20:40:57Z, before any REG_0 byte at a resolved struct offset has been read.
+#   question: is the param struct at [p3] in pm_0002 0x21f8..0x228a a verbatim copy of REG_0, with struct+0x21 = REG_0 0x7C (so p3 = REG_0 + 0x5B)?
+#   method: resolve every [p3, djN] / [p3, #imm] offset in that stretch from the nearest preceding dj write (timing-aware), read REG_0[0x5B + off] with the load's width from the fixture xmodel, and compare with the fixture conv's parameters.
+#   prediction: NOT verbatim (the values will not read as the fixture's parameters), because the adjacent byte 0x21 passes raw into vsrs while 0x20 cannot pass raw into vlda.ups. Weak: a static read, no execution trace.
+
+# ===== A. the run =====
+== xrt-smi examine -r aie-partitions (before)
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+== mode 3 int8-vlda.ups->acc32: int8 lanes [1, -1, 127, -128, 2, -2, 3, -3, 5, -5, 64, -64, 100, -100, 17, -17, 0, 7, -7, 33, -33, 99, -99, 126, -127, 11, -11, 85, -85, 42, -42, 120], 384 shift scalars
+  shift -128 (0xffffff80): fits k=0/wrap, k=0/sat, k=0/rnd_half_up
+  shift -127 (0xffffff81): fits k=1/wrap, k=1/sat, k=1/rnd_half_up
+  shift -126 (0xffffff82): fits k=2/wrap, k=2/sat, k=2/rnd_half_up
+  shift -125 (0xffffff83): fits k=3/wrap, k=3/sat, k=3/rnd_half_up
+  shift -124 (0xffffff84): fits k=4/wrap, k=4/sat, k=4/rnd_half_up
+  shift -123 (0xffffff85): fits k=5/wrap, k=5/sat, k=5/rnd_half_up
+  shift -122 (0xffffff86): fits k=6/wrap, k=6/sat, k=6/rnd_half_up
+  shift -121 (0xffffff87): fits k=7/wrap, k=7/sat, k=7/rnd_half_up
+  shift -120 (0xffffff88): fits k=8/wrap, k=8/sat, k=8/rnd_half_up
+  shift -119 (0xffffff89): fits k=9/wrap, k=9/sat, k=9/rnd_half_up
+  shift -118 (0xffffff8a): fits k=10/wrap, k=10/sat, k=10/rnd_half_up
+  shift -117 (0xffffff8b): fits k=11/wrap, k=11/sat, k=11/rnd_half_up
+  shift -116 (0xffffff8c): fits k=12/wrap, k=12/sat, k=12/rnd_half_up
+  shift -115 (0xffffff8d): fits k=13/wrap, k=13/sat, k=13/rnd_half_up
+  shift -114 (0xffffff8e): fits k=14/wrap, k=14/sat, k=14/rnd_half_up
+  shift -113 (0xffffff8f): fits k=15/wrap, k=15/sat, k=15/rnd_half_up
+  shift -112 (0xffffff90): fits k=16/wrap, k=16/sat, k=16/rnd_half_up
+  shift -111 (0xffffff91): fits k=17/wrap, k=17/sat, k=17/rnd_half_up
+  shift -110 (0xffffff92): fits k=18/wrap, k=18/sat, k=18/rnd_half_up
+  shift -109 (0xffffff93): fits k=19/wrap, k=19/sat, k=19/rnd_half_up
+  shift -108 (0xffffff94): fits k=20/wrap, k=20/sat, k=20/rnd_half_up
+  shift -107 (0xffffff95): fits k=21/wrap, k=21/sat, k=21/rnd_half_up
+  shift -106 (0xffffff96): fits k=22/wrap, k=22/sat, k=22/rnd_half_up
+  shift -105 (0xffffff97): fits k=23/wrap, k=23/sat, k=23/rnd_half_up
+  shift -104 (0xffffff98): fits k=24/wrap, k=24/sat, k=24/rnd_half_up
+  shift -103 (0xffffff99): fits k=25/sat
+  shift -102 (0xffffff9a): fits k=26/sat
+  shift -101 (0xffffff9b): fits k=27/sat
+  shift -100 (0xffffff9c): fits k=28/sat
+  shift  -99 (0xffffff9d): fits k=29/sat
+  shift  -98 (0xffffff9e): fits k=30/sat
+  shift  -97 (0xffffff9f): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -96 (0xffffffa0): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -95 (0xffffffa1): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -94 (0xffffffa2): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -93 (0xffffffa3): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -92 (0xffffffa4): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -91 (0xffffffa5): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -90 (0xffffffa6): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -89 (0xffffffa7): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -88 (0xffffffa8): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -87 (0xffffffa9): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -86 (0xffffffaa): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -85 (0xffffffab): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -84 (0xffffffac): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -83 (0xffffffad): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -82 (0xffffffae): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -81 (0xffffffaf): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -80 (0xffffffb0): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -79 (0xffffffb1): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -78 (0xffffffb2): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -77 (0xffffffb3): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -76 (0xffffffb4): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -75 (0xffffffb5): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -74 (0xffffffb6): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -73 (0xffffffb7): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -72 (0xffffffb8): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -71 (0xffffffb9): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -70 (0xffffffba): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -69 (0xffffffbb): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -68 (0xffffffbc): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -67 (0xffffffbd): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -66 (0xffffffbe): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -65 (0xffffffbf): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -64 (0xffffffc0): fits k=0/wrap, k=0/sat, k=0/rnd_half_up
+  shift  -63 (0xffffffc1): fits k=1/wrap, k=1/sat, k=1/rnd_half_up
+  shift  -62 (0xffffffc2): fits k=2/wrap, k=2/sat, k=2/rnd_half_up
+  shift  -61 (0xffffffc3): fits k=3/wrap, k=3/sat, k=3/rnd_half_up
+  shift  -60 (0xffffffc4): fits k=4/wrap, k=4/sat, k=4/rnd_half_up
+  shift  -59 (0xffffffc5): fits k=5/wrap, k=5/sat, k=5/rnd_half_up
+  shift  -58 (0xffffffc6): fits k=6/wrap, k=6/sat, k=6/rnd_half_up
+  shift  -57 (0xffffffc7): fits k=7/wrap, k=7/sat, k=7/rnd_half_up
+  shift  -56 (0xffffffc8): fits k=8/wrap, k=8/sat, k=8/rnd_half_up
+  shift  -55 (0xffffffc9): fits k=9/wrap, k=9/sat, k=9/rnd_half_up
+  shift  -54 (0xffffffca): fits k=10/wrap, k=10/sat, k=10/rnd_half_up
+  shift  -53 (0xffffffcb): fits k=11/wrap, k=11/sat, k=11/rnd_half_up
+  shift  -52 (0xffffffcc): fits k=12/wrap, k=12/sat, k=12/rnd_half_up
+  shift  -51 (0xffffffcd): fits k=13/wrap, k=13/sat, k=13/rnd_half_up
+  shift  -50 (0xffffffce): fits k=14/wrap, k=14/sat, k=14/rnd_half_up
+  shift  -49 (0xffffffcf): fits k=15/wrap, k=15/sat, k=15/rnd_half_up
+  shift  -48 (0xffffffd0): fits k=16/wrap, k=16/sat, k=16/rnd_half_up
+  shift  -47 (0xffffffd1): fits k=17/wrap, k=17/sat, k=17/rnd_half_up
+  shift  -46 (0xffffffd2): fits k=18/wrap, k=18/sat, k=18/rnd_half_up
+  shift  -45 (0xffffffd3): fits k=19/wrap, k=19/sat, k=19/rnd_half_up
+  shift  -44 (0xffffffd4): fits k=20/wrap, k=20/sat, k=20/rnd_half_up
+  shift  -43 (0xffffffd5): fits k=21/wrap, k=21/sat, k=21/rnd_half_up
+  shift  -42 (0xffffffd6): fits k=22/wrap, k=22/sat, k=22/rnd_half_up
+  shift  -41 (0xffffffd7): fits k=23/wrap, k=23/sat, k=23/rnd_half_up
+  shift  -40 (0xffffffd8): fits k=24/wrap, k=24/sat, k=24/rnd_half_up
+  shift  -39 (0xffffffd9): fits k=25/sat
+  shift  -38 (0xffffffda): fits k=26/sat
+  shift  -37 (0xffffffdb): fits k=27/sat
+  shift  -36 (0xffffffdc): fits k=28/sat
+  shift  -35 (0xffffffdd): fits k=29/sat
+  shift  -34 (0xffffffde): fits k=30/sat
+  shift  -33 (0xffffffdf): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -32 (0xffffffe0): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -31 (0xffffffe1): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -30 (0xffffffe2): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -29 (0xffffffe3): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -28 (0xffffffe4): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -27 (0xffffffe5): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -26 (0xffffffe6): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -25 (0xffffffe7): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -24 (0xffffffe8): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -23 (0xffffffe9): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -22 (0xffffffea): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -21 (0xffffffeb): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -20 (0xffffffec): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -19 (0xffffffed): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -18 (0xffffffee): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -17 (0xffffffef): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -16 (0xfffffff0): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -15 (0xfffffff1): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -14 (0xfffffff2): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -13 (0xfffffff3): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -12 (0xfffffff4): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -11 (0xfffffff5): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -10 (0xfffffff6): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   -9 (0xfffffff7): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   -8 (0xfffffff8): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   -7 (0xfffffff9): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   -6 (0xfffffffa): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   -5 (0xfffffffb): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   -4 (0xfffffffc): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   -3 (0xfffffffd): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   -2 (0xfffffffe): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   -1 (0xffffffff): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift    0 (0x00000000): fits k=0/wrap, k=0/sat, k=0/rnd_half_up
+  shift    1 (0x00000001): fits k=1/wrap, k=1/sat, k=1/rnd_half_up
+  shift    2 (0x00000002): fits k=2/wrap, k=2/sat, k=2/rnd_half_up
+  shift    3 (0x00000003): fits k=3/wrap, k=3/sat, k=3/rnd_half_up
+  shift    4 (0x00000004): fits k=4/wrap, k=4/sat, k=4/rnd_half_up
+  shift    5 (0x00000005): fits k=5/wrap, k=5/sat, k=5/rnd_half_up
+  shift    6 (0x00000006): fits k=6/wrap, k=6/sat, k=6/rnd_half_up
+  shift    7 (0x00000007): fits k=7/wrap, k=7/sat, k=7/rnd_half_up
+  shift    8 (0x00000008): fits k=8/wrap, k=8/sat, k=8/rnd_half_up
+  shift    9 (0x00000009): fits k=9/wrap, k=9/sat, k=9/rnd_half_up
+  shift   10 (0x0000000a): fits k=10/wrap, k=10/sat, k=10/rnd_half_up
+  shift   11 (0x0000000b): fits k=11/wrap, k=11/sat, k=11/rnd_half_up
+  shift   12 (0x0000000c): fits k=12/wrap, k=12/sat, k=12/rnd_half_up
+  shift   13 (0x0000000d): fits k=13/wrap, k=13/sat, k=13/rnd_half_up
+  shift   14 (0x0000000e): fits k=14/wrap, k=14/sat, k=14/rnd_half_up
+  shift   15 (0x0000000f): fits k=15/wrap, k=15/sat, k=15/rnd_half_up
+  shift   16 (0x00000010): fits k=16/wrap, k=16/sat, k=16/rnd_half_up
+  shift   17 (0x00000011): fits k=17/wrap, k=17/sat, k=17/rnd_half_up
+  shift   18 (0x00000012): fits k=18/wrap, k=18/sat, k=18/rnd_half_up
+  shift   19 (0x00000013): fits k=19/wrap, k=19/sat, k=19/rnd_half_up
+  shift   20 (0x00000014): fits k=20/wrap, k=20/sat, k=20/rnd_half_up
+  shift   21 (0x00000015): fits k=21/wrap, k=21/sat, k=21/rnd_half_up
+  shift   22 (0x00000016): fits k=22/wrap, k=22/sat, k=22/rnd_half_up
+  shift   23 (0x00000017): fits k=23/wrap, k=23/sat, k=23/rnd_half_up
+  shift   24 (0x00000018): fits k=24/wrap, k=24/sat, k=24/rnd_half_up
+  shift   25 (0x00000019): fits k=25/sat
+  shift   26 (0x0000001a): fits k=26/sat
+  shift   27 (0x0000001b): fits k=27/sat
+  shift   28 (0x0000001c): fits k=28/sat
+  shift   29 (0x0000001d): fits k=29/sat
+  shift   30 (0x0000001e): fits k=30/sat
+  shift   31 (0x0000001f): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   32 (0x00000020): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   33 (0x00000021): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   34 (0x00000022): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   35 (0x00000023): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   36 (0x00000024): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   37 (0x00000025): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   38 (0x00000026): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   39 (0x00000027): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   40 (0x00000028): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   41 (0x00000029): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   42 (0x0000002a): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   43 (0x0000002b): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   44 (0x0000002c): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   45 (0x0000002d): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   46 (0x0000002e): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   47 (0x0000002f): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   48 (0x00000030): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   49 (0x00000031): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   50 (0x00000032): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   51 (0x00000033): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   52 (0x00000034): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   53 (0x00000035): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   54 (0x00000036): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   55 (0x00000037): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   56 (0x00000038): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   57 (0x00000039): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   58 (0x0000003a): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   59 (0x0000003b): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   60 (0x0000003c): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   61 (0x0000003d): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   62 (0x0000003e): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   63 (0x0000003f): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   64 (0x00000040): fits k=0/wrap, k=0/sat, k=0/rnd_half_up
+  shift   65 (0x00000041): fits k=1/wrap, k=1/sat, k=1/rnd_half_up
+  shift   66 (0x00000042): fits k=2/wrap, k=2/sat, k=2/rnd_half_up
+  shift   67 (0x00000043): fits k=3/wrap, k=3/sat, k=3/rnd_half_up
+  shift   68 (0x00000044): fits k=4/wrap, k=4/sat, k=4/rnd_half_up
+  shift   69 (0x00000045): fits k=5/wrap, k=5/sat, k=5/rnd_half_up
+  shift   70 (0x00000046): fits k=6/wrap, k=6/sat, k=6/rnd_half_up
+  shift   71 (0x00000047): fits k=7/wrap, k=7/sat, k=7/rnd_half_up
+  shift   72 (0x00000048): fits k=8/wrap, k=8/sat, k=8/rnd_half_up
+  shift   73 (0x00000049): fits k=9/wrap, k=9/sat, k=9/rnd_half_up
+  shift   74 (0x0000004a): fits k=10/wrap, k=10/sat, k=10/rnd_half_up
+  shift   75 (0x0000004b): fits k=11/wrap, k=11/sat, k=11/rnd_half_up
+  shift   76 (0x0000004c): fits k=12/wrap, k=12/sat, k=12/rnd_half_up
+  shift   77 (0x0000004d): fits k=13/wrap, k=13/sat, k=13/rnd_half_up
+  shift   78 (0x0000004e): fits k=14/wrap, k=14/sat, k=14/rnd_half_up
+  shift   79 (0x0000004f): fits k=15/wrap, k=15/sat, k=15/rnd_half_up
+  shift   80 (0x00000050): fits k=16/wrap, k=16/sat, k=16/rnd_half_up
+  shift   81 (0x00000051): fits k=17/wrap, k=17/sat, k=17/rnd_half_up
+  shift   82 (0x00000052): fits k=18/wrap, k=18/sat, k=18/rnd_half_up
+  shift   83 (0x00000053): fits k=19/wrap, k=19/sat, k=19/rnd_half_up
+  shift   84 (0x00000054): fits k=20/wrap, k=20/sat, k=20/rnd_half_up
+  shift   85 (0x00000055): fits k=21/wrap, k=21/sat, k=21/rnd_half_up
+  shift   86 (0x00000056): fits k=22/wrap, k=22/sat, k=22/rnd_half_up
+  shift   87 (0x00000057): fits k=23/wrap, k=23/sat, k=23/rnd_half_up
+  shift   88 (0x00000058): fits k=24/wrap, k=24/sat, k=24/rnd_half_up
+  shift   89 (0x00000059): fits k=25/sat
+  shift   90 (0x0000005a): fits k=26/sat
+  shift   91 (0x0000005b): fits k=27/sat
+  shift   92 (0x0000005c): fits k=28/sat
+  shift   93 (0x0000005d): fits k=29/sat
+  shift   94 (0x0000005e): fits k=30/sat
+  shift   95 (0x0000005f): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   96 (0x00000060): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   97 (0x00000061): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   98 (0x00000062): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   99 (0x00000063): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  100 (0x00000064): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  101 (0x00000065): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  102 (0x00000066): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  103 (0x00000067): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  104 (0x00000068): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  105 (0x00000069): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  106 (0x0000006a): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  107 (0x0000006b): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  108 (0x0000006c): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  109 (0x0000006d): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  110 (0x0000006e): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  111 (0x0000006f): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  112 (0x00000070): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  113 (0x00000071): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  114 (0x00000072): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  115 (0x00000073): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  116 (0x00000074): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  117 (0x00000075): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  118 (0x00000076): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  119 (0x00000077): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  120 (0x00000078): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  121 (0x00000079): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  122 (0x0000007a): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  123 (0x0000007b): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  124 (0x0000007c): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  125 (0x0000007d): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  126 (0x0000007e): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  127 (0x0000007f): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  128 (0x00000080): fits k=0/wrap, k=0/sat, k=0/rnd_half_up
+  shift  129 (0x00000081): fits k=1/wrap, k=1/sat, k=1/rnd_half_up
+  shift  130 (0x00000082): fits k=2/wrap, k=2/sat, k=2/rnd_half_up
+  shift  131 (0x00000083): fits k=3/wrap, k=3/sat, k=3/rnd_half_up
+  shift  132 (0x00000084): fits k=4/wrap, k=4/sat, k=4/rnd_half_up
+  shift  133 (0x00000085): fits k=5/wrap, k=5/sat, k=5/rnd_half_up
+  shift  134 (0x00000086): fits k=6/wrap, k=6/sat, k=6/rnd_half_up
+  shift  135 (0x00000087): fits k=7/wrap, k=7/sat, k=7/rnd_half_up
+  shift  136 (0x00000088): fits k=8/wrap, k=8/sat, k=8/rnd_half_up
+  shift  137 (0x00000089): fits k=9/wrap, k=9/sat, k=9/rnd_half_up
+  shift  138 (0x0000008a): fits k=10/wrap, k=10/sat, k=10/rnd_half_up
+  shift  139 (0x0000008b): fits k=11/wrap, k=11/sat, k=11/rnd_half_up
+  shift  140 (0x0000008c): fits k=12/wrap, k=12/sat, k=12/rnd_half_up
+  shift  141 (0x0000008d): fits k=13/wrap, k=13/sat, k=13/rnd_half_up
+  shift  142 (0x0000008e): fits k=14/wrap, k=14/sat, k=14/rnd_half_up
+  shift  143 (0x0000008f): fits k=15/wrap, k=15/sat, k=15/rnd_half_up
+  shift  144 (0x00000090): fits k=16/wrap, k=16/sat, k=16/rnd_half_up
+  shift  145 (0x00000091): fits k=17/wrap, k=17/sat, k=17/rnd_half_up
+  shift  146 (0x00000092): fits k=18/wrap, k=18/sat, k=18/rnd_half_up
+  shift  147 (0x00000093): fits k=19/wrap, k=19/sat, k=19/rnd_half_up
+  shift  148 (0x00000094): fits k=20/wrap, k=20/sat, k=20/rnd_half_up
+  shift  149 (0x00000095): fits k=21/wrap, k=21/sat, k=21/rnd_half_up
+  shift  150 (0x00000096): fits k=22/wrap, k=22/sat, k=22/rnd_half_up
+  shift  151 (0x00000097): fits k=23/wrap, k=23/sat, k=23/rnd_half_up
+  shift  152 (0x00000098): fits k=24/wrap, k=24/sat, k=24/rnd_half_up
+  shift  153 (0x00000099): fits k=25/sat
+  shift  154 (0x0000009a): fits k=26/sat
+  shift  155 (0x0000009b): fits k=27/sat
+  shift  156 (0x0000009c): fits k=28/sat
+  shift  157 (0x0000009d): fits k=29/sat
+  shift  158 (0x0000009e): fits k=30/sat
+  shift  159 (0x0000009f): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  160 (0x000000a0): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  161 (0x000000a1): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  162 (0x000000a2): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  163 (0x000000a3): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  164 (0x000000a4): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  165 (0x000000a5): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  166 (0x000000a6): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  167 (0x000000a7): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  168 (0x000000a8): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  169 (0x000000a9): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  170 (0x000000aa): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  171 (0x000000ab): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  172 (0x000000ac): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  173 (0x000000ad): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  174 (0x000000ae): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  175 (0x000000af): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  176 (0x000000b0): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  177 (0x000000b1): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  178 (0x000000b2): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  179 (0x000000b3): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  180 (0x000000b4): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  181 (0x000000b5): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  182 (0x000000b6): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  183 (0x000000b7): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  184 (0x000000b8): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  185 (0x000000b9): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  186 (0x000000ba): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  187 (0x000000bb): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  188 (0x000000bc): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  189 (0x000000bd): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  190 (0x000000be): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  191 (0x000000bf): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  192 (0x000000c0): fits k=0/wrap, k=0/sat, k=0/rnd_half_up
+  shift  193 (0x000000c1): fits k=1/wrap, k=1/sat, k=1/rnd_half_up
+  shift  194 (0x000000c2): fits k=2/wrap, k=2/sat, k=2/rnd_half_up
+  shift  195 (0x000000c3): fits k=3/wrap, k=3/sat, k=3/rnd_half_up
+  shift  196 (0x000000c4): fits k=4/wrap, k=4/sat, k=4/rnd_half_up
+  shift  197 (0x000000c5): fits k=5/wrap, k=5/sat, k=5/rnd_half_up
+  shift  198 (0x000000c6): fits k=6/wrap, k=6/sat, k=6/rnd_half_up
+  shift  199 (0x000000c7): fits k=7/wrap, k=7/sat, k=7/rnd_half_up
+  shift  200 (0x000000c8): fits k=8/wrap, k=8/sat, k=8/rnd_half_up
+  shift  201 (0x000000c9): fits k=9/wrap, k=9/sat, k=9/rnd_half_up
+  shift  202 (0x000000ca): fits k=10/wrap, k=10/sat, k=10/rnd_half_up
+  shift  203 (0x000000cb): fits k=11/wrap, k=11/sat, k=11/rnd_half_up
+  shift  204 (0x000000cc): fits k=12/wrap, k=12/sat, k=12/rnd_half_up
+  shift  205 (0x000000cd): fits k=13/wrap, k=13/sat, k=13/rnd_half_up
+  shift  206 (0x000000ce): fits k=14/wrap, k=14/sat, k=14/rnd_half_up
+  shift  207 (0x000000cf): fits k=15/wrap, k=15/sat, k=15/rnd_half_up
+  shift  208 (0x000000d0): fits k=16/wrap, k=16/sat, k=16/rnd_half_up
+  shift  209 (0x000000d1): fits k=17/wrap, k=17/sat, k=17/rnd_half_up
+  shift  210 (0x000000d2): fits k=18/wrap, k=18/sat, k=18/rnd_half_up
+  shift  211 (0x000000d3): fits k=19/wrap, k=19/sat, k=19/rnd_half_up
+  shift  212 (0x000000d4): fits k=20/wrap, k=20/sat, k=20/rnd_half_up
+  shift  213 (0x000000d5): fits k=21/wrap, k=21/sat, k=21/rnd_half_up
+  shift  214 (0x000000d6): fits k=22/wrap, k=22/sat, k=22/rnd_half_up
+  shift  215 (0x000000d7): fits k=23/wrap, k=23/sat, k=23/rnd_half_up
+  shift  216 (0x000000d8): fits k=24/wrap, k=24/sat, k=24/rnd_half_up
+  shift  217 (0x000000d9): fits k=25/sat
+  shift  218 (0x000000da): fits k=26/sat
+  shift  219 (0x000000db): fits k=27/sat
+  shift  220 (0x000000dc): fits k=28/sat
+  shift  221 (0x000000dd): fits k=29/sat
+  shift  222 (0x000000de): fits k=30/sat
+  shift  223 (0x000000df): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  224 (0x000000e0): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  225 (0x000000e1): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  226 (0x000000e2): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  227 (0x000000e3): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  228 (0x000000e4): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  229 (0x000000e5): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  230 (0x000000e6): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  231 (0x000000e7): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  232 (0x000000e8): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  233 (0x000000e9): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  234 (0x000000ea): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  235 (0x000000eb): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  236 (0x000000ec): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  237 (0x000000ed): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  238 (0x000000ee): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  239 (0x000000ef): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  240 (0x000000f0): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  241 (0x000000f1): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  242 (0x000000f2): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  243 (0x000000f3): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  244 (0x000000f4): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  245 (0x000000f5): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  246 (0x000000f6): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  247 (0x000000f7): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  248 (0x000000f8): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  249 (0x000000f9): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  250 (0x000000fa): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  251 (0x000000fb): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  252 (0x000000fc): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  253 (0x000000fd): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  254 (0x000000fe): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  255 (0x000000ff): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+
+== xrt-smi examine -r aie-partitions (after)
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  Total Memory Usage: 64 MB
+  Partition Index   : 0
+    Columns: [1, 2, 3, 4]
+    HW Contexts:
+      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |
+      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |
+      |Memory Usage        |Instr BO   |            |            |     |FPS      |
+      |                    |           |            |            |     |Latency  |
+      |====================|===========|============|============|=====|=========|
+      |44576               |35         |384         |0           |0    |Normal   |
+      |python.exe          |Active     |384         |0           |     |N/A      |
+      |64 MB               |64 KB      |            |            |     |N/A      |
+      |                    |           |            |            |     |N/A      |
+      |--------------------|-----------|------------|------------|-----|---------|
+
+# ===== A. the compiler emitted the fused form (llvm-objdump of the mode-4 kernel object; 0x1ca is mode 4, 0x4fc mode 3, the s64 pair mode 2) =====
+         1ca: 19 42 10 03   vlda.ups.s32.s8 cm0, s0, [p3, dj0]
+         4fc: d9 07 07 18   vups.s32.s8 cm0, wl0, s0
+         61c: 19 c3 2c 03   vlda.ups.s64.s32 bmh0, s0, [p3, #0x20]
+         620: 19 c1 0c 03   vlda.ups.s64.s32 bml0, s0, [p3, #0x0]
+
+# ===== A. model check (scratch ups_model.py, sha256 4e725d8db29b0ed35d7e02d76cdf9ce34ea9f64614311ce768e2c33a8671f8e9) =====
+    points 384, model k = s & 63 (saturating) misses 0, points read as all-zero 0
+#   diff of the per-scalar fits, mode 3 (results/aie/ups_shift_probe_desktop2_20261012T202624Z.log) against
+#   mode 4: 0 lines, i.e. identical at all 384 scalars.
+#   H_same HOLDS: vlda.ups.s32.s8 decodes its shift scalar exactly like vups, k = s & 63, saturating left.
+
+# ===== B. bias upshift at 0x24d4 (tools/aie_timing_slice.py --lo 1c00 --hi 24d8 --at 24d4 --reg s3) =====
+    target  24d4 [t=339] vlda.2d.ups.s32.s8 cm4, s3, [p6], d7   (s3 read at cycle 7)
+       22e0 [t=267] mov s3, r5
+        r5 (read c1) <- commit t=252
+           2274 [t=245] lda.s8 r5, [p3, dj1]
+            dj1 (read c1) <- commit t=232
+               2216 [t=231] mova dj1, #0x20
+
+# ===== B. output vsrs at 0x2538, same hardware loop ls=0x24d0..le=0x2590 (--lo 1c00 --hi 2570 --at 2538 --reg s0) =====
+    target  2538 [t=356] vsrs.d8.s32 wl8, cm6, s0   (s0 read at cycle 1)
+       22cc [t=265] mov s0, r22
+        r22 (read c1) <- commit t=256
+           228a [t=249] lda.s8 r22, [p3, dj4]
+            dj4 (read c1) <- commit t=51
+               1ce6 [t= 50] mova dj4, #0x21
+#   On this straight-line path s3 is the signed byte at [p3 + 0x20] (load commits t=252, read t=267, a
+#   15-cycle margin; no other write to s3 in 0x2200..0x2600), and s0 the signed byte at [p3 + 0x21].
+
+# ===== B. struct check (scratch struct_check.py, sha256 4784311c7b07519fe467f618dcfa83881616dbf1f114c92fb95203001048dd4c): every [p3, ...] load in 0x21c0..0x2290, offset resolved, read from REG_0 + 0x5B of three fixtures (sc8, sc8_sb4, sc16) =====
+    REG_0 length [1891, 1891, 1891]
+     addr op       dst  src      off         sc8     sc8_sb4        sc16
+     21f8 lda.u16  r22  dj2     0x1e      0x1111      0x1111      0x1111
+     2202 lda.u8   r14  dj6      0x7        0x7f        0x7f        0x7f
+     220c lda.u16  r11  #0x2     0x2      0x7f7f      0x7f7f      0x7f7f
+     223a lda.u8   r10  dj0     0x23         0x0         0x0         0x0
+     2250 lda.u16  r27  dj3     0x2c         0x0         0x0         0x0
+     225a lda.u8   r23  dj7     0x15         0x4         0x4         0x4
+     226a lda.u8   r14  dj5     0x22         0x0         0x0         0x0
+     2274 lda.s8   r5   dj1     0x20         0x1        0x11         0x1
+     228a lda.s8   r22  dj4     0x21         0x8         0x8        0x10
+    
+    REG_0 bytes 0x40..0x9f (first xmodel):
+      40: 00 00 00 00 00 00 00 00 00 00 00 01 01 01 01 01
+      50: 01 01 01 ff ff ff ff ff ff ff ff 7f 7f 7f 7f 7f
+      60: 7f 7f 7f 00 9e 08 00 01 01 01 04 01 01 01 01 01
+      70: 04 02 06 00 0e 00 8e 02 02 11 11 01 08 00 00 00
+      80: 06 00 00 00 00 00 00 00 00 08 04 00 00 00 06 00
+      90: 00 00 00 00 38 80 06 00 06 00 04 10 00 02 80 02
+#   +0x20 tracks the fixtures' shift_bias byte (0x01, 0x11, 0x01) and +0x21 their shift_cut (8, 8, 16), so
+#   [p3] = REG_0 + 0x5B fits the two bytes that vary. That fit holds by construction for +0x21; +0x20 is the
+#   independent confirmation. The other fields (0x7f7f, 0x1111, 0x7f, 4) are constant across these fixtures and
+#   are not identified. Pre-registered prediction B ("not verbatim") is REFUTED for these two bytes.
+
+# ===== B. every scalar load in PDI 2 at a resolved offset 0x20 or 0x21 (scratch off_scan.py, linear dj tracking, sha256 70c78335c70af917b2a0d546f448a73c75dc8f403c1db008887e553e191d80f9) =====
+     2274  lda.s8    r5   [p3, dj1=0x20]   | lda.s8 r5, [p3, dj1] ; add r23, r11, r13
+     228a  lda.s8    r22  [p3, dj4=0x21]   | lda.s8 r22, [p3, dj4]
+     2614  lda.u16   r0   [p4, dj3=0x20]   | lda.u16 r0, [p4, dj3] ; add r11, r11, r12 ; mov r12, #0x3
+     2650  lda.u16   r10  [p1, dj3=0x20]   | lda.u16 r10, [p1, dj3] ; mul r9, r5, r9
+     2a58  lda.u16   r27  [p3, dj3=0x20]   | lda.u16 r27, [p3, dj3] ; movx r28, #0x1f7 ; mov dj3, #0x34
+     2e8e  lda.u8    r11  [p6, dj3=0x21]   | lda.u8 r11, [p6, dj3] ; add r8, r22, r20 ; mov dj3, #0x0
+     2ebc  lda.u8    r22  [p6, dj6=0x20]   | lda.u8 r22, [p6, dj6] ; mul r8, r11, r8 ; mov dj6, #0x2a
+
+# ===== B. the shift scalar at all 13 upshift sites in PDI 2 (900-byte straight-line window before each; a window that crosses a branch is only a hint) =====
+    target  183e [t=343] vups.s32.s16 cm0, x4, s3   (s3 read at cycle 1)
+    |   1834 [t=342] mov s3, r10
+    |    r10 (read c1) <- commit t=342
+    |
+    
+    target  2780 [t=333] vlda.2d.ups.s32.s8 cm4, s3, [p6], d6   (s3 read at cycle 7)
+    |   22e0 [t=142] mov s3, r5
+    |    r5 (read c1) <- commit t=127
+    |
+    
+    target  3378 [t=409] vups.s32.s8 cm7, wl0, s1   (s1 read at cycle 1)
+    |   2cd8 [t=120] mov s1, #0x0
+    |
+    
+    target  33f8 [t=393] vlda.ups.s32.s8 cm0, s1, [p5, #0x0]   (s1 read at cycle 7)
+    |   2cd8 [t= 89] mov s1, #0x0
+    |
+    
+    target  3438 [t=388] vlda.ups.s32.s8 cm0, s1, [p5, #0x0]   (s1 read at cycle 7)
+    |   2cd8 [t= 78] mov s1, #0x0
+    |
+    
+    target  34a2 [t=381] vups.s32.s8 cm1, wl10, s1   (s1 read at cycle 1)
+    |   2cd8 [t= 59] mov s1, #0x0
+    |
+    
+    target  38e6 [t=409] vlda.ups.s32.s8 cm0, s3, [p0, #0x20]   (s3 read at cycle 7)
+    |  PRE
+    |
+    
+    target  38f0 [t=408] vlda.ups.s32.s8 cm2, s0, [p1, #0x20]   (s0 read at cycle 7)
+    |   38c6 [t=403] mov s0, r13
+    |    r13 (read c1) <- commit t=403
+    |
+    
+    target  3904 [t=409] vlda.ups.s32.s8 cm4, s0, [p1], #0x40   (s0 read at cycle 7)
+    |   38c6 [t=402] mov s0, r13
+    |    r13 (read c1) <- commit t=402
+    |
+    
+    target  3978 [t=399] vlda.ups.s32.s8 cm2, s0, [p1, #0x20]   (s0 read at cycle 7)
+    |   38c6 [t=376] mov s0, r13
+    |    r13 (read c1) <- commit t=376
+    |
+    
+    target  3982 [t=396] vlda.ups.s32.s8 cm4, s0, [p1], #0x40   (s0 read at cycle 7)
+    |   38c6 [t=372] mov s0, r13
+    |    r13 (read c1) <- commit t=372
+    |
+    
+    target  398c [t=394] vlda.ups.s32.s8 cm0, s3, [p0, #0x20]   (s3 read at cycle 7)
+    |   390e [t=377] mov s3, r1
+    |    r1 (read c1) <- commit t=376
+    |
+    
+    target  3990 [t=394] vlda.ups.s32.s8 cm1, s3, [p0], #0x40   (s3 read at cycle 7)
+    |   390e [t=376] mov s3, r1
+    |    r1 (read c1) <- commit t=375
+    |
+    
+
+# ===== reading =====
+# 1. Measured (A): the fused vlda.ups reads its scalar as s & 63, a saturating left shift, like vups.
+# 2. Static (B), under the llvm-aie timing model: the 0x24d0 loop takes its bias shift from the raw REG_0 0x7B
+#    byte, sign-extended, with nothing in between. By point 1, that loop would shift the bias by b & 63 (5 for
+#    shift_bias 1), where the DPU shifts by 1 (run 6): 0 of 64 agree. So the fixture Conv does not run this loop
+#    with this byte as its bias shift. Commit b3ea795 said the extraction was "pinned to the overlay's decode
+#    code"; that is SUPERSEDED here: on the one path traced, the core does no decode at all.
+# 3. Which path runs is UNIDENTIFIED. The other twelve sites take their scalar from a stack slot (0x183e, an
+#    s16 input), a constant 0 (0x3378..0x34a2, window crosses branches), or a byte streamed with post-increment
+#    (0x38f0..0x3990). A second reader of +0x20/+0x21 (0x2e8e, 0x2ebc, unsigned, base p6) feeds address
+#    arithmetic, not a shift. Static reading does not separate them; that needs a dynamic witness (the core
+#    program counter or event trace during a fixture run).
+# 4. So where (b >> 2) & 15 and the 0x81 exception are computed stays UNEXPLAINED. Candidates not ruled out:
+#    a handler that reads 0x7B some other way, a loader that rewrites the parameter memory before the core sees
+#    it, or a struct base other than REG_0 + 0x5B on the executed path.

@@ -1,0 +1,119 @@
+# tools/dpu_sigma_patch_test.py, Desktop 2 (DESKTOP-CBL5NUA), run 2 started 20261012T182840Z UTC
+# Does the VitisAI DPU execute a shift_cut outside the producer contract [0, 16] (sigma 14..30)?
+# Ryzen AI 1.7.1 VitisAI EP, resnet_env17, phoenix 4x4.xclbin sha256 d3b5e845...; base fixture = the
+# 32-channel single-Conv from tools/xint8_arithmetic_probe.py at shift_cut 16, compiled --fresh, then the
+# CACHED compiled xmodel is edited and reloaded without --fresh. Every arm: idle-device check first, the
+# EP must leave the edited xmodel byte-identical (it did, every arm), and NPU output codes are scored
+# exactly against the numpy oracle (output rounding half_up) for the patched value and for the base.
+# Compiled xmodels and outputs are AMD-compiled artefacts and stay in git-ignored scratch/.
+#
+# ===== RUN 1: VOID. Site = the weight param_buffer varint (the field found by dpu_mc_fixtures) =====
+# Pre-registration (sha256 0f34e29c709eb67142dbb8950a965ab79d944d28edd0b3c9a01b10b7b757f781):
+#   written_utc 2026-10-12T18:21:08Z, before any patched xmodel has been loaded
+#   test: tools/dpu_sigma_patch_test.py --base 16 --controls 15,1 --patches 17,18,20,24,31,45,46
+#   decision rule per arm: EXACT if H_exact mismatches == 0; NO EFFECT if H_base == 0; else NEITHER; REJECTED if the EP rewrites the cached xmodel.
+#   controls 15 and 1 must read EXACT, or the patch method itself is void and no patched arm is interpreted.
+#   prediction (best guess, from: field holds shift_cut in bits 8+; AIE2 vsrs reads a 6-bit code, right shift 0..59; sigma = shift_cut + 14):
+#     shift_cut 17, 18, 20, 24, 31, 45 (sigma 31, 32, 34, 38, 45, 59): EXACT
+#     shift_cut 46 (sigma 60, the first vsrs left-shift code if sigma reached vsrs unchanged): NEITHER
+#   competing outcomes named in advance: NO EFFECT/clamp (the core clamps shift_cut to 16), a 5-bit mask in the core (17 reads like 1), REJECTED (an integrity check on the xmodel).
+# Result: the in-contract controls read the BASE shift, so by the pre-registered rule the method is void
+# and no patched arm of run 1 is interpreted (their lines are kept here as the record):
+    BASE shift_cut 16: NPU:Conv 1, sites 1, H_exact mismatches 0 (max 0 LSB)
+    control  shift_cut 15 (sigma 29) field [81 1e]: NO EFFECT / base  {'h_exact': (8400, 8), 'h_base': (0, 0), 'npu_conv': 1, 'xmodel_unchanged_by_ep': True, 'cache_file_set_unchanged': True}
+    control  shift_cut  1 (sigma 15) field [81 02]: NO EFFECT / base  {'h_exact': (51015, 128), 'h_base': (0, 0), 'npu_conv': 1, 'xmodel_unchanged_by_ep': True, 'cache_file_set_unchanged': True}
+    patched  shift_cut 17 (sigma 31) field [81 22]: NO EFFECT / base  {'h_exact': (7520, 4), 'h_base': (0, 0), 'npu_conv': 1, 'xmodel_unchanged_by_ep': True, 'cache_file_set_unchanged': True}
+    patched  shift_cut 18 (sigma 32) field [81 24]: NO EFFECT / base  {'h_exact': (8032, 6), 'h_base': (0, 0), 'npu_conv': 1, 'xmodel_unchanged_by_ep': True, 'cache_file_set_unchanged': True}
+    patched  shift_cut 20 (sigma 34) field [81 28]: NO EFFECT / base  {'h_exact': (8032, 8), 'h_base': (0, 0), 'npu_conv': 1, 'xmodel_unchanged_by_ep': True, 'cache_file_set_unchanged': True}
+    patched  shift_cut 24 (sigma 38) field [81 30]: NO EFFECT / base  {'h_exact': (8032, 8), 'h_base': (0, 0), 'npu_conv': 1, 'xmodel_unchanged_by_ep': True, 'cache_file_set_unchanged': True}
+    patched  shift_cut 31 (sigma 45) field [81 3e]: NO EFFECT / base  {'h_exact': (8032, 8), 'h_base': (0, 0), 'npu_conv': 1, 'xmodel_unchanged_by_ep': True, 'cache_file_set_unchanged': True}
+    patched  shift_cut 45 (sigma 59) field [81 5a]: NO EFFECT / base  {'h_exact': (8032, 8), 'h_base': (0, 0), 'npu_conv': 1, 'xmodel_unchanged_by_ep': True, 'cache_file_set_unchanged': True}
+    patched  shift_cut 46 (sigma 60) field [81 5c]: NO EFFECT / base  {'h_exact': (8032, 8), 'h_base': (0, 0), 'npu_conv': 1, 'xmodel_unchanged_by_ep': True, 'cache_file_set_unchanged': True}
+    restore  shift_cut 16 (sigma 30) field [81 20]: EXACT at shift_cut 16  {'h_exact': (0, 0), 'h_base': (0, 0), 'npu_conv': 1, 'xmodel_unchanged_by_ep': True, 'cache_file_set_unchanged': True}
+    cache xmodel restored to the original bytes; NPU idle after: True
+    exit=0
+      No hardware contexts running on device
+#
+# Diagnosis (one fresh process per step, scratch scripts, cache restored after each):
+# a) shift_cut 1 written to param_buffer only, in a NEW process: still base. In-process memoization ruled out.
+    xmodel unchanged by EP: True
+    decode scale 2^16, H shift_cut 1: (mismatches, max LSB) (51015, 128)
+    decode scale 2^16, H shift_cut 16: (mismatches, max LSB) (0, 0)
+    decode with output scale 2^1: OFF GRID (output is not on the declared UINT8 grid)
+# b) the output fix_point attrs (4 sites; the other xmodel field that differs across the sweep), alone and
+#    together with param_buffer: still base, and the host still dequantizes at 2^-16.
+    mode both value 1, bytes changed: 5
+    decode scale 2^16, H shift_cut 1: (mismatches, max LSB) (51015, 128)
+    decode scale 2^16, H shift_cut 16: (mismatches, max LSB) (0, 0)
+    decode with output scale 2^1: OFF GRID (output is not on the declared UINT8 grid)
+# c) is the cached xmodel read at all? Deleted: the session refuses to build. Both mc_code copies zeroed:
+#    builds in 0.3 s with no recompile and the output CHANGES (8032 mismatches = the all-zero-point count).
+    F20261012 14:24:58.552239 15832 graph_holder.cpp:55] Check failed: maybe_xmodel_content.has_value() read cache file error: can't read compiled.0x800020500148acb.xmodel
+    bytes changed 2638
+    build 0.3 s
+    H shift_cut 16: (8032, 8)
+# d) the shift_cut-15 ONNX swapped in under the shift_cut-16 cache (context.json onnx md5 updated so the
+#    cache hits): integer codes still follow 16; only the HOST dequant scale follows the ONNX (2^-15).
+    build 0.3 s; xmodel unchanged: True; xmodels in cache: ['compiled.0x800020500148acb.xmodel']
+    decode scale 2^15, H shift_cut 15: (8400, 8)
+    decode scale 2^15, H shift_cut 16: (0, 0)
+    decode scale 2^16: OFF GRID
+# e) the structural diff (scratch proto_diff.py) had compared opaque blobs by their first 48 bytes only.
+#    With full-blob hashes, one more difference appears: the subgraph attr reg_id_to_parameter_value,
+#    entry REG_0 (1891 B). tools/dpu_mc_fixtures.py --summary over the 9 fixtures:
+
+fixture   NPU:Conv  mc_code sha256        param_buffer#1 field  value   sc<<8|sb<<2|1  buffers 0/2 == first  REG_0 0x7B 0x7C  == (sb<<2|1, sc)
+sc0       True      a76b25e1318b2606      [01      ]            0x0001  yes            True                  1891 B  01   00    yes
+sc1       True      a76b25e1318b2606      [81 02   ]            0x0101  yes            True                  1891 B  01   01    yes
+sc15      True      a76b25e1318b2606      [81 1e   ]            0x0f01  yes            True                  1891 B  01   0f    yes
+sc16      True      a76b25e1318b2606      [81 20   ]            0x1001  yes            True                  1891 B  01   10    yes
+sc2       True      a76b25e1318b2606      [81 04   ]            0x0201  yes            True                  1891 B  01   02    yes
+sc4       True      a76b25e1318b2606      [81 08   ]            0x0401  yes            True                  1891 B  01   04    yes
+sc8       True      a76b25e1318b2606      [81 10   ]            0x0801  yes            True                  1891 B  01   08    yes
+sc8_sb1   True      a76b25e1318b2606      [85 10   ]            0x0805  yes            True                  1891 B  05   08    yes
+sc8_sb4   True      a76b25e1318b2606      [91 10   ]            0x0811  yes            True                  1891 B  11   08    yes
+
+REG_0 lengths [1891]; byte offsets that vary across all 9 fixtures: ['0x7b', '0x7c']
+exit=0
+
+# ===== RUN 2: site = REG_0 byte 0x7C (one byte changed per arm) =====
+# Pre-registration, written after the diagnosis and before any REG_0-patched load (sha256 9c119781c447d1744c3ffe99ba85cc67e7ee886ed3e7438dafe23a815e0fdd28):
+#   written_utc 2026-10-12T18:28:24Z, before any REG_0-patched xmodel has been loaded
+#   run 1 (param_buffer site, prereg 0f34e29c...) was VOID: controls read base. Diagnosis: fresh process same; fix_point patch no effect; zeroed mc_code DOES change output (xmodel read); ONNX swap moves only host dequant. Full-blob diff found REG_0 (reg_id_to_parameter_value, 1891 B): byte 0x7b = shift_bias<<2|1, byte 0x7c = shift_cut, the only varying bytes across 9 fixtures.
+#   test: tools/dpu_sigma_patch_test.py --site reg0 --base 16 --controls 15,1 --patches 17,18,19,20,31,45,46,47,49,50
+#   decision rule unchanged: EXACT if H_exact==0; NO EFFECT if H_base==0; else NEITHER; REJECTED if EP rewrites the xmodel. Controls 15 and 1 must read EXACT or the run is void.
+#   power: this fixture's outputs are all zero-point for every right shift >= 20, so 17/18/19 are decisive; EXACT at 20/31/45 shows only an effective right shift >= 20.
+#   prediction (sigma = shift_cut + 14 reaches the 6-bit vsrs code unchanged):
+#     17, 18, 19, 20, 31, 45 (sigma 31..59): EXACT
+#     46, 47, 49 (sigma 60, 61, 63 = vsrs left-shift codes): NEITHER
+#     50 (sigma 64): NEITHER if the code wraps to 6 bits (shift 0); EXACT (all zero point) if it saturates or the field is wider
+#   competing outcomes: 5-bit mask (18 -> sigma 32 -> 0: NEITHER at 18), clamp to 16 (NO EFFECT at 17+), REJECTED/hang.
+
+BASE shift_cut 16: NPU:Conv 1, sites 1, H_exact mismatches 0 (max 0 LSB)
+control  shift_cut 15 (sigma 29) field [0f]: EXACT at shift_cut 15  {'h_exact': (0, 0), 'h_base': (8400, 8), 'npu_conv': 1, 'xmodel_unchanged_by_ep': True, 'cache_file_set_unchanged': True}
+control  shift_cut  1 (sigma 15) field [01]: EXACT at shift_cut 1  {'h_exact': (0, 0), 'h_base': (51015, 128), 'npu_conv': 1, 'xmodel_unchanged_by_ep': True, 'cache_file_set_unchanged': True}
+patched  shift_cut 17 (sigma 31) field [11]: EXACT at shift_cut 17  {'h_exact': (0, 0), 'h_base': (7520, 4), 'npu_conv': 1, 'xmodel_unchanged_by_ep': True, 'cache_file_set_unchanged': True}
+patched  shift_cut 18 (sigma 32) field [12]: EXACT at shift_cut 18  {'h_exact': (0, 0), 'h_base': (8032, 6), 'npu_conv': 1, 'xmodel_unchanged_by_ep': True, 'cache_file_set_unchanged': True}
+patched  shift_cut 19 (sigma 33) field [13]: EXACT at shift_cut 19  {'h_exact': (0, 0), 'h_base': (8032, 7), 'npu_conv': 1, 'xmodel_unchanged_by_ep': True, 'cache_file_set_unchanged': True}
+patched  shift_cut 20 (sigma 34) field [14]: EXACT at shift_cut 20  {'h_exact': (0, 0), 'h_base': (8032, 8), 'npu_conv': 1, 'xmodel_unchanged_by_ep': True, 'cache_file_set_unchanged': True}
+patched  shift_cut 31 (sigma 45) field [1f]: EXACT at shift_cut 31  {'h_exact': (0, 0), 'h_base': (8032, 8), 'npu_conv': 1, 'xmodel_unchanged_by_ep': True, 'cache_file_set_unchanged': True}
+patched  shift_cut 45 (sigma 59) field [2d]: EXACT at shift_cut 45  {'h_exact': (0, 0), 'h_base': (8032, 8), 'npu_conv': 1, 'xmodel_unchanged_by_ep': True, 'cache_file_set_unchanged': True}
+patched  shift_cut 46 (sigma 60) field [2e]: EXACT at shift_cut 46  {'h_exact': (0, 0), 'h_base': (8032, 8), 'npu_conv': 1, 'xmodel_unchanged_by_ep': True, 'cache_file_set_unchanged': True}
+patched  shift_cut 47 (sigma 61) field [2f]: EXACT at shift_cut 47  {'h_exact': (0, 0), 'h_base': (8032, 8), 'npu_conv': 1, 'xmodel_unchanged_by_ep': True, 'cache_file_set_unchanged': True}
+patched  shift_cut 49 (sigma 63) field [31]: EXACT at shift_cut 49  {'h_exact': (0, 0), 'h_base': (8032, 8), 'npu_conv': 1, 'xmodel_unchanged_by_ep': True, 'cache_file_set_unchanged': True}
+patched  shift_cut 50 (sigma 64) field [32]: EXACT at shift_cut 50  {'h_exact': (0, 0), 'h_base': (8032, 8), 'npu_conv': 1, 'xmodel_unchanged_by_ep': True, 'cache_file_set_unchanged': True}
+restore  shift_cut 16 (sigma 30) field [10]: EXACT at shift_cut 16  {'h_exact': (0, 0), 'h_base': (0, 0), 'npu_conv': 1, 'xmodel_unchanged_by_ep': True, 'cache_file_set_unchanged': True}
+cache xmodel restored to the original bytes; NPU idle after: True
+exit=0
+  No hardware contexts running on device
+
+# Scored against the pre-registration:
+#   controls 15, 1: EXACT (run valid). The edited byte alone moves the device shift both ways.
+#   17, 18, 19 (sigma 31, 32, 33): EXACT, as predicted. DECISIVE: this fixture separates neighbouring
+#     shifts by 4056..7520 outputs, and the 5-bit-mask outcome (18 -> sigma 32 -> 0) is excluded.
+#   20, 31, 45: EXACT, as predicted, but WEAK: every right shift >= 20 gives all zero point here.
+#   46, 47, 49 (sigma 60, 61, 63): predicted NEITHER (vsrs left-shift codes), read EXACT. PREDICTION
+#     MISSED. Unexplained: the effective shift is not sigma = shift_cut + 14 fed unchanged to a 6-bit
+#     vsrs code, or the path clamps/saturates; this fixture cannot tell which (all zero point).
+#   50 (sigma 64): EXACT (all zero point). Uninformative between saturation and a wider field.
+#   Not tested: shift_cut < 0 (sigma < 14), the lower edge; shift_bias outside the sweep.

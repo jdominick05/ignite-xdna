@@ -1,0 +1,589 @@
+# kernels/srs_probe/srs_probe.py --modes 3 --shifts=-128:255, Desktop 2 (DESKTOP-CBL5NUA), started 20261012T202624Z UTC.
+# mlir-aie ironenv, one Worker on Tile(0, 2). Mode 3 (new): 32 int8 lanes upshifted into acc32 by a RUNTIME shift
+# scalar (aie_api from_vector(v8, shift), i.e. the compiler's vups with an s register), read back unshifted as int32.
+# Each scalar gets every effective shift k (and 32-bit wrap / saturate / half-up right shift) that reproduces all
+# 32 lanes exactly. The device was idle before (xrt-smi below); the "after" report lists the probe's own context.
+#
+# Pre-registration (sha256 3b03d6945a4200ed80951cabdfd8bda30fa331e6f2b41d37f83bc41275544d72):
+#   written_utc 2026-10-12T20:26:24Z, before any mode-3 (vups) point has run.
+#   question: is the DPU's run-6 map of REG_0 byte 0x7B (shift_bias << 2 | 1) a property of the AIE2 bias upshift itself?
+#   static trace (PDI 2 = graph_used_pdi_list [2], scratch pm/pm_0002_c0r3.s, a READING AID with no pipeline-timing model):
+#     0x2274 lda.s8 r5, [p3, 0x20]: a SIGNED byte load from offset 0x20 of a param struct whose offset 0x21 feeds the conv's
+#     output vsrs (0x228a lda.s8 r22, [p3, 0x21] -> s0 -> vsrs.d8.s32 next to vmac). 0x22e0 mov s3, r5; 0x24d4
+#     vlda.2d.ups.s32.s8 cm4, s3, [p6] (int8 vector upshifted into acc32 by s3). So the bias upshift's scalar is plausibly
+#     the sign-extended byte. Not proven: a mul also writes r5 one bundle after the load, and the core has no interlocks.
+#   test: kernels/srs_probe/srs_probe.py --modes 3 --shifts=-128:255 (one core, Tile(0,2); aie_api from_vector(v8, shift),
+#     i.e. the compiler's vups/vlda.ups with a runtime s register). Each shift scalar s gets the effective k that reproduces
+#     all 32 int8 lanes.
+#   decision rule (H_native): take the 64 values b = sb << 2 | 1, sb 0..63, and s = b read as int8 (so b >= 0x80 is negative).
+#     If vups(s) equals the run-6 DPU map for all 64 (b < 0x80: << ((b >> 2) & 15); 0x81: << 0; 0x85..0xfd: zero, or a
+#     right shift of 8 or more), then the map is the upshift's own operand decode and 0x81 is explained.
+#     If not, the core transforms the byte before vups, and the static trace above is wrong or incomplete.
+#   No prediction is made for the outcome; both are informative.
+
+# ===== the run =====
+== xrt-smi examine -r aie-partitions (before)
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+== mode 3 int8-ups->acc32: int8 lanes [1, -1, 127, -128, 2, -2, 3, -3, 5, -5, 64, -64, 100, -100, 17, -17, 0, 7, -7, 33, -33, 99, -99, 126, -127, 11, -11, 85, -85, 42, -42, 120], 384 shift scalars
+  shift -128 (0xffffff80): fits k=0/wrap, k=0/sat, k=0/rnd_half_up
+  shift -127 (0xffffff81): fits k=1/wrap, k=1/sat, k=1/rnd_half_up
+  shift -126 (0xffffff82): fits k=2/wrap, k=2/sat, k=2/rnd_half_up
+  shift -125 (0xffffff83): fits k=3/wrap, k=3/sat, k=3/rnd_half_up
+  shift -124 (0xffffff84): fits k=4/wrap, k=4/sat, k=4/rnd_half_up
+  shift -123 (0xffffff85): fits k=5/wrap, k=5/sat, k=5/rnd_half_up
+  shift -122 (0xffffff86): fits k=6/wrap, k=6/sat, k=6/rnd_half_up
+  shift -121 (0xffffff87): fits k=7/wrap, k=7/sat, k=7/rnd_half_up
+  shift -120 (0xffffff88): fits k=8/wrap, k=8/sat, k=8/rnd_half_up
+  shift -119 (0xffffff89): fits k=9/wrap, k=9/sat, k=9/rnd_half_up
+  shift -118 (0xffffff8a): fits k=10/wrap, k=10/sat, k=10/rnd_half_up
+  shift -117 (0xffffff8b): fits k=11/wrap, k=11/sat, k=11/rnd_half_up
+  shift -116 (0xffffff8c): fits k=12/wrap, k=12/sat, k=12/rnd_half_up
+  shift -115 (0xffffff8d): fits k=13/wrap, k=13/sat, k=13/rnd_half_up
+  shift -114 (0xffffff8e): fits k=14/wrap, k=14/sat, k=14/rnd_half_up
+  shift -113 (0xffffff8f): fits k=15/wrap, k=15/sat, k=15/rnd_half_up
+  shift -112 (0xffffff90): fits k=16/wrap, k=16/sat, k=16/rnd_half_up
+  shift -111 (0xffffff91): fits k=17/wrap, k=17/sat, k=17/rnd_half_up
+  shift -110 (0xffffff92): fits k=18/wrap, k=18/sat, k=18/rnd_half_up
+  shift -109 (0xffffff93): fits k=19/wrap, k=19/sat, k=19/rnd_half_up
+  shift -108 (0xffffff94): fits k=20/wrap, k=20/sat, k=20/rnd_half_up
+  shift -107 (0xffffff95): fits k=21/wrap, k=21/sat, k=21/rnd_half_up
+  shift -106 (0xffffff96): fits k=22/wrap, k=22/sat, k=22/rnd_half_up
+  shift -105 (0xffffff97): fits k=23/wrap, k=23/sat, k=23/rnd_half_up
+  shift -104 (0xffffff98): fits k=24/wrap, k=24/sat, k=24/rnd_half_up
+  shift -103 (0xffffff99): fits k=25/sat
+  shift -102 (0xffffff9a): fits k=26/sat
+  shift -101 (0xffffff9b): fits k=27/sat
+  shift -100 (0xffffff9c): fits k=28/sat
+  shift  -99 (0xffffff9d): fits k=29/sat
+  shift  -98 (0xffffff9e): fits k=30/sat
+  shift  -97 (0xffffff9f): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -96 (0xffffffa0): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -95 (0xffffffa1): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -94 (0xffffffa2): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -93 (0xffffffa3): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -92 (0xffffffa4): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -91 (0xffffffa5): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -90 (0xffffffa6): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -89 (0xffffffa7): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -88 (0xffffffa8): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -87 (0xffffffa9): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -86 (0xffffffaa): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -85 (0xffffffab): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -84 (0xffffffac): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -83 (0xffffffad): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -82 (0xffffffae): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -81 (0xffffffaf): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -80 (0xffffffb0): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -79 (0xffffffb1): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -78 (0xffffffb2): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -77 (0xffffffb3): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -76 (0xffffffb4): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -75 (0xffffffb5): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -74 (0xffffffb6): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -73 (0xffffffb7): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -72 (0xffffffb8): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -71 (0xffffffb9): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -70 (0xffffffba): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -69 (0xffffffbb): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -68 (0xffffffbc): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -67 (0xffffffbd): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -66 (0xffffffbe): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -65 (0xffffffbf): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -64 (0xffffffc0): fits k=0/wrap, k=0/sat, k=0/rnd_half_up
+  shift  -63 (0xffffffc1): fits k=1/wrap, k=1/sat, k=1/rnd_half_up
+  shift  -62 (0xffffffc2): fits k=2/wrap, k=2/sat, k=2/rnd_half_up
+  shift  -61 (0xffffffc3): fits k=3/wrap, k=3/sat, k=3/rnd_half_up
+  shift  -60 (0xffffffc4): fits k=4/wrap, k=4/sat, k=4/rnd_half_up
+  shift  -59 (0xffffffc5): fits k=5/wrap, k=5/sat, k=5/rnd_half_up
+  shift  -58 (0xffffffc6): fits k=6/wrap, k=6/sat, k=6/rnd_half_up
+  shift  -57 (0xffffffc7): fits k=7/wrap, k=7/sat, k=7/rnd_half_up
+  shift  -56 (0xffffffc8): fits k=8/wrap, k=8/sat, k=8/rnd_half_up
+  shift  -55 (0xffffffc9): fits k=9/wrap, k=9/sat, k=9/rnd_half_up
+  shift  -54 (0xffffffca): fits k=10/wrap, k=10/sat, k=10/rnd_half_up
+  shift  -53 (0xffffffcb): fits k=11/wrap, k=11/sat, k=11/rnd_half_up
+  shift  -52 (0xffffffcc): fits k=12/wrap, k=12/sat, k=12/rnd_half_up
+  shift  -51 (0xffffffcd): fits k=13/wrap, k=13/sat, k=13/rnd_half_up
+  shift  -50 (0xffffffce): fits k=14/wrap, k=14/sat, k=14/rnd_half_up
+  shift  -49 (0xffffffcf): fits k=15/wrap, k=15/sat, k=15/rnd_half_up
+  shift  -48 (0xffffffd0): fits k=16/wrap, k=16/sat, k=16/rnd_half_up
+  shift  -47 (0xffffffd1): fits k=17/wrap, k=17/sat, k=17/rnd_half_up
+  shift  -46 (0xffffffd2): fits k=18/wrap, k=18/sat, k=18/rnd_half_up
+  shift  -45 (0xffffffd3): fits k=19/wrap, k=19/sat, k=19/rnd_half_up
+  shift  -44 (0xffffffd4): fits k=20/wrap, k=20/sat, k=20/rnd_half_up
+  shift  -43 (0xffffffd5): fits k=21/wrap, k=21/sat, k=21/rnd_half_up
+  shift  -42 (0xffffffd6): fits k=22/wrap, k=22/sat, k=22/rnd_half_up
+  shift  -41 (0xffffffd7): fits k=23/wrap, k=23/sat, k=23/rnd_half_up
+  shift  -40 (0xffffffd8): fits k=24/wrap, k=24/sat, k=24/rnd_half_up
+  shift  -39 (0xffffffd9): fits k=25/sat
+  shift  -38 (0xffffffda): fits k=26/sat
+  shift  -37 (0xffffffdb): fits k=27/sat
+  shift  -36 (0xffffffdc): fits k=28/sat
+  shift  -35 (0xffffffdd): fits k=29/sat
+  shift  -34 (0xffffffde): fits k=30/sat
+  shift  -33 (0xffffffdf): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -32 (0xffffffe0): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -31 (0xffffffe1): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -30 (0xffffffe2): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -29 (0xffffffe3): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -28 (0xffffffe4): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -27 (0xffffffe5): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -26 (0xffffffe6): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -25 (0xffffffe7): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -24 (0xffffffe8): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -23 (0xffffffe9): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -22 (0xffffffea): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -21 (0xffffffeb): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -20 (0xffffffec): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -19 (0xffffffed): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -18 (0xffffffee): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -17 (0xffffffef): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -16 (0xfffffff0): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -15 (0xfffffff1): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -14 (0xfffffff2): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -13 (0xfffffff3): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -12 (0xfffffff4): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -11 (0xfffffff5): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  -10 (0xfffffff6): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   -9 (0xfffffff7): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   -8 (0xfffffff8): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   -7 (0xfffffff9): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   -6 (0xfffffffa): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   -5 (0xfffffffb): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   -4 (0xfffffffc): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   -3 (0xfffffffd): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   -2 (0xfffffffe): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   -1 (0xffffffff): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift    0 (0x00000000): fits k=0/wrap, k=0/sat, k=0/rnd_half_up
+  shift    1 (0x00000001): fits k=1/wrap, k=1/sat, k=1/rnd_half_up
+  shift    2 (0x00000002): fits k=2/wrap, k=2/sat, k=2/rnd_half_up
+  shift    3 (0x00000003): fits k=3/wrap, k=3/sat, k=3/rnd_half_up
+  shift    4 (0x00000004): fits k=4/wrap, k=4/sat, k=4/rnd_half_up
+  shift    5 (0x00000005): fits k=5/wrap, k=5/sat, k=5/rnd_half_up
+  shift    6 (0x00000006): fits k=6/wrap, k=6/sat, k=6/rnd_half_up
+  shift    7 (0x00000007): fits k=7/wrap, k=7/sat, k=7/rnd_half_up
+  shift    8 (0x00000008): fits k=8/wrap, k=8/sat, k=8/rnd_half_up
+  shift    9 (0x00000009): fits k=9/wrap, k=9/sat, k=9/rnd_half_up
+  shift   10 (0x0000000a): fits k=10/wrap, k=10/sat, k=10/rnd_half_up
+  shift   11 (0x0000000b): fits k=11/wrap, k=11/sat, k=11/rnd_half_up
+  shift   12 (0x0000000c): fits k=12/wrap, k=12/sat, k=12/rnd_half_up
+  shift   13 (0x0000000d): fits k=13/wrap, k=13/sat, k=13/rnd_half_up
+  shift   14 (0x0000000e): fits k=14/wrap, k=14/sat, k=14/rnd_half_up
+  shift   15 (0x0000000f): fits k=15/wrap, k=15/sat, k=15/rnd_half_up
+  shift   16 (0x00000010): fits k=16/wrap, k=16/sat, k=16/rnd_half_up
+  shift   17 (0x00000011): fits k=17/wrap, k=17/sat, k=17/rnd_half_up
+  shift   18 (0x00000012): fits k=18/wrap, k=18/sat, k=18/rnd_half_up
+  shift   19 (0x00000013): fits k=19/wrap, k=19/sat, k=19/rnd_half_up
+  shift   20 (0x00000014): fits k=20/wrap, k=20/sat, k=20/rnd_half_up
+  shift   21 (0x00000015): fits k=21/wrap, k=21/sat, k=21/rnd_half_up
+  shift   22 (0x00000016): fits k=22/wrap, k=22/sat, k=22/rnd_half_up
+  shift   23 (0x00000017): fits k=23/wrap, k=23/sat, k=23/rnd_half_up
+  shift   24 (0x00000018): fits k=24/wrap, k=24/sat, k=24/rnd_half_up
+  shift   25 (0x00000019): fits k=25/sat
+  shift   26 (0x0000001a): fits k=26/sat
+  shift   27 (0x0000001b): fits k=27/sat
+  shift   28 (0x0000001c): fits k=28/sat
+  shift   29 (0x0000001d): fits k=29/sat
+  shift   30 (0x0000001e): fits k=30/sat
+  shift   31 (0x0000001f): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   32 (0x00000020): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   33 (0x00000021): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   34 (0x00000022): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   35 (0x00000023): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   36 (0x00000024): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   37 (0x00000025): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   38 (0x00000026): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   39 (0x00000027): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   40 (0x00000028): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   41 (0x00000029): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   42 (0x0000002a): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   43 (0x0000002b): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   44 (0x0000002c): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   45 (0x0000002d): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   46 (0x0000002e): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   47 (0x0000002f): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   48 (0x00000030): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   49 (0x00000031): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   50 (0x00000032): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   51 (0x00000033): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   52 (0x00000034): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   53 (0x00000035): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   54 (0x00000036): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   55 (0x00000037): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   56 (0x00000038): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   57 (0x00000039): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   58 (0x0000003a): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   59 (0x0000003b): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   60 (0x0000003c): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   61 (0x0000003d): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   62 (0x0000003e): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   63 (0x0000003f): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   64 (0x00000040): fits k=0/wrap, k=0/sat, k=0/rnd_half_up
+  shift   65 (0x00000041): fits k=1/wrap, k=1/sat, k=1/rnd_half_up
+  shift   66 (0x00000042): fits k=2/wrap, k=2/sat, k=2/rnd_half_up
+  shift   67 (0x00000043): fits k=3/wrap, k=3/sat, k=3/rnd_half_up
+  shift   68 (0x00000044): fits k=4/wrap, k=4/sat, k=4/rnd_half_up
+  shift   69 (0x00000045): fits k=5/wrap, k=5/sat, k=5/rnd_half_up
+  shift   70 (0x00000046): fits k=6/wrap, k=6/sat, k=6/rnd_half_up
+  shift   71 (0x00000047): fits k=7/wrap, k=7/sat, k=7/rnd_half_up
+  shift   72 (0x00000048): fits k=8/wrap, k=8/sat, k=8/rnd_half_up
+  shift   73 (0x00000049): fits k=9/wrap, k=9/sat, k=9/rnd_half_up
+  shift   74 (0x0000004a): fits k=10/wrap, k=10/sat, k=10/rnd_half_up
+  shift   75 (0x0000004b): fits k=11/wrap, k=11/sat, k=11/rnd_half_up
+  shift   76 (0x0000004c): fits k=12/wrap, k=12/sat, k=12/rnd_half_up
+  shift   77 (0x0000004d): fits k=13/wrap, k=13/sat, k=13/rnd_half_up
+  shift   78 (0x0000004e): fits k=14/wrap, k=14/sat, k=14/rnd_half_up
+  shift   79 (0x0000004f): fits k=15/wrap, k=15/sat, k=15/rnd_half_up
+  shift   80 (0x00000050): fits k=16/wrap, k=16/sat, k=16/rnd_half_up
+  shift   81 (0x00000051): fits k=17/wrap, k=17/sat, k=17/rnd_half_up
+  shift   82 (0x00000052): fits k=18/wrap, k=18/sat, k=18/rnd_half_up
+  shift   83 (0x00000053): fits k=19/wrap, k=19/sat, k=19/rnd_half_up
+  shift   84 (0x00000054): fits k=20/wrap, k=20/sat, k=20/rnd_half_up
+  shift   85 (0x00000055): fits k=21/wrap, k=21/sat, k=21/rnd_half_up
+  shift   86 (0x00000056): fits k=22/wrap, k=22/sat, k=22/rnd_half_up
+  shift   87 (0x00000057): fits k=23/wrap, k=23/sat, k=23/rnd_half_up
+  shift   88 (0x00000058): fits k=24/wrap, k=24/sat, k=24/rnd_half_up
+  shift   89 (0x00000059): fits k=25/sat
+  shift   90 (0x0000005a): fits k=26/sat
+  shift   91 (0x0000005b): fits k=27/sat
+  shift   92 (0x0000005c): fits k=28/sat
+  shift   93 (0x0000005d): fits k=29/sat
+  shift   94 (0x0000005e): fits k=30/sat
+  shift   95 (0x0000005f): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   96 (0x00000060): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   97 (0x00000061): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   98 (0x00000062): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift   99 (0x00000063): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  100 (0x00000064): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  101 (0x00000065): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  102 (0x00000066): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  103 (0x00000067): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  104 (0x00000068): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  105 (0x00000069): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  106 (0x0000006a): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  107 (0x0000006b): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  108 (0x0000006c): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  109 (0x0000006d): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  110 (0x0000006e): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  111 (0x0000006f): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  112 (0x00000070): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  113 (0x00000071): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  114 (0x00000072): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  115 (0x00000073): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  116 (0x00000074): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  117 (0x00000075): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  118 (0x00000076): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  119 (0x00000077): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  120 (0x00000078): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  121 (0x00000079): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  122 (0x0000007a): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  123 (0x0000007b): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  124 (0x0000007c): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  125 (0x0000007d): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  126 (0x0000007e): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  127 (0x0000007f): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  128 (0x00000080): fits k=0/wrap, k=0/sat, k=0/rnd_half_up
+  shift  129 (0x00000081): fits k=1/wrap, k=1/sat, k=1/rnd_half_up
+  shift  130 (0x00000082): fits k=2/wrap, k=2/sat, k=2/rnd_half_up
+  shift  131 (0x00000083): fits k=3/wrap, k=3/sat, k=3/rnd_half_up
+  shift  132 (0x00000084): fits k=4/wrap, k=4/sat, k=4/rnd_half_up
+  shift  133 (0x00000085): fits k=5/wrap, k=5/sat, k=5/rnd_half_up
+  shift  134 (0x00000086): fits k=6/wrap, k=6/sat, k=6/rnd_half_up
+  shift  135 (0x00000087): fits k=7/wrap, k=7/sat, k=7/rnd_half_up
+  shift  136 (0x00000088): fits k=8/wrap, k=8/sat, k=8/rnd_half_up
+  shift  137 (0x00000089): fits k=9/wrap, k=9/sat, k=9/rnd_half_up
+  shift  138 (0x0000008a): fits k=10/wrap, k=10/sat, k=10/rnd_half_up
+  shift  139 (0x0000008b): fits k=11/wrap, k=11/sat, k=11/rnd_half_up
+  shift  140 (0x0000008c): fits k=12/wrap, k=12/sat, k=12/rnd_half_up
+  shift  141 (0x0000008d): fits k=13/wrap, k=13/sat, k=13/rnd_half_up
+  shift  142 (0x0000008e): fits k=14/wrap, k=14/sat, k=14/rnd_half_up
+  shift  143 (0x0000008f): fits k=15/wrap, k=15/sat, k=15/rnd_half_up
+  shift  144 (0x00000090): fits k=16/wrap, k=16/sat, k=16/rnd_half_up
+  shift  145 (0x00000091): fits k=17/wrap, k=17/sat, k=17/rnd_half_up
+  shift  146 (0x00000092): fits k=18/wrap, k=18/sat, k=18/rnd_half_up
+  shift  147 (0x00000093): fits k=19/wrap, k=19/sat, k=19/rnd_half_up
+  shift  148 (0x00000094): fits k=20/wrap, k=20/sat, k=20/rnd_half_up
+  shift  149 (0x00000095): fits k=21/wrap, k=21/sat, k=21/rnd_half_up
+  shift  150 (0x00000096): fits k=22/wrap, k=22/sat, k=22/rnd_half_up
+  shift  151 (0x00000097): fits k=23/wrap, k=23/sat, k=23/rnd_half_up
+  shift  152 (0x00000098): fits k=24/wrap, k=24/sat, k=24/rnd_half_up
+  shift  153 (0x00000099): fits k=25/sat
+  shift  154 (0x0000009a): fits k=26/sat
+  shift  155 (0x0000009b): fits k=27/sat
+  shift  156 (0x0000009c): fits k=28/sat
+  shift  157 (0x0000009d): fits k=29/sat
+  shift  158 (0x0000009e): fits k=30/sat
+  shift  159 (0x0000009f): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  160 (0x000000a0): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  161 (0x000000a1): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  162 (0x000000a2): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  163 (0x000000a3): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  164 (0x000000a4): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  165 (0x000000a5): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  166 (0x000000a6): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  167 (0x000000a7): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  168 (0x000000a8): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  169 (0x000000a9): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  170 (0x000000aa): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  171 (0x000000ab): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  172 (0x000000ac): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  173 (0x000000ad): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  174 (0x000000ae): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  175 (0x000000af): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  176 (0x000000b0): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  177 (0x000000b1): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  178 (0x000000b2): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  179 (0x000000b3): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  180 (0x000000b4): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  181 (0x000000b5): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  182 (0x000000b6): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  183 (0x000000b7): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  184 (0x000000b8): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  185 (0x000000b9): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  186 (0x000000ba): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  187 (0x000000bb): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  188 (0x000000bc): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  189 (0x000000bd): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  190 (0x000000be): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  191 (0x000000bf): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  192 (0x000000c0): fits k=0/wrap, k=0/sat, k=0/rnd_half_up
+  shift  193 (0x000000c1): fits k=1/wrap, k=1/sat, k=1/rnd_half_up
+  shift  194 (0x000000c2): fits k=2/wrap, k=2/sat, k=2/rnd_half_up
+  shift  195 (0x000000c3): fits k=3/wrap, k=3/sat, k=3/rnd_half_up
+  shift  196 (0x000000c4): fits k=4/wrap, k=4/sat, k=4/rnd_half_up
+  shift  197 (0x000000c5): fits k=5/wrap, k=5/sat, k=5/rnd_half_up
+  shift  198 (0x000000c6): fits k=6/wrap, k=6/sat, k=6/rnd_half_up
+  shift  199 (0x000000c7): fits k=7/wrap, k=7/sat, k=7/rnd_half_up
+  shift  200 (0x000000c8): fits k=8/wrap, k=8/sat, k=8/rnd_half_up
+  shift  201 (0x000000c9): fits k=9/wrap, k=9/sat, k=9/rnd_half_up
+  shift  202 (0x000000ca): fits k=10/wrap, k=10/sat, k=10/rnd_half_up
+  shift  203 (0x000000cb): fits k=11/wrap, k=11/sat, k=11/rnd_half_up
+  shift  204 (0x000000cc): fits k=12/wrap, k=12/sat, k=12/rnd_half_up
+  shift  205 (0x000000cd): fits k=13/wrap, k=13/sat, k=13/rnd_half_up
+  shift  206 (0x000000ce): fits k=14/wrap, k=14/sat, k=14/rnd_half_up
+  shift  207 (0x000000cf): fits k=15/wrap, k=15/sat, k=15/rnd_half_up
+  shift  208 (0x000000d0): fits k=16/wrap, k=16/sat, k=16/rnd_half_up
+  shift  209 (0x000000d1): fits k=17/wrap, k=17/sat, k=17/rnd_half_up
+  shift  210 (0x000000d2): fits k=18/wrap, k=18/sat, k=18/rnd_half_up
+  shift  211 (0x000000d3): fits k=19/wrap, k=19/sat, k=19/rnd_half_up
+  shift  212 (0x000000d4): fits k=20/wrap, k=20/sat, k=20/rnd_half_up
+  shift  213 (0x000000d5): fits k=21/wrap, k=21/sat, k=21/rnd_half_up
+  shift  214 (0x000000d6): fits k=22/wrap, k=22/sat, k=22/rnd_half_up
+  shift  215 (0x000000d7): fits k=23/wrap, k=23/sat, k=23/rnd_half_up
+  shift  216 (0x000000d8): fits k=24/wrap, k=24/sat, k=24/rnd_half_up
+  shift  217 (0x000000d9): fits k=25/sat
+  shift  218 (0x000000da): fits k=26/sat
+  shift  219 (0x000000db): fits k=27/sat
+  shift  220 (0x000000dc): fits k=28/sat
+  shift  221 (0x000000dd): fits k=29/sat
+  shift  222 (0x000000de): fits k=30/sat
+  shift  223 (0x000000df): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  224 (0x000000e0): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  225 (0x000000e1): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  226 (0x000000e2): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  227 (0x000000e3): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  228 (0x000000e4): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  229 (0x000000e5): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  230 (0x000000e6): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  231 (0x000000e7): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  232 (0x000000e8): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  233 (0x000000e9): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  234 (0x000000ea): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  235 (0x000000eb): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  236 (0x000000ec): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  237 (0x000000ed): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  238 (0x000000ee): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  239 (0x000000ef): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  240 (0x000000f0): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  241 (0x000000f1): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  242 (0x000000f2): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  243 (0x000000f3): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  244 (0x000000f4): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  245 (0x000000f5): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  246 (0x000000f6): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  247 (0x000000f7): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  248 (0x000000f8): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  249 (0x000000f9): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  250 (0x000000fa): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  251 (0x000000fb): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  252 (0x000000fc): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  253 (0x000000fd): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  254 (0x000000fe): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+  shift  255 (0x000000ff): fits k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+
+== xrt-smi examine -r aie-partitions (after)
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  Total Memory Usage: 64 MB
+  Partition Index   : 0
+    Columns: [1, 2, 3, 4]
+    HW Contexts:
+      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |
+      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |
+      |Memory Usage        |Instr BO   |            |            |     |FPS      |
+      |                    |           |            |            |     |Latency  |
+      |====================|===========|============|============|=====|=========|
+      |10684               |34         |384         |0           |0    |Normal   |
+      |python.exe          |Active     |384         |0           |     |N/A      |
+      |64 MB               |64 KB      |            |            |     |N/A      |
+      |                    |           |            |            |     |N/A      |
+      |--------------------|-----------|------------|------------|-----|---------|
+
+# ===== scored against the pre-registration (scratch ups_compare.py, sha256 840e596a8a8f96c172fc984e6221a696b3a65cc7becbe447fe4a88c47ae3cc70) =====
+    0x01  s=   1  DPU k=0            vups: k=1/wrap, k=1/sat, k=1/rnd_half_up                           DIFFER
+    0x05  s=   5  DPU k=1            vups: k=5/wrap, k=5/sat, k=5/rnd_half_up                           DIFFER
+    0x09  s=   9  DPU k=2            vups: k=9/wrap, k=9/sat, k=9/rnd_half_up                           DIFFER
+    0x0d  s=  13  DPU k=3            vups: k=13/wrap, k=13/sat, k=13/rnd_half_up                        DIFFER
+    0x11  s=  17  DPU k=4            vups: k=17/wrap, k=17/sat, k=17/rnd_half_up                        DIFFER
+    0x15  s=  21  DPU k=5            vups: k=21/wrap, k=21/sat, k=21/rnd_half_up                        DIFFER
+    0x19  s=  25  DPU k=6            vups: k=25/sat                                                     DIFFER
+    0x1d  s=  29  DPU k=7            vups: k=29/sat                                                     DIFFER
+    0x21  s=  33  DPU k=8            vups: k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat ( DIFFER
+    0x25  s=  37  DPU k=9            vups: k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat ( DIFFER
+    0x29  s=  41  DPU k=10           vups: k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat ( DIFFER
+    0x2d  s=  45  DPU k=11           vups: k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat ( DIFFER
+    0x31  s=  49  DPU k=12           vups: k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat ( DIFFER
+    0x35  s=  53  DPU k=13           vups: k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat ( DIFFER
+    0x39  s=  57  DPU k=14           vups: k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat ( DIFFER
+    0x3d  s=  61  DPU k=15           vups: k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat ( DIFFER
+    0x41  s=  65  DPU k=0            vups: k=1/wrap, k=1/sat, k=1/rnd_half_up                           DIFFER
+    0x45  s=  69  DPU k=1            vups: k=5/wrap, k=5/sat, k=5/rnd_half_up                           DIFFER
+    0x49  s=  73  DPU k=2            vups: k=9/wrap, k=9/sat, k=9/rnd_half_up                           DIFFER
+    0x4d  s=  77  DPU k=3            vups: k=13/wrap, k=13/sat, k=13/rnd_half_up                        DIFFER
+    0x51  s=  81  DPU k=4            vups: k=17/wrap, k=17/sat, k=17/rnd_half_up                        DIFFER
+    0x55  s=  85  DPU k=5            vups: k=21/wrap, k=21/sat, k=21/rnd_half_up                        DIFFER
+    0x59  s=  89  DPU k=6            vups: k=25/sat                                                     DIFFER
+    0x5d  s=  93  DPU k=7            vups: k=29/sat                                                     DIFFER
+    0x61  s=  97  DPU k=8            vups: k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat ( DIFFER
+    0x65  s= 101  DPU k=9            vups: k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat ( DIFFER
+    0x69  s= 105  DPU k=10           vups: k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat ( DIFFER
+    0x6d  s= 109  DPU k=11           vups: k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat ( DIFFER
+    0x71  s= 113  DPU k=12           vups: k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat ( DIFFER
+    0x75  s= 117  DPU k=13           vups: k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat ( DIFFER
+    0x79  s= 121  DPU k=14           vups: k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat ( DIFFER
+    0x7d  s= 125  DPU k=15           vups: k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat ( DIFFER
+    0x81  s=-127  DPU k=0            vups: k=1/wrap, k=1/sat, k=1/rnd_half_up                           DIFFER
+    0x85  s=-123  DPU zero or k<=-8  vups: k=5/wrap, k=5/sat, k=5/rnd_half_up                           DIFFER
+    0x89  s=-119  DPU zero or k<=-8  vups: k=9/wrap, k=9/sat, k=9/rnd_half_up                           DIFFER
+    0x8d  s=-115  DPU zero or k<=-8  vups: k=13/wrap, k=13/sat, k=13/rnd_half_up                        DIFFER
+    0x91  s=-111  DPU zero or k<=-8  vups: k=17/wrap, k=17/sat, k=17/rnd_half_up                        DIFFER
+    0x95  s=-107  DPU zero or k<=-8  vups: k=21/wrap, k=21/sat, k=21/rnd_half_up                        DIFFER
+    0x99  s=-103  DPU zero or k<=-8  vups: k=25/sat                                                     DIFFER
+    0x9d  s= -99  DPU zero or k<=-8  vups: k=29/sat                                                     DIFFER
+    0xa1  s= -95  DPU zero or k<=-8  vups: k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat ( DIFFER
+    0xa5  s= -91  DPU zero or k<=-8  vups: k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat ( DIFFER
+    0xa9  s= -87  DPU zero or k<=-8  vups: k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat ( DIFFER
+    0xad  s= -83  DPU zero or k<=-8  vups: k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat ( DIFFER
+    0xb1  s= -79  DPU zero or k<=-8  vups: k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat ( DIFFER
+    0xb5  s= -75  DPU zero or k<=-8  vups: k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat ( DIFFER
+    0xb9  s= -71  DPU zero or k<=-8  vups: k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat ( DIFFER
+    0xbd  s= -67  DPU zero or k<=-8  vups: k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat ( DIFFER
+    0xc1  s= -63  DPU zero or k<=-8  vups: k=1/wrap, k=1/sat, k=1/rnd_half_up                           DIFFER
+    0xc5  s= -59  DPU zero or k<=-8  vups: k=5/wrap, k=5/sat, k=5/rnd_half_up                           DIFFER
+    0xc9  s= -55  DPU zero or k<=-8  vups: k=9/wrap, k=9/sat, k=9/rnd_half_up                           DIFFER
+    0xcd  s= -51  DPU zero or k<=-8  vups: k=13/wrap, k=13/sat, k=13/rnd_half_up                        DIFFER
+    0xd1  s= -47  DPU zero or k<=-8  vups: k=17/wrap, k=17/sat, k=17/rnd_half_up                        DIFFER
+    0xd5  s= -43  DPU zero or k<=-8  vups: k=21/wrap, k=21/sat, k=21/rnd_half_up                        DIFFER
+    0xd9  s= -39  DPU zero or k<=-8  vups: k=25/sat                                                     DIFFER
+    0xdd  s= -35  DPU zero or k<=-8  vups: k=29/sat                                                     DIFFER
+    0xe1  s= -31  DPU zero or k<=-8  vups: k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat ( DIFFER
+    0xe5  s= -27  DPU zero or k<=-8  vups: k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat ( DIFFER
+    0xe9  s= -23  DPU zero or k<=-8  vups: k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat ( DIFFER
+    0xed  s= -19  DPU zero or k<=-8  vups: k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat ( DIFFER
+    0xf1  s= -15  DPU zero or k<=-8  vups: k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat ( DIFFER
+    0xf5  s= -11  DPU zero or k<=-8  vups: k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat ( DIFFER
+    0xf9  s=  -7  DPU zero or k<=-8  vups: k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat ( DIFFER
+    0xfd  s=  -3  DPU zero or k<=-8  vups: k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat ( DIFFER
+    agree 0 / 64
+    
+    native vups, raw scalar 0..63 and -8..-1:
+      s=   0  k=0/wrap, k=0/sat, k=0/rnd_half_up
+      s=   1  k=1/wrap, k=1/sat, k=1/rnd_half_up
+      s=   2  k=2/wrap, k=2/sat, k=2/rnd_half_up
+      s=   3  k=3/wrap, k=3/sat, k=3/rnd_half_up
+      s=   4  k=4/wrap, k=4/sat, k=4/rnd_half_up
+      s=   5  k=5/wrap, k=5/sat, k=5/rnd_half_up
+      s=   6  k=6/wrap, k=6/sat, k=6/rnd_half_up
+      s=   7  k=7/wrap, k=7/sat, k=7/rnd_half_up
+      s=   8  k=8/wrap, k=8/sat, k=8/rnd_half_up
+      s=   9  k=9/wrap, k=9/sat, k=9/rnd_half_up
+      s=  10  k=10/wrap, k=10/sat, k=10/rnd_half_up
+      s=  11  k=11/wrap, k=11/sat, k=11/rnd_half_up
+      s=  12  k=12/wrap, k=12/sat, k=12/rnd_half_up
+      s=  13  k=13/wrap, k=13/sat, k=13/rnd_half_up
+      s=  14  k=14/wrap, k=14/sat, k=14/rnd_half_up
+      s=  15  k=15/wrap, k=15/sat, k=15/rnd_half_up
+      s=  16  k=16/wrap, k=16/sat, k=16/rnd_half_up
+      s=  17  k=17/wrap, k=17/sat, k=17/rnd_half_up
+      s=  18  k=18/wrap, k=18/sat, k=18/rnd_half_up
+      s=  19  k=19/wrap, k=19/sat, k=19/rnd_half_up
+      s=  20  k=20/wrap, k=20/sat, k=20/rnd_half_up
+      s=  21  k=21/wrap, k=21/sat, k=21/rnd_half_up
+      s=  22  k=22/wrap, k=22/sat, k=22/rnd_half_up
+      s=  23  k=23/wrap, k=23/sat, k=23/rnd_half_up
+      s=  24  k=24/wrap, k=24/sat, k=24/rnd_half_up
+      s=  25  k=25/sat
+      s=  26  k=26/sat
+      s=  27  k=27/sat
+      s=  28  k=28/sat
+      s=  29  k=29/sat
+      s=  30  k=30/sat
+      s=  31  k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+      s=  32  k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+      s=  33  k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+      s=  34  k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+      s=  35  k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+      s=  36  k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+      s=  37  k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+      s=  38  k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+      s=  39  k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+      s=  40  k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+      s=  41  k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+      s=  42  k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+      s=  43  k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+      s=  44  k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+      s=  45  k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+      s=  46  k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+      s=  47  k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+      s=  48  k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+      s=  49  k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+      s=  50  k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+      s=  51  k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+      s=  52  k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+      s=  53  k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+      s=  54  k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+      s=  55  k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+      s=  56  k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+      s=  57  k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+      s=  58  k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+      s=  59  k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+      s=  60  k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+      s=  61  k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+      s=  62  k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+      s=  63  k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+      s=  -8  k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+      s=  -7  k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+      s=  -6  k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+      s=  -5  k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+      s=  -4  k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+      s=  -3  k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+      s=  -2  k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+      s=  -1  k=31/sat, k=32/sat, k=33/sat, k=34/sat, k=35/sat, k=36/sat (+27)
+#   H_native REFUTED: 0 of 64. For 0x05 the DPU shifts the bias by 1; vups given 5 shifts by 5. The overlay
+#   transforms the shift_bias byte before the upshift (consistent with extracting the 4-bit field), so the
+#   static trace's naive "s3 = the loaded byte" is wrong or incomplete.
+#
+# POST-HOC (scratch ups_model.py, sha256 4e725d8db29b0ed35d7e02d76cdf9ce34ea9f64614311ce768e2c33a8671f8e9), fitted on this same data:
+    points 384, model k = s & 63 (saturating) misses 0, points read as all-zero 0
+#   Native vups reads k = s & 63 as an unsigned LEFT shift, saturating to 32 bits, at all 384 scalars. Unlike vsrs,
+#   codes 60..63 do not shift the other way. k >= 31 saturates every nonzero lane, so those codes are not
+#   separated from each other. No scalar zeroed the lanes, and none shifts right. So the DPU's bit-7 outcome
+#   (no bias, or a bias right-shifted by 8 or more) cannot come from vups with any scalar: for those bytes the
+#   overlay skips or reroutes the bias. Why 0x81 is the exception stays UNEXPLAINED, now pinned to the overlay's
+#   decode code.

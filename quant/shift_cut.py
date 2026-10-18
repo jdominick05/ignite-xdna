@@ -30,6 +30,11 @@ Theorem 1 (Systolic Shift-Cut Bound) -- STATED, NOT VALIDATED ON THIS DEVICE:
     If sigma < 0, the operation would require an arithmetic left-shift exceeding
     accumulator precision (accumulator overflow hazard).
     If sigma > 31, the hardware 5-bit shifter would clamp to 31 (shift clamp hazard).
+    SUPERSEDED 2026-10-12: the AIE2 vsrs shift operand is MEASURED to be a 6-bit code
+    (0..59 right, 60..63 left by 4..1; results/aie/srs_shift_width_probe_*_T175013Z.log),
+    so no 5-bit shifter clamps at 31. The [14, 30] window is the producer/compiler contract:
+    with the shift byte patched in a cached xmodel, the DPU executes sigma 31..33 exactly
+    (results/aie/dpu_sigma_patch_desktop2_20261012T182840Z.log).
 
     Read the "if and only if" as a hypothesis, not a result. Both register widths --
     the 15-bit multiplier and the 5-bit shifter -- are asserted here, not measured, and
@@ -38,6 +43,12 @@ Theorem 1 (Systolic Shift-Cut Bound) -- STATED, NOT VALIDATED ON THIS DEVICE:
     without giving the shift field's width, so the bound is not externally corroborated
     either.
 
+    SUPERSEDED 2026-10-12: with the shift byte patched in a cached xmodel, the DPU
+    executed sigma 31..33 exactly (results/aie/dpu_sigma_patch_desktop2_20261012T182840Z.log).
+    Runs 3-4 (results/aie/dpu_sigma_patch_desktop2_20261012T191325Z.log): the shift_cut byte & 63 is the
+    vsrs code (sigma's +14 is not part of it); shift_cut -1 and 0..23 execute exactly, 24..59
+    read all zero point (consistent, not separated), -2..-4 run with a wrapping left shift;
+    shift_bias is a 4-bit field.
     Neither edge has been observed on hardware. The highest sigma ever executed on this
     DPU is 30; measured placements cover sigma in {14, 15, 17, 18, 22, 30}, all from
     fixtures whose scales sit inside the producer's own [0, 16] shift-cut contract.
@@ -316,7 +327,7 @@ def _classify(sigma: int, kind: str, op_type: str) -> Tuple[bool, str]:
                       f"(requires left-shift beyond accumulator; UNVALIDATED bound)")
     if sigma > high:
         return True, (f"SHIFT CLAMP HAZARD: sigma={sigma} > {high} "
-                      f"(5-bit shifter would clamp; UNVALIDATED bound)")
+                      f"(stated bound; the AIE2 shifter itself is 6-bit, so UNVALIDATED for the DPU)")
     if op_type not in ("Conv", "Gemm"):
         return False, (f"Feasible {kind} shift. No producer contract is asserted: "
                        f"adjust_shift_cut clamps Conv/Gemm only, not {op_type}")

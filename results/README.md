@@ -21,6 +21,10 @@ Split container sizing logs are indexed under
 and the full-family YOLOv8 split suite with
 [measurements and early-exit cascades](../docs/BENCHMARKS.md#all-yolov8-variants-on-split-containers-and-what-each-segment-costs-2026-09-20-desktop-2).
 
+The AIE2 shifter width and the DPU overlay extraction are indexed under
+[AIE DPU microcode](aie/README.md#native-windows-xrt-driver-and-dpu-microcode-disassembly), with
+[the 6-bit shift code and its scope](../docs/BENCHMARKS.md#the-aie2-shifter-reads-a-6-bit-code-so-theorem-1s-5-bit-shifter-is-not-the-bound-2026-10-12-desktop-2).
+
 Raw logs behind every number in `README.md`, `RESEARCH.md` and `docs/BENCHMARKS.md`. Each
 log is the UTF-8 stdout of one script invocation, written by the wrappers in `scripts/`;
 nothing here is edited by hand except for token redactions. The local user profile path

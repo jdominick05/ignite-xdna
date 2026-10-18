@@ -7045,7 +7045,10 @@ recorded in `docs/DECISIONS.md` so there is one policy rather than two precedent
 >    (`"tested_conv_on_npu": false`), so they cannot speak to the DPU in either direction.
 >    **The highest sigma ever executed on this hardware is 30.** Neither the 15-bit
 >    multiplier nor the 5-bit shifter is measured, and no ISA document in this repo states
->    either width.
+>    either width. *(Updated 2026-10-12: the shifter is now measured, and it is a 6-bit code,
+>    not 5-bit. See "The AIE2 shifter reads a 6-bit code" below. The 15-bit multiplier is
+>    still unmeasured, and the highest sigma the DPU has executed is still 30.)*
+>    *(Superseded 2026-10-12: with the shift byte patched in a cached xmodel, the DPU executed sigma 31, 32 and 33 exactly, `results/aie/dpu_sigma_patch_desktop2_20261012T182840Z.log`.)*
 >
 > 5. **The zero was a tautology, and a third of the "analyzed" operations were not
 >    analyzed.** Added 2026-09-09 (Desktop 2), see the subsection below and
@@ -7097,11 +7100,11 @@ The hardware compiler approximates A using (M, sigma):
 **Theorem 1 (Systolic Shift-Cut Bound):**
 An operation is physically executable without numerical distortion on XDNA1 if and only if
 (**hypothesis, not a result — see the retraction at the top of this section; neither edge has
-been reached on hardware and the highest sigma ever executed is 30**):
+been reached on hardware and the highest sigma ever executed is 30**; *(Superseded 2026-10-12: with the shift byte patched in a cached xmodel, the DPU executed sigma 31, 32 and 33 exactly, `results/aie/dpu_sigma_patch_desktop2_20261012T182840Z.log`.)*):
 
     0 <= sigma <= 31
 
-If sigma < 0, the operation requires an arithmetic left-shift exceeding the 32-bit accumulator, resulting in accumulator overflow. If sigma > 31, the hardware 5-bit shift register overflows or clamps.
+If sigma < 0, the operation requires an arithmetic left-shift exceeding the 32-bit accumulator, resulting in accumulator overflow. If sigma > 31, the hardware 5-bit shift register overflows or clamps. **Superseded 2026-10-12 as a silicon claim:** the AIE2 `vsrs` shift operand is a 6-bit code, 0–59 right and 60–63 left by 4..1, and shifts of 32–59 run exactly (MEASURED, "The AIE2 shifter reads a 6-bit code" below). The [14, 30] window is a contract, not this register.
 
 **Theorem 2 (Multi-Branch Inter-Scale Feasibility):**
 For multi-branch elementwise tensor operations C = A * B or C = A + B:
@@ -7159,7 +7162,7 @@ In power-of-two quantization where scale is parameterized by position (S = 2^(-p
 
     sigma = pos_x + pos_w - pos_y + 14
 
-Because the physical shift register is bounded by 0 <= sigma <= 31, the output scale position pos_y must satisfy the **Systolic Scale Feasibility Window**:
+Because the physical shift register is bounded by 0 <= sigma <= 31, the output scale position pos_y must satisfy the **Systolic Scale Feasibility Window** *(superseded 2026-10-12: no such physical bound. The AIE2 shifter reads a 6-bit code, see "The AIE2 shifter reads a 6-bit code" below. The window stands only as arithmetic on Theorem 1's hypothesis)*:
 
     pos_x + pos_w - 17 <= pos_y <= pos_x + pos_w + 14
 
@@ -7255,7 +7258,7 @@ So sigma is reachable on this hardware only in **[14, 30]**, and Theorem 1's `[0
 never be tested at either edge with a Conv the DPU will actually run. That also explains, without
 any appeal to a shift register's width, why no model in this repo has ever shown a sigma outside
 7..30: the compiler will not accept the graph in the first place. The highest sigma ever executed
-here is 30.
+here is 30. *(Superseded 2026-10-12: with the shift byte patched in a cached xmodel, the DPU executed sigma 31, 32 and 33 exactly, `results/aie/dpu_sigma_patch_desktop2_20261012T182840Z.log`.)*
 
 The rounding results from the in-contract sweep are unaffected -- those fixtures did place, at 5 of
 7 nodes, and are reported in the arithmetic section above.
@@ -7342,7 +7345,7 @@ When an ONNX graph contains violating nodes, `quant/shift_cut.py::project_scale_
 
 Tested on FastDepth `Conv_96`:
 - Original: pos_x = 7 (S_x = 2^-7), pos_w = 11 (S_w = 2^-11), pos_y = 0 (S_y = 1.0).
-- Analytical sigma: 7 + 11 - 0 + 14 = 32 > 31 (overflows 5-bit shifter by 1 bit).
+- Analytical sigma: 7 + 11 - 0 + 14 = 32 > 31 (overflows 5-bit shifter by 1 bit). *(Superseded 2026-10-12: the AIE2 shifter is not 5-bit, and a shift of 32 executes exactly in `vsrs`. Whether the DPU would run this layer is the EP's contract question, see "The AIE2 shifter reads a 6-bit code".)*
 - Feasible pos_y window: [18 - 17, 18 + 14] = [1, 32].
 - Projected: pos_y = 1 (S_y = 0.5), yielding sigma = 31 <= 31.
 - Outcome: The layer is 100% physically compliant with zero shift-cut violations, eliminating the clamp hazard without retraining.
@@ -7355,6 +7358,410 @@ Tested on FastDepth `Conv_96`:
 > i.e. every one had targeted a working op. `quant/shift_cut.py` now uses unclamped positions
 > and raises rather than emitting a scale the analyzer would flag. Do not run `--repair` on a
 > model that already places and scores.
+
+### The AIE2 shifter reads a 6-bit code, so Theorem 1's "5-bit shifter" is not the bound (2026-10-12, Desktop 2)
+
+**Measured:** the AIE2 shift-round-saturate takes its shift from a scalar `s` register
+(`mov s0, rX; vsrs ..., s0`). It reads only the low **6 bits** of that register:
+- codes **0–59** shift right;
+- codes **60–63** shift **left** by 4, 3, 2 and 1;
+- an acc32 lane shifted by 32–59 floors to 0 or −1, as an unbounded arithmetic shift would.
+
+So no 5-bit shift register stops sigma at 31. Lines in this section that rest on one
+(Theorem 1's "5-bit shift register overflows or clamps", the feasibility window's "physical shift
+register is bounded by 0 <= sigma <= 31", the FastDepth `Conv_96` "overflows 5-bit shifter by
+1 bit") are **superseded as statements about the silicon**, and are marked where they stand.
+
+**What it does not show:** that the VitisAI DPU could execute sigma 0 or 31. The table above
+still holds. The EP refuses any Conv whose shift-cut is outside `[0, 16]`, so sigma reaches
+the DPU only in [14, 30]. That window is now known **not** to come from the shifter's width. It
+is the producer's and compiler's contract, and possibly the overlay's packet format. Which of
+those binds is open, and the overlay decode below is how it gets settled.
+
+**How it was measured.** The probe is one kernel on one core, `kernels/srs_probe/` (IRON,
+`Tile(0, 2)`).
+- **Setup.** Rounding is forced to floor and saturation to saturate, and both are read back
+  (`crRnd` 0, `crSat` 1). The shift goes from the input buffer to `s0` with no masking: IRON's
+  built object was disassembled, and it is `lda r0` → `mov s0, r0` → `vsrs`.
+- **Comparison.** Every lane is compared exactly against oracles for several shifter readings.
+
+| Sitting | What it is | Result |
+|---|---|---|
+| [`T174901Z`](../results/aie/srs_shift_width_probe_desktop2_20261012T174901Z.log) | **Harness bug, no conclusion drawn.** Lanes were loaded from word 4. AIE vector loads drop the low address bits, so the kernel read from word 0, and output lane 0 was the mode. | Every oracle fails, at shift 0 too. |
+| [`T174942Z`](../results/aie/srs_shift_width_probe_desktop2_20261012T174942Z.log) | Lanes at the 128 B-aligned word 32. Shifts −8..72, three paths: acc32 → int16, acc32 → int8, acc64 → int32. | 0–59 behave as written. 60–63 multiply by 16/8/4/2. −8..−5 equal 56..59, and 64..72 equal 0..8. No oracle in the set survives. |
+| [`T175013Z`](../results/aie/srs_shift_width_probe_desktop2_20261012T175013Z.log) | Adds the 6-bit code oracle (`f6_m4_59`, **fitted on the sitting above**). Then **130 new shifts** (−70..−9 and 73..140) and new acc64 upshifts 16 and 31. | acc32 → int16 and acc32 → int8: `f6_m4_59` matches **every lane at all 211 shifts**, and every other oracle fails. acc64 → int32: 621 of 633 points match. The 12 misses are all left shifts at upshift 0. |
+| [`T175238Z`](../results/aie/srs_shift_width_probe_desktop2_20261012T175238Z.log) | Those acc64 left shifts again, all lanes printed. | The data the saturation rule below was **fitted** on. |
+| [`T175316Z`](../results/aie/srs_shift_width_probe_desktop2_20261012T175316Z.log) | 16 **held-out** lanes, most at the ±2³⁰ boundary. Predictions were written before the run, and the log carries them. | **64 of 64 lanes predicted exactly.** |
+
+**The acc64 → int32 left-shift rule** (fitted, then predicted out of sample): a lane saturates
+only if |acc| ≥ 2³⁰. Otherwise the result is `acc << k` wrapped to 32 bits, even when that
+overflows: `0x12345678 << 4` reads `0x23456780`. The overflow check behaves as if it assumes a
+one-bit shift. That is a model the silicon agrees with, not an observed mechanism. Why it is
+built this way is **unexplained**. It sits off the DPU's int8 path, whose accumulators are
+32-bit. *(2026-10-12, later: the same one-bit-check shape governs the DPU's own int8 output
+on left shifts, fitted on run 3 and held out on 7 arms of run 4 below.)*
+
+**Alternatives ruled out:**
+- **A 5-bit field** (`s & 31`). Shift 32 differs from shift 0 on acc32.
+- **A 7-bit field** (`s & 127`). Shift 64 equals shift 0.
+- **A clamp at 31 or 63.** Codes 60–63 shift left. On acc32, a clamp at 31 cannot be told
+  from a real shift of 32–59, since both floor to 0 or −1. The **acc64** lanes at upshifts
+  16 and 31 exclude it: `clamp31` fails there while codes 32–59 shift by their full amount
+  (`T175013Z`). acc32 excludes the 5-bit wrap, and acc64 excludes the clamp.
+- **Plain two's complement over 6 bits.** Codes 32–59 shift right, not left.
+- **Software masking.** The disassembly above shows none.
+
+**Not tested:** rounding modes other than floor, and the other `vsrs` variants beyond `s8.s32`,
+`s16.s32` and `s32.s64`. `vlda.ups` was exercised only as the acc64 lane builder at shifts 0,
+16 and 31, and is validated only implicitly at those three values. *(The int8 → acc32 upshift was
+measured later the same day at 384 scalars, below the run-6 paragraph.)*
+
+**Why this was the next step: the overlay.** The VitisAI "DPU" is a fixed set of AIE core programs.
+[`tools/xclbin_overlay_extract.py`](../tools/xclbin_overlay_extract.py) pulls them out of
+`phoenix\4x4.xclbin` ([log](../results/aie/dpu_overlay_extract_phoenix4x4_desktop2_20261012T1737Z.log)):
+- **What the PDIs hold.** There are 15 PDIs, one per DPU kernel ID `0x100`–`0x10e`, and each
+  programs all 16 cores. The images are compiled C programs of 13.6–15.6 KB, 45 distinct in all.
+- **The PDI layout, inferred from the bytes.** The CDO records are: type 3 writes, type 2
+  masked writes, and type 5 DMA descriptors into a payload region after a type-0 terminator.
+  The decoder exits nonzero on any record it cannot place. Peano disassembles 225 of the 240
+  images with no unknown encoding. The other 15 are the same tile, c3r5, whose last 4 B fall
+  28 B past the end of every PDI.
+- **How requantization works.** It is ordinary `vsrs`/`vups`, with `s0`–`s3` loaded from fields
+  of a 40-byte instruction packet. In the conv path, a `u16` field packs two 4-bit shifts, and
+  another shift adds a signed 6-bit value from a separate byte.
+
+~~Which packet field carries Theorem 1's sigma, and with what offset, is **not yet traced**.~~
+*(Traced the same day, below.)* The images and their disassembly are AMD binaries and are not committed.
+
+*Superseded in part the same day (next block): the `param_buffer` varint below is a copy the
+device ignores. What the DPU loads is the same two bytes in the subgraph's `REG_0`.*
+
+**Where sigma lives: not in mc_code, but in the weight tensor's `param_buffer`** (2026-10-12,
+Desktop 2, [log](../results/aie/dpu_sigma_field_fixtures_desktop2_20261012T180818Z.log)).
+- **The fixtures.** [`tools/dpu_mc_fixtures.py`](../tools/dpu_mc_fixtures.py) compiles single-Conv
+  XINT8 fixtures from `tools/xint8_arithmetic_probe.py`. They differ only in shift_cut: 0, 1, 2,
+  4, 8, 15 and 16, that is sigma 14–30. Each is built `--fresh` through the VitisAI EP, and
+  every one places its Conv on the NPU.
+- **What doesn't change.** The `mc_code` instruction stream is **byte-identical across all
+  seven** (one sha256). So are two of the three `param_buffer` attributes in the xmodel.
+- **What does.** The third, a 63–64 B `param_buffer` on the weight tensor, changes in one
+  varint field:
+
+      value = shift_cut << 8 | shift_bias << 2 | 1
+
+  `01` at sigma 14, `81 20` (0x1001) at sigma 30. The rule was fitted on shift_cut 0 and 16.
+  Predictions for shift_cut 1, 2, 4, 8 and 15 were written before those were compiled, and the
+  log embeds them: **5 of 5 match exactly**.
+- **The shift_bias term is exploratory.** It is fitted on three points at shift_cut 8: bias 0,
+  1 and 4 give `81 10`, `85 10` and `91 10`. Negative shift_bias is untested.
+- **The fixtures are numerically clean.** Every NPU output is exact under half-up output
+  rounding. The probe's default reference rounds half to even, so it differs by 1 LSB on ties
+  at shift_cut 1–8. Six rounding models with half-up output survive all nine fixtures, fitted
+  and held out alike.
+
+What this changes:
+- **The sigma window is not an mc_code property.** ~~A patch to reach sigma 31 or 32 is a
+  `param_buffer` patch, not an `mc_code` patch.~~ *Wrong: it is a `REG_0` patch (below).*
+- **The field has room for sigma 31 and 32.** Shift_cut sits in bits 8 and up of a varint, so
+  shift_cut 17 or 18 can be written. The EP refuses that model before it compiles, so no xmodel
+  with such a value exists yet.
+- ~~**What would settle the window.** Patch the field in a cached in-contract xmodel and load it
+  without `--fresh`. That needs the xmodel's integrity check (`files_md5sum` covers the source
+  ONNX, not the xmodel) to accept it. It is the remaining step to attribute the [14, 30] window
+  to the producer's contract rather than the DPU, and it has not been run.~~ *Run the same day
+  on `REG_0`, below; patching this field does nothing.*
+- **Alternatives ruled out.** mc_code carrying sigma: its hash is identical across all nine
+  fixtures. Another `param_buffer`: buffers 0 and 2 are identical across all nine.
+- **Not identified.** How the overlay's core programs read this buffer at run time.
+
+**Sigma 31–33 execute exactly on the DPU: the [14, 30] window's upper edge is the producer and
+compiler contract, not the silicon** (2026-10-12, Desktop 2,
+[log](../results/aie/dpu_sigma_patch_desktop2_20261012T182840Z.log)).
+
+**Method.** [`tools/dpu_sigma_patch_test.py`](../tools/dpu_sigma_patch_test.py) compiles the
+shift_cut-16 fixture `--fresh`. It then edits the shift in the **cached** xmodel and reloads it
+without `--fresh`, so the EP's compile-time refusal never runs. Every arm checks four things:
+- the device is idle;
+- the EP left the edited xmodel byte-identical (it did, in every arm);
+- the Conv is on the NPU;
+- the NPU output codes match the numpy oracle exactly, at both the patched shift and the base.
+
+**Run 1 was void, and it corrected the section above.** The edit went to the `param_buffer`
+varint. The in-contract controls (shift_cut 15 and 1) still read the base shift, so by the
+pre-registered rule no arm is interpreted. Five steps, each in its own process, found out why:
+- **Not in-process caching.** A fresh process reads the base shift too.
+- **Not the `fix_point` attributes.** Patching them, alone or with `param_buffer`, changes
+  nothing.
+- **The xmodel is read.** Without it the session refuses to build. With both `mc_code` copies
+  zeroed, it builds in 0.3 s and the output changes.
+- **The ONNX sets only the host scale.** Swapping in the shift_cut-15 ONNX under the
+  shift_cut-16 cache moves the host dequant to 2^-15, while the integer codes still follow 16.
+- **The diff had a blind spot.** The structural diff above compared opaque blobs by their
+  first 48 bytes. Hashed in full, one more blob differs: the subgraph's
+  `reg_id_to_parameter_value` entry `REG_0`, 1891 B.
+  - **What it holds.** In all 9 fixtures, byte `0x7B` is `shift_bias << 2 | 1` and byte
+    `0x7C` is shift_cut. They are the only bytes that vary (`dpu_mc_fixtures.py --summary`).
+    Read together as a little-endian u16, they equal the varint's value,
+    `shift_cut << 8 | shift_bias << 2 | 1`. That is why one byte holds shift_cut only up to 255.
+  - **What the attr is.** The `param_buffer` varint is a copy of the same two bytes, and the
+    device does not read it.
+
+**Run 2 edits `REG_0` byte `0x7C`, one byte per arm,** pre-registered after the diagnosis
+(predictions and sha256 in the log):
+
+| shift_cut (sigma) | predicted | read | weight |
+|---|---|---|---|
+| 15 (29), 1 (15): controls | EXACT | **EXACT** | run valid: the byte moves the shift both ways |
+| 17, 18, 19 (31, 32, 33) | EXACT | **EXACT**, 0 mismatches each | **decisive**: neighbouring shifts differ by 4,056–7,520 outputs here |
+| 20, 31, 45 (34, 45, 59) | EXACT | EXACT | weak: every right shift ≥ 20 gives all zero point on this fixture |
+| 46, 47, 49 (60, 61, 63) | NEITHER (`vsrs` left-shift codes) | EXACT | **prediction missed**. *Explained by runs 3–4 (next block): the byte, not sigma, is the `vsrs` code, so 46–49 are right shifts* |
+| 50 (64) | either | EXACT | uninformative |
+
+What this settles, and what it does not:
+- **The upper edge is not the silicon.** The DPU executes sigma 31, 32 and 33 exactly
+  (MEASURED). So the edge is the producer/compiler contract: Quark's `adjust_shift_cut` clamp,
+  then the EP's compile-time refusal. The finding rules out only the hardware. **A 5-bit mask
+  is excluded**: it would turn sigma 32 into a shift of 0, and shift_cut 18 read exact. It
+  would also turn sigma 59 into 27 (shift_cut 45 & 31 = 13), which gives thousands of
+  non-zero-point outputs here, and shift_cut 45 read all zero point.
+- **The miss at 46–49 rules out the straight path.** sigma = shift_cut + 14 does not reach a
+  6-bit `vsrs` code unchanged, or those arms would have shifted left. That is consistent with
+  the overlay's packet decode splitting the shift across the 4-bit and signed 6-bit fields
+  above. Saturation or a clamp somewhere fits too, and this fixture cannot tell which.
+  *(Settled the same day, next block: no clamp. The byte goes to `vsrs` as its code, and
+  sigma's +14 is not part of it.)*
+- **Not tested.** shift_cut < 0 (sigma < 14, the lower edge). Large shifts on a fixture whose
+  accumulator is wide enough to tell them apart. How the overlay's cores read `REG_0`.
+  *(The first two were run the same day, next block.)*
+- **Alternatives ruled out for the upper edge.** A recompile: the xmodel was unchanged and the
+  build took 0.3 s. A stale cache: the restore arm reads the base again. The host doing the
+  arithmetic: the host scale stays at 2^-16 while the codes follow the patched shift.
+
+**The shift_cut byte is the `vsrs` shift code itself, and a 4-bit field carries shift_bias**
+(2026-10-12, Desktop 2, runs 3 and 4,
+[log](../results/aie/dpu_sigma_patch_desktop2_20261012T191325Z.log)). Same method as run 2, now
+editing `REG_0` byte `0x7B` (`shift_bias << 2 | 1`) as well as `0x7C`. A negative shift_cut is
+written as its two's-complement byte. The bias is the lever: `127 << shift_bias` in the
+accumulator is what makes large shifts give non-zero outputs. Every arm is scored against named
+models, and `--dry-run` prints how far apart they are before anything loads.
+
+**Run 3 refuted its own pre-registration.** The five controls were exact, including three
+in-contract shift_bias arms (16:8, 16:15, 10:12; base differs by 2,715–47,848 elements). So
+byte `0x7B` does move the bias shift. But the predictions missed:
+- shift_bias above 15 does not shift the bias by that amount (16:17 reads within 6 elements of base);
+- bytes 63 and 255 read as shift_cut −1, and 64 and 128 as 0;
+- bytes `0xf8` (−8) and `0xf2` (−14) read all zero point;
+- −2 and −3 read close to a left shift, but not exactly.
+
+**A model fitted on run 3** (exhaustive search and a mismatch dump, both in the log):
+- **The shift.** The shift_cut byte `& 63` is the `vsrs` code: 0–59 shift right, 60–63 shift
+  left by 4..1.
+- **Left-shift saturation.** A left shift saturates only if a *one-bit* shift would overflow
+  int8 (t outside [−64, 63]). Otherwise `t << k` wraps to 8 bits. Every −2/−3 mismatch is that
+  wrap.
+- **The bias.** The effective shift_bias is `shift_bias & 15`.
+It reproduces all 36 run-3 arms. The rival reading, sigma = byte + 14 wrapped to 6 bits, fails
+three of them (50:24, −8, −14).
+
+**Run 4 tested the fit on 23 arms it was not fitted on** (pre-registered, sha in the log):
+
+| group | arms | separation from the fitted prediction | read |
+|---|---|---|---|
+| controls | 15:0, 1:0, 16:15 | — | **EXACT**, run valid |
+| left-shift codes, k = 4 new | 60, 61, 62, 124, 189, 190, −4 | plain saturation: 5,018–9,706 | **fit matches all 7**; plain saturation matches none |
+| low bits 50–59 | −5, −11, 54, 59, 114 | rival (left shifts): 37,179–52,422 | **fit matches all 5**; the rival matches none |
+| high bits ignored | 65, 192, −60 | exact: 38,105–54,184 | fit matches all 3 (does not separate the rival) |
+| shifts 20–23 (sigma 34–37) at shift_bias 15 | 20:15 … 23:15 | `sc_clamp17` 19,780; base 7,855–20,232 | **EXACT, all 4** |
+| `0x7B` bit 6 set | 16:21, 22:31 | `sb_clamp15` 28,672 at 16:21 | fit matches both |
+| `0x7B` bit 7 set | 15:40, 16:47 | `sb_clamp15` 42,976 at 15:40 | **fit MISSED both** |
+
+**So the shift_cut half of the fit held on all 19 arms that test it, and the model as
+pre-registered is refuted by the two bit-7 arms.** After the fact, both bit-7 arms equal the
+shift with the bias zeroed (0 mismatches; `shift_bias & 15` misses by 14,352 and 28,672). That
+reading is fitted on 2 arms and untested, and these arms cannot tell a disabled bias from one
+shifted out of range. *(Tested the same day, run 5 below: refuted by one arm.)*
+
+What this settles, and what it does not:
+- **Run 2's miss is explained.** The device does not shift by sigma = shift_cut + 14. It
+  shifts by the byte, so shift_cut 46–49 are right-shift codes. Sigma's +14 is the producer's
+  bookkeeping, not part of the `vsrs` operand (on this fixture, with input and weight
+  positions 0). It was not added to the byte before `vsrs`.
+- **Shifts up to 23 (sigma 37) execute exactly** and decisively (MEASURED). Every right shift
+  from 24 to 59 reads all zero point here, consistent with the code but not separating it
+  from a clamp anywhere in that range. For 24–31 the limit is this fixture: its largest
+  value, bias plus accumulator, stays below 2^23, so a wider Conv could still separate them.
+  From 32 up, no 32-bit accumulator can.
+- **The lower edge is reachable, and wrong past −1.** Shift_cut −1 (byte `0xff`) runs exactly.
+  −2..−4 run, but wrap rather than saturate when 32 ≤ |t| < 64 (for −2), the same rule as
+  `vsrs` on one core. −5 and below cannot be expressed: their bytes are right-shift codes
+  50–59. The 2026-09-09 "sigma 0 diverges" row ran on CPU fallback. This is the first DPU data
+  below shift_cut 0.
+- **Not tested.** What `0x7B` bit 7 does, beyond zeroing the bias on two arms *(run 5,
+  below)*. Bits 0–1 of `0x7B`. An accumulator-width probe: shift_bias is 4 bits, so the bias stays below 2^22, and
+  the arms meant for it tested nothing. Any layer shape other than this 1x1 Conv.
+- **Alternatives ruled out.** Those of run 2 (no recompile, no stale cache, no host
+  arithmetic), in every arm of both runs. For the shift reading: a clamp at 16 or 17 (shifts
+  20–23 exact), a 5-bit mask, sigma wrapped to 6 bits (8 arms across both runs), plain
+  saturation on left shifts (7 arms), and an unsigned byte (`0xff` is −1).
+
+**Run 5: "bit 7 zeroes the bias" is refuted, and `0x7B` bits 6–7 stay unexplained**
+(2026-10-12, Desktop 2, [log](../results/aie/dpu_sigma_patch_bit7_desktop2_20261012T193618Z.log)). It is a pre-registered
+held-out test of the bit-7 reading fitted on run 4. It used 8 new arms, all with bit 7 set, varying the low
+field, bit 6, shift_cut, a left-shift code and the byte `0xff`. The controls were valid. That reading matched 7 arms
+and **missed `1:32`** (byte `0x81`: bit 7 only, low field 0), where the bias applied unshifted.
+`1:48` (`0xc1`, bits 7 and 6, low field 0) read as no bias, so bit 6 is not ignored once bit 7
+is set. An after-the-fact fit over every arm of runs 3–5 with shift_bias ≥ 16 (in the log) gives:
+- **Bit 7 clear, bit 6 set.** The bias shifts by `shift_bias & 15`, and nothing else fits (5 informative arms).
+- **Bit 7 set.** `0x81` fits only an unshifted bias. Seven other arms fit only "no bias" or a bias
+  right-shifted by 4–8 or more, which this fixture cannot separate.
+- **No reading fits.** None tried fits `0x81`, `0x85` and `0xc1` together: bits 2–5, 2–6 or 2–7 as a
+  signed or unsigned shift, or bit 7 as a bias-off flag. **Unexplained.**
+The in-contract field (bits 2–5, bits 6–7 clear) is unaffected: every in-contract control in runs
+3–5 was exact.
+
+**Run 6 maps the whole byte: bit 6 is ignored, and bit 7 removes the bias except at `0x81`**
+(2026-10-12, Desktop 2, [log](../results/aie/dpu_sigma_patch_sbgrid_desktop2_20261012T194600Z.log)).
+Every shift_bias 0–63 was run at shift_cut 1, and again at shift_cut (low field + 1) where that
+differs: 123 arms, pre-registered, controls exact.
+- **Bits 6–7 clear (in contract):** the bias shifts by the low field, 30 of 30 arms (predicted).
+- **Bit 6 alone:** the same, `shift_bias & 15`, 31 of 31 (predicted). Bit 6 is ignored.
+- **Run 5 replicated:** `0x81` kept an unshifted bias and `0xc1` did not (predicted).
+- **Bit 7 set (mapping, no prediction):** fitted per byte after the run. `0x81` alone keeps an
+  unshifted bias. All 31 other bytes `0x85`–`0xfd` fit "no bias" or a bias right-shifted by 8 or
+  more with half-up rounding, which this fixture cannot separate. A floor right shift is excluded
+  at shift_cut 1 for every one of them.
+Why `0x81` is the exception is **unexplained**. This map is measured byte by byte; any rule
+drawn from it would need its own held-out run. None of it reaches a model the producer can emit,
+which never sets bits 6–7.
+
+**The bias upshift does not decode `0x7B` itself, so `0x81` comes from the overlay's own code**
+(2026-10-12, Desktop 2, [log](../results/aie/ups_shift_probe_desktop2_20261012T202624Z.log)).
+- **The static trace.** PDI 2 is the Conv's (`graph_used_pdi_list` `[2]`). In it, the conv's output
+  `vsrs` takes its shift from a signed byte at offset 0x21 of a parameter struct, which matches `REG_0`
+  `0x7C`. Offset 0x20 is also loaded as a signed byte, and a scalar that plausibly holds it feeds
+  `vlda.ups.s32.s8`, the int8 bias upshift. "Plausibly", because the core has no interlocks and this
+  reading has no pipeline-timing model.
+- **The probe.** `kernels/srs_probe` mode 3 ran the upshift on one core at every scalar −128..255
+  (pre-registered).
+- **Result.** Fed the shift_bias byte, the upshift agrees with the run-6 DPU map at **0 of 64** values. Given 5
+  (shift_bias 1) it shifts by 5, where the DPU shifts by 1. So the overlay extracts the field before
+  the upshift, and the naive trace is incomplete.
+- **Native behaviour** (fitted on the same 384 points, all matching): `vups` reads `s & 63` as an
+  unsigned left shift, saturating to 32 bits. Unlike `vsrs`, codes 60–63 do not reverse. Shifts of 31 or
+  more saturate every nonzero lane and are not separated from each other.
+- **What it rules out.** No scalar zeroes the lanes or shifts them right. So the DPU's bit-7
+  outcome cannot be this upshift with any operand; for those bytes the overlay skips or reroutes
+  the bias. Why `0x81` is spared stays **unexplained**. *(This paragraph first said it was "now pinned to
+  the overlay's decode code". That is superseded by the trace below: on the one path traced, the core
+  does no decode at all.)*
+
+**The traced bias path passes `0x7B` raw, so the fixture Conv does not run it, and the decode is
+not located** (2026-10-12, Desktop 2, [log](../results/aie/ups_fused_probe_desktop2_20261012T203701Z.log)).
+- **The fused form decodes the same way (measured).** `kernels/srs_probe` mode 4 loads the int8 lanes
+  from memory, so the compiler emits `vlda.ups.s32.s8`, the overlay's own form; the disassembly
+  confirms it. Pre-registered against mode 3, it matches at all 384 scalars: `s & 63`, a saturating
+  left shift.
+- **The timing-aware trace (static).** `tools/aie_timing_slice.py` walks the definition chain back
+  using llvm-aie's scheduling latencies: a scalar load commits after 7 cycles, `mul` after 2, and
+  `vlda.ups` reads its scalar at cycle 7. These are SPEC(Peano), not measured. In the `0x24d0` loop the
+  bias upshift's scalar is the signed byte at `[p3 + 0x20]`, with a 15-cycle margin and nothing in
+  between. The output `vsrs` in the same loop takes `[p3 + 0x21]`.
+- **The struct base fits.** Across three fixtures, +0x20 tracks the shift_bias byte (`0x01`, `0x11`, `0x01`)
+  and +0x21 the shift_cut (8, 8, 16). So `[p3]` = `REG_0` + 0x5B fits the two bytes that vary.
+- **Conclusion.** The upshifted `cm4` seeds the accumulator chains that the loop's `vsrs` drain
+  (`vmac cm7, cm4` → `cm6` → `vsrs … cm6`). So that loop would shift the bias by `b & 63`, where the DPU
+  shifts by `(b >> 2) & 15`, and the fixture Conv does not run it with this byte. PDI 2 has 13 bias upshift sites. Their scalars come
+  from this byte, a stack slot, a constant 0 or a streamed byte, and static reading does not say which
+  one executes. Where the field is extracted, and why `0x81` is spared, stays **unexplained**.
+- **Candidates not ruled out:** another handler, a loader that rewrites the parameter memory, or another
+  struct base on the executed path. Separating them needs a dynamic witness, such as the core's program
+  counter or event trace during a fixture run.
+- **The evidence pulls two ways.** Runs 3–4 found the shift_cut byte acts exactly as a raw 6-bit `vsrs`
+  code, which is what this loop does with +0x21. The bias byte does not act as this loop would treat
+  +0x20. Either a twin handler shares the `vsrs` pattern, or a loader rewrites +0x20 but not +0x21 before
+  the core reads them. The struct check read the xmodel, not device memory, so it does not exclude the
+  second.
+
+**Gate 0 of a dynamic witness: XRT's trace plugin attaches to the EP, but writes no trace without AIE
+metadata** (2026-10-12, Desktop 2, [log](../results/aie/xdp_trace_attach_desktop2_20261012T213156Z.log)).
+- **The question.** Can XRT's own AIE trace plugin observe the overlay's cores, configured only by
+  env vars and an `xrt.ini`, with no DLL copied or replaced and no patch?
+- **Which runtime the EP uses.** The untraced arm shows the EP process loads System32's
+  `xrt_coreutil.dll` (XRT 2.21.0), not Ryzen AI's bundled 2.19.
+- **What held.** With `AMD_NPU_SDK_PATH` set to the XRT SDK, `xdp_aie_trace_plugin.dll` loaded. The
+  outputs stayed bit-equal on all 7 cases, and the cached xmodel was not recompiled.
+- **What failed.** No trace file was written, so Gate 0 **fails** as pre-registered. XRT gives the
+  reason itself: "AIE metadata read failed" and "AIE Metadata is empty for AIE Trace". The plugin wants
+  the metadata as `aie_control_config.json` in the run directory, although the overlay xclbin carries an
+  `AIE_METADATA` section.
+- **Not yet tried:** supplying that file, which would be a new pre-registered attempt. *(Tried the same
+  day as Gate 0b, below.)*
+
+**Gate 0b: with its own metadata supplied, the plugin finds no trace streams in the overlay**
+(2026-10-12, Desktop 2, [log](../results/aie/xdp_trace_metadata_desktop2_20261012T214206Z.log)).
+- **The change.** A byte copy of the overlay xclbin's `AIE_METADATA` went into the run directory as
+  `aie_control_config.json`. Nothing else changed.
+- **What happened.** The metadata loads. The plugin then stops with "Neither PLIO nor GMIO trace
+  infrastructure is found in the given design". In XDP's source that means the design declares no trace
+  streams.
+- **Why.** The metadata agrees: `TraceGMIOs` is empty. The 16 GMIOs carry data (IFM/WGT/OFM), and the 4
+  PLIOs are `TCT0`–`TCT3`. So the shipped Phoenix overlay has no trace routing, and XRT's trace plugin
+  cannot observe its cores by configuration alone. Gate 0b **fails**; the outputs stayed bit-equal.
+- **Not tried:** editing the metadata to declare trace streams. XDP would then program routes into the
+  live partition, which is no longer configuration-only observation.
+
+**B-0: the profile plugin configures and reads the overlay's cores, but every counter reads 0**
+(2026-10-12, Desktop 2, [log](../results/aie/xdp_profile_attach_desktop2_20261012T215835Z.log)).
+- **What worked.** XRT's AIE profile plugin ran in the EP process on the same configuration-only setup.
+  It reserved 4 `heat_map` counters on each of the 16 cores, scheduled its setup and poll transactions
+  through `XDP_KERNEL`, and read 64 counter values back. So that kernel's configure-and-read path works on
+  this firmware.
+- **What failed.** Every value is 0, although the cores computed: the outputs are bit-equal and there
+  was no recompile. B-0 **fails** as pre-registered.
+- **Why is unexplained.** Three candidates, none ruled out: the PDI 2 load re-initialises the core
+  modules after XDP armed them at xclbin load; the end-of-run poll lands after a teardown reset; or these
+  events do not count here. Any replay therefore arms after a warm-up run.
+
+**Route C, a `REG_0` sensitivity sweep, stopped on its first arm**
+(2026-10-12, Desktop 2, [log](../results/aie/dpu_reg0_sensitivity_desktop2_20261012T220151Z.log)).
+- **The sweep and the stop.** It flips each byte of `REG_0[0x00..0xFF]` two ways and records whether the
+  Conv's outputs change. Its pre-registered stop rule ended it at byte `0x00`, with a host-side
+  deserialisation error that occurred before any device contact.
+- **The cause.** `REG_0`'s value is itself a nested protobuf message: `0a e0 0e` is field 1, 1888 B. The
+  parameter payload therefore starts at `REG_0` offset 3. The offsets quoted in this section (0x7B, 0x7C,
+  base 0x5B) are all in the same `REG_0`-value coordinates, so they stand.
+- **No sensitivity result yet.** Resuming at offset 3 waits for the user's OK, as pre-registered.
+- **Resumed at offset 3, it stopped at its 4th arm** ([log](../results/aie/dpu_reg0_sensitivity_desktop2_20261012T221209Z.log)). The error was
+  in `session.run` at `0x04 ^ 0x80`. The tool kept only 300 characters, so host- versus device-side is not
+  recorded. Before the stop, flips of bytes `0x03`–`0x04` changed 47,507 of the 57,344 output codes.
+- **A narrower sweep of the located struct, `0x58`–`0x90`** (2026-10-13, [log](../results/aie/dpu_reg0_sensitivity_narrow_desktop2_20261013T001705Z.log)),
+  now keeps the full error text.
+  - It stopped at arm 23, `0x63 ^ 0x01`, with "nondeterministic repeated output": the same input gave two
+    different outputs. `0x63` is +0x08 from base 0x5B, a byte handler B reads.
+  - Every arm over `0x58`–`0x62` left the outputs unchanged, although both handlers read some of those
+    bytes at base 0x5B.
+  - The pre-registered tests T1/T2 were **not reached**. The scorer's "HOLDS" line is about untested bytes,
+    because it does not check coverage.
+  - `REG_0` is byte-identical across the three compiles, so the offsets compare. No sensitivity map exists
+    yet; going past `0x63` waits for the user.
+- **Resumed at `0x64`, it stopped on its 2nd arm with a device timeout** ([log](../results/aie/dpu_reg0_sensitivity_narrow_desktop2_20261013T002237Z.log)).
+  - The scorer was corrected first and pre-registered: it now prints NOT REACHED for any test whose bytes were
+    not all tested.
+  - `0x64 ^ 0x01` changed 25,021 output codes. `0x64 ^ 0x80` timed out on the device (`ERT_CMD_STATE_TIMEOUT`).
+    The xmodel was restored and the NPU read idle afterwards.
+  - T1, T2 and T3 are still **not reached**.
+  - Post hoc, not a test: the only live bytes so far, `0x63` and `0x64` (+0x08, +0x09 from base 0x5B), are
+    ones only handler B reads. The bytes both handlers read at +0x02..+0x07 were dead on these inputs.
+- **A targeted sweep of the test bytes answers T1 and T2** (2026-10-13, [log](../results/aie/dpu_reg0_sensitivity_targeted_desktop2_20261013T002753Z.log)). It ran
+  10 arms with no error.
+  - **T1 passes:** `0x7C` (shift_cut) is sensitive.
+  - **T2 holds:** `0x70`, `0x87` and `0x88`, the bytes only handler A reads at base 0x5B, change nothing under
+    either flip. That is consistent with the 0x24d0 handler not running the fixture's bias, but it is
+    evidence, not a witness.
+  - Post hoc and consistent with earlier findings, not tests: `0x7C ^ 0x80` (8 -> 0x88) changes nothing,
+    as the 6-bit shift code predicts (0x88 & 63 = 8). `0x7B`'s flips of bits 0 and 7 change nothing, as
+    the `(b >> 2) & 15` decode predicts.
+  - T3, the per-handler fit, still needs the full region.
 
 ---
 
@@ -7381,7 +7788,7 @@ models lies in `[14, 30]`, zero outside.
 This also explains, with no new hardware, the fact recorded in `46c022a` that the highest
 sigma ever executed on this device is 30 — 30 is the contract's upper edge (`shift_cut` 16),
 i.e. the producer's ceiling rather than the silicon's. Both register widths behind Theorem 1
-remain unmeasured and both edges of `[0, 31]` remain unreached.
+remain unmeasured and both edges of `[0, 31]` remain unreached. *(Superseded 2026-10-12: with the shift byte patched in a cached xmodel, the DPU executed sigma 31, 32 and 33 exactly, `results/aie/dpu_sigma_patch_desktop2_20261012T182840Z.log`.)* The lower edge is still unreached.
 
 **166 of 1102 candidate operations were being scored on scales that were never read.** The
 analyzer initialised `scale_x`/`scale_w`/`scale_y` to 1.0 and overwrote each only where a

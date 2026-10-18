@@ -1,0 +1,410 @@
+# kernels/srs_probe/srs_probe.py, sitting 3 of 2026-10-12 on Desktop 2 (DESKTOP-CBL5NUA), Phoenix XDNA1, mlir-aie ironenv
+# lanes at the 128 B-aligned word 32; oracle set WITHOUT f6_m4_59 (added after this run showed codes 60..63 shifting left)
+DESKTOP-CBL5NUA
+20261012T174942Z
+== xrt-smi examine -r aie-partitions (before)
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+== mode 0 acc32->int16, ups [0], 81 shifts, 32 lanes, floor + saturate
+  up  0 shift  -8: rnd 0 sat 1  matches and63,and127  (3017.89 ms)
+  up  0 shift  -7: rnd 0 sat 1  matches and63,and127  (0.83 ms)
+  up  0 shift  -6: rnd 0 sat 1  matches and63,and127  (0.79 ms)
+  up  0 shift  -5: rnd 0 sat 1  matches and63,and127  (0.73 ms)
+  up  0 shift  -4: rnd 0 sat 1  matches NONE  (1.50 ms)
+     lanes: [0, 16, -16, 32, -32, 48, -48, 32767] ...
+  up  0 shift  -3: rnd 0 sat 1  matches NONE  (0.74 ms)
+     lanes: [0, 8, -8, 16, -16, 24, -24, 32767] ...
+  up  0 shift  -2: rnd 0 sat 1  matches NONE  (0.72 ms)
+     lanes: [0, 4, -4, 8, -8, 12, -12, 32767] ...
+  up  0 shift  -1: rnd 0 sat 1  matches NONE  (0.74 ms)
+     lanes: [0, 2, -2, 4, -4, 6, -6, 32767] ...
+  up  0 shift   0: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.71 ms)
+  up  0 shift   1: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.70 ms)
+  up  0 shift   2: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.70 ms)
+  up  0 shift   3: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.73 ms)
+  up  0 shift   4: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.70 ms)
+  up  0 shift   5: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.69 ms)
+  up  0 shift   6: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.70 ms)
+  up  0 shift   7: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.75 ms)
+  up  0 shift   8: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.69 ms)
+  up  0 shift   9: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.69 ms)
+  up  0 shift  10: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.69 ms)
+  up  0 shift  11: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.69 ms)
+  up  0 shift  12: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.69 ms)
+  up  0 shift  13: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.68 ms)
+  up  0 shift  14: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.69 ms)
+  up  0 shift  15: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.69 ms)
+  up  0 shift  16: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.70 ms)
+  up  0 shift  17: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.94 ms)
+  up  0 shift  18: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.70 ms)
+  up  0 shift  19: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.75 ms)
+  up  0 shift  20: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.70 ms)
+  up  0 shift  21: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.72 ms)
+  up  0 shift  22: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.69 ms)
+  up  0 shift  23: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.70 ms)
+  up  0 shift  24: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.72 ms)
+  up  0 shift  25: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.70 ms)
+  up  0 shift  26: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.72 ms)
+  up  0 shift  27: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.69 ms)
+  up  0 shift  28: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.77 ms)
+  up  0 shift  29: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.72 ms)
+  up  0 shift  30: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.75 ms)
+  up  0 shift  31: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.73 ms)
+  up  0 shift  32: rnd 0 sat 1  matches and63,and127,clamp31,clamp63,as_is  (0.70 ms)
+  up  0 shift  33: rnd 0 sat 1  matches and63,and127,clamp31,clamp63,as_is  (0.69 ms)
+  up  0 shift  34: rnd 0 sat 1  matches and63,and127,clamp31,clamp63,as_is  (1.08 ms)
+  up  0 shift  35: rnd 0 sat 1  matches and63,and127,clamp31,clamp63,as_is  (0.76 ms)
+  up  0 shift  36: rnd 0 sat 1  matches and63,and127,clamp31,clamp63,as_is  (0.78 ms)
+  up  0 shift  37: rnd 0 sat 1  matches and63,and127,clamp31,clamp63,as_is  (0.71 ms)
+  up  0 shift  38: rnd 0 sat 1  matches and63,and127,clamp31,clamp63,as_is  (0.70 ms)
+  up  0 shift  39: rnd 0 sat 1  matches and63,and127,clamp31,clamp63,as_is  (0.71 ms)
+  up  0 shift  40: rnd 0 sat 1  matches and63,and127,clamp31,clamp63,as_is  (0.69 ms)
+  up  0 shift  41: rnd 0 sat 1  matches and63,and127,clamp31,clamp63,as_is  (0.71 ms)
+  up  0 shift  42: rnd 0 sat 1  matches and63,and127,clamp31,clamp63,as_is  (0.68 ms)
+  up  0 shift  43: rnd 0 sat 1  matches and63,and127,clamp31,clamp63,as_is  (0.69 ms)
+  up  0 shift  44: rnd 0 sat 1  matches and63,and127,clamp31,clamp63,as_is  (0.69 ms)
+  up  0 shift  45: rnd 0 sat 1  matches and63,and127,clamp31,clamp63,as_is  (0.69 ms)
+  up  0 shift  46: rnd 0 sat 1  matches and63,and127,clamp31,clamp63,as_is  (0.72 ms)
+  up  0 shift  47: rnd 0 sat 1  matches and63,and127,clamp31,clamp63,as_is  (1.12 ms)
+  up  0 shift  48: rnd 0 sat 1  matches and63,and127,clamp31,clamp63,as_is  (0.72 ms)
+  up  0 shift  49: rnd 0 sat 1  matches and63,and127,clamp31,clamp63,as_is  (0.70 ms)
+  up  0 shift  50: rnd 0 sat 1  matches and63,and127,clamp31,clamp63,as_is  (0.70 ms)
+  up  0 shift  51: rnd 0 sat 1  matches and63,and127,clamp31,clamp63,as_is  (0.69 ms)
+  up  0 shift  52: rnd 0 sat 1  matches and63,and127,clamp31,clamp63,as_is  (0.69 ms)
+  up  0 shift  53: rnd 0 sat 1  matches and63,and127,clamp31,clamp63,as_is  (0.69 ms)
+  up  0 shift  54: rnd 0 sat 1  matches and63,and127,clamp31,clamp63,as_is  (0.68 ms)
+  up  0 shift  55: rnd 0 sat 1  matches and63,and127,clamp31,clamp63,as_is  (0.69 ms)
+  up  0 shift  56: rnd 0 sat 1  matches and63,and127,clamp31,clamp63,as_is  (0.69 ms)
+  up  0 shift  57: rnd 0 sat 1  matches and63,and127,clamp31,clamp63,as_is  (0.69 ms)
+  up  0 shift  58: rnd 0 sat 1  matches and63,and127,clamp31,clamp63,as_is  (0.69 ms)
+  up  0 shift  59: rnd 0 sat 1  matches and63,and127,clamp31,clamp63,as_is  (0.69 ms)
+  up  0 shift  60: rnd 0 sat 1  matches NONE  (0.71 ms)
+     lanes: [0, 16, -16, 32, -32, 48, -48, 32767] ...
+  up  0 shift  61: rnd 0 sat 1  matches NONE  (0.78 ms)
+     lanes: [0, 8, -8, 16, -16, 24, -24, 32767] ...
+  up  0 shift  62: rnd 0 sat 1  matches NONE  (0.71 ms)
+     lanes: [0, 4, -4, 8, -8, 12, -12, 32767] ...
+  up  0 shift  63: rnd 0 sat 1  matches NONE  (0.80 ms)
+     lanes: [0, 2, -2, 4, -4, 6, -6, 32767] ...
+  up  0 shift  64: rnd 0 sat 1  matches and31,and63  (0.72 ms)
+  up  0 shift  65: rnd 0 sat 1  matches and31,and63  (0.79 ms)
+  up  0 shift  66: rnd 0 sat 1  matches and31,and63  (0.73 ms)
+  up  0 shift  67: rnd 0 sat 1  matches and31,and63  (0.80 ms)
+  up  0 shift  68: rnd 0 sat 1  matches and31,and63  (0.75 ms)
+  up  0 shift  69: rnd 0 sat 1  matches and31,and63  (0.72 ms)
+  up  0 shift  70: rnd 0 sat 1  matches and31,and63  (0.73 ms)
+  up  0 shift  71: rnd 0 sat 1  matches and31,and63  (0.66 ms)
+  up  0 shift  72: rnd 0 sat 1  matches and31,and63  (0.78 ms)
+-- mode 0 acc32->int16: candidates matching EVERY lane at EVERY shift: NONE
+     and127   first fails at up 0 shift -4 lane 1: acc 1 expected 0 got 16
+     and31    first fails at up 0 shift -8 lane 7: acc 2147483647 expected 127 got 0
+     and63    first fails at up 0 shift -4 lane 1: acc 1 expected 0 got 16
+     as_is    first fails at up 0 shift 60 lane 1: acc 1 expected 0 got 16
+     clamp31  first fails at up 0 shift -8 lane 1: acc 1 expected 1 got 0
+     clamp63  first fails at up 0 shift -8 lane 1: acc 1 expected 1 got 0
+
+== mode 1 acc32->int8, ups [0], 81 shifts, 32 lanes, floor + saturate
+  up  0 shift  -8: rnd 0 sat 1  matches and63,and127  (0.72 ms)
+  up  0 shift  -7: rnd 0 sat 1  matches and63,and127  (0.73 ms)
+  up  0 shift  -6: rnd 0 sat 1  matches and63,and127  (0.71 ms)
+  up  0 shift  -5: rnd 0 sat 1  matches and63,and127  (1.17 ms)
+  up  0 shift  -4: rnd 0 sat 1  matches NONE  (1.00 ms)
+     lanes: [0, 16, -16, 32, -32, 48, -48, 127] ...
+  up  0 shift  -3: rnd 0 sat 1  matches NONE  (0.74 ms)
+     lanes: [0, 8, -8, 16, -16, 24, -24, 127] ...
+  up  0 shift  -2: rnd 0 sat 1  matches NONE  (1.04 ms)
+     lanes: [0, 4, -4, 8, -8, 12, -12, 127] ...
+  up  0 shift  -1: rnd 0 sat 1  matches NONE  (0.71 ms)
+     lanes: [0, 2, -2, 4, -4, 6, -6, 127] ...
+  up  0 shift   0: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.68 ms)
+  up  0 shift   1: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.69 ms)
+  up  0 shift   2: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.68 ms)
+  up  0 shift   3: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.69 ms)
+  up  0 shift   4: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.70 ms)
+  up  0 shift   5: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.69 ms)
+  up  0 shift   6: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.71 ms)
+  up  0 shift   7: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.69 ms)
+  up  0 shift   8: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.70 ms)
+  up  0 shift   9: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.69 ms)
+  up  0 shift  10: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.67 ms)
+  up  0 shift  11: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.69 ms)
+  up  0 shift  12: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.68 ms)
+  up  0 shift  13: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.67 ms)
+  up  0 shift  14: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.70 ms)
+  up  0 shift  15: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.74 ms)
+  up  0 shift  16: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.71 ms)
+  up  0 shift  17: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.72 ms)
+  up  0 shift  18: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.69 ms)
+  up  0 shift  19: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.66 ms)
+  up  0 shift  20: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.70 ms)
+  up  0 shift  21: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.95 ms)
+  up  0 shift  22: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.75 ms)
+  up  0 shift  23: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.71 ms)
+  up  0 shift  24: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.70 ms)
+  up  0 shift  25: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.73 ms)
+  up  0 shift  26: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.78 ms)
+  up  0 shift  27: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.76 ms)
+  up  0 shift  28: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.71 ms)
+  up  0 shift  29: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.70 ms)
+  up  0 shift  30: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.71 ms)
+  up  0 shift  31: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.71 ms)
+  up  0 shift  32: rnd 0 sat 1  matches and63,and127,clamp31,clamp63,as_is  (0.69 ms)
+  up  0 shift  33: rnd 0 sat 1  matches and63,and127,clamp31,clamp63,as_is  (0.69 ms)
+  up  0 shift  34: rnd 0 sat 1  matches and63,and127,clamp31,clamp63,as_is  (0.69 ms)
+  up  0 shift  35: rnd 0 sat 1  matches and63,and127,clamp31,clamp63,as_is  (0.80 ms)
+  up  0 shift  36: rnd 0 sat 1  matches and63,and127,clamp31,clamp63,as_is  (1.14 ms)
+  up  0 shift  37: rnd 0 sat 1  matches and63,and127,clamp31,clamp63,as_is  (0.75 ms)
+  up  0 shift  38: rnd 0 sat 1  matches and63,and127,clamp31,clamp63,as_is  (0.70 ms)
+  up  0 shift  39: rnd 0 sat 1  matches and63,and127,clamp31,clamp63,as_is  (0.71 ms)
+  up  0 shift  40: rnd 0 sat 1  matches and63,and127,clamp31,clamp63,as_is  (0.69 ms)
+  up  0 shift  41: rnd 0 sat 1  matches and63,and127,clamp31,clamp63,as_is  (0.70 ms)
+  up  0 shift  42: rnd 0 sat 1  matches and63,and127,clamp31,clamp63,as_is  (0.69 ms)
+  up  0 shift  43: rnd 0 sat 1  matches and63,and127,clamp31,clamp63,as_is  (0.69 ms)
+  up  0 shift  44: rnd 0 sat 1  matches and63,and127,clamp31,clamp63,as_is  (0.69 ms)
+  up  0 shift  45: rnd 0 sat 1  matches and63,and127,clamp31,clamp63,as_is  (0.73 ms)
+  up  0 shift  46: rnd 0 sat 1  matches and63,and127,clamp31,clamp63,as_is  (0.68 ms)
+  up  0 shift  47: rnd 0 sat 1  matches and63,and127,clamp31,clamp63,as_is  (0.68 ms)
+  up  0 shift  48: rnd 0 sat 1  matches and63,and127,clamp31,clamp63,as_is  (0.69 ms)
+  up  0 shift  49: rnd 0 sat 1  matches and63,and127,clamp31,clamp63,as_is  (0.68 ms)
+  up  0 shift  50: rnd 0 sat 1  matches and63,and127,clamp31,clamp63,as_is  (0.69 ms)
+  up  0 shift  51: rnd 0 sat 1  matches and63,and127,clamp31,clamp63,as_is  (0.69 ms)
+  up  0 shift  52: rnd 0 sat 1  matches and63,and127,clamp31,clamp63,as_is  (0.69 ms)
+  up  0 shift  53: rnd 0 sat 1  matches and63,and127,clamp31,clamp63,as_is  (0.69 ms)
+  up  0 shift  54: rnd 0 sat 1  matches and63,and127,clamp31,clamp63,as_is  (0.69 ms)
+  up  0 shift  55: rnd 0 sat 1  matches and63,and127,clamp31,clamp63,as_is  (0.69 ms)
+  up  0 shift  56: rnd 0 sat 1  matches and63,and127,clamp31,clamp63,as_is  (0.74 ms)
+  up  0 shift  57: rnd 0 sat 1  matches and63,and127,clamp31,clamp63,as_is  (0.68 ms)
+  up  0 shift  58: rnd 0 sat 1  matches and63,and127,clamp31,clamp63,as_is  (0.71 ms)
+  up  0 shift  59: rnd 0 sat 1  matches and63,and127,clamp31,clamp63,as_is  (1.02 ms)
+  up  0 shift  60: rnd 0 sat 1  matches NONE  (0.70 ms)
+     lanes: [0, 16, -16, 32, -32, 48, -48, 127] ...
+  up  0 shift  61: rnd 0 sat 1  matches NONE  (0.83 ms)
+     lanes: [0, 8, -8, 16, -16, 24, -24, 127] ...
+  up  0 shift  62: rnd 0 sat 1  matches NONE  (0.72 ms)
+     lanes: [0, 4, -4, 8, -8, 12, -12, 127] ...
+  up  0 shift  63: rnd 0 sat 1  matches NONE  (0.75 ms)
+     lanes: [0, 2, -2, 4, -4, 6, -6, 127] ...
+  up  0 shift  64: rnd 0 sat 1  matches and31,and63  (0.69 ms)
+  up  0 shift  65: rnd 0 sat 1  matches and31,and63  (0.71 ms)
+  up  0 shift  66: rnd 0 sat 1  matches and31,and63  (0.72 ms)
+  up  0 shift  67: rnd 0 sat 1  matches and31,and63  (0.72 ms)
+  up  0 shift  68: rnd 0 sat 1  matches and31,and63  (0.72 ms)
+  up  0 shift  69: rnd 0 sat 1  matches and31,and63  (0.70 ms)
+  up  0 shift  70: rnd 0 sat 1  matches and31,and63  (0.69 ms)
+  up  0 shift  71: rnd 0 sat 1  matches and31,and63  (0.71 ms)
+  up  0 shift  72: rnd 0 sat 1  matches and31,and63  (0.70 ms)
+-- mode 1 acc32->int8: candidates matching EVERY lane at EVERY shift: NONE
+     and127   first fails at up 0 shift -4 lane 1: acc 1 expected 0 got 16
+     and31    first fails at up 0 shift -8 lane 7: acc 2147483647 expected 127 got 0
+     and63    first fails at up 0 shift -4 lane 1: acc 1 expected 0 got 16
+     as_is    first fails at up 0 shift 60 lane 1: acc 1 expected 0 got 16
+     clamp31  first fails at up 0 shift -8 lane 1: acc 1 expected 1 got 0
+     clamp63  first fails at up 0 shift -8 lane 1: acc 1 expected 1 got 0
+
+== mode 2 acc64->int32, ups [0, 31], 81 shifts, 16 lanes, floor + saturate
+  up  0 shift  -8: rnd 0 sat 1  matches and63,and127  (0.73 ms)
+  up  0 shift  -7: rnd 0 sat 1  matches and63,and127  (0.69 ms)
+  up  0 shift  -6: rnd 0 sat 1  matches and63,and127  (0.68 ms)
+  up  0 shift  -5: rnd 0 sat 1  matches and63,and127  (0.69 ms)
+  up  0 shift  -4: rnd 0 sat 1  matches NONE  (0.76 ms)
+     lanes: [0, 16, -16, 2147483647, -2147483648, 591751040, -591751040, 48] ...
+  up  0 shift  -3: rnd 0 sat 1  matches NONE  (0.69 ms)
+     lanes: [0, 8, -8, 2147483647, -2147483648, -1851608128, 1851608128, 24] ...
+  up  0 shift  -2: rnd 0 sat 1  matches NONE  (0.93 ms)
+     lanes: [0, 4, -4, 2147483647, -2147483648, 1221679584, -1221679584, 12] ...
+  up  0 shift  -1: rnd 0 sat 1  matches NONE  (0.78 ms)
+     lanes: [0, 2, -2, 2147483647, -2147483648, 610839792, -610839792, 6] ...
+  up  0 shift   0: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.68 ms)
+  up  0 shift   1: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.67 ms)
+  up  0 shift   2: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.70 ms)
+  up  0 shift   3: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.68 ms)
+  up  0 shift   4: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.70 ms)
+  up  0 shift   5: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.67 ms)
+  up  0 shift   6: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.68 ms)
+  up  0 shift   7: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.66 ms)
+  up  0 shift   8: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.66 ms)
+  up  0 shift   9: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.67 ms)
+  up  0 shift  10: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.67 ms)
+  up  0 shift  11: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.69 ms)
+  up  0 shift  12: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.68 ms)
+  up  0 shift  13: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.67 ms)
+  up  0 shift  14: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.67 ms)
+  up  0 shift  15: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.68 ms)
+  up  0 shift  16: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.67 ms)
+  up  0 shift  17: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.65 ms)
+  up  0 shift  18: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.75 ms)
+  up  0 shift  19: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.69 ms)
+  up  0 shift  20: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.68 ms)
+  up  0 shift  21: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.69 ms)
+  up  0 shift  22: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.68 ms)
+  up  0 shift  23: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.67 ms)
+  up  0 shift  24: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.67 ms)
+  up  0 shift  25: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.67 ms)
+  up  0 shift  26: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.85 ms)
+  up  0 shift  27: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.68 ms)
+  up  0 shift  28: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.66 ms)
+  up  0 shift  29: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.68 ms)
+  up  0 shift  30: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.67 ms)
+  up  0 shift  31: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.96 ms)
+  up  0 shift  32: rnd 0 sat 1  matches and63,and127,clamp31,clamp63,as_is  (0.68 ms)
+  up  0 shift  33: rnd 0 sat 1  matches and63,and127,clamp31,clamp63,as_is  (0.66 ms)
+  up  0 shift  34: rnd 0 sat 1  matches and63,and127,clamp31,clamp63,as_is  (0.67 ms)
+  up  0 shift  35: rnd 0 sat 1  matches and63,and127,clamp31,clamp63,as_is  (0.67 ms)
+  up  0 shift  36: rnd 0 sat 1  matches and63,and127,clamp31,clamp63,as_is  (0.67 ms)
+  up  0 shift  37: rnd 0 sat 1  matches and63,and127,clamp31,clamp63,as_is  (0.66 ms)
+  up  0 shift  38: rnd 0 sat 1  matches and63,and127,clamp31,clamp63,as_is  (0.68 ms)
+  up  0 shift  39: rnd 0 sat 1  matches and63,and127,clamp31,clamp63,as_is  (1.13 ms)
+  up  0 shift  40: rnd 0 sat 1  matches and63,and127,clamp31,clamp63,as_is  (1.00 ms)
+  up  0 shift  41: rnd 0 sat 1  matches and63,and127,clamp31,clamp63,as_is  (0.70 ms)
+  up  0 shift  42: rnd 0 sat 1  matches and63,and127,clamp31,clamp63,as_is  (0.66 ms)
+  up  0 shift  43: rnd 0 sat 1  matches and63,and127,clamp31,clamp63,as_is  (0.69 ms)
+  up  0 shift  44: rnd 0 sat 1  matches and63,and127,clamp31,clamp63,as_is  (0.68 ms)
+  up  0 shift  45: rnd 0 sat 1  matches and63,and127,clamp31,clamp63,as_is  (0.67 ms)
+  up  0 shift  46: rnd 0 sat 1  matches and63,and127,clamp31,clamp63,as_is  (0.67 ms)
+  up  0 shift  47: rnd 0 sat 1  matches and63,and127,clamp31,clamp63,as_is  (0.66 ms)
+  up  0 shift  48: rnd 0 sat 1  matches and63,and127,clamp31,clamp63,as_is  (0.67 ms)
+  up  0 shift  49: rnd 0 sat 1  matches and63,and127,clamp31,clamp63,as_is  (0.67 ms)
+  up  0 shift  50: rnd 0 sat 1  matches and63,and127,clamp31,clamp63,as_is  (0.68 ms)
+  up  0 shift  51: rnd 0 sat 1  matches and63,and127,clamp31,clamp63,as_is  (0.67 ms)
+  up  0 shift  52: rnd 0 sat 1  matches and63,and127,clamp31,clamp63,as_is  (0.66 ms)
+  up  0 shift  53: rnd 0 sat 1  matches and63,and127,clamp31,clamp63,as_is  (0.66 ms)
+  up  0 shift  54: rnd 0 sat 1  matches and63,and127,clamp31,clamp63,as_is  (0.67 ms)
+  up  0 shift  55: rnd 0 sat 1  matches and63,and127,clamp31,clamp63,as_is  (0.66 ms)
+  up  0 shift  56: rnd 0 sat 1  matches and63,and127,clamp31,clamp63,as_is  (0.66 ms)
+  up  0 shift  57: rnd 0 sat 1  matches and63,and127,clamp31,clamp63,as_is  (0.66 ms)
+  up  0 shift  58: rnd 0 sat 1  matches and63,and127,clamp31,clamp63,as_is  (0.67 ms)
+  up  0 shift  59: rnd 0 sat 1  matches and63,and127,clamp31,clamp63,as_is  (0.66 ms)
+  up  0 shift  60: rnd 0 sat 1  matches NONE  (0.67 ms)
+     lanes: [0, 16, -16, 2147483647, -2147483648, 591751040, -591751040, 48] ...
+  up  0 shift  61: rnd 0 sat 1  matches NONE  (0.81 ms)
+     lanes: [0, 8, -8, 2147483647, -2147483648, -1851608128, 1851608128, 24] ...
+  up  0 shift  62: rnd 0 sat 1  matches NONE  (0.68 ms)
+     lanes: [0, 4, -4, 2147483647, -2147483648, 1221679584, -1221679584, 12] ...
+  up  0 shift  63: rnd 0 sat 1  matches NONE  (0.68 ms)
+     lanes: [0, 2, -2, 2147483647, -2147483648, 610839792, -610839792, 6] ...
+  up  0 shift  64: rnd 0 sat 1  matches and31,and63  (0.68 ms)
+  up  0 shift  65: rnd 0 sat 1  matches and31,and63  (0.69 ms)
+  up  0 shift  66: rnd 0 sat 1  matches and31,and63  (0.67 ms)
+  up  0 shift  67: rnd 0 sat 1  matches and31,and63  (0.66 ms)
+  up  0 shift  68: rnd 0 sat 1  matches and31,and63  (0.68 ms)
+  up  0 shift  69: rnd 0 sat 1  matches and31,and63  (0.66 ms)
+  up  0 shift  70: rnd 0 sat 1  matches and31,and63  (0.67 ms)
+  up  0 shift  71: rnd 0 sat 1  matches and31,and63  (0.66 ms)
+  up  0 shift  72: rnd 0 sat 1  matches and31,and63  (0.67 ms)
+  up 31 shift  -8: rnd 0 sat 1  matches and63  (0.65 ms)
+  up 31 shift  -7: rnd 0 sat 1  matches and63  (0.67 ms)
+  up 31 shift  -6: rnd 0 sat 1  matches and63  (0.66 ms)
+  up 31 shift  -5: rnd 0 sat 1  matches and63  (0.65 ms)
+  up 31 shift  -4: rnd 0 sat 1  matches clamp31,clamp63  (0.67 ms)
+  up 31 shift  -3: rnd 0 sat 1  matches clamp31,clamp63  (0.67 ms)
+  up 31 shift  -2: rnd 0 sat 1  matches clamp31,clamp63  (0.66 ms)
+  up 31 shift  -1: rnd 0 sat 1  matches clamp31,clamp63  (0.67 ms)
+  up 31 shift   0: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.66 ms)
+  up 31 shift   1: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.67 ms)
+  up 31 shift   2: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.71 ms)
+  up 31 shift   3: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.67 ms)
+  up 31 shift   4: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.68 ms)
+  up 31 shift   5: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.67 ms)
+  up 31 shift   6: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.67 ms)
+  up 31 shift   7: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.67 ms)
+  up 31 shift   8: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.67 ms)
+  up 31 shift   9: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.67 ms)
+  up 31 shift  10: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.68 ms)
+  up 31 shift  11: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.67 ms)
+  up 31 shift  12: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.66 ms)
+  up 31 shift  13: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.67 ms)
+  up 31 shift  14: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.67 ms)
+  up 31 shift  15: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.66 ms)
+  up 31 shift  16: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.67 ms)
+  up 31 shift  17: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.67 ms)
+  up 31 shift  18: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.67 ms)
+  up 31 shift  19: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.65 ms)
+  up 31 shift  20: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.67 ms)
+  up 31 shift  21: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.66 ms)
+  up 31 shift  22: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.65 ms)
+  up 31 shift  23: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.66 ms)
+  up 31 shift  24: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.70 ms)
+  up 31 shift  25: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.68 ms)
+  up 31 shift  26: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.68 ms)
+  up 31 shift  27: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.67 ms)
+  up 31 shift  28: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.67 ms)
+  up 31 shift  29: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.65 ms)
+  up 31 shift  30: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.66 ms)
+  up 31 shift  31: rnd 0 sat 1  matches and31,and63,and127,clamp31,clamp63,as_is  (0.67 ms)
+  up 31 shift  32: rnd 0 sat 1  matches and63,and127,clamp63,as_is  (0.66 ms)
+  up 31 shift  33: rnd 0 sat 1  matches and63,and127,clamp63,as_is  (0.67 ms)
+  up 31 shift  34: rnd 0 sat 1  matches and63,and127,clamp63,as_is  (1.00 ms)
+  up 31 shift  35: rnd 0 sat 1  matches and63,and127,clamp63,as_is  (1.04 ms)
+  up 31 shift  36: rnd 0 sat 1  matches and63,and127,clamp63,as_is  (0.69 ms)
+  up 31 shift  37: rnd 0 sat 1  matches and63,and127,clamp63,as_is  (0.70 ms)
+  up 31 shift  38: rnd 0 sat 1  matches and63,and127,clamp63,as_is  (0.69 ms)
+  up 31 shift  39: rnd 0 sat 1  matches and63,and127,clamp63,as_is  (0.67 ms)
+  up 31 shift  40: rnd 0 sat 1  matches and63,and127,clamp63,as_is  (0.67 ms)
+  up 31 shift  41: rnd 0 sat 1  matches and63,and127,clamp63,as_is  (0.68 ms)
+  up 31 shift  42: rnd 0 sat 1  matches and63,and127,clamp63,as_is  (0.67 ms)
+  up 31 shift  43: rnd 0 sat 1  matches and63,and127,clamp63,as_is  (0.68 ms)
+  up 31 shift  44: rnd 0 sat 1  matches and63,and127,clamp63,as_is  (0.68 ms)
+  up 31 shift  45: rnd 0 sat 1  matches and63,and127,clamp63,as_is  (0.70 ms)
+  up 31 shift  46: rnd 0 sat 1  matches and63,and127,clamp63,as_is  (0.69 ms)
+  up 31 shift  47: rnd 0 sat 1  matches and63,and127,clamp63,as_is  (0.68 ms)
+  up 31 shift  48: rnd 0 sat 1  matches and63,and127,clamp63,as_is  (0.67 ms)
+  up 31 shift  49: rnd 0 sat 1  matches and63,and127,clamp63,as_is  (0.86 ms)
+  up 31 shift  50: rnd 0 sat 1  matches and63,and127,clamp63,as_is  (0.66 ms)
+  up 31 shift  51: rnd 0 sat 1  matches and63,and127,clamp63,as_is  (0.68 ms)
+  up 31 shift  52: rnd 0 sat 1  matches and63,and127,clamp63,as_is  (0.67 ms)
+  up 31 shift  53: rnd 0 sat 1  matches and63,and127,clamp63,as_is  (0.67 ms)
+  up 31 shift  54: rnd 0 sat 1  matches and63,and127,clamp63,as_is  (0.68 ms)
+  up 31 shift  55: rnd 0 sat 1  matches and63,and127,clamp63,as_is  (0.68 ms)
+  up 31 shift  56: rnd 0 sat 1  matches and63,and127,clamp63,as_is  (0.67 ms)
+  up 31 shift  57: rnd 0 sat 1  matches and63,and127,clamp63,as_is  (0.65 ms)
+  up 31 shift  58: rnd 0 sat 1  matches and63,and127,clamp63,as_is  (0.67 ms)
+  up 31 shift  59: rnd 0 sat 1  matches and63,and127,clamp63,as_is  (0.68 ms)
+  up 31 shift  60: rnd 0 sat 1  matches NONE  (0.67 ms)
+     lanes: [0, 2147483647, -2147483648, 2147483647, -2147483648, 2147483647, -2147483648, 2147483647] ...
+  up 31 shift  61: rnd 0 sat 1  matches NONE  (0.68 ms)
+     lanes: [0, 2147483647, -2147483648, 2147483647, -2147483648, 2147483647, -2147483648, 2147483647] ...
+  up 31 shift  62: rnd 0 sat 1  matches NONE  (0.69 ms)
+     lanes: [0, 2147483647, -2147483648, 2147483647, -2147483648, 2147483647, -2147483648, 2147483647] ...
+  up 31 shift  63: rnd 0 sat 1  matches NONE  (0.69 ms)
+     lanes: [0, 2147483647, -2147483648, 2147483647, -2147483648, 2147483647, -2147483648, 2147483647] ...
+  up 31 shift  64: rnd 0 sat 1  matches and31,and63  (0.67 ms)
+  up 31 shift  65: rnd 0 sat 1  matches and31,and63  (0.68 ms)
+  up 31 shift  66: rnd 0 sat 1  matches and31,and63  (0.67 ms)
+  up 31 shift  67: rnd 0 sat 1  matches and31,and63  (0.87 ms)
+  up 31 shift  68: rnd 0 sat 1  matches and31,and63  (0.68 ms)
+  up 31 shift  69: rnd 0 sat 1  matches and31,and63  (1.15 ms)
+  up 31 shift  70: rnd 0 sat 1  matches and31,and63  (0.69 ms)
+  up 31 shift  71: rnd 0 sat 1  matches and31,and63  (0.68 ms)
+  up 31 shift  72: rnd 0 sat 1  matches and31,and63  (0.68 ms)
+-- mode 2 acc64->int32: candidates matching EVERY lane at EVERY shift: NONE
+     and127   first fails at up 0 shift -4 lane 1: acc 1 expected 0 got 16
+     and31    first fails at up 0 shift -8 lane 3: acc 2147483647 expected 127 got 0
+     and63    first fails at up 0 shift -4 lane 1: acc 1 expected 0 got 16
+     as_is    first fails at up 0 shift 60 lane 1: acc 1 expected 0 got 16
+     clamp31  first fails at up 0 shift -8 lane 1: acc 1 expected 1 got 0
+     clamp63  first fails at up 0 shift -8 lane 1: acc 1 expected 1 got 0
+
+== xrt-smi examine -r aie-partitions (after)
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  Total Memory Usage: 64 MB
+  Partition Index   : 0
+    Columns: [1, 2, 3, 4]
+    HW Contexts:
+      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |
+      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |
+      |Memory Usage        |Instr BO   |            |            |     |FPS      |
+      |                    |           |            |            |     |Latency  |
+      |====================|===========|============|============|=====|=========|
+      |8992                |35         |324         |0           |0    |Normal   |
+      |python.exe          |Active     |324         |0           |     |N/A      |
+      |64 MB               |64 KB      |            |            |     |N/A      |
+      |                    |           |            |            |     |N/A      |
+      |--------------------|-----------|------------|------------|-----|---------|
+exit=0

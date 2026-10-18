@@ -1,0 +1,111 @@
+# tools/dpu_sigma_patch_test.py, Desktop 2 (DESKTOP-CBL5NUA), run 5, started 20261012T193618Z UTC.
+# What does bit 7 of REG_0 byte 0x7B (shift_bias << 2 | 1, so shift_bias bit 5) do? Same method as runs 1-4
+# (results/aie/dpu_sigma_patch_desktop2_20261012T182840Z.log, ..._20261012T191325Z.log): the shift_cut-16 fixture
+# compiled --fresh, the CACHED xmodel edited and reloaded without --fresh; idle check before each arm; the EP left
+# every edited xmodel byte-identical and placed the Conv on the NPU in every arm. Model code6_b7zero was added
+# to the tool after run 4 and fitted on its two bit-7 misses; it matches all 36 run-3 and all 27 run-4 arms.
+# Compiled xmodels and outputs stay in git-ignored scratch/.
+#
+# Pre-registration (sha256 5061df480e813fe45eb2dbcd5b70a9bf9025107960fb3973d54424f68216b6d4):
+#   written_utc 2026-10-12T19:36:08Z (rule for control 16:21 reworded before any load), before any run-5 arm has been loaded. Held-out test of the bit-7 reading FITTED on run 4.
+#   run 4 (prereg 99bf2ee8...): code6_sb4 held on all 19 shift arms; the two arms with byte 0x7B bit 7 set (15:40 = 0xa1,
+#     16:47 = 0xbd) missed and, after the fact, equal the shift with the bias zeroed. Model code6_b7zero = code6_sb4, except
+#     shift_bias bit 5 (byte 0x7B bit 7) set -> no bias. It matches all 36 run-3 arms and all 27 run-4 arms (rescore_b7_*.txt).
+#   test: tools/dpu_sigma_patch_test.py --site reg0 --base 16 --base-sb 0 --controls 15,16:15,16:21
+#     --patches 16:40,10:44,1:32,8:52,12:46,60:36,-1:33,1:48
+#   none of the 8 patched arms is in runs 3 or 4. Separation from code6_b7zero's prediction (elements of 57344):
+#     prereg5_dry.txt (--dry-run --reference code6_b7zero, which also lists 20:47; that arm is degenerate and not run),
+#     sha256 7ffb48eca53eff1233857f6e803c4fe41be3ed00e6f1eba24a47b1df83a777e8
+#   decision rules: VOID if control 15:0 or 16:15 is not EXACT, or if control 16:21 (bit 6 only; held in run 4) is not matched by code6_b7zero (its "exact" at shift_bias 21 is not the model, so the tool will print NEITHER for it).
+#     REJECTED if the EP rewrites the xmodel. Hang/device error recorded, not retried.
+#     code6_b7zero PASSES only if it matches all 8 patched arms with 0 mismatches.
+#   prediction: code6_b7zero matches all 8. Arms vary bits 2..5 (the 4-bit field: 8, 12, 0, 4, 14, 4, 1, 0), bit 6
+#     (8:52, 1:48 set it too), shift_cut (1..16, a left-shift code 60 and the byte 0xff = -1).
+#     Separation from code6_sb4 (bias & 15 kept): 2715 (16:40), 9633..43002 (the rest).
+#   LIMIT stated in advance: wrap32 (bias << full shift_bias, wrapped to 32 bits) predicts the same on every one of these arms,
+#     since 127 << 32+ vanishes mod 2^32. So a pass shows the bias contributes nothing when bit 7 is set; it cannot tell
+#     "bit 7 disables the bias" from "the 6-bit field shifts it out of a 32-bit lane". (wrap32 with the full field is already
+#     refuted for shift_bias 16..31 by runs 3-4, where bit 4 is ignored.)
+# Its separation table (--dry-run --reference code6_b7zero, sha256 7ffb48eca53eff1233857f6e803c4fe41be3ed00e6f1eba24a47b1df83a777e8):
+#   control    15:0   sigma  29  code6_b7zero distinct codes  33  alternatives differ by {'exact': 0, 'sat32': 0, 'wrap32': 0, 'sb_clamp15': 0, 'sc_clamp16': 0, 'sc_clamp17': 0, 'sc_clamp31': 0, 'sigma_mask5': 0, 'vsrs6': 0, 'code6_sb4': 0, 'code6_sb4_sat': 0, 'sigma6_sb4': 0, 'base': 8400}
+#   control    16:15  sigma  30  code6_b7zero distinct codes  33  alternatives differ by {'exact': 0, 'sat32': 0, 'wrap32': 0, 'sb_clamp15': 0, 'sc_clamp16': 0, 'sc_clamp17': 0, 'sc_clamp31': 0, 'sigma_mask5': 0, 'vsrs6': 0, 'code6_sb4': 0, 'code6_sb4_sat': 0, 'sigma6_sb4': 0, 'base': 28672}
+#   control    16:21  sigma  30  code6_b7zero distinct codes  17  alternatives differ by {'exact': 43008, 'sat32': 43008, 'wrap32': 43008, 'sb_clamp15': 28672, 'sc_clamp16': 43008, 'sc_clamp17': 43008, 'sc_clamp31': 43008, 'sigma_mask5': 43008, 'vsrs6': 43008, 'code6_sb4': 0, 'code6_sb4_sat': 0, 'sigma6_sb4': 0, 'base': 158}
+#   patched    16:40  sigma  30  code6_b7zero distinct codes  17  alternatives differ by {'exact': 43008, 'sat32': 43008, 'wrap32': 0, 'sb_clamp15': 28672, 'sc_clamp16': 43008, 'sc_clamp17': 43008, 'sc_clamp31': 43008, 'sigma_mask5': 43008, 'vsrs6': 43008, 'code6_sb4': 2715, 'code6_sb4_sat': 2715, 'sigma6_sb4': 2715, 'base': 0}
+#   patched    10:44  sigma  24  code6_b7zero distinct codes 108  alternatives differ by {'exact': 40699, 'sat32': 40699, 'wrap32': 0, 'sb_clamp15': 39291, 'sc_clamp16': 40699, 'sc_clamp17': 40699, 'sc_clamp31': 40699, 'sigma_mask5': 40699, 'vsrs6': 40699, 'code6_sb4': 39179, 'code6_sb4_sat': 39179, 'sigma6_sb4': 39179, 'base': 20520}
+#   patched     1:32  sigma  15  code6_b7zero distinct codes 145  alternatives differ by {'exact': 34945, 'sat32': 34945, 'wrap32': 0, 'sb_clamp15': 32937, 'sc_clamp16': 34945, 'sc_clamp17': 34945, 'sc_clamp31': 34945, 'sigma_mask5': 34945, 'vsrs6': 34945, 'code6_sb4': 18015, 'code6_sb4_sat': 18015, 'sigma6_sb4': 18015, 'base': 44832}
+#   patched     8:52  sigma  22  code6_b7zero distinct codes 118  alternatives differ by {'exact': 39976, 'sat32': 39976, 'wrap32': 0, 'sb_clamp15': 38194, 'sc_clamp16': 39976, 'sc_clamp17': 39976, 'sc_clamp31': 39976, 'sigma_mask5': 39976, 'vsrs6': 39976, 'code6_sb4': 13395, 'code6_sb4_sat': 13395, 'sigma6_sb4': 13395, 'base': 22420}
+#   patched    12:46  sigma  26  code6_b7zero distinct codes 255  alternatives differ by {'exact': 43002, 'sat32': 43002, 'wrap32': 0, 'sb_clamp15': 43002, 'sc_clamp16': 43002, 'sc_clamp17': 43002, 'sc_clamp31': 43002, 'sigma_mask5': 43002, 'vsrs6': 43002, 'code6_sb4': 43002, 'code6_sb4_sat': 43002, 'sigma6_sb4': 43002, 'base': 14880}
+#   patched    20:47  sigma  34  code6_b7zero distinct codes   1  alternatives differ by {'exact': 43008, 'sat32': 43008, 'wrap32': 0, 'sb_clamp15': 14454, 'sc_clamp16': 45016, 'sc_clamp17': 44790, 'sc_clamp31': 43008, 'sigma_mask5': 54231, 'vsrs6': 43008, 'code6_sb4': 14454, 'code6_sb4_sat': 14454, 'sigma6_sb4': 14454, 'base': 8032}
+#   patched    60:36  sigma  74  code6_b7zero distinct codes  17  alternatives differ by {'exact': 40736, 'sat32': 40736, 'wrap32': 40736, 'sb_clamp15': 40736, 'sc_clamp16': 40930, 'sc_clamp17': 40930, 'sc_clamp31': 48810, 'sigma_mask5': 33591, 'vsrs6': 33591, 'code6_sb4': 9633, 'code6_sb4_sat': 22564, 'sigma6_sb4': 9633, 'base': 40736}
+#   patched    -1:33  sigma  13  code6_b7zero distinct codes 129  alternatives differ by {'exact': 30883, 'sat32': 30883, 'wrap32': 0, 'sb_clamp15': 28875, 'sc_clamp16': 30883, 'sc_clamp17': 30883, 'sc_clamp31': 30883, 'sigma_mask5': 30883, 'vsrs6': 30883, 'code6_sb4': 20259, 'code6_sb4_sat': 20259, 'sigma6_sb4': 20259, 'unsigned': 44892, 'sc_floor0': 36462, 'base': 44892}
+#   patched     1:48  sigma  15  code6_b7zero distinct codes 145  alternatives differ by {'exact': 34945, 'sat32': 34945, 'wrap32': 0, 'sb_clamp15': 32937, 'sc_clamp16': 34945, 'sc_clamp17': 34945, 'sc_clamp31': 34945, 'sigma_mask5': 34945, 'vsrs6': 34945, 'code6_sb4': 18015, 'code6_sb4_sat': 18015, 'sigma6_sb4': 18015, 'base': 44832}
+
+BASE shift_cut 16: NPU:Conv 1, sites 1, H_exact mismatches 0 (max 0 LSB)
+control    15:0   (sigma  29) bytes [01 0f]: EXACT at 15:0  {'h_exact': (0, 0), 'h_base': (8400, 8), 'matches': ['code6_b7zero', 'code6_sb4', 'code6_sb4_sat', 'exact', 'sat32', 'sb_clamp15', 'sc_clamp16', 'sc_clamp17', 'sc_clamp31', 'sigma6_sb4', 'sigma_mask5', 'vsrs6', 'wrap32'], 'npu_conv': 1, 'xmodel_unchanged_by_ep': True, 'cache_file_set_unchanged': True}
+control    16:15  (sigma  30) bytes [3d 10]: EXACT at 16:15  {'h_exact': (0, 0), 'h_base': (28672, 64), 'matches': ['code6_b7zero', 'code6_sb4', 'code6_sb4_sat', 'exact', 'sat32', 'sb_clamp15', 'sc_clamp16', 'sc_clamp17', 'sc_clamp31', 'sigma6_sb4', 'sigma_mask5', 'vsrs6', 'wrap32'], 'npu_conv': 1, 'xmodel_unchanged_by_ep': True, 'cache_file_set_unchanged': True}
+control    16:21  (sigma  30) bytes [55 10]: NEITHER  {'h_exact': (43008, 135), 'h_base': (158, 1), 'matches': ['code6_b7zero', 'code6_sb4', 'code6_sb4_sat', 'sigma6_sb4'], 'npu_conv': 1, 'xmodel_unchanged_by_ep': True, 'cache_file_set_unchanged': True}
+patched    16:40  (sigma  30) bytes [a1 10]: NO EFFECT / base  {'h_exact': (43008, 136), 'h_base': (0, 0), 'matches': ['base', 'code6_b7zero', 'wrap32'], 'npu_conv': 1, 'xmodel_unchanged_by_ep': True, 'cache_file_set_unchanged': True}
+patched    10:44  (sigma  24) bytes [b1 0a]: NEITHER  {'h_exact': (40699, 255), 'h_base': (20520, 126), 'matches': ['code6_b7zero', 'wrap32'], 'npu_conv': 1, 'xmodel_unchanged_by_ep': True, 'cache_file_set_unchanged': True}
+patched     1:32  (sigma  15) bytes [81 01]: NEITHER  {'h_exact': (34780, 255), 'h_base': (51015, 128), 'matches': ['code6_sb4', 'code6_sb4_sat', 'sigma6_sb4'], 'npu_conv': 1, 'xmodel_unchanged_by_ep': True, 'cache_file_set_unchanged': True}
+patched     8:52  (sigma  22) bytes [d1 08]: NEITHER  {'h_exact': (39976, 255), 'h_base': (22420, 127), 'matches': ['code6_b7zero', 'wrap32'], 'npu_conv': 1, 'xmodel_unchanged_by_ep': True, 'cache_file_set_unchanged': True}
+patched    12:46  (sigma  26) bytes [b9 0c]: NEITHER  {'h_exact': (43002, 255), 'h_base': (14880, 119), 'matches': ['code6_b7zero', 'wrap32'], 'npu_conv': 1, 'xmodel_unchanged_by_ep': True, 'cache_file_set_unchanged': True}
+patched    60:36  (sigma  74) bytes [91 3c]: NEITHER  {'h_exact': (40736, 128), 'h_base': (40736, 128), 'matches': ['code6_b7zero'], 'npu_conv': 1, 'xmodel_unchanged_by_ep': True, 'cache_file_set_unchanged': True}
+patched    -1:33  (sigma  13) bytes [85 ff]: NEITHER  {'h_exact': (30883, 255), 'h_base': (44892, 128), 'matches': ['code6_b7zero', 'wrap32'], 'npu_conv': 1, 'xmodel_unchanged_by_ep': True, 'cache_file_set_unchanged': True}
+patched     1:48  (sigma  15) bytes [c1 01]: NEITHER  {'h_exact': (34945, 255), 'h_base': (44832, 128), 'matches': ['code6_b7zero', 'wrap32'], 'npu_conv': 1, 'xmodel_unchanged_by_ep': True, 'cache_file_set_unchanged': True}
+restore    16:0   (sigma  30) bytes [01 10]: EXACT at 16:0  {'h_exact': (0, 0), 'h_base': (0, 0), 'matches': ['base', 'code6_b7zero', 'code6_sb4', 'code6_sb4_sat', 'exact', 'sat32', 'sb_clamp15', 'sc_clamp16', 'sc_clamp17', 'sc_clamp31', 'sigma6_sb4', 'sigma_mask5', 'vsrs6', 'wrap32'], 'npu_conv': 1, 'xmodel_unchanged_by_ep': True, 'cache_file_set_unchanged': True}
+cache xmodel restored to the original bytes; NPU idle after: True
+exit 0
+
+# Scored against the pre-registration:
+#   controls 15:0 and 16:15 EXACT; 16:21 matched by code6_b7zero. Run valid.
+#   code6_b7zero matches 7 of 8 patched arms and MISSES 1:32 (byte 0x81: bit 7 set, bits 6 and 2..5 clear), which
+#   matches code6_sb4 instead, i.e. the bias applied unshifted. So code6_b7zero is REFUTED as pre-registered.
+#   1:48 (0xc1, bits 7 and 6 set, bits 2..5 clear) did read as no bias, so bit 6 is not ignored when bit 7 is set.
+#
+# POST-HOC (scratch fit_sb.py, sha256 c1f652572b33f11767c6aa05c1f9f49fc6690bdce2622289943ece71a3d37b2a): for every arm of runs 3-5 with shift_bias >= 16, the effective bias
+#   b * 2**s (s in [-24, 40], right shifts floor or half_up) or none, with the shift from code6_sb4:
+    sb 17 (byte 0x45, bits7..2 010001)  sc  16  patch3   bias fits (wide): <<1
+    sb 17 (byte 0x45, bits7..2 010001)  sc  17  patch3   bias fits (wide): none; <<0..1 (2 values); >>1..24 floor; >>1..24 half_up; only under wrap32: 9 more
+    sb 19 (byte 0x4d, bits7..2 010011)  sc  18  patch3   bias fits (wide): <<3
+    sb 19 (byte 0x4d, bits7..2 010011)  sc  19  patch3   bias fits (wide): none; <<0..3 (4 values); >>1..24 floor; >>1..24 half_up; only under wrap32: 9 more
+    sb 20 (byte 0x51, bits7..2 010100)  sc  16  patch3   bias fits (wide): <<4
+    sb 20 (byte 0x51, bits7..2 010100)  sc  20  patch3   bias fits (wide): none; <<0..5 (6 values); >>1..24 floor; >>1..24 half_up; only under wrap32: 9 more
+    sb 21 (byte 0x55, bits7..2 010101)  sc  16  patch4   bias fits (wide): <<5
+    sb 21 (byte 0x55, bits7..2 010101)  sc  16  patch5   bias fits (wide): <<5
+    sb 22 (byte 0x59, bits7..2 010110)  sc  22  patch3   bias fits (wide): none; <<0..13 (14 values); >>1..24 floor; >>1..24 half_up; only under wrap32: 9 more
+    sb 23 (byte 0x5d, bits7..2 010111)  sc  24  patch3   bias fits (wide): none; <<0..15 (16 values); >>1..24 floor; >>1..24 half_up; only under wrap32: 9 more
+    sb 23 (byte 0x5d, bits7..2 010111)  sc  26  patch3   bias fits (wide): none; <<0..17 (18 values); >>1..24 floor; >>1..24 half_up; only under wrap32: 9 more
+    sb 23 (byte 0x5d, bits7..2 010111)  sc  28  patch3   bias fits (wide): none; <<0..20 (21 values); >>1..24 floor; >>1..24 half_up; only under wrap32: 11 more
+    sb 24 (byte 0x61, bits7..2 011000)  sc  30  patch3   bias fits (wide): none; <<0..22 (23 values); >>1..24 floor; >>1..24 half_up; only under wrap32: 13 more
+    sb 24 (byte 0x61, bits7..2 011000)  sc  31  patch3   bias fits (wide): none; <<0..23 (24 values); >>1..24 floor; >>1..24 half_up; only under wrap32: 14 more
+    sb 24 (byte 0x61, bits7..2 011000)  sc  32  patch3   bias fits (wide): none; <<0..24 (25 values); >>1..24 floor; >>1..24 half_up; only under sat32/wrap32: 32 more
+    sb 24 (byte 0x61, bits7..2 011000)  sc  40  patch3   bias fits (wide): none; <<0..32 (33 values); >>1..24 floor; >>1..24 half_up; only under sat32/wrap32: 16 more
+    sb 24 (byte 0x61, bits7..2 011000)  sc  46  patch3   bias fits (wide): none; <<0..38 (39 values); >>1..24 floor; >>1..24 half_up; only under sat32/wrap32: 4 more
+    sb 24 (byte 0x61, bits7..2 011000)  sc  47  patch3   bias fits (wide): none; <<0..39 (40 values); >>1..24 floor; >>1..24 half_up; only under sat32/wrap32: 2 more
+    sb 24 (byte 0x61, bits7..2 011000)  sc  49  patch3   bias fits (wide): none; <<0..40 (41 values); >>1..24 floor; >>1..24 half_up
+    sb 24 (byte 0x61, bits7..2 011000)  sc  50  patch3   bias fits (wide): none; <<0..40 (41 values); >>1..24 floor; >>1..24 half_up
+    sb 24 (byte 0x61, bits7..2 011000)  sc  63  patch3   bias fits (wide): <<8
+    sb 24 (byte 0x61, bits7..2 011000)  sc  64  patch3   bias fits (wide): <<8
+    sb 24 (byte 0x61, bits7..2 011000)  sc 128  patch3   bias fits (wide): <<8
+    sb 24 (byte 0x61, bits7..2 011000)  sc 255  patch3   bias fits (wide): <<8
+    sb 26 (byte 0x69, bits7..2 011010)  sc  31  patch3   bias fits (wide): none; <<0..23 (24 values); >>1..24 floor; >>1..24 half_up; only under wrap32: 14 more
+    sb 28 (byte 0x71, bits7..2 011100)  sc  31  patch3   bias fits (wide): none; <<0..23 (24 values); >>1..24 floor; >>1..24 half_up; only under wrap32: 14 more
+    sb 31 (byte 0x7d, bits7..2 011111)  sc  22  patch4   bias fits (wide): <<15
+    sb 32 (byte 0x81, bits7..2 100000)  sc   1  patch5   bias fits (wide): <<0
+    sb 33 (byte 0x85, bits7..2 100001)  sc  -1  patch5   bias fits (wide): none; >>8..24 half_up; only under wrap32: 9 more
+    sb 36 (byte 0x91, bits7..2 100100)  sc  60  patch5   bias fits (wide): none; >>8..24 half_up; only under wrap32: 9 more
+    sb 38 (byte 0x99, bits7..2 100110)  sc  40  patch3   bias fits (wide): none; <<0..32 (33 values); >>1..24 floor; >>1..24 half_up; only under sat32/wrap32: 16 more
+    sb 40 (byte 0xa1, bits7..2 101000)  sc  15  patch4   bias fits (wide): none; >>1..24 floor; >>1..24 half_up; only under wrap32: 9 more
+    sb 40 (byte 0xa1, bits7..2 101000)  sc  16  patch5   bias fits (wide): none; <<0; >>1..24 floor; >>1..24 half_up; only under wrap32: 9 more
+    sb 44 (byte 0xb1, bits7..2 101100)  sc  10  patch5   bias fits (wide): none; >>4..24 half_up; only under wrap32: 9 more
+    sb 46 (byte 0xb9, bits7..2 101110)  sc  12  patch5   bias fits (wide): none; >>4..24 half_up; only under wrap32: 9 more
+    sb 47 (byte 0xbd, bits7..2 101111)  sc  16  patch4   bias fits (wide): none; <<0; >>1..24 floor; >>1..24 half_up; only under wrap32: 9 more
+    sb 48 (byte 0xc1, bits7..2 110000)  sc   1  patch5   bias fits (wide): none; >>8..24 half_up; only under wrap32: 9 more
+    sb 52 (byte 0xd1, bits7..2 110100)  sc   8  patch5   bias fits (wide): none; >>8..24 half_up; only under wrap32: 9 more
+#   Bit 7 clear, bit 6 set (shift_bias 16..31): every informative arm fits << (shift_bias & 15) and nothing else.
+#   Bit 7 set: 0x81 fits only << 0. 0x85, 0x91, 0xb1, 0xb9, 0xc1, 0xd1 and 0xa1 (at shift_cut 15) fit only "none" or a
+#   bias right-shifted by 4..8 or more (half_up), which this fixture cannot tell apart. Checked by hand against this table,
+#   none of these readings fits all rows: bits 2..5 as the shift (0x85 would shift by 1), bits 2..6 or 2..7 unsigned
+#   (0xc1 would shift by 16; 0x81 by 32), bits 2..6 or 2..7 signed (0x85 would shift by 1; 0x81 by -32), bit 7 as a
+#   bias-off flag (0x81 kept its bias). Each fails on at least one of
+#   0x81, 0x85 and 0xc1. UNEXPLAINED.

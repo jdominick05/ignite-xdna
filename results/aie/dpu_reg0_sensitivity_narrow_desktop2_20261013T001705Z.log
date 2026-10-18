@@ -1,0 +1,199 @@
+# Route C, narrow REG_0 sensitivity sweep (0x58..0x90), Desktop 2 (DESKTOP-CBL5NUA), started 20261013T001705Z UTC, resnet_env17,
+# per-run keep-awake. It ran on the user's instruction after the 221209Z stop, once the other session's
+# CPU-heavy job had ended (no llama-quantize process; CPU load 2 %; NPU idle).
+# Tool: tools/dpu_reg0_sensitivity.py (sha256 66b235f3f17958ba9f40c6f6e217263ab04c56c3dc965961cce5f1e625ebb7c7). Its only change since the first run keeps the full error text.
+#
+# Pre-registration (sha256 f0d4403dbf748023098cc1f4c4bb0ed94d39c7fcce8c3c549008f4f27ac92ea7):
+#   written_utc 2026-10-13T00:16:52Z, before the narrow sweep, on the user's instruction (after the 221209Z stop).
+#   tool: tools/dpu_reg0_sensitivity.py (sha256 66b235f3f17958ba9f40c6f6e217263ab04c56c3dc965961cce5f1e625ebb7c7); its one change since the first pre-registration keeps the full exception text. Scorer unchanged: scratch c_score.py (sha256 663adf5007d67eb818fec872fe46e60bfb330bb72aa916a0d78196c5015cd83e).
+#   sweep: REG_0[0x58..0x90] x masks {0x01, 0x80} = 114 arms on the 32-channel sc8/sb0 fixture, 7 cases each. This region holds the struct both static handlers read at base 0x5B (+0x00..+0x2f = 0x5B..0x8A) plus margins. 'sensitive' = any mask changes any output code.
+#   Stop rule unchanged: the first ERROR or REJECTED arm stops the sweep, restores the xmodel, records the full error text, and waits for the user's OK. Handler B reads +0x04..+0x0a (0x5F..0x65) and +0x24 u32 (0x7F..0x82), which may be sizes or addresses.
+#   T1 control: 0x7C (shift_cut) is sensitive.
+#   T2 H_notA: 0x70 (+0x15) and 0x87, 0x88 (+0x2c u16), the bytes ONLY handler A reads at base 0x5B, are NOT sensitive. Any of them sensitive refutes it.
+#   T3 (descriptive, the rule fixed in c_score.py): slide each handler's read set over every base whose bytes were all tested; rank by coverage, then hits. Inside this window only bases 0x58..0x61 (A) and 0x58..0x63 (B) are fully tested.
+#   Evidence, not a witness.
+#   (Erratum, written before any arm was read: within this window, handler A's fully tested bases are 0x58..0x63
+#   and handler B's 0x56..0x65, not the ranges stated above. The scorer applies the rule itself.)
+
+# ===== run (the tool's stdout, verbatim) =====
+deleted stale cache C:\Users\<user>\PycharmProjects\ignite-xdna\.claude\worktrees\dpu-isa-re\modelcachekey
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\PycharmProjects\ignite-xdna\.claude\worktrees\dpu-isa-re\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+BASE: NPU:Conv 1, REG_0 1891 B at xmodel offset 71574
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\PycharmProjects\ignite-xdna\.claude\worktrees\dpu-isa-re\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+0x58 ^ 0x01 (ff->fe): same
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\PycharmProjects\ignite-xdna\.claude\worktrees\dpu-isa-re\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+0x58 ^ 0x80 (ff->7f): same
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\PycharmProjects\ignite-xdna\.claude\worktrees\dpu-isa-re\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+0x59 ^ 0x01 (ff->fe): same
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\PycharmProjects\ignite-xdna\.claude\worktrees\dpu-isa-re\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+0x59 ^ 0x80 (ff->7f): same
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\PycharmProjects\ignite-xdna\.claude\worktrees\dpu-isa-re\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+0x5a ^ 0x01 (ff->fe): same
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\PycharmProjects\ignite-xdna\.claude\worktrees\dpu-isa-re\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+0x5a ^ 0x80 (ff->7f): same
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\PycharmProjects\ignite-xdna\.claude\worktrees\dpu-isa-re\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+0x5b ^ 0x01 (7f->7e): same
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\PycharmProjects\ignite-xdna\.claude\worktrees\dpu-isa-re\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+0x5b ^ 0x80 (7f->ff): same
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\PycharmProjects\ignite-xdna\.claude\worktrees\dpu-isa-re\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+0x5c ^ 0x01 (7f->7e): same
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\PycharmProjects\ignite-xdna\.claude\worktrees\dpu-isa-re\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+0x5c ^ 0x80 (7f->ff): same
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\PycharmProjects\ignite-xdna\.claude\worktrees\dpu-isa-re\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+0x5d ^ 0x01 (7f->7e): same
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\PycharmProjects\ignite-xdna\.claude\worktrees\dpu-isa-re\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+0x5d ^ 0x80 (7f->ff): same
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\PycharmProjects\ignite-xdna\.claude\worktrees\dpu-isa-re\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+0x5e ^ 0x01 (7f->7e): same
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\PycharmProjects\ignite-xdna\.claude\worktrees\dpu-isa-re\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+0x5e ^ 0x80 (7f->ff): same
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\PycharmProjects\ignite-xdna\.claude\worktrees\dpu-isa-re\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+0x5f ^ 0x01 (7f->7e): same
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\PycharmProjects\ignite-xdna\.claude\worktrees\dpu-isa-re\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+0x5f ^ 0x80 (7f->ff): same
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\PycharmProjects\ignite-xdna\.claude\worktrees\dpu-isa-re\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+0x60 ^ 0x01 (7f->7e): same
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\PycharmProjects\ignite-xdna\.claude\worktrees\dpu-isa-re\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+0x60 ^ 0x80 (7f->ff): same
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\PycharmProjects\ignite-xdna\.claude\worktrees\dpu-isa-re\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+0x61 ^ 0x01 (7f->7e): same
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\PycharmProjects\ignite-xdna\.claude\worktrees\dpu-isa-re\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+0x61 ^ 0x80 (7f->ff): same
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\PycharmProjects\ignite-xdna\.claude\worktrees\dpu-isa-re\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+0x62 ^ 0x01 (7f->7e): same
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\PycharmProjects\ignite-xdna\.claude\worktrees\dpu-isa-re\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+0x62 ^ 0x80 (7f->ff): same
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\PycharmProjects\ignite-xdna\.claude\worktrees\dpu-isa-re\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+0x63 ^ 0x01 (00->01): ERROR: RuntimeError
+  full error text:
+nondeterministic repeated output on fit_ramp
+arms 23, stopped: stop rule at 0x63 ^ 0x01: ERROR: RuntimeError, restored True, idle after False, 8 s
+
+# ===== state =====
+arms run 23; xmodel restored True; the tool's idle check at exit read False; xrt-smi read idle a minute later.
+REG_0 content is byte-identical across all three compiles of this fixture (sha256 922a0268a1def274...). Only the
+xmodel's map order moved (REG_0 at xmodel offset 4233995, 4238057, then 71574), so REG_0 offsets are comparable.
+
+# ===== pre-registered scorer output (scratch c_score.py, unchanged) =====
+    arms 23, offsets tested 11 (0x58..0x62), stopped: stop rule at 0x63 ^ 0x01: ERROR: RuntimeError
+    sensitive offsets (0): 
+      mask 0x01: 0 sensitive
+      mask 0x80: 0 sensitive
+    
+    T1 controls: 0x7C sensitive: False; 0x7B sensitive: False
+    T2 H_notA: bytes only handler A reads at base 0x5B: 70 87 88 -> sensitive: none -> HOLDS
+    T3 handler A, best bases (coverage, hits, base): 
+    T3 handler B, best bases (coverage, hits, base): 
+
+# ===== reading =====
+# STOPPED at arm 23, 0x63 ^ 0x01 (00 -> 01), by the stop rule.
+#   - The full error text is now recorded: "nondeterministic repeated output on fit_ramp". Two runs of the
+#     same input on the same session gave different output codes.
+#   - 0x63 is +0x08 from base 0x5B, a byte that static handler B reads (lda.u8 at 0x2dae).
+#   - A plausible reading is that the flip makes the overlay read memory whose contents vary, but that is not
+#     established.
+# Scorer caveat: c_score.py does not check coverage. Its "T1 ... False" and "T2 ... HOLDS" are about bytes this
+# run never reached (0x70, 0x7B, 0x7C, 0x87, 0x88). T1 and T2 are therefore NOT EVALUATED, and T3 has no fully
+# tested base.
+# What the run does show: all 22 arms over 0x58..0x62 left every output code unchanged. Both static handlers
+# read some of those bytes at base 0x5B: +0x02 u16 = 0x5D..0x5E (both), +0x07 = 0x62 (both), and +0x04..+0x06 =
+# 0x5F..0x61 (B). Two readings remain open:
+#   - those fields have no effect on these 7 inputs;
+#   - the executed path does not read them at that base.
+# Resuming past 0x63 waits for the user's OK.
