@@ -25039,3 +25039,43 @@ contexts, exit 0, `timing_eligible: true`. Batch 2 throughout, so 512 tokens pad
 - **The weight-product path is now its NPU calls plus about 20-35%** (the `gemm` phase is 1.22-1.33x the calls).
 - **What remains on the host is the single-threaded NumPy fp32 ops:** attention, GELU, norms and RoPE, 109 ms at
   128 tokens and 3,885 ms at 2048. Those are what the fused kernels replace.
+
+#### Fused local attention on one core: correct, about 4x off its DMA bound (2026-10-18, Desktop 2)
+
+[`kernels/embedgemma/attn_local.cc`](../kernels/embedgemma/attn_local.cc) computes one head of local attention
+(head_dim 256) for 16 query rows on one core, in flash order:
+- Q stays resident.
+- A window of 32-key blocks streams as 4 KiB chunks: four K^T chunks, then four V chunks per block.
+- The band |i - j| <= W is built on the core from indices. Blocks no row can see are skipped. Rows that have seen
+  no key are guarded.
+- Exp uses Laya's fp32 table exp.
+- P is BF16, O and the row sums fp32, and the output is BF16 through a Newton reciprocal.
+
+Linked core program 11,456 B (limit 16,384), deepest frame 832 B (2 KiB stack).
+
+[`kernels/embedgemma/attn_probe.py`](../kernels/embedgemma/attn_probe.py) feeds it from the shim. Each case is
+compared with a NumPy emulation of the kernel's arithmetic: the table exp and the Newton reciprocal op for op,
+fp64 products rounded to fp32.
+
+| Case | L | W | Key blocks | Result | Dispatch |
+|---|---:|---:|---:|---|---:|
+| dense | 128 | 512 | 4 | PASS, worst 0.500 | 0.978 ms |
+| band | 256 | 48 | 5 | PASS, worst 0.125 | 1.765 ms |
+| model | 1088 | 512 | 33 | PASS, worst 0.500 | 41.401 ms |
+
+([log](../results/aie/embedgemma_attn_local_onecore_desktop2_20261018T213101Z.log); host CLEAR, no foreign
+contexts, exit 0, `timing_eligible: true`. "Worst" is the largest |device - emulation| over 2 BF16 ulps of that
+output row's largest |value|. Every case is finite and bit-equal across 4 dispatches.)
+
+**The criterion was changed after a failure, and the failed run is kept.**
+[Run 1](../results/aie/embedgemma_attn_local_onecore_desktop2_20261018T212916Z.log) compared against numpy exp
+and exact division, requiring every output within 2 BF16 ulps of its own value. It FAILED: up to 377 ulps on
+0.03-0.26% of outputs. A per-value ulp distance is unbounded where O cancels near zero; the same outputs are
+within 1.58e-3 of the largest value. Before run 2, the emulation was made op-for-op for exp and reciprocal, and the
+criterion became row-scaled (written into the tool's docstring before the run). The frozen end-to-end gate stays
+the final judge, and the kernel has not met it yet.
+
+**Speed.** The model case runs 68 tiles of 16 rows against 33 blocks each, about 0.61 ms per tile.
+- Ideal MAC time is about 37 µs per tile: 2,048 `mmul` per block x 33 at 1.8 GHz.
+- Streaming the window's 1.06 MiB at one shim channel's 4 B/cycle takes about 150 µs.
+- So the kernel is about 16x off compute and 4x off that DMA bound. Where the rest goes is not yet measured.
