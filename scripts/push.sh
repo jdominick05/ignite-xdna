@@ -1,35 +1,34 @@
 #!/usr/bin/env bash
-# Push the current branch to both remotes: origin (GitLab, the primary
-# multi-machine sync point) and github (public mirror). Run this after
-# scripts/commit.sh -- commit.sh never pushes, this is the separate,
-# confirmed step that does.
+# Push the current branch to origin (GitHub, github.com/jdominick05/ignite-xdna,
+# the one remote every machine pulls from). Run this after scripts/commit.sh --
+# commit.sh never pushes, this is the separate, confirmed step that does.
 #
-#   ./scripts/push.sh              # push current branch to origin, then github
+#   ./scripts/push.sh              # push the current branch to origin
 #   ./scripts/push.sh --branch main
-#   ./scripts/push.sh --only origin
-#   ./scripts/push.sh --only github
 #   ./scripts/push.sh --no-scrub   # skip AI assistant link scrubbing/verification
 #
 # Before pushing, verifies that outgoing commits do not contain any links
 # for AI assistants (e.g. Claude, Codex, ChatGPT, Antigravity, Gemini).
 # Automatically scrubs any AI assistant links from unpushed commits so that
-# mirrors and remotes never receive AI assistant links.
+# the public remote never receives AI assistant links.
 #
-# Never force-pushes. Fails loudly (and keeps going to try the other remote)
-# if either push is rejected -- e.g. another machine pushed to origin first,
-# in which case `git pull --rebase` (or a fetch + merge) on origin comes
-# before retrying: sync at the start and end of every session.
+# Refuses if origin is not GitHub: a clone still pointing at the retired GitLab
+# remote fixes that with
+#   git remote set-url origin https://github.com/jdominick05/ignite-xdna.git
+#   git remote remove github     # if it still has the old mirror name
+#
+# Never force-pushes. A rejected push (another machine pushed first) needs
+# `git pull --rebase` (or a fetch + merge) before retrying: sync at the start
+# and end of every session.
 
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 BRANCH="$(git rev-parse --abbrev-ref HEAD)"
-ONLY=""
 NO_SCRUB=0
 
 while [ $# -gt 0 ]; do
     case "$1" in
         --branch)   BRANCH="$2"; shift ;;
-        --only)     ONLY="$2"; shift ;;
         --no-scrub) NO_SCRUB=1 ;;
         -h|--help)  usage "${BASH_SOURCE[0]}"; exit 0 ;;
         *) die "unknown arg $1" ;;
@@ -37,14 +36,11 @@ while [ $# -gt 0 ]; do
     shift
 done
 
-case "$ONLY" in
-    ""|origin|github) ;;
-    *) die "--only must be 'origin' or 'github'" ;;
+URL="$(git remote get-url origin 2>/dev/null)" || die "remote 'origin' is not configured (git remote -v)"
+case "$URL" in
+    *github.com[:/]*) ;;
+    *) die "origin is $URL, not GitHub -- see the fix in ./scripts/push.sh --help" ;;
 esac
-
-for r in origin github; do
-    git remote get-url "$r" >/dev/null 2>&1 || die "remote '$r' is not configured (git remote -v)"
-done
 
 if [ "$NO_SCRUB" -eq 0 ]; then
     step "verifying no AI assistant links in outgoing commits"
@@ -52,32 +48,6 @@ if [ "$NO_SCRUB" -eq 0 ]; then
     ok "verified no AI assistant links in outgoing commits"
 fi
 
-step "pushing '$BRANCH'"
-info "origin: $(git remote get-url origin)"
-info "github: $(git remote get-url github)"
-
-FAILED=()
-
-push_remote() {
-    local remote="$1"
-    step "-> $remote"
-    if git push "$remote" "$BRANCH"; then
-        ok "$remote up to date"
-    else
-        warn "push to $remote failed -- see above"
-        FAILED+=("$remote")
-    fi
-}
-
-if [ -n "$ONLY" ]; then
-    push_remote "$ONLY"
-else
-    push_remote origin
-    push_remote github
-fi
-
-if [ "${#FAILED[@]}" -gt 0 ]; then
-    die "failed remote(s): ${FAILED[*]} -- likely a non-fast-forward; fetch/rebase and retry"
-fi
-
-ok "pushed '$BRANCH' to $( [ -n "$ONLY" ] && echo "$ONLY" || echo "origin and github" )"
+step "pushing '$BRANCH' to origin ($URL)"
+git push origin "$BRANCH" || die "push to origin failed -- likely a non-fast-forward; fetch/rebase and retry"
+ok "pushed '$BRANCH' to origin"
