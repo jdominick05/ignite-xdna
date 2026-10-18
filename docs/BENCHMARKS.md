@@ -11462,6 +11462,13 @@ reproducing a model that quantization has already broken. Anyone reading the exa
 as an accuracy advantage is reading it wrong, and the work this points at is the XINT8 recipe for
 MODNet-Cut, not the engine.
 
+**The 68 % is not a thresholding artifact, which was the obvious competing explanation.** If XINT8
+merely biased the alpha low, a fixed 0.5 cut would under-segment and IoU would collapse without the
+matte being worse. Re-scoring both arms at 0.3 rules that out: FP32 moves 0.5030 to 0.5058 and XINT8
+moves 0.1609 to 0.1641. The quantized model recovers **+0.003** of the missing 0.34, so it produces a
+genuinely worse matte rather than a shifted one. (`acc_modnet_cut_{fp32,cpu}_t030_20260921.log`; the
+CPU arm is Ignition's, since the two agree to every digit.)
+
 Caveats: COCO masks are polygons, so this scores gross person segmentation and says nothing about the
 hair-level detail a matting model exists for; and the AMD arm's witness recorded foreign contention
 from a CPU arm still running beside it - these are `--checks-only` runs making no timing claim and
