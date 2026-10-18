@@ -1,0 +1,17 @@
+Machine: Laptop / Ryzen 5 8645HS / Hawk Point XDNA1
+UTC: 2026-09-08T18:45:33.711440+00:00
+Command: python pipelines/yolov8n/4_detect.py --model models/yolov8n_cut_xint8_adaround.onnx --ep cpu --source assets/test_image.jpg --runs 20 --log 2 --out results/laptop_readiness_20260908_144321/out_yolov8n_cut_xint8_adaround_cpu.jpg
+model: head-cut (6 outputs), decode tail runs in numpy
+input: 640x640
+
+=== CPU | models/yolov8n_cut_xint8_adaround.onnx | 640px | assets/test_image.jpg ===
+infer   mean 41.56 ms   median 42.08 ms   p95 44.51 ms   (24.1 fps)
+post    mean 2.58 ms
+5 detections:
+   person           0.62  (409,157,56,138)
+   tv               0.50  (5,164,149,99)
+   chair            0.44  (292,217,61,101)
+   chair            0.38  (361,216,81,95)
+   refrigerator     0.32  (445,167,67,124)
+wrote results/laptop_readiness_20260908_144321/out_yolov8n_cut_xint8_adaround_cpu.jpg
+Exit code: 0

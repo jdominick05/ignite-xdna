@@ -11,6 +11,29 @@ This file exists because these entries used to be a single cell in
 [`results/README.md`](../README.md)'s table, long enough that its three retractions were
 invisible to anyone scanning it.
 
+## Standalone BF16 transformer primitives
+
+Reusable source and replay instructions live in
+[`kernels/transformer_bf16/`](../../kernels/transformer_bf16/README.md), with
+[method and limits](../../docs/BENCHMARKS.md#standalone-bf16-transformer-primitives-2026-10-18-desktop-2).
+
+| Evidence | Scope |
+| --- | --- |
+| [transformer_bf16_checks_20261018_v2.log](transformer_bf16_checks_20261018_v2.log) | Bounded checks-only device run: all seven operations, three seeds; no speed claim |
+| [transformer_bf16_checks_20261018.json](transformer_bf16_checks_20261018.json) | Source hashes, numerical criteria and individual operation results |
+| [transformer_bf16_checks_20261018.log](transformer_bf16_checks_20261018.log) | Initial build-path failure before device execution; retained negative attempt |
+| [transformer_bf16_composed_attention_20261018.log](transformer_bf16_composed_attention_20261018.log) | The consuming workspace imports the shared ops: 16 synthetic attention cases, both models at shared-cache lengths 37 and 8192; checks only |
+| [transformer_bf16_complete_draft_first_20261018.log](transformer_bf16_complete_draft_first_20261018.log) | Original matrix-unit GEMV, one complete E2B draft step passes; synthetic input only |
+| [transformer_bf16_complete_draft_20261018.log](transformer_bf16_complete_draft_20261018.log) | Original GEMV: second complete step exceeds frozen numerical limits; retained failure |
+| [transformer_bf16_complete_draft_trace_20261018.log](transformer_bf16_complete_draft_trace_20261018.log) | Repeat of that failure with saved native intermediates for local-operation diagnosis |
+| [transformer_bf16_compensated_draft_first_20261018.log](transformer_bf16_compensated_draft_first_20261018.log) | Compensated FP32 GEMV fixes the first failing complete-step case without changing numerical gates |
+| [transformer_bf16_compensated_draft_full_20261018.log](transformer_bf16_compensated_draft_full_20261018.log) | Both assistants, three seeds, four cache lengths: 18/24 numerical passes and 23/24 matching greedy tokens; failed qualification |
+| [transformer_bf16_complete_draft_20261018.json](transformer_bf16_complete_draft_20261018.json) | Compact source provenance, per-stage errors and dispatch-completion counts for the complete-step attempts |
+| [transformer_bf16_cached_transport_20261018.log](transformer_bf16_cached_transport_20261018.log) | Bounded cached-transport check: 28 operation checks including A/B/C/A replay, cache eviction and cleanup |
+| [transformer_bf16_cached_transport_20261018.json](transformer_bf16_cached_transport_20261018.json) | Cached-transport source hashes, reference errors, 21 cache hits and released-context witnesses |
+| [transformer_bf16_cached_complete_draft_20261018.log](transformer_bf16_cached_complete_draft_20261018.log) | Four selected complete draft steps through cached transport, both assistants; all four pass and release owned contexts |
+| [transformer_bf16_cached_complete_draft_20261018.json](transformer_bf16_cached_complete_draft_20261018.json) | Per-stage errors, source identities and context/cache counters for the selected complete steps |
+
 ## Cross-audit against Hello XDNA! (2026-09-23, Desktop 2)
 
 This repo checked against Steinert and Breuer's [Hello XDNA!](https://tnzr.org/xdna/), the XDNA1 ISA
@@ -1704,3 +1727,13 @@ hardware contexts running on device"; the sweep is offline and needs no witness.
 | [hipnet_probe_5x20_desktop2_20260928T2211Z.log](hipnet_probe_5x20_desktop2_20260928T2211Z.log) ([JSON](hipnet_probe_5x20_desktop2_20260928T2211Z.json)) | On Device 0 at b58ea8f, xrt-smi idle before and after, pmode default: all three reuse-free containers 14/14 layers exact, the default ones 5/5 readable and 9/9 reused slots, output bit-equal to ORT CPU on the QDQ model, 0 host segments and 0 ORT calls, over 16 frames. Sitting, 3 interleaved passes of 1,000 calls: NPU call 0.7253-0.7260 ms against CPU FP32 on one thread 0.5535-0.5656 (base), 1.5377-1.5394 against 1.4333-1.4474 (k5), 0.7401-0.7440 against 0.5540-0.5696 (relu_after_add). THE NPU IS SLOWER than one CPU thread on this model, at under 0.15 ms of host CPU per call against 0.56-0.58 - [BENCHMARKS](../../docs/BENCHMARKS.md#five-row-maps-on-the-existing-core-a-5x20-sensor-model-compiles-whole-and-layer-exact-and-is-13x-slower-than-one-cpu-thread-2026-09-28-desktop-2) |
 | [hipnet_probe_20x20_offline_desktop2_20260928.log](hipnet_probe_20x20_offline_desktop2_20260928.log) | hipnet v2, the same model redesigned at 20x20 (one row per tracker), on main (de276fb) unmodified: the XINT8 contract holds and the QDQ output is within 0.0070 of FP32 at the hip readout; the offline gate is exact at every layer, reuse on and off, and equals ORT CPU's intermediates; ignite-compile --task segment writes all four containers, then EXITS 1 on a KeyError: 'transform' in its summary print (fixed in b58ea8f); the container snippet matches ORT CPU on 8 frames; and the compile-time schedule size of v1 (5x20) and v2 (20x20) side by side: the same rounds, activation packets, instruction bytes and weight-packet bytes - [BENCHMARKS](../../docs/BENCHMARKS.md#twenty-rows-cost-the-npu-what-five-did-the-same-sensor-model-at-20x20-is-31x-faster-than-one-cpu-thread-on-main-2026-09-28-desktop-2) |
 | [hipnet_probe_20x20_desktop2_20260928T2249Z.log](hipnet_probe_20x20_desktop2_20260928T2249Z.log) ([JSON](hipnet_probe_20x20_desktop2_20260928T2249Z.json)) | On Device 0 at main (de276fb), xrt-smi idle before and after, pmode default: both reuse-free containers 14/14 layers exact, the default ones 5/5 and 9/9, output bit-equal to ORT CPU, 0 host segments and 0 ORT calls, over 16 frames. Sitting, 3 interleaved passes of 1,000 calls: NPU call 0.7492-0.7518 ms against CPU FP32 on one thread 2.3041-2.3204 (3.08-3.09x FASTER), k5 1.5690-1.5699 against 6.8331-6.8833 (4.36-4.38x). Dispatch 0.6500-0.6511 ms, where the five-row sitting 38 minutes earlier read 0.6514-0.6532: twenty rows cost the NPU what five did. Unexplained: k5's dispatch p99 1.9457-1.9717 against 1.4939-1.4973 at five rows, with equal medians - [BENCHMARKS](../../docs/BENCHMARKS.md#twenty-rows-cost-the-npu-what-five-did-the-same-sensor-model-at-20x20-is-31x-faster-than-one-cpu-thread-on-main-2026-09-28-desktop-2) |
+
+## Additional archived work in the testing checkpoint
+
+- Earlier standalone records: [DFL context-block outcome](dfl_decode_phoenix_context_block_20260913T0839Z.log) and [SPPF probe](sppf_20x20x256_phoenix_20260913T062234Z_28355.log).
+- BF16 dispatch-image compilation: [first attempt](transformer_bf16_dispatch_compile_20261018.log), [second attempt](transformer_bf16_dispatch_compile_20261018_v2.log), [bounded single-image transport checks](transformer_bf16_single_image_checks_20261018.log). These do not reverse the failed full-draft numerical qualification.
+- [Checkpoint scope and offline validation](../../docs/BENCHMARKS.md#archived-testing-work-and-historical-evidence-2026-10-18-checkpoint).
+
+- [Later single-image replay and artifact-drift check](transformer_bf16_single_image_checks_20261018_v3.log) retains its checks-only scope; it does not qualify complete-draft numerics.
+
+- [Completed single-image draft check](transformer_bf16_single_image_draft_20261018_v2.log) retains the full bounded-run completion and idle witnesses; checks-only, with no serving-performance claim.

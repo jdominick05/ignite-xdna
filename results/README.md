@@ -808,3 +808,11 @@ Two-output lookup GEMM primitive: [initial build](laya/window_lookup_primitive_v
 
 
 - Full512 attention adoption runner: [26 final offline decision, evidence, order and factory checks; active accuracy identities unchanged](laya/attention512_compare_v2_offline_desktop2_20261017.log), [initial 24-check preparation, superseded](laya/attention512_compare_v1_offline_desktop2_20261017.log); [proposed protocol after full accuracy](../docs/DECISIONS.md#full512-attention-adoption-runner-prepared-during-scoring-2026-10-17-desktop-2). No timing registration or speed result yet.
+
+## Archived testing checkpoint (2026-10-18)
+
+[Offline validation and privacy provenance](testing_checkpoint_20261018.json) and
+[scope of the archived work](../docs/BENCHMARKS.md#archived-testing-work-and-historical-evidence-2026-10-18-checkpoint)
+index the historical laptop, medium-model, dense regression and pose-placement
+artifacts preserved with this checkpoint. Historical failures remain failures;
+unverified post-audit figures are not promoted into accepted performance results.

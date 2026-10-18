@@ -1,0 +1,36 @@
+Machine: Laptop / Ryzen 5 8645HS / Hawk Point XDNA1
+UTC: 2026-09-08T18:46:11.885419+00:00
+Command: python pipelines/yolov6n/4_detect.py --model models/yolov6n_cut_xint8.onnx --ep cpu --source assets/test_image.jpg --runs 20 --log 2 --out results/laptop_readiness_20260908_144321/out_yolov6n_cut_xint8_cpu.jpg
+model: head-cut (6 outputs), decode tail runs in numpy
+input: 640x640
+
+=== CPU | models/yolov6n_cut_xint8.onnx | 640px | assets/test_image.jpg ===
+infer   mean 38.74 ms   median 38.86 ms   p95 44.97 ms   (25.8 fps)
+post    mean 2.19 ms
+24 detections:
+   tv               0.87  (4,169,152,92)
+   chair            0.82  (294,219,58,94)
+   person           0.78  (408,157,56,132)
+   person           0.62  (385,173,19,43)
+   chair            0.59  (360,217,68,96)
+   vase             0.56  (551,304,36,92)
+   potted plant     0.50  (341,176,28,42)
+   tv               0.47  (4,37,168,96)
+   tv               0.47  (552,205,88,124)
+   clock            0.38  (447,122,15,20)
+   tv               0.38  (476,137,46,36)
+   cup              0.38  (169,233,18,32)
+   chair            0.38  (410,220,36,89)
+   cell phone       0.35  (6,37,166,92)
+   tv               0.32  (477,137,19,34)
+   potted plant     0.32  (205,179,62,34)
+   dining table     0.32  (313,212,79,30)
+   bed              0.32  (124,357,340,68)
+   couch            0.29  (128,357,332,64)
+   tv               0.27  (564,84,74,36)
+   dining table     0.27  (313,213,85,89)
+   chair            0.27  (465,220,28,79)
+   traffic light    0.27  (4,37,172,90)
+   bench            0.27  (470,365,166,60)
+wrote results/laptop_readiness_20260908_144321/out_yolov6n_cut_xint8_cpu.jpg
+Exit code: 0

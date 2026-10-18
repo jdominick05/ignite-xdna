@@ -1,0 +1,93 @@
+{
+  "timestamp": "2026-09-13T17:42:55Z",
+  "platform": {
+    "system": "Windows",
+    "machine": "AMD64",
+    "python": "3.13.15",
+    "target_silicon": "AMD Phoenix XDNA1 NPU Device 0 ([003d:00:01.1])"
+  },
+  "config": {
+    "iterations": 2000,
+    "warmup": 100,
+    "input_resolution": "810x1080"
+  },
+  "metrics": {
+    "python_streaming": {
+      "sustained_fps": 1213.793157029824,
+      "elapsed_sec": 1.647727199990186,
+      "frames_processed": 2000,
+      "frame_drops": 0,
+      "glass_to_glass_ms": {
+        "mean": 1.3756108501547715,
+        "median": 1.3503000009222887,
+        "min": 1.3051999994786456,
+        "max": 3.839299999526702,
+        "p95": 1.484135007194709,
+        "p99": 1.724456000811187
+      },
+      "wall_glass_to_glass_ms": {
+        "mean": 1.6862416499861865,
+        "median": 1.6534999958821572,
+        "p95": 1.8279650059412234
+      },
+      "stage_breakdown_ms": {
+        "preprocess_mean": 0.5668088001402793,
+        "npu_mean": 0.7610173502471298,
+        "postprocess_mean": 0.047784699767362326
+      },
+      "memory_mb": {
+        "initial": 173.4609375,
+        "final": 174.16796875,
+        "drift": 0.70703125
+      }
+    },
+    "native_cpp_streaming": {
+      "g2g_mean_ms": 1.333,
+      "g2g_med_ms": 1.334,
+      "g2g_p95_ms": 1.381,
+      "g2g_p99_ms": 1.463
+    },
+    "top_detections": [
+      {
+        "class_name": "person",
+        "class_id": 0,
+        "score": 0.9046505093574524
+      },
+      {
+        "class_name": "person",
+        "class_id": 0,
+        "score": 0.8807970285415649
+      },
+      {
+        "class_name": "person",
+        "class_id": 0,
+        "score": 0.8807970285415649
+      },
+      {
+        "class_name": "person",
+        "class_id": 0,
+        "score": 0.5
+      },
+      {
+        "class_name": "bus",
+        "class_id": 5,
+        "score": 0.5
+      }
+    ]
+  },
+  "constraints": {
+    "fps_target": 1000.0,
+    "fps_actual": 1213.793157029824,
+    "fps_passed": true,
+    "latency_mean_target_ms": 1.8,
+    "latency_mean_actual_ms": 1.3756108501547715,
+    "latency_passed": true,
+    "frame_drops_target": 0,
+    "frame_drops_actual": 0,
+    "frame_drops_passed": true,
+    "memory_drift_target_mb": 5.0,
+    "memory_drift_actual_mb": 0.70703125,
+    "memory_drift_passed": true,
+    "overall_passed": true
+  }
+}

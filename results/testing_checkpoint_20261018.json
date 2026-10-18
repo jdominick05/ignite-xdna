@@ -1,0 +1,129 @@
+{
+  "scope": "local testing checkpoint; no fresh inference or silicon benchmark performed",
+  "recorded_machine": "Desktop 2",
+  "base_commit": "01f491ac1008c4729e99010ce611bf3d4609be74",
+  "offline_tests": {
+    "command": "pytest -q tests/test_audio_l1_sizing_offline.py tests/test_int4_prefill_model_offline.py tests/test_xdna1_roofline_offline.py tests/test_scrub_ai_links.py",
+    "exit_code": 0,
+    "passed": 36,
+    "observed_output": "36 passed in 3.07s"
+  },
+  "legacy_gate": {
+    "command": "resnet_env17: python tools/check_legacy_gate.py",
+    "exit_code": 0,
+    "observed_output": "PIPELINE CHECKS PASS: syntax, shell syntax, 44 imports",
+    "raw_sha256": "136559523db82d00559380f0f58a2d5397a441ec9e53055cc8f893eccb4cca16",
+    "scope": "Final syntax/import gate after latest pending BF16 transport edits"
+  },
+  "privacy_redactions": [
+    {
+      "path": "pose_h2h_20261015/context.json",
+      "original_sha256": "152e6df51564b0b7eccea1c3ddd54a515da03199612ff3b774f6b6e7205848ac",
+      "public_sha256": "4013cf94399b8203b189103c365cf09df4a27a68e113922862ace002f8b4ab3a",
+      "original_local_copy": "scratch/commit-all-testing-20261018/raw/pose_h2h_20261015/context.json",
+      "reason": "local profile path or private local configuration paragraph removed before first commit"
+    },
+    {
+      "path": "results/aie/dfl_decode_phoenix_context_block_20260913T0839Z.log",
+      "original_sha256": "8511368a4722890e7f6a0aa2f1f42db80d77dcdb56081260735f6ae88179430f",
+      "public_sha256": "b990a776dfbdc595e94d15b94cb32d20c016f88b20c6563731b2c9ee12a2b3b1",
+      "original_local_copy": "scratch/commit-all-testing-20261018/raw/results/aie/dfl_decode_phoenix_context_block_20260913T0839Z.log",
+      "reason": "local profile path or private local configuration paragraph removed before first commit"
+    },
+    {
+      "path": "results/aie/transformer_bf16_cached_transport_20261018.json",
+      "original_sha256": "c9988cb4dc435ad54fb8f883e18e8b3d0a9d1da54bad5bec0bd37c00e4549f3e",
+      "public_sha256": "a84ea4b8d96e58b9e90655a2dea821309fde7e78cecc75fd065d92be9128d722",
+      "original_local_copy": "scratch/commit-all-testing-20261018/raw/results/aie/transformer_bf16_cached_transport_20261018.json",
+      "reason": "local profile path or private local configuration paragraph removed before first commit"
+    },
+    {
+      "path": "results/laptop_readiness_20260908_144321/README.md",
+      "original_sha256": "dcb31121ec37386f8be26d40c41fadecbf744c0562eeecbddda3c48da2b79141",
+      "public_sha256": "e7e45dfb137bf6f3ab1f84515e2fae81e4f37c606eaa5e21ce889d918fdd8986",
+      "original_local_copy": "scratch/commit-all-testing-20261018/raw/results/laptop_readiness_20260908_144321/README.md",
+      "reason": "local profile path or private local configuration paragraph removed before first commit"
+    },
+    {
+      "path": "results/yolo_cut_m_adaround_cpu_laptop.log",
+      "original_sha256": "a7b46531f11d7a7187925d2c6309488e50e6460fb82d3ff50a51c671bc2b01b5",
+      "public_sha256": "a3481dc3b11171d3067acbf7503593e7cddfd60fe168aa77e640c571a9740b9e",
+      "original_local_copy": "scratch/commit-all-testing-20261018/raw/results/yolo_cut_m_adaround_cpu_laptop.log",
+      "reason": "local profile path or private local configuration paragraph removed before first commit"
+    },
+    {
+      "path": "results/yolo_cut_m_adaround_diag_laptop.log",
+      "original_sha256": "1f1029a3688e6d7e2d9ab291461820a8d3ce0dcdc145f98f00e0b5613a1e7e4b",
+      "public_sha256": "70416a1501e412742faabfd9c7976f08045f30211967ec842a933aa30cafa752",
+      "original_local_copy": "scratch/commit-all-testing-20261018/raw/results/yolo_cut_m_adaround_diag_laptop.log",
+      "reason": "local profile path or private local configuration paragraph removed before first commit"
+    },
+    {
+      "path": "results/yolo_cut_m_adaround_npu_laptop.log",
+      "original_sha256": "1925837f07f6749c3f72e43c9760e8a5b0417a8920c80861358322f8ebf47fdf",
+      "public_sha256": "31a701badda36a872d50c66e850736ff69132f2c3d32e53c13b3c5e597b0a9ba",
+      "original_local_copy": "scratch/commit-all-testing-20261018/raw/results/yolo_cut_m_adaround_npu_laptop.log",
+      "reason": "local profile path or private local configuration paragraph removed before first commit"
+    }
+  ],
+  "historical_report_before_warning_sha256": "a9544bd5f3bb64feb6824965b8b854d438956f3af98fe6fbba7ff86da2bb5996",
+  "caveats": [
+    "BF16 complete draft remains numerically unqualified",
+    "Historical dense regression failures retained; not rerun",
+    "Post-audit throughput and glass-to-glass labels remain unverified",
+    "Offline estimators are not hardware measurements"
+  ],
+  "encoding_normalizations": [
+    {
+      "path": "results/dense/baseline_regression_failures_20260919.log",
+      "original_sha256": "ef3626cea937c18c6eadb05ee7b266bd4292d01063cdf64e91077a21ddd9503d",
+      "public_sha256": "def1772c3e912282dbc5434029eeb3b6c5fc121373cfcad5c72ff0bea636486b",
+      "original_local_copy": "scratch/commit-all-testing-20261018/raw/results/dense/baseline_regression_failures_20260919.log",
+      "normalization": "decoded embedded ASCII UTF-16LE stderr and removed its single orphan trailing NUL before the next pytest heading; all text preserved"
+    },
+    {
+      "path": "results/dense/current_regression_isolation_20260919.log",
+      "original_sha256": "d92fe530ecc20988c1d19799e8457edfe3f33f14b8e10374566c8067ec4d9e18",
+      "public_sha256": "bb9c9054c1840a2ee2b964219cbd0fa6ac975f4a43b9428799c90ac0ff5951d2",
+      "original_local_copy": "scratch/commit-all-testing-20261018/raw/results/dense/current_regression_isolation_20260919.log",
+      "normalization": "decoded embedded ASCII UTF-16LE stderr and removed its single orphan trailing NUL before the next pytest heading; all text preserved"
+    },
+    {
+      "path": "results/dense/root_tests_hardware_20260919.log",
+      "original_sha256": "7d331aa00851e5109ca2ab6b67e5bf77604a0b61ec09c7d35078da137ad5b4e3",
+      "public_sha256": "f71be88ee631fa08c50b8370bd9ecfdbb82a106af64350f164935f0132347b9f",
+      "original_local_copy": "scratch/commit-all-testing-20261018/raw/results/dense/root_tests_hardware_20260919.log",
+      "normalization": "decoded embedded ASCII UTF-16LE stderr and removed its single orphan trailing NUL before the next pytest heading; all text preserved"
+    },
+    {
+      "path": "results/dense/root_tests_hardware_pack_20260919.log",
+      "original_sha256": "77986425d26e35ed05a6e4f73f2d9a40ee54b8ad1cd2582c9dcdd5ce06ff0e37",
+      "public_sha256": "d1159a668aae26c5641d0a6e8447029a53197ef52f62dd29fd11d1f14a1b4995",
+      "original_local_copy": "scratch/commit-all-testing-20261018/raw/results/dense/root_tests_hardware_pack_20260919.log",
+      "normalization": "decoded embedded ASCII UTF-16LE stderr and removed its single orphan trailing NUL before the next pytest heading; all text preserved"
+    }
+  ],
+  "advisory_number_audit": {
+    "untraced": 88,
+    "notices": 469,
+    "scope": "Includes archived unverified report; no new performance acceptance"
+  },
+  "source_checkpoint": {
+    "kernels/transformer_bf16/common.py": "e9ea9aefc2167093490bc2716ec2895f38cb13fc3852703ebd42211526c4854e",
+    "kernels/transformer_bf16/ops.py": "aabac8f0016d553e5a44db5b2857e09972eaa59799a59f221bc33587aaf49cf7",
+    "kernels/transformer_bf16/persistent.py": "2ebf85286ff9462ba5cc9bf1509e18260094fc057372e319306db7e5b50c8f2d",
+    "kernels/transformer_bf16/probe.py": "8233278ed12504807faa60ce48c08e5bb5b3bd9f95502428247f9050e4a41c5d",
+    "kernels/transformer_bf16/session_probe.py": "5bdccf07ea2c4afce21960af75a83c35a73dbe88250ed1b45cb173f2381856a8",
+    "kernels/transformer_bf16/stream.py": "6e7da07da912a65f6cdfafbc76df2dd22e135e371cc0a560eeddd0bf4c19c97d",
+    "kernels/transformer_bf16/__init__.py": "66e8ee8dbd8e1bbc4788e12fa85a161db92c666969493f6a38b5f623cb309bf4",
+    "kernels/transformer_bf16/dispatch.cc": "2f3de210acfad2fcc8f8d9f3a8415052aa402f058734a459d714c897ad986b05",
+    "kernels/transformer_bf16/geglu.cc": "e7ed0233130e8f63bc2134502c318c87563ac48cf2308aeb7c308641666d4b34",
+    "kernels/transformer_bf16/gemv.cc": "66a1da00c319f565af9554ea516254588273f0396c3d2a1b29299a8e3039690f",
+    "kernels/transformer_bf16/gemv_precise.cc": "6600e21079a574c4d1d3b93f497d11d75656fc062cc123fb12013ece3436087a",
+    "kernels/transformer_bf16/residual.cc": "56d6d909c9830b799263b970443f1f7b57dd4d99557db25afef036d761e8f4a2",
+    "kernels/transformer_bf16/rmsnorm.cc": "9efc3bec80f7c25e88a48ce30f851bc437e05000e7d79014cc2997399b15463f",
+    "kernels/transformer_bf16/rope.cc": "9cda05b108160f2152261eb79b61c8830aca34d0c4d4158d5c281897f1b7ce2a",
+    "kernels/transformer_bf16/softmax.cc": "32ed139ad46f7c3ee8f3edd5716eafed3306386cb81be384ede30fdf00ff397a",
+    "kernels/transformer_bf16/topk.cc": "1f680ca67d8c97a82bb41db53a6f2aad15802f16be287b9bfddbac31ca6e1868"
+  }
+}

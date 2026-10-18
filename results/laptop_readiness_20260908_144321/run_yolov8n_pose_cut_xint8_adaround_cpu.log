@@ -1,0 +1,13 @@
+Machine: Laptop / Ryzen 5 8645HS / Hawk Point XDNA1
+UTC: 2026-09-08T18:45:51.633574+00:00
+Command: python pipelines/yolov8n-pose/4_pose.py --model models/yolov8n-pose_cut_xint8_adaround.onnx --ep cpu --source assets/test_image.jpg --runs 20 --log 2 --out results/laptop_readiness_20260908_144321/out_yolov8n_pose_cut_xint8_adaround_cpu.jpg
+model: head-cut (9 outputs), decode tail runs in numpy
+input: 640x640
+
+=== CPU | models/yolov8n-pose_cut_xint8_adaround.onnx | 640px | assets/test_image.jpg ===
+infer   mean 47.66 ms   median 47.93 ms   p95 50.49 ms   (21.0 fps)
+post    mean 0.13 ms
+1 people:
+   person 0.78  (413,157,50,140)  12/17 keypoints visible
+wrote results/laptop_readiness_20260908_144321/out_yolov8n_pose_cut_xint8_adaround_cpu.jpg
+Exit code: 0

@@ -1,0 +1,363 @@
+RESEARCH_PLATFORM {"machine": "Desktop 2", "cpu": "AMD Ryzen 7 8700G w/ Radeon 780M Graphics", "os": "Windows-11-10.0.26200-SP0", "ram_bytes": 33381138432, "source_sha256": {"tools/research_process.py": "1e356a0b7bd37e6185fe91f4e5e40586bf3b02af144a86318905d6ac6a205e2d", "tools/quant_calib_alphabet.py": "2dc0b2878c564853f340880209a425dfcf63b8536b2b8e9fd32344daade58d37", "tools/xint8_arithmetic_probe.py": "6aa3df08b9870c3c2264b868459d7ffbac3070dddc1349d7c6f3f480075f7041", "scripts/research-lowlevel.sh": "3455ad7933697936487712665505c216891865c6deada647302785f6e37020bd", "scripts/research-iron.sh": "4c863a262646ddab39b5005006ba8e03809895e6386c6310e2fd9d0a9e9609ee", "kernels/memory_placement/probe.py": "e8d990169ad6091fa1b53852e9f61eff495b5def72d35165a5c5cf1759e38898", "kernels/memory_placement/memory_kernels.cc": "182e7af7071a1e851afb4a7ca266069c489aea1fbaaa85eca129708daeba5ba6", "scripts/research-matrix.sh": "739254171629deae822b0ad7dabc875aee19ace56dde77d3e8aab61663f97516", "kernels/memory_placement/gemm.py": "17c905ad66110d3346bbf0db898dfc6b780df59fae1dfb0c1747057ce1e5844e", "kernels/memory_placement/gemm_placement.cc": "f21acf7250b12914ea30cc1f77613239dfa18421a85a1b9a5199017dd916278a", "tools/research_summary.py": "0c00dcceef07053d06731b41a1f1ed58d3ba4ea09f82497de354ce9cef17da20", "tools/research_toolchain.py": "f0a126a24ae213acfaa43460cfd9def0c86d9cb70cfee0228aa271688467b314"}, "commit": "7c9efd5f0d35f23a5ce6d476900660600ab4f10c", "command": ["C:/Users/<user>/miniforge3/envs/mlir-aie-iron/python.exe", "scratch/dense_checks.py", "current_runtime"], "seconds_limit": 600.0, "rss_gib_limit": 8.0, "checks_only": true, "free_ram_bytes": 18077982720}
+PRE_NPU_CONTEXT_WITNESS "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+IMPORTS C:\Users\<user>\PycharmProjects\ignite-xdna\src\ignite_xdna\__init__.py C:\Users\<user>\PycharmProjects\ignite-xdna\Ignition\src\ignition\__init__.py C:\Xilinx\XRT\xrt_sdk\xrt\python\pyxrt.pyd
+BASELINE_RUNTIME 4c789417f5b65619ad5207e249ef6a4a5b93c3fa7b9823df804e451ee8191c1c
+BASELINE_API dd3a5b9b877a3b5d143ded22cd5c3f4dfbc6ab217ca227d5347a0d72a2815cc8
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 92 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |17112               |245        |0           |0           |0    |Normal   |\n      |python.exe          |Active     |0           |0           |     |N/A      |\n      |92 MB               |672 KB     |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [17112], "owned_pids": [17112, 59912], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 3.531, "tree_rss_bytes": 279326720, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 74 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |17112               |247        |10          |0           |0    |Normal   |\n      |python.exe          |Active     |10          |0           |     |N/A      |\n      |74 MB               |448 KB     |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [17112], "owned_pids": [17112, 59912], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 7.047, "tree_rss_bytes": 354693120, "foreign_peers": []}
+.FFFF.                                                                   [100%]
+================================== FAILURES ===================================
+__ NpuInferenceOnSilicon.test_11_hundred_frames_no_buffer_growth_and_latency __
+
+self = <tests.test_npu_inference.NpuInferenceOnSilicon testMethod=test_11_hundred_frames_no_buffer_growth_and_latency>
+
+    def test_11_hundred_frames_no_buffer_growth_and_latency(self):
+        """N_FRAMES continuous frames: no buffer objects allocated, < 5 MB working-set drift, G2G within budget."""
+        rng = np.random.default_rng(1234)
+        frames = [rng.integers(0, 256, size=(720, 1280, 3), dtype=np.uint8) for _ in range(4)]
+        with self._pipeline() as pipe:
+            harness = pipe.session.harness
+            allocations = {"host_bo": 0, "instr_bo": 0}
+            real_host, real_instr = harness.create_host_bo, harness.create_instruction_bo_from_bytes
+    
+            def counted_host(*a, **k):
+                allocations["host_bo"] += 1
+                return real_host(*a, **k)
+    
+            def counted_instr(*a, **k):
+                allocations["instr_bo"] += 1
+                return real_instr(*a, **k)
+    
+            harness.create_host_bo = counted_host
+            harness.create_instruction_bo_from_bytes = counted_instr
+            try:
+                for i in range(10):
+                    pipe.predict_sync(frames[i % 4], use_oracle_for_boxes=False)
+                gc.collect()
+                rss_before = _rss_bytes()
+                g2g, npu, prep, post = [], [], [], []
+                sources = set()
+                for i in range(N_FRAMES):
+                    _, t = pipe.predict_sync(frames[i % 4], use_oracle_for_boxes=False)
+                    g2g.append(t.glass_to_glass_ms)
+                    npu.append(t.npu_forward_ms)
+                    prep.append(t.preprocess_ms)
+                    post.append(t.postprocess_ms)
+                    sources.add(t.head_source)
+                gc.collect()
+                rss_after = _rss_bytes()
+            finally:
+                harness.create_host_bo = real_host
+                harness.create_instruction_bo_from_bytes = real_instr
+            status = pipe.session.head_status
+    
+        arr = np.asarray(g2g)
+        growth_mb = (rss_after - rss_before) / (1024 * 1024)
+        print(f"\n[silicon] {N_FRAMES} frames (1280x720 synthetic): G2G mean {arr.mean():.3f} ms median "
+              f"{np.median(arr):.3f} p95 {np.percentile(arr, 95):.3f} p99 {np.percentile(arr, 99):.3f} "
+              f"max {arr.max():.3f} | preprocess {np.mean(prep):.3f} | NPU {np.mean(npu):.3f} | "
+              f"postprocess {np.mean(post):.3f} ms | boxes from {sorted(sources)} | "
+              f"buffer objects allocated after warm-up: {allocations} | working set "
+              f"{rss_before / 2**20:.1f} -> {rss_after / 2**20:.1f} MB ({growth_mb:+.2f} MB)")
+        if not status.present:
+            print("[silicon] note: the postprocess stage saw no head tensors, so this is the latency of "
+                  "preprocess + NPU dispatch + an empty decode, not of a detection pipeline")
+        self.assertEqual(allocations, {"host_bo": 0, "instr_bo": 0})
+        self.assertLess(growth_mb, 5.0, f"working set grew by {growth_mb:.2f} MB over {N_FRAMES} frames")
+>       self.assertLessEqual(float(arr.mean()), G2G_MEAN_BUDGET_MS,
+                             f"mean glass-to-glass {arr.mean():.3f} ms > {G2G_MEAN_BUDGET_MS} ms")
+E       AssertionError: 8.491468198597431 not less than or equal to 8.0 : mean glass-to-glass 8.491 ms > 8.0 ms
+
+tests\test_npu_inference.py:499: AssertionError
+---------------------------- Captured stdout call -----------------------------
+
+[silicon] 500 frames (1280x720 synthetic): G2G mean 8.491 ms median 8.440 p95 8.955 p99 9.241 max 9.661 | preprocess 0.384 | NPU 7.980 | postprocess 0.128 ms | boxes from ['npu'] | buffer objects allocated after warm-up: {'host_bo': 0, 'instr_bo': 0} | working set 266.4 -> 266.4 MB (+0.01 MB)
+---------------------------- Captured stderr call -----------------------------
+[0;93m2026-09-19 15:03:43.6692178 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.15/m.0/cv1/act/Sigmoid_output_0_zero_point'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.6706938 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.15/cv2/act/Sigmoid_output_0_Scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.6786964 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.15/m.0/cv1/act/Sigmoid_output_0_scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.6791223 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.22/cv3.2/cv3.2.1/act/Sigmoid_output_0_scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.6795470 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.2/cv1/act/Sigmoid_output_0_scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.6799535 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.2/cv1/act/Sigmoid_output_0_zero_point'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.6803733 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.9/cv1/act/Sigmoid_output_0_scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.6807776 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.0/act/Sigmoid_output_0_zero_point'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.6812131 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.8/m.0/cv2/act/Sigmoid_output_0_Scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.6816230 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.6/m.1/cv1/act/Sigmoid_output_0_scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.6820332 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.0/act/Sigmoid_output_0_scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.6824296 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.4/cv2/act/Sigmoid_output_0_Scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.6828351 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.22/cv2.0/cv2.0.0/act/Sigmoid_output_0_scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.6832571 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.21/cv1/act/Sigmoid_output_0_scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.6836604 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.21/cv1/act/Sigmoid_output_0_zero_point'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.6840765 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.22/cv3.2/cv3.2.0/act/Sigmoid_output_0_scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.6845147 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.1/act/Sigmoid_output_0_zero_point'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.6849227 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.1/act/Sigmoid_output_0_scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.6853274 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.8/m.0/cv2/act/Sigmoid_output_0_zero_point'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.6857469 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.4/m.0/cv2/act/Sigmoid_output_0_zero_point'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.6861925 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.2/m.0/cv1/act/Sigmoid_output_0_zero_point'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.6866207 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.2/m.0/cv1/act/Sigmoid_output_0_scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.6870396 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.6/cv2/act/Sigmoid_output_0_zero_point'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.6874531 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.2/m.0/cv2/act/Sigmoid_output_0_zero_point'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.6878785 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.2/m.0/cv2/act/Sigmoid_output_0_scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.6882911 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.22/cv3.0/cv3.0.0/act/Sigmoid_output_0_zero_point'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.6887218 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.6/m.0/cv2/act/Sigmoid_output_0_Scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.6891817 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.3/act/Sigmoid_output_0_zero_point'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.6895956 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.12/cv1/act/Sigmoid_output_0_scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.6900262 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.2/cv2/act/Sigmoid_output_0_zero_point'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.6904392 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.2/cv2/act/Sigmoid_output_0_scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.6908485 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.6/cv1/act/Sigmoid_output_0_zero_point'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.6912932 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.6/cv2/act/Sigmoid_output_0_Scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.6916955 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.22/cv3.0/cv3.0.0/act/Sigmoid_output_0_scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.6921235 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.22/cv3.1/cv3.1.0/act/Sigmoid_output_0_Scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.6925498 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.3/act/Sigmoid_output_0_scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.6929521 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.12/cv2/act/Sigmoid_output_0_Scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.6933852 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.0/act/Sigmoid_output_0_Scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.6937866 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.4/cv1/act/Sigmoid_output_0_zero_point'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.6941918 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.4/cv1/act/Sigmoid_output_0_scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.6946016 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.22/cv3.2/cv3.2.1/act/Sigmoid_output_0_Scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.6950271 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.6/m.1/cv1/act/Sigmoid_output_0_Scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.6954357 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.4/m.1/cv2/act/Sigmoid_output_0_zero_point'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.6958463 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.8/m.0/cv2/act/Sigmoid_output_0_scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.6962495 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.4/m.0/cv1/act/Sigmoid_output_0_zero_point'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.6966588 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.4/m.0/cv1/act/Sigmoid_output_0_scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.6970647 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.8/cv2/act/Sigmoid_output_0_scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.6974591 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.4/m.0/cv2/act/Sigmoid_output_0_scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.6978644 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.18/cv1/act/Sigmoid_output_0_zero_point'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.6982693 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.9/cv2/act/Sigmoid_output_0_zero_point'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.6986708 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.22/cv3.1/cv3.1.1/act/Sigmoid_output_0_Scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.6990846 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.4/m.1/cv1/act/Sigmoid_output_0_zero_point'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.6994897 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.4/m.1/cv1/act/Sigmoid_output_0_scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.6998929 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.4/m.1/cv2/act/Sigmoid_output_0_scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7002928 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.6/m.0/cv2/act/Sigmoid_output_0_scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7006904 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.22/cv2.2/cv2.2.0/act/Sigmoid_output_0_zero_point'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7011133 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.19/act/Sigmoid_output_0_Scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7015030 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.12/cv2/act/Sigmoid_output_0_zero_point'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7019021 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.22/cv3.0/cv3.0.1/act/Sigmoid_output_0_scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7023101 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.4/cv2/act/Sigmoid_output_0_zero_point'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7027142 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.4/cv2/act/Sigmoid_output_0_scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7031054 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.22/cv2.2/cv2.2.0/act/Sigmoid_output_0_Scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7035160 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.12/m.0/cv1/act/Sigmoid_output_0_scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7039158 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.12/m.0/cv1/act/Sigmoid_output_0_zero_point'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7043537 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.12/m.0/cv1/act/Sigmoid_output_0_Scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7047579 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.5/act/Sigmoid_output_0_zero_point'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7051473 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.5/act/Sigmoid_output_0_scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7055360 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.15/cv2/act/Sigmoid_output_0_scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7059229 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.6/cv1/act/Sigmoid_output_0_scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7063112 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.9/cv2/act/Sigmoid_output_0_Scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7067055 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.22/cv3.0/cv3.0.0/act/Sigmoid_output_0_Scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7071113 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.6/cv2/act/Sigmoid_output_0_scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7075003 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.22/cv3.1/cv3.1.0/act/Sigmoid_output_0_scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7079064 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.6/m.0/cv1/act/Sigmoid_output_0_zero_point'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7083101 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.6/m.0/cv1/act/Sigmoid_output_0_scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7087077 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.6/m.1/cv2/act/Sigmoid_output_0_scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7091050 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.21/m.0/cv2/act/Sigmoid_output_0_Scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7095028 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.6/m.0/cv2/act/Sigmoid_output_0_zero_point'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7099098 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.21/m.0/cv2/act/Sigmoid_output_0_scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7103166 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.6/m.1/cv1/act/Sigmoid_output_0_zero_point'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7107281 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.6/m.1/cv2/act/Sigmoid_output_0_zero_point'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7111403 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.7/act/Sigmoid_output_0_zero_point'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7115341 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.22/cv2.0/cv2.0.1/act/Sigmoid_output_0_Scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7119381 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.7/act/Sigmoid_output_0_scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7123242 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.8/cv1/act/Sigmoid_output_0_zero_point'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7127197 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.8/cv1/act/Sigmoid_output_0_scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7131104 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.22/cv3.0/cv3.0.1/act/Sigmoid_output_0_Scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7135163 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.8/m.0/cv1/act/Sigmoid_output_0_zero_point'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7139198 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.8/m.0/cv1/act/Sigmoid_output_0_scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7143132 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.15/m.0/cv2/act/Sigmoid_output_0_scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7147062 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.5/act/Sigmoid_output_0_Scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7150886 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.22/cv2.0/cv2.0.0/act/Sigmoid_output_0_Scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7154947 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.21/cv2/act/Sigmoid_output_0_scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7158859 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.4/m.1/cv2/act/Sigmoid_output_0_Scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7162771 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.8/cv2/act/Sigmoid_output_0_zero_point'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7166779 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.18/m.0/cv2/act/Sigmoid_output_0_Scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7170768 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.9/cv1/act/Sigmoid_output_0_zero_point'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7174717 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.12/m.0/cv2/act/Sigmoid_output_0_zero_point'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7178719 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.9/cv2/act/Sigmoid_output_0_scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7182621 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.15/m.0/cv2/act/Sigmoid_output_0_zero_point'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7186631 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.12/cv1/act/Sigmoid_output_0_zero_point'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7190607 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.9/cv1/act/Sigmoid_output_0_Scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7194478 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.18/m.0/cv1/act/Sigmoid_output_0_scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7198430 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.12/m.0/cv2/act/Sigmoid_output_0_scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7202425 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.22/cv2.1/cv2.1.0/act/Sigmoid_output_0_scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7206458 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.12/cv2/act/Sigmoid_output_0_scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7210352 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.15/cv1/act/Sigmoid_output_0_zero_point'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7214298 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.15/cv1/act/Sigmoid_output_0_scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7218223 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.19/act/Sigmoid_output_0_scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7222028 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.4/cv1/act/Sigmoid_output_0_Scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7225924 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.15/cv2/act/Sigmoid_output_0_zero_point'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7229879 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.22/cv2.0/cv2.0.1/act/Sigmoid_output_0_scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7233911 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.22/cv2.0/cv2.0.1/act/Sigmoid_output_0_zero_point'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7238095 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.16/act/Sigmoid_output_0_zero_point'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7241984 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.16/act/Sigmoid_output_0_scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7245783 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.22/cv2.0/cv2.0.0/act/Sigmoid_output_0_zero_point'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7249949 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.18/m.0/cv2/act/Sigmoid_output_0_zero_point'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7253988 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.22/cv3.0/cv3.0.1/act/Sigmoid_output_0_zero_point'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7258112 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.18/cv1/act/Sigmoid_output_0_scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7262110 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.18/m.0/cv1/act/Sigmoid_output_0_zero_point'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7266138 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.18/m.0/cv2/act/Sigmoid_output_0_scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7270104 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.16/act/Sigmoid_output_0_Scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7273949 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.21/m.0/cv1/act/Sigmoid_output_0_Scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7277890 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.18/cv2/act/Sigmoid_output_0_zero_point'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7281852 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.18/cv2/act/Sigmoid_output_0_scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7285726 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.2/m.0/cv1/act/Sigmoid_output_0_Scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7289662 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.19/act/Sigmoid_output_0_zero_point'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7293830 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.22/cv2.1/cv2.1.0/act/Sigmoid_output_0_zero_point'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7297950 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.22/cv3.1/cv3.1.0/act/Sigmoid_output_0_zero_point'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7302117 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.22/cv2.1/cv2.1.1/act/Sigmoid_output_0_zero_point'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7306220 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.22/cv2.1/cv2.1.1/act/Sigmoid_output_0_scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7310271 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.22/cv3.1/cv3.1.1/act/Sigmoid_output_0_zero_point'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7314371 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.22/cv3.1/cv3.1.1/act/Sigmoid_output_0_scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7318464 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.21/m.0/cv1/act/Sigmoid_output_0_zero_point'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7322472 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.21/m.0/cv1/act/Sigmoid_output_0_scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7326654 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.21/m.0/cv2/act/Sigmoid_output_0_zero_point'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7330685 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.21/cv2/act/Sigmoid_output_0_zero_point'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7334649 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.22/cv2.2/cv2.2.0/act/Sigmoid_output_0_scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7338685 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.22/cv3.2/cv3.2.0/act/Sigmoid_output_0_zero_point'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7342792 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.21/cv2/act/Sigmoid_output_0_Scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7346754 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.22/cv2.2/cv2.2.1/act/Sigmoid_output_0_zero_point'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7350852 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.22/cv2.2/cv2.2.1/act/Sigmoid_output_0_scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7355063 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.22/cv3.2/cv3.2.1/act/Sigmoid_output_0_zero_point'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7359253 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.8/cv2/act/Sigmoid_output_0_Scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7363156 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.22/cv2.2/cv2.2.1/act/Sigmoid_output_0_Scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7367243 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.2/cv2/act/Sigmoid_output_0_Scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7371140 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.4/m.0/cv1/act/Sigmoid_output_0_Scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7375114 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.8/m.0/cv1/act/Sigmoid_output_0_Scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7379096 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.1/act/Sigmoid_output_0_Scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7382907 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.2/cv1/act/Sigmoid_output_0_Scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7386784 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.2/m.0/cv2/act/Sigmoid_output_0_Scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7390703 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.3/act/Sigmoid_output_0_Scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7394516 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.4/m.0/cv2/act/Sigmoid_output_0_Scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7398437 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.4/m.1/cv1/act/Sigmoid_output_0_Scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7402372 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.6/cv1/act/Sigmoid_output_0_Scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7406252 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.6/m.0/cv1/act/Sigmoid_output_0_Scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7410145 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.6/m.1/cv2/act/Sigmoid_output_0_Scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7414059 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.7/act/Sigmoid_output_0_Scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7417838 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.8/cv1/act/Sigmoid_output_0_Scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7421686 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.12/cv1/act/Sigmoid_output_0_Scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7425597 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.12/m.0/cv2/act/Sigmoid_output_0_Scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7429510 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.15/cv1/act/Sigmoid_output_0_Scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7433423 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.15/m.0/cv1/act/Sigmoid_output_0_Scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7437342 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.15/m.0/cv2/act/Sigmoid_output_0_Scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7441303 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.18/cv1/act/Sigmoid_output_0_Scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7445157 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.18/m.0/cv1/act/Sigmoid_output_0_Scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7449088 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.18/cv2/act/Sigmoid_output_0_Scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7452933 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.22/cv2.1/cv2.1.0/act/Sigmoid_output_0_Scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7456941 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.22/cv2.1/cv2.1.1/act/Sigmoid_output_0_Scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7460972 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.21/cv1/act/Sigmoid_output_0_Scale'. It is not used by any node and should be removed from the model.[m
+[0;93m2026-09-19 15:03:43.7464830 [W:onnxruntime:, graph.cc:5607 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.22/cv3.2/cv3.2.0/act/Sigmoid_output_0_Scale'. It is not used by any node and should be removed from the model.[m
+
+_________ SuperResolutionOnSilicon.test_20_image_matches_onnx_runtime _________
+
+self = <tests.test_npu_inference.SuperResolutionOnSilicon testMethod=test_20_image_matches_onnx_runtime>
+
+    def test_20_image_matches_onnx_runtime(self):
+        """Every pixel of the NPU image equals ONNX Runtime's (graph optimizations off) SESR output."""
+        import onnxruntime as ort
+        from ignite_xdna.pipelines.sr_pipeline import SuperResolutionPipeline
+        with SuperResolutionPipeline(SR_IGNITE) as sr:
+            got, t = sr.predict_sync(self.bus)
+        if not SR_ONNX.exists():
+            self.skipTest(f"{SR_ONNX} missing: image checked for shape only")
+        options = ort.SessionOptions()
+        options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_DISABLE_ALL
+        sess = ort.InferenceSession(str(SR_ONNX), options, providers=["CPUExecutionProvider"])
+        small = cv2.resize(self.bus, (256, 256), interpolation=cv2.INTER_LINEAR)
+        x = np.transpose(cv2.cvtColor(small, cv2.COLOR_BGR2RGB).astype(np.float32) - 128.0, (2, 0, 1))[None]
+        y = sess.run(None, {sess.get_inputs()[0].name: x})[0][0]
+        ref = cv2.cvtColor(np.clip(np.transpose(y, (1, 2, 0)) + 128.0, 0, 255).astype(np.uint8), cv2.COLOR_RGB2BGR)
+        diff = int(np.count_nonzero(got != ref))
+        print(f"\n[silicon-sr] bus.jpg -> {got.shape}: {diff} of {ref.size} values differ from ONNX Runtime | "
+              f"dispatch {t.dispatch_ms:.3f} ms, readback {t.readback_ms:.3f}, G2G {t.glass_to_glass_ms:.3f} ms")
+        self.assertEqual(got.shape, (512, 512, 3))
+>       self.assertEqual(diff, 0)
+E       AssertionError: 457941 != 0
+
+tests\test_npu_inference.py:570: AssertionError
+---------------------------- Captured stdout call -----------------------------
+
+[silicon-sr] bus.jpg -> (512, 512, 3): 457941 of 786432 values differ from ONNX Runtime | dispatch 5.851 ms, readback 0.026, G2G 7.507 ms
+______________ SuperResolutionOnSilicon.test_22_dispatch_budget _______________
+
+self = <tests.test_npu_inference.SuperResolutionOnSilicon testMethod=test_22_dispatch_budget>
+
+    def test_22_dispatch_budget(self):
+        """Mean raw NPU dispatch within IGNITE_SR_DISPATCH_MS (default 1.5 ms)."""
+        stats = getattr(type(self), "stats", None)
+        if stats is None:
+            stats, _, _ = self._run_frames()
+        mean = float(stats["dispatch"].mean())
+>       self.assertLessEqual(mean, SR_DISPATCH_BUDGET_MS,
+                             f"mean dispatch {mean:.3f} ms > {SR_DISPATCH_BUDGET_MS} ms")
+E       AssertionError: 4.201887600589544 not less than or equal to 1.5 : mean dispatch 4.202 ms > 1.5 ms
+
+tests\test_npu_inference.py:631: AssertionError
+__________ PoseOnSilicon.test_30_heads_and_people_match_onnx_runtime __________
+
+self = <tests.test_npu_inference.PoseOnSilicon testMethod=test_30_heads_and_people_match_onnx_runtime>
+
+    def test_30_heads_and_people_match_onnx_runtime(self):
+        """numpy ingress: the nine heads equal ONNX Runtime CPU's, people equal its numpy tail's bit for bit, no ORT call."""
+        if not POSE_ONNX.exists():
+            self.skipTest(f"{POSE_ONNX} missing")
+        import onnxruntime as ort
+        import npu.yolo as yolo
+        import npu.yolo_pose as yp
+        from npu.yolo_pose_decode import decode_heads
+        from ignite_xdna.pipelines.pose_pipeline import HEAD_ORDER, PosePipeline
+        settings = ((0.25, 0.5), (0.001, 0.7))
+        sess = ort.InferenceSession(str(POSE_ONNX), providers=["CPUExecutionProvider"])
+        x, pad, scale = yolo.letterbox(self.bus)
+        float_heads = sess.run(yp.HEAD_OUTS, {sess.get_inputs()[0].name: x})
+        calls = []
+        real_run = ort.InferenceSession.run
+    
+        def counting_run(session, *args, **kwargs):
+            calls.append(1)
+            return real_run(session, *args, **kwargs)
+    
+        with PosePipeline(POSE_IGNITE, ingress="numpy") as pose:
+            ort.InferenceSession.run = counting_run
+            try:
+                got = {conf: pose.predict_sync(self.bus, conf_thres=conf, iou_thres=iou)[0] for conf, iou in settings}
+                heads = pose.session.run_yolo_monolithic(None)
+            finally:
+                ort.InferenceSession.run = real_run
+            scales = heads["scales"]
+            bad_heads = [name for name, ref in zip(HEAD_ORDER, float_heads)
+                         if not np.array_equal((heads[name].astype(np.float32) - np.float32(scales[name][1]))
+                                               * np.float32(scales[name][0]), ref)]
+        print(f"\n[silicon-pose] bus.jpg, numpy ingress: heads {9 - len(bad_heads)}/9 equal ONNX Runtime | people "
+              f"{len(got[0.25])} at conf 0.25, {len(got[0.001])} at conf 0.001 | InferenceSession.run calls {len(calls)}")
+>       self.assertEqual(bad_heads, [])
+E       AssertionError: Lists differ: ['p3_box', 'p4_box', 'p5_box', 'p3_cls', '[43 chars]kpt'] != []
+E       
+E       First list contains 9 additional elements.
+E       First extra element 0:
+E       'p3_box'
+E       
+E       + []
+E       - ['p3_box',
+E       -  'p4_box',
+E       -  'p5_box',
+E       -  'p3_cls',
+E       -  'p4_cls',
+E       -  'p5_cls',
+E       -  'p3_kpt',
+E       -  'p4_kpt',
+E       -  'p5_kpt']
+
+tests\test_npu_inference.py:701: AssertionError
+---------------------------- Captured stdout call -----------------------------
+
+[silicon-pose] bus.jpg, numpy ingress: heads 0/9 equal ONNX Runtime | people 4 at conf 0.25, 50 at conf 0.001 | InferenceSession.run calls 0
+=========================== short test summary info ===========================
+FAILED tests/test_npu_inference.py::NpuInferenceOnSilicon::test_11_hundred_frames_no_buffer_growth_and_latency
+FAILED tests/test_npu_inference.py::SuperResolutionOnSilicon::test_20_image_matches_onnx_runtime
+FAILED tests/test_npu_inference.py::SuperResolutionOnSilicon::test_22_dispatch_budget
+FAILED tests/test_npu_inference.py::PoseOnSilicon::test_30_heads_and_people_match_onnx_runtime
+4 failed, 2 passed in 9.21s
+POST_NPU_CONTEXT_WITNESS "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+RESEARCH_PROCESS_RESULT {"exit_code": 1, "stop": null, "peak_tree_rss_bytes": 467435520, "rss_measurement": "maximum observed across sampled descendant working sets; zero observations reported as null", "elapsed_seconds": 9.858999999938533, "foreign_contention_observed": false, "timing_eligible": false}
