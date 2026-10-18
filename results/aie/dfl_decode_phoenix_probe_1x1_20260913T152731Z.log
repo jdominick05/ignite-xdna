@@ -1,0 +1,37 @@
+Phoenix DFL decode silicon qualification
+date_utc=2026-09-13T15:27:31+00:00
+host=DESKTOP-CBL5NUA
+command=C:\Users\<user>\mlir-aie\ironenv\Scripts\python.exe tests/test_dfl_kernel.py --hardware --skip-offline --cols 1 --cores-per-col 1 --iters 100 --warmup 10 --log results\aie\dfl_decode_phoenix_probe_1x1_20260913T152731Z.log
+shape=1x1 (1 cores)
+test_sha256=206f962c5f2caee2f225e526752f88670fc4a23190a56927e1bb4d890823c558
+source_dfl_decode.cc_sha256=d1d84be79b04060a5168f846b49e86f8b492384f62b0ef3779f3ffa892087151
+source_dfl_stage.py_sha256=be4453a3f110f00da4bb712d4c8807cd6aac85f6ad0060a7b5b3f52b6d55cbab
+{"active_anchors": 525, "active_cores": 1, "event": "build_identity", "full_design": false, "insts_sha256": "b7c3a1eb039534e4917c4f27dd5bbc28175bc19356035f4cbbd3438620f87e07", "shape": {"cols": 1, "cores_per_col": 1}, "sources": {"dfl_decode.cc": "d1d84be79b04060a5168f846b49e86f8b492384f62b0ef3779f3ffa892087151", "dfl_stage.py": "be4453a3f110f00da4bb712d4c8807cd6aac85f6ad0060a7b5b3f52b6d55cbab"}, "test_sha256": "206f962c5f2caee2f225e526752f88670fc4a23190a56927e1bb4d890823c558", "xclbin_sha256": "dd46cae54d0c80cbe9b97dd81c984fdb64f4c5eae92a0f8c62cead0c9eea11ab"}
+{"dispatches": 114, "distinct_fixtures": 12, "event": "references_ready", "measured_fixture_pool": 8}
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+HOST_LOAD busy_cores=1.38 logical_cores=16 free_ram_gb=16 sample_sec=1
+HOST_LOAD_TOP 0.39 <local-tool>:31940 ws_mb=1160
+HOST_LOAD_TOP 0.31 python:25340 ws_mb=50
+HOST_LOAD_TOP 0.19 powershell:35628 ws_mb=69
+HOST_LOAD_TOP 0.19 pycharm64:8540 ws_mb=2650
+HOST_LOAD_TOP 0.06 powershell:35200 ws_mb=81
+HOST_LOAD_VERDICT CLEAR
+
+{"event": "context_ready", "group_ids": {"1": "0x00130001", "3": "0x00130000", "4": "0x00130000", "5": "0x00130000"}}
+{"boxes_max_abs_px": 0.078338623046875, "boxes_max_q4_lsb": 0.15667724609375, "dispatch_wait_us": 51161.0, "event": "comparison", "fixed_boxes_max_abs": 0.004638671875, "fixed_mismatched_values": 41414, "fixed_scores_max_abs": 719.0966796875, "index": 0, "mode": "random", "nonfinite_outputs": 0, "parity": "FAIL", "role": "correctness", "scores_max_abs": 719.0966796875, "seed": 17, "stray_writes": 0}
+{"event": "postflight", "no_hardware_contexts": true}
+Traceback (most recent call last):
+  File "<worktree>\tests\test_dfl_kernel.py", line 540, in main
+    hardware(args, directory)
+    ~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "<worktree>\tests\test_dfl_kernel.py", line 448, in hardware
+    raise AssertionError(f"DFL output failed parity at dispatch {index}: {report}")
+AssertionError: DFL output failed parity at dispatch 0: {'nonfinite_outputs': 0, 'stray_writes': 0, 'boxes_max_abs_px': 0.078338623046875, 'boxes_max_q4_lsb': 0.15667724609375, 'scores_max_abs': 719.0966796875, 'fixed_boxes_max_abs': 0.004638671875, 'fixed_scores_max_abs': 719.0966796875, 'fixed_mismatched_values': 41414, 'parity': 'FAIL'}
+
