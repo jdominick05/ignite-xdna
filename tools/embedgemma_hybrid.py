@@ -28,7 +28,7 @@ product's input to BF16 as the NPU GEMM does. Both are numerics checks: their ti
 Timing: wall time per batch divided by its documents, median per length, after one untimed warm-up batch per
 (length, batch size). Phases: ``gemm`` is the whole weight-product hook; inside it ``npu_pack`` (round to BF16
 into the mapped A), ``npu_write`` (A sync), ``npu_call`` (submit + wait), ``npu_read`` (C sync) and ``npu_unpack``
-(chunk concatenation). attention, norm, rope, gelu and embed are host NumPy fp32 (single-threaded, not a tuned CPU
+(chunk concatenation); ``--round-dll`` does the packing natively. attention, norm, rope, gelu and embed are host NumPy fp32 (single-threaded, not a tuned CPU
 path). Run the npu backend under scripts/research-lowlevel.sh --npu.
 
 History: the first run (results/aie/embedgemma_hybrid_npu_desktop2_20261018T203211Z) rounded every input twice
@@ -66,7 +66,8 @@ def idle():
 class Npu:
     """Every weight product through one generic-GEMM context. Weight BOs resident; one A/C BO pair per (M, K, N)."""
 
-    def __init__(self, enc, builds, ms):
+    def __init__(self, enc, builds, ms, rounder=None):
+        self.rounder = rounder
         sys.path.insert(0, "C:/Xilinx/XRT/xrt_sdk/xrt/python")
         import pyxrt
         self.x, self.ms, self.builds = pyxrt, sorted(ms), builds
@@ -124,8 +125,11 @@ class Npu:
             ib, nb, A, C, av, cv = self._io(M, K, Np)
             t0 = time.perf_counter()
             if packed is None:   # round once per product; every chunk shares the input
-                u = np.ascontiguousarray(x, dtype=np.float32).view(np.uint32)
-                av[:L] = (u + ((u >> 16) & 1) + 0x7FFF) >> 16
+                if self.rounder:
+                    self.rounder.round_into(x, av)
+                else:
+                    u = np.ascontiguousarray(x, dtype=np.float32).view(np.uint32)
+                    av[:L] = (u + ((u >> 16) & 1) + 0x7FFF) >> 16
                 packed = av
             elif packed is not av:
                 av[:L] = packed[:L]
@@ -173,6 +177,8 @@ def main():
     ap.add_argument("--attention", choices=["exact", "blockwise"], default="exact")
     ap.add_argument("--k-block", type=int, default=32)
     ap.add_argument("--bf16-inputs", action="store_true", help="cpu: round weight-product inputs to BF16")
+    ap.add_argument("--round-dll", type=Path, help="npu: kernels/embedgemma/native.py build's embedgemma_round.dll "
+                                                    "(AVX2 + OpenMP, bit-identical) instead of NumPy rounding")
     ap.add_argument("--out", type=Path, required=True)
     a = ap.parse_args()
     if a.out.exists():
@@ -196,7 +202,11 @@ def main():
         if not idle():
             print("NPU not idle: refusing (a foreign context is contention, not a finding)")
             return 3
-        npu = Npu(enc, a.builds, a.ms)
+        rounder = None
+        if a.round_dll:
+            from native import Rounder
+            rounder = Rounder(a.round_dll)
+        npu = Npu(enc, a.builds, a.ms, rounder)
     matmul = npu.matmul if npu else None
     bf16 = a.backend == "npu" or a.bf16_inputs
     emulation = a.backend == "cpu" and (a.bf16_inputs or a.attention != "exact")
@@ -240,7 +250,7 @@ def main():
         strict = a.backend == "cpu" and not emulation
         threshold = 0.99999 if strict else 0.9999
         passed = bool(cos.min() >= threshold and (strict or nn_kept == 1.0))
-        rec = dict(backend=a.backend, docs=str(a.docs), reference=str(a.reference), batch=a.batch, attention=a.attention, k_block=a.k_block,
+        rec = dict(backend=a.backend, docs=str(a.docs), reference=str(a.reference), batch=a.batch, round_dll=bool(a.round_dll), attention=a.attention, k_block=a.k_block,
                    bf16_inputs=a.bf16_inputs, passed=passed,
                    gate=dict(cos_min=threshold, nn_kept=None if strict else 1.0),
                    cos_min=float(cos.min()), cos_mean=float(cos.mean()), nn_kept=nn_kept,

@@ -25011,3 +25011,31 @@ cosine min 0.9999918, mean 0.9999966, nearest neighbour kept 100%. **PASS.**
   computed `exp(-inf - -inf)`. A kernel needs the same guard (select on `l == 0`).
 - **Not emulated:** the device's own exp error (the LUT's, beyond BF16 rounding) and accumulation order inside a
   32-key block. The on-device kernel needs its own exact oracle check before its timing means anything.
+
+#### Native BF16 rounding removes the host packing cost (2026-10-18, Desktop 2)
+
+[`kernels/embedgemma/round.c`](../kernels/embedgemma/round.c) rounds fp32 to BF16 (nearest-even) straight into
+the mapped A buffer, using AVX2 and OpenMP. It is built and checked by
+[`kernels/embedgemma/native.py`](../kernels/embedgemma/native.py) and matches the NumPy reference bit for bit on:
+- random data;
+- raw bit patterns;
+- edge values;
+- every finite exact tie (65,280).
+
+With `--round-dll` the hybrid passes the frozen gate with exactly the same figures as NumPy rounding (cosine min
+0.9999942, nearest neighbour kept 100%), as bit-identical inputs must.
+([log](../results/aie/embedgemma_hybrid_npu_b2_native_desktop2_20261018T211805Z.log),
+[record](../results/aie/embedgemma_hybrid_npu_b2_native_desktop2_20261018T211805Z.json); host CLEAR, no foreign
+contexts, exit 0, `timing_eligible: true`. Batch 2 throughout, so 512 tokens pads to M = 2048 here.)
+
+| Per document, ms | 128 | 512 (M = 2048) | 2048 |
+|---|---:|---:|---:|
+| Rounding into A, NumPy (batch-2 run above) | 60.7 | 271.6 | 1051.4 |
+| Rounding into A, native | **3.9** | **12.3** | **44.0** |
+| Whole `gemm` phase, native | 40.7 | 204.8 | 453.3 |
+| of which NPU call | 31.6 | 167.3 | 340.4 |
+| Whole document (host ops still NumPy fp32) | 171.3 | 885.0 | 4789.5 |
+
+- **The weight-product path is now its NPU calls plus about 20-35%** (the `gemm` phase is 1.22-1.33x the calls).
+- **What remains on the host is the single-threaded NumPy fp32 ops:** attention, GELU, norms and RoPE, 109 ms at
+  128 tokens and 3,885 ms at 2048. Those are what the fused kernels replace.
