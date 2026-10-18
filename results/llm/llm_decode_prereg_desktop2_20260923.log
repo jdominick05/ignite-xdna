@@ -1,0 +1,87 @@
+LLM study, Phase 1: CPU and DirectML yardsticks for M = 1 decode, pre-registered before any timing
+
+Question
+  Can the NPU alone decode a Llama-2-7B-shaped int4 model faster than the better of the CPU and
+  the Radeon 780M on this APU (Ryzen 7 8700G, DDR5-6000 on two channels)? And what error does each
+  of those yardsticks carry, so a later NPU arm can be judged on accuracy?
+
+Workload
+  y = x W^T at M = 1 through ONNX Runtime's com.microsoft MatMulNBits: uint4 weights, round-to-nearest
+  asymmetric per block of K, one zero point per block, blocks of 32 and 128. Shapes (K x N):
+  4096 x 4096, 4096 x 11008, 11008 x 4096. Each timed run streams >= 1 GiB of distinct weight
+  copies (64x the 16 MiB L3), so every row reads DRAM. Weights ~ N(0, 0.02), seed 20260923, generator
+  rtn-asym-uint4-v1 (tools/llm_gemv_bench.py). x ~ N(0, 1) rounded to fp16.
+
+Decisive configurations (each: 3 shapes x 2 blocks = 6 rows; 36 rows in all)
+  C23a0  CPU, ONNX Runtime 1.23.3 (resnet_env17), fp32 activations, accuracy_level 0 (fp32 compute)
+  C23a4  CPU, ONNX Runtime 1.23.3, fp32 activations, accuracy_level 4 (int8 compute)
+  C30a0  CPU, ONNX Runtime 1.30.0 (mlir-aie-iron), accuracy_level 0
+  C30a4  CPU, ONNX Runtime 1.30.0, accuracy_level 4
+  Df32   Radeon 780M, DirectML EP 1.23.3, fp32 activations and scales, every node on DirectML
+  Df16   Radeon 780M, DirectML EP 1.23.3, fp16 activations and scales, every node on DirectML
+
+Context rows (never decide)
+  dense  fp32 MatMul on the CPU (1.23.3) and fp16 MatMul on DirectML, same shapes, the block-32
+         weights dequantized: the dense-weight read rate of each chip.
+  sweep  C23a4 at 4096 x 11008, block 32, CPU threads 1, 2, 4, 16 (8 is in the matrix).
+  read   tools/cpu_mem_bw.py (numpy float32 sums over 4 GiB, threads 1, 2, 4, 8, 16);
+         ReduceSum over a 1 GiB initializer through ONNX Runtime: CPU fp32 (8 threads), DirectML
+         fp16 and fp32.
+
+Timing
+  warmup 3, then 20 timed session.run calls; the median decides. ms per GEMV =
+  median / copies. Session creation, weight upload and CPU prepacking are outside the timed
+  region. ONNX Runtime default graph optimizations, sequential execution, CPU intra-op
+  threads 8. DirectML rows use session.disable_cpu_ep_fallback, so a session that would put any
+  node on the CPU is refused and the row is void (the controls prove the refusal works in this
+  build). One sitting, serial, announced to the other sessions beforehand; the NPU idle
+  (xrt-smi: no hardware contexts) before and after; a host-load witness per group.
+
+Accuracy
+  one GEMV (copy 0) per row against float64 y_ref = x W^T, W the exact dequantized weights: rel_l2 =
+  ||y - y_ref|| / ||y_ref|| and max_abs_rel = max|y - y_ref| / max|y_ref|. A configuration's error
+  E is its largest rel_l2 over the 3 shapes, per block.
+
+Token time (DERIVED from MEASURED rows)
+  T(config, block) = 32 x (4 t(4096x4096) + 2 t(4096x11008) + 1 t(11008x4096)), t = ms per GEMV.
+  Linear layers only: 6,476,005,376 weights. T_best = the smallest T over the 12 (config, block)
+  pairs.
+
+NPU floor (DERIVED)
+  The NPU's most favourable case: 3.339 GB per token (group 128, bf16 scales, no zero
+  points) at 28.1 GB/s, the highest NPU DRAM rate this repo has seen: 118.8 ms. At the
+  26.8 GB/s fill transport it is 124.6 ms. No clean read-only NPU test exists.
+
+Rule (speed)
+  KILL   if T_best <= 118.8 ms: NPU-only int4 decode of a 7B model cannot beat the better of
+         the CPU and DirectML at the NPU DRAM rates measured so far. It reopens only if a clean NPU
+         read test (Phase 3 S1) measures at least BW_needed = 3.339 GB / T_best.
+  ALIVE  otherwise: NPU-only decode stays a speed candidate, and S1 must show BW_needed.
+  Either way the verdict prints T_best, its configuration, and BW_needed.
+Rule (accuracy, for Phase 3)
+  Each (config, block) is a point (T, E). An NPU arm earns an accuracy role only if no CPU or
+  DirectML point is at least as fast AND at least as accurate (Pareto non-dominance). Phase 1 prints
+  the front; it cannot decide this rule alone.
+Problems that void the verdict (printed as PROBLEM, verdict INCOMPLETE)
+  a missing decisive row; a DirectML row whose session failed; a row streaming < 1 GiB; a
+  non-finite output; an fp32-compute row (C23a0, C30a0, Df32) with rel_l2 > 1e-05; a host-load
+  witness reading PEER for a timing group.
+
+Written predictions (stated expectations; the rules above decide, these do not)
+  P1  numpy read at 8-16 threads: 50-75 GB/s (96 GB/s theoretical at the configured DDR5-6000).
+  P2  DirectML ReduceSum fp16: 40-85 GB/s.
+  P3  the best CPU int4 configuration reads 25-55 GB/s of int4 bytes; accuracy_level 4 is at least
+      1.2x faster than accuracy_level 0 at the same block.
+  P4  DirectML int4 reads 20-60 GB/s, and its GEMV at a shape takes under half the time of the
+      fp16 dense GEMV there. If not, DirectML is expanding the weights before it reads them.
+  P5  T_best <= 118.8 ms, i.e. KILL: NPU-only 7B decode loses on speed.
+  P6  fp32-compute rows reach rel_l2 <= 1e-6; accuracy_level 4 about 5e-3; DirectML fp16 about 4e-4.
+      So an NPU arm (bf16 or int8 activations) can win on accuracy only where it is faster than
+      every fp32-compute configuration.
+
+Unverified by design: attention, the KV cache and lm_head are not timed; one prompt position; one
+machine; ONNX Runtime's CPU prepacking may change the bytes the CPU actually reads (T is what
+decides, not GB/s); llama.cpp is not a yardstick here (the user's choice); the NPU is not used.
+
+git HEAD 69e2eb06bdd6158ce7a54e22bb78e0e7b8e1d786 (+6 uncommitted paths: this log's own commit)
+PREREG_JSON {"blocks": [32, 128], "configs": {"C23a0": {"acc": 0, "ep": "cpu", "ort": "1.23", "t1": "fp32", "text": "CPU, ONNX Runtime 1.23.3 (resnet_env17), fp32 activations, accuracy_level 0 (fp32 compute)", "threads": 8}, "C23a4": {"acc": 4, "ep": "cpu", "ort": "1.23", "t1": "fp32", "text": "CPU, ONNX Runtime 1.23.3, fp32 activations, accuracy_level 4 (int8 compute)", "threads": 8}, "C30a0": {"acc": 0, "ep": "cpu", "ort": "1.30", "t1": "fp32", "text": "CPU, ONNX Runtime 1.30.0 (mlir-aie-iron), accuracy_level 0", "threads": 8}, "C30a4": {"acc": 4, "ep": "cpu", "ort": "1.30", "t1": "fp32", "text": "CPU, ONNX Runtime 1.30.0, accuracy_level 4", "threads": 8}, "Df16": {"acc": 0, "ep": "dml", "ort": "1.23", "t1": "fp16", "text": "Radeon 780M, DirectML EP 1.23.3, fp16 activations and scales, every node on DirectML", "threads": null}, "Df32": {"acc": 0, "ep": "dml", "ort": "1.23", "t1": "fp32", "text": "Radeon 780M, DirectML EP 1.23.3, fp32 activations and scales, every node on DirectML", "threads": null}}, "fp32_compute": ["C23a0", "C30a0", "Df32"], "fp32_err_max": 1e-05, "git_head": "69e2eb06bdd6158ce7a54e22bb78e0e7b8e1d786", "layers": 32, "linear_weights": 6476005376, "min_run_bytes": 1073741824, "npu_bytes_min": 3339190272.0, "npu_floor_ms": 118.83239402135231, "npu_gbps_best": 28.1, "npu_gbps_fill": 26.8, "shapes": [[4096, 4096, 4], [4096, 11008, 2], [11008, 4096, 1]], "timing": {"cpu_intra_op_threads": 8, "execution_mode": "sequential", "graph_optimization": "ORT_ENABLE_ALL", "reps": 20, "statistic": "median", "warmup": 3}}

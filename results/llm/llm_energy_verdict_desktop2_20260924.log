@@ -1,0 +1,44 @@
+Smoke: G100 GPU busy 88.9% over 7 rows (>= 80.0%)
+
+pass arm     idle W  idle R  dPKG W  dCores   dR W  CPU% GPUpid   GB/s   J/GB  witness
+   1 R-cpu    15.17   11.22   53.71   30.32  23.39  55.6    0.0  61.53  0.873  cov 1.000  idle CPU 1.5% sd 3.68 W GPU(all) 0.2%
+   1 R-dml    14.63   11.05   56.37    1.81  54.56   7.7   99.0  73.20  0.770  cov 1.000  idle CPU 1.5% sd 1.87 W GPU(all) 0.2%
+   1 R-npu    14.55   11.04   15.53    0.23  15.30   1.7   99.6  47.67  0.326  cov 1.000  idle CPU 1.4% sd 1.99 W GPU(all) 0.2%
+   1 C1       14.39   10.93   25.22    9.96  15.26   7.2    0.0                busy 1.000  idle CPU 1.4% sd 2.11 W GPU(all) 0.2%
+   1 G100     14.23   10.85   41.60    0.94  40.65   2.8   90.2                busy 0.996  idle CPU 1.6% sd 2.06 W GPU(all) 0.2%
+   1 G50      14.65   11.02    6.12    1.09   5.03   1.9   45.1                busy 0.498  idle CPU 1.6% sd 2.13 W GPU(all) 0.2%
+   1 G25      14.31   10.79    2.86    0.69   2.17   1.5   22.4                busy 0.251  idle CPU 1.4% sd 2.19 W GPU(all) 0.2%
+   1 N-c      14.19   10.77   21.12    0.30  20.82   1.7   98.8                busy 1.000  idle CPU 1.5% sd 1.92 W GPU(all) 0.2%
+   2 N-c      14.33   10.90   21.25    0.36  20.89   1.6   98.8                busy 1.000  idle CPU 1.5% sd 2.14 W GPU(all) 0.2%
+   2 G25      14.25   10.90    2.93    0.74   2.19   1.5   22.4                busy 0.251  idle CPU 1.5% sd 2.10 W GPU(all) 0.2%
+   2 G50      14.26   10.95    6.38    1.46   4.92   1.9   44.8                busy 0.499  idle CPU 1.6% sd 2.30 W GPU(all) 0.2%
+   2 G100     14.16   10.80   40.68    0.95  39.74   2.8   90.3                busy 0.996  idle CPU 1.7% sd 2.13 W GPU(all) 0.2%
+   2 C1       14.25   10.91   25.11    9.99  15.12   7.1    0.0                busy 1.000  idle CPU 1.6% sd 2.24 W GPU(all) 0.2%
+   2 R-npu    14.10   10.74   15.56    0.38  15.19   1.5   99.6  47.24  0.329  cov 1.000  idle CPU 1.5% sd 2.03 W GPU(all) 0.2%
+   2 R-dml    14.25   10.82   55.38    1.97  53.41   7.7   99.0  76.23  0.726  cov 1.000  idle CPU 1.5% sd 2.13 W GPU(all) 0.1%
+   2 R-cpu    14.26   10.90   54.58   31.11  23.47  55.5    0.0  61.58  0.886  cov 1.000  idle CPU 1.6% sd 1.92 W GPU(all) 0.2%
+
+sigma_R over 16 idle windows: 0.124 W; GPU line max(2.0, 3 sigma) = 2.000 W; NPU line max(1.0, 3 sigma) = 1.000 W
+pass 1 GPU: dR(G100) - dR(C1) = 25.392 W; dR G25/G50/G100 = 2.170 / 5.033 / 40.653; G100 busy 90.2% -> met
+pass 1 NPU: dR(N-c) - dR(C1) = 5.554 W -> met
+pass 2 GPU: dR(G100) - dR(C1) = 24.617 W; dR G25/G50/G100 = 2.187 / 4.924 / 39.737; G100 busy 90.3% -> met
+pass 2 NPU: dR(N-c) - dR(C1) = 5.772 W -> met
+
+GPU INSIDE
+NPU INSIDE
+J/GB R-cpu: 0.873 / 0.886, mean 0.880 -> OK
+J/GB R-dml: 0.770 / 0.726, mean 0.748 -> OK
+J/GB R-npu: 0.326 / 0.329, mean 0.328 -> OK
+
+Labels
+  NPU vs DirectML: comparable, labelled. The controls show a component scaling with each chip's work is inside the package, not that all of it is.
+  NPU vs CPU (the cores are package 0's sub-domains, inside by construction): comparable, labelled.
+  On every figure: completeness is never shown (package counters only), and DRAM power is outside the package; shared DRAM pulls ratios toward 1 and undercounts a compaction's saving.
+
+Predictions
+  P1 R-cpu 0.45-0.7 J/GB: MISS (0.880)
+  P2 R-dml 0.12-0.35 J/GB: MISS (0.748)
+  P3 R-npu 0.05-0.2 J/GB: MISS (0.328)
+  P4 GPU INSIDE: HIT
+  P5 NPU INSIDE, margin 1-4 W: MISS (INSIDE, mean margin 5.66 W)
+VERDICT COMPLETE

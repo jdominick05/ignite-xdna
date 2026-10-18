@@ -1,0 +1,57 @@
+Gemma 3 4B decode, pre-registration (c): the rule for sitting 2, committed before it (the gate's
+decision of 2026-09-24, after sitting 1 at 99a7eec)
+
+Sitting 1 (gemma_decode_suite, _accuracy and _verdict_desktop2_20260924.log) is INCOMPLETE and stays
+so in the record: three arm-passes void on the memory witness (C4-H4 pass 1, D-H4 pass 2, C0-H16 pass 2),
+and D-H16's passes disagree (13.35 against 10.85 tok/s). C0-H4 alone completed there; its values are
+recomputed from that log below. Sitting 2 runs the full matrix again and ALONE decides: no sitting-1
+arm-pass enters its verdict. If sitting 2 is INCOMPLETE, it stands, and there is no third run without the
+user.
+
+Unchanged from the prereg at 68e9cfe (gemma_decode_prereg_desktop2_20260924.log):
+  - the arms, the order and the lengths (a 128-token prompt, 896 generated, window
+    257-896);
+  - the 100 pages/s void, not moved after seeing data;
+  - the 10% pass agreement, B3', and the start refusals (a process of >= 4 GB; the
+    780M's adapters);
+  - the energy method, the predictions and (d).
+
+Changes, and nothing else:
+  (a) The GPU witness regex accepts engine types with a space ("Compute 0", "Compute 1", "Timer 0", the
+      780M's DirectML engines). Sitting 1's (\w+) dropped those columns, so its "780M pid" read 0. A
+      selftest case has a spaced name. Report-only, as before.
+  (b) A page-in attribution witness, report-only.
+      - What: every process's page faults, hard faults and IO read bytes, once a second, from one
+        NtQuerySystemInformation(SystemProcessInformation) call. These are the kernel counts behind
+        \Process(*)\Page Faults/sec and \Process(*)\IO Read Bytes/sec.
+      - Why not the PDH counters: typeperf fixes a wildcard's instances when it starts, so it would miss
+        a process launched inside a window. A psutil sweep cost 2.5 s of CPU; this call costs about 11 ms.
+      - When: in every idle and every arm-pass alike, so its cost cancels in dP.
+      - Logged: for every window over 100 pages/s, the top 5 processes by page faults/s and by IO
+        read bytes/s (PAGEIN_ATTRIBUTION). Each entry also carries that process's hard faults/s. The
+        verdict prints them beside the voids.
+  (c) No accuracy pass. Sitting 1's accuracy log stands (untimed and deterministic), pinned below by its
+      sha256. Each sitting-2 arm's greedy tokens (the tokens_sha of every sequence, both passes) must
+      equal sitting 1's for that arm, or the arm is VOID (TOKENS_SHA_S1 below). This ties the two sittings
+      without a cross-sitting timing ratio.
+  Hygiene (the gate's addendum, report-only): the tokenizer loads with transformers' logging at error.
+  4.57.6's "incorrect regex pattern" warning, which quoted the local path on 24 lines of sitting 1's and
+  the build's logs, therefore no longer reaches a log. The prereg's TOKENIZER_CHECK_JSON showed that the
+  warning changes no id.
+
+The logs: gemma_decode_suite_rerun_desktop2_<date>.log (scripts/llm-study.sh decode-rerun) and
+gemma_decode_verdict_rerun_desktop2_<date>.log (decode-rerun-verdict, over it and sitting 1's accuracy
+log). As in sitting 1: BFP16 holds the machine, and nothing else runs.
+
+  gemma_decode_suite_desktop2_20260924.log: sha256 19af6e168d9d164730b490ebabdfd140e56402986fb6c988ac3422da9dc4c7d4 (CRLF working copy), 19af6e168d9d164730b490ebabdfd140e56402986fb6c988ac3422da9dc4c7d4 (LF blob)
+  gemma_decode_accuracy_desktop2_20260924.log: sha256 04986de0f78cef2b3b74eceed502c10cb961209fcf92b234a1afeb79e04eb6bb (CRLF working copy), 7a579b84bdb022e77d4a267d0b25690cfb99eb2594bda4071528c7000fe2d5dd (LF blob)
+  TOKENS_SHA_S1 C0-H4: 43eb1ccaa3d0d6a8ce0a28efdff5e2cb6e1e5a8ef4073a04abe1d08bedf6b8d4; sitting 1 had 1 distinct value(s), equal
+  TOKENS_SHA_S1 C4-H4: c78d37dd4ef54142973d8add8104686158f8bacf708ba89c9c729a9ca1c55467; sitting 1 had 1 distinct value(s), equal
+  TOKENS_SHA_S1 D-H4: 43eb1ccaa3d0d6a8ce0a28efdff5e2cb6e1e5a8ef4073a04abe1d08bedf6b8d4; sitting 1 had 1 distinct value(s), equal
+  TOKENS_SHA_S1 C0-H16: 38bf3d11228efcdb88840169a358cdff04dd3850cd7d69b036dc0a76b1cc2e0b; sitting 1 had 1 distinct value(s), equal
+  TOKENS_SHA_S1 D-H16: 38bf3d11228efcdb88840169a358cdff04dd3850cd7d69b036dc0a76b1cc2e0b; sitting 1 had 1 distinct value(s), equal
+SITTING1_C0_H4_JSON {"state": "OK", "tokps": 17.542586885591312, "jtok": 4.078648864976522, "tokps_agree": 0.0074123620338861895, "jtok_agree": 0.010065573955851028}
+  IDS_SHA c87fda3e20a29a5fd9af2104661438ff63a3c29cd496cb4d95a9000820dfb15e (equal to the pin)
+  the prereg: gemma_decode_prereg_desktop2_20260924.log, sha256 f01b455f7736931f518011c52549f4caac8a39cf01a8ac918ffa432a10e237d2 (CRLF working copy), 57001d2295c4fad7bea89de6fdb7d1319cb1555242ecbcef8a8c3e4ef3f0b042 (LF blob)
+RERUN_CONSTANTS_JSON {"tokens_sha_s1": {"C4-H4": "c78d37dd4ef54142973d8add8104686158f8bacf708ba89c9c729a9ca1c55467", "C0-H4": "43eb1ccaa3d0d6a8ce0a28efdff5e2cb6e1e5a8ef4073a04abe1d08bedf6b8d4", "D-H4": "43eb1ccaa3d0d6a8ce0a28efdff5e2cb6e1e5a8ef4073a04abe1d08bedf6b8d4", "C0-H16": "38bf3d11228efcdb88840169a358cdff04dd3850cd7d69b036dc0a76b1cc2e0b", "D-H16": "38bf3d11228efcdb88840169a358cdff04dd3850cd7d69b036dc0a76b1cc2e0b"}, "s1_logs_lf": {"gemma_decode_suite_desktop2_20260924.log": "19af6e168d9d164730b490ebabdfd140e56402986fb6c988ac3422da9dc4c7d4", "gemma_decode_accuracy_desktop2_20260924.log": "7a579b84bdb022e77d4a267d0b25690cfb99eb2594bda4071528c7000fe2d5dd"}, "page_max": 100.0, "pass_agree": 0.1, "order": [[1, "C4-H4"], [1, "D-H4"], [1, "C0-H4"], [1, "D-H16"], [1, "C0-H16"], [2, "C0-H16"], [2, "D-H16"], [2, "C0-H4"], [2, "D-H4"], [2, "C4-H4"]], "seqs": {"cpu": 3, "dml": 5}, "git_head": "99a7eec1e516870cee85346cc86d72f409a062a5"}
+git HEAD 99a7eec1e516870cee85346cc86d72f409a062a5 (plus this log's own commit)

@@ -1,0 +1,130 @@
+LLM study stage 3: prefill GEMM at Llama-2-7B's shapes on the CPU, DirectML and the NPU,
+pre-registered before any sitting
+
+Question (the user's third item; the gate's go after the R5 sync test)
+  Does the NPU earn a prefill role? The bar is the user's: an NPU arm must be faster than both the
+  CPU (ONNX Runtime) and DirectML on the Radeon 780M, or more accurate than both.
+
+Workload: one Llama-2-7B layer's weight GEMMs, M = prompt tokens, M in (512, 2048)
+  S1  (M, 4096) x (4096, 4096)    4 per layer (Q, K, V, O)
+  S2  (M, 4096) x (4096, 11008)   2 per layer (gate, up)
+  S3  (M, 11008) x (11008, 4096)  1 per layer (down)
+  An arm's layer time = 4 t(S1) + 2 t(S2) + t(S3) (DERIVED from MEASURED rows); 32 layers are
+  printed beside it. Attention, norms, RoPE and the LM head are outside this stage.
+
+Inputs (tools/llm_prefill_bench.py inputs, seed 20260923; SHA-256 pinned below)
+  X ~ N(0, 1.0) fp32, [2048, 4096] and [2048, 11008]; W ~ N(0, 0.02) fp32 per shape. M = 512
+  uses the first 512 rows.
+  Each arm rounds the same fp32 X and W to its own dtype: fp16, bf16 (round to nearest even), or
+  int8 with one shared quantization: X symmetric per tensor, W symmetric per output column, both
+  to [-127, 127]. Every exact int8 arm therefore returns the same int32 output, and ties on error.
+
+Arms (native dtypes in and out, weights resident, input and output in host memory)
+  cpu  ONNX Runtime 1.23.3 CPU EP, resnet_env17, 8 and 16 threads (the faster counts, per arm):
+       fp32 MatMul; int8 MatMulInteger, u8 x s8 with A zero point 128 (MLAS's VNNI form; the int32 output
+       equals s8 x s8). s8 x s8 and u8 x s8 both build and are exact on this CPU (checked, no timing).
+  dml  ONNX Runtime DirectML EP, device 0 (the 780M, Phase 1's adapter log), CPU fallback disabled:
+       fp16 MatMul; fp32 MatMul; int8 MatMulInteger as s8 x s8, else u8 x s8 with zero point 128. If
+       DirectML places neither, its int8 arm is UNAVAILABLE, which does not void the verdict.
+  npu  mlir-aie v1.4.2's whole_array (live file pinned below; it carries the two local patches in
+       kernels/ and one unrecorded change to its own integer input generator, which this stage
+       does not use), 4 columns x 4 rows, compiled by IRON's compile-only path here and dispatched
+       through raw pyxrt with IRON's XRT ABI: kernel(3, instr, instr bytes, A, B, C).
+       bf16 in, f32 out; int8 in, int32 out. Tiles (M = 512 and 2048 each; P = the best tile on
+       record, F = the one that already ran at the shape; the faster passing config counts):
+         bf16 S1-P  M=512  K=4096  N=4096  m=32 k=64  n=128 c_single=1  L1 60672 B  insts 5baacc78aeefa2e3  xclbin 2566e8cc11d2d73d
+         bf16 S1-F  M=512  K=4096  N=4096  m=64 k=64  n=64  c_single=1  L1 52480 B  insts c4b0cceb88502ad0  xclbin d674fb421ec9c1a4
+         bf16 S2u   M=512  K=4096  N=11008 m=16 k=64  n=64  c_single=0  L1 32000 B  insts 64bfb894b90bcc98  xclbin cdecdffacab4368a
+         bf16 T-F   M=512  K=4096  N=2816  m=64 k=64  n=64  c_single=1  L1 52480 B  insts fc15164162b566d0  xclbin 00e811d7aa665317
+         bf16 S3-P  M=512  K=11008 N=4096  m=32 k=64  n=128 c_single=1  L1 60672 B  insts 1a8afacb3cf0120f  xclbin f3bdb0e4cac06ddd
+         bf16 S3-F  M=512  K=11008 N=4096  m=64 k=64  n=32  c_single=0  L1 44288 B  insts 6f06ed0f40b475e9  xclbin 99b497ca329a9dab
+         i8   S1-P  M=512  K=4096  N=4096  m=64 k=128 n=64  c_single=1  L1 52480 B  insts 6af535ccc56df09a  xclbin f267bade4cf307eb
+         i8   S1-F  M=512  K=4096  N=4096  m=64 k=64  n=64  c_single=0  L1 52480 B  insts 25804b1675fe6e70  xclbin 364906750c0c9d40
+         i8   S2u   M=512  K=4096  N=11008 m=16 k=64  n=64  c_single=0  L1 21760 B  insts 99839efa966cdc2f  xclbin b2672ce4e156d437
+         i8   T-P   M=512  K=4096  N=2816  m=64 k=128 n=64  c_single=1  L1 52480 B  insts ca67570858ef825e  xclbin 34830e4e14b3f799
+         i8   T-F   M=512  K=4096  N=2816  m=64 k=64  n=64  c_single=0  L1 52480 B  insts 9b6a547affd1050d  xclbin 8996ec2336fc5586
+         i8   S3-P  M=512  K=11008 N=4096  m=64 k=128 n=64  c_single=1  L1 52480 B  insts d99f617f8e2b02f8  xclbin 37f35bbba97f26e2
+         i8   S3-F  M=512  K=11008 N=4096  m=64 k=64  n=64  c_single=0  L1 52480 B  insts 3a306eaf72550e8d  xclbin a57a9c6cf7e116e8
+         bf16 S1-P  M=2048 K=4096  N=4096  m=32 k=64  n=128 c_single=1  L1 60672 B  insts e67727d58b83dd9f  xclbin ccc57d75656b24ca
+         bf16 S1-F  M=2048 K=4096  N=4096  m=64 k=64  n=64  c_single=1  L1 52480 B  insts 4eadf965b5605656  xclbin be18797d28a655e8
+         bf16 S2u   M=2048 K=4096  N=11008 m=16 k=64  n=64  c_single=0  L1 32000 B  insts 48c0f5591297f8c1  xclbin 0036664b0ae1bf0f
+         bf16 T-F   M=2048 K=4096  N=2816  m=64 k=64  n=64  c_single=1  L1 52480 B  insts 710963ee81a93372  xclbin 415e5c8d8d6b4eb0
+         bf16 S3-P  M=2048 K=11008 N=4096  m=32 k=64  n=128 c_single=1  L1 60672 B  insts d470bb5e1de26230  xclbin cc0b787109297f67
+         bf16 S3-F  M=2048 K=11008 N=4096  m=64 k=64  n=32  c_single=0  L1 44288 B  insts 0693bae1b3d4a67a  xclbin 8e4f7d603dec5051
+         i8   S1-P  M=2048 K=4096  N=4096  m=64 k=128 n=64  c_single=1  L1 52480 B  insts d94fdd6e4f89886b  xclbin c7b3c2f5f67b1d05
+         i8   S1-F  M=2048 K=4096  N=4096  m=64 k=64  n=64  c_single=0  L1 52480 B  insts 932821fa50f2cca4  xclbin 6dab363cb94a3b62
+         i8   S2u   M=2048 K=4096  N=11008 m=16 k=64  n=64  c_single=0  L1 21760 B  insts aca4f1a9ac4a0640  xclbin ff4f129e01d16922
+         i8   T-P   M=2048 K=4096  N=2816  m=64 k=128 n=64  c_single=1  L1 52480 B  insts aafac9feae8d12c0  xclbin 48fe274d1680367c
+         i8   T-F   M=2048 K=4096  N=2816  m=64 k=64  n=64  c_single=0  L1 52480 B  insts 3ef06643271a44a3  xclbin 6a8f78dfb7b8d670
+         i8   S3-P  M=2048 K=11008 N=4096  m=64 k=128 n=64  c_single=1  L1 52480 B  insts 0faad118071d2d35  xclbin 6b8342db5e435390
+         i8   S3-F  M=2048 K=11008 N=4096  m=64 k=64  n=64  c_single=0  L1 52480 B  insts 05aeb1c3bbe61d96  xclbin d8b7a8e5e4ef1598
+         bf16 smoke M=512  K=512   N=512   m=64 k=64  n=64  c_single=1  L1 52480 B  insts 24552d6b26c5c8a1  xclbin bd68627ede399c47
+         i8   smoke M=512  K=512   N=512   m=64 k=64  n=64  c_single=0  L1 52480 B  insts ada233edffcd99a3  xclbin f1e78e999a607f3d
+       S2 runs three ways: unsliced (S2u, forced to m = 16 by the 2^20-word C step), and as column
+       slices 4096 + 4096 + 2816 (S2s-P, S2s-F: two dispatches on the S1 tile, one on the T tile,
+       two hardware contexts held, no padded work). Its three outputs stay in their own buffers;
+       their host concatenation is timed separately (concat_ms) and added only to a KEEP check.
+
+Timing (all chips)
+  CPU and DirectML: one session.run per GEMM, numpy in and out (DirectML uploads x and downloads y).
+  NPU: sync A to the device, start, wait, sync C from the device (A and B written beforehand; B
+  synced once). Prior NPU GEMM figures here (1.33x, 1.10x, 1.13x and the int8 table) used IRON's
+  inner bracket, without the input sync, against torch baselines. They are not comparable.
+  3 warmup runs, then 10 timed; the row is the median. Two passes, the second in reverse row
+  order; a row's value is the mean of its two pass medians.
+
+Accuracy
+  rel-L2 of each arm's output (int8 dequantized) against the float64 product of the fp32 X and W; an
+  arm's error is its worst of the three shapes at that M.
+  Controls: NPU bf16 against the float64 product of its own bf16-rounded inputs must be <= 0.0001
+  (fp32 accumulation); NPU int8 must equal the int8 inputs' product exactly; a failing NPU row is void.
+  Every int8 row prints the SHA-256 of its int32 output, and the verdict prints whether they agree
+  across chips. That is a control, not a void: the rule uses each arm's own measured rel-L2.
+
+Rule (kill or keep, per M)
+  An NPU arm X beats a chip if it is at least 1.10x faster (layer time) than every arm of that chip
+  whose rel-L2 is <= 1.10 x X's. If that chip has no such arm, X is more accurate than all of it.
+  KEEP at M if some NPU arm beats both the CPU and DirectML, and still does with S2's concatenation
+  and 3 context switches per layer added. 3 is the most a layer needs beyond what its rows
+  already hold (S1 -> S2 -> S3 -> the next layer's S1; the sliced S2 rows alternate their two
+  contexts inside their own timed runs). Each switch costs 0.748 ms, the cross-context alternation
+  penalty BENCHMARKS measured with a passthrough on the driver bench; it is not remeasured on GEMMs.
+  The verdict: KEEP at the M values where that holds; KILL if it holds at neither.
+  An NPU arm with no passing config at some shape beats nothing at that M.
+
+INCOMPLETE (no verdict)
+  A sitting log without EXIT_CODE 0, which includes any NPU dispatch that raises or times out (it
+  stops the sitting; only a tile that completes with wrong numbers voids just its row); the NPU
+  smoke (512^3 per dtype, each twice with a fresh hardware context, before any timed row) not
+  passing; a missing row or pass; a row whose pass medians differ by more than 10% of their
+  mean; a non-finite output; DirectML fp16 or fp32 unavailable.
+
+Written predictions (stated expectations; the rule decides, these do not)
+  Q1 CPU fp32, S1 at M = 2048: 0.5-1.0 TFLOPS. Prior: torch fp32 0.71 at this shape (MEASURED,
+     results/aie/int8_matmul_sweep_npu.log).
+  Q2 CPU int8, S1 at M = 2048: 1.4-2.4 TOPS. Prior: ORT MatMulInteger u8 x s8 1.70 (same log).
+  Q3 DirectML fp16, S1 at M = 2048: 2.5-9 TFLOPS. No DirectML GEMM above M = 1 has run here. The
+     780M's fp16 peak is 8.9 TFLOPS with one of RDNA 3's dual issue or packed fp16, and 17.8 if both
+     apply, as AMD's RDNA 3 peak figures count them; which applies here is not established (DERIVED
+     from SPEC: 768 shaders at 2.9 GHz).
+  Q4 DirectML fp32, S1 at M = 2048: 1.5-5 TFLOPS.
+  Q5 NPU bf16 at M = 2048: S1 2.2-2.8 TFLOPS (IRON's inner bracket read 2.70 at this shape and tile);
+     S2 0.8-1.0 unsliced (0.91 before), 2.0-2.7 sliced; S3 1.7-2.7.
+  Q6 NPU int8, S1 at M = 2048: 3.0-4.9 TOPS (3.26 at the F tile, 4.85 at the P tile but only at
+     2048^3, both through IRON's inner bracket).
+  Q7 rel-L2: CPU and DirectML fp32 under 1e-6; DirectML fp16 2e-4 to 1.5e-3; NPU bf16 1.5e-3 to 5e-3;
+     every int8 arm the same, 5e-3 to 3e-2. So the NPU cannot win on accuracy.
+  Q8 KILL at both M. DirectML fp16 decides: it is at least as accurate as both NPU arms and at least
+     1.10x faster than each. If it lands under about 3.5 TFLOPS, NPU int8 could beat it; that is the
+     prediction most likely to be wrong.
+  Q9 No chip runs faster per FLOP at M = 512 than at M = 2048.
+
+Unverified by design: attention, norms, RoPE and the LM head; the activations between GEMMs (f32 to
+bf16, int8 quantization and dequantization are outside every bracket, for every arm); DirectML IO
+binding; CPU stacks other than ONNX Runtime (torch ran faster than ORT in int8 before); tiles outside
+the menu above; the NPU's power modes; running prefill beside decode.
+
+PINS inputs manifest 9c5454169184a4b307059fbcbb8519cc31403b48d902918ea66c8023e43dbaf1
+PINS whole_array.py 92db1cad98aa2ec0670f0f39a3cd3e93d12ebe0d91ee0bc457adb16dbd51c01e mm.cc 7c7b4638be1c8fe6b5e262ab4916613784b283189c329e8921c536fba1cb2aba
+git HEAD 0f94c6176beae7f407e013627a9dad1132a73147 (+2 uncommitted paths, this stage's own files)
+PREREG_JSON {"ms": [512, 2048], "shapes": {"S1": [4096, 4096], "S2": [4096, 11008], "S3": [11008, 4096]}, "per_layer": {"S1": 4, "S2": 2, "S3": 1}, "margin": 1.1, "acc_tie": 1.1, "repeat_max": 0.1, "bf16_acc_max": 0.0001, "switch_ms": 0.748, "switches": 3, "warmup": 3, "reps": 10, "cpu_threads": [8, 16], "seed": 20260923, "git_head": "0f94c6176beae7f407e013627a9dad1132a73147"}

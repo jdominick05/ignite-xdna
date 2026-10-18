@@ -1,0 +1,88 @@
+NPU read-only DRAM bandwidth (LLM study stage 1), pre-registered before any sitting
+
+Question
+  How fast can Phoenix's NPU read DDR when nothing is written back? SILICON 1.6 has no clean
+  single-direction read test. It derives a shared cap of 26-28 GB/s per direction above ~4 channels
+  (DRAM or NoC side, unattributed); device.yaml's unitless 16 reads as 25.6 GB/s at 1.6 GHz and
+  28.8 at 1.8. The LLM study's decode reopens only if the NPU reads >= 59.7 GB/s.
+
+Design (tools/npu_read_bw_probe.py)
+  Every enabled shim MM2S channel streams one contiguous region of one host-only DDR buffer into
+  its own mem-tile S2MM channel. The sink is one 128 KiB BD looping on itself with no locks.
+  The runtime sequence holds only the MM2S tasks, each with a completion token. No stream leaves
+  the array. Layouts (columns x channels per column), logical columns from 0:
+  1x1, 1x2, 2x1, 2x2, 4x1, 3x2, 4x2
+  Sizes: 256 MiB and 1024 MiB per dispatch (at least; split equally over the channels, rounded up
+  to 1024 words each). Each (layout, size) runs in a fresh process: 3 warmup then 15 timed
+  dispatches; rate = bytes / median submit-to-wait wall time. The 1 GiB rows decide.
+  Smoke row, first and not deciding: 1x1 at 32 MiB, the size SILICON 1.5's round trip drove at
+  6.899 GB/s per direction. Two mechanisms are new here: SILICON 1.5's on-chip probe ran a
+  lockless self-looping mem-tile BD on this npu1, but as an MM2S source, not an S2MM sink (the
+  sink pattern's only mlir-aie examples target npu2); and the repo's designs await S2MM tokens,
+  not MM2S ones. A hang from either shows here first. The verdict requires this row to complete.
+  Fallback, pre-stated: if a 1 GiB host-only buffer fails to allocate (untested at that size
+  here), the 1 GiB rows re-run on a 256 MiB buffer read 4 times per dispatch
+  (repeat_count = 3; N means N+1 runs), with the same layouts, labelled as an amendment and
+  compiled and committed before that sitting. The largest cache AMD lists for the 8700G is the
+  CPU's 16 MiB L3 (SPEC), far below 256 MiB.
+  The sitting: host-load gate (busy cores < 2, no peer >= 0.5), GPU engine snapshot, xrt-smi idle
+  before and after every child, the same-sitting trace clock (tools/silicon_stream_probe.py clock),
+  announced to the other sessions, nothing else reading DRAM.
+
+Constants (DERIVED from MEASURED unless tagged)
+  per-stream ceiling  3.999756 B/cycle (SILICON 1.5) x 1.796301 GHz = 7.185 GB/s
+  all 8 drivable MM2S at that rate: 57.48 GB/s, BELOW the 59.7 GB/s reopen line
+  cap binds reads if the best 1 GiB total <= 30.24 GB/s (28.8 x 1.05)
+
+Rules (mechanical; the rate is the 1 GiB row's bytes / median wall time, fixed cost included)
+  R1 reopen   decode reopens iff the best total read rate >= 59.7 GB/s.
+  R2 cap      BINDS if the best total <= 30.24 GB/s: reads alone, with no write stream on
+              the bus, stay within 5% of the 26-28.8 GB/s cap. REFUTED otherwise: the cap does
+              not hold for reads alone. Either way this names no cause for the earlier figures.
+  R3 where    at equal channel counts, compare 2x1 with 1x2 and 4x1 with 2x2. A ratio (across columns
+              / within a column) >= 1.1 names the per-column shim as a limiter; below 1.1 at
+              both, the limit is not per column.
+  R4 scaling  the 1x1 rate in bytes per cycle at the sitting clock, against 1 word/cycle.
+  Reported, not deciding: the slope rate and fixed cost per dispatch from the line through each
+  layout's 256 MiB and 1 GiB medians.
+  VOID        a fixed cost outside -1.0 to 3.0 ms (time not linear in bytes); a dispatch that does not
+              complete; an xrt-smi witness that is not idle (the suite stops); a missing row.
+
+Written predictions (stated expectations; the rules decide)
+  Q1  1x1 reads 6.7-7.2 GB/s (S1 measured 6.899 per direction on one channel, in a round trip).
+      If it undershoots, one named alternative to the stream limit is address translation over
+      a 1 GiB mapping; a fixed cost that grows with size would show it, and a clean line
+      through 256 MiB and 1 GiB argues against it.
+  Q2  1x2 and 2x1 read 13-14.4 GB/s.
+  Q3  2x2 reads 26-29 GB/s (memcpy moved 28.1 per direction on 2 columns x 2 channels), 4x1
+      reads the same within 1.1x, and 4x2 reads less than 1.1x the better of them: R2 BINDS.
+      The alternative, named because the evidence for
+      the cap is thin: SILICON 1.6's only 8-channel figure is GroupNorm's 25.9 GB/s of reads, a
+      compute kernel whose 3.2 GB/s per channel may be its own limit, and memcpy moved 56.2 GB/s
+      read + write together. If that is so, 4x2 reads up to 57.48 GB/s and R2 is REFUTED.
+  Q4  R1: decode does NOT reopen; 59.7 GB/s exceeds even 57.48, all 8 streams at 1 word/cycle.
+      Reopening would need a shim MM2S stream faster than 1 word/cycle, which SILICON 1.5 measured
+      it is not.
+
+Unverified by design: reads through the core tiles (the sink is the mem tile); packet-switched
+streams; the host-to-NPU coherence path (host-only BOs); power modes other than the default;
+column 0, which the driver never exposes.
+
+Artifacts the sitting will load (compiled before it; the sitting prints each insts_sha256 again)
+ARTIFACT c1x1_m32 words_per_channel 8388608 insts_sha256 1a1b11c909b8a4f6356a23c1434d558ee8b29b98ddf3600a451c45ade81867bc mlir_sha256 4f0a45f9a30dfa81743bb062771c2a6eee540eeff4000c79e3859292dbca74ac
+ARTIFACT c1x1_m256 words_per_channel 67108864 insts_sha256 cb30c1ee6d997eb36ea77c2a177b7f4a1dcc8e8e5eafee97e789d01bb32cc4a5 mlir_sha256 6f68c8fdea6915ed11fc9b92f8d6d7b3f9e94d4547cf6831b9c7a5d50cbde29e
+ARTIFACT c1x2_m256 words_per_channel 33554432 insts_sha256 fb13eb1076034f26cc5374ec888656377217cdbdfa7080c9971add2a7d34cf65 mlir_sha256 3333ba922c9c88c90c1e9a0bbbcb28239579062f425770fb24dd5cc03cbfb3e2
+ARTIFACT c2x1_m256 words_per_channel 33554432 insts_sha256 bceea31826f66baf5c90b8e729345383f308b9ded8b2cc55c671cbead2f13d81 mlir_sha256 0afddad30c7c34072ae126c1972f8ac325765c0a19b174cd6487470a13f03a82
+ARTIFACT c2x2_m256 words_per_channel 16777216 insts_sha256 820c7cb27d6bea6429021673238fe3331e6266f521b181e8fee2fd6ee47b219b mlir_sha256 024cff56207d07dda2d6c6aa9ffbe54c6e1f37b23642cc4dec1ac190537f1e99
+ARTIFACT c4x1_m256 words_per_channel 16777216 insts_sha256 0c87b80bbf176966c31d62debd605317bc35b32180181e35f98f2e61e91c2155 mlir_sha256 a3b6e34e2f5743a99cb5c0b8fbfa02a6edc2ffb4528a39823ff2d365bd18d792
+ARTIFACT c3x2_m256 words_per_channel 11185152 insts_sha256 69c5ab2fa3d8a48626855d7b368b79d57362e5a302fbda3ea9e8c08930299fb5 mlir_sha256 76c0baed22bd68c2094c0bc96dd0c62dce6062bd5df21bac7eede687b1e68fac
+ARTIFACT c4x2_m256 words_per_channel 8388608 insts_sha256 42c8bc2d6059607e6ca3be6cc6f556e1470e1bcdb17e1d5d5b87b19982ff83fa mlir_sha256 6139420179d29fdc8809def98f2a97bdfa1d55e601d215888e3e957dc0bd7fd2
+ARTIFACT c1x1_m1024 words_per_channel 268435456 insts_sha256 8c654eda8d8227d0feb1296c9e2293d529ac9fb17e104ef6af81da0e473e8e9f mlir_sha256 fd598fdb0288ce726b732079289bb9ef351ccdf0ba2c4b49bf0e8b636650e78e
+ARTIFACT c1x2_m1024 words_per_channel 134217728 insts_sha256 5dda30aab9b3d532060554d679f0141cd62f33dcbb7b662d8423bd18b2cd3911 mlir_sha256 7587c468538d5292b1da8643a5bd04b501c04a098fc5aed3c0f257dbbede486c
+ARTIFACT c2x1_m1024 words_per_channel 134217728 insts_sha256 641d5a38dff63503f1772f507d650ef4c97b586950fd38240caddee4086f8ccf mlir_sha256 a4ee9afc0ef9684a68972e9e0e63c9ffdb897ade45458c3e3e149bc758b20571
+ARTIFACT c2x2_m1024 words_per_channel 67108864 insts_sha256 8ab844a0bafb9cf2f2801cec7b33a9d3acb4a6b677df2c59865efc5c3cb3d781 mlir_sha256 bcdd725632959cedffe8b14eed8c36b295c29ad7d01dfc90d5a58da9f8ab5257
+ARTIFACT c4x1_m1024 words_per_channel 67108864 insts_sha256 24225f6a9c50d6066ce3990da54797e99470a65f0a18209ffcf0400f4f7ce32a mlir_sha256 1f702370577c77eb61929bd31dbeb695169a0d32538cba17a4d61b33d4964405
+ARTIFACT c3x2_m1024 words_per_channel 44739584 insts_sha256 7b6e9eb612f01f2ebd7320137958a4c2eb0cdae0c275acc71d84853923208c02 mlir_sha256 d785e3afe8a3a7a83da422355a468d1d750d415bb89229877f515eb0a1ef9aa6
+ARTIFACT c4x2_m1024 words_per_channel 33554432 insts_sha256 c3aa45a3c6013bbcf1170e0cb9d68cb0a20ecbf063bc6eb2d52621e06314fe3a mlir_sha256 1941ab04fc51140a45aa95b1cdbedd6eeb818d59ebe8614755b86c8c3790cf1b
+git HEAD f99e4310eecc408ac61590ba3594dbd19ada985a (plus this log's own commit)
+PREREG_JSON {"layouts": [[1, 1], [1, 2], [2, 1], [2, 2], [4, 1], [3, 2], [4, 2]], "sizes_mib": [256, 1024], "smoke": [[1, 1], 32], "chunk_words": 32768, "warmup": 3, "reps": 15, "channel_ceil_gbps": 7.184765702556, "all8_ceil_gbps": 57.478125620448, "reopen_gbps": 59.7, "cap_binds_max_gbps": 30.240000000000002, "fixed_ms": [-1.0, 3.0], "column_ratio": 1.1, "git_head": "f99e4310eecc408ac61590ba3594dbd19ada985a"}

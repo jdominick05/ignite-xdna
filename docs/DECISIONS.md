@@ -181,8 +181,363 @@ The measurement and verdict will be folded into BENCHMARKS after the run.
    `<path>`" line. The change is forward-looking: versions already pushed with the Apache header stay
    Apache for whoever took them. The copyright holder string, "The ignite-xdna contributors", is an
    **assumption** pending the owner. Never paste mlir-aie's AMD header onto a new file.
+10. **LLM study: energy per token and freeing the GPU count, and the model is Gemma 3 4B
+    (2026-09-23).** The user decided both.
+    - **The bar.** In the user's words: "energy per token and freeing the gpu both count".
+      - From this date, an NPU arm earns a role if it is faster, more accurate, uses less energy
+        per token, or frees the GPU.
+      - The yardsticks stay the CPU (ONNX Runtime) and DirectML on the Radeon 780M. Combining the
+        chips stays in scope.
+      - The energy method and an operational definition of freeing the GPU come in a
+        pre-registration the user approves before any sitting.
+    - **Earlier stages are not re-scored.** They were judged on speed and accuracy. Their kills
+      are on speed (and on accuracy where stated); energy and GPU freeing were not measured for
+      them.
+    - **The model.** Gemma 3 4B. The user accepted Google's Gemma terms. The Llama-2-7B targets
+      do not carry over; this model's targets are derived from its own shapes. The checkpoints
+      (repo list amended 2026-09-24):
+      - `google/gemma-3-4b-it`, the instruction-tuned release;
+      - `-qat-q4_0-gguf`, the shipped q4_0 file;
+      - `-qat-q4_0-unquantized` (revision `7c0881d8`), the QAT checkpoint Google's card pairs with
+        Q4_0 (its card says to quantize with Q4_0). Whether the GGUF was made from it is stage
+        (c)'s B1 test.
+      - `-qat-int4-unquantized` is a different QAT run, for int4 quantizers. It was named here in
+        error at first, and stage (a)'s prereg compared the GGUF with it
+        ([BENCHMARKS](BENCHMARKS.md#gemma-3-4bs-shipped-weights-compress-losslessly-113-per-token-mostly-in-the-f16-head-compaction-survives-as-a-byte-cut-necessary-but-not-sufficient-2026-09-23-desktop-2)).
+    - **Freeing the CPU counts too (2026-09-23).** Asked "Should leaving the CPU cores free also
+      count, the way freeing the GPU does?", the user answered "Yes, it counts".
+      - CPU decode leaves the GPU free, and DirectML decode leaves most CPU cores free. So the
+        NPU's distinct claim is freeing both at once.
+    - **The floor for freeing a chip is 5 tokens/s, the user's number (2026-09-23).**
+      - The reason is reading speed. Adults read English non-fiction silently at an average of
+        238 words per minute (Brysbaert 2019, *J. Memory and Language* 109, 104047, a
+        meta-analysis of 190 studies).
+      - Tokens per word are measured with Gemma's tokenizer before the freeing test. The floor
+        stays 5 tokens/s unless the user changes it.
+    - **Energy comes from the package counters only (2026-09-23).** Asked about a wall-power
+      meter, the user answered "package counters only". There is no wall meter, and a comparison
+      the counters cannot decide ends UNDECIDED.
 
 ## Rejected approaches and known pitfalls
+
+- **NPU-only LLM decode on Phoenix, killed on speed at the NPU DRAM rates measured so far
+  (2026-09-23).** The rule was pre-registered at `37e7bdb`.
+  - Scope: this kill and every DEAD below are on speed, and on accuracy where stated. Energy per
+    token and freeing the GPU, which count from 2026-09-23 (locked decision 10), were not
+    measured. Nothing here is re-scored.
+  - The competitors: int4 GEMV at Llama-2-7B's shapes runs 55.9 ms/token on the 780M through
+    DirectML (fp16) and 61.3 ms/token on the CPU through ONNX Runtime (int8 compute). Both are
+    DERIVED from MEASURED per-GEMV rows.
+  - The NPU's most favourable floor is 118.8 ms: the fewest bytes, 3.339 GB, at the best rate
+    seen, 28.1 GB/s.
+  - DirectML fp32 is also on the accuracy front at 1.4e-7 and 64.6 ms, so an NPU decode arm is
+    dominated on both speed and error.
+  - **Reopen only** if a clean NPU read-only test measures ≥ 59.7 GB/s. Prefill and a concurrent
+    three-chip split are separate, unmeasured questions.
+  - ([BENCHMARKS](BENCHMARKS.md#llm-decode-yardsticks-the-cpu-and-the-780m-read-int4-at-5664-gbs-so-npu-only-7b-decode-is-killed-on-speed-2026-09-23-desktop-2))
+  - **The reopen test has run, and decode stays killed.** It was pre-registered at `c365f9f`.
+    - Read-only, the NPU reads 47.62 GB/s on eight channels (MEASURED), below 59.7.
+    - The floor moves to 70.1 ms/token (DERIVED). That is still slower than both yardsticks,
+      and slower than DirectML fp32 on the accuracy front.
+    - Even eight streams at a word per cycle, 57.5 GB/s (DERIVED), would give 58.1 ms, above
+      55.9.
+    - Decode kernels stay out. Whether the chips' reads add is the next question.
+    - ([BENCHMARKS](BENCHMARKS.md#the-npu-reads-ddr-at-476-gbs-when-nothing-is-written-back-silicons-2628-gbs-cap-does-not-bind-reads-and-7b-decode-stays-killed-2026-09-23-desktop-2))
+  - **The chips' reads add, and the NPU's bandwidth role in a split sits on the line.** Stage 2
+    was pre-registered at `4557ec9`; its sitting 2 decides under the re-run rule at `06ffd7a`.
+    Sitting 1 was INCOMPLETE: its DirectML-alone runs read 81.11 and 70.95 GB/s, cause
+    unattributed.
+    - DirectML + NPU read 91.76 GB/s together (MEASURED), 1.31× DirectML alone.
+    - Adding the NPU to CPU + DirectML gives 1.084×, under 1.10 (R3 NO).
+    - The best total with the NPU is 1.1004× the best without it: R5 OPEN, not established,
+      inside the sitting's run-to-run spread.
+    - A split also pays 224 synchronizations per token, which is not measured. (Measured
+      since: the next bullet.)
+    - Decode kernels stay out unless the user decides otherwise.
+    - ([BENCHMARKS](BENCHMARKS.md#reads-add-across-the-chips-directml-and-the-npu-together-read-918-gbs-and-the-npus-share-of-a-split-lands-on-the-pre-registered-line-2026-09-23-desktop-2))
+  - **The DirectML + NPU split is dead at the round trips measured here: joining its halves
+    costs 3.5× what it could save.** The
+    user decided to "measure the sync first"; the test was pre-registered at `a81f16d`, with the
+    gate's kill line.
+    - A dependent join of a DirectML half and an NPU half costs J* = 174.5 µs per GEMV
+      (MEASURED, with the two-process handshake subtracted). 224 joins per token are 39.09 ms
+      (DERIVED), against the 11.1 ms at most the split could save, which is itself optimistic:
+      R1 DEAD.
+    - With 128 joins (independent GEMVs sharing one), 22.34 ms: R1b DEAD too.
+    - The halves overlap (R2). What kills the split is each chip's own dependent round trip:
+      NPU 131.1 µs and DirectML 168.8 µs per step, each over the line alone. The repo's C++
+      host still pays about 108 µs for one NPU dispatch at a time, so a faster host language
+      does not rescue it.
+    - Not covered by the rules: a tensor-parallel layout with 64 joins lands on the line
+      (11.17 ms), and that is before each chip's own dispatches between joins, which come on
+      top. It would also need attention and a KV-cache share on the NPU, and neither exists
+      here.
+    - **Reopen only if** a DirectML + NPU join falls under 49.55 µs per step, for example
+      through a device-side DirectML–XRT fence, which does not exist today.
+    - Decode kernels stay out. Stage 3, prefill, is next.
+    - ([BENCHMARKS](BENCHMARKS.md#a-directml--npu-split-pays-39-ms-per-token-to-join-its-halves-against-the-111-ms-it-could-save-the-split-is-dead-2026-09-23-desktop-2))
+  - **Prefill GEMM, stages 3, 3b and 3c: no stage gives the NPU a speed role. Stages 3 and 3b
+    are INCOMPLETE on their own repeat rules; stage 3c gives it an energy role at M = 2048, for
+    isolated weight GEMMs at Gemma 3 4B's shapes, and is INCOMPLETE at M = 8192.**
+    - **Stage 3, at Llama-2-7B's shapes: no decision; INCOMPLETE in both sittings on its own
+      repeat rule.** It was pre-registered at `d51a427`. Sitting 2 ran under the gate's re-run
+      rule (`c6c37e3`).
+      - Sitting 1 broke the 10% rule on six CPU 8-thread rows (11.7–38.4%). Sitting 2 broke it on
+        two CPU 8-thread rows and six DirectML rows (11.1–37.8%).
+      - Not a verdict: in neither sitting's tables does an NPU arm beat both chips.
+        - NPU bf16 loses to DirectML fp16, which is more accurate and 1.24–1.41× faster in
+          sitting 1, where its rows held. Sitting 2's DirectML rows broke the rule.
+        - NPU int8 is level with the CPU's int8 at M = 2048 (0.99–1.03×) and slower at M = 512.
+      - Post hoc, not pre-registered: the rows that held already rule out a KEEP in both sittings.
+      - Accuracy is the same in both sittings. The NPU's best arm, bf16 at 2.35e-3, is less
+        accurate than CPU fp32, DirectML fp32 and DirectML fp16.
+      - ([BENCHMARKS](BENCHMARKS.md#prefill-gemm-at-llama-2-7bs-shapes-incomplete-in-both-sittings-on-its-own-repeat-rule-and-neither-sittings-tables-show-an-npu-arm-beating-both-chips-2026-09-23-desktop-2))
+    - **Stage 3b, the user's "re-run prefill, pinned": INCOMPLETE too, by one row.** It was
+      pre-registered at `c2b439c` after the noise study as a new experiment. The CPU was pinned
+      and read back every session, and DirectML ran 5 fresh sessions per row; nothing else
+      changed.
+      - DirectML fp32 S1 at M = 2048 read 44.90 / 49.69 ms between passes (10.1%). Every pinned
+        CPU row, every NPU row and every other DirectML row held.
+      - Not a verdict: its tables again show no NPU arm beating both chips. NPU bf16 loses to
+        DirectML fp16, which takes 0.72–0.92× its time. The CPU's int8 takes 0.79× NPU int8's
+        time at M = 512; at M = 2048 NPU int8 is only 1.02× faster, under the 1.10 line.
+      - Post hoc: the broken row cannot change that. At either pass's value, the NPU beats
+        DirectML fp32 by at least 1.99× by layer time, and 1.69× with S2's concatenation and
+        the 3 switches added.
+      - Also post hoc: NPU int8's 1.37× over DirectML fp16 at M = 2048 is bare layer time. With
+        the same overheads added, it is 1.07×, under the 1.10 line.
+      - As pre-registered, there is no third run without the user. What happens next is the
+        user's call.
+      - ([BENCHMARKS](BENCHMARKS.md#prefill-gemm-re-run-with-pinned-cpu-threads-and-directml-over-fresh-sessions-stage-3b-incomplete-by-one-directml-row-and-its-tables-again-show-no-npu-arm-beating-both-chips-2026-09-23-desktop-2))
+    - **Stage 3c, at Gemma 3 4B's shapes with energy counting (locked decision 10): speed KILL for
+      both NPU arms at both M; a role at M = 2048 on energy alone; M = 8192 INCOMPLETE
+      (2026-09-24).** Pre-registered at `2c29296`. It was amended at `1278d96` (the counters at HIGH
+      priority) and `9ebb7c0` (the cadence gate on the rule itself); the rules and the verdict code did
+      not change.
+      - Speed: DirectML's MatMulNBits is 1.22× faster than NPU int8 at M = 2048, and the CPU's int8
+        only 1.056× slower. At M = 8192 MatMulNBits is 1.029× slower than NPU int8, under the 1.10
+        line. NPU bf16 loses at both M. Accuracy cannot be won by construction.
+      - Energy at M = 2048: NPU int8 uses 2.32× and NPU bf16 1.40× fewer joules above idle than
+        MatMulNBits, the binding rival. With the idle included (post hoc, report-only), 1.75× and
+        1.04×: bf16's lead holds only above idle.
+      - M = 8192 is INCOMPLETE: three 16-thread CPU rivals lost a pass each to the 50-row counter rule,
+        and under R2 a missing rival can block a KEEP. The user ruled no third sitting.
+      - Scope: one block's seven weight GEMMs in isolation, per prompt token; not per token of the
+        model, and no model quality.
+      - **Pitfall: a 1 Hz typeperf beside 16 pinned threads loses samples.** At normal priority a
+        window held 42 rows; at HIGH, six windows at M = 8192 still held 44–49, against a 50-row rule.
+        A later row-count rule should leave headroom for the busiest arm.
+      - ([BENCHMARKS](BENCHMARKS.md#prefill-weight-gemms-at-gemma-3-4bs-shapes-stage-3c-at-m--2048-the-npu-earns-a-role-on-energy-alone-speed-is-kill-at-both-m-and-m--8192-is-incomplete-on-three-missing-cpu-rivals-2026-09-24-desktop-2))
+  - **Hybrid stack S1, the NPU numerics gate: bf16 (N3) keeps Gemma 3 4B's next-token distribution
+    within the bar, both int8 arms (N1, N2) fail, and the pick is N3; a CPU emulation (2026-09-24).**
+    - Pre-registered at `e4c5caa`. Amendment 1 (`71493f8`, the user's choice) changed the sessions'
+      execution order and added a memory watchdog. The rules and the verdict code (`d78b0f48`) did not change.
+    - Results against R0 on 16 WikiText-2 prompts of 2,048 tokens:
+      - N3: mean KL 0.00008 and top-1 0.995 in both bands;
+      - N2: 0.061 / 0.052 and 0.895 / 0.911;
+      - N1: 3.51 / 3.54 and 0.287 / 0.291.
+
+      The bar is ≤ 0.0123 and ≥ 0.956 in both bands. No arm is NARROW.
+    - N3 is bf16 X and W with an fp32 MatMul on the CPU, equal to the NPU's N-bf16 up to accumulation order.
+      The NPU did not run.
+    - P2 is a MISS: the plan's preference for N2 is superseded.
+    - N2's cause is not split. N1 and N2 requantize the Q4_0 weights to int8 per column *and* quantize X,
+      while R, which keeps Q4_0 weights with int8 X per 32-block, passes (report-only).
+    - The pick label's 3c figures have 3c's scope: one block's seven weight GEMMs in isolation, per prompt
+      token, at M = 2048. They are 1.40× on energy above idle, 1.04× with the idle (post hoc,
+      report-only), and 2.09× DirectML's time.
+    - Band C is report-only and upgrades nothing.
+    - **Pitfall: under ORT_DISABLE_ALL, ORT 1.23.3's default execution order can run constant-input nodes
+      early.** The initial build stopped on memory in N3's probe; the cause, N3's 238 weight casts running
+      ahead of their MatMuls, is INFERRED from synthetic checks that are not logged. PRIORITY_BASED keeps the
+      graph's order. The gate's reading of the committed N3 profile then showed at most one cast output alive
+      at once.
+    - **The user's decision on what follows (2026-09-24):**
+      - S1b, int8 for the prompt only;
+      - S0 approved, with the INCORRECT flag as proposed (report-only);
+      - U6 as a plan for a q4_0 NPU kernel only, with no kernel code.
+    - ([BENCHMARKS](BENCHMARKS.md#hybrid-stack-s1-the-npu-numerics-gate-on-real-2048-token-prompts-bf16-n3-keeps-gemma-3-4bs-next-token-distribution-within-the-bar-and-both-int8-arms-fail-in-a-cpu-emulation-2026-09-24-desktop-2))
+  - **Hybrid stack S1b, N2 serving the prompt's KV: set C passes, not NARROW, the last prompt position fails
+    (report-only), and the pick stays N3; a CPU emulation (2026-09-25).**
+    - Pre-registered at `b777070`; the verdict is at `e5b320e` (verdict code `3059986a`). The question: with N2
+      building only the prompt's KV and R0 generating, does the generation stay within S1's bar?
+    - Set C (deciding) is R0 teacher-forced over positions 2,048–3,070 on N2's 2,048-position prompt KV,
+      against R0 one-shot, on 84 new WikiText-2 windows: mean KL 0.0101 [0.0096, 0.0107] and top-1 0.9602
+      [0.9584, 0.9619], against ≤ 0.0123 and ≥ 0.956. N2 ON SET C: PASS, not NARROW.
+    - The PASS is the pooled mean. The first 512 continuation positions read mean KL 0.01265, above the line,
+      and the rest 0.00758 (report-only).
+    - Position 2,047 fails, report-only both ways: P-arm (N2's own logits) FAIL NARROW at 77/84, mean KL 0.0370;
+      P-R0 (the GPU computing id 2,047 on N2's KV for 0–2,046) FAIL NARROW at 79/84, mean KL 0.0234. The
+      prereg's consequence: N2 can serve the prompt's KV only if the GPU computes the last prompt position.
+    - The L/H replication fails again (report-only): mean KL 0.0623 and 0.0498, top-1 0.8992 and 0.9100.
+    - N2's lower set C perplexity (10.95 against N3's 11.21) is a departure from the reference, not a gain.
+    - The prediction Q1 is a MISS: its NARROW-on-top-1 part missed. Q2–Q8 are HIT.
+    - Scope: CPU emulation; R0 stands in for the 780M's generation; fp32 head; the 780M's attention precision
+      is not modelled; N2's tie to the NPU is DERIVED.
+    - **The pick stays N3.** Moving the prompt-KV arm to N2 is the user's decision, with the interval in hand.
+    - ([BENCHMARKS](BENCHMARKS.md#hybrid-stack-s1b-n2-serving-the-prompts-kv-r0s-continuation-on-n2s-kv-passes-on-the-pooled-set-c-not-narrow-the-last-prompt-position-fails-report-only-and-the-pick-stays-n3-in-a-cpu-emulation-2026-09-25-desktop-2))
+  - **Hybrid stack U6-E and U6-0, route (i)'s per-block epilogue: fp32-grade needs three bf16 pieces, the
+    epilogue costs 97 cycles per 32-lane block-tile, and route (i) as built misses the user's bar on time and
+    energy by the U6 plan's own model (2026-09-25).**
+    - U6 is the plan, approved by the user, for a Q4_0 × int8-per-block GEMM on the NPU in R's arithmetic.
+      AIE2 has no vector fp32 multiply, so the fp32 scale products are built from bf16 pieces.
+    - U6-E (the tool frozen at `2505530`, the log at `8faa9db`; numpy against MatMulNBits level 4 on the CPU):
+      - SPLIT: 3-term. Three pieces sit at 1.08–1.22× L4's own departure from float64, and two at
+        5.05–12.40×, against the gate's rule of ≤ 2.0×.
+      - A2's threshold is 2.3e-06.
+      - The 3-term outcome follows from the rule's strictness ("fp32-grade"). Two pieces sit about 20× below
+        llama.cpp's own form's departure from L4. Whether they would hold at model level is unmeasured.
+    - U6-0 (the tool at `a513ac0`, the log at `3a2ac2b`; compile only, the NPU did not run):
+      - E = 97 cycles per 32-lane block-tile, for 3-term with a round-trip, DERIVED from bundles (static).
+      - 2-term reads 68 and the int16 conversion 93, both report-only.
+      - U0-P2 FAILS: the plan's 12–16 was INFERRED from SPEC rates.
+      - The loop is issue-bound (INFERRED): 101 vector ops in 104 bundles. The text shows CONTROL's loop
+        pipelined and does not show FULL3's.
+    - **Through the plan's model** (DERIVED; compute only; energy at N-w4's power), in its form, 18 ms of MACs +
+      6.55 ms × E:
+      - 653 ms per layer (635 of it the epilogue), 8.2× D-nb16's 79.49;
+      - 10.46 mJ per prompt token per layer with idle, 3.7× D-nb16's 2.8569.
+      - The whole loop as compiled reads 681 ms and 10.90 mJ; its CONTROL runs 146 MAC per cycle against the
+        plan's 372.4.
+      - The break-even against D-nb16 is E ≤ 24 (E ≤ 20 in the loop's form, a sensitivity). Under a
+        one-issue-slot assumption, the census's floor for 3-term is 34.
+    - Which split U6 uses is moot for route (i) as built: 3-term's E is 4.0× the break-even and 2-term's 2.8×.
+    - What remains:
+      - F2 (integerized 8-bit scales), which the user's rule triggers on both readings;
+      - F3 (dequant, then bf16), bounded by N-bf16's 166.00 ms;
+      - the untested U6-0b forms, 2 × 2 blocking and per-row and per-column splits, whose gain is
+        unestimated.
+    - ([BENCHMARKS](BENCHMARKS.md#hybrid-stack-u6-e-and-u6-0-the-epilogue-of-a-q4_0-npu-kernel-fp32-grade-products-take-three-bf16-pieces-and-that-epilogue-costs-97-cycles-per-32-lane-block-tile-so-route-i-as-built-misses-the-users-bar-on-time-and-energy-by-the-u6-plans-own-model-2026-09-25-desktop-2))
+  - **The user moved the prompt-KV arm to N2, with the GPU computing the last prompt position (the user's
+    decision, 2026-09-25).**
+    - N2 (int8) serves the prompt's KV, and the GPU computes the last prompt position, 2,047.
+    - It was taken with S1b's interval in hand. S1b's verdict kept the pick at N3 and left this move to the user;
+      its prereg's consequence was that N2 can serve the prompt's KV only if the GPU computes the last prompt
+      position.
+    - The basis the user was given: N2 runs 3c's int8 kernel with the same weight codes, with the activation scale
+      per token (BENCHMARKS, S1's arms). In 3c's post-hoc reading (report-only), that kernel, N-i8, used 1.75×
+      fewer joules than D-nb16 with idle, against N-bf16's 1.04× (2.8569 against 1.6334 and 2.7417 mJ; the
+      post-hoc log, lines 24–26). The per-token scale's cost is not in that figure.
+    - The caveats, report-only in S1b (`hybrid_s1b_verdict_desktop2_20260925.log`):
+      - the first 512 continuation positions, 2,048–2,559, read mean KL 0.01265, above the line of 0.0123
+        (line 111);
+      - the hybrid's first generated token, P-R0 (the GPU computing id 2,047 on N2's KV), reads FAIL NARROW:
+        mean KL 0.02342 and top-1 0.9405, 79 of 84 windows (line 101).
+    - ([BENCHMARKS](BENCHMARKS.md#hybrid-stack-s1b-n2-serving-the-prompts-kv-r0s-continuation-on-n2s-kv-passes-on-the-pooled-set-c-not-narrow-the-last-prompt-position-fails-report-only-and-the-pick-stays-n3-in-a-cpu-emulation-2026-09-25-desktop-2))
+  - **Hybrid stack F2-0 and F2-0b, integerized 8-bit scales for route (i): both flush forms pass E ≤ 24 at
+    S = ROW, compute only, and F2 cannot beat the chosen N2 arm on energy (2026-09-25).**
+    - F2 replaces route (i)'s per-block fp32 scales with 8-bit integers under one fp32 scale per superblock, and
+      keeps the integer sum exact in a 64-bit accumulator.
+    - F2-0 (the tool at `a47e631`, the log at `ca2f0de`; compile only, the NPU did not run):
+      - E_core = 22 cycles per 32-lane block-tile, DERIVED from bundles (static).
+      - The flush read VOID by U6-0's rule. Its loop holds 18 mode writes from aie_api's `_conf` srs inside
+        `to_float` on an acc64. That is a rule artefact, not a malformed flush.
+      - The tier was STOP, and the gate ruled the flush onto the core.
+    - F2-0b (the tool at `a72726e`, the log at `5a5e15a`; compile only):
+      - F2_CORE's re-read is bit-identical, and acc64 is CONFIRMED: r4 = 0x35a, amode 1 (`aiev2_vmult.h:15-25`).
+      - fp32(I) is built by shuffles with one rounding (DERIVED; that the add is RNE is INFERRED).
+      - FLUSH_B3 116 gives E_F2 23.81 and FLUSH_B2 82 gives 23.28, both PASS. PASS is necessary, not sufficient.
+      - S is ROW only. B2's loop holds one accumulator spill, counted.
+    - Energy (DERIVED; compute only, at N-w4's assumed power; mJ with idle per prompt token per layer):
+      - in the plan's form, B3 2.7849 and B2 2.7292, beside D-nb16's 2.8569 and N-bf16's 2.7417;
+      - in the serial form, 3.84 and 3.78, above D-nb16.
+      - Any F2 edge rests on the epilogue overlapping N-w4's measured transport.
+    - **The dominance fact** (DERIVED, under the plan's power assumption):
+      - N-i8, the kernel N2 runs, MEASURED 1.6334 mJ with idle: 96.92 ms at 34.53 W (the 3c post-hoc log,
+        line 26).
+      - F2's best form, in its optimistic compute-only model, reads 2.7292, 1.67× that. So F2 cannot beat the
+        chosen N2 arm on energy.
+      - The bases differ: F2's figure is compute only at an assumed power, and N-i8's is measured.
+      - F2's remaining case is memory: sharing the GPU's Q4_0 4-bit codes (with F2's own int8 qw per block and fp32
+        Dw per column) instead of holding an int8 copy. It is unmeasured. The bar as written does not score memory,
+        and the user stopped F2 after F2-A (2026-09-25).
+    - Not established: a silicon time; F2's own power; accuracy (F2-E's question); the lane order on silicon (it
+      rests on IR semantics); the RNE add (INFERRED).
+    - ([BENCHMARKS](BENCHMARKS.md#hybrid-stack-f2-0-and-f2-0b-route-i-with-integerized-8-bit-scales-the-core-adds-22-cycles-per-32-lane-block-tile-and-a-flush-with-no-srs-on-an-acc64-costs-116-or-82-cycles-per-superblock-so-both-flush-forms-pass-e--24-at-s--row-compute-only-yet-f2s-best-modelled-energy-is-167-the-measured-energy-of-n-i8-the-kernel-n2-runs-2026-09-25-desktop-2))
+  - **The user decided to write up F2-0 and F2-0b, then run F2-E (2026-09-25).**
+    - F2-E is the accuracy question at S = ROW, for both flush forms. Its plan text goes to the gate before
+      anything is coded.
+    - F2-E's answer cannot change the N2 pick. By the dominance fact, F2 cannot beat N2 on energy.
+    - F2 continues as the int4-weight alternative (the user's decision, 2026-09-25), and its remaining case is
+      memory (stopped after F2-A, 2026-09-25).
+  - **Hybrid stack F2-E, integerized 8-bit scales at S = ROW: form B with FLUSH_B2 is the pick, in a CPU
+    emulation, and it cannot change the N2 pick (2026-09-25).**
+    - F2-E (the tool frozen at `f88fe73`, its selftest and pins logs at `3c258b0`, the run log at `96f83a8`;
+      numpy against MatMulNBits levels 0 and 4 on the CPU):
+      - F2-E PICK: form B, FLUSH_B2, S = ROW, E_F2 23.28125.
+      - Both deciding arms read 1.047–1.189× L4's own departure from level 0 over the 21 cases, against the gate's
+        rule of ≤ 2.0×. They are ACCEPTABLE at 2.0 and 1.41, not at 1.12.
+      - Form A fails at ROW on all three down_proj cases (2.2978×, 2.2589×, 2.3300×; report-only). Form A keeps L4's
+        codes under a rounded qx. So the host must requantize the activations (form B), with Sx rounded up.
+      - S = 16 and 8 read better (worst 1.1287× and 1.1016×), but F2-0b's flush budget allows ROW only.
+      - The grid, not the flush, carries the departure. No block rounds to qw = 0 at any S. P4 held vacuously:
+        every fraction is 0.
+      - A2-F2's threshold, for a later kernel test, is 1.4e-05.
+    - Scope: layer 16's inputs on S1's sequence 0, 256 rows, for all three layers; a numpy emulation of the
+      compiled flush order; no silicon run.
+    - It cannot change the N2 pick. F2's best modelled energy is 2.7292 mJ with idle, compute only at an assumed
+      power: 1.67× N-i8's MEASURED 1.6334.
+    - ([BENCHMARKS](BENCHMARKS.md#hybrid-stack-f2-e-integerized-8-bit-scales-at-s--row-in-a-cpu-emulation-form-b-with-flush_b2-is-the-pick-every-case-within-119-l4s-own-departure-from-level-0-form-a-fails-on-all-three-down_proj-cases-and-f2-e-cannot-change-the-n2-pick-2026-09-25-desktop-2))
+  - **The user decided to plan F2-A (2026-09-25).**
+    - F2-A is being planned on the user's go (2026-09-25). It cannot change the N2 pick, and F2's case is weight
+      memory.
+    - Its pre-registration text goes to the gate before anything is coded or run.
+  - **Hybrid stack F2-A, F2-E's pick in all 238 linears at model level: F2-A/KV PASS and F2-A/FULL PASS, neither
+    NARROW, in a CPU emulation, and the N2 pick is unchanged (2026-09-25).**
+    - F2-A (the tool frozen at `bd2c7e9`; the selftest at `b358865`; the prereg at `c60692c`, the freeze; the build
+      at `87f39b0`, the check at `852b051`, the states at `419de8d` and the verdict at `ef297b3`). Against R0
+      one-shot on 16 new WikiText-2 validation windows:
+      - F2-A/KV (set C, S1b's rule): PASS, mean KL 0.00012 [0.00011, 0.00014], top-1 0.9954 [0.9941, 0.9965].
+      - F2-A/FULL (bands L and H, S1's rule): PASS, band L 0.00140 / 0.9844 and band H 0.00128 / 0.9857.
+      - "F2 qualifies for the KV-serving role, and also holds at prompt positions."
+      - K1–K8 PASS; the guard 0 in all 40 F2 runs; all nine predictions HIT.
+    - Report-only, on the same windows: F2's mean KL is 1.26–1.39× R's (DERIVED). N2 reads set C 0.00961 / 0.9593,
+      would-be PASS NARROW, and FAIL on bands L and H, S1b's basis, with a NARROW on set C over these 16 windows
+      (report-only).
+    - Scope: a CPU emulation. No NPU kernel ran, and F2's tie to the NPU is DERIVED from F2-0b's flush. R0 stands in
+      for the 780M's numerics; the continuation is teacher-forced; 16 windows, one tokenizer, 2,048-token prompts.
+    - It does not change the N2 pick. Energy is not measured: F2's modelled 2.7292 mJ with idle, compute only at an
+      assumed power, against N-i8's MEASURED 1.6334, stands.
+    - F2's weight-memory case now has model-level accuracy support, in a CPU emulation: about 4.25 bits per weight
+      (DERIVED: 4-bit codes and an int8 qw per 32-block), against 8.02 for N2's int8 copy (DERIVED from its
+      3,216,719,872 B). The memory case itself (sharing the GPU's Q4_0 4-bit codes, with F2's own int8 qw per
+      block and fp32 Dw per column, instead of holding an int8 copy) is unmeasured.
+    - Ruling 1 (the two verdicts) was the user's to override until the freeze at `c60692c`. The user was away and
+      had asked for autonomy, so F2-A ran on the gate's ruling.
+    - The user stopped F2 here (2026-09-25; the entry below). "Any move is the user's." (the prereg's section 5,
+      the KV PASS / FULL FAIL combination's text, line 239).
+    - ([BENCHMARKS](BENCHMARKS.md#hybrid-stack-f2-a-f2-es-pick-in-all-238-linears-at-model-level-f2-akv-and-f2-afull-both-pass-not-narrow-so-f2-qualifies-for-the-kv-serving-role-and-also-holds-at-prompt-positions-in-a-cpu-emulation-and-the-n2-pick-is-unchanged-2026-09-25-desktop-2))
+  - **The user stopped F2 after F2-A (2026-09-25).**
+    - The user first chose to measure F2's memory case. Its plan draft (F2-M v1, LF `a95748b7`, git-ignored;
+      nothing ran) showed that the bar as written scores no memory saving.
+    - Locked decision 10's clauses are faster, more accurate, less energy per token, or frees the GPU (and the
+      CPU). "Frees" is stage (e)'s K_W work rate, and memory enters (e) only as its VOID rule.
+    - F2 cannot beat N2 on energy: 1.67× (DERIVED, compute only).
+    - The bytes (DERIVED): F2's own copy 1,708,630,016 B, and sharing the codes 104,308,736 B, against N2's
+      3,216,719,872 B (MEASURED file bytes).
+    - F2-A's accuracy result stands. N2 stays the pick.
+- **A pre-registered size floor caught a builder defect (2026-09-23).** `tools/llm_gemv_bench.py build`
+  first sized the fp16-scale variant's copies from the fp32 variant, so six DirectML rows streamed
+  0.90–0.98 GiB against a pre-registered ≥ 1 GiB, and the verdict came out INCOMPLETE (`4620b53`).
+  The fix (`b909584`) went in before the six rows were re-timed. When a data file has variants of
+  different element sizes, size each variant separately.
+- **Pin ONNX Runtime's CPU threads, and time DirectML over several sessions (2026-09-23).** This
+  is a recommendation for later pre-registrations, from the noise study the user asked for after
+  stage 3. It re-scores nothing, and stage 3 stays INCOMPLETE.
+  - The CPU's 8-thread bimodality is where ORT puts its own threads (ATTRIBUTED). Pinned one per
+    physical core, int8 S1 at M = 512 read one level, 4.11 / 4.13 ms, against levels of about 4.1
+    and 7.2 unpinned. A3, one deliberately doubled core, reproduces the slow level. Whether A0's
+    slow reps come from doubling or from migration is not separated.
+  - ORT 1.23.3's default (`intra_op_num_threads` 0) does not pin on this machine. Read back
+    every session, it made 7 pool threads plus the caller, all 16 logical CPUs in each mask and
+    no CPU sets, and its rows were bimodal too.
+  - DirectML's level is set per session: 1.19× across 20 fresh sessions of one row, 1.011×
+    within one session. The GPU memory split was identical in all 20, so the cause is
+    unattributed.
+  - So: set `session.intra_op_thread_affinities` and pin the calling thread. For DirectML, take
+    the median over several fresh sessions, or keep one session per row and call its level one
+    draw.
+  - ([BENCHMARKS](BENCHMARKS.md#measurement-noise-on-this-apu-pinning-orts-8-threads-to-distinct-cores-removes-the-cpus-bimodality-and-directmls-level-is-set-per-session-2026-09-23-desktop-2))
 
 - **`AIE_PREPARE_FOR_PIPELINING` and `AIE_LOOP_FLATTEN` do nothing under Peano (2026-09-23).**
   Peano predefines `__AIECC__`, so `aie_kernel_utils.h:33-58` (`kernels/conv_accum/` copy) selects its

@@ -19,8 +19,12 @@ This is a narrow target, and most of the narrowness is not optional.
 - **PowerShell**, not cmd. The scripts print resolved paths at startup so you can see
   when an environment variable did not take.
 
-XDNA1's support matrix is CNN INT8 only: no BF16, no transformer/NLP paths, no LLMs.
-That is a vendor-level limit, not a configuration problem.
+Under the current Ryzen AI release (1.8.0, 2026-07-23; inference here runs on 1.7.1),
+XDNA1's support matrix is CNN INT8 only: no BF16, no transformer/NLP paths, and no LLMs on
+the NPU. Both releases' LLM table lists Ryzen AI 7000/8000 as GPU/CPU only. That is a
+vendor-level limit, not a configuration problem. It was not always so: RyzenAI-SW 1.1–1.3.1
+(commits 2024-02-17 to 2024-11-27) shipped a w4abf16 LLM path for Phoenix's NPU, see
+[the prior-art note](../results/llm/notes_prior_art_phoenix_llm.md).
 
 ### Environments
 

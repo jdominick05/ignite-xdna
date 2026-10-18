@@ -1,0 +1,350 @@
+U6-0 run 2026-09-25T09:25:28Z
+COMMIT 55ab0dd
+TOOL_SHA_JSON {"file": "tools/hybrid_u6_0.py", "lf_sha256": "6f47d8616b364502a3da9739bee524f99c27f2fea7a12afe86987b0f56915e46"}
+SOURCE_SHA_JSON {"file": "kernels/u6_epilogue/u6_epilogue.cc", "pinned": "7130b078a9ef51530b8c485183900939c79ad23b861a7bcf4bb6afcbe7498cc9", "lf_sha256": "7130b078a9ef51530b8c485183900939c79ad23b861a7bcf4bb6afcbe7498cc9"}
+PLAN_JSON {"u6": {"pinned": "830eb8b9cd5d3512c1ffb20b5a1cee57e67280f7dd1d8333ffae6ea478e9508d", "file_lf_sha": "830eb8b9cd5d3512c1ffb20b5a1cee57e67280f7dd1d8333ffae6ea478e9508d"}, "u6_0": {"pinned": "352a30d818b93fc55f3da6169bd2a396c9e709cc3f5f25e20f15c570c61c29f5", "file_lf_sha": "352a30d818b93fc55f3da6169bd2a396c9e709cc3f5f25e20f15c570c61c29f5"}}
+TOOLCHAIN_JSON {"pinned": "llvm_aie-22.0.0.2026090201+a36c62b9, mlir_aie-1.4.2", "read": "llvm_aie-22.0.0.2026090201+a36c62b9, mlir_aie-1.4.2"}
+SELFTEST_JSON {"check": "the flags, clang and include equal static_probe.py's", "ok": true, "flags": ["-std=c++20", "-Wno-parentheses", "-Wno-attributes", "-Wno-macro-redefined", "-Wno-empty-body", "-O2", "-DNDEBUG", "-D__AIE_API_AIE_ADF_HPP__", "--target=aie2-none-unknown-elf"]}
+SELFTEST_JSON {"check": "the U6-E tool is the frozen one (its ORDER is read next)", "ok": true, "lf_sha": "b88d23d30c6c2ec3ffa55407dd4969957acf98e788fca47f1a703feec146e892"}
+SELFTEST_JSON {"check": "the source's 3-term P_FIRST/P_TERM/Y_TERM order equals U6-E's ORDER[3]", "ok": true, "source": {"P": [[3, 1], [2, 2], [1, 3], [2, 1], [1, 2], [1, 1]], "Y": [[2, 2], [1, 3], [2, 1], [1, 2], [1, 1]], "n_first": 1}, "u6e": {"P": [[3, 1], [2, 2], [1, 3], [2, 1], [1, 2], [1, 1]], "Y": [[2, 2], [1, 3], [2, 1], [1, 2], [1, 1]]}}
+SELFTEST_JSON {"check": "the source's 2-term P_FIRST/P_TERM/Y_TERM order equals U6-E's ORDER[2]", "ok": true, "source": {"P": [[2, 1], [1, 2], [1, 1]], "Y": [[2, 1], [1, 2], [1, 1]], "n_first": 1}, "u6e": {"P": [[2, 1], [1, 2], [1, 1]], "Y": [[2, 1], [1, 2], [1, 1]]}}
+SELFTEST_JSON {"check": "a copy with two P terms swapped fails the ORDER check", "ok": true, "swapped_p": [[3, 1], [1, 3], [2, 2], [2, 1], [1, 2], [1, 1]]}
+SELFTEST_JSON {"check": "set_rounding sits once in the source, before the tile loop", "ok": true, "lines": {"set_rounding": [81], "tile_loop": [85]}}
+SELFTEST_JSON {"check": "integer MACs are the bare family; .f MACs are apart", "ok": true}
+SELFTEST_JSON {"check": "vector ops exclude vector loads and stores", "ok": true}
+SELFTEST_JSON {"check": "the fixture has its three parts", "ok": true, "parts": ["clock", "synthetic", "w4a8"]}
+SELFTEST_JSON {"check": "clock_probe: four loops; .L_LEnd3 is 2 bundles and .L_LEnd2 is 9; no integer MAC", "ok": true, "loops": {".L_LEnd3": 2, ".L_LEnd2": 9, ".L_LEnd1": 8, ".L_LEnd0": 8}}
+SELFTEST_JSON {"check": "mm_i8i4_native: one MAC loop of 16 bundles and 8 integer MACs, loop stack 0, function stack 20, frame 64", "ok": true, "mac_loops": [{"name": ".L_LEnd4", "start": "0x200", "end": "0x280", "bundles": 16, "int_macs": 8, "float_macs": 0, "vector_ops": 12, "stack_refs": 0, "live_ops": 36}], "function_stack_refs": 20, "frame_bytes": 64}
+SELFTEST_JSON {"check": "mm_i8i4_native: the rule finds no loop with exactly 2 integer MACs (a STOP)", "ok": true, "reason": "no loop holds exactly 2 integer MACs (the one with MACs holds 8)"}
+SELFTEST_JSON {"check": "mm_i8i4_native: 0 integer MACs before the loop and 8 after it", "ok": true, "before": 0, "after": 8}
+SELFTEST_JSON {"check": "synthetic full: 6 bundles, 2 integer and 3 .f MACs, 1 stack ref", "ok": true, "loop": {"name": ".L_LEnd90", "start": "0x20", "end": "0x40", "bundles": 6, "int_macs": 2, "float_macs": 3, "vector_ops": 5, "stack_refs": 1, "live_ops": 8}}
+SELFTEST_JSON {"check": "synthetic full: an integer MAC before the loop reads PIPELINED: SHOWN", "ok": true, "outside": {"int_macs_before": 1, "int_macs_after": 0, "vst_before": 0, "vst_after": 0}}
+SELFTEST_JSON {"check": "synthetic full: the crRnd write before the loop is located, outside it", "ok": true, "cr_writes": [{"addr": "0x0", "op": "mov crRnd, #0xc", "inside_loop": false}]}
+SELFTEST_JSON {"check": "synthetic control: 3 bundles, 2 integer MACs, PIPELINED: NOT SHOWN, no control-register write", "ok": true, "loop": {"name": ".L_LEnd91", "start": "0x10", "end": "0x20", "bundles": 3, "int_macs": 2, "float_macs": 0, "vector_ops": 2, "stack_refs": 0, "live_ops": 4}}
+SELFTEST_JSON {"check": "synthetic E = 6 - 3 = 3", "ok": true}
+SELFTEST_JSON {"check": "synthetic split: integer MACs in two loops is a STOP", "ok": true, "reason": "integer MACs in 2 loops ([1, 1])"}
+SELFTEST_JSON {"check": "synthetic crin: a crRnd write inside the loop is a STOP", "ok": true, "reason": "a control-register write inside the loop: [{'addr': '0x10', 'op': 'mov crRnd, r2', 'inside_loop': True}]"}
+SELFTEST_JSON {"check": "synthetic tofloat: one loop of 7 bundles with 5 vector ops (loads and stores excluded)", "ok": true, "loop": {"name": ".L_LEnd95", "start": "0x10", "end": "0x30", "bundles": 7, "int_macs": 0, "float_macs": 0, "vector_ops": 5, "stack_refs": 0, "live_ops": 9}}
+SELFTEST OK
+PROTOCOL_JSON {"stage": "hybrid U6-0", "scope": "compile only: no NPU, no hardware context, no xclbin", "plan_u6_sha": "830eb8b9cd5d3512c1ffb20b5a1cee57e67280f7dd1d8333ffae6ea478e9508d", "plan_u60_sha": "352a30d818b93fc55f3da6169bd2a396c9e709cc3f5f25e20f15c570c61c29f5", "source": "kernels/u6_epilogue/u6_epilogue.cc", "source_sha": "7130b078a9ef51530b8c485183900939c79ad23b861a7bcf4bb6afcbe7498cc9", "cases": [{"case": "CONTROL", "defines": ["-DU6_CONTROL"], "function": "u6_block", "role": "BASELINE"}, {"case": "FULL3", "defines": ["-DU6_SPLIT=3"], "function": "u6_block", "role": "DECIDING"}, {"case": "FULL2", "defines": ["-DU6_SPLIT=2"], "function": "u6_block", "role": "REPORT-ONLY"}, {"case": "FULL3_I16", "defines": ["-DU6_SPLIT=3", "-DU6_I16"], "function": "u6_block", "role": "REPORT-ONLY"}, {"case": "TOFLOAT", "defines": ["-DU6_TOFLOAT"], "function": "u6_tofloat", "role": "REPORT-ONLY"}], "e_definition": "cycles per 32-lane block-tile, DERIVED from bundles: a zero-overhead hardware loop issues one bundle per cycle (tools/aie_disasm.py:7-12; calibrated at BENCHMARKS.md:1512-1519 and :2112-2118)", "e_contains": "E = FULL3's loop bundles minus CONTROL's. CONTROL holds the A and B loads, the two integer MACs and the store of i as int32 (to_vector<int32>, shift 0). So E holds the y load, the s_x and d_w loads and broadcasts, whatever FULL3 does to bring i into vector registers for the conversion, the int32-to-fp32 conversion, the h, s_x, d_w and P splits, P, the Y MACs and any spills: not the arithmetic alone", "unit_change": "the U6 plan's section 3 E counted vector-slot operations per 32-lane block-tile (an ESTIMATE, 12-16, INFERRED from SPEC rates); U6-0's E is cycles per 32-lane block-tile, DERIVED from bundles. The E >= 12 line is read in cycles. F2 is already triggered by U6-E's 3-term split (the user's decision), so the line decides nothing about F2; E feeds the 6.55 ms x E per layer time ESTIMATE only", "loop_rule": "every hardware loop in the case's function is printed with its bundles; E reads the ONE loop that holds exactly 2 integer MACs (the mmul's mul and mac); no such loop, or integer MACs in more than one loop, is a STOP for FULL3 or CONTROL and a VOID for FULL2 or FULL3_I16; TOFLOAT reads the one hardware loop in u6_tofloat (none, or more than one, is its VOID); there is no fallback to whole-function counts", "int_macs": ["vmul", "vmac", "vmsc", "vnegmul", "vnegmac", "vnegmsc", "vaddmac", "vaddmsc", "vsubmac", "vsubmsc"], "float_macs": "the same names with a .f suffix, counted apart", "pipelined_reading": "with unrolling disabled, the body's bundles are the cycles per iteration whether or not the loop is modulo-scheduled (then they are the initiation interval). What the text can show is a pipelined prologue or epilogue: integer MACs, or vector stores not relative to sp, in the function outside the loop body. Either nonzero prints PIPELINED: SHOWN, else NOT SHOWN; a reading of the text (INFERRED), not a compiler report", "rounding": {"where": "aie::set_rounding(conv_even) once, before the tile loop, never inside it", "source_lines": {"set_rounding": [81], "tile_loop": [85]}, "check": "every control-register write (cr plus a capital) is located; one inside the E loop is a STOP for FULL3 or CONTROL and a VOID otherwise; any srs of i (to int32, or to int16 in FULL3_I16) is at shift 0, so crRnd does not change its value and matters for the bf16 conversions", "printed_form": "mov crRnd, #0xc, as Peano printed set_rounding(conv_even) in a throwaway probe; a u6_block case with no located write prints a NOTE"}, "to_float": "FULL3 and FULL2: aie::to_float<float>(C.to_vector<int32>()), the int32-vector overload's 32-bit branch (aie.hpp:7581-7605, elementary.hpp:66-79); FULL3_I16: C.to_vector<int16>(), then its 16-bit branch (elementary.hpp:80-87); TOFLOAT: FULL's call alone; the accumulator overload (aie.hpp:7615-7624) is not used", "broadcast": "s_x: four scalar loads, aie::broadcast<float, 8> of each, aie::concat of the four (lanes r*8 + 0..7); d_w: aie::load_v<8>, then aie::concat(d, d, d, d)", "b_offset": "B holds (c - 8) as signed int4, repacked on the host (U6 plan section 1, exact), so the epilogue has no -8 x sum(q) term", "conservative": "s_x and d_w are loaded, broadcast and split per tile; the real kernel can split s_x once per row and d_w once per column and reuse the pieces, so for that part E is an upper bound", "excludes": ["bank conflicts (+1 cycle per iteration when two accesses share a 16 KB bank; SILICON.md:85-86), which a static count cannot see", "lock, stream or DMA waits (BENCHMARKS.md:1526-1529)", "code outside the loop"], "static_count": "a lower bound on time on silicon", "order": {"2": {"P": [[2, 1], [1, 2], [1, 1]], "Y": [[2, 1], [1, 2], [1, 1]]}, "3": {"P": [[3, 1], [2, 2], [1, 3], [2, 1], [1, 2], [1, 1]], "Y": [[2, 2], [1, 3], [2, 1], [1, 2], [1, 1]]}}, "flags": ["-std=c++20", "-Wno-parentheses", "-Wno-attributes", "-Wno-macro-redefined", "-Wno-empty-body", "-O2", "-DNDEBUG", "-D__AIE_API_AIE_ADF_HPP__", "--target=aie2-none-unknown-elf"], "clang": "~/mlir-aie/ironenv/Lib/site-packages/llvm-aie/bin/clang++.exe", "objdump": ["~/mlir-aie/ironenv/Lib/site-packages/llvm-aie/bin/llvm-objdump.exe", "-d", "--no-show-raw-insn"], "size": ["~/mlir-aie/ironenv/Lib/site-packages/llvm-aie/bin/llvm-size.exe", "-A", "summing .text*"], "text_limit": 16384, "no_fast_math": "the flags carry no fast-math option, so the fp32 add chain stays in the order written", "predictions": {"U0-P1": "the four v1 cases compile (CONTROL, FULL3, FULL2, TOFLOAT); FULL3_I16 carries no prediction", "U0-P2": "FULL2's E is within the U6 plan's 12-16 (section 3, INFERRED, counted there in operations)", "U0-P3": "FULL3's E exceeds FULL2's", "U0-P4": "TOFLOAT's loop holds at least 4 vector ops per 16 lanes, so no single conversion instruction"}}
+LOOPS_JSON {"case": "CONTROL", "function": "u6_block", "loops": [{"name": ".L_LEnd0", "start": "0x70", "end": "0xc0", "bundles": 7, "int_macs": 2, "float_macs": 0, "vector_ops": 2, "stack_refs": 0, "live_ops": 14}]}
+LOOP_BODY CONTROL .L_LEnd0: 7 bundles
+    0x0070  vldb wh2, [p0, #0x20] | vlda wh0, [p1, #0x20]
+    0x0080  vldb wl2, [p0], #0x40 | vlda wl0, [p1], #0x40
+    0x0090  vldb wh6, [p1, #0x20] | vmul cm0, x2, x0, r1
+    0x00a0  vldb wl6, [p1], #0x40 | vlda wh4, [p0, #0x20] | vst amlh1, [p4, #0x20]
+    0x00b0  vlda wl4, [p0], #0x40 | vst amll1, [p4], #0x40 | vmac cm1, cm0, x4, x6, r1
+    0x00bc  vst amhh1, [p4, #0x20]
+    0x00c0  vst amhl1, [p4], #0x40
+CASE_JSON {"case": "CONTROL", "role": "BASELINE", "defines": ["-DU6_CONTROL"], "function": "u6_block", "compiled": true, "error": null, "loop_found": true, "loop": ".L_LEnd0", "loop_bundles": 7, "int_macs_in_loop": 2, "float_macs_in_loop": 0, "vector_ops_in_loop": 2, "stack_refs_in_loop": 0, "function_stack_refs": 0, "frame_bytes": null, "pipelined": "SHOWN", "outside": {"int_macs_before": 2, "int_macs_after": 2, "vst_before": 0, "vst_after": 8}, "cr_writes": [{"addr": "0x60", "op": "mov crRnd, #0xc", "inside_loop": false}], "slot_census": {"mnemonics": {"vlda": 4, "vldb": 4, "vmac": 1, "vmul": 1, "vst": 4}, "full_width_slots": {"b": 4, "a": 3, "s": 2, "x": 0, "m": 0, "v": 1, "xm(fused)": 0}, "full_width_bundles": 5, "compressed_bundles": 2}, "text_bytes": 272, "void": null}
+LOOPS_JSON {"case": "FULL3", "function": "u6_block", "loops": [{"name": ".L_LEnd0", "start": "0x60", "end": "0x260", "bundles": 104, "int_macs": 2, "float_macs": 22, "vector_ops": 101, "stack_refs": 0, "live_ops": 123}]}
+LOOP_BODY FULL3 .L_LEnd0: 104 bundles
+    0x0060  lda r0, [p2], #4
+    0x0070  lda r7, [p2], #4
+    0x0076  lda r8, [p2], #4
+    0x007a  lda r9, [p2], #4
+    0x007e  (all nop)
+    0x0080  (all nop)
+    0x0082  (all nop)
+    0x0084  vbcst.32 x6, r0
+    0x0088  vbcst.32 x2, r7
+    0x008c  vmov wh6, wl2
+    0x0090  vbcst.32 x4, r9
+    0x0094  vmov bml5, x6
+    0x0098  vbcst.32 x6, r8
+    0x009c  vmov wh6, wl4
+    0x00a0  (all nop)
+    0x00a2  vldb wl6, [p3], #0x20 | vmov bmh2, x6
+    0x00a8  vconv.bf16.fp32 wl2, bml5
+    0x00ac  vconv.bf16.fp32 wl4, bmh2
+    0x00b0  vconv.fp32.bf16 bmh3, wl2 | vsub.f bmh3, bml5, bmh3, r5
+    0x00b8  vconv.fp32.bf16 bmh4, wl4 | vsub.f bmh4, bmh2, bmh4, r5
+    0x00c0  (all nop)
+    0x00c2  (all nop)
+    0x00c4  vldb wh3, [p0, #0x20] | vmov wh6, wl6
+    0x00ca  vldb wl3, [p0], #0x40
+    0x00ce  vconv.bf16.fp32 wl8, bmh3 | vldb wh1, [p1, #0x20] | vmov bmh6, x6
+    0x00d8  vldb wl1, [p1], #0x40 | vconv.bf16.fp32 wl10, bmh4
+    0x00de  vconv.bf16.fp32 wl6, bmh6 | vconv.fp32.bf16 bmh5, wl8 | vsub.f bmh5, bmh3, bmh5, r5
+    0x00e8  vconv.fp32.bf16 bml6, wl10 | vsub.f bml6, bmh4, bml6, r5
+    0x00f0  vconv.fp32.bf16 bml2, wl6 | vsub.f bml3, bmh6, bml2, r5
+    0x00f8  vldb wh5, [p0, #0x20]
+    0x00fc  vldb wl5, [p0], #0x40
+    0x0100  vldb wh7, [p1, #0x20] | vmov wh1, wl0
+    0x0106  vconv.bf16.fp32 wl1, bmh5 | vldb wl7, [p1], #0x40 | vmov wh6, wl0 | vmul cm7, x3, x1, r2
+    0x0112  vconv.bf16.fp32 wl1, bml6
+    0x0116  vconv.bf16.fp32 wl1, bml3 | vmul.f bmh4, x1, x6, r6
+    0x011e  vmul.f bmh8, x1, x6, r6
+    0x0122  vconv.fp32.bf16 bml4, wl1 | vsub.f bml4, bml3, bml4, r5
+    0x012a  (all nop)
+    0x012c  vmov wh8, wl0
+    0x0130  vmac cm7, cm7, x5, x7, r2
+    0x0134  vmac.f bmh4, bmh4, x8, x1, r6
+    0x0138  vmov wh3, wl0 | vmac.f bmh8, bmh8, x10, x1, r6
+    0x0140  vconv.bf16.fp32 wl3, bml4 | vmov wh2, wl0
+    0x0148  vmov wh4, wl0
+    0x014c  vmac.f bmh4, bmh4, x2, x3, r6
+    0x0150  vmac.f bmh8, bmh8, x4, x3, r6
+    0x0154  vmov x9, bmh7
+    0x0158  vmov x8, bml7
+    0x015c  vshuffle x3, x8, x9, r4 | vmac.f bmh4, bmh4, x8, x6, r6
+    0x0164  vshuffle x11, x8, x9, r3 | vmac.f bmh8, bmh8, x10, x6, r6
+    0x016c  vups.s32.d16 cm5, x3, s0
+    0x0170  vups.s32.s16 cm7, x11, s0 | vadd cm6, cm5, cm1, r1
+    0x0178  vadd cm7, cm7, cm0, r1
+    0x017c  vmac.f bmh4, bmh4, x2, x1, r6
+    0x0180  vmac.f bmh8, bmh8, x4, x1, r6
+    0x0184  vsub.f bmh7, bmh7, bml0, r5
+    0x0188  vsub.f bml5, bml7, bml0, r5
+    0x018c  vmac.f bmh4, bmh4, x2, x6, r6
+    0x0190  vsub.f bml7, bml6, bml1, r5
+    0x0194  vmac.f bmh5, bmh8, x4, x6, r6
+    0x0198  vsub.f bmh6, bmh6, bml1, r5
+    0x019c  (all nop)
+    0x019e  vadd.f bml7, bml7, bml5, r5
+    0x01a2  vconv.bf16.fp32 wl2, bmh4
+    0x01a6  vadd.f bmh6, bmh6, bmh7, r5
+    0x01aa  vconv.bf16.fp32 wl4, bmh5 | vconv.fp32.bf16 bmh8, wl2 | vsub.f bml4, bmh4, bmh8, r5
+    0x01b4  (all nop)
+    0x01b6  vconv.fp32.bf16 bml8, wl4 | vsub.f bml6, bmh5, bml8, r5
+    0x01be  vconv.bf16.fp32 wl6, bml7
+    0x01c2  (all nop)
+    0x01c4  vconv.bf16.fp32 wl8, bmh6 | vconv.fp32.bf16 bml3, wl6 | vsub.f bml5, bml7, bml3, r5
+    0x01ce  vconv.bf16.fp32 wl10, bml4
+    0x01d2  vlda amhh3, [p4, #0x20] | vconv.fp32.bf16 bml2, wl8 | vsub.f bmh5, bmh6, bml2, r5
+    0x01dc  vlda amhl3, [p5], #0x80 | vconv.bf16.fp32 wl1, bml6 | vconv.fp32.bf16 bml2, wl10 | vsub.f bmh8, bml4, bml2, r5
+    0x01ea  vlda amhh2, [p4, #0x60]
+    0x01ee  vlda amhl2, [p4, #0x40] | vconv.fp32.bf16 bml8, wl1 | vsub.f bml3, bml6, bml8, r5
+    0x01f8  vconv.bf16.fp32 wl3, bml5 | vmov wh3, wl0
+    0x0200  (all nop)
+    0x0202  vconv.bf16.fp32 wl5, bmh5 | vmov wh5, wl0 | vmac.f bmh3, bmh3, x3, x10, r6
+    0x020c  (all nop)
+    0x020e  vconv.bf16.fp32 wl7, bmh8 | vmov wh7, wl0 | vmac.f bmh2, bmh2, x5, x1, r6
+    0x0218  (all nop)
+    0x021a  vconv.bf16.fp32 wl7, bml3 | vmov wh8, wl0 | vmac.f bmh3, bmh3, x6, x7, r6
+    0x0224  (all nop)
+    0x0226  vmac.f bmh2, bmh2, x8, x7, r6
+    0x022a  (all nop)
+    0x022c  vmac.f bmh3, bmh3, x3, x2, r6
+    0x0230  (all nop)
+    0x0232  vmac.f bmh2, bmh2, x5, x4, r6
+    0x0236  (all nop)
+    0x0238  vmac.f bmh3, bmh3, x6, x10, r6
+    0x023c  (all nop)
+    0x023e  vmac.f bmh2, bmh2, x8, x1, r6
+    0x0242  (all nop)
+    0x0244  vmac.f bmh3, bmh3, x6, x2, r6
+    0x0248  (all nop)
+    0x024a  vmac.f bmh2, bmh2, x8, x4, r6
+    0x024e  (all nop)
+    0x0250  (all nop)
+    0x0252  (all nop)
+    0x0254  vst amhh3, [p4, #0x20]
+    0x0258  vst amhl3, [p4, #0x0]
+    0x025c  vst amhh2, [p4, #0x60]
+    0x0260  vst amhl2, [p4, #0x40] | mov p4, p5
+CASE_JSON {"case": "FULL3", "role": "DECIDING", "defines": ["-DU6_SPLIT=3"], "function": "u6_block", "compiled": true, "error": null, "loop_found": true, "loop": ".L_LEnd0", "loop_bundles": 104, "int_macs_in_loop": 2, "float_macs_in_loop": 22, "vector_ops_in_loop": 101, "stack_refs_in_loop": 0, "function_stack_refs": 0, "frame_bytes": null, "pipelined": "NOT SHOWN", "outside": {"int_macs_before": 0, "int_macs_after": 0, "vst_before": 0, "vst_after": 0}, "cr_writes": [{"addr": "0x28", "op": "mov crRnd, #0xc", "inside_loop": false}], "slot_census": {"mnemonics": {"lda": 4, "mov": 1, "vadd": 2, "vadd.f": 2, "vbcst.32": 4, "vconv.bf16.fp32": 19, "vconv.fp32.bf16": 12, "vlda": 4, "vldb": 9, "vmac": 1, "vmac.f": 20, "vmov": 18, "vmul": 1, "vmul.f": 2, "vshuffle": 2, "vst": 4, "vsub.f": 16, "vups.s32.d16": 1, "vups.s32.s16": 1}, "full_width_slots": {"b": 0, "a": 1, "s": 1, "x": 0, "m": 1, "v": 0, "xm(fused)": 0}, "full_width_bundles": 2, "compressed_bundles": 102}, "text_bytes": 640, "void": null}
+LOOPS_JSON {"case": "FULL2", "function": "u6_block", "loops": [{"name": ".L_LEnd0", "start": "0x60", "end": "0x1e0", "bundles": 75, "int_macs": 2, "float_macs": 12, "vector_ops": 71, "stack_refs": 0, "live_ops": 93}]}
+LOOP_BODY FULL2 .L_LEnd0: 75 bundles
+    0x0060  vldb wh2, [p0, #0x20]
+    0x006c  vldb wl2, [p0], #0x40
+    0x0070  vldb wh4, [p1, #0x20]
+    0x0074  lda r0, [p2], #4 | vldb wl4, [p1], #0x40
+    0x007a  lda r7, [p2], #4 | vldb wh6, [p0, #0x20]
+    0x0080  vldb wl6, [p0], #0x40
+    0x0084  lda r8, [p2], #4 | vldb wh8, [p1, #0x20]
+    0x008a  lda r9, [p2], #4 | vldb wl8, [p1], #0x40
+    0x0090  (all nop)
+    0x0092  (all nop)
+    0x0094  vbcst.32 x10, r0
+    0x0098  vbcst.32 x7, r7
+    0x009c  vmov wh10, wl7 | vmul cm2, x2, x4, r2
+    0x00a4  vbcst.32 x8, r8
+    0x00a8  vbcst.32 x11, r9 | vmac cm3, cm2, x6, x8, r2
+    0x00b0  vmov bmh7, x10
+    0x00b4  vmov wh8, wl11
+    0x00b8  vldb wl6, [p3], #0x20
+    0x00bc  vconv.bf16.fp32 wl2, bmh7 | vmov bml7, x8
+    0x00c4  vmov x1, bmh3
+    0x00c8  vmov x3, bml3
+    0x00cc  vconv.fp32.bf16 bml2, wl2
+    0x00d0  vshuffle x5, x3, x1, r3
+    0x00d4  vconv.bf16.fp32 wl4, bml7 | vshuffle x9, x3, x1, r4
+    0x00dc  vmov wh6, wl6
+    0x00e0  vconv.fp32.bf16 bmh3, wl4 | vsub.f bml2, bmh7, bml2, r5
+    0x00e8  vups.s32.s16 cm4, x5, s0 | vsub.f bmh3, bml7, bmh3, r5
+    0x00f0  vups.s32.d16 cm6, x9, s0
+    0x00f4  vadd cm5, cm4, cm0, r1
+    0x00f8  vmov bmh2, x6
+    0x00fc  vadd cm8, cm6, cm1, r1
+    0x0100  vconv.bf16.fp32 wl6, bmh2 | vsub.f bml4, bmh5, bml0, r5
+    0x0108  (all nop)
+    0x010a  vconv.fp32.bf16 bml3, wl6 | vsub.f bml3, bmh2, bml3, r5
+    0x0112  vconv.bf16.fp32 wl8, bml2 | vmov wh8, wl0
+    0x011a  vmov wh6, wl0 | vsub.f bmh4, bml5, bml0, r5
+    0x0122  vconv.bf16.fp32 wl8, bmh3 | vsub.f bml5, bml8, bml1, r5
+    0x012a  vmul.f bmh5, x8, x6, r6
+    0x012e  vmul.f bmh6, x8, x6, r6
+    0x0132  vconv.bf16.fp32 wl8, bml3 | vmov wh2, wl0 | vsub.f bml6, bmh8, bml1, r5
+    0x013c  vmov wh4, wl0 | vadd.f bml5, bml5, bmh4, r5
+    0x0144  vmac.f bmh5, bmh5, x2, x8, r6
+    0x0148  vmac.f bmh6, bmh6, x4, x8, r6
+    0x014c  vadd.f bml6, bml6, bml4, r5
+    0x0150  (all nop)
+    0x0152  vmac.f bmh5, bmh5, x2, x6, r6
+    0x0156  vconv.bf16.fp32 wl2, bml5 | vmac.f bmh6, bmh6, x4, x6, r6
+    0x015e  (all nop)
+    0x0160  vconv.fp32.bf16 bmh8, wl2 | vsub.f bmh8, bml5, bmh8, r5
+    0x0168  vconv.bf16.fp32 wl4, bml6
+    0x016c  (all nop)
+    0x016e  vlda amhh7, [p4, #0x20] | vconv.bf16.fp32 wl6, bmh5 | vconv.fp32.bf16 bml8, wl4 | vsub.f bml8, bml6, bml8, r5
+    0x017c  vlda amhl7, [p5], #0x80 | vconv.bf16.fp32 wl8, bmh6
+    0x0182  vlda amlh7, [p4, #0x60] | vconv.fp32.bf16 bmh2, wl6 | vsub.f bmh2, bmh5, bmh2, r5
+    0x018c  vlda amll7, [p4, #0x40] | vconv.bf16.fp32 wl10, bmh8 | vconv.fp32.bf16 bml2, wl8 | vsub.f bml2, bmh6, bml2, r5
+    0x019a  vmov wh10, wl0
+    0x019e  (all nop)
+    0x01a0  vconv.bf16.fp32 wl10, bml8 | vmac.f bmh7, bmh7, x10, x6, r6
+    0x01a8  (all nop)
+    0x01aa  vconv.bf16.fp32 wl10, bmh2 | vmac.f bml7, bml7, x10, x8, r6
+    0x01b2  (all nop)
+    0x01b4  vconv.bf16.fp32 wl10, bml2 | vmac.f bmh7, bmh7, x2, x10, r6
+    0x01bc  (all nop)
+    0x01be  vmac.f bml7, bml7, x4, x10, r6
+    0x01c2  (all nop)
+    0x01c4  vmac.f bmh7, bmh7, x2, x6, r6
+    0x01c8  (all nop)
+    0x01ca  vmac.f bml7, bml7, x4, x8, r6
+    0x01ce  (all nop)
+    0x01d0  (all nop)
+    0x01d2  (all nop)
+    0x01d4  vst amhh7, [p4, #0x20]
+    0x01d8  vst amhl7, [p4, #0x0]
+    0x01dc  vst amlh7, [p4, #0x60]
+    0x01e0  vst amll7, [p4, #0x40] | mov p4, p5
+CASE_JSON {"case": "FULL2", "role": "REPORT-ONLY", "defines": ["-DU6_SPLIT=2"], "function": "u6_block", "compiled": true, "error": null, "loop_found": true, "loop": ".L_LEnd0", "loop_bundles": 75, "int_macs_in_loop": 2, "float_macs_in_loop": 12, "vector_ops_in_loop": 71, "stack_refs_in_loop": 0, "function_stack_refs": 0, "frame_bytes": null, "pipelined": "NOT SHOWN", "outside": {"int_macs_before": 0, "int_macs_after": 0, "vst_before": 0, "vst_after": 0}, "cr_writes": [{"addr": "0x2c", "op": "mov crRnd, #0xc", "inside_loop": false}], "slot_census": {"mnemonics": {"lda": 4, "mov": 1, "vadd": 2, "vadd.f": 2, "vbcst.32": 4, "vconv.bf16.fp32": 14, "vconv.fp32.bf16": 7, "vlda": 4, "vldb": 9, "vmac": 1, "vmac.f": 10, "vmov": 13, "vmul": 1, "vmul.f": 2, "vshuffle": 2, "vst": 4, "vsub.f": 11, "vups.s32.d16": 1, "vups.s32.s16": 1}, "full_width_slots": {"b": 0, "a": 0, "s": 1, "x": 0, "m": 1, "v": 0, "xm(fused)": 0}, "full_width_bundles": 1, "compressed_bundles": 74}, "text_bytes": 512, "void": null}
+LOOPS_JSON {"case": "FULL3_I16", "function": "u6_block", "loops": [{"name": ".L_LEnd0", "start": "0x50", "end": "0x220", "bundles": 100, "int_macs": 2, "float_macs": 22, "vector_ops": 90, "stack_refs": 0, "live_ops": 112}]}
+LOOP_BODY FULL3_I16 .L_LEnd0: 100 bundles
+    0x0050  lda r0, [p2], #4
+    0x0058  lda r5, [p2], #4
+    0x005c  lda r6, [p2], #4
+    0x0060  lda r7, [p2], #4
+    0x0064  (all nop)
+    0x0066  (all nop)
+    0x0068  (all nop)
+    0x006a  vbcst.32 x6, r0
+    0x006e  vbcst.32 x2, r5
+    0x0072  vmov wh6, wl2
+    0x0076  vbcst.32 x4, r7
+    0x007a  vldb wl8, [p3], #0x20 | vmov bmh1, x6
+    0x0080  vbcst.32 x6, r6
+    0x0084  vmov wh6, wl4
+    0x0088  vconv.bf16.fp32 wl2, bmh1
+    0x008c  vmov bmh2, x6
+    0x0090  vconv.fp32.bf16 bmh3, wl2 | vsub.f bmh4, bmh1, bmh3, r3
+    0x0098  vconv.bf16.fp32 wl4, bmh2
+    0x009c  vmov wh8, wl8
+    0x00a0  vconv.fp32.bf16 bmh5, wl4 | vsub.f bmh6, bmh2, bmh5, r3
+    0x00a8  (all nop)
+    0x00aa  vldb wh1, [p0, #0x20] | vmov bmh7, x8
+    0x00b0  vldb wl1, [p0], #0x40 | vconv.bf16.fp32 wl6, bmh4
+    0x00b6  vldb wh3, [p1, #0x20] | vconv.bf16.fp32 wl8, bmh7
+    0x00bc  vldb wl3, [p1], #0x40 | vconv.fp32.bf16 bmh8, wl6 | vsub.f bml1, bmh4, bmh8, r3
+    0x00c6  vconv.bf16.fp32 wl10, bmh6 | vconv.fp32.bf16 bml4, wl8 | vsub.f bml5, bmh7, bml4, r3
+    0x00d0  (all nop)
+    0x00d2  vconv.fp32.bf16 bml2, wl10 | vsub.f bml3, bmh6, bml2, r3
+    0x00da  (all nop)
+    0x00dc  vldb wh5, [p0, #0x20] | vmov wh8, wl0
+    0x00e2  vconv.bf16.fp32 wl1, bml1 | vldb wl5, [p0], #0x40 | vmov wh1, wl0
+    0x00ec  vconv.bf16.fp32 wl1, bml5 | vldb wh9, [p1, #0x20] | vmul cm6, x1, x3, r2
+    0x00f6  vldb wl9, [p1], #0x40 | vmul.f bml7, x1, x8, r4
+    0x00fe  vconv.fp32.bf16 bmh1, wl1 | vsub.f bmh1, bml5, bmh1, r3
+    0x0106  vconv.bf16.fp32 wl3, bml3 | vmov wh3, wl0
+    0x010e  vmov wh6, wl0
+    0x0112  vmul.f bml8, x3, x8, r4
+    0x0116  vmac.f bml7, bml7, x6, x1, r4
+    0x011a  (all nop)
+    0x011c  vconv.bf16.fp32 wl7, bmh1 | vmov wh2, wl0 | vmac cm6, cm6, x5, x9, r2
+    0x0126  vmac.f bml8, bml8, x10, x1, r4
+    0x012a  vmac.f bml7, bml7, x2, x7, r4
+    0x012e  vmov wh4, wl0
+    0x0132  (all nop)
+    0x0134  vmac.f bml8, bml8, x4, x7, r4
+    0x0138  vmac.f bml7, bml7, x6, x8, r4
+    0x013c  vsrs.s16.s32 x6, cm6, s0
+    0x0140  (all nop)
+    0x0142  vmac.f bml8, bml8, x10, x8, r4
+    0x0146  vmac.f bml7, bml7, x2, x1, r4
+    0x014a  vups.s32.s16 cm2, x6, s0
+    0x014e  vadd cm2, cm2, cm0, r1
+    0x0152  vmac.f bml8, bml8, x4, x1, r4
+    0x0156  (all nop)
+    0x0158  vmac.f bml7, bml7, x2, x8, r4
+    0x015c  (all nop)
+    0x015e  vmac.f bml8, bml8, x4, x8, r4
+    0x0162  vsub.f bmh3, bml2, bml0, r3
+    0x0166  (all nop)
+    0x0168  vsub.f bmh4, bmh2, bml0, r3
+    0x016c  vconv.bf16.fp32 wl2, bml7
+    0x0170  (all nop)
+    0x0172  vconv.bf16.fp32 wl4, bml8 | vconv.fp32.bf16 bmh5, wl2 | vsub.f bmh5, bml7, bmh5, r3
+    0x017c  vconv.bf16.fp32 wl6, bmh3
+    0x0180  vconv.fp32.bf16 bmh7, wl4 | vsub.f bmh7, bml8, bmh7, r3
+    0x0188  vconv.bf16.fp32 wl8, bmh4 | vconv.fp32.bf16 bml1, wl6 | vsub.f bml1, bmh3, bml1, r3
+    0x0192  (all nop)
+    0x0194  vconv.fp32.bf16 bml3, wl8 | vsub.f bml3, bmh4, bml3, r3
+    0x019c  vlda amhh8, [p4, #0x20] | vconv.bf16.fp32 wl10, bmh5
+    0x01a2  vlda amhl8, [p5], #0x80
+    0x01a6  vlda amlh4, [p4, #0x60] | vconv.bf16.fp32 wl1, bmh7 | vconv.fp32.bf16 bml5, wl10 | vsub.f bml5, bmh5, bml5, r3
+    0x01b4  vlda amll4, [p4, #0x40] | vconv.bf16.fp32 wl3, bml1
+    0x01ba  vconv.fp32.bf16 bmh1, wl1 | vsub.f bmh1, bmh7, bmh1, r3
+    0x01c2  vconv.bf16.fp32 wl5, bml3
+    0x01c6  vmov wh5, wl0 | vmac.f bmh8, bmh8, x3, x10, r4
+    0x01ce  (all nop)
+    0x01d0  vconv.bf16.fp32 wl7, bml5 | vmov wh6, wl0 | vmac.f bml4, bml4, x5, x1, r4
+    0x01da  (all nop)
+    0x01dc  vconv.bf16.fp32 wl7, bmh1 | vmac.f bmh8, bmh8, x6, x7, r4
+    0x01e4  (all nop)
+    0x01e6  vmac.f bml4, bml4, x8, x7, r4
+    0x01ea  (all nop)
+    0x01ec  vmac.f bmh8, bmh8, x3, x2, r4
+    0x01f0  (all nop)
+    0x01f2  vmac.f bml4, bml4, x5, x4, r4
+    0x01f6  (all nop)
+    0x01f8  vmac.f bmh8, bmh8, x6, x10, r4
+    0x01fc  (all nop)
+    0x01fe  vmac.f bml4, bml4, x8, x1, r4
+    0x0202  (all nop)
+    0x0204  vmac.f bmh8, bmh8, x6, x2, r4
+    0x0208  (all nop)
+    0x020a  vmac.f bml4, bml4, x8, x4, r4
+    0x020e  (all nop)
+    0x0210  (all nop)
+    0x0212  (all nop)
+    0x0214  vst amhh8, [p4, #0x20]
+    0x0218  vst amhl8, [p4, #0x0]
+    0x021c  vst amlh4, [p4, #0x60]
+    0x0220  vst amll4, [p4, #0x40] | mov p4, p5
+CASE_JSON {"case": "FULL3_I16", "role": "REPORT-ONLY", "defines": ["-DU6_SPLIT=3", "-DU6_I16"], "function": "u6_block", "compiled": true, "error": null, "loop_found": true, "loop": ".L_LEnd0", "loop_bundles": 100, "int_macs_in_loop": 2, "float_macs_in_loop": 22, "vector_ops_in_loop": 90, "stack_refs_in_loop": 0, "function_stack_refs": 0, "frame_bytes": null, "pipelined": "NOT SHOWN", "outside": {"int_macs_before": 0, "int_macs_after": 0, "vst_before": 0, "vst_after": 0}, "cr_writes": [{"addr": "0x26", "op": "mov crRnd, #0xc", "inside_loop": false}], "slot_census": {"mnemonics": {"lda": 4, "mov": 1, "vadd": 1, "vbcst.32": 4, "vconv.bf16.fp32": 19, "vconv.fp32.bf16": 12, "vlda": 4, "vldb": 9, "vmac": 1, "vmac.f": 20, "vmov": 14, "vmul": 1, "vmul.f": 2, "vsrs.s16.s32": 1, "vst": 4, "vsub.f": 14, "vups.s32.s16": 1}, "full_width_slots": {"b": 0, "a": 0, "s": 1, "x": 0, "m": 1, "v": 0, "xm(fused)": 0}, "full_width_bundles": 1, "compressed_bundles": 99}, "text_bytes": 576, "void": null}
+LOOPS_JSON {"case": "TOFLOAT", "function": "u6_tofloat", "loops": [{"name": ".L_LEnd0", "start": "0xf0", "end": "0x140", "bundles": 12, "int_macs": 0, "float_macs": 0, "vector_ops": 12, "stack_refs": 0, "live_ops": 20}]}
+LOOP_BODY TOFLOAT .L_LEnd0: 12 bundles
+    0x00f0  vldb wh0, [p0, #0x20] | vst amlh8, [p1, #0x20] | vups.s32.s16 cm2, x4, s0
+    0x0100  vlda wl0, [p0], #0x40 | vups.s32.d16 cm3, x6, s0 | vadd cm4, cm2, cm0, r1
+    0x0110  vst amll8, [p1], #0x40 | vldb wh2, [p0, #0x20] | vadd cm5, cm3, cm1, r1
+    0x011a  vlda wl2, [p0], #0x40
+    0x011e  vsub.f bmh6, bml4, bml0, r4
+    0x0122  vst amlh7, [p1, #0x20] | vsub.f bmh7, bml5, bml1, r4
+    0x012a  vsub.f bmh8, bmh4, bml0, r4
+    0x012e  vsub.f bml6, bmh5, bml1, r4
+    0x0132  (all nop)
+    0x0134  vadd.f bml7, bmh7, bmh6, r4
+    0x0138  vst amll7, [p1], #0x40 | vshuffle x4, x0, x2, r2
+    0x0140  vshuffle x6, x0, x2, r3 | vadd.f bml8, bml6, bmh8, r4
+CASE_JSON {"case": "TOFLOAT", "role": "REPORT-ONLY", "defines": ["-DU6_TOFLOAT"], "function": "u6_tofloat", "compiled": true, "error": null, "loop_found": true, "loop": ".L_LEnd0", "loop_bundles": 12, "int_macs_in_loop": 0, "float_macs_in_loop": 0, "vector_ops_in_loop": 12, "stack_refs_in_loop": 0, "function_stack_refs": 0, "frame_bytes": null, "pipelined": "SHOWN", "outside": {"int_macs_before": 0, "int_macs_after": 0, "vst_before": 2, "vst_after": 10}, "cr_writes": [], "slot_census": {"mnemonics": {"vadd": 2, "vadd.f": 2, "vlda": 2, "vldb": 2, "vshuffle": 2, "vst": 4, "vsub.f": 4, "vups.s32.d16": 1, "vups.s32.s16": 1}, "full_width_slots": {"b": 1, "a": 1, "s": 1, "x": 0, "m": 3, "v": 2, "xm(fused)": 0}, "full_width_bundles": 3, "compressed_bundles": 9}, "text_bytes": 448, "void": null}
+OUTPUT_JSON {"E3": 97, "E2": 68, "E3_I16": 93, "control_bundles": 7, "cycles_per_block_tile_3": 104, "e3_ge_12": true, "pipelined": {"CONTROL": "SHOWN", "FULL3": "NOT SHOWN", "FULL2": "NOT SHOWN", "FULL3_I16": "NOT SHOWN", "TOFLOAT": "SHOWN"}, "full3_stack_refs_in_loop": 0, "voids": {}, "text_bytes": {"CONTROL": 272, "FULL3": 640, "FULL2": 512, "FULL3_I16": 576, "TOFLOAT": 448}, "text_limit": 16384, "tofloat": {"vector_ops_in_loop": 12, "vector_ops_per_16_lanes": 6.0, "mnemonics": {"vadd": 2, "vadd.f": 2, "vlda": 2, "vldb": 2, "vshuffle": 2, "vst": 4, "vsub.f": 4, "vups.s32.d16": 1, "vups.s32.s16": 1}}}
+PRED_JSON {"U0-P1": "HOLDS", "U0-P2": "FAILS", "U0-P3": "HOLDS", "U0-P4": "HOLDS"}
+MEM_JSON {"measured": false, "what": "L1 bytes per block-tile, DERIVED from the source's pointer strides; not process memory", "a": 128, "b": 128, "sx": 16, "dw": 32, "y_in": 128, "y_out": 128}
+NOTE: CONTROL reads PIPELINED: SHOWN and FULL3 NOT SHOWN, so E subtracts an initiation interval from a body length (or the reverse)
+U6-0 E: 97 cycles per 32-lane block-tile (3-term, round-trip; DERIVED from bundles)
+U6-0 E >= 12: YES
+U6-0 E (2-term, REPORT-ONLY): 68 cycles per 32-lane block-tile
+U6-0 E (3-term, int16 conversion, REPORT-ONLY): 93 cycles per 32-lane block-tile

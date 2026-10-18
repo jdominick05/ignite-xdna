@@ -684,6 +684,135 @@ been closed:
       silicon.
     - Does int4 pay where weights dominate, as in M = 1 GEMV (LLM decode)? No design in this repo
       can express M < 32, so the note's "~2×" there is DERIVED and untested.
+      - AMD got there first. RyzenAI-SW 1.1 (2024-02-17) shipped a Phoenix bf16 × uint4 overlay
+        with a dedicated M = 1 path at Llama-2-7B's shapes. The kernel is closed, and no source
+        read gives its bandwidth ([prior art](results/llm/notes_prior_art_phoenix_llm.md)).
+      - Bandwidth alone caps it. A 7B model at 4 bits reads 3.4–4.0 GB per token. At the DRAM
+        rates this repo has measured for the NPU (26.8 GB/s fill, 28.1 best), and at the 26–28 GB/s
+        shared cap that [SILICON 1.6](docs/SILICON.md#16-off-chip-bandwidth) derives (lines 136-140),
+        NPU-only decode stays under about 8 tokens/s (DERIVED). The read-only ceiling was
+        unmeasured when this was written (measured since, below), so this was not a hard cap, and
+        the compute side (the on-core int4 → bf16 expansion, and
+        M = 1 on a bf16 mmul) is unmeasured too.
+      - Since 2026-09-23 the bar also counts energy per token and freeing the GPU (the user's
+        decision, [DECISIONS](docs/DECISIONS.md#locked-decisions-do-not-reopen) locked decision 10).
+        The kills and DEAD below are on speed and accuracy. Energy and GPU freeing were not
+        measured, and nothing is re-scored.
+      - The NPU earns a decode role only if it beats both the CPU and DirectML on the 780M, in
+        speed or in accuracy. Measured since, pre-registered: the 780M decodes the 7B linear
+        stack in 55.9 ms/token and the CPU in 61.3, against the NPU's 118.8 ms floor. NPU-only
+        decode is killed on speed, and DirectML fp32 (1.4e-7 at 64.6 ms) closes the accuracy
+        route. It reopens only if a clean NPU read test reaches 59.7 GB/s
+        ([BENCHMARKS](docs/BENCHMARKS.md#llm-decode-yardsticks-the-cpu-and-the-780m-read-int4-at-5664-gbs-so-npu-only-7b-decode-is-killed-on-speed-2026-09-23-desktop-2)).
+      - That test has run, pre-registered. With nothing written back, the NPU reads 47.62 GB/s
+        on eight channels, far past SILICON 1.6's 26–28 GB/s cap but below 59.7. Decode stays
+        killed at a 70.1 ms/token floor (DERIVED), about 14 tokens/s at most
+        ([BENCHMARKS](docs/BENCHMARKS.md#the-npu-reads-ddr-at-476-gbs-when-nothing-is-written-back-silicons-2628-gbs-cap-does-not-bind-reads-and-7b-decode-stays-killed-2026-09-23-desktop-2)).
+      - Run together, the chips' reads add (pre-registered; decided by a second sitting after the
+        first broke its repeat rule on DirectML alone). DirectML + NPU read 91.76 GB/s, 95.6% of
+        the theoretical. The NPU's bandwidth role in a split lands on the pre-registered 1.10×
+        line (1.1004×), inside the sitting's own run-to-run spread (1.097–1.104× across its
+        paired runs). So it is OPEN, not established. A split would still need an NPU int4 GEMV and 224 chip-to-chip
+        synchronizations per token, neither measured
+        ([BENCHMARKS](docs/BENCHMARKS.md#reads-add-across-the-chips-directml-and-the-npu-together-read-918-gbs-and-the-npus-share-of-a-split-lands-on-the-pre-registered-line-2026-09-23-desktop-2)).
+      - The synchronization, measured next (pre-registered): joining a DirectML half and an NPU
+        half through the host costs 174.5 µs per GEMV. That is 39.09 ms per token against the
+        11.1 ms at most the split could save, so the DirectML + NPU split is dead at these round
+        trips. The halves overlap; each chip's own dependent round trip (131.1 and 168.8 µs) is
+        already over the line. It reopens only if a join falls under 49.55 µs
+        ([BENCHMARKS](docs/BENCHMARKS.md#a-directml--npu-split-pays-39-ms-per-token-to-join-its-halves-against-the-111-ms-it-could-save-the-split-is-dead-2026-09-23-desktop-2)).
+      - Prefill, measured next (pre-registered, two sittings): INCOMPLETE both times on its own
+        repeat rule. The CPU's 8-thread rows broke 10%, and in sitting 2 some DirectML rows did
+        too. Not a verdict: in neither sitting does an NPU arm beat both chips. NPU bf16 loses to
+        DirectML fp16, which is also more accurate, and NPU int8 is level with the CPU's int8 at
+        M = 2048
+        ([BENCHMARKS](docs/BENCHMARKS.md#prefill-gemm-at-llama-2-7bs-shapes-incomplete-in-both-sittings-on-its-own-repeat-rule-and-neither-sittings-tables-show-an-npu-arm-beating-both-chips-2026-09-23-desktop-2)).
+      - The noise behind that INCOMPLETE, studied next (pre-registered; a finding about
+        measuring here, not a re-scoring). The CPU's 8-thread bimodality is where ONNX Runtime
+        puts its threads: pinned one per core, it goes away. ORT 1.23.3's default does not pin
+        on this machine.
+        DirectML's level is set per session, 1.19× across 20 fresh sessions and 1.011× within
+        one, cause unattributed. Later pre-registrations should pin CPU threads and time DirectML
+        over several sessions
+        ([BENCHMARKS](docs/BENCHMARKS.md#measurement-noise-on-this-apu-pinning-orts-8-threads-to-distinct-cores-removes-the-cpus-bimodality-and-directmls-level-is-set-per-session-2026-09-23-desktop-2)).
+      - Prefill re-run that way as stage 3b (pre-registered, a new experiment): INCOMPLETE by
+        one row, DirectML fp32 S1 at M = 2048, 10.1% between passes. Every pinned CPU row and
+        every NPU row held. Not a verdict: its tables again show no NPU arm beating both chips.
+        NPU bf16 loses to DirectML fp16, and NPU int8 is level with the CPU's int8 at M = 2048
+        (1.02×). No third run without the user
+        ([BENCHMARKS](docs/BENCHMARKS.md#prefill-gemm-re-run-with-pinned-cpu-threads-and-directml-over-fresh-sessions-stage-3b-incomplete-by-one-directml-row-and-its-tables-again-show-no-npu-arm-beating-both-chips-2026-09-23-desktop-2)).
+      - The study then moved to Gemma 3 4B, where energy per token and freeing the GPU or the
+        CPU count too (locked decision 10). Its first pre-registered stage, (a), asks whether a
+        lossless coder cuts decode's bytes.
+        - As shipped, one token reads 3.147 GB, 43% of it the tied F16 head.
+        - Table-driven Huffman coders make that stream 1.13× smaller, mostly in the head. The
+          q4_0 linears alone reach 1.089×, under the 1.10 line.
+        - Compaction survives as a byte cut. That is necessary, not sufficient, because every
+          chip could read the coded stream. A lossy 4-bit head would give 1.44× (DERIVED), at an
+          accuracy cost not yet measured
+          ([BENCHMARKS](docs/BENCHMARKS.md#gemma-3-4bs-shipped-weights-compress-losslessly-113-per-token-mostly-in-the-f16-head-compaction-survives-as-a-byte-cut-necessary-but-not-sufficient-2026-09-23-desktop-2)).
+      - Stage (b) asks whether the package power counter sees the 780M and the NPU at all. It
+        does: each chip's control raises the counter beyond one busy CPU thread's rise.
+        - Reading a GB costs the NPU 0.33 J above idle, against DirectML's 0.75 and the CPU's
+          0.88.
+        - Most of the NPU's cost is the package leaving deep idle: about 15 W, the same rise one
+          busy CPU thread causes. Only its compute adds more.
+        - Package counters only: completeness and DRAM power are not shown. This idle was 20-26
+          W lower than the 2026-09-17 sittings', which is not yet attributed
+          ([BENCHMARKS](docs/BENCHMARKS.md#the-780m-and-the-npu-both-register-in-the-package-power-counter-and-the-npu-reads-a-gb-for-033-j-against-directmls-075-and-the-cpus-088-2026-09-24-desktop-2)).
+      - Stage (c) timed decode on the CPU and DirectML, on the release's own weights, in two
+        pre-registered sittings. Both were INCOMPLETE on the page-in witness. The second alone
+        decides, and its INCOMPLETE stands: there is no third run without the user.
+        - Complete in sitting 2, all above the 5 tok/s floor:
+          - C0-H4 (CPU, int4 head): 17.55 tok/s at 4.061 J/token;
+          - D-H16 (DirectML, F16 head): 13.16 at 4.652;
+          - C0-H16: 10.81 at 5.934.
+          C4-H4 and D-H4 were voided.
+        - Against the release, the int4 head costs about 0.012 nats per position. DirectML's fp16
+          compute costs 8.3e-6 on the F16 head.
+        - Post hoc, deciding nothing: (d)'s speed rule leaves NPU-only decode OPEN on the F16
+          head.
+          - Under the least generous accuracy assumption the margin is 4.55%, so an NPU would have
+            to decode at 95.6% of its measured read ceiling.
+          - The int4 head is undetermined.
+          ([BENCHMARKS](docs/BENCHMARKS.md#gemma-3-4b-decode-on-the-cpu-and-directml-incomplete-in-both-sittings-on-the-page-in-witness-and-the-three-complete-arms-decode-at-108176-toks-2026-09-24-desktop-2)).
+      - Stage (e) asked whether an NPU decode frees the GPU or the CPU where the rivals' decodes do
+        not. Pre-registered, in one sitting, COMPLETE, on a read-only proxy: the NPU arm reads a
+        token's bytes and computes nothing.
+        - **Frees both at once: PASS, only because DirectML collapses beside the read loop** (0.77
+          / 0.92 tok/s), under the "does not hold" clause written into the prereg. Without it, FAIL.
+        - **Frees the GPU: FAIL, unqualified.** The read loop PASSes only because the calibrated
+          CPU rival (2 threads) cannot hold beside it (4.20 / 4.25 tok/s); on the ratio alone it
+          fails. YOLO-World on DirectML FAILs: the CPU arm held there at K 0.880.
+        - **Frees the CPU: FAIL** (K 0.960 against a line of 0.976; DirectML held at K 0.887).
+        - The plain finding: every decode was paced at 5.26 tok/s, and the proxy held its pace
+          beside all three workloads, keeping 0.93–0.96 of each. Neither rival did both.
+        - The read loop's PASS rests on N = 2; no larger CPU rival ran beside it. The YOLO-World
+          FAIL rests on the CPU arm holding 5.7% over the floor while running back to back.
+        - The proxy worked 77 ms per token, about 28 GB/s at a 40% duty. A GEMV adds compute and
+          synchronization, so a proxy PASS is not a role; building the GEMV is the user's call
+          ([BENCHMARKS](docs/BENCHMARKS.md#freeing-the-gpu-or-the-cpu-during-gemma-3-4b-decode-stage-e-complete-on-a-read-only-npu-proxy-frees-both-at-once-pass-only-because-directml-collapses-beside-w1-frees-the-gpu-fail-w1-passing-only-because-the-cpu-arm-cannot-hold-there-frees-the-cpu-fail-2026-09-24-desktop-2)).
+      - Stage 3c asked whether an NPU arm earns a prefill role at Gemma 3 4B's weight-GEMM shapes (one
+        block's seven linears, M = 2048 and 8192 prompt tokens) on speed, accuracy or energy per prompt
+        token. Pre-registered, in two sittings, after two amendments: the counters at HIGH priority, then
+        the sitting's start reading the cadence check on the rule itself. The rules did not change.
+        - **M = 2048: the role is KEEP, on energy alone.** NPU int8 uses 2.32× fewer joules
+          above idle than DirectML's MatMulNBits, the binding rival, and NPU bf16 1.40×.
+        - Both lose on speed there: MatMulNBits is 1.22× faster than NPU int8, and the CPU's int8 only
+          1.056× slower. Accuracy cannot be won by construction.
+        - With the idle included (post hoc, report-only), NPU int8's lead is 1.75× and NPU bf16's 1.04×,
+          under the 1.10 line. So bf16's lead holds only above idle.
+        - **M = 8192: INCOMPLETE.** Three 16-thread CPU rivals lost a pass each to the 50-row counter
+          rule, and a missing rival can block a KEEP. Every complete rival was beaten on energy (int8 by
+          ≥ 2.50×, bf16 by ≥ 1.435×). Speed is KILL: MatMulNBits is 1.029× slower than NPU int8, under
+          the 1.10 line. The user ruled no third sitting.
+        - Scope: one block's seven GEMMs in isolation, not per token of the model; kernel-level rel-L2;
+          one machine, one day.
+        - A q4_0 NPU kernel stays the user's call. Its bound for the W4A8 route, a scale-free
+          int8 × int4 kernel, fails on speed at M = 2048 (MatMulNBits takes 0.947× its time). At
+          M = 8192 its speed reading is INCOMPLETE: it beats every complete rival by at least 1.209×,
+          with two CPU rivals missing
+          ([BENCHMARKS](docs/BENCHMARKS.md#prefill-weight-gemms-at-gemma-3-4bs-shapes-stage-3c-at-m--2048-the-npu-earns-a-role-on-energy-alone-speed-is-kill-at-both-m-and-m--8192-is-incomplete-on-three-missing-cpu-rivals-2026-09-24-desktop-2)).
 
   Evidence: `results/aie/int4_{isa_gate,engine_bytes_gate,demo_npu}_desktop2_20260923.log`,
   `results/int4/w4a8_accuracy_{prereg,verdict}_desktop2_20260923.log`,

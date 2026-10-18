@@ -1,0 +1,106 @@
+(e) verdict over llm_freeing_suite_desktop2_20260924.log (sha256 563f4de17b802ca75fcfd292e8da8d4b9205e889c17b78e399344e018cf7523c working copy, 563f4de17b802ca75fcfd292e8da8d4b9205e889c17b78e399344e018cf7523c LF blob)
+
+Calibration (U6): the CPU arm alone, unpaced; N is the smallest whose two runs reach >= 6.58 tok/s
+  N=1 run 1: OK     3.617 tok/s, work median 276.0 ms, process CPU 99.1%
+  N=1 run 2: OK     3.633 tok/s, work median 275.3 ms, process CPU 99.6%
+  N=2 run 1: OK     6.750 tok/s, work median 148.1 ms, process CPU 198.0%
+  N=2 run 2: OK     6.867 tok/s, work median 145.5 ms, process CPU 195.4%
+  -> N = 2
+
+The matrix: 30 of 30 windows logged
+pass arm   w     state   arm tok/s  work ms    W rate unit           pages/s  hard/s arm,w  CPU%   780M
+   1 NPU   -     OK          5.250     77.0         -                   36.2         0.0,-   1.2    0.0
+   1 CPU   -     OK          5.417    147.0         -                    4.5         0.0,-  10.7    0.0
+   1 DML   -     OK          5.250     95.1         -                    1.6         0.0,-   4.5   49.3
+   1 -     W1    OK              -        -    70.736 GB/s               1.8         -,0.0   7.1   99.2
+   1 -     W2    OK              -        -    20.860 frames/s           4.8         -,0.0  10.4   68.4
+   1 -     Wcpu  OK              -        -    22.816 inferences/s       1.7         -,0.0  51.3    0.1
+   1 NPU   W1    OK          5.250     75.7    66.184 GB/s              82.8       0.0,0.0   9.3   99.3
+   1 CPU   W1    OK          4.200    234.6    65.467 GB/s               2.1       0.0,0.0  21.2   99.1
+   1 DML   W1    OK          0.767   1316.3    70.571 GB/s              37.4       0.0,0.0  14.6  198.6
+   1 NPU   W2    OK          5.267     80.5    19.987 frames/s           0.8       0.0,0.0  10.9   69.2
+   1 CPU   W2    OK          5.283    188.8    18.388 frames/s          98.1       0.0,0.0  23.6   70.3
+   1 DML   W2    OK          5.250    118.9    17.831 frames/s          67.9       0.0,0.0  13.9  129.8
+   1 NPU   Wcpu  OK          5.250     78.4    21.923 inferences/s       5.5       0.0,0.0  51.3    0.0
+   1 CPU   Wcpu  OK          3.067    327.1    17.673 inferences/s      12.0       0.0,0.0  63.2    0.0
+   1 DML   Wcpu  OK          5.250    106.5    20.290 inferences/s       4.1       0.0,0.0  56.1   54.9
+   2 DML   Wcpu  OK          5.250    104.2    20.293 inferences/s       5.5       0.0,0.0  55.5   53.9
+   2 CPU   Wcpu  OK          3.067    327.3    17.682 inferences/s       0.7       0.0,0.0  63.2    0.0
+   2 NPU   Wcpu  OK          5.267     78.4    22.029 inferences/s       3.9       0.0,0.0  51.6    0.0
+   2 DML   W2    OK          5.250    115.0    18.004 frames/s          28.2       0.0,0.0  14.0  127.8
+   2 CPU   W2    OK          5.333    187.3    18.473 frames/s           1.9       0.0,0.0  22.4   70.2
+   2 NPU   W2    OK          5.267     81.0    19.815 frames/s           1.4       0.0,0.0  10.5   69.2
+   2 DML   W1    OK          0.917   1080.5    71.908 GB/s               6.5       0.0,0.0  13.7  198.3
+   2 CPU   W1    OK          4.250    235.0    65.382 GB/s               8.0       0.0,0.0  19.9   99.1
+   2 NPU   W1    OK          5.267     77.2    67.285 GB/s               0.8       0.0,0.0   7.8   99.3
+   2 -     Wcpu  OK              -        -    22.957 inferences/s       9.4         -,0.0  50.9    0.0
+   2 -     W2    OK              -        -    21.009 frames/s           2.6         -,0.0  10.2   68.4
+   2 -     W1    OK              -        -    72.295 GB/s              26.0         -,0.0   7.4   99.2
+   2 DML   -     OK          5.250     95.6         -                    0.6         0.0,-   4.0   49.4
+   2 CPU   -     OK          5.417    145.5         -                    1.1         0.0,-  10.5    0.0
+   2 NPU   -     OK          5.250     77.7         -                    3.2         0.0,-   1.3    0.0
+
+Holds (>= 5.00 tok/s in both passes); the pace is 5.26; the reading-rate column (U2, report-only) is 5.98-6.21 tok/s
+  NPU: alone PASS; with W1 PASS, with W2 PASS, with Wcpu PASS; unpaced capacity from its alone work per token: 13.0, 12.9 tok/s
+  CPU: alone PASS; with W1 FAIL, with W2 PASS, with Wcpu FAIL; unpaced capacity from its alone work per token: 6.8, 6.9 tok/s
+  DML: alone PASS; with W1 FAIL, with W2 PASS, with Wcpu PASS; unpaced capacity from its alone work per token: 10.5, 10.5 tok/s
+
+K_W(arm) = W's rate with the arm / alone, per pass; K is the passes' mean if they differ by <= 0.05
+  W1 alone: 70.736 / 72.295 GB/s, passes differ by 0.022 (<= 0.1 to agree)
+    K_W1(NPU) = 0.933  passes 0.936 / 0.931
+    K_W1(CPU) = 0.915  passes 0.926 / 0.904
+    K_W1(DML) = 0.996  passes 0.998 / 0.995
+  W2 alone: 20.860 / 21.009 frames/s, passes differ by 0.007 (<= 0.1 to agree)
+    K_W2(NPU) = 0.951  passes 0.958 / 0.943
+    K_W2(CPU) = 0.880  passes 0.881 / 0.879
+    K_W2(DML) = 0.856  passes 0.855 / 0.857
+  Wcpu alone: 22.816 / 22.957 inferences/s, passes differ by 0.006 (<= 0.1 to agree)
+    K_Wcpu(NPU) = 0.960  passes 0.961 / 0.960
+    K_Wcpu(CPU) = 0.772  passes 0.775 / 0.770
+    K_Wcpu(DML) = 0.887  passes 0.889 / 0.884
+
+The rules
+  frees the GPU on W1 (against the CPU arm): PASS
+      the NPU holds with W1: PASS
+      K_W1(NPU) >= 0.90: PASS
+      K_W1(NPU) >= 1.10 x K_W1(CPU), or CPU does not hold with W1: PASS
+  frees the GPU on W2 (against the CPU arm): FAIL
+      the NPU holds with W2: PASS
+      K_W2(NPU) >= 0.90: PASS
+      K_W2(NPU) >= 1.10 x K_W2(CPU), or CPU does not hold with W2: FAIL
+  frees the GPU (unqualified: W1 and W2): FAIL
+  frees the CPU on Wcpu (against the DirectML arm): FAIL
+      the NPU holds with Wcpu: PASS
+      K_Wcpu(NPU) >= 0.90: PASS
+      K_Wcpu(NPU) >= 1.10 x K_Wcpu(DML), or DML does not hold with Wcpu: FAIL
+  frees both at once (joint): PASS
+      the NPU holds with W1, K >= 0.90: PASS
+      the NPU holds with W2, K >= 0.90: PASS
+      the NPU holds with Wcpu, K >= 0.90: PASS
+      CPU gives up Wcpu (K < 0.90, or K(NPU) >= 1.10 x K(CPU), or CPU does not hold): PASS
+      DML gives up W1 (K < 0.90, or K(NPU) >= 1.10 x K(DML), or DML does not hold): PASS
+      DML gives up W2 (K < 0.90, or K(NPU) >= 1.10 x K(DML), or DML does not hold): PASS
+  role: frees both at once; frees the GPU on W1 only (the proxy is not a role: a PASS only justifies building the GEMV, which the user decides)
+
+Report-only, not a rival: (c)'s CPU setup (8 threads on 0, 2, ..., 14, default spinning) against Wcpu
+  pass 1: K_Wcpu(CPU-c) = 0.714; its tok/s alone 5.267, with Wcpu 5.250
+  pass 2: K_Wcpu(CPU-c) = 0.715; its tok/s alone 5.267, with Wcpu 5.250
+
+Predictions
+  NPU holds alone: yes: HIT
+  CPU holds alone: yes: HIT
+  DML holds alone: yes: HIT
+  the CPU arm's calibrated N: 2 or 4: HIT (2)
+  K_W1(NPU): 0.90-0.96: HIT (0.933)
+  K_W1(CPU): 0.87-0.94: HIT (0.915)
+  K_W1(DML): 0.60-0.80: MISS (0.996)
+  K_W2(NPU): >= 0.95: HIT (0.951)
+  K_W2(CPU): >= 0.90: MISS (0.880)
+  K_W2(DML): < 0.90: HIT (0.856)
+  K_Wcpu(DML): >= 0.90: MISS (0.887)
+  K_Wcpu(NPU): >= 0.90: HIT (0.960)
+  K_Wcpu(CPU): 0.80-0.95: MISS (0.772)
+  frees the GPU on W1: FAIL: MISS (PASS)
+  frees the CPU: FAIL: HIT (FAIL)
+  the joint score: OPEN (no prediction): PASS
+VERDICT COMPLETE

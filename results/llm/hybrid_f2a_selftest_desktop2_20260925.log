@@ -1,0 +1,119 @@
+F2-A SELFTEST (synthetic only: no model, no text, no x16). 2026-09-25T15:22:37Z
+0. The pins:
+  PREREG is the accepted text (LF e2408569): True
+  the imported tools, the source, the texts and F2-E's log are the pinned ones: []
+  tools/hybrid_s1.py and tools/hybrid_s1b.py equal their blobs at c67d6d2 and b777070: [True, True]
+  F2-E's pick line reads form B, FLUSH_B2, S = ROW: True
+  the source's orders equal hybrid_f2e's: True
+  S1b's module constants equal F2-A's (window_metrics and halves read them): ((2048, 3070), 2047, {'L': (0, 1023), 'H': (1024, 2046)}, 256, 2560)
+  onnxruntime is the pinned build: 1.23.3.dev20260320
+1. The F2 subgraph against hybrid_f2e's emulation, bit for bit (ORT, one-linear probes, planted rows):
+  K = 2048: y equals the emulation bit for bit: True
+  K = 2048: Sx, c, qx and the codes equal hybrid_f2e's: True
+  K = 2048: the graph's step fires on 23 of 40 rows (3 planted); hybrid_f2e's step_up fallback on 0
+  K = 2048: the plants are present (3 stepped rows, qx = 1 blocks, codes at +-127, a zero row at 0): (3, True, True, True, True, True)
+  K = 2048: the guard reads 0 on clean inputs: 0
+  K = 2560: y equals the emulation bit for bit: True
+  K = 2560: Sx, c, qx and the codes equal hybrid_f2e's: True
+  K = 2560: the graph's step fires on 16 of 40 rows (3 planted); hybrid_f2e's step_up fallback on 0
+  K = 2560: the plants are present (3 stepped rows, qx = 1 blocks, codes at +-127, a zero row at 0): (3, True, True, True, True, True)
+  K = 2560: the guard reads 0 on clean inputs: 0
+  K = 10240: y equals the emulation bit for bit: True
+  K = 10240: Sx, c, qx and the codes equal hybrid_f2e's: True
+  K = 10240: the graph's step fires on 21 of 40 rows (3 planted); hybrid_f2e's step_up fallback on 0
+  K = 10240: the plants are present (3 stepped rows, qx = 1 blocks, codes at +-127, a zero row at 0): (3, True, True, True, True, True)
+  K = 10240: the guard reads 0 on clean inputs: 0
+2. The one-ulp step against hybrid_f2e's step_up (nextafter), 10^6 positive normals and every binade's ends:
+  the step equals step_up's nextafter on all 1,000,508 values (FLT_MAX steps to inf both ways): True
+3. The in-graph Sx, c and qx against fp32_up, scale_up and ceil_exact (planted quotients, random rows):
+  planted: Sx equals scale_up bit for bit, and fp32_up of the float64 quotient where step_up's fallback did not fire (the graph's step fired on 0 of 400 rows; step_up's fallback on 0): True
+  planted: c equals ceil_exact, qx equals max(1, min(c, 255)): True
+  planted: k on integer quotients, k + 1 a hair above, 255 on the row max, 0 on a zero block: True
+  random: Sx equals scale_up bit for bit, and fp32_up of the float64 quotient where step_up's fallback did not fire (the graph's step fired on 4931 of 10000 rows; step_up's fallback on 0): True
+  random: c equals ceil_exact, qx equals max(1, min(c, 255)): True
+4. The integer sum: MatMul(double) against Python integers at the bounds; MatMul(int64) on record:
+  MatMul(double) equals the Python-integer sum exactly, |I| up to 10,240 x 32,385 x 1,016: True
+  MatMul(int64) equals it too (kept on record): [[336928358400, -336928358400, -2118205695, 0], [-336928358400, 336928358400, 2118205695, 0], [1263235472, -1263235472, 486416240, 1988177888]]
+  report-only, a pipeline fact: MatMul(double) at 2,048 x 2,560 x 2,560 on 8 threads, median 0.104 s, 258 GFLOPS (the build's probe measures the model's)
+5. The casts round to nearest even on planted ties (against numpy, ml_dtypes, F2-0b's rne and u6e.bf16):
+  Cast(double -> float) equals numpy's RNE, and F2-0b's rne on the integer ties: True
+  the tie 2^24 + 1 rounds to 2^24 (even), 2^24 + 3 to 2^24 + 4: (16777216.0, 16777220.0)
+  Cast(float -> bfloat16 -> float) equals ml_dtypes' RNE and u6e.bf16 bit for bit (3,000 planted ties): True
+  the 2-piece split equals u6e.split bit for bit: True
+6. The guard: 0 on clean inputs; each planted violation counted (a doctored s_x; a doctored Sx):
+  clean: guard 0, counts (code, c, Sx) = (0, 0, 0): (0, [0, 0, 0])
+  a doctored s_x (0.99 x amax / 127 on one block): one code over 127, and nothing else: (1, [1, 0, 0])
+  the true Sx fed in: guard 0: 0
+  a doctored Sx one ulp under: the Sx count and c > 255 on the row max block (one event: s_x / Sx > 255 there), no code over: (2, [0, 1, 1])
+7. The windows: offsets and the non-overlap asserts on a synthetic token list; the download's STOP:
+  16 windows at 0, 3,071, ..., the last ending at 49,136: (16, (0, 3071), 3071, 49136)
+  the synthetic windows pass every assert: True
+  each window is [BOS] + 3,071 tokens; the prompt its first 2,048 ids: True
+  pairwise_disjoint on a deliberate overlap, stride 3,070 (False = caught): False
+  the sha assert on a prompt equal to a prior prompt (False = caught): False
+  text_pins' asserts on a text too short for 16 windows (False = caught): False
+  text_pins' sha assert on an S1 sha equal to window 0's prompt (False = caught): False
+  unrelated S1 and S1b shas pass: True
+  the download failing mid-way (a mocked ConnectionError, Timeout and OSError; no network): a STOP naming the class only: ['the download failed (ConnectionError)', 'the download failed (Timeout)', 'the download failed (OSError)']
+8. The verdict code: the rules, the headline and combinations, the slicing, the KV slice, the bootstrap:
+  KV: PASS: PASS
+  KV: FAIL above T_KL: FAIL
+  KV: PASS NARROW: PASS NARROW
+  KV: FAIL NARROW: FAIL NARROW
+  KV: FAIL when non-finite: FAIL
+  KV: INCOMPLETE when a window is missing: INCOMPLETE
+  FULL: PASS: PASS
+  FULL: FAIL when band H fails: FAIL
+  FULL: PASS NARROW (band L's interval holds T_TOP1): {'outcome': 'PASS', 'narrow': ['L'], 'label': 'PASS NARROW'}
+  FULL: FAIL NARROW: FAIL NARROW
+  FULL: FAIL when a band is non-finite: FAIL
+  FULL: INCOMPLETE: INCOMPLETE
+  the headline prints KV first, then FULL, the combination and the N2 note: ['F2-A/KV', 'F2-A/FULL', "N2's position: F2 qualifies for the KV-serving role on the same pre-registered basis as N2. Any move is the user's.", 'The verdict does not change the N2 pick. Neither verdict is ever re-scored, and a NARROW changes neither.']
+  combinations: KV PASS / FULL FAIL, KV FAIL (either FULL), both PASS, the INCOMPLETEs: ["N2's position: F2 qualifies for the KV-serving role on the same pre-registered basis as N2. Any move is the user's.", 'F2 does not qualify for the role N2 fills.', 'F2 does not qualify for the role N2 fills.', 'F2 qualifies for the KV-serving role, and also holds at prompt positions.', 'F2-A/KV is INCOMPLETE: no combination is read.', 'F2-A/KV reads PASS and F2-A/FULL is INCOMPLETE: no combination is read.']
+  NARROW changes no combination: True
+  every arm, R0's pseudo-arm too, gets C, P_arm, P_R0, L and H: True
+  positions: C 1,023, P 1 and 1, L 1,024, H 1,023: [1023, 1, 1, 1024, 1023]
+  equal states: KL 0 and top-1 1 everywhere: True
+  prompt row 2,047 moves P-arm only: ['P_arm']
+  prompt row 100 moves band L only: ['L']
+  prompt row 2,046 moves band H only: ['H']
+  continuation row 0 moves set C only: ['C']
+  continuation row 1,023 (position 3,071, unscored) moves nothing: []
+  the P-R0 row moves P-R0 only: ['P_R0']
+  halves split set C at 2,560 and read 0 on equal states: (512, True)
+  the KV slice to 0-2,046 plus one step equals the one-shot at 2,047: True
+  the bootstrap is deterministic (seed 20260924, 10,000 resamples): True
+  control: all 0 PASS; each path failing alone FAIL; a missing window FAIL; exactly 1e-5 PASS: ['PASS', 'FAIL', 'FAIL', 'FAIL', 'FAIL', 'PASS']
+  predictions: all HIT on a set built to hit: {'FA-P1a': 'HIT', 'FA-P1b': 'HIT', 'FA-P2': 'HIT', 'FA-P3': 'HIT', 'FA-P4': 'HIT', 'FA-P5': 'HIT', 'FA-P6': 'HIT', 'FA-P7': 'HIT', 'FA-P8': 'HIT'}
+  predictions: FA-P1a MISS on PASS NARROW, FA-P8 MISS on a nonzero guard: ('MISS', 'MISS')
+  predictions: NOT SCORED without the arms: NOT SCORED
+  VERDICT_CODE covers F2-A's functions and the imported S1b and S1 kernels: ['control_outcome', 'outcome_kv', 'outcome_full', 'combination', 'headline', 'score_predictions', 'hybrid_s1b.offsets', 'hybrid_s1b.window_asserts', 'hybrid_s1b.slice_kv', 'hybrid_s1b.window_metrics', 'hybrid_s1b.set_aggregate', 'hybrid_s1b.halves', 'hybrid_s1b.rule_set', 'hybrid_s1.log_softmax_rows', 'hybrid_s1.logits_chunk', 'hybrid_s1.kl_top1_chunk', 'hybrid_s1.band_rows', 'hybrid_s1.bootstrap', 'hybrid_s1.aggregate', 'hybrid_s1.rule', 'hybrid_s1.max_kl']
+  the imported sources change VERDICT_CODE: True
+9. K2's and K3's comparators, and the surgery end to end, on a synthetic two-layer graph:
+  f2.onnx.data holds the six W' with no padding (4096-multiples): 49152
+  K2 on the synthetic F2 graph: True
+  K2's ok on a graph with a planted extra node (False = caught): False
+  K2's ok on a graph with a changed node (False = caught): False
+  K2's ok on a graph missing the guard output (False = caught): False
+  K3 on the synthetic graph's profile: 6 MatMul, all double; executed equals static; rest equals R0's: True
+  K3's no_fused on a profile with a planted fused op (False = caught): False
+  K3's ok on a profile with a MatMul that is not double (False = caught): False
+  the surgery end to end: the graph's hidden states equal the chained emulation bit for bit: True
+  the graph's guard reads 0 (each of the 6 linears contributes its input's count): 0
+  the activation side is built once per input: 4 of them for 6 linears: 4
+10. The watchdog and the start gate (S1's), the probe's runaway ceiling, the states' finiteness, and determinism:
+  _watchdog 1e+06: rc 4, MEMORY_ABORT_JSON printed, the main thread stopped: (4, True, False)
+  _watchdog 0: rc 0, MEMORY_ABORT_JSON absent, the main thread finished: (0, False, True)
+  _gate 1e+06: rc 4, MEMORY_REFUSE printed, the main thread stopped: (4, True, False)
+  _gate 0: rc 0, MEMORY_REFUSE absent, the main thread finished: (0, False, True)
+  _line 0.3: rc 5, PROBE STOP printed, the main thread stopped: (5, True, False)
+  _line 60: rc 0, PROBE STOP absent, the main thread finished: (0, False, True)
+  the probe's timer is the runaway ceiling, above the line the build STOPs on (ceiling, line): (1800.0, 420.0, True)
+  the states print finiteness for R, N2 and R0, and none for the deciding arm F2 (the prereg, section 9): ({}, {}, {'finite': False}, {'finite': True}, {'finite': True})
+  deterministic: a second session, and 8 threads against 2, give the same bits: True
+The frozen hashes:
+  PREREG_TEXT_SHA256 e240856939dd21e966a8bdd96776ba1f0a11017f354bb634c568ea7fa20d8242
+  PROTOCOL_JSON_SHA256 db9b80a7feefe19a45916f78c51c3066bc2b6757b8257c0d80736a94e58f51aa
+  VERDICT_CODE_SHA256 c375a45e396377d844a97e87b3757be387507f2421d393f7e0ca338e6bdeb749
+MEM_JSON {"child": "F2-A selftest", "wset_gb": 0.47, "peak_wset_gb": 0.68, "private_gb": 0.9, "peak_private_gb": 1.11}
+SELFTEST OK

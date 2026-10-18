@@ -1,0 +1,6 @@
+HEADER {"cpu": "AMD64 Family 25 Model 117 Stepping 2, AuthenticAMD", "env": "mlir-aie-iron", "ep": "cpu", "host": "DESKTOP-CBL5NUA", "numpy": "2.5.3", "onnx": "1.22.0", "onnxruntime": "1.30.0", "python": "3.13.15"}
+[controls] cpu MatMulNBits t1=fp32 acc=0: rel_l2 7.994e-08 max_abs_rel 7.346e-08 -> PASS (packing check: must be < 1e-6)
+[controls] cpu MatMulNBits t1=fp32 acc=4: rel_l2 5.091e-03 max_abs_rel 4.980e-03 -> PASS
+[controls] cpu MatMulNBits t1=fp16 acc=0: rel_l2 2.020e-04 max_abs_rel 2.291e-04 -> PASS
+[controls] cpu MatMulNBits t1=fp16 acc=4: rel_l2 5.107e-03 max_abs_rel 5.006e-03 -> PASS
+[controls] PASS

@@ -62,7 +62,7 @@ All parameters below are drawn directly from physical hardware measurements or a
 |---|---|---|---|
 | Shim DMA Stream Channel | **7.0 GB/s per channel** (3.9 B/cyc @ 1.80 GHz = 1 word/cyc) | Single-channel passthrough: slope 0.0726 ns/B round-trip | [MEASURED: `results/aie/dispatch_floor_npu.log`] |
 | Aggregate Shim Streaming | 8 channels (2 S2MM + 2 MM2S per col) = **56.0 GB/s** | 4 columns × 2 input streams × 7.0 GB/s | [DERIVED] |
-| Off-Chip Shared DRAM Bandwidth | **26.0–28.0 GB/s per direction** (shared across array) | Measured on 00_memcpy (28.1 GB/s) and GroupNorm (25.9 GB/s) | [MEASURED: `results/aie/groupnorm_bf16_kernel_npu.log`] |
+| Off-Chip Shared DRAM Bandwidth | **26.0–28.0 GB/s per direction** (shared across array). Refuted for reads on 2026-09-23: 47.62 GB/s read-only on eight channels ([SILICON 1.6](../../docs/SILICON.md#16-off-chip-bandwidth)) | Measured on 00_memcpy (28.1 GB/s) and GroupNorm (25.9 GB/s) | [MEASURED: `results/aie/groupnorm_bf16_kernel_npu.log`] |
 | VitisAI EP Host Dispatch Gap | **89–91 µs** per inference call | Host-side dispatch gap outside ORT compute nodes | [MEASURED: `results/percall_overhead_yolov8_1x4.log`] |
 | Boundary QDQ Latency (640×640) | **440–450 µs** per inference call | ORT CPU QuantizeLinear + DequantizeLinear nodes | [MEASURED: `results/percall_overhead_yolov8_1x4.log`] |
 | Hardware Submit + Wait Floor | **169.8 µs** per unbatched hardware packet | Intercept of hardware execution bracket vs payload size | [MEASURED: `results/aie/dispatch_floor_npu.log`] |

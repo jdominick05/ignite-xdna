@@ -1,0 +1,60 @@
+Quantize subgraph against 3c's quant_x (float64, RNE), ties and a zero row included:
+  per tensor: codes equal 3c's quant_x: True
+  per tensor: scale equals 3c's: True
+  per token: codes equal numpy's: True
+  per token: the zero row gives codes 0 and scale 0: True
+int8 linear: MatMulInteger's int32 against 3c's exact_int, the float64 epilogue:
+  per tensor: int32 exact: True
+  per tensor: epilogue fp32(float64(int32) * s_x * s_w): True
+  per token: int32 exact: True
+  per token: epilogue fp32(float64(int32) * s_x * s_w): True
+bf16 casts round to nearest even (ties included), as ml_dtypes does:
+  ORT Cast float->bf16->float equals ml_dtypes RNE bit for bit: True
+  the tie 1 + 2^-8 rounds to 1 (even): True
+The surgery on a synthetic graph shaped like (c)'s (two layers, a head):
+  head cut: the output is the hidden states: ['/model/layers.34/final_norm_layernorm/output_0']
+  C3 R0: True
+  R0: executed ops equal the graph's: {'Add': 2, 'Identity': 1, 'MatMulNBits': 6}
+  C3 R: True
+  R: executed ops equal the graph's: {'Add': 2, 'Identity': 1, 'MatMulNBits': 6}
+  C3 N1: True
+  N1: executed ops equal the graph's: {'Abs': 4, 'Add': 6, 'Cast': 24, 'Clip': 4, 'Div': 8, 'Equal': 4, 'Identity': 1, 'MatMulInteger': 6, 'Mul': 12, 'ReduceMax': 4, 'Round': 4, 'Where': 4}
+  C3 N2: True
+  N2: executed ops equal the graph's: {'Abs': 4, 'Add': 6, 'Cast': 24, 'Clip': 4, 'Div': 8, 'Equal': 4, 'Identity': 1, 'MatMulInteger': 6, 'Mul': 12, 'ReduceMax': 4, 'Round': 4, 'Where': 4}
+  C3 N3: True
+  N3: executed ops equal the graph's: {'Add': 2, 'Cast': 14, 'Identity': 1, 'MatMul': 6}
+  C3 catches a changed node: False
+  R0: the graph equals its numpy emulation (rel-L2 2.7e-07 <= 1e-5): True
+  N1: the graph equals its numpy emulation (rel-L2 0.0e+00 <= 1e-5): True
+  N2: the graph equals its numpy emulation (rel-L2 0.0e+00 <= 1e-5): True
+  N3: the graph equals its numpy emulation (rel-L2 4.7e-08 <= 1e-5): True
+  R (int8 activations) differs from R0: True
+The metrics, the rule, the pick and the scoring:
+  log-softmax equals the direct form: True
+  log-softmax equals (c)'s: True
+  KL of a model against itself is 0: True
+  top-1 against itself is 1: True
+  band L is 1,024 positions, H 1,023, C 1,023: (1024, 1023, 1023)
+  bootstrap is deterministic: True
+  rule: PASS at the thresholds: PASS
+  rule: FAIL above T_KL: FAIL
+  rule: FAIL below T_TOP1: FAIL
+  rule: FAIL when non-finite: FAIL
+  rule: NARROW when the interval holds T_KL: ['L', 'H']
+  rule: both bands must pass: FAIL
+  pick: N2 first: N2
+  pick: N1 with the tile requirement: True
+  pick: N3 when neither int8 arm passes: True
+  pick: none: True
+  pick: an INCOMPLETE N2 leaves the pick INCOMPLETE: INCOMPLETE
+  outcomes: a C1 failure voids the arm: INCOMPLETE
+  scores: {'P1': 'HIT', 'P2': 'HIT', 'P3': 'HIT', 'P4': 'HIT'}
+The emulations of C2 on synthetic blocks:
+  q4_dot equals a brute-force loop: True
+  llama form differs only in the fp16 scale: True
+Frozen hashes:
+  PREREG_TEXT_SHA256 59ed095aa950328e6cfb968426e52e25a8fabff50f01ea3aa7d452ffe5037bb7
+  PROTOCOL_JSON_SHA256 17bfbefa85caf6eb75e33d2d7fe838a298fe15c7fe4ab0322d7ec3ecac5aa044
+  VERDICT_CODE_SHA256 d78b0f48d978b52d773caf11cd228cddc2a46f3c5c8575651c5efeda61df50b7
+  PREREG holds the plan: True
+SELFTEST OK

@@ -1,0 +1,10 @@
+per step, us (median over 30 chains of 224; min / max chain)
+  a NPU round trip          131.1   (122.0 / 163.8)
+  b DirectML round trip     168.8   (160.0 / 184.7)
+  e handshake                 3.3   (3.2 / 5.1)
+  c join                    177.8   (162.4 / 198.9)
+
+J = 177.8 us, H = 3.3 us, J* = J - H = 174.5 us per join
+R1 224 x J* = 39.09 ms per token vs 11.1 ms: DEAD, the split is dead for good
+R1b 128 x J* = 22.34 ms per token vs 11.1 ms: DEAD
+R2 J 177.8 vs a 131.1, b 168.8, max(a, b) 168.8, a + b 299.9 us

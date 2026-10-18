@@ -1,0 +1,732 @@
+STAGE 3c PLAN AND PREREG: prefill weight GEMMs at Gemma 3 4B's shapes, M = 2048 and 8192, on speed,
+accuracy and energy per prompt token
+
+This is plan v2 as the user approved it on 2026-09-24 (the user's words, relayed by the gate: "Go with
+U1-U12"). Its text is v2's, with two edits agreed in review: the scoped route (i) text in §3, and
+"(accuracy cannot, §6)" in §6. The §9 heading records the user's decisions.
+- v2 took the gate's review of v1: five blocking items (B1-B5) and fourteen fixes (W1-W14), all
+  applied. Changes from v1 are marked [v2].
+- This text is committed before any 3c NPU build or sitting; Q1 is locked here. The rules are
+  tools/llm_prefill3c.py's verdict code.
+
+Order [v2, B1 and W14]:
+1. The user's decisions (§9).
+2. The ONNX models for the CPU and DirectML arms, and the DirectML placement read at build time.
+   - Each DirectML arm's session is opened once on the 780M, and its placement is logged. There is
+     no timing. It is a light GPU load, done under a START REQUEST.
+   - An arm that cannot be placed wholly on DirectML is dropped and named in the plan commit.
+   - No prediction reads this step.
+3. **The plan commit.** The tool with the rules and every prediction (Q1-Q12), the dropped-arm list,
+   and results/llm/llm_prefill3c_insts_fit_desktop2_<date>.log.
+   - That log holds stage 3's 28 builds as (dtype, M, K, N, m, k, n, cs, insts.bin bytes). They are
+     read-only from build/llm_prefill, with no chip.
+   - No NPU build for 3c exists yet, so Q1 is scored against builds made after it.
+4. The NPU compile-only builds and field-width check (§5), then the inputs and references (§2).
+   Both are heavy CPU loads, under a START REQUEST.
+5. **The pins-only commit.** The xclbin, model and manifest SHAs, and the build log. It changes no
+   rule and no prediction: the PROTOCOL_JSON and the rule text are byte-identical to step 3's, and
+   the gate can diff them.
+6. A load check (pre-sitting, enters no rule), under a START REQUEST. Its log is committed before
+   the first sitting.
+7. Sitting A (M = 2048) and sitting B (M = 8192), each under its own START REQUEST, each committed
+   as measured, then FINISHED (U7).
+8. The verdict, the report, and the write-up for the gate.
+
+## 0. Why 3c, and what it answers from the brief
+
+- From M = 512 to 2048 in 3b (MEASURED; Llama-2-7B shapes):
+  - NPU int8 rose from 3.28 to 3.90 TOPS;
+  - CPU int8 fell from 4.17 to 3.82 TOPS;
+  - DirectML fp16 fell from 3.32 to 2.86 TFLOPS.
+  [v2, W8] The NPU's speed over the CPU's went 0.79 -> 1.02. Two points are not a trend; they are
+  the reason to test M = 8192.
+- Prefill energy was never measured. Stages 3 and 3b predate locked decision 10's energy term, and
+  they are not re-scored.
+- (b) measured the package's rise above idle for a looped NPU bf16 GEMM (3b's S1-P tile at
+  2048 x 4096 x 4096): 21.12 / 21.25 W. One Python thread spinning in cache read 25.22 / 25.11 W
+  (MEASURED).
+  - So a GEMM that ties on time could still win on joules. That is the hypothesis 3c tests.
+  - The "+5.6 W for the NPU's compute" is (b)'s residual statistic, labelled POST HOC there. No 3c
+    rule reads it.
+- Every 3b lesson is pre-registered:
+  - DirectML warms up by time (§4);
+  - the CPU is pinned and read back (§3);
+  - the NPU's slices are consumed where they lie, with every host cost inside the loop (§3, U3);
+  - context switches are paid inside the loop (§4).
+- 3c is a new experiment. It does not re-score 3 or 3b, and no 3 or 3b row enters it.
+
+## 1. The question (locked decision 10)
+
+At Gemma 3 4B's weight-GEMM shapes, for M = 2048 and 8192 prompt tokens, does an NPU arm earn a
+prefill role?
+- It earns one by being faster, more accurate, or using less energy per prompt token than both the
+  CPU (ONNX Runtime) and DirectML on the 780M.
+- Each is judged against every arm of that chip that is at least as accurate.
+- Freeing the GPU is (e)'s question and is not measured here.
+
+## 2. Workload and inputs
+
+**Shapes.** One layer's seven linears as the pinned release stores them: all Q4_0, in all 34
+layers. The GGUF is google/gemma-3-4b-it-qat-q4_0-gguf @ 15f73f5e, sha256 76aed0a8… (MEASURED in
+(a)). Shapes are K x N, y = x·W:
+
+| Linear | K x N | Input |
+|---|---|---|
+| q | 2560 x 2048 | X_attn |
+| k | 2560 x 1024 | X_attn |
+| v | 2560 x 1024 | X_attn |
+| o | 2048 x 2560 | X_o |
+| gate | 2560 x 10240 | X_ffn |
+| up | 2560 x 10240 | X_ffn |
+| down | 10240 x 2560 | X_down |
+
+- That is 94,371,840 weights per layer.
+- Layer work = 2·M·94,371,840: 386.5 GFLOP at M = 2048 and 1,546.2 GFLOP at 8192 (DERIVED).
+- The model's 34 layers are x34 (DERIVED).
+- [v2, B5] There are four inputs, as in a real layer:
+  - q, k and v share one normed input;
+  - gate and up share another;
+  - o and down each take their own.
+
+**Weight GEMMs only.** Attention, the norms, RoPE, GELU, the head and the activations between GEMMs
+are outside every bracket, for every arm.
+- F4 is why attention stays out: through ORT's DirectML EP, Gemma 3 past 1024 positions is a
+  different model, because DirectML's GroupQueryAttention reads no local_window_size.
+- The weight GEMMs do not depend on position, so M = 8192 rows are the same computation on every
+  chip. That does not make an 8192-token DirectML prefill a Gemma 3 prefill. 3c says nothing about
+  one.
+
+**W is real (U2).**
+- W is the release's blk.16 (a middle layer), dequantized exactly: d·(q − 8) is exact in fp32.
+- The q4_0 arms carry no weight error against the reference. Every other arm rounds W to its own
+  dtype.
+- The functions exist: gemma_decode.gguf_linear, then dequant, transposed to [K, N].
+
+**X is random, as in 3 and 3b.**
+- X ~ N(0, 1) fp32 at [8192, K], one array per input, seeded. M = 2048 uses the first 2048 rows.
+- The limit, stated: real hidden states have outlier channels that per-tensor int8 activations
+  handle worse. 3c's int8 errors are this input's, not a real prompt's.
+
+**Quantization.**
+- int8 arms quantize X symmetric per tensor and W symmetric per output column, as 3/3b did. The
+  conversions are outside every bracket.
+- [v2, W12] Each M quantizes its own rows. M = 2048's int8 X takes its per-tensor scale from its
+  own 2048 rows, not from the 8192, as a 2048-token prefill would. So M = 2048's int8 X is not a
+  prefix of M = 8192's, and the int8 control is per M.
+
+**The manifest** (new; stage 3's generator stops at M_MAX = 2048). Under a SHA-256 manifest pinned
+in step 5:
+- X, W, and the int8 copies per M;
+- the float64 references y = X·W per linear;
+- [v2, W4] the float64 products of the bf16-rounded X and W, per linear, for N-bf16's own check.
+
+Sizes and reuse (DERIVED):
+- Each reference set is about 1.95 GB at M = 8192: q 134, k 67, v 67, o 168, gate 671, up 671 and
+  down 168 MB.
+- Rounding to bf16 is elementwise, so M = 2048's references and bf16 products are the first 2048
+  rows of M = 8192's.
+- X at M = 8192 is 570 MB fp32.
+
+**Accuracy.**
+- rel-L2 against the float64 reference. An arm's error is its worst linear at that M.
+- Two arms tie if one's rel-L2 is within 1.10x of the other's (3's ACC_TIE).
+- N-bf16 must also be within 1e-4 of its own bf16 product (3's check).
+- The int8 control: the int32 outputs of C-i8, D-i8 and N-i8 are identical, per linear and M, by
+  SHA. The NPU's split-K down sums its int32 partials exactly, so the control holds for it too.
+
+## 3. Arms
+
+Every arm has its weights resident, and its input and output in host memory each call, as 3 and
+3b.
+
+**[v2, B5] The rivals run one session per arm, holding the seven MatMuls.**
+- The graph's node order is q, k, v, o, gate, up, down. It has the four inputs, and all seven
+  outputs return to the host each call. ORT's sequential executor runs the nodes in that order
+  (INFERRED).
+- This is how ONNX Runtime runs a real layer, and it is the rival's most favourable form:
+  - it has one thread pool, not seven pools of 8 or 16 pinned threads on 16 logical CPUs, where
+    pool q still spins while pool k starts;
+  - on DirectML it has one fence round trip per layer, not seven.
+- The rivals' per-linear times are dropped. No rule reads them. The NPU logs its own per-piece
+  times.
+
+**CPU (ONNX Runtime 1.23.3, resnet_env17)**, pinned as in 3b: 8 threads one per physical core, or
+16 one per logical CPU, with the caller pinned too.
+- Affinities are read back after the warm-up, and a mismatch voids the window.
+- Intra-op spinning is at ORT's default, as in 3b. In a back-to-back loop the pool's idle gaps are
+  short, so its energy effect is INFERRED small; that is a stated limit.
+- The arms:
+  - C-fp32: MatMul.
+  - C-i8: MatMulInteger, u8 x s8, zero point 128.
+  - C-nb0: MatMulNBits on the release's own codes (3-input, block 32, fp32 scales,
+    accuracy_level 0; fp32 compute). Built as (c) built C0: the codes injected, no requant.
+  - C-nb4: the same, with accuracy_level 4 (int8 compute). ORT quantizes the activations per
+    32-block internally, and that error is its own.
+- Each runs at 8 and at 16 threads as two arms of the CPU (U11), e.g. C-i8@8 and C-i8@16. Every
+  rule's "every arm of that chip" then covers both counts: speed is judged against the faster, and
+  energy against the one with fewer joules.
+  - This is the gate's rule from (e) v3: the rival gets its most favourable configuration for the
+    axis being scored.
+  - In 3b, 8 and 16 threads were within 0.2-6.5% on int8 time. The power each draws was never
+    measured.
+  - Fewer than 8 threads is not tried, and that is a stated limit.
+
+**DirectML (the 780M, ORT 1.23.3 DirectML build).** disable_cpu_ep_fallback = 1. Placement is read
+at build time (Order, step 2) and logged again in every window.
+- D-fp16: MatMul.
+- D-fp32: MatMul.
+- D-i8: MatMulInteger, s8 x s8.
+- D-nb16: MatMulNBits on the release's codes, with fp16 activations and fp16 scales.
+- **Sessions: one fresh session per arm and pass, so each pass value is one draw of the session
+  level.** This is the noise study's second option (BENCHMARKS, "Recommendation for later
+  pre-registrations": "keep one session per row ... and say its level is one draw from a spread of
+  this size").
+  - Its first option, the median over several fresh sessions, does not fit a continuous 60 s
+    energy loop.
+  - It did not save 3b either: 3b's broken row moved between passes, not between its 5 sessions.
+  - A between-pass level shift is what U8 absorbs, when it cannot change the outcome.
+
+**NPU (mlir-aie whole_array; raw pyxrt; 3's NpuGemm).** The best tiles on record (P); F only where P
+is refused at compile.
+- N-bf16: bf16 -> f32, P = 32/64/128 cs1.
+- N-i8: int8 -> i32, P = 64/128/64 cs1.
+- The layout (U3):
+  - q, k, v and o run unsliced.
+  - gate and up run as four 2560-wide column slices each.
+  - down runs split-K as four 2560-row pieces.
+  - All twelve pieces are one shape, 2560 x 2560, and one xclbin serves them. The arm holds four
+    hardware contexts (q; k and v; o; the 2560 pieces), under the measured cap of 5.
+- [v2, W13] The host sums down's four partials (f32 for bf16, int32 for int8) serially, after the
+  fourth piece returns. They do not overlap any run, so N-i8's and N-bf16's T are conservative on
+  this point.
+- [v2, B5] Uploads:
+  - The NPU syncs each input once per context that reads it:
+    - X_ffn once for all eight gate and up slices (one context);
+    - X_o once;
+    - each down piece's own quarter of X_down, the same bytes as the rival's one X_down upload.
+  - X_attn is read by two contexts (q; k and v). The load check tests whether one XRT buffer can be
+    passed to runs in two contexts.
+    - If it can, X_attn is synced once, as the rival uploads it once.
+    - If it cannot, it is synced twice, and that is stated as an NPU handicap: 10.5 / 42 MB bf16 at
+      M = 2048 / 8192 (DERIVED).
+
+**Report-only, not an arm (U4): N-w4, a speed and energy bound for a q4_0 NPU kernel.**
+- kernels/w4a8_array's native int8 x int4 whole-array design at its best tile, 64/128/64 cs1
+  native unroll2 (6,206.73 GOPS at 2048³, 1.287x upstream int8; MEASURED under IRON's inner
+  bracket, not comparable). It is re-timed here in 3's sync bracket, on the same 2560-piece
+  layout.
+- B = the release's codes (q − 8), repacked outside the bracket. X is int8 per tensor.
+- It applies no scales, so its output is not y, and it has no accuracy.
+- The reading, report-only: at an M where N-w4 fails the speed (or energy) rule, taken against the
+  rivals at least as accurate as C-nb4, a q4_0 NPU kernel cannot pass it either.
+- [v2, W5] That reading holds only for a q4_0 kernel with int8 activations, no more accurate than
+  C-nb4 (route (i) below).
+  - A kernel with bf16 activations (route (ii)) is not bounded by N-w4.
+  - N-bf16 is that route's proxy (INFERRED): the same bf16 MACs and bf16-rounded weights, plus an
+    expansion step, with fewer weight bytes.
+
+**Not an arm: an NPU arm on the release's q4_0 codes (U6).** [v2, the gate's request: the scope for
+the user.] The whole-array designs sum all of K in int32, and q4_0 has one fp16 scale per 32
+weights along K. So no existing kernel can consume the release. Folding the scales per column is
+lossy and is not the release. There are two routes.
+
+- **(i) W4A8 with a per-block epilogue.**
+  - The design change:
+    - the core loops K in k = 32 blocks, one q4_0 block each;
+    - it MACs int8 x int4 into an int32 partial for the m x n tile;
+    - then an f32 epilogue: convert, times the n per-column scales of that block, times the
+      activation scale, and add to an f32 C tile.
+  - It also needs:
+    - a scale stream beside B (n fp16 per k-block per tile: K·N/16 bytes in all);
+    - a fourth ObjectFifo in the IRON design;
+    - a host repack: GGUF's K-blocked (j, j + 16) nibbles to the design's pairs along N, with the
+      −8 folded into the codes.
+  - AIE-ML has no native fp32 vector multiply (SPEC: aie2 config FP32_SUPPORT 0; the API emulates
+    it in 5-13 bf16 multiply-unit ops per 16 lanes, accuracy_low to the default safe). Through that
+    path the epilogue adds 5-13 ops per 512-MAC instruction, about 3-7x N-i8's core instructions
+    per block (INFERRED, one multiply-unit issue per cycle). Operand-aware epilogues would cost
+    less, and are not examined:
+    - the partial fits int16, and d splits exactly into two bf16 parts: 4 bf16 MACs, about 2.5x;
+    - an int16 scale ratio into acc64: 1 op, about 1x, lossy at about 2^-15 of a column's largest
+      block scale.
+    Route (ii) runs at the bf16 rate, 128-MAC mmul against int8's 256: about 2x N-i8 plus the
+    expansion. Neither route is ranked. A compile-only bundle count of each epilogue form, in the
+    isa_gate pattern, would rank them in hours, before any build.
+  - Its bound is N-w4.
+- **(ii) W4A16, the AWQ path AMD's closed Phoenix kernels took.**
+  - The core expands q4_0 to bf16: int4 -> int8 unpack is free (MEASURED), then int8 -> bf16 and the
+    block scale, amortized over the m rows that reuse each weight.
+  - Then it MACs at the bf16 rate.
+  - N-bf16 is its proxy on speed and accuracy class.
+- **Rough effort** (a rough estimate, not derived): several days to about two weeks for either.
+  That covers the core kernel, the IRON design, the host repack and the checks below. Program
+  memory is 16,384 B per core.
+- **What it would be tested against:**
+  1. an ISA and compile gate in the int4 study's isa_gate pattern: the fit in program memory, and
+     the bundle count per block-tile, which the repo takes as cycles;
+  2. bit-exactness against a numpy model of the same arithmetic in the same order;
+  3. rel-L2 against 3c's float64 references (the manifest);
+  4. 3c's rules in a 3c window, against C-nb4 (the same arithmetic class) and every more accurate
+     rival, on speed and energy;
+  5. if it ever runs a whole model, (c)'s KL harness.
+- **The evidence 3c gives the user for U6:** N-w4 bounds route (i), and N-bf16 stands in for route
+  (ii).
+
+## 4. The sitting (one per M, U7)
+
+**Start.**
+- The host-load gate: CLEAR, refuse on PEER.
+- xrt-smi: no hardware contexts. The 780M is the only DirectML adapter.
+- Every pin (manifest, models, xclbins, tool) matches.
+- memory_start: no process at 4 GB or more.
+- Everything runs under silicon_probe_record.py --device.
+
+**A window,** per arm and pass (the (b) method, with (c)'s per-token form and (e)'s mechanics):
+1. Idle: 60 s with nothing launched, counters running.
+2. The reader launches. It opens its session or contexts, builds its buffers, and runs the layer
+   once as the output check.
+   - The check: rel-L2 per linear against the reference; for N-bf16 also its own bf16 product; for
+     the int8 arms the SHA.
+   - Each linear's references are loaded, checked and released before READY.
+   - The loop's working set is X, W and the outputs in the arm's dtype. For an fp32 arm at M =
+     8192 that is about 1.9 GB (X 570 MB, outputs 973 MB, W 377 MB; DERIVED) [v2, W9], plus the
+     runtime's own copies.
+   - [v2, W4] Loading and checking takes about 15-35 s at M = 8192. The largest step is N-bf16's
+     two reference sets, about 3.9 GB read; the float64 products themselves are precomputed. The
+     window's length does not depend on it.
+   - Then it prints READY.
+3. Counters start, then the common go.
+4. The reader loops its layer from the go. The window is [go + 20 s, go + 80 s].
+   - The warm-up is 20 s by time and runs straight into the window, with no idle gap between them.
+     (3b: the short DirectML rows were still ramping after 3 counted warm-ups.)
+5. After the window the reader stops, and a 10 s settle follows.
+
+Pass 2 is pass 1 reversed. The pass 1 order is:
+- C-fp32@8, C-fp32@16, C-i8@8, C-i8@16, C-nb0@8, C-nb0@16, C-nb4@8, C-nb4@16;
+- D-fp16, D-fp32, D-i8, D-nb16;
+- N-bf16, N-i8, then N-w4.
+- [v2, B2 / U12] A VOID window gets at most one re-run, at the end of the same pass. It is logged
+  with its position, and a second VOID stands.
+
+**The numbers.**
+- **T (layer ms):** the median wall time of the layer iterations that complete inside the window.
+  - An iteration is the whole layer, with everything the arm does in it.
+  - For a rival that is one session call.
+  - For the NPU it is its sixteen dispatches, four context alternations and the split-K sums.
+- **E (J per prompt token, per layer, above idle):** (mean package power over the window's rows −
+  the idle's mean) / (M x the layers completed in the window / the window's seconds).
+  - Completed layers use fractional overlap, as (e)'s W rate did.
+  - E x 34 is the model's weight GEMMs (DERIVED).
+- The reader logs every layer iteration's start and completion time, and the log keeps them. That
+  answers the gate's note after (e).
+- Rows: typeperf at 1 Hz with the package, core, CPU, GPU Engine and memory counters. A 1 s trim
+  at each end; at least 50 rows.
+
+**Time (DERIVED).**
+- A window is about 175 s: 60 s idle, about 25 s load and check, 20 s warm-up, 60 s window and
+  10 s settle.
+- 15 windows x 2 passes is about 88 min, plus any U12 re-runs (about 3 min each).
+- Two sittings make about 3 h in all, plus the load check (about 15 min).
+
+## 5. Compile-only check (step 4; Q1 is scored against it)
+
+Planning arithmetic, already run with stage 3's constraints() (no chip):
+- Every P and F tile passes at q, kv, o and the 2560 piece, at M = 2048 and 8192.
+- Unsliced gate/up (N = 10240) is refused at every tile by the 2^20-word C step. 4·m·N ≤ 2^20
+  gives m ≤ 25.6, exactly as Llama's 11008 was.
+- Unsliced down passes. It is split-K anyway, for the layout (U3).
+- None of whole_array's field limits scales with M:
+  - the 64-iteration A wrap is N/(4n), at most 10 here;
+  - the C step is 4·m·N;
+  - the B tile is k·n.
+  - M enters only the host runtime sequence and the core's loop count. M = 8192 passes the shape
+    rules: M/(4m) is even at m = 32 and 64.
+- **[v2, B3] The insts.bin fit is now traced.**
+  - All 28 stage-3 builds in build/llm_prefill fit insts.bin = 16 + 2576·M/(8m) B exactly. Their
+    rows are committed with the plan (Order, step 3).
+  - The largest is 41,232 B: the unsliced S2u builds, bf16 and i8 at M = 2048, K = 4096,
+    N = 11008, m = 16. Both ran as GEMMs in stage 3.
+  - By the fit, 3c's M = 8192 builds are 41,232 B (i8 P, m = 64) and 82,448 B (bf16 P, m = 32).
+    The first equals the largest run so far; the second has not run.
+- The buffers at M = 8192 are at most 84 MB (C of a 2560 piece, f32). The largest run so far is
+  90 MB.
+
+The check, logged as results/llm/llm_prefill3c_build_desktop2_<date>.log, builds every NPU xclbin
+through the aiecc verifier:
+- 4 shapes x 2 dtypes x 2 M;
+- F only where P is refused;
+- N-w4's 4 x 2 under U4.
+
+It records per build: the constraints() values, L1 bytes, insts.bin size and the xclbin SHA.
+
+**The load check** (Order, step 6; pre-sitting):
+- It opens the four contexts at once, allocates the M = 8192 buffers, and runs each reader to READY
+  and one layer.
+- [v2, B5] It tests whether one XRT buffer can serve runs in two contexts.
+- If the four contexts cannot be held, 3c STOPS and comes back to the user. There is no silent
+  redesign.
+
+## 6. Rules, per M, each labelled
+
+**Valid passes [v2, B2].**
+- A window is valid if it is neither VOID nor FAILED (after at most one U12 re-run of a VOID).
+- An arm with fewer than two valid passes is INCOMPLETE, and U8 cannot decide from its one value.
+- A reader that exits non-zero is FAILED. That window is not re-run: a crash is a defect to report.
+- [v2, W10] A failed output check voids that window, like every other VOID. A systematic failure
+  will fail its re-run too, and then stands.
+
+**Repeat [v2, W2].**
+- An arm's T holds if |p1 − p2| ≤ 0.10 x (p1 + p2)/2, and likewise its E. This is 3b's form: its
+  broken row read 4.79 / 47.30 = 10.1%.
+- An arm that holds on both takes the mean. Otherwise the arm is INCOMPLETE.
+
+**U8, deciding with INCOMPLETE arms [v2, W1].**
+- A rule that needs INCOMPLETE arms is evaluated at every combination of their two pass values,
+  with the complete arms at their means.
+- It is decided only if every combination gives the same outcome. Otherwise the rule is
+  INCOMPLETE.
+- Membership in "at least as accurate" uses the worse of an arm's two output-check rel-L2s.
+- INCOMPLETE stands. There is no third run without the user.
+
+**Speed.**
+- An NPU arm beats a chip if T_rival ≥ 1.10 x T_npu for every arm of that chip with rel-L2 ≤ 1.10
+  x the NPU arm's.
+- Speed KEEP needs both chips beaten; otherwise speed KILL.
+- Labels: T MEASURED, ratios DERIVED.
+
+**Energy.**
+- An NPU arm beats a chip if E_rival ≥ 1.10 x E_npu for every at-least-as-accurate arm of that
+  chip.
+- Energy KEEP needs both chips beaten; otherwise energy KILL.
+- (b)'s labels go in the verdict verbatim:
+  - above idle, with idle charged to no one;
+  - package counters only (the user's rule), so completeness is never shown;
+  - DRAM is outside the package, which pulls ratios toward 1;
+  - E is DERIVED from measured power and rate.
+- (b) showed the 780M and the NPU inside the package counter, and that is cited (U9). [v2, B4] v1's
+  "UNDECIDED" exit is deleted: it had no pre-registered trigger.
+
+**Accuracy.**
+- An NPU arm wins on accuracy if its rel-L2 x 1.10 < every arm of both chips.
+- [v2, W6] This cannot be met by construction, and no reader should take the accuracy row as a
+  test that could have passed. C-fp32 and D-fp32 are in the set, W's d·(q − 8) is exact in fp32,
+  and the NPU's best arm rounds X and W to bf16.
+
+**The role.**
+- At each M, an NPU arm earns a prefill role if speed or energy KEEPs (accuracy cannot, §6).
+- The verdict names which, and whether the other is KILL or INCOMPLETE.
+
+**VOID (per window).** Any of these voids it:
+- under 50 rows;
+- pinning not read back (CPU);
+- placement not all DirectML;
+- a failed output check;
+- under 5 completed layer iterations;
+- the memory rule, (e)'s (U10): a measured process's own hard faults over 25/s, or Pages Input/sec
+  averaging over 1,000 in the window.
+
+**Report-only (no rule):**
+- N-w4's reading (§3);
+- the NPU's per-piece T and TOPS;
+- the witnesses (§7).
+
+## 7. Witnesses (report-only)
+
+- Each process's CPU %; the package, core-sum and residual power.
+- The 780M busy per engine, from its per-instance columns.
+- The NPU adapter's busy; the idle's SD; the host-load snapshot; xrt-smi before and after every NPU
+  arm.
+- The CPU arms' affinities; DirectML placement.
+- Once per NPU window, outside the loop: the gate/up concatenation done as 3b's layout would do it,
+  timed, so 3b's accounting sits beside 3c's.
+
+## 8. Predictions (written before the plan commit; the rules decide, these do not)
+
+The bases are:
+- 3b's rates (MEASURED on Llama shapes);
+- (b)'s loop powers (MEASURED on other loops);
+- this draft's layer work (DERIVED).
+
+Transferring them to Gemma's GEMMs is INFERRED.
+
+- **Q1, compile:** every P tile passes the aiecc verifier at every shape and both M. insts.bin
+  equals the fit (16 + 2576·M/(8m)) at every 3c build, as it does at all 28 of stage 3's.
+- **Q2, load:**
+  - the NPU arm holds its four contexts and the M = 8192 buffers;
+  - one XRT buffer can serve runs in two contexts (low confidence; untested here).
+- **Q3, N-i8's T:** 110-135 ms at M = 2048 and 430-520 ms at M = 8192.
+  - The basis: the layer's work at 3.4-3.9 TOPS (99-114 and 396-455 ms), plus 4 switches (about
+    3 ms), plus the serial split-K sums (8-15 and 30-60 ms, §9 U3).
+- **Q4, C-i8 (report-only, cross-sitting) [v2, W7]:** its TOPS in sitting B is at most its TOPS in
+  sitting A (3b's direction). D-fp16 follows the same direction.
+- **Q5, speed at M = 2048: KILL for both NPU arms.**
+  - N-i8 does not reach 1.10x the CPU's best int8 (0.80-1.10x).
+  - [v2, W3] N-bf16 loses to D-fp16, if D-fp16's measured rel-L2 is at most 1.10x N-bf16's (Q9
+    expects it far below). If it is not, Q5's bf16 half is scored against the remaining rivals.
+- **Q6, speed at M = 8192: KILL** (moderate confidence). N-i8 against the faster of C-i8 and C-nb4,
+  at the better thread count, lands at 0.9-1.2x, with 1.10 inside that range.
+- **Q7, energy: KEEP for N-i8 at both M,** at 1.5x or more fewer J/token than the best rival.
+  - The basis: the NPU loop at about 18-26 W above idle, against 40-65 W for 16 CPU threads, a
+    lower figure at 8, and 30-45 W for the 780M, at similar times.
+  - The ~15 W wake step that every busy arm pays ((b), post hoc) pulls this toward 1.
+- **Q8, energy: KEEP for N-bf16 at both M** (lower confidence). The binding rival is D-fp16 or
+  D-nb16, at a margin of 1.2-1.6x.
+- **Q9, accuracy:**
+  - The NPU wins nowhere on it, by construction (§6).
+  - N-bf16 reads 2e-3 to 3e-3, and N-i8 1e-2 to 3e-2.
+  - [v2, W3] D-fp16 reads 2e-4 to 6e-4, D-fp32 under 1e-5 and C-fp32 under 1e-6. 3b read 3.61e-4,
+    1.33e-6 and 3.12e-7 against N-bf16's 2.35e-3, on Llama shapes, random W and K up to 11008.
+  - C-nb0 reads under 1e-6, C-nb4 3e-3 to 1e-2, and D-nb16 3e-4 to 6e-4.
+  - The int8 basis is 3b's 1.54e-2, on random W ~ N(0, 0.02). Per-column int8 over a q4_0 grid,
+    with mixed block scales in each column, may read higher.
+  - The int8 control holds at both M.
+- **Q10, MatMulNBits at M ≥ 2048** (never timed here):
+  - D-nb16 is slower than D-fp16 at both M.
+  - C-nb4 lands at 0.7-1.1x C-i8's speed at the same thread count.
+- **Q11, N-w4 (report-only):** at M = 8192 it reads 1.1-1.4x faster than N-i8's layer. Its speed
+  reading is FAIL at M = 2048 and OPEN at 8192.
+- **Q12:** every DirectML arm holds the repeat rule with the 20 s warm-up.
+  - The risk is named: 3b's one broken row moved between passes, not sessions (44.90 / 49.69 ms,
+    10.1%).
+
+## 9. The user's decisions (2026-09-24, relayed by the gate: "Go with U1-U12")
+
+Every decision took the recommendation, listed first below; the gate's position follows each.
+
+- **U1, shapes: the seven linears as shipped** (recommended), or fused QKV and gate|up. Every arm
+  would take the same fusion. The release stores them separate, and 3/3b ran unfused. The gate
+  agrees.
+- **U2, inputs: the release's blk.16 as W, with random X** (recommended).
+  - Real hidden states would need a model forward over 8192 tokens of text, and their activation
+    outliers would change the int8 errors.
+  - The limit is stated either way. The gate agrees.
+- **U3, the NPU's gate/up/down layout.**
+  - **(a) Recommended:** the slices are consumed where they lie, and down runs split-K with the
+    host sums inside the loop, serially.
+    - This is the dataflow a real pipeline would use: gate and up feed an elementwise product per
+      slice, and down splits along K to meet them.
+    - It needs 4 contexts, not 5.
+    - Its host cost is not small. The three adds over [M, 2560] move about 190 MB at M = 2048 and
+      750 MB at 8192: about 8-15 ms and 30-60 ms (DERIVED).
+    - That is the same order as (b)'s concatenation. So the choice is which host op matches the
+      dataflow, and 4 contexts against 5, not cheap against realistic.
+  - **(b) Alternative:** 3b's accounting, with gate's and up's outputs concatenated on the host
+    (about 25 ms each at M = 2048 and about 100 ms at 8192, DERIVED from 26-29 ms per 90 MB) and
+    down unsliced. That needs 5 contexts, at the measured cap.
+  - (b) is timed beside (a) in every NPU window (§7). The gate agrees with (a), with the serial
+    sums stated (W13).
+- **U4, the N-w4 bound: include it, report-only** (recommended), with W5's scope: it bounds route
+  (i) only.
+  - It needs its builds and a raw-pyxrt host path for its packed B.
+  - It is dropped, and this is stated, if its compile or load check fails. Nothing is redesigned.
+  - The gate agrees.
+- **U5, the q4_0 rival arms: C-nb0, C-nb4 and D-nb16** (recommended all three). The brief named
+  C-nb4 and D-nb16. C-nb0 is the only CPU q4_0 arm with fp32-class accuracy. The gate agrees.
+- **U6, no NPU arm on the release's q4_0 codes in 3c** (recommended).
+  - §3 scopes what a kernel would take: two routes, the design change, a rough effort and its
+    tests.
+  - 3c's N-w4 and N-bf16 are the evidence for whether to build one. The user asked today why there
+    is no int4 kernel for the LLM work: this is where that decision sits.
+  - The gate agrees.
+- **U7, two sittings, one per M, about 90 min each** (recommended), or one sitting of about 3 h.
+  Every rule is per M, and energy is compared only within a sitting. The gate agrees.
+- **U8, an INCOMPLETE arm still decides a rule when every combination of its pass values gives the
+  same outcome** (recommended; W1's form).
+  - This pre-registers what 3b could only say post hoc ("the broken row cannot change the
+    outcome").
+  - The alternative is 3b's plain INCOMPLETE. The gate agrees, with W1.
+- **U9, energy controls: cite (b)'s INSIDE result** (recommended), or re-run (b)'s controls in each
+  sitting (about 10 min more). (b)'s finding is about the counter's domain, not a sitting's level.
+  The gate agrees, with B4.
+- **U10, the memory rule: (e)'s** (recommended). 3/3b had none. (c) lost 3 of 10 arm-passes per
+  sitting to a page-in rule set at 100. The gate agrees.
+- **U11, the CPU's thread counts: 8 and 16 threads, each its own arm** (recommended). This is 8 CPU
+  windows a pass.
+  - Speed is then judged against the faster count, and energy against the one with fewer joules.
+  - Choosing one count by speed and using it for energy too would hand the NPU an energy win
+    against a configuration picked for another axis: (e) v3's artifact.
+  - The alternative is a speed-selected count for both rules, about 20 min shorter a sitting. The
+    gate agrees.
+- **U12 [v2, B2]: a VOID window gets at most one re-run,** at the end of the same pass, logged with
+  its position (recommended; the gate's recommendation).
+  - A second VOID stands. FAILED windows are not re-run.
+  - This is not a third run of a valid arm, and (c) lost 3 of 10 arm-passes per sitting to voids.
+  - The alternative is no re-run.
+- **U13 does not arise [v2, B5].** v2 adopts the gate's one-session form for the rivals outright.
+  The only open point is whether the NPU can share X_attn across two contexts; the load check
+  decides it, and v2 states the handicap if it cannot.
+
+## 10. Unverified going in
+
+- MatMulNBits at M > 1, on either chip: never timed here. [v2, W11] Nor is D-nb16's implementation
+  known: it may dequantize then GEMM, or run natively.
+- The 82 KB insts.bin (bf16 P at M = 8192) and 84 MB buffers.
+- Four whole_array contexts held by one process. The cap of 5 was measured with a graph-engine
+  xclbin.
+- Whether one XRT buffer can serve runs in two contexts.
+- ORT's sequential executor running the seven nodes in graph order (INFERRED).
+- Whether 20 s of warm-up by time steadies DirectML.
+- The GEMM loops' power on each chip. Q7 and Q8 are INFERRED from other loops.
+- The 0.748 ms switch. It was measured on a non-GEMM kernel; 3c pays it inside the loop instead of
+  adding it.
+
+READINGS: the code's choices where v2's text leaves one (not part of v2's text). The gate ruled on the first
+plan commit (2c29296): R1, R2 and R6 accepted; R3 accepted with A1; R4 accepted as amended by A1 and A2; R5
+accepted with A3; A4 freezes the verdict code. This second plan commit carries A1-A4; the plan text above
+is unchanged.
+- R1 Repeat, arm-level (v2 §6: "An arm that holds on both takes the mean. Otherwise the arm is
+  INCOMPLETE."): an arm with two valid passes whose T or E breaks the 10% rule is INCOMPLETE, and U8
+  takes both of its pass values of the metric a rule reads.
+- R2 An arm with fewer than two valid passes (v2: "U8 cannot decide from its one value") is unknown,
+  and U8's own logic applies: a rule is decided only when no value of the unknown arm could change its
+  outcome. A rival that may be at least as accurate could only block the NPU arm on its chip, so a rule
+  the other arms already KILL stays KILL, and one they would KEEP is INCOMPLETE. An NPU arm with fewer
+  than two valid passes leaves its own rules INCOMPLETE.
+- R3 Membership uses the worse of an arm's valid windows' rel-L2s, each its worst linear. A worse error
+  only removes an arm from the set, so a known error that already removes an unknown arm decides. A
+  VOID window's error is not used. A1 closes the gap this left: a finite garbage pass can no longer stay
+  valid and drop its arm from the set (R4).
+- R4 The output check (v2 §4 lists what it checks, not when it fails) fails, voiding its window, on:
+  - a non-finite output;
+  - (A1) a worst-linear rel-L2 above the arm's wiring bound, R6's bounds, fixed before the wiring run:
+    1e-4 for fp32 and nb0, 1e-2 for fp16 and nb16, 0.2 for nb4 and int8 (C-fp32, C-i8, C-nb0, C-nb4,
+    D-fp16, D-fp32, D-i8, D-nb16, and N-i8 at int8's). The bounds are in PROTOCOL_JSON (wiring_max, and
+    void_rel_l2_max per arm), and the verdict applies them to every window whatever the log says;
+  - N-bf16 over 1e-4 rel-L2 from its own bf16 product (stage 3's check);
+  - any int8 arm's (C-i8@8, C-i8@16, D-i8, N-i8) int32 not identical to the exact int8 product (the
+    manifest's, computed in float64, exact since every |sum| < 2^53): the same check for every int8
+    arm, rival or NPU, which implies v2's SHA identity;
+  - (A2) N-w4's int32 not identical to the exact int8 x (q - 8) product, in float64, so a mis-packed B
+    cannot bound the wrong computation. N-w4 still has no accuracy: its output is not y.
+  Such a VOID takes U12's one re-run like any other. The int8 control (§2, Q9) is every int8 window's
+  SHAs, VOID or not; it holds if all agree.
+- R5 Scoring the predictions: "C-i8" and "C-nb4" mean the better of the two thread counts (U11 made
+  each two arms); "N-bf16 loses to D-fp16" means it does not beat D-fp16 by the speed rule's 1.10x;
+  "the best rival" (Q7, Q8) is the best of the NPU arm's at-least-as-accurate set. A prediction is MISS
+  if any part is known false, else NOT SCORED if any part is unknown, else HIT.
+  (A3) Q1's "every 3c build" is every build the build log records, N-w4's and any F build included, with
+  no carve-out: Q1 is scored from the build log's BUILD_ROW_JSON rows (dt bf16 | i8 | w4, M, K, N, tile
+  P | F, m, k, n, verifier_ok, insts_bytes). Every planned P build (the four NPU shapes, both M, bf16, i8
+  and w4) must pass the verifier, and every row's insts.bin must equal 16 + 2576.M/(8m). Q2 reads the
+  load check's LOADCHECK_SUMMARY_JSON booleans contexts, buffers_8192 and shared_buffer.
+- R6 Step 2 ran each model once at M = 64 (its own seed, not the sitting's X) as a wiring check (a
+  miswired graph reads rel-L2 near 1): bounds 1e-4 (fp32, nb0), 1e-2 (fp16, nb16), 0.2 (int8, nb4),
+  and each int8 model against the exact product. Its M = 64 rel-L2s are a wiring check, own seed, not
+  a 3c result: they are never cited as Q9's outcome or as any 3c accuracy figure, and no rule reads
+  them. They were seen before this plan commit; Q1-Q12 are v2's text unchanged.
+- A4 The rules are the verdict code, and it is frozen here. VERDICT_CODE_SHA256 is sha256 over the
+  source of taken, worst, arm_record, rule, evaluate, int8_control, in_range and score, plus what they
+  call or read (void_bound, state_of, q1, parse), and the JSON of the constants REPEAT_MAX through
+  RERUN_VOID, Q9_RANGES and WIRING_MAX (plus MS, ORDER, NPU_ARMS, MODEL_OF, NPU_SHAPES, INSTS_FIT).
+  Every later 3c log prints it, and later code-only commits keep those functions and constants
+  byte-identical. The window-state code (R4, U10 and the VOID list) is not written yet: when it lands,
+  its HEAD goes to the gate before the load check.
+
+AMENDMENT 1 (the third plan commit): the counters at HIGH priority. The user's words: "Go with A".
+
+Why. Sitting A was stopped by the gate at window 3 (922f929; the partial log is kept as measured, is not
+cited, and the verdict refuses it). With 16 threads pinned to all 16 logical CPUs, typeperf at normal
+priority is starved. Its 1 s samples stretched to 1.25-1.56 s, so the trimmed 57 s window held 42 rows,
+against the 50-row rule. The @8 windows sampled about every 1.03 s. Under the frozen rules, all four @16
+rivals would have been MISSING at both M, and under R2 they could block any KEEP. No T or E had been read
+when the sitting stopped, so this amendment is not outcome-driven. The gate put three options to the user:
+(A) the counters at HIGH, (B) a seconds-covered row rule, (C) dropping the @16 arms. The user chose (A).
+
+The change (the instrument only):
+1. typeperf runs at HIGH_PRIORITY_CLASS in every window's idle and its window. The command is
+   gemma_decode_suite.typeperf's exactly (the same counters, -si 1), started by a 3c-local launcher; the
+   shared helper is not edited. Its priority class is read back, and anything else makes the window FAILED.
+2. The suite process raises itself to HIGH at the sitting's start (read back; otherwise it refuses). Its
+   FaultSampler thread, the go timing and the CPU-time reads therefore run at HIGH.
+3. The readers stay at NORMAL: Windows gives a child NORMAL unless the parent is IDLE or BELOW_NORMAL. Each
+   READY reports the reader's own class, and anything but NORMAL makes the window FAILED.
+4. The 50-row rule is unchanged, and so is every other rule: U10, U12, the VOID and FAILED lists, T, E,
+   the trims, the predictions and the verdict code.
+5. New report-only witnesses in WINDOW_JSON, read by no rule:
+   - the row cadence over the idle and the trimmed window (median, p95 and max gap);
+   - typeperf's and the suite's CPU seconds in the window;
+   - the three priority classes.
+6. protocol() gains one field, "counters". PROTOCOL_JSON_SHA256 changes from a997580c... (before amendment
+   1) to the new hash printed below. PREREG_TEXT_SHA256 f7fa696b... and VERDICT_CODE_SHA256 6e459e56... are
+   unchanged.
+
+The disclosed cost:
+- A HIGH typeperf preempts one pinned thread for its sample each second, in every arm's idle and window
+  alike. Its package power is in both the idle and the window, so it cancels in E.
+- Its time cost falls only where every logical CPU is busy: the four @16 CPU rivals, slightly, in the NPU's
+  favour. Each window logs typeperf's CPU seconds, so the preemption's size can be read.
+- The @8 arms, DirectML and the NPU leave CPUs free (INFERRED unaffected).
+
+The cadence check (pre-sitting, enters no rule, under its own START REQUEST): one C-fp32@16 window at
+M = 2048, by the sitting's own run_window path, with the counters at HIGH and the reader's check quiet.
+- It prints CADENCE_JSON and never T or E.
+- It passes only if:
+  - window_record's state is OK, with no other VOID or FAILED cause (the gate's addition). This covers the
+    rows (≥ 50 in the idle and the window), the fault-sampler seconds (≥ 50), U10, at least 5 layers, and
+    the CPU pinning read back OK before READY, after the warm-up and after the loop, with the suite at HIGH;
+  - the median row gap is ≤ 1.05 s and the max gap ≤ 1.5 s;
+  - the priority classes read back HIGH (typeperf), HIGH (the suite) and NORMAL (the reader).
+- A failure goes back to the gate and the user, and nothing re-runs.
+
+The order, with the gate's check after each step:
+1. this commit;
+2. the cadence check (results/llm/llm_prefill3c_cadence_desktop2_<date>.log);
+3. sitting A2 (M = 2048), under a new log name (results/llm/llm_prefill3c_sitting_A2_desktop2_<date>.log;
+   the sitting refuses without the cadence check's PASS);
+4. sitting B (M = 8192);
+5. the verdict over A2, B, the build log and the load check. It refuses the partial sitting A log by its
+   LF hash. The load check stands: it enters no rule, and its go does not depend on the counters.
+
+AMENDMENT 2 (the fourth plan commit): the sitting's gate reads the cadence check on the rule itself. The
+user's words: "Go with 1".
+
+Why. The cadence check (05dc1a2; kept as measured) FAILED on one condition only: the window's median row
+gap was 1.069 s, against the 1.05 s limit. Everything else passed:
+- window_record's state was OK, with no other cause;
+- the rows after the trims were 58 in the idle and 53 in the window, against the rule's 50 (sitting A's
+  window 1 had 42);
+- the p95 gap was 1.117 s and the max 1.148 s (limit 1.5 s);
+- the priorities read back HIGH/HIGH/NORMAL;
+- the pinning read back OK before READY, after the warm-up and after the loop;
+- the memory rule held (hard 0.0/s, fault-sampler seconds 57, pages 0.68/s);
+- typeperf used 0.125 CPU s in the window.
+The median criterion was mis-calibrated: typeperf's own idle median is 1.022 s, so the limit sat only 28 ms
+above it. The gate put two options to the user: (1) proceed on the rule itself; (2) a longer window, which
+changes the PREREG text. The user chose (1).
+
+The change (the sitting's start only):
+- sitting() no longer requires "CADENCE PASS". It reads the committed cadence log, which must have the LF
+  hash a8057eb6..., and its CADENCE_JSON. cadence_ok() requires all of:
+  - state == "OK" and why == "";
+  - window_rows >= 50 and idle_rows >= 50;
+  - the window's max row gap <= 1.5 s;
+  - the priorities HIGH/HIGH/NORMAL;
+  - the three pinning read-backs all true;
+  - the memory rule within U10: hard faults <= 25/s, Pages Input/sec <= 1,000, fault-sampler seconds >= 50.
+- The median-gap criterion is dropped, not loosened, and the cadence check is not re-run. Its FAIL stands in
+  its log, and the proxy miss goes into the write-up.
+- Nothing else changes. PREREG_TEXT_SHA256 f7fa696b..., PROTOCOL_JSON_SHA256 5e533fca... (amendment 1's) and
+  VERDICT_CODE_SHA256 6e459e56... are unchanged.
+
+The order, with the gate's check after each step: this commit, then sitting A2 (M = 2048), then sitting B
+(M = 8192), then the verdict over A2, B, the build log and the load check.
+
+PROTOCOL_JSON {"stage": "3c", "plan": "v2", "layer": 16, "linears": [["q", "attn_q", 2560, 2048, "x_attn"], ["k", "attn_k", 2560, 1024, "x_attn"], ["v", "attn_v", 2560, 1024, "x_attn"], ["o", "attn_output", 2048, 2560, "x_o"], ["gate", "ffn_gate", 2560, 10240, "x_ffn"], ["up", "ffn_up", 2560, 10240, "x_ffn"], ["down", "ffn_down", 10240, 2560, "x_down"]], "inputs": {"x_attn": 2560, "x_o": 2048, "x_ffn": 2560, "x_down": 10240}, "layers": 34, "ms": [2048, 8192], "seed": 20260924, "order": ["C-fp32@8", "C-fp32@16", "C-i8@8", "C-i8@16", "C-nb0@8", "C-nb0@16", "C-nb4@8", "C-nb4@16", "D-fp16", "D-fp32", "D-i8", "D-nb16", "N-bf16", "N-i8", "N-w4"], "report_only": ["N-w4"], "npu_arms": ["N-bf16", "N-i8"], "model_of": {"C-fp32": "fp32", "C-i8": "i8_u8", "C-nb0": "nb0", "C-nb4": "nb4", "D-fp16": "fp16", "D-fp32": "fp32", "D-i8": "i8_s8", "D-nb16": "nb16"}, "threads": [8, 16], "zp": 128, "cpu_pin": "8: one logical CPU per physical core; 16: every logical CPU; the caller pinned to the first", "idle_s": 60, "warmup_s": 20, "window_s": 60, "settle_s": 10, "trim_s": 1, "min_rows": 50, "min_iterations": 5, "repeat_max": 0.1, "margin": 1.1, "acc_tie": 1.1, "bf16_acc_max": 0.0001, "hf_max": 25.0, "pages_max": 1000.0, "rerun_void": 1, "npu_tiles": {"bf16": {"P": [32, 64, 128, 1], "F": [64, 64, 64, 1]}, "i8": {"P": [64, 128, 64, 1], "F": [64, 64, 64, 0]}, "w4": {"P": [64, 128, 64, 1]}}, "npu_piece": 2560, "npu_contexts": 4, "insts_fit": [16, 2576], "e_unit": "J per prompt token per layer, above idle (printed in mJ)", "t_unit": "ms per layer iteration, median over the window", "npu_shapes": [[2560, 2048], [2560, 1024], [2048, 2560], [2560, 2560]], "wiring_max": {"fp32": 0.0001, "nb0": 0.0001, "fp16": 0.01, "nb16": 0.01, "nb4": 0.2, "i8_u8": 0.2, "i8_s8": 0.2}, "void_rel_l2_max": {"C-fp32@8": 0.0001, "C-fp32@16": 0.0001, "C-i8@8": 0.2, "C-i8@16": 0.2, "C-nb0@8": 0.0001, "C-nb0@16": 0.0001, "C-nb4@8": 0.2, "C-nb4@16": 0.2, "D-fp16": 0.01, "D-fp32": 0.0001, "D-i8": 0.2, "D-nb16": 0.01, "N-bf16": null, "N-i8": 0.2, "N-w4": null}, "counters": "typeperf and the suite (its FaultSampler) at HIGH_PRIORITY_CLASS in every idle and window; the readers at NORMAL_PRIORITY_CLASS; each read back, else the window is FAILED (amendment 1)"}
+PREDICTIONS_JSON [{"id": "Q1", "text": "every P tile passes the aiecc verifier at every shape and both M; insts.bin equals the fit at every 3c build"}, {"id": "Q2", "text": "the NPU arm holds its four contexts and the M = 8192 buffers; (low confidence) one XRT buffer serves runs in two contexts"}, {"id": "Q3", "text": "N-i8's T: 110-135 ms at M = 2048 and 430-520 ms at M = 8192"}, {"id": "Q4", "text": "report-only, cross-sitting: C-i8's TOPS in sitting B <= in sitting A; D-fp16 likewise"}, {"id": "Q5", "text": "speed at M = 2048: KILL for both NPU arms; N-i8 at 0.80-1.10x the CPU's best int8; N-bf16 loses to D-fp16 if D-fp16 is at least as accurate, else to the remaining rivals"}, {"id": "Q6", "text": "speed at M = 8192: KILL; N-i8 at 0.9-1.2x the faster of C-i8 and C-nb4 at the better thread count"}, {"id": "Q7", "text": "energy: KEEP for N-i8 at both M, at >= 1.5x fewer J/token than the best rival"}, {"id": "Q8", "text": "energy: KEEP for N-bf16 at both M; the binding rival D-fp16 or D-nb16, at 1.2-1.6x"}, {"id": "Q9", "text": "accuracy: the NPU wins nowhere; N-bf16 2e-3..3e-3, N-i8 1e-2..3e-2, D-fp16 2e-4..6e-4, D-fp32 < 1e-5, C-fp32 < 1e-6, C-nb0 < 1e-6, C-nb4 3e-3..1e-2, D-nb16 3e-4..6e-4; the int8 control holds at both M"}, {"id": "Q10", "text": "D-nb16 slower than D-fp16 at both M; C-nb4 at 0.7-1.1x C-i8's speed at the same thread count"}, {"id": "Q11", "text": "report-only: N-w4 at M = 8192 is 1.1-1.4x faster than N-i8's layer; its speed reading FAIL at 2048, OPEN at 8192"}, {"id": "Q12", "text": "every DirectML arm holds the repeat rule at both M"}]
+PREREG_TEXT_SHA256 f7fa696b608d22b7ad2a5b228b1b93d2e617a40b34385c1e85f361faf5fca6d9
+PROTOCOL_JSON_SHA256 5e533fca3b30902e5e349a29812047d2bc186381b5a4d28d1f2d13663468414a
+PROTOCOL_JSON_SHA256_BEFORE_AMENDMENT_1 a997580c4e04dbe8e1506d7033031bb098e696ef3d8e788a1251fa9b8292868c
+VERDICT_CODE_SHA256 6e459e560c838909295e554994c950ad3ce32cf0b15a150123ab5481d17dc549
+MODELS_LOG results/llm/llm_prefill3c_models_desktop2_20260924.log: sha256 20fdec5310e32263c79fe47b0767224f7016c93d186599ae4b7abf5f747e993a (CRLF working copy), 44f27691b502b002026ab936193119074847c6e6d4465579b85988931af43a7f (LF blob)
+DROPPED_ARMS_JSON {}
+  MODEL_JSON {"model": "fp16", "bytes": 188744426, "sha256": "cacd13e05587bb9045b9fc5d9952f2b8dcaca99cc65a668776391175faa3e73c", "seconds": 1.6}
+  MODEL_JSON {"model": "fp32", "bytes": 377488107, "sha256": "57ceee004ab471597b72e82f2ba2f64b3e8bf0543d2594fedf57cf6d85970258", "seconds": 1.8}
+  MODEL_JSON {"model": "i8_s8", "bytes": 94372636, "sha256": "072be6e51fb0f6437aac27233dceec0a8130bfb23fcc7e33c5ff59466a2675b9", "seconds": 1.7}
+  MODEL_JSON {"model": "i8_u8", "bytes": 94372683, "sha256": "343223937be00c54b9d2e657ca7d3a41e8098d262a4dc341ab3cfb45c7679d7e", "seconds": 1.7}
+  MODEL_JSON {"model": "nb0", "bytes": 58984042, "sha256": "c1ebc7d8204b4544b35220091635772bbf74c483ed14adb5c54da42bb121c227", "seconds": 0.2}
+  MODEL_JSON {"model": "nb16", "bytes": 53085797, "sha256": "75ff71f938c17f55631927592528950ca98d67d431b0c25f0c8229d3ee4a4083", "seconds": 0.2}
+  MODEL_JSON {"model": "nb4", "bytes": 58984042, "sha256": "83393758184cbfb02cd42bb5787af196e7835909f6d9128c0a8f4a6bf641a486", "seconds": 0.2}
+  Its MODEL_CHECK_JSON rel-L2s (M = 64): wiring check, own seed, not a 3c result; never cited as Q9's outcome or as any 3c accuracy figure (R6).
+INSTS_FIT_LOG results/llm/llm_prefill3c_insts_fit_desktop2_20260924.log: sha256 83851535c877222bb295818cc9eb01f30447da3a0545272587659b7fcf72ffc7 (CRLF working copy), e7883e2fd731e92b8ccbb8ec1873e73a98352c30c77a88a5e2eefe81f9feeb1e (LF blob)
+INSTS_FIT_JSON {"builds": 28, "exact": 28, "largest": 41232, "largest_builds": ["bf16 M2048 K4096 N11008 m16", "i8 M2048 K4096 N11008 m16"]}
+PREREG OK

@@ -1,0 +1,175 @@
+S1b PLAN AND PREREG: int8 per token (N2) serves the prompt's KV, and the continuation decides.
+Plan v2 (2026-09-24), accepted by the gate as the plan text. CPU emulation throughout: no NPU and no GPU runs.
+Tags: MEASURED (S1's committed logs), DERIVED (arithmetic on them), ESTIMATE. GB = 1e9 bytes.
+
+## 0. Why S1b (disclosed)
+
+- S1 (closed at c67d6d2) failed N2 at every prompt position, against R0 on 16 prompts: band L mean KL 0.06077,
+  top-1 0.8949; band H 0.05204, 0.9107 (MEASURED).
+- S1's band C was report-only: 4 sequences, the arm's prompt KV, then R0 over positions 2,048-3,070. It read N2
+  at mean KL 0.00962 and top-1 0.9580, 0.002 above the top-1 line (MEASURED).
+- That band-C reading motivated S1b. It is 4 sequences with no interval, and it upgrades nothing. S1b asks the
+  question properly, on new text.
+
+## 1. The question
+
+The user approved this configuration: the NPU only builds the prompt's KV, and the GPU generates exactly. N2's
+arithmetic would serve the prompt: the NPU runs the seven weight GEMMs per layer, and the 780M runs attention
+(building the KV from N2's k and v projections) and the generation (design v3). Does the generation then stay
+within S1's bar?
+- Set C, DECIDING: the continuation, positions 2,048-3,070. R0 runs teacher-forced on the arm's full
+  2,048-position prompt KV, against R0 one-shot.
+- Set P, REPORT-ONLY: the last prompt position (2,047), measured both ways:
+  - P-arm: the arm's own logits at 2,047;
+  - P-R0: R0 on the arm's KV sliced to positions 0-2,046, with one decode step for id 2,047. This is exact under
+    causal attention: the arm's KV at positions 0-2,046 does not depend on id 2,047, so the slice equals the KV
+    of a 2,047-id prompt. The arms' activation scales keep it so: per token (N2), per element (N3), per 32-block
+    of a row (R); a per-tensor scale (N1) would not. The R0 control checks the slice path.
+- The consequence: a set C PASS with a P-arm FAIL means N2 can serve the prompt's KV only if the GPU computes
+  the last prompt position (the NPU prefills 0-2,046, and the GPU runs id 2,047 as its first decode step). P-R0
+  is that hybrid's first token, report-only here; that reading goes to the user as the gate's design note.
+
+## 2. Text: new windows only
+
+- WikiText-2 raw test, the same pin, tokenizer and joined split as S1: 292,282 tokens (S1's TEXT_JSON).
+- S1's span is T[0 : S1_END], S1_END = STRIDE x N_SEQ = 2,047 x 16 = 32,752 (imported from S1). S1's band C
+  (T[0 : 9,212]) lies inside it.
+- Window w (w = 0..83) is [BOS] + T[32,752 + 3,071w : 32,752 + 3,071(w+1)]: 3,072 ids. The prompt is ids 0-2,047,
+  the continuation ids 2,048-3,071. 84 whole windows end at 290,716 and leave 1,566 tokens (DERIVED).
+- TEXT_JSON prints every offset and every window's and prompt's sha, and three asserts: every window starts at
+  or after 32,752; the windows are pairwise disjoint; no prompt's 2,048 ids hash to any of S1's seq_sha. The
+  prereg stops if any fails. Every later stage checks its ids against this TEXT_JSON.
+
+## 3. The measure
+
+- The arm runs the whole 2,048-id prompt in one session and keeps its KV. It saves the hidden states it is scored
+  on: all 2,048 positions for N2 (the L/H replication), position 2,047 for N3 and R.
+- Set C: R0 runs ids 2,048-3,071 with the arm's full KV as past; its states at 2,048-3,070 are scored (3,071 has
+  no next id in the window, as in S1's band C). 1,023 positions per window.
+- P-R0: R0 runs id 2,047 with the arm's KV sliced to 0-2,046 as past. 1 position per window; P-arm likewise.
+- The reference is R0 one-shot over all 3,072 ids. Its first 2,048 positions are the reference for P-arm, P-R0
+  and the L/H replication; control (c) checks them against R0's own 2,048-id prompt run.
+- The metrics are S1's frozen kernels (imported; their sources are in VERDICT_CODE): KL(ref || arm) in float64
+  over all 262,144 entries, top-1 agreement, the arm's perplexity on the next ids, the fp32 head (the release's
+  F16 token_embd upcast, its sha checked against S1's r2 build log) applied in the verdict. Per set: the pooled
+  mean, p50, p99 and max, and a 95% bootstrap interval over the per-window means (10,000 resamples, seed
+  20260924).
+- Scope: (a) R0 stands in for the generation's numerics; the 780M's runtime is S0's subject. (b) The arm's KV is
+  the hybrid's KV in form: k and v projected in the arm's numerics, attention in the reference graph; the 780M's
+  own attention precision is not modelled. (c) The head is fp32 here. (d) CPU emulation; N2's tie to the NPU is
+  DERIVED (S1's wording).
+
+## 4. The arms and the control
+
+- N2: DECIDING, on set C.
+- N3: control, REPORT-ONLY. S1's PASS arm through the same prompt -> R0 path.
+- R: REPORT-ONLY. All 84 windows.
+- N1: DROPPED (S1: mean KL 3.5 at prompt positions, 0.570 in band C; no branch of the pick uses it).
+- The replication, REPORT-ONLY: N2's bands L (0-1,023) and H (1,024-2,046) on the new windows, against the
+  one-shot's prompt positions. It re-reads S1's FAIL on new text and decides nothing.
+- The R0 control, in the check stage before any states, on windows 0, 12, 24, 36, 48, 60, 72 and 83:
+  (a) R0's own full-prompt KV, then R0's continuation, against the one-shot at 2,048-3,070;
+  (b) R0's KV sliced to 0-2,046 plus one decode step for id 2,047, against the one-shot at 2,047;
+  (c) R0's 2,048-id prompt hidden states against the one-shot's first 2,048 positions.
+  Each path is held to S1's C6 limit, max per-position KL <= 1e-5, with the sha-equality of the compared rows
+  reported beside it. Any failure is a STOP: a pipeline defect, not a verdict.
+  For the record: S1's C6 was 1 sequence (R0 chunked against one-shot), within the same limit. Band C's R0 row
+  was 4 sequences, 4,092 positions, with a mean of exactly 0.0 (BAND_C_JSON). It was not C6 on 4 sequences.
+- C5': N2 runs window 0 twice, and the two prompt states' sha256 must match. A failure leaves N2 INCOMPLETE (as
+  S1's C5), and the states stage does not run.
+
+## 5. The rule
+
+- Thresholds, S1's, unchanged: mean KL <= 0.0123 and top-1 >= 0.956. They were anchored on prompt positions
+  ((c)'s C0-H4), and are carried to set C unchanged.
+- Set C decides N2: PASS if both hold on set C, FAIL otherwise, and FAIL on a non-finite value. NARROW names a
+  threshold inside the 95% bootstrap interval; it is reported and changes nothing. The point estimate decides.
+- Report-only, with the same PASS or FAIL wording marked report-only: P-arm and P-R0 for N2, N3 and R (set P's
+  top-1 moves in steps of 1/84: 81/84 = 0.964 passes, 80/84 = 0.952 fails; its KL is one heavy-tailed position
+  per window); set C for N3 and R; N2's bands L and H.
+- INCOMPLETE: any window missing from set C for N2 after one re-run of its child, or C5' failing. rc 4 (the
+  memory gate) is not re-run: the stage stops, "memory gate; not a verdict", as in S1's amendment 1.
+- STOP: the R0 control fails any path on any of its windows; a frozen hash, model sha or text pin differs; or
+  tools/hybrid_s1.py's blob differs from c67d6d2's.
+- The verdict names N2 PASS, FAIL or INCOMPLETE on set C, with NARROW, and reports P both ways. It does NOT
+  change the pick: S1's pick, N3, stands. Any change to the hybrid's NPU numerics is the user's decision, made
+  with the interval in hand.
+
+## 6. N = 84
+
+- Every whole window. A re-run is a fresh sitting on the same pre-registered windows, so a reserve has no use.
+- The spread, DERIVED from S1's published intervals (half-width x sqrt(16) / 1.96): N2's per-sequence top-1 SD is
+  about 0.013 (band L) and 0.012 (band H); its per-sequence KL SD about 0.010, a CV near 17%.
+- Set C's top-1 (ESTIMATE, assuming the continuation's per-window spread is like the prompt bands'): the SE at 84
+  windows lies between the binomial floor sqrt(0.958 x 0.042 / 1,023) / sqrt(84) and the spread 0.0125 /
+  sqrt(84), 0.0007-0.0014, so the 95% half-width is 0.0013-0.0027. Band C's gap to the line is 0.002, so a true
+  value near band C's would likely be NARROW even at 84 windows; 84 is all the text allows.
+- Set P (report-only): at a true top-1 of 0.91, the binomial SE is 0.031, a half-width of about 0.06.
+
+## 7. Predictions (they decide nothing; PREDICTIONS_JSON scores them mechanically)
+
+- Q1 (set C): N2's mean KL <= 0.0123 (band C read 0.00962); its top-1 within 0.956 +/- 0.01; set C NARROW on
+  top-1. The side of the line is not predicted.
+- Q2 (set C): N2's KL falls with position: its mean over 2,048-2,559 exceeds its mean over 2,560-3,070. The
+  local layers' 1,024 window holds fewer of the arm's KV positions as the continuation grows; the global layers
+  hold all of them.
+- Q3 (P, report-only): N2 FAILS P-arm (S1's band H top-1 0.9107 at prompt positions).
+- Q4: N2's mean KL orders as set C < P-R0 < P-arm. P-R0's past is all the arm's KV, like set C's first position,
+  while set C's mean runs over positions whose local window holds less of it; P-arm adds N2's own GEMMs at the
+  scored position.
+- Q5: N3 PASSES set C, and reads within both thresholds on P-arm and P-R0.
+- Q6: R PASSES set C.
+- Q7: the R0 control passes all three paths on all 8 windows; (a) and (c) sha-equal on every window, as band C's
+  R0 row (exactly 0.0) suggests; (b) within 1e-5, its sha-equality not predicted (a 1-id step may take a
+  different MatMul path).
+- Q8: the replication FAILS N2 again in bands L and H, with mean KL in 0.04-0.08 and top-1 in 0.88-0.93 in each.
+- Overall: N2's set C verdict is predicted NARROW, its side not predicted. The pick stays N3 either way.
+
+## 8. Checks
+
+- tools/hybrid_s1.py: every stage prints its blob (git hash-object) beside c67d6d2's (git rev-parse
+  c67d6d2:tools/hybrid_s1.py) and stops unless they are equal. The prereg prints S1b's VERDICT_CODE and the list
+  of the imported S1 sources it hashes, each with its own sha256.
+- Models: S1's R0.onnx, R.onnx, N2.onnx and N3.onnx and their data files (int8.onnx.data, bf16.onnx.data,
+  base.onnx.data) are reused, not rebuilt. MODEL_PIN holds their sizes and shas; the prereg checks MODEL_PIN
+  against the r2 build log's BUILD_JSON (and base.onnx.data against S1's SRC_PIN), and check and states hash
+  every file against MODEL_PIN before any session.
+- Text: the section 2 asserts, and TEXT_JSON against this prereg in every later stage.
+- Memory: every heavy child gets S1's 15 GB start gate and 5 GB watchdog (rc 4 is not a verdict). One model per
+  child. PRIORITY_BASED sessions (S1's session_options). The states stage refuses below 40 GB free disk.
+- Completeness: 84 windows x each arm's P-arm state, P-R0 state and continuation, and the reference, each pinned
+  by sha256 in the states log. The KV is deleted after each batch, and the log says so.
+
+## 9. Tool, runs and logs
+
+- tools/hybrid_s1b.py imports tools/hybrid_s1.py read-only. VERDICT_CODE_SHA256 hashes the sources of its own
+  VERDICT_FUNCS and of the imported S1 kernels (S1_VERDICT_FUNCS: log_softmax_rows, logits_chunk, kl_top1_chunk,
+  band_rows, bootstrap, aggregate, max_kl), plus verdict_constants(). The blob check is the second guard.
+- Batches of 8 windows (the last holds 4): for each, the N2, N3 and R children (prompt, states and KV), then one R0
+  child (the one-shots, then for each arm's KV the continuation and the P-R0 step), then the batch's KV deleted.
+  KV per arm and window is 570 MB (MEASURED in S1): 13.7 GB per batch, about 148 GB written in all (DERIVED).
+- Runtime ESTIMATE from S1's MEASURED states: about 120 s per window, 2.8 h for the states; about 10 min for the
+  check; 35-45 min and about 5 GB for the verdict (about 430k scored positions).
+- Logs: results/llm/hybrid_s1b_{selftest,prereg,check,states,verdict}_desktop2_YYYYMMDD.log, UTF-8, the profile
+  path scrubbed, never overwritten (--tag for a re-run). Every RAM-heavy stage is a START REQUEST, confirmed
+  before it starts, and a FINISHED after.
+
+## 10. What S1b would not establish
+
+- The 780M's generation numerics (S0), or its attention precision.
+- An NPU run: CPU emulation, and N2's NPU tie is DERIVED.
+- Speed or energy.
+- Other text or tokenizers, prompts other than 2,048 ids, or continuations beyond 1,023 positions.
+- Free-running generation: the continuation is teacher-forced.
+
+PROTOCOL_JSON {"stage": "hybrid S1b", "plan": "v2 (scratch sha256 1da1e402)", "arms": ["N2", "N3", "R"], "deciding": ["N2"], "report_only": ["N3", "R"], "reference": "R0 one-shot over the window's 3,072 ids", "bos": 2, "prompt": 2048, "s1_end": 32752, "win_len": 3072, "win_stride": 3071, "n_win": 84, "set_c": [2048, 3070], "p_pos": 2047, "bands": {"L": [0, 1023], "H": [1024, 2046]}, "q2_split": 2560, "control_windows": [0, 12, 24, 36, 48, 60, 72, 83], "control_paths": {"a": "R0's own full-prompt KV, then R0's continuation, against the one-shot at 2,048-3,070", "b": "R0's KV sliced to 0-2,046, then one decode step for id 2,047, against the one-shot at 2,047", "c": "R0's 2,048-id prompt hidden states against the one-shot's first 2,048 positions"}, "control_kl_max": 1e-05, "t_kl": 0.0123, "t_top1": 0.956, "seed": 20260924, "boot_n": 10000, "chunk": 256, "batch": 8, "min_avail_gb": 15.0, "watch_min_gb": 5.0, "min_disk_gb": 40.0, "session": {"graph_optimization_level": "ORT_DISABLE_ALL", "intra_op_num_threads": 8, "execution_order": "PRIORITY_BASED", "providers": ["CPUExecutionProvider"], "prepacking": "on (ORT's default)"}, "text_pin": {"repo": "Salesforce/wikitext", "revision": "b08601e04326c79dfdd32d625aee71d232d685c3", "file": "wikitext-2-raw-v1/test-00000-of-00001.parquet", "size": 732610, "sha256": "5f1bea067869d04849c0f975a2b29c4ff47d867f484f5010ea5e861eab246d91"}, "s1_commit": "c67d6d2", "s1_build_log": "hybrid_s1_build_desktop2_20260924_r2.log", "model_pin": {"R0.onnx": [432992, "a0a7d785e8dafb387189d76e2e3aedcd4425a26a130ec0142b1e13e0049b1904"], "R.onnx": [432992, "b960a9193a9ab3e19fe1d823bf828ae52523eb60a3349da27011bc6e7ee1b94e"], "N2.onnx": [903332, "7ac950ad4978205e3afcdde62674b09b8efc0787374c4c456810b9b8b626d1ac"], "N3.onnx": [462635, "c3ad9f64d469bf7c8c148062bdc26c5d1e9269579049c8e33764d78a63abfef6"], "int8.onnx.data": [3216719872, "ceef81a2b70f4651b83bae28e04d18edcddebb26bc409492653cf477de338a5b"], "bf16.onnx.data": [6417285120, "5499847b8e9abe29d0ccf8b645424367a961a180d23d44d46adef0570978a1be"], "base.onnx.data": [7644053504, "11edd445f01760ab1d44d8197fd75e40ae805b968522848d101373c804fb8380"]}, "saved": {"N2": "all 2,048 prompt positions", "N3": "position 2,047", "R": "position 2,047"}, "pick": "N3 (S1's pick; S1b does not change it: any change to the hybrid's NPU numerics is the user's decision)"}
+PREDICTIONS_JSON [{"id": "Q1", "text": "set C (deciding): N2's mean KL <= 0.0123, its top-1 within 0.956 +/- 0.01, and set C NARROW on top-1; the side of the line is not predicted"}, {"id": "Q2", "text": "set C: N2's mean KL over positions 2,048-2,559 exceeds its mean over 2,560-3,070"}, {"id": "Q3", "text": "P-arm (report-only): N2 FAILS"}, {"id": "Q4", "text": "N2's mean KL orders as set C < P-R0 < P-arm"}, {"id": "Q5", "text": "N3 PASSES set C, and reads within both thresholds on P-arm and P-R0"}, {"id": "Q6", "text": "R PASSES set C"}, {"id": "Q7", "text": "the R0 control passes all three paths on all 8 windows, with paths (a) and (c) sha-equal on every window; path (b)'s sha-equality is not predicted"}, {"id": "Q8", "text": "the replication FAILS N2 again in bands L and H, with mean KL in 0.04-0.08 and top-1 in 0.88-0.93 in each"}]
+TEXT_JSON {"text_tokens": 292282, "s1_end": 32752, "offsets": [[32752, 35823], [35823, 38894], [38894, 41965], [41965, 45036], [45036, 48107], [48107, 51178], [51178, 54249], [54249, 57320], [57320, 60391], [60391, 63462], [63462, 66533], [66533, 69604], [69604, 72675], [72675, 75746], [75746, 78817], [78817, 81888], [81888, 84959], [84959, 88030], [88030, 91101], [91101, 94172], [94172, 97243], [97243, 100314], [100314, 103385], [103385, 106456], [106456, 109527], [109527, 112598], [112598, 115669], [115669, 118740], [118740, 121811], [121811, 124882], [124882, 127953], [127953, 131024], [131024, 134095], [134095, 137166], [137166, 140237], [140237, 143308], [143308, 146379], [146379, 149450], [149450, 152521], [152521, 155592], [155592, 158663], [158663, 161734], [161734, 164805], [164805, 167876], [167876, 170947], [170947, 174018], [174018, 177089], [177089, 180160], [180160, 183231], [183231, 186302], [186302, 189373], [189373, 192444], [192444, 195515], [195515, 198586], [198586, 201657], [201657, 204728], [204728, 207799], [207799, 210870], [210870, 213941], [213941, 217012], [217012, 220083], [220083, 223154], [223154, 226225], [226225, 229296], [229296, 232367], [232367, 235438], [235438, 238509], [238509, 241580], [241580, 244651], [244651, 247722], [247722, 250793], [250793, 253864], [253864, 256935], [256935, 260006], [260006, 263077], [263077, 266148], [266148, 269219], [269219, 272290], [272290, 275361], [275361, 278432], [278432, 281503], [281503, 284574], [284574, 287645], [287645, 290716]], "window_sha": ["935aeffd45031803a859cb5458d0665a943aaaa0c4479c6770d1fe3359c5386f", "6b5e6b3799896060111f515c9188fe606446ebab1b7c06afa9840409304d60a5", "56dee586a9226cbf58fe0caa355fffa413a5e7a9f80b01b4e50dd2a57543d335", "d2012e4a5de9ec5c7f9b88dc40581d8e304d35632e174791ca0629d806d0b265", "d2402ad6303cb0bc68371a9a9f385e1cb24b0862b6b579b9f299430e8c52f8fe", "e1f797079a05d28912e12f6dfa0975d606da7633e6b9e5a8e0f916db10ac0c1c", "52d1de09c04eb2a2ee44015e942e2584e6a56ea7e5b4cc689a45b9801358da7b", "5f0d10829a4978258c676d82e2c31c2ed5efa4f3e2f33594c1dc98e47af77767", "77009afb54f78da9be4b0edaf560899c464a69a904bf59facd98b3678e288af7", "e000ad9efe0a5198076735d577cfc7036b817bba91a9fa353f20ea0bce8b49e4", "9663df95754dea169f0ce98c7f78d26e9b012835906351b140ff67559fe57fea", "fd9c41fd981010cec6444c21b655fc3c072f4b017e9fdfc1b99d19dea98cfcdd", "f9104149202039c32a4707faba3b4a04c33286072b5afe6bd4d387abff7b454f", "32a40fa2300c8a3afa4e55453cf3b27f949ad3564440e439af6c4dddcbc56fba", "920cb4ecc3ba333189341a5af7b93f540d7c3aad13c742ca7f763388bdd7419e", "1dcb90ac9adcc06e6aa41c376b5d3f6cf87d065fa8feb373e4f50b6074b38fbe", "cba34917b566c92d28c329ef73e945694556c907c246068f46b9c435f920d027", "3494255e34d66ff411fcb04e23ec4053032a63a03b02ccb7146a92e25a27696f", "e99fe3eacdcbf3985d25433728de80f5dbec36b79a55aa467faa7224a32480af", "3759ab06ae2b50ff1e6439e9fdd87c4ee6d3baf0be02a97a5630573f8bceaf3b", "ed67853aa073456c086c8a68d50b20437c5e6883145c85fd92e9d80d8833c389", "3b66aa7182caf5ce91863bdd4b99f30ccfe239d3dee9832dd8f08889c5215560", "5e3f09287286456bf9b97be8d7f5e46fa8ea4770c3bdeecb328e60777778635f", "98b4198c4486d25e337358582a558365224848fd8aa6d50656e91ecf91501611", "533ff2e8ae0c53a43ef2bde76b1b0d345f66c87670e3e6b14c9fae9a14296b8d", "4ad9e3970f4431edc909a4ff969246540939d17bc919afb471f4bd3ad09c3740", "7db324acc3f66ffb9928189b08ac511408d1a1cf116aafcb6eba823ebcf9b3e6", "b5060ed5a319881a23f23399cc5c7b45dc6213b124586d85ee1c07a2293f3781", "ff33b8b41e6c0410409842b0180e5b789a3eac3a4daf5e46bd99bad18917a09b", "2a68a466690662dfd7e37b5d28756b9d86c4393a164633fb65417f2bf4e26972", "c986ec192a4150087b81d1dc1e5a7e6f320098b085ebe851758f128354698d63", "797d927209663997c64622953cb6e45e76f74178658e137752f46c5b4eca52bd", "3ee372d1b01147d6a2334d8bd87bdae0542c0f2cba6715ef654ccd1992674de4", "ef1564e6ef9d012464d2b32f850ce73cc32c8e762dbedac704ed6f202137eb1b", "c82d24010dd8b736810f9e341db6398b81f29bdd3a48115451c6bc307ddb18e6", "63f6af7e2e966ce357d0ec170b3eb2416dfbf98adbca1cf90873f2f556d76c92", "765a568c5b0ce3e6214c72d345dace16008c5842b3e22d34783013f144c2ba75", "e1b4f12b9e5eddd373e9ece91c5e4266ca33bcf96e8cde47bf9c868aa50b237f", "a21433a1d9687c09332b75353c2a752b6e67bba8f76ca000f220e549099b1133", "0174d56090fe7ad4ab8044f541f93ccd04da5e6a61fe878706e61f4edb0a21a2", "0fb7dd8849e4298bc44624708e790d0447712a15455d975e8c5a12ce604283ee", "c5315856cb821afeeb6d48d0242c6bb1cc27d824df1ff2408d6b43a6b4ea8f13", "549a0c9325c506f0f31d000d6257734b4c2f2d457722e6b1e1e9362fc53e77e6", "f96de8223c11e44bf59b869b00c07097467dd3881e40a8c20b6e4831c97051f5", "a16b1cd685e07db58cbed074879edc01454c544c949e05d3db97b8fe73833fbb", "cd68f423affe71595599878be4b2a85737f7bf8432c0111aa99be709a5eac9df", "3bd4694fe0fbab05fa75247be402a6e03bddcee8ab78366d7cdff4322c15e09b", "dd80f19e86acec7231b0ef4e16b3e24c20108da654e89e1ac6d0c13c277b84cc", "da1f41655fc3c6d50b1b50277b960b717acf7835ffd6e15e82db3c8e88cb0c7d", "7b1ea5a46b0226ee4dcf8b08316e67daad3d6e7e9df2c0d48da8112dae0f996c", "42e6089095abcd7a2d50610e05473bc374f10b152ffb85890b9747aad5f287b1", "979e0d83a7c4a514fe233554f942a60116d8d35021b14d75ba0fea019d6d461c", "fd212ab055a33767e0aae2e1238efff68b4fbd81130c5182243d4ebac61b6d52", "75502c12af777727c0dd2f94027e64f0cc6645e6b7459979dcf007e64bab3525", "90085ee14d2b3d55e510e9037c0e9f2be597dd249f733119afea5ff150f5c6d0", "384a7cb571097c3ed918f4513782177dfa4cee36f5e0f8d9cf3644d1f3e32b0d", "b84f4d36583a05cdd6470ef96ea1063cbfd796733dce2cf547abef60c623c5a0", "9c1290b2d4dcd0e3d76b0ad1e7dbe2b4b5c811ff8941343a2ffbcc0f9a0c3729", "a76430178d868e7e3bcceaaf687349ad70474ee4ca119471ee3a185fae38b704", "9040f09f33412a59683d6c58d65ff7ac4ce75fe0e26184b07883032525ff8442", "ab2d4fd5507cd0d984d7e1741a60a2338e9a4174c3e16caba45bb5b3a18d5ddc", "7a1782ceff43629dde26c733eefd908caaeb7038671b7c648ca548b70c1162c8", "d26a7f2b7a4af94718a4171495ab49f174538148d536a00f4cc680c948fe6517", "78447e183ee816e603fc0b3a4466767b751a80a49a290780f6e7b2e251bfd25a", "0462cacdf2e5b5007a013c4905b957f837da8d61e89f78fabf383c701e94f758", "8462a0387fb18a20fff385f9bed6d90e0c703bec35c1c5b84c2f8061c97ba361", "1fc6e1effdd4823d29f33906f8662bea3c68a4e5e4abf00e11a523fcd0632ce6", "93a3ac68b56d52fd52588317612ef4eaec77b56a7f9ce9c370fd2d1060a1c827", "addf8fc91b1584c5f40da89cb14bc096c987f3269605e6ea6d412869b14169c0", "75fc8d1becf228e861012b8391562d6348d4c42588336b7253aaa773867208bc", "8a18b6d964661ef18957fa447c177f9d39721424cfa766e1acdd9988f3eae74e", "a632db9844673f9e7c0453a4aa5f0082fa8e8ba1e89ce9e4fc728bbfd2236ea5", "f714114e1cd4e12f7481774b97135e15cecf47937f4f2f460d4b33588bc9c772", "f7a0d43d171ebf1a4c13dea3255ed8158e90317bbc17f7262d67fecd7475adfe", "73ff6496d839708e7440f49d16d99ca1e6ffa363f884d297d4a57b48e4e3d257", "81bb63f2153e85843c3375a3930abe09476e336098ca078564bce9c5ae40dd27", "7e14e13e18f1c169f48229f6bed03573f04554ab178f245f042060bc77ab178a", "900702fcbf352fddd6c4aad4af59e6b19861c98288de8f9570f5d1b6781d146d", "c1abb0ea1ff6b39d8a03f49e81d58d1edc5e933f5f18b1f1608c322a6486d468", "e837918bafcd964e7b86e13f3dfabd3dc197f213cb3f0180d7011f6edf492113", "89fbcaaa922510b88f17693aecfa6c17cc9ad5a83f1308dcf58b31fedfb97f6b", "4f86e786a685f0048f8df98a0df93ee65b4634ff40f1ef4df93aa183b11faf45", "21797d8ada3c0464e90e22bf03c36122c04097342afdc9bf068991354d7be023", "3cfafe5ee8ebfa3ba811f0469df746e6342fcef91bc1ff4b9b52255c748c2a63"], "prompt_sha": ["afe55d7e981cebb8270cbef65c066e37746dce25744a8d21e9424569e0f6a86b", "6a544800fec589c4ce841599f4f5b14264aa89b3fe24197e3f151709a8359021", "c39ac0e609aa8cb796653fe28e93076bce3d9081564ceceacfd76276d07d4c95", "5cd23b2ad8101b6d570c0d3aa2a580933a6a7d1031dcf54656d8b1599aec17c3", "53cb4503862c1940d7598231e2da4c3a9be07bb56ed0bb0550824ba12c0afb70", "28f0f0ff671cc1a06a11c0f4306344b2a2439245e01bc1d60e3c796bcb260963", "889fa08cb8f857dad3611f98a19707e5dde8072c95cccbf2299d5b9b859ddf14", "4877d3765f1daeac453f75358cf4d8a030a9b194f55d786554b3a9d3dcfdf64e", "455abe3c73db1f1e4d594a12118203481b58c126a359f793c731172cce407782", "a3e6a9c5cb4ba75daf7eb861a38e64096c4f29cfb1e3029627eb7f1a3fcf8fe3", "88ec6c9140b51b73122aa575d58edbc7c1c8102a4740b4d7d1bcdc7cc590767b", "c62d0000c8fe1e9919fb86548444b6c2c1f1110023dcebb6279f735b117ab68b", "dc1e1cd79dd14571e57223579c0358e0bb9cdeb0f3ef04625b32eabfc8219207", "4b0e07c3e19a6542e0202e1aecc38517977b6867c49890ff549d1e83accb9eb7", "fc616c767f30819b12960d99e2d8a9cd40c86138df6e8f04d0c57908236cf575", "484d7bb8e170ce7a52c1c53ebb16b733ba66ef2bb72b352a620b26c7d5fbb831", "03e1626893cbdc4d4f4516f4fa515fb740e852e632a06bbdb2a6faaa1bbcc2ce", "0ff19ac1b3d2fe248c84d0bf56986830b7d1c076133e9ed9e9aedc0055121d10", "068e89ac889a305494fa089c4042709f9f3ddea8e7cab3a730ae6587391d611e", "fa2096b34fffa0dcf5714080f3935e078e131aa1b4dfeccba4887593e3de6aeb", "a3ef2003d9869cc0661b80e21f2b57a8fa766f1c87ec0aff515bd6fa7ef0da30", "01563575a1b1f38472df67c351f622181dfb6b13d776374819083641b9a934b2", "ab51b10811093c7006830863cdfb73af6d512735116d458d89e228d8e241ce8b", "6e676b6c5f6859db525965a8f8a92826f3e8518d511f83f1682cbd1728c8c41c", "dc189e3fce73a5f128f32c596c537c60d9af57f5d18877dcaf7a54c061fd631c", "d569cf73d41ae46ee285eb410e5e658d866a425d7a75ae056b49e42b9b08ec59", "1667af5286be9dd4d07b074870aa0a98d1aa062a14f87c1b1314a97c0a06fc2c", "f82f7b36b59cfa817bca3ac8cfc6c976db66bc3e34129924a2e16d9f3614f431", "9fba451123765bf691d347f8983e966612b88513f7d78a43e1a2385d21cc3384", "f6c003b9adab24a5f95512d103ffc24cd934495edba7e528e5c56b210510c610", "9bdd6bd25c1b4c11e74409b41e485cb512f771b9c8edde4788d8e8ae939ffb5b", "637d8ca1f279c31cc3c60359cef1d0a4167c425ae2294319a3bff92c1db17720", "873dacdec9e56b2a03a545f7036bf3aa890c330b7aeafb53ccba0971da23d8f0", "4c31484f576856fbe6daaf2125b2efad09ad628fc5c3a61dbeee18a51da9269d", "6c1f255cc16eec614702768ccd45377251b4716f52baa273b6d396589455c1db", "6171bfa39d900d54abb8bf176f73c15d18da95d0be6bdda5ac27bf85211b9f7b", "ed69e0ae798b39d2f6014b2ab842b12ecb98e7d5fff7826860778968f4766d58", "d5216355d14b910d55da30d009d0ef33161b18a0e467479a70f759900ee0a791", "fc8d9bde4bb2ee776234c624cfe4be53715fd926471229dabd30abeb1ebdaef5", "dcceeadf17e01001bfeab0af6959de9e6a3575a810a37dc9166a93fc520e2bbe", "a0a61d24492e30653911e999761b060e214f47c22ca79fae16e6f1cc7f3609ba", "814820daea20ac98b154105f94c3c6983c2ee243008384e54b94352b66e5e5de", "d564db87e969bcdce64732a46cb0ccb4a86df0cedc66d030204806002c017a28", "13f67cba6483de2f78a8c6fb842f27c8861afbd02f6ad69ef1bf20d6680ad648", "25ca92578306fdb9846cdccfb8b0ebd3a19c0fb54ff175b85e9a299a3711b5c6", "314bfee117c4c243a7227d1c95af7a1d225872ad73293ebbfbd607374f50394b", "8c5e24396dc7d5fcf3560127fc76683a930b4ea7a59ab5226cfb8dfa23b06403", "8bfddea5f8ddbd6d6b0aeaf8e81d6f40abd15d020920fa5da4dea96405ea7c88", "2a0cc648da786c70de24cb9f992573646dd31c7cd6ee881d58e585f84ddb620e", "6aeaf717abdcca510102efef7de8bf5126e3cf2067fea71ecfea3bfda5d7acf7", "bd427c5f5138aafbe83252e4a519823d63c530062e7f159911cf282328be9917", "b883c96d2e94e16946cf52c128d2093bf0ff4d8a4c289c066379e4fb9bb8a1ca", "3c8edeee53abaec58a0d4c265255cbb549d0d632d07ad9391b7c1953f8883b93", "d8680660717b61474ab4d4ba6ce0fa9a96af1da6ea34389f223c9c04442845f4", "5f14280001ec3c94d366ef760c5a2b53de70fa520f28a358ebe53016ab757cf1", "d8ce6ba21a1f838e1e835192f2232ce3d1debdfd4fe50eb00eee04e0f1f2dc57", "e348505d50e226fcee0adc10da02421281aa4cb6aef1bea354f16071744b5380", "c6cf3379121c077dcbf3f27657b3d187479a6fc98732d56e9ed12dd1a3c93224", "d951df8ad73705ed2b89d517d546aa8cc2543431c142d7b5136c3451b3cb2081", "b069fdee3aa63d1a017e4d38857835d4fa21e504de171a95924f5eafa6157735", "02d0eeef0b3b74eb331b5e72f8588c765fcf0dd00e607a731ab7184b6925e3c0", "10422f8632b8dc02c1dea36366b3c4edf61e53c082242ebe489bc1c557299c7f", "81d26b3c89c395cb4d85807098c6ecc8a12fa6d8644425bce594286f70c663e4", "a8903c04bef1d7b4eb58b0a94b2c76c0831a7a8761367458462e86fc15b7dfa8", "bb575cec783911e06e80dacec56693ecebd49517a4db0c99ad69c4152732e912", "76ed5549304741d42a5971b9b0fddeb4c929a2390b13fbe1e0132ae3d25a64d6", "d0835878d9640e88a7393c4912163e6a110844a471e3e30aee709a96bbba8e2f", "f084dbbb7b4436208200c771732cb943987c4335c032c97bbb5459c108fc64f6", "6f887eb98832b2c2de343a386d34c533a4d659feee9a653f955d776bf05e3712", "94d6f1e8261adae66a95a771607fc32d11f6dc8f79b6b22a25313d4bdc749b48", "8b6a785cad229275f04685a36be338def550699c17cbd4aa2198c19d2c0e3f7b", "7ae92b273ff5d285ecf0183e8a6efa618a7b46f06a81c6d95306e9d7d48fbd7a", "cb5bf075ad1be36b5239d2276bfb9cd84a44435ae35824e187021266ee70dabd", "3d1fa2415248307a3f224675ddd4901418b9c17c7c8c185e149af78d7c94b88a", "649e60eb4ea0a3a023c240546af2ae51444cb5f48b2a6ef3665f89fe93d8e634", "ce455049081400857476458cef95575498be0c3be9b106d7171a04445d6aa336", "595ae9d88b7028697ab9b24cee420c14df99b67f1c9d90052e030b3b841c7c2c", "74bfe0e3ca903380b9ee8baf9e01fc8862e48a7453ef49b6ea419aab151f53e0", "cef52ee1dee55560bb1d34b5a815ba1b97b0d4657664eabacb1c877e96c14d55", "8d77137623e03865711834809352e108849a1ffeb9bde5f8079b389209a223ff", "cf9ab734c9134dfed7067ea30f0070118a776be4c54543996f4cc52d655e9973", "e008b2da9dcbdeb9334282f73f60302572023a4a27642d0d76979c2740ad9ce1", "79d135d77892321cd981ac8d2b9a64523d45cfd9e4f3a119f2a8042bd1ef1ab8", "253b3c609a36068cfd11878b4a1cf0df6640ac0e9799eac618fbd6ab3f2b2704"], "all_sha": "3268926e4affa9756fefe00c217c725b18a7deca0a723c71fa8e7b8c2595e433", "first": 32752, "end": 290716, "left": 1566, "asserts": {"start_after_s1": true, "pairwise_disjoint": true, "inside_text": true, "no_s1_prompt_sha": true, "ok": true}}
+TEXT: 292282 tokens; 84 windows of 3072 ids from 32752 to 290716, 1566 tokens left; asserts: start at or after 32752 True, pairwise disjoint True, inside the text True, no S1 prompt sha True
+MODEL_PIN_JSON {"source": "hybrid_s1_build_desktop2_20260924_r2.log BUILD_JSON (base.onnx.data: hybrid_s1 SRC_PIN)", "source_lf_sha256": "cf02c7915dc8c4397d71bf2a2951eb3a32c92a5b7995580ebd332eda0de4738f", "equal": true, "files": {"R0.onnx": {"pin": [432992, "a0a7d785e8dafb387189d76e2e3aedcd4425a26a130ec0142b1e13e0049b1904"], "logged": [432992, "a0a7d785e8dafb387189d76e2e3aedcd4425a26a130ec0142b1e13e0049b1904"]}, "R.onnx": {"pin": [432992, "b960a9193a9ab3e19fe1d823bf828ae52523eb60a3349da27011bc6e7ee1b94e"], "logged": [432992, "b960a9193a9ab3e19fe1d823bf828ae52523eb60a3349da27011bc6e7ee1b94e"]}, "N2.onnx": {"pin": [903332, "7ac950ad4978205e3afcdde62674b09b8efc0787374c4c456810b9b8b626d1ac"], "logged": [903332, "7ac950ad4978205e3afcdde62674b09b8efc0787374c4c456810b9b8b626d1ac"]}, "N3.onnx": {"pin": [462635, "c3ad9f64d469bf7c8c148062bdc26c5d1e9269579049c8e33764d78a63abfef6"], "logged": [462635, "c3ad9f64d469bf7c8c148062bdc26c5d1e9269579049c8e33764d78a63abfef6"]}, "int8.onnx.data": {"pin": [3216719872, "ceef81a2b70f4651b83bae28e04d18edcddebb26bc409492653cf477de338a5b"], "logged": [3216719872, "ceef81a2b70f4651b83bae28e04d18edcddebb26bc409492653cf477de338a5b"]}, "bf16.onnx.data": {"pin": [6417285120, "5499847b8e9abe29d0ccf8b645424367a961a180d23d44d46adef0570978a1be"], "logged": [6417285120, "5499847b8e9abe29d0ccf8b645424367a961a180d23d44d46adef0570978a1be"]}, "base.onnx.data": {"pin": [7644053504, "11edd445f01760ab1d44d8197fd75e40ae805b968522848d101373c804fb8380"], "logged": [7644053504, "11edd445f01760ab1d44d8197fd75e40ae805b968522848d101373c804fb8380"]}}}
+VERDICT_SOURCES_JSON [{"name": "offsets", "sha256": "cdc0a477a1dc60e2bb9d96311fda37d1a5d66d34c805b0257139667b9b17b299"}, {"name": "window_asserts", "sha256": "ebe40a25ce6d78be5d12c79fcf1b82a66648e8fc39033905d765a7426bc9e9c2"}, {"name": "slice_kv", "sha256": "c7432c4d201d9c1b73019e20a094e13a81db4349d41e8052b8e732cdf9d82dba"}, {"name": "window_metrics", "sha256": "e6ee43c88db7b8add1852a2130f5b305e8ce83b53e9cf8396c3652dbcd16af72"}, {"name": "set_aggregate", "sha256": "6828704173321db261cfbd9d8398ade56ed8b2e6e26fb145dbaf3a46dab25b24"}, {"name": "halves", "sha256": "236af8cceb6e1d40557b3e3cba8f6eecfb9d892ec2871bc1b0a114f59f524a72"}, {"name": "rule_set", "sha256": "7376df0c399c174baec0a2097b1d4a9d355a43862c70047c3ae530f6e3c93286"}, {"name": "control_outcome", "sha256": "1234573c5bbd6f3f3b59a0abee101ed8c8e806910486918892034159de542ae3"}, {"name": "outcome_n2", "sha256": "fe0caf55b3c49495c04f55042f3dea0124b41384d36acd0904634b541fde804f"}, {"name": "score_predictions", "sha256": "a8fcca34a82ccf3cff4778df71e79ce3b15cf810279015cd44dadca6e014cdfd"}, {"name": "hybrid_s1.log_softmax_rows", "sha256": "b36b24ba49bad66aeea1c5f0eb1545bc6734e2ba451f7381c19447f05949d805"}, {"name": "hybrid_s1.logits_chunk", "sha256": "c2af2f923d6682771819cc04ccd0b1af93be667c091961bbebfc526fe5211497"}, {"name": "hybrid_s1.kl_top1_chunk", "sha256": "b7d57aee6db2f5f5889a6a4a1ded8bf5b73a037a0c4ace23b47775806e017bbc"}, {"name": "hybrid_s1.band_rows", "sha256": "6e13864331c5b3c152e7b3a9693c5cf63f35ea0504bdb1c877790a834d5c7f10"}, {"name": "hybrid_s1.bootstrap", "sha256": "bcc8a04df2c22cfe54ae55347aafff72b16ac7c9a8d492b93018a4469372ff73"}, {"name": "hybrid_s1.aggregate", "sha256": "cccb3a6f9cb95fb1ce557887c8288f1ee144fd7f380113a7dfb15c5ca0c2ae76"}, {"name": "hybrid_s1.max_kl", "sha256": "35d7845e463f1a99f701dcbd059305e26f425ca0d0ca234e01f739f935d8012f"}]
+S1_BLOB_JSON {"commit": "c67d6d2", "blob_at_commit": "51fd6829fee90a338599da20e8f273d0c1bfabf7", "blob_now": "51fd6829fee90a338599da20e8f273d0c1bfabf7", "equal": true}
+PREREG_TEXT_SHA256 7fdc89d9acc9c55810edad7ed431bcb3e11f8aef36e537f55898601171226fdc
+PROTOCOL_JSON_SHA256 de717533e387da275b4e21faf05771beb6934685b8d94edded1fddcfdaa97df1
+VERDICT_CODE_SHA256 3059986ac857146041302e3ab6d84a423bf59278208972a5cb235dafea5c3133
+PREREG OK

@@ -1,0 +1,49 @@
+Concurrent DDR reads, stage 2: the re-run rule, written after sitting 1 and before sitting 2
+
+Sitting 1 was committed as measured at 4566f87 and is INCOMPLETE on its own repeat rule. Its two
+DirectML-alone runs read 81.11 and 70.95 GB/s, 13.4% apart, over the 10% limit. Every other
+configuration repeated within 4%.
+
+Sitting 2
+  The full 14-run matrix again, as pre-registered at 4557ec9
+  (concurrent_read_prereg_desktop2_20260923.log): the same readers, windows, mirrored order,
+  2 runs per configuration, thresholds and 10% repeat rule. Its logs carry the tag _rerun.
+
+Which sitting decides
+  Sitting 2 alone decides R1-R5. Its verdict runs on its own log only.
+  If sitting 2 breaks the 10% repeat rule for any configuration, stage 2's verdict is
+  INCOMPLETE and R1-R5 are not decided. The spread is reported as a finding, with both
+  sittings' run totals side by side. There is no averaging across sittings and no new rule
+  after sitting 2's data.
+  Sitting 1 stays in the record as measured. Wherever stage 2 is reported, sitting 1's
+  DirectML-alone spread is shown beside the verdict, as an observation with its cause
+  unattributed. Every figure quoted comes from one sitting; no ratio pairs the two.
+
+Changes made after sitting 1 (none touches a rule's input)
+  (a) Non-deciding: the mid-window counter sample also reads the DirectML reader process's GPU
+      memory, Dedicated Usage and Shared Usage (Windows GPU Process Memory counters). This
+      tests one candidate for the spread: where the 1 GiB resource lands against the 780M's
+      512 MB carve-out. It folds into the existing mid-window PowerShell call, so the
+      sampling footprint is unchanged.
+  (b) Display only: the verdict prints pre-run GPU snapshots as witnesses and leaves out the
+      mid-window samples, which are expected to show the chips at work. Everything that gated
+      or voided a run in sitting 1 (the host-load gate, xrt-smi idle, coverage, the repeat
+      rule) gates sitting 2 identically.
+      Checked: re-printing sitting 1's verdict with this change gives the same table, the
+      same PROBLEM line and VERDICT INCOMPLETE. Only the witness lines differ: one pre-run
+      snapshot, VS Code's 3D engine at 2.2% before run 0.
+  Not changed: repeats, windows, order, readers, thresholds, the 10% rule.
+  Not possible: closing VS Code's use of the 780M (the user's application). It stays witnessed.
+
+Post hoc from sitting 1, labelled as such (the cause is unattributed)
+  Each DirectML-alone run is steady within itself: a median of 13.2 ms per GiB in all four
+  quarters of run 1, and 15.1 ms in run 12.
+  The mid-window counters do not separate them: CPU % Processor Performance 113.7 vs 114.0,
+  and the 780M's 3D engine at 99.4% vs 99.7%.
+  Across all runs, the CPU clock held at 112-118% under combined load.
+
+PINS
+  npu c4x2_m1024 insts_sha256 c3aa45a3c6013bbcf1170e0cb9d68cb0a20ecbf063bc6eb2d52621e06314fe3a
+  readbw model scratch/llm/readbw_fp32_65536x4096/model.onnx sha256 1871f393faa54fde25815f47858b1c14455cc844dff5a0251a33f4ce4a4457a1 weights.bin bytes 1073741824
+git HEAD 4566f8757e5d10e9097b9ccff34c4d399c95c383 (plus this log's own commit)
+PREREG_JSON {"configs": [["cpu"], ["dml"], ["npu"], ["cpu", "dml"], ["cpu", "npu"], ["dml", "npu"], ["cpu", "dml", "npu"], ["cpu", "dml", "npu"], ["dml", "npu"], ["cpu", "npu"], ["cpu", "dml"], ["npu"], ["dml"], ["cpu"]], "window_s": 20.0, "trim_s": 1.0, "lead_s": 3.0, "warmup": 3, "cpu_threads": 8, "solo_before": {"cpu": 60.59, "dml": 68.81, "npu": 47.62}, "ddr_gbps": 96.0, "add_ratio": 1.1, "coverage_min": 0.9, "repeat_agree": 0.1, "git_head": "4566f8757e5d10e9097b9ccff34c4d399c95c383"}

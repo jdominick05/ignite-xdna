@@ -1,0 +1,240 @@
+#!/usr/bin/env bash
+# Hybrid Gemma 3 4B stack on the 8700G (NPU prompt, 780M generation). S1: the NPU numerics gate, CPU
+# only. tools/hybrid_s1.py holds the plan (its PREREG text), the rules and the predictions; the
+# pre-registration log is committed before anything heavy runs.
+#
+#   ./scripts/hybrid-stack.sh s1-selftest   # synthetic checks: no model, no chip
+#   ./scripts/hybrid-stack.sh s1-prereg     # the plan, the text pins, PROTOCOL_JSON, the frozen hashes (commit it)
+#   ./scripts/hybrid-stack.sh s1-build      # the five models from (c)'s C0-H16, C3, one profiled pass each
+#   ./scripts/hybrid-stack.sh s1-check      # C1, C2 (the form), C4, C5, C6
+#   ./scripts/hybrid-stack.sh s1-states     # the five models' hidden states, then band C (commit with the two above)
+#   ./scripts/hybrid-stack.sh s1-verdict    # the metrics and the frozen verdict
+#
+# S1b (tools/hybrid_s1b.py): N2 serves the prompt's KV, and R0's continuation decides. Same pattern as S1.
+#   ./scripts/hybrid-stack.sh s1b-selftest  # synthetic checks: no model, no chip
+#   ./scripts/hybrid-stack.sh s1b-prereg    # the plan, the 84 windows, PROTOCOL_JSON, the frozen hashes (commit it)
+#   ./scripts/hybrid-stack.sh s1b-check     # the model pins, C5' and the R0 control (RAM-heavy)
+#   ./scripts/hybrid-stack.sh s1b-states    # the arms' prompts and R0's continuations, in batches (RAM-heavy)
+#   ./scripts/hybrid-stack.sh s1b-verdict   # the metrics and the frozen verdict
+#
+# S0 (tools/hybrid_s0.py), the light steps: a re-read, the publishers' asset list, verified downloads.
+#   ./scripts/hybrid-stack.sh s0-baseline
+#   ./scripts/hybrid-stack.sh s0-assets
+#   ./scripts/hybrid-stack.sh s0-fetch COMPONENT   # the gate-approved rows only; its log is hybrid_s0_fetch-COMPONENT_...
+#   ./scripts/hybrid-stack.sh s0-contents          # the fetched archives' member lists (a read)
+#   ./scripts/hybrid-stack.sh s0-addendum PKG==VER --tag TAG   # PyPI's record for one package, as an addendum
+#                                                  # assets log hybrid_s0_assets_..._TAG; nothing is downloaded, and
+#                                                  # its rows are fetched only after the gate has pinned the log
+#
+# U6-E (tools/hybrid_u6e.py): the precision of U6's planned epilogue, CPU only (the U6 plan, section 4).
+#   ./scripts/hybrid-stack.sh u6e-selftest   # synthetic only: bf16 RNE (ties), the splits, the fp32 add order
+#   ./scripts/hybrid-stack.sh u6e-pins       # the input pins: hashes and sizes only, nothing computed
+#   ./scripts/hybrid-stack.sh u6e-run        # C2's anchor, the emulation, then the split and A2's threshold
+#
+# U6-0 (tools/hybrid_u6_0.py): the epilogue's cost in cycles, read off Peano's machine code. Compile only: no NPU,
+# no hardware context. Peano is called by absolute path, so no ironenv activation.
+#   ./scripts/hybrid-stack.sh u6-0           # the pins, the fixture selftest, five compiles, E (after u6e-run)
+#
+# F2-0 (tools/hybrid_f2_0.py): F2's epilogue (integerized 8-bit scales) in cycles, read with U6-0's reader. Compile
+# only, the same way as U6-0.
+#   ./scripts/hybrid-stack.sh f2-0           # the pins, the selftest, four compiles, E_core, FLUSH, E_F2 (after u6-0)
+#
+# F2-0b (tools/hybrid_f2_0b.py): the flush with no srs on an acc64 (two forms), and the acc64 confirmation. Compile
+# only, the same way.
+#   ./scripts/hybrid-stack.sh f2-0b          # the pins, the selftest, F2_CORE re-read and decoded, two flush forms
+#
+# F2-E (tools/hybrid_f2e.py): F2's precision at S = ROW, CPU only (the F2 plan's section 3, with sections 1 and 3
+# as the F2-E addendum amends them). The same pattern as U6-E.
+#   ./scripts/hybrid-stack.sh f2e-selftest   # synthetic only: the grid, the round-up, the flush's order and floor
+#   ./scripts/hybrid-stack.sh f2e-pins       # the pins: hashes and sizes only, nothing computed
+#   ./scripts/hybrid-stack.sh f2e-run        # the pins, E_F2, the order, the anchors, the 12 arms and the pick
+#
+# F2-A (tools/hybrid_f2a.py): F2-E's pick in all 238 linears at model level, CPU only, two verdicts (KV on set C,
+# FULL on bands L and H). The S1b pattern; f2a-prereg is the one stage that reaches the Hub (the validation text).
+#   ./scripts/hybrid-stack.sh f2a-selftest   # synthetic only: no model, no text, no x16
+#   ./scripts/hybrid-stack.sh f2a-prereg     # the plan, the validation text's 16 windows, the frozen hashes (commit it)
+#   ./scripts/hybrid-stack.sh f2a-build      # the F2 graph and the probe on S1's sequence 0 (RAM-heavy)
+#   ./scripts/hybrid-stack.sh f2a-check      # the anchors K1-K8 (RAM-heavy)
+#   ./scripts/hybrid-stack.sh f2a-states     # F2, R and N2 prompts, R0's continuations, in batches (RAM-heavy)
+#   ./scripts/hybrid-stack.sh f2a-verdict    # the metrics and the two frozen verdicts
+#
+# Before s1-build, copy (c)'s C0-H16 model.onnx and model.onnx.data to scratch/llm/hybrid_s1/models/ as
+# c0h16.onnx and base.onnx.data, and text_only's config.json and tokenizer files to scratch/llm/gemma/text_only/;
+# s1-build checks every copy against (c)'s pins. build, check and states are RAM-heavy: announce them
+# first. Each heavy child refuses to start below 15 GB available.
+#
+# Options: --machine TAG names the logs (default: desktop2 on DESKTOP-CBL5NUA, else required).
+# --tag TAG adds _TAG after the date, for a re-run on the same day (a memory refusal or a crash); the
+# tool reads the latest log of each kind, and the suffix sorts after the untagged name.
+#
+# Logs go to results/llm/ (UTF-8, profile path scrubbed). The script refuses to replace a log; delete by
+# hand to re-run. Model and state files stay in the git-ignored scratch/llm/hybrid_s1/.
+
+. "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+
+STAGE="" MACHINE="" TAG=""
+while [ $# -gt 0 ]; do
+    case "$1" in
+        s1-selftest|s1-prereg|s1-build|s1-check|s1-states|s1-verdict) STAGE="${1//-/_}" ;;
+        s1b-selftest|s1b-prereg|s1b-check|s1b-states|s1b-verdict) STAGE="${1//-/_}" ;;
+        s0-baseline|s0-assets|s0-contents) STAGE="${1//-/_}" ;;
+        u6e-selftest|u6e-pins|u6e-run) STAGE="${1//-/_}" ;;
+        u6-0)      STAGE=u6_0 ;;
+        f2-0)      STAGE=f2_0 ;;
+        f2-0b)     STAGE=f2_0b ;;
+        f2e-selftest|f2e-pins|f2e-run) STAGE="${1//-/_}" ;;
+        f2a-selftest|f2a-prereg|f2a-build|f2a-check|f2a-states|f2a-verdict) STAGE="${1//-/_}" ;;
+        s0-fetch)  STAGE=s0_fetch; COMP="${2:-}"; shift ;;
+        s0-addendum) STAGE=s0_addendum; SPEC="${2:-}"; shift ;;
+        --machine) MACHINE="$2"; shift ;;
+        --tag)     TAG="_$2"; shift ;;
+        -h|--help) usage "${BASH_SOURCE[0]}"; exit 0 ;;
+        *)         die "unknown argument $1" ;;
+    esac
+    shift
+done
+[ -n "$STAGE" ] || { usage "${BASH_SOURCE[0]}"; die "name a stage"; }
+if [ -z "$MACHINE" ]; then
+    case "$(hostname)" in
+        DESKTOP-CBL5NUA) MACHINE=desktop2 ;;
+        *) die "unknown host $(hostname): pass --machine TAG" ;;
+    esac
+fi
+
+DATE="$(date +%Y%m%d)"
+OUT=results/llm
+RAW=scratch/llm/raw
+T=tools/hybrid_s1.py
+mkdir -p "$OUT" "$RAW"
+export HF_HUB_OFFLINE=1          # every file S1 reads is already in the local cache and pinned by hash
+
+refuse() {
+    local p
+    for p in "$@"; do
+        [ ! -e "$p" ] || die "$p exists; this script never replaces a log. Delete it by hand to re-run."
+    done
+}
+
+# scrub <raw> <log> -- copy with the local profile path replaced by C:\Users\<user>.
+scrub() {
+    python -c 'import pathlib,re,sys; s=pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"); s=re.sub(r"(?i)([A-Z]:[\\/]Users[\\/])[^\\/\s\"<>]+",r"\1<user>",s); s=re.sub(r"(?i)(/[A-Z]/Users/)[^/\s\"<>]+",r"\1<user>",s); pathlib.Path(sys.argv[2]).write_text(s,encoding="utf-8")' "$1" "$2"
+}
+
+# logged <log> <cmd...> -- run through run_logged into scratch, then scrub into results/llm/.
+logged() {
+    local log="$1" rc=0; shift
+    local raw="$RAW/$(basename "$log")"
+    rm -f "$raw"
+    run_logged "$raw" "$@" || rc=$?
+    scrub "$raw" "$log"
+    return $rc
+}
+
+need() {
+    ls "$OUT"/hybrid_s1_"$1"_*.log >/dev/null 2>&1 || die "no S1 $1 log: run $0 s1-$1 first"
+}
+
+stage() {
+    local name="$1" log="$OUT/hybrid_s1_$1_${MACHINE}_${DATE}${TAG}.log"
+    refuse "$log"
+    use_env resnet_env17
+    logged "$log" python "$T" "$name" || die "S1 $name did not finish OK, see $log"
+    ok "S1 $name done: $log"
+}
+
+stage_s1_selftest() { stage selftest; }
+stage_s1_prereg()   { stage prereg; }
+stage_s1_build()    { need prereg; stage build; }
+stage_s1_check()    { need build; stage check; }
+stage_s1_states()   { need check; stage states; }
+stage_s1_verdict()  { need states; stage verdict; }
+
+# stage_for <tool> <log kind> <mode> [args...] -- stage, for S1b's and S0's tools and log names.
+stage_for() {
+    local tool="$1" kind="$2" mode="$3"; shift 3
+    local log="$OUT/${kind}_${MACHINE}_${DATE}${TAG}.log"
+    refuse "$log"
+    use_env resnet_env17
+    logged "$log" python "$tool" "$mode" "$@" || die "$kind did not finish OK, see $log"
+    ok "$kind done: $log"
+}
+
+need1b() {
+    ls "$OUT"/hybrid_s1b_"$1"_*.log >/dev/null 2>&1 || die "no S1b $1 log: run $0 s1b-$1 first"
+}
+
+T1B=tools/hybrid_s1b.py
+stage_s1b_selftest() { stage_for "$T1B" hybrid_s1b_selftest selftest; }
+stage_s1b_prereg()   { stage_for "$T1B" hybrid_s1b_prereg prereg; }
+stage_s1b_check()    { need1b prereg; stage_for "$T1B" hybrid_s1b_check check; }
+stage_s1b_states()   { need1b check; stage_for "$T1B" hybrid_s1b_states states; }
+stage_s1b_verdict()  { need1b states; stage_for "$T1B" hybrid_s1b_verdict verdict; }
+
+T0=tools/hybrid_s0.py
+stage_s0_baseline() { stage_for "$T0" hybrid_s0_baseline baseline; }
+stage_s0_assets()   { stage_for "$T0" hybrid_s0_assets assets; }
+stage_s0_contents() { stage_for "$T0" hybrid_s0_contents contents; }
+stage_s0_fetch() {
+    [[ "${COMP:-}" =~ ^[a-z0-9][a-z0-9.-]*$ ]] || die "s0-fetch needs a COMPONENT name"
+    stage_for "$T0" "hybrid_s0_fetch-$COMP" fetch "$COMP"
+}
+stage_s0_addendum() {
+    [[ "${SPEC:-}" =~ ^[a-z0-9][a-z0-9._-]*==[0-9][0-9A-Za-z.+-]*$ ]] || die "s0-addendum needs PKG==VERSION"
+    [ -n "$TAG" ] || die "s0-addendum needs --tag TAG: an addendum log never takes the approved assets log's name"
+    stage_for "$T0" hybrid_s0_assets addendum "$SPEC"
+}
+
+need6e() {
+    ls "$OUT"/hybrid_u6e_"$1"_*.log >/dev/null 2>&1 || die "no U6-E $1 log: run $0 u6e-$1 first"
+}
+
+T6E=tools/hybrid_u6e.py
+stage_u6e_selftest() { stage_for "$T6E" hybrid_u6e_selftest selftest; }
+stage_u6e_pins()     { stage_for "$T6E" hybrid_u6e_pins pins; }
+stage_u6e_run()      { need6e selftest; need6e pins; need1b verdict; stage_for "$T6E" hybrid_u6e_run run; }
+
+T60=tools/hybrid_u6_0.py
+stage_u6_0()         { need6e run; stage_for "$T60" hybrid_u6_0 run; }
+
+T20=tools/hybrid_f2_0.py
+stage_f2_0() {
+    ls "$OUT"/hybrid_u6_0_*.log >/dev/null 2>&1 || die "no U6-0 log: run $0 u6-0 first"
+    stage_for "$T20" hybrid_f2_0 run
+}
+
+T20B=tools/hybrid_f2_0b.py
+stage_f2_0b() {
+    ls "$OUT"/hybrid_f2_0_*.log >/dev/null 2>&1 || die "no F2-0 log: run $0 f2-0 first"
+    stage_for "$T20B" hybrid_f2_0b run
+}
+
+need2e() {
+    ls "$OUT"/hybrid_f2e_"$1"_*.log >/dev/null 2>&1 || die "no F2-E $1 log: run $0 f2e-$1 first"
+}
+
+T2E=tools/hybrid_f2e.py
+stage_f2e_selftest() { stage_for "$T2E" hybrid_f2e_selftest selftest; }
+stage_f2e_pins()     { stage_for "$T2E" hybrid_f2e_pins pins; }
+stage_f2e_run() {
+    need2e selftest; need2e pins
+    ls "$OUT"/hybrid_f2_0b_*.log >/dev/null 2>&1 || die "no F2-0b log: run $0 f2-0b first"
+    stage_for "$T2E" hybrid_f2e_run run
+}
+
+need2a() {
+    ls "$OUT"/hybrid_f2a_"$1"_*.log >/dev/null 2>&1 || die "no F2-A $1 log: run $0 f2a-$1 first"
+}
+
+T2A=tools/hybrid_f2a.py
+stage_f2a_selftest() { stage_for "$T2A" hybrid_f2a_selftest selftest; }
+stage_f2a_prereg() {
+    need2a selftest
+    unset HF_HUB_OFFLINE         # the validation text is fetched here, without a token, at its pinned revision
+    stage_for "$T2A" hybrid_f2a_prereg prereg
+}
+stage_f2a_build()    { need2a prereg; stage_for "$T2A" hybrid_f2a_build build; }
+stage_f2a_check()    { need2a build; stage_for "$T2A" hybrid_f2a_check check; }
+stage_f2a_states()   { need2a check; stage_for "$T2A" hybrid_f2a_states states; }
+stage_f2a_verdict()  { need2a states; stage_for "$T2A" hybrid_f2a_verdict verdict; }
+
+"stage_$STAGE"

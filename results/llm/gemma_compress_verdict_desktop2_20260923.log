@@ -1,0 +1,22 @@
+inputs: fetch verified, census ok, 238 of 238 linears, head row present
+Q1 grid: 46,674,186 of 3,208,642,560 linear weights exact (0.014546); blocks with a q = 0 code 100,270,080 of 100,270,080 (1.000000); blocks with d = 0 0
+Q1c: the GGUF's F16 head equals f16(bf16 embedding) for 0.076395 of the shared rows; the q4_0 rule reproduces the embedding for 0.044946
+Q2 (on paper): codes H0 pooled 3.7435, per tensor weighted 3.7431 bits; scales 0.3455 bits/weight as 16-bit symbols (0.3554 split sign+exponent / mantissa); head high byte 5.4900, low byte 7.9672, sign+exponent 3.5628 bits
+Q3 L, bits/weight (shipped 4.5; block-128 4.125 is lossy, for reference): C1 4.2645, C2 4.1891, C3 4.2717, C4 4.1334; round trips C1 True, C2 True, C3 True, C4 True
+Q3 H, bits/weight (shipped 16): C1 14.6808, byte-split zstd 13.5134, C5 13.5206; round trips C1 True, byte-split True, C5 True
+K1 (the linear stack, table-driven): best C3/C4 1,657,838,197 B = 4.1334 bits/weight against ≤ 4.0909: FAIL (1.0887x fewer bytes)
+K2 (the whole shipped stream, table-driven): 2,792,026,839 B per token against ≤ 2,860,944,290.9: PASS (1.1272x fewer bytes, saving 11.28%, 5.7572 bits/weight over L and H)
+P1: ≥ 99.9% of linear weights match the grid exactly: 0.0145464  MISS
+P2: 100% of blocks hold a q = 0 code: 1  HIT
+P3: pooled H0 of the codes is 3.60-3.85 bits: 3.74353  HIT
+P4: scales cost 0.28-0.38 bits/weight at order 0: 0.345469  HIT
+P5 range: the best C3/C4 on L is 3.95-4.20 bits/weight: 4.13343  HIT
+P5 outcome: K1 FAILS: False  HIT
+P6: C5 codes the head to 13.0-14.2 bits/weight: 13.5206  HIT
+P7 range: K2 saves 8-13% of 3.147 GB: 0.112808  HIT
+P7 outcome: K2 PASSES: True  HIT
+P8: C1 on the raw blocks is ≥ 4.3 bits/weight: 4.26451  MISS
+P9: the embedding is not on an int4 grid (< 10% exact): 0.0449458  HIT
+P10: Q1c: the F16 head equals bf16 -> f16 of the embedding for ≥ 99.9%: 0.0763945  MISS
+VERDICT (a): SURVIVES - lossless compaction survives as a byte cut (necessary, not sufficient: (d) and a decode-rate test decide whether the NPU gains)
+VERDICT_JSON {"verdict": "SURVIVES", "k1": false, "k2": true, "best_l": 1657838197, "t_bytes": 2792026839}

@@ -1,0 +1,65 @@
+VERDICT_CODE_SHA256 6e459e560c838909295e554994c950ad3ce32cf0b15a150123ab5481d17dc549
+
+M = 2048 (layer work 386.5 GFLOP, DERIVED)
+  arm        state           T ms p1 / p2        T   TOPS    E mJ/tok p1 / p2       E    rel-L2
+  C-fp32@8   COMPLETE    387.46 / 386.31    386.88   1.00   12.8875 / 13.8085 13.3480  2.93e-07
+  C-fp32@16  COMPLETE    434.04 / 429.90    431.97   0.89   15.3624 / 15.2886 15.3255  2.93e-07
+  C-i8@8     COMPLETE    106.87 / 106.84    106.85   3.62    3.8232 / 3.8179   3.8205  1.72e-02
+  C-i8@16    COMPLETE    103.17 / 101.46    102.31   3.78    3.6683 / 3.6683   3.6683  1.72e-02
+  C-nb0@8    COMPLETE    430.48 / 417.77    424.12   0.91   15.1551 / 15.0023 15.0787  1.69e-06
+  C-nb0@16   COMPLETE    527.68 / 512.25    519.97   0.74   18.4368 / 18.2368 18.3368  1.69e-06
+  C-nb4@8    COMPLETE    385.98 / 385.37    385.68   1.00   13.5247 / 13.6981 13.6114  5.35e-03
+  C-nb4@16   COMPLETE    389.53 / 392.71    391.12   0.99   13.9971 / 13.9922 13.9947  5.35e-03
+  D-fp16     COMPLETE    130.56 / 135.04    132.80   2.91    3.4366 / 3.5071   3.4719  3.38e-04
+  D-fp32     COMPLETE    319.16 / 317.01    318.09   1.22    9.6980 / 9.6582   9.6781  1.69e-06
+  D-i8       COMPLETE    591.16 / 645.05    618.10   0.63   19.6197 / 20.9378 20.2787  1.72e-02
+  D-nb16     COMPLETE     79.59 / 79.40      79.49   4.86    2.3317 / 2.3243   2.3280  4.64e-04
+  N-bf16     COMPLETE    165.68 / 166.32    166.00   2.33    1.6542 / 1.6660   1.6601  2.38e-03
+  N-i8       COMPLETE     96.79 / 97.05      96.92   3.99    1.0034 / 1.0045   1.0040  1.72e-02
+  N-w4       COMPLETE     83.89 / 83.93      83.91   4.61    0.7965 / 0.7933   0.7949         -
+  N-bf16: speed KILL, energy KEEP, accuracy KILL (cannot be met by construction: C-fp32 and D-fp32 are in the set)
+  N-i8: speed KILL, energy KEEP, accuracy KILL (cannot be met by construction: C-fp32 and D-fp32 are in the set)
+  THE ROLE AT M = 2048: KEEP
+  N-w4 (report-only; it bounds route (i) only): speed FAIL, energy OPEN
+  int8 control: identical over 8 int8 windows (VOID or not)
+
+M = 8192 (layer work 1546.2 GFLOP, DERIVED)
+  arm        state           T ms p1 / p2        T   TOPS    E mJ/tok p1 / p2       E    rel-L2
+  C-fp32@8   COMPLETE   1682.16 / 1688.72  1685.44   0.92   13.7641 / 15.0002 14.3822  2.93e-07
+  C-fp32@16  MISSING          - / -              -      -         - / -             -  2.93e-07
+  C-i8@8     COMPLETE    465.44 / 463.91    464.67   3.33    4.1540 / 3.9991   4.0765  1.74e-02
+  C-i8@16    MISSING          - / -              -      -         - / -             -  1.74e-02
+  C-nb0@8    COMPLETE   1701.29 / 1724.24  1712.77   0.90   15.1226 / 15.2231 15.1728  1.69e-06
+  C-nb0@16   COMPLETE   2197.86 / 2200.40  2199.13   0.70   19.5571 / 19.5939 19.5755  1.69e-06
+  C-nb4@8    COMPLETE   1533.43 / 1541.30  1537.36   1.01   13.5290 / 13.5583 13.5436  5.35e-03
+  C-nb4@16   MISSING          - / -              -      -         - / -             -  5.35e-03
+  D-fp16     COMPLETE    631.89 / 624.34    628.11   2.46    3.8670 / 3.6685   3.7677  3.37e-04
+  D-fp32     COMPLETE   1326.33 / 1283.10  1304.72   1.19   10.2901 / 9.8290  10.0595  1.69e-06
+  D-i8       COMPLETE   2287.69 / 2435.39  2361.54   0.65   23.7930 / 23.8322 23.8126  1.74e-02
+  D-nb16     COMPLETE    347.62 / 345.51    346.56   4.46    2.2476 / 2.2916   2.2696  4.64e-04
+  N-bf16     COMPLETE    611.49 / 612.80    612.14   2.53    1.5760 / 1.5874   1.5817  2.38e-03
+  N-i8       COMPLETE    336.83 / 336.87    336.85   4.59    0.9005 / 0.9147   0.9076  1.74e-02
+  N-w4       COMPLETE    286.72 / 286.38    286.55   5.40    0.7107 / 0.7124   0.7115         -
+  N-bf16: speed KILL, energy INCOMPLETE, accuracy KILL (cannot be met by construction: C-fp32 and D-fp32 are in the set)
+  N-i8: speed KILL, energy INCOMPLETE, accuracy KILL (cannot be met by construction: C-fp32 and D-fp32 are in the set)
+  THE ROLE AT M = 8192: INCOMPLETE
+  N-w4 (report-only; it bounds route (i) only): speed INCOMPLETE, energy INCOMPLETE
+  int8 control: identical over 9 int8 windows (VOID or not)
+
+Predictions (they decide nothing):
+  Q1 HIT: every P tile passes the aiecc verifier at every shape and both M; insts.bin equals the fit at every 3c build
+  Q2 HIT: the NPU arm holds its four contexts and the M = 8192 buffers; (low confidence) one XRT buffer serves runs in two contexts
+  Q3 MISS: N-i8's T: 110-135 ms at M = 2048 and 430-520 ms at M = 8192
+  Q4 NOT SCORED: report-only, cross-sitting: C-i8's TOPS in sitting B <= in sitting A; D-fp16 likewise
+  Q5 HIT: speed at M = 2048: KILL for both NPU arms; N-i8 at 0.80-1.10x the CPU's best int8; N-bf16 loses to D-fp16 if D-fp16 is at least as accurate, else to the remaining rivals
+  Q6 NOT SCORED: speed at M = 8192: KILL; N-i8 at 0.9-1.2x the faster of C-i8 and C-nb4 at the better thread count
+  Q7 MISS: energy: KEEP for N-i8 at both M, at >= 1.5x fewer J/token than the best rival
+  Q8 MISS: energy: KEEP for N-bf16 at both M; the binding rival D-fp16 or D-nb16, at 1.2-1.6x
+  Q9 MISS: accuracy: the NPU wins nowhere; N-bf16 2e-3..3e-3, N-i8 1e-2..3e-2, D-fp16 2e-4..6e-4, D-fp32 < 1e-5, C-fp32 < 1e-6, C-nb0 < 1e-6, C-nb4 3e-3..1e-2, D-nb16 3e-4..6e-4; the int8 control holds at both M
+  Q10 MISS: D-nb16 slower than D-fp16 at both M; C-nb4 at 0.7-1.1x C-i8's speed at the same thread count
+  Q11 NOT SCORED: report-only: N-w4 at M = 8192 is 1.1-1.4x faster than N-i8's layer; its speed reading FAIL at 2048, OPEN at 8192
+  Q12 HIT: every DirectML arm holds the repeat rule at both M
+
+Energy labels, (b)'s: above idle, with idle charged to no one; package counters only (the user's rule), so completeness is never shown; DRAM is outside the package, which pulls ratios toward 1; E is DERIVED from measured power and rate. (b) showed the 780M and the NPU inside the package counter (U9).
+VERDICT_JSON {"2048": {"role": "KEEP", "rules": {"N-bf16": {"speed": "KILL", "energy": "KEEP", "accuracy": "KILL"}, "N-i8": {"speed": "KILL", "energy": "KEEP", "accuracy": "KILL"}}}, "8192": {"role": "INCOMPLETE", "rules": {"N-bf16": {"speed": "KILL", "energy": "INCOMPLETE", "accuracy": "KILL"}, "N-i8": {"speed": "KILL", "energy": "INCOMPLETE", "accuracy": "KILL"}}}}
+PREDICTIONS_SCORED_JSON {"Q1": "HIT", "Q2": "HIT", "Q3": "MISS", "Q4": "NOT SCORED", "Q5": "HIT", "Q6": "NOT SCORED", "Q7": "MISS", "Q8": "MISS", "Q9": "MISS", "Q10": "MISS", "Q11": "NOT SCORED", "Q12": "HIT"}

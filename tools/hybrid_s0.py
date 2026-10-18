@@ -1,0 +1,917 @@
+#!/usr/bin/env python3
+# Copyright (C) 2026 The ignite-xdna contributors
+# SPDX-License-Identifier: AGPL-3.0-or-later
+"""Hybrid stack, S0: the GPU runtimes at their latest supported versions, pinned. The light steps only: nothing
+here installs, runs a downloaded binary or computes on a chip.
+
+    python tools/hybrid_s0.py baseline          # re-read the drivers, Vulkan, the HIP runtime, the NPU driver,
+                                                # the toolchains and the disk, against the plan's v1 read
+    python tools/hybrid_s0.py assets            # the asset list, read from the publishers' APIs: URL, size,
+                                                # checksum (or "pinned only"), the source and the read time
+    python tools/hybrid_s0.py fetch COMPONENT   # download one component's APPROVED_ROWS into scratch/rt/, verified,
+                                                # from the approved assets log only (pinned by its LF sha256)
+    python tools/hybrid_s0.py contents          # list the fetched archives' members, a nested .tar's too, the
+                                                # HIP DLLs' PE versions and Smart App Control's state (reads only:
+                                                # nothing extracted, loaded or changed)
+    python tools/hybrid_s0.py addendum PKG==VER # a tagged addendum assets log: PyPI's record for one package;
+                                                # its rows are fetched only once the gate has pinned it (PINS)
+
+Standard library only, except that contents reads PE versions with pefile and its own memory with psutil (both
+already in resnet_env17). Sizes are printed in bytes and in GB = 1e9 bytes. The plan is
+scratch/llm/hybrid_s0_plan_draft.md (v2, approved 2026-09-24).
+"""
+import argparse
+import datetime
+import glob
+import hashlib
+import json
+import os
+import posixpath
+import re
+import shutil
+import subprocess
+import sys
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
+import winreg
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+RT = ROOT / "scratch/rt"
+RESULTS = ROOT / "results/llm"
+SYSTEM32 = Path(os.environ.get("SystemRoot", r"C:\Windows")) / "System32"
+DISPLAY_CLASS = r"SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}"
+FLOOR_GB = 100.0
+DRIVE = "C:\\"
+
+# The plan's v1 read (2026-09-24, before anything changed). v1's disk figures were PowerShell's /1GB, which is
+# GiB: 573.40 GiB free is 615.68 GB.
+V1 = {
+    "radeon_driver_version": "32.0.31041.1004",
+    "radeon_software_version": "26.8.1",
+    "radeon_release_version_prefix": "26.10.41.01-260811a-203304C",
+    "vulkan_api_version": "1.4.349",
+    "vulkan_driver_info": "26.8.1 (LLPC)",
+    "vulkan_conformance": "1.4.3.3",
+    "amdhip64_6.dll": "10.0.3652.0",
+    "amdhip64_7.dll": "10.0.3679.0",
+    "npu_driver_version": "32.0.20101.3760",
+    "disk_free_gib": 573.40,
+}
+
+VK_EXTENSIONS = ("VK_KHR_shader_integer_dot_product", "VK_KHR_cooperative_matrix", "VK_NV_cooperative_matrix2",
+                 "VK_KHR_shader_float16_int8", "VK_KHR_16bit_storage", "VK_KHR_8bit_storage",
+                 "VK_EXT_subgroup_size_control", "VK_KHR_shader_bfloat16", "VK_EXT_shader_float8")
+
+
+def say(tag: str, obj) -> None:
+    print(f"{tag} " + json.dumps(obj), flush=True)
+
+
+def gb(n: int) -> float:
+    return round(n / 1e9, 2)
+
+
+def utc_now() -> str:
+    return datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def rel(p: Path) -> str:
+    return p.resolve().relative_to(ROOT).as_posix()
+
+
+def sha256_file(p: Path) -> str:
+    h = hashlib.sha256()
+    with open(p, "rb") as f:
+        for b in iter(lambda: f.read(1 << 20), b""):
+            h.update(b)
+    return h.hexdigest()
+
+
+def ps_json(cmd: str):
+    """Run one PowerShell query whose output is ConvertTo-Json; a list, a dict or None."""
+    r = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command",
+                        f"{cmd} | ConvertTo-Json -Depth 3 -Compress"],
+                       capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=180)
+    s = r.stdout.strip()
+    if r.returncode != 0 or not s:
+        return None
+    return json.loads(s)
+
+
+def as_list(x) -> list:
+    return [] if x is None else (x if isinstance(x, list) else [x])
+
+
+def run_text(args: list, timeout: int = 120) -> tuple:
+    r = subprocess.run(args, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=timeout)
+    return r.returncode, r.stdout
+
+
+def disk() -> dict:
+    u = shutil.disk_usage(DRIVE)
+    return {"drive": DRIVE[:2], "total_bytes": u.total, "used_bytes": u.used, "free_bytes": u.free,
+            "total_gb": gb(u.total), "used_gb": gb(u.used), "free_gb": gb(u.free), "floor_gb": FLOOR_GB}
+
+
+def display_registry() -> list:
+    out = []
+    names = ("DriverDesc", "DriverVersion", "DriverDate", "ProviderName", "RadeonSoftwareVersion",
+             "RadeonSoftwareEdition", "ReleaseVersion", "MatchingDeviceId")
+    with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, DISPLAY_CLASS) as cls:
+        i = 0
+        while True:
+            try:
+                sub = winreg.EnumKey(cls, i)
+            except OSError:
+                break
+            i += 1
+            if not sub.isdigit():
+                continue
+            try:
+                with winreg.OpenKey(cls, sub) as k:
+                    row = {"subkey": sub}
+                    for n in names:
+                        try:
+                            row[n] = winreg.QueryValueEx(k, n)[0]
+                        except OSError:
+                            pass
+                    out.append(row)
+            except OSError as e:
+                out.append({"subkey": sub, "error": type(e).__name__})
+    return out
+
+
+def vulkan() -> dict:
+    exe = shutil.which("vulkaninfo") or str(SYSTEM32 / "vulkaninfo.exe")
+    if not Path(exe).exists():
+        return {"vulkaninfo": "absent"}
+    rc, s = run_text([exe, "--summary"])
+    keep, section = [], None
+    for line in s.splitlines():
+        t = line.strip()
+        if t.startswith("Vulkan Instance Version"):
+            keep.append(t)
+        if t in ("Devices:",):
+            section = "devices"
+            continue
+        if section == "devices" and "=" in t:
+            keep.append(t)
+    rc2, full = run_text([exe])
+    ext = {}
+    for e in VK_EXTENSIONS:
+        hits = sorted({ln.strip() for ln in full.splitlines() if ln.strip().startswith(e + " ")})
+        ext[e] = hits[0] if hits else "absent"
+    feats = sorted({" ".join(ln.split()) for ln in full.splitlines()
+                    if ln.strip().startswith(("integerDotProduct8BitSignedAccelerated ",
+                                              "integerDotProduct4x8BitPackedSignedAccelerated ",
+                                              "cooperativeMatrix ", "shaderFloat16 ", "shaderInt8 ",
+                                              "shaderBFloat16Type "))})
+    return {"rc_summary": rc, "rc_full": rc2, "summary": keep, "extensions": ext, "features": feats}
+
+
+def hip_dlls() -> list:
+    rows = []
+    for pat in ("amdhip64*.dll", "amd_comgr*.dll", "hiprtc*.dll", "amdhiprtc*.dll"):
+        for p in sorted(glob.glob(str(SYSTEM32 / pat))):
+            q = Path(p)
+            v = ps_json(f"(Get-Item -LiteralPath '{p}').VersionInfo | Select-Object FileVersion, ProductVersion")
+            rows.append({"name": q.name, "bytes": q.stat().st_size, "sha256": sha256_file(q),
+                         "file_version": (v or {}).get("FileVersion"),
+                         "product_version": (v or {}).get("ProductVersion")})
+    return rows
+
+
+def signed_drivers() -> list:
+    q = ("Get-CimInstance Win32_PnPSignedDriver | Where-Object { $_.DeviceName -cmatch '\\bNPU\\b|\\bIPU\\b|Radeon' } "
+         "| Select-Object DeviceName, DeviceClass, DriverVersion, "
+         "@{n='DriverDate';e={if ($_.DriverDate) { $_.DriverDate.ToString('yyyy-MM-dd') }}}, "
+         "Manufacturer, InfName")
+    return as_list(ps_json(q))
+
+
+def video_controllers() -> list:
+    q = ("Get-CimInstance Win32_VideoController | Select-Object Name, DriverVersion, "
+         "@{n='DriverDate';e={if ($_.DriverDate) { $_.DriverDate.ToString('yyyy-MM-dd') }}}, VideoProcessor, Status")
+    return as_list(ps_json(q))
+
+
+def host() -> dict:
+    os_ = ps_json("Get-CimInstance Win32_OperatingSystem | Select-Object Caption, Version, BuildNumber")
+    cpu = ps_json("Get-CimInstance Win32_Processor | Select-Object Name, NumberOfCores, NumberOfLogicalProcessors")
+    mem = as_list(ps_json("Get-CimInstance Win32_PhysicalMemory | Select-Object Capacity, Speed, "
+                          "ConfiguredClockSpeed, DeviceLocator"))
+    for m in mem:
+        m["capacity_gb"] = gb(int(m.get("Capacity") or 0))
+    return {"os": os_, "cpu": cpu, "memory_modules": mem,
+            "memory_total_gb": gb(sum(int(m.get("Capacity") or 0) for m in mem))}
+
+
+def toolchains() -> dict:
+    env = {k: ("set" if os.environ.get(k) else "unset")
+           for k in ("HIP_PATH", "ROCM_PATH", "CUDA_PATH", "VULKAN_SDK")}
+    env.update({k: "set" for k in os.environ if k.startswith(("HIP_PATH_", "CUDA_PATH_V"))})
+    dirs = {}
+    for d in (r"C:\Program Files\AMD\ROCm", r"C:\Program Files\NVIDIA GPU Computing Toolkit", r"C:\VulkanSDK"):
+        p = Path(d)
+        dirs[d] = sorted(x.name for x in p.iterdir()) if p.is_dir() else "absent"
+    on_path = {t: ("found" if shutil.which(t) else "absent") for t in ("nvcc", "hipcc", "hipconfig", "cmake", "ninja")}
+    vers = {}
+    for t, args in (("cmake", ["cmake", "--version"]), ("ninja", ["ninja", "--version"])):
+        if shutil.which(t):
+            rc, s = run_text(args)
+            vers[t] = s.splitlines()[0].strip() if s else f"rc {rc}"
+    vs = []
+    vswhere = Path(os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)")) / \
+        "Microsoft Visual Studio/Installer/vswhere.exe"
+    if vswhere.exists():
+        rc, s = run_text([str(vswhere), "-all", "-products", "*", "-format", "json", "-utf8"])
+        rc2, s2 = run_text([str(vswhere), "-all", "-products", "*", "-requires",
+                            "Microsoft.VisualStudio.Component.VC.Tools.x86.x64", "-format", "json", "-utf8"])
+        with_vc = {x.get("instanceId") for x in json.loads(s2 or "[]")}
+        for x in json.loads(s or "[]"):
+            vs.append({"displayName": x.get("displayName"), "installationVersion": x.get("installationVersion"),
+                       "vc_tools_x64": x.get("instanceId") in with_vc})
+    conda = {}
+    exe = os.environ.get("CONDA_EXE") or shutil.which("conda.exe") or shutil.which("conda")
+    if exe and Path(exe).exists():
+        rc, s = run_text([exe, "--version"])
+        conda["version"] = s.strip()
+        rc, s = run_text([exe, "env", "list", "--json"])
+        envs = json.loads(s or "{}").get("envs", [])
+        names = sorted("base" if i == 0 else Path(e).name for i, e in enumerate(envs))
+        conda["envs"] = names
+        conda["planned_envs_absent"] = {n: n not in names for n in ("genai016", "rocm10")}
+    return {"env": env, "dirs": dirs, "on_path": on_path, "versions": vers, "visual_studio": vs, "conda": conda}
+
+
+def baseline() -> int:
+    print("S0 BASELINE (light: a re-read only; nothing is installed, and no chip computes). GB = 1e9 bytes.",
+          flush=True)
+    say("TIME_JSON", {"utc": utc_now()})
+    say("HOST_JSON", host())
+    reg = display_registry()
+    say("DISPLAY_REGISTRY_JSON", reg)
+    say("VIDEO_CONTROLLER_JSON", video_controllers())
+    drv = signed_drivers()
+    say("SIGNED_DRIVERS_JSON", drv)
+    vk = vulkan()
+    say("VULKAN_JSON", vk)
+    dlls = hip_dlls()
+    say("HIP_DLLS_JSON", dlls)
+    say("TOOLCHAINS_JSON", toolchains())
+    rt = sorted(x.name for x in RT.iterdir()) if RT.is_dir() else "absent"
+    say("SCRATCH_RT_JSON", {"path": rel(RT.parent) + "/rt", "entries": rt})
+    d = disk()
+    say("DISK_JSON", d)
+
+    radeon = next((r for r in reg if "Radeon" in str(r.get("DriverDesc", ""))), {})
+    npu = next((r for r in drv if str(r.get("DeviceClass", "")) == "COMPUTEACCELERATOR"), {})
+    summ = {ln.split("=", 1)[0].strip(): ln.split("=", 1)[1].strip() for ln in vk.get("summary", []) if "=" in ln}
+    dll = {r["name"]: r["file_version"] for r in dlls}
+    now = {
+        "radeon_driver_version": radeon.get("DriverVersion"),
+        "radeon_software_version": radeon.get("RadeonSoftwareVersion"),
+        "radeon_release_version_prefix": str(radeon.get("ReleaseVersion", ""))[:27],
+        "vulkan_api_version": summ.get("apiVersion"),
+        "vulkan_driver_info": summ.get("driverInfo"),
+        "vulkan_conformance": summ.get("conformanceVersion"),
+        "amdhip64_6.dll": dll.get("amdhip64_6.dll"),
+        "amdhip64_7.dll": dll.get("amdhip64_7.dll"),
+        "npu_driver_version": npu.get("DriverVersion"),
+        "disk_free_gib": round(d["free_bytes"] / 2**30, 2),
+    }
+    cmp_ = {}
+    for k, v1 in V1.items():
+        v = now[k]
+        if k == "disk_free_gib":
+            cmp_[k] = {"v1": v1, "now": v, "delta_gib": round(v - v1, 2)}
+        else:
+            cmp_[k] = {"v1": v1, "now": v, "same": v == v1}
+    say("V1_COMPARE_JSON", cmp_)
+    changed = [k for k, c in cmp_.items() if k != "disk_free_gib" and not c["same"]]
+    above = d["free_gb"] >= FLOOR_GB
+    print(f"BASELINE {'OK' if not changed else 'CHANGED'}: "
+          f"{'no version differs from v1' if not changed else 'differs from v1: ' + ', '.join(changed)}; "
+          f"{d['drive']} {d['free_gb']} GB free ({'above' if above else 'BELOW'} the {FLOOR_GB:g} GB floor)",
+          flush=True)
+    return 0 if above else 3
+
+
+# ---------------------------------------------------------------- the asset list (the publishers' own records)
+
+UA = "ignite-xdna-s0/1 (urllib; one read per record)"
+GH = "https://api.github.com/repos/"
+PYPI = "https://pypi.org/pypi/"
+ANACONDA = "https://api.anaconda.org/package/"
+THEROCK = "https://stable.repo.amd.com/rocm/whl-next/"
+PY_TAG = "cp312"                                          # the genai016 env's Python (3.12)
+NVCC_VERSION = "13.1.115"                                 # the newest CUDA ZLUDA v6's notes name ("CUDA 13.1")
+ROCM_VERSION = "10.0.0"
+ROCM_PKGS = ("rocm", "rocm-sdk-core", "rocm-sdk-libraries", "rocm-sdk-devel", "rocm-sdk-device-gfx1103")
+NVCC_PKGS = ("cuda-nvcc", "cuda-nvcc_win-64", "cuda-nvcc-dev_win-64", "cuda-nvcc-impl", "cuda-nvcc-tools",
+             "cuda-nvvm-tools", "cuda-nvvm-impl", "cuda-crt-tools", "cuda-crt-dev_win-64")
+LLAMA_WIN = re.compile(r"^(llama-b\d+-bin-win-(cpu|vulkan|rocm-[\d.]+|hip-[\w.-]+|cuda-[\d.]+)-x64\.zip|"
+                       r"cudart-llama-bin-win-cuda-[\d.]+-x64\.zip)$")
+LLAMA_FETCH = re.compile(r"-(cpu|vulkan|rocm-[\d.]+)-x64\.zip$|cuda-12\.[\d.]+-x64\.zip$")
+_GH_CALLS = []
+
+
+def http(url: str, method: str = "GET", accept: str = None):
+    h = {"User-Agent": UA}
+    if accept:
+        h["Accept"] = accept
+    r = urllib.request.urlopen(urllib.request.Request(url, headers=h, method=method), timeout=120)
+    return r
+
+
+def get_json(url: str) -> dict:
+    with http(url, accept="application/vnd.github+json" if url.startswith(GH) else "application/json") as r:
+        if url.startswith(GH):
+            _GH_CALLS.append(r.headers.get("X-RateLimit-Remaining"))
+        return json.loads(r.read().decode("utf-8"))
+
+
+def get_text(url: str) -> tuple:
+    with http(url) as r:
+        return r.read().decode("utf-8", errors="replace"), r.geturl()
+
+
+def head_bytes(url: str):
+    try:
+        with http(url, method="HEAD") as r:
+            n = r.headers.get("Content-Length")
+            return int(n) if n is not None else None
+    except Exception as e:                                # a HEAD refusal leaves the size to the download
+        return f"HEAD failed: {type(e).__name__}"
+
+
+def row(component: str, version: str, name: str, url: str, size, sha256, source: str, api: str, fetch: bool,
+        note: str = "") -> dict:
+    return {"component": component, "version": version, "name": name, "url": url, "bytes": size,
+            "gb": gb(size) if isinstance(size, int) else None, "sha256": sha256,
+            "checksum": f"publisher sha256 ({source})" if sha256 else "none published: pinned only (hashed at download)",
+            "api": api, "read_utc": utc_now(), "fetch": fetch, "note": note}
+
+
+def gh_digest(a: dict):
+    d = a.get("digest") or ""
+    return d.split(":", 1)[1] if d.startswith("sha256:") else None
+
+
+def gh_release_info(rel: dict) -> dict:
+    return {"tag": rel.get("tag_name"), "name": rel.get("name"), "published_at": rel.get("published_at"),
+            "prerelease": rel.get("prerelease"), "draft": rel.get("draft"),
+            "assets": [a["name"] for a in rel.get("assets", [])]}
+
+
+def assets_llamacpp() -> tuple:
+    repo = "ggml-org/llama.cpp"
+    api = f"{GH}{repo}/releases/latest"
+    latest = get_json(api)
+    info = {"releases_latest": gh_release_info(latest), "api": api}
+    tag = None
+    nt = next((a for a in latest.get("assets", []) if a["name"] == "nightly-tag.txt"), None)
+    if nt is not None:
+        tag = get_text(nt["browser_download_url"])[0].strip()
+        info["nightly_tag_txt"] = {"url": nt["browser_download_url"], "bytes": nt["size"], "sha256": gh_digest(nt),
+                                   "reads": tag}
+    if not tag or not re.fullmatch(r"b\d+", tag):
+        tag = latest.get("tag_name")
+    api_b = f"{GH}{repo}/releases/tags/{tag}"
+    rel = get_json(api_b)
+    info["binaries_release"] = gh_release_info(rel)
+    info["binaries_commit"] = get_json(f"{GH}{repo}/commits/{tag}").get("sha")
+    recent = get_json(f"{GH}{repo}/releases?per_page=5")
+    info["newest_releases"] = [{"tag": r["tag_name"], "published_at": r["published_at"], "prerelease": r["prerelease"]}
+                               for r in recent]
+    rows = []
+    for a in rel.get("assets", []):
+        if LLAMA_WIN.match(a["name"]):
+            rows.append(row("llamacpp", tag, a["name"], a["browser_download_url"], a["size"], gh_digest(a),
+                            "GitHub release digest", api_b, bool(LLAMA_FETCH.search(a["name"])),
+                            "" if LLAMA_FETCH.search(a["name"]) else "listed, not fetched by default"))
+    src = f"https://github.com/{repo}/archive/refs/tags/{tag}.zip"
+    rows.append(row("llamacpp", tag, f"llama.cpp-{tag}-source.zip", src, None, None, "", api_b, False,
+                    f"GitHub's generated source archive; the tag's commit {info['binaries_commit']} is the pin"))
+    return info, rows
+
+
+def assets_zluda() -> tuple:
+    repo = "vosen/ZLUDA"
+    api = f"{GH}{repo}/releases/latest"
+    latest = get_json(api)
+    recent = get_json(f"{GH}{repo}/releases?per_page=10")
+    pre = next((r for r in recent if r.get("prerelease")), None)
+    info = {"stable": gh_release_info(latest), "newest_prerelease": gh_release_info(pre) if pre else None,
+            "api": api}
+    rows = []
+    for rel, stable in ((latest, True), (pre, False)):
+        if rel is None:
+            continue
+        for a in rel.get("assets", []):
+            if "windows" in a["name"].lower():
+                rows.append(row("zluda", rel["tag_name"], a["name"], a["browser_download_url"], a["size"], gh_digest(a),
+                                "GitHub release digest", f"{GH}{repo}/releases/tags/{rel['tag_name']}", stable,
+                                "" if stable else "PREVIEW: only if the stable release fails"))
+    return info, rows
+
+
+def pypi_files(pkg: str, version: str = None) -> tuple:
+    api = f"{PYPI}{pkg}/{version}/json" if version else f"{PYPI}{pkg}/json"
+    j = get_json(api)
+    return j["info"], j.get("urls", []), api
+
+
+def pypi_rows(component: str, pkg: str, version, fetch: bool, note: str = "") -> tuple:
+    info, files, api = pypi_files(pkg, version)
+    rows = [row(component, info["version"], f["filename"], f["url"], f["size"], f["digests"].get("sha256"),
+                "PyPI digests", api, fetch, note)
+            for f in files if f["filename"].endswith(f"-{PY_TAG}-{PY_TAG}-win_amd64.whl")
+            or (f["filename"].endswith("-py3-none-win_amd64.whl"))]
+    meta = {"package": pkg, "version": info["version"], "requires_dist": info.get("requires_dist"),
+            "cp312_win_amd64": [r["name"] for r in rows], "api": api}
+    if not rows:
+        rows = [row(component, info["version"], f"{pkg}: no {PY_TAG} win_amd64 wheel", None, None, None, "", api,
+                    False, "absent on PyPI")]
+    return meta, rows
+
+
+def assets_genai() -> tuple:
+    info, rows = {}, []
+    for pkg, ver, fetch, note in (
+            ("onnxruntime-genai", "0.16.0", True, "GenAI 0.16, the CPU package"),
+            ("onnxruntime", None, True, "the newest onnxruntime (onnxruntime-genai 0.16 requires it)"),
+            ("onnxruntime-genai-directml", None, False, "the newest DirectML package; see its requires_dist"),
+            ("onnxruntime-directml", None, False, "the newest onnxruntime-directml on PyPI"),
+            ("onnxruntime-genai-winml", "0.16.0", False, "the WinML package of 0.16; for the gate"),
+            ("onnxruntime-ep-amdgpu", None, False, "the AMDGPU EP's PyPI name, if any")):
+        try:
+            meta, rr = pypi_rows("genai", pkg, ver, fetch, note)
+        except urllib.error.HTTPError as e:
+            meta, rr = {"package": pkg, "version": ver, "error": f"HTTP {e.code}"}, []
+        info[pkg] = meta
+        rows += rr
+    api = f"{GH}microsoft/onnxruntime-genai/releases/tags/v0.16.0"
+    rel = get_json(api)
+    info["github_v0.16.0"] = gh_release_info(rel) | {"api": api}
+    api = f"{GH}ROCm/hip-ep/releases/latest"
+    try:
+        rel = get_json(api)
+        body_shas = sorted(set(re.findall(r"\b[0-9a-f]{64}\b", rel.get("body") or "")))
+        info["hip_ep_latest"] = gh_release_info(rel) | {"api": api, "sha256_in_body": body_shas}
+        for a in rel.get("assets", []):
+            if "windows" in a["name"].lower():
+                d = gh_digest(a)
+                rows.append(row("hip-ep", rel["tag_name"], a["name"], a["browser_download_url"], a["size"], d,
+                                "GitHub release digest", api, False,
+                                f"the AMDGPU EP plugin; the release body lists {body_shas}; "
+                                f"{'the body agrees with the digest' if d in body_shas else 'the body DISAGREES with the digest'}"))
+    except urllib.error.HTTPError as e:
+        info["hip_ep_latest"] = {"api": api, "error": f"HTTP {e.code}"}
+    return info, rows
+
+
+def link_rows(html: str) -> list:
+    return re.findall(r'<a\s+[^>]*href="([^"]+)"[^>]*>([^<]+)</a>', html, re.I)
+
+
+def assets_rocm() -> tuple:
+    info, rows = {"index": THEROCK, "version": ROCM_VERSION, "packages": {}}, []
+    for pkg in ROCM_PKGS:
+        page = f"{THEROCK}{pkg}/"
+        try:
+            html, final = get_text(page)
+        except urllib.error.HTTPError as e:
+            info["packages"][pkg] = {"page": page, "error": f"HTTP {e.code}"}
+            continue
+        files = []
+        for href, text in link_rows(html):
+            fn = text.strip()
+            if not (fn.endswith(".whl") or fn.endswith(".tar.gz")):
+                continue
+            files.append(fn)
+            v = re.search(r"-(\d+\.\d+\.\d+[\w.]*?)(?:-|\.tar\.gz)", fn)
+            if v and v.group(1) == ROCM_VERSION and (fn.endswith("win_amd64.whl") or fn.endswith(".tar.gz")):
+                url, frag = urllib.parse.urldefrag(urllib.parse.urljoin(final, href))
+                sha = frag.split("=", 1)[1] if frag.startswith("sha256=") else None
+                rows.append(row("rocm", ROCM_VERSION, fn, url, head_bytes(url), sha, "the index's #sha256", final, True))
+        info["packages"][pkg] = {"page": page, "final": final, "files_listed": len(files),
+                                 "versions": sorted({m.group(1) for f in files
+                                                     for m in [re.search(r"-(\d+\.\d+\.\d+[\w.]*?)(?:-|\.tar\.gz)", f)] if m})}
+    return info, rows
+
+
+def assets_nvcc() -> tuple:
+    info, rows = {"channel": "conda-forge", "version": NVCC_VERSION, "packages": {}}, []
+    for pkg in NVCC_PKGS + ("vs2019_win-64", "vs2022_win-64"):
+        api = f"{ANACONDA}conda-forge/{pkg}"
+        try:
+            j = get_json(api)
+        except urllib.error.HTTPError as e:
+            info["packages"][pkg] = {"api": api, "error": f"HTTP {e.code}"}
+            continue
+        files = j.get("files", [])
+        want = NVCC_VERSION if pkg.startswith("cuda-") else j.get("latest_version")
+        hits = [f for f in files if f.get("version") == want and f.get("attrs", {}).get("subdir") in ("win-64", "noarch")]
+        hits.sort(key=lambda f: (f.get("attrs", {}).get("build_number", 0), f.get("upload_time", "")))
+        info["packages"][pkg] = {"api": api, "latest_version": j.get("latest_version"), "wanted": want,
+                                 "builds_at_wanted": [f["basename"] for f in hits]}
+        if hits:
+            f = hits[-1]
+            url = "https:" + f["download_url"] if f["download_url"].startswith("//") else f["download_url"]
+            rows.append(row("nvcc", want, f["basename"].split("/")[-1], url, f.get("size"), f.get("sha256"),
+                            "anaconda.org file sha256", api, False,
+                            "conda resolves and verifies it at install (the closure is pinned by a logged dry-run)"))
+    return info, rows
+
+
+COMPONENTS = {"llamacpp": assets_llamacpp, "zluda": assets_zluda, "genai": assets_genai, "rocm": assets_rocm,
+              "nvcc": assets_nvcc}
+
+
+def assets() -> int:
+    print("S0 ASSETS (light: publisher records only; nothing is downloaded but llama.cpp's 7-byte nightly-tag.txt). "
+          "GB = 1e9 bytes.", flush=True)
+    say("TIME_JSON", {"utc": utc_now()})
+    total, allrows, bad = 0, [], []
+    for comp, fn in COMPONENTS.items():
+        try:
+            info, rows = fn()
+        except Exception as e:
+            say("COMPONENT_ERROR_JSON", {"component": comp, "error": f"{type(e).__name__}: {e}"})
+            bad.append(comp)
+            continue
+        say("RELEASE_JSON", {"component": comp, **info})
+        for r in rows:
+            say("ASSET_JSON", r)
+        allrows += rows
+    fetch = [r for r in allrows if r["fetch"]]
+    total = sum(r["bytes"] for r in fetch if isinstance(r["bytes"], int))
+    d = disk()
+    say("ASSETS_DONE_JSON", {"rows": len(allrows), "fetch_rows": len(fetch), "fetch_bytes": total,
+                             "fetch_gb": gb(total), "pinned_only_fetch_rows": sum(1 for r in fetch if not r["sha256"]),
+                             "free_gb": d["free_gb"], "free_after_gb": gb(d["free_bytes"] - total),
+                             "floor_gb": FLOOR_GB, "github_rate_remaining": _GH_CALLS[-1] if _GH_CALLS else None,
+                             "errors": bad})
+    print(f"\n  {'component':9s} {'version':10s} {'fetch':5s} {'bytes':>13s}  checksum  name")
+    for r in allrows:
+        b = f"{r['bytes']:,}" if isinstance(r["bytes"], int) else str(r["bytes"])
+        print(f"  {r['component']:9s} {r['version']:10s} {str(r['fetch']):5s} {b:>13s}  "
+              f"{'sha256' if r['sha256'] else 'pinned only':11s} {r['name']}")
+    print(f"ASSETS {'OK' if not bad else 'INCOMPLETE: ' + ', '.join(bad)}: {len(allrows)} assets, {len(fetch)} to "
+          f"fetch by default ({gb(total)} GB); {d['free_gb']} GB free, the floor {FLOOR_GB:g} GB", flush=True)
+    return 0 if not bad else 2
+
+
+# ---------------------------------------------------------------- fetch (verified downloads into scratch/rt)
+
+# The gate's approval (2026-09-24, F1): fetch reads only this assets log, checked by its LF sha256, and fetches only
+# these rows, taking each URL, size and sha256 from that log. The log's own fetch flags decide nothing.
+APPROVED_ASSETS_LOG = "hybrid_s0_assets_desktop2_20260924.log"
+APPROVED_ASSETS_LF = "28e112bf3047b57665af14c74d8111560d3f318defd59f23d2a6ea04cba4780b"
+APPROVED_ROWS = {
+    "llamacpp": ("llama-b11146-bin-win-cpu-x64.zip", "llama-b11146-bin-win-vulkan-x64.zip",
+                 "llama-b11146-bin-win-rocm-10.0-x64.zip", "llama-b11146-bin-win-cuda-12.4-x64.zip",
+                 "cudart-llama-bin-win-cuda-12.4-x64.zip", "llama-b11146-bin-win-cuda-13.4-x64.zip",
+                 "cudart-llama-bin-win-cuda-13.4-x64.zip"),
+    "zluda": ("zluda-windows-3fe1206.zip",),
+    "genai": ("onnxruntime_genai-0.16.0-cp312-cp312-win_amd64.whl", "onnxruntime-1.30.0-cp312-cp312-win_amd64.whl",
+              "onnxruntime_genai_winml-0.16.0-cp312-cp312-win_amd64.whl"),
+    "rocm": ("rocm-10.0.0.tar.gz", "rocm_sdk_core-10.0.0-py3-none-win_amd64.whl",
+             "rocm_sdk_libraries-10.0.0-py3-none-win_amd64.whl", "rocm_sdk_devel-10.0.0-py3-none-win_amd64.whl",
+             "rocm_sdk_device_gfx1103-10.0.0-py3-none-win_amd64.whl"),
+    "genai-dml": ("onnxruntime_directml-1.24.4-cp312-cp312-win_amd64.whl",),
+}
+# G-GA/dml (the user's decision, 2026-09-25) has two rows, joined together once the gate had matched the dml013
+# addendum (2026-09-25): this log's onnxruntime_directml-1.24.4 wheel, as "genai-dml" above, and the addendum's
+# 0.13.1 wheel, as PINS' second entry. contents walks all 18 rows, so it reads INCOMPLETE until fetch genai-dml.
+# Every (log, LF sha256, rows) the gate has approved, in order. A tagged addendum joins only after the gate has matched
+# its log against its own read of the publisher's record; until then nothing of it is fetched.
+PINS = [
+    {"log": APPROVED_ASSETS_LOG, "lf": APPROVED_ASSETS_LF, "rows": APPROVED_ROWS},
+    {"log": "hybrid_s0_assets_desktop2_20260925_dml013.log",
+     "lf": "585d3f2050bd164b0ba0332d3d1d8dce1bb12beb13ebe164f58faf7d3b0abbed",
+     "rows": {"genai-dml": ("onnxruntime_genai_directml-0.13.1-cp312-cp312-win_amd64.whl",)}},
+]
+RT_DIR = {"llamacpp": "llamacpp-b11146", "zluda": "zluda-v6", "genai": "genai-0.16.0", "rocm": "rocm-10.0.0",
+          "genai-dml": "genai-dml-0.13.1"}
+ADDENDUM_COMPONENT = {"onnxruntime-genai-directml": "genai-dml"}
+FETCH_NOTES = {
+    "llamacpp": "b11146 (commit 7fe450e19305b828c199d602c23a8337aaa1f03b) is the build releases/latest (v0.5.0) names "
+                "in its nightly-tag.txt; v0.5.0 is the same commit ('bump version to 0.5.0'). b11175 "
+                "(2026-09-25T03:04Z) is a later prerelease and is not taken. Both CUDA builds (12.4, 13.4) are fetched "
+                "for G-ZL; the source archive is not (a source build clones 7fe450e). The gate's rulings 1 and 3.",
+    "zluda": "v6 stable; v7-preview.11 is not fetched (PREVIEW only if v6 fails). The gate's ruling 3.",
+    "genai": "GenAI 0.16.0 (CPU) with onnxruntime 1.30.0; the WinML wheel is fetched for its file listing only. "
+             "G-GA/dml and G-GA/amdgpu are NOT RUN at 0.16, and hip-ep is not fetched. The gate's rulings 5 and 6.",
+    "rocm": "TheRock 10.0.0 wheels: no checksum is published anywhere, so each is hashed at download and its size "
+            "checked ('pinned only'); S3's prereg pins the hash. The gate's ruling 2.",
+    "genai-dml": "G-GA/dml, the user's decision (2026-09-25): onnxruntime-genai-directml 0.13.1 on "
+                 "onnxruntime-directml 1.24.4, the newest pair PyPI can satisfy, for its own env genai013. The 1.24.4 "
+                 "wheel is in the approved assets log; the 0.13.1 wheel comes from a tagged addendum, fetched only "
+                 "once the gate has matched it.",
+}
+
+
+def lf_sha(p: Path):
+    return hashlib.sha256(p.read_bytes().replace(b"\r\n", b"\n")).hexdigest() if p.exists() else None
+
+
+def pinned_rows(component: str) -> tuple:
+    """The approved rows for a component, each read by name from its pinned log. (rows, plan, refusal)"""
+    rows, plan = [], []
+    for pin in PINS:
+        want = pin["rows"].get(component, ())
+        if not want:
+            continue
+        p = RESULTS / pin["log"]
+        lf = lf_sha(p)
+        plan.append({"log": pin["log"], "log_lf_sha256": lf, "pinned_lf": pin["lf"], "rows": list(want)})
+        if lf != pin["lf"]:
+            return rows, plan, f"{pin['log']} is missing or its LF sha256 differs from the pin"
+        logged = {}
+        for s in p.read_text(encoding="utf-8").splitlines():
+            if s.startswith("ASSET_JSON "):
+                r = json.loads(s.split(" ", 1)[1])
+                logged[r["name"]] = r
+        missing = [n for n in want if n not in logged]
+        if missing:
+            return rows, plan, f"{pin['log']} lacks {missing}"
+        rows += [logged[n] for n in want]
+    return rows, plan, None if rows else f"{component} has no approved rows"
+
+
+def fetch(component: str) -> int:
+    rows, plan, refusal = pinned_rows(component)
+    say("FETCH_PLAN_JSON", {"pins": plan, "component": component, "dir": f"{rel(RT)}/{RT_DIR.get(component)}",
+                            "note": FETCH_NOTES.get(component), "utc": utc_now()})
+    if refusal:
+        print(f"FETCH REFUSED: {refusal}", flush=True)
+        return 2
+    rc = 0
+    for r in rows:
+        dest = RT / RT_DIR[component]
+        dest.mkdir(parents=True, exist_ok=True)
+        out = dest / r["name"]
+        before = disk()
+        need = (r["bytes"] if isinstance(r["bytes"], int) else 0) / 1e9
+        if before["free_gb"] - need < FLOOR_GB:
+            say("FETCH_REFUSED_JSON", {"name": r["name"], "free_gb": before["free_gb"], "need_gb": round(need, 2),
+                                       "floor_gb": FLOOR_GB})
+            print(f"FETCH STOP: {r['name']} would leave less than {FLOOR_GB:g} GB free", flush=True)
+            return 3
+        if out.exists():
+            got = sha256_file(out)
+            same = got == r["sha256"] if r["sha256"] else None
+            say("FETCH_EXISTS_JSON", {"name": r["name"], "path": rel(out), "sha256": got, "publisher_match": same})
+            if same is not False:
+                continue
+            out.unlink()
+        part = out.with_name(out.name + ".part")
+        h, n, t0 = hashlib.sha256(), 0, time.time()
+        with http(r["url"]) as resp, open(part, "wb") as f:
+            for chunk in iter(lambda: resp.read(1 << 20), b""):
+                h.update(chunk)
+                f.write(chunk)
+                n += len(chunk)
+        got = h.hexdigest()
+        size_ok = not isinstance(r["bytes"], int) or n == r["bytes"]
+        match = (got == r["sha256"]) if r["sha256"] else None
+        if match is False or not size_ok:
+            part.unlink()
+            rc = 3
+        else:
+            part.replace(out)
+        after = disk()
+        say("FETCH_JSON", {"name": r["name"], "url": r["url"], "path": rel(out) if rc == 0 else None, "bytes": n,
+                           "bytes_listed": r["bytes"], "sha256_publisher": r["sha256"], "sha256_got": got,
+                           "verified": "MATCH" if match else ("pinned only" if match is None else "MISMATCH"),
+                           "size_ok": size_ok, "seconds": round(time.time() - t0, 1),
+                           "free_gb_before": before["free_gb"], "free_gb_after": after["free_gb"]})
+        if rc:
+            print(f"FETCH STOP: {r['name']} failed verification; the partial file is deleted", flush=True)
+            return rc
+    print(f"FETCH OK: {component}, {len(rows)} assets in {rel(RT)}/{RT_DIR[component]}", flush=True)
+    return 0
+
+
+# ---------------------------------------------------------------- contents (a read of each fetched archive)
+
+FLAGS = {
+    "rocblas_hipblas": re.compile(r"(?i)(^|/)(rocblas|hipblas|hipblaslt)[^/]*\.dll$"),
+    "hip_runtime": re.compile(r"(?i)(^|/)(amdhip64[^/]*|amd_comgr[^/]*|rocm_kpack[^/]*|hiprtc[^/]*)\.dll$"),
+    "cuda_standins": re.compile(r"(?i)(^|/)(nvcuda|nvml|cublas|cublaslt|cufft|cusparse|cudnn|cudart|nvrtc)[^/]*\.dll$"),
+    "webgpu": re.compile(r"(?i)(webgpu|dawn|dxcompiler|dxil)[^/]*\.(dll|pyd)$"),
+    "directml_winml": re.compile(r"(?i)(directml|windows\.ai\.machinelearning|winml|microsoft\.windows\.ai)[^/]*\.(dll|pyd|winmd)$"),
+    "onnxruntime_dll": re.compile(r"(?i)(^|/)onnxruntime[^/]*\.(dll|pyd)$"),
+    "providers": re.compile(r"(?i)providers?[^/]*\.(dll|pyd)$"),
+    "tools": re.compile(r"(?i)(^|/)(llama-perplexity|llama-cli|llama-bench|zluda[^/]*|cuda_check)\.exe$"),
+}
+FULL_LIST_MAX = 400
+
+
+def members(path: Path) -> tuple:
+    import tarfile
+    import zipfile
+    if path.suffix in (".zip", ".whl"):
+        with zipfile.ZipFile(path) as z:
+            infos = z.infolist()
+            meta = next((i for i in infos if i.filename.endswith(".dist-info/METADATA")), None)
+            requires = [ln.split(":", 1)[1].strip() for ln in z.read(meta).decode("utf-8", "replace").splitlines()
+                        if ln.startswith("Requires-Dist:")] if meta else None
+            return [(i.filename, i.file_size) for i in infos if not i.is_dir()], requires
+    with tarfile.open(path) as t:
+        return [(m.name, m.size) for m in t.getmembers() if m.isfile()], None
+
+
+PE_NAMES = re.compile(r"(?i)(^|/)(amdhip64_7|rocblas|hipblas)\.dll$")     # amendment 4 (c): read their PE version
+
+
+def pe_info(data: bytes) -> dict:
+    """A DLL's PE version resource and whether it embeds an Authenticode blob, parsed from bytes in memory with
+    pefile (already in the env): nothing is written to disk and nothing is loaded or executed."""
+    import pefile
+    out = {"bytes": len(data), "sha256": hashlib.sha256(data).hexdigest()}
+    try:
+        pe = pefile.PE(data=data, fast_load=True)
+        pe.parse_data_directories(directories=[pefile.DIRECTORY_ENTRY["IMAGE_DIRECTORY_ENTRY_RESOURCE"]])
+    except pefile.PEFormatError as e:
+        return {**out, "error": f"not a PE: {e}"}
+    ver = lambda ms, ls: f"{ms >> 16}.{ms & 0xFFFF}.{ls >> 16}.{ls & 0xFFFF}"  # noqa: E731
+    ff = getattr(pe, "VS_FIXEDFILEINFO", None)
+    if ff:
+        out["file_version"] = ver(ff[0].FileVersionMS, ff[0].FileVersionLS)
+        out["product_version"] = ver(ff[0].ProductVersionMS, ff[0].ProductVersionLS)
+    strings = {}
+    for fi in getattr(pe, "FileInfo", None) or []:
+        for entry in fi:
+            for st in getattr(entry, "StringTable", None) or []:
+                for k, v in st.entries.items():
+                    strings[k.decode("utf-8", "replace")] = v.decode("utf-8", "replace")
+    out["strings"] = {k: strings[k] for k in ("FileVersion", "ProductVersion", "CompanyName", "FileDescription")
+                      if k in strings}
+    sec = pe.OPTIONAL_HEADER.DATA_DIRECTORY[pefile.DIRECTORY_ENTRY["IMAGE_DIRECTORY_ENTRY_SECURITY"]]
+    out["authenticode_embedded"] = sec.Size > 0             # present, not verified
+    pe.close()
+    return out
+
+
+def own_memory() -> dict:
+    """This process's working set and private bytes, now and at peak (GB), in S1's form (psutil, in the env)."""
+    import psutil
+    m = psutil.Process().memory_info()
+    return {"wset_gb": round(m.rss / 1e9, 3), "peak_wset_gb": round(getattr(m, "peak_wset", 0) / 1e9, 3),
+            "private_gb": round(getattr(m, "private", 0) / 1e9, 3),
+            "peak_private_gb": round(getattr(m, "peak_pagefile", 0) / 1e9, 3)}
+
+
+def sac_state() -> dict:
+    """Smart App Control, read-only: VerifiedAndReputablePolicyState (0 off, 1 on, 2 evaluation). Never written."""
+    key = r"SYSTEM\CurrentControlSet\Control\CI\Policy"
+    try:
+        with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, key, 0, winreg.KEY_READ) as k:
+            v, _ = winreg.QueryValueEx(k, "VerifiedAndReputablePolicyState")
+    except OSError as e:
+        return {"key": "HKLM\\" + key, "value": None, "error": str(e)}
+    return {"key": "HKLM\\" + key, "value": v, "state": {0: "off", 1: "on", 2: "evaluation"}.get(v, "unknown")}
+
+
+def norm_member(p: str) -> str:
+    """An archive path in one form: '/' separators, no leading './', '..' and '.' resolved (posixpath.normpath)."""
+    p = p.replace("\\", "/")
+    while p.startswith("./"):
+        p = p[2:]
+    return posixpath.normpath(p) if p else p
+
+
+def nested_tar(z, info) -> dict:
+    """A .tar inside a wheel (rocm_sdk_devel's _devel.tar), streamed from the zip: its member list, the PE reads,
+    and its links with their targets (the dangling ones named: amendment 4 (e), TheRock #7807). Nothing extracted.
+    Memory stays bounded: the zip member is read as a stream and the tar in stream mode ("r|*"), one member's data
+    at a time; only a matching DLL's own bytes are held, for its PE read. tarfile keeps each member's header (a
+    TarInfo, well under 1 kB), about 7,000 for _devel.tar; contents() logs the peak working set.
+    A link resolves if its target is a file, a link, an explicit directory, an ancestor directory of any of those,
+    or the archive's root. The limit: links are not followed, so a target reached THROUGH another symlinked
+    directory (lib64 -> lib, then lib64/x) is not resolved, and the dangling list is an upper bound
+    ("links_followed": false in the record)."""
+    import tarfile
+    files, links, dirs, pes, longest = [], [], set(), [], (0, "")
+    with z.open(info) as raw, tarfile.open(fileobj=raw, mode="r|*") as t:
+        for m in t:
+            if len(m.name) > longest[0]:
+                longest = (len(m.name), m.name)
+            if m.issym() or m.islnk():
+                links.append((norm_member(m.name), m.linkname, "sym" if m.issym() else "hard"))
+            elif m.isfile():
+                files.append((norm_member(m.name), m.size))
+                if PE_NAMES.search(m.name):
+                    pes.append({"member": m.name, **pe_info(t.extractfile(m).read())})
+            elif m.isdir():
+                dirs.add(norm_member(m.name))
+    names = {n for n, _ in files} | {n for n, _, _ in links} | dirs
+
+    def ancestors(n):
+        """Every parent directory of a member name, nearest first; stops at '' (relative) or '/' (absolute)."""
+        d = posixpath.dirname(n)
+        while d and d != "/":
+            yield d
+            d = posixpath.dirname(d)
+    names |= {a for n in names for a in ancestors(n)} | {"."}
+
+    def target(name, link, kind):
+        """A hard link's target is archive-relative; a symlink's is relative to its own directory. Both are put in
+        norm_member's form before the comparison; an absolute symlink target can never be inside the tar."""
+        link = link.replace("\\", "/")
+        if kind == "sym" and (link.startswith("/") or re.match(r"^[A-Za-z]:/", link)):
+            return None
+        return norm_member(link if kind == "hard" else posixpath.join(posixpath.dirname(name), link))
+    dangling = [{"link": n, "target": l, "kind": k, "resolved": target(n, l, k)} for n, l, k in links
+                if target(n, l, k) not in names]
+    flags = {k: sorted(n for n, _ in files if rx.search(n)) for k, rx in FLAGS.items()}
+    return {"tar": info.filename, "files": len(files), "uncompressed_bytes": sum(s for _, s in files),
+            "dirs": len(dirs), "links": len(links), "links_followed": False, "dangling": dangling,
+            "flags": {k: v for k, v in flags.items() if v},
+            "longest_member": {"chars": longest[0], "name": longest[1]}, "pe": pes}
+
+
+def contents() -> int:
+    """List every approved, fetched archive's members: a read, nothing is extracted or executed. Amendment 4 (c):
+    the PE version of amdhip64_7, rocblas and hipblas, read in memory; a .tar inside a wheel is streamed and listed;
+    Smart App Control's state is read (read-only)."""
+    import zipfile
+    print("S0 CONTENTS (a read of the fetched archives; nothing extracted or run). GB = 1e9 bytes.", flush=True)
+    say("TIME_JSON", {"utc": utc_now()})
+    say("SAC_JSON", sac_state())
+    missing = []
+    for comp, name in [(c, n) for pin in PINS for c, names in pin["rows"].items() for n in names]:
+        path = RT / RT_DIR[comp] / name
+        if not path.exists():
+            missing.append(name)
+            continue
+        mem, requires = members(path)
+        flags = {k: sorted(n for n, _ in mem if rx.search(n)) for k, rx in FLAGS.items()}
+        longest = max(mem, key=lambda m: len(m[0]))[0] if mem else ""
+        say("CONTENTS_JSON", {"component": comp, "name": name, "sha256": sha256_file(path),
+                              "members": len(mem), "uncompressed_bytes": sum(s for _, s in mem),
+                              "requires_dist": requires, "flags": {k: v for k, v in flags.items() if v},
+                              "longest_member": {"chars": len(longest), "name": longest},
+                              "list": sorted(n for n, _ in mem) if len(mem) <= FULL_LIST_MAX
+                              else f"{len(mem)} members (over {FULL_LIST_MAX}: flags only)"})
+        if path.suffix in (".zip", ".whl"):
+            with zipfile.ZipFile(path) as z:
+                for info in z.infolist():
+                    if PE_NAMES.search(info.filename):
+                        say("PE_JSON", {"component": comp, "archive": name, "member": info.filename,
+                                        **pe_info(z.read(info))})
+                    elif info.filename.endswith(".tar"):
+                        say("NESTED_TAR_JSON", {"component": comp, "archive": name, **nested_tar(z, info)})
+    say("MEM_JSON", own_memory())
+    print(f"CONTENTS {'OK' if not missing else 'INCOMPLETE: not fetched ' + ', '.join(missing)}", flush=True)
+    return 0 if not missing else 2
+
+
+def addendum(spec: str) -> int:
+    """A tagged addendum assets log: PyPI's own record for one package==version (cp312 win_amd64). Its rows are
+    fetched only after the gate has matched this log and its LF sha256 joins PINS."""
+    pkg, _, ver = spec.partition("==")
+    comp = ADDENDUM_COMPONENT.get(pkg)
+    if comp is None or not ver:
+        print(f"ADDENDUM REFUSED: {spec!r} is not PKG==VERSION for one of {sorted(ADDENDUM_COMPONENT)}", flush=True)
+        return 2
+    print(f"S0 ASSETS ADDENDUM (light: PyPI's record for {spec} only; nothing is downloaded). GB = 1e9 bytes.",
+          flush=True)
+    say("TIME_JSON", {"utc": utc_now()})
+    meta, rows = pypi_rows(comp, pkg, ver, False, "an addendum row: fetched only once the gate has pinned this log")
+    say("RELEASE_JSON", {"component": comp, "addendum": spec, **meta})
+    for r in rows:
+        say("ASSET_JSON", r)
+    say("ASSETS_DONE_JSON", {"rows": len(rows), "addendum": spec, "component": comp,
+                             "bytes": sum(r["bytes"] for r in rows if isinstance(r["bytes"], int))})
+    ok = bool(rows) and all(r["url"] and r["sha256"] for r in rows)
+    print(f"ADDENDUM {'OK' if ok else 'INCOMPLETE'}: {len(rows)} row(s) for {spec}", flush=True)
+    return 0 if ok else 2
+
+
+def main() -> int:
+    sys.stdout.reconfigure(encoding="utf-8")
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("mode", choices=("baseline", "assets", "fetch", "contents", "addendum"))
+    ap.add_argument("args", nargs="*")
+    a = ap.parse_args()
+    comps = sorted({c for pin in PINS for c in pin["rows"]})
+    if a.mode == "fetch":
+        if len(a.args) != 1 or a.args[0] not in comps:
+            ap.error(f"fetch takes one COMPONENT: {', '.join(comps)}")
+        return fetch(a.args[0])
+    if a.mode == "addendum":
+        if len(a.args) != 1:
+            ap.error("addendum takes one PKG==VERSION")
+        return addendum(a.args[0])
+    return {"baseline": baseline, "assets": assets, "contents": contents}[a.mode]()
+
+
+if __name__ == "__main__":
+    sys.exit(main())

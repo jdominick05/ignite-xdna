@@ -1,0 +1,385 @@
+S1 PLAN AND PREREG: the NPU numerics gate. Do 3c's int8 and bf16 arithmetics on the seven linears keep
+Gemma 3 4B's quality on real text? CPU only.
+
+Plan v2, 2026-09-24.
+
+The approvals:
+- The user approved S1: "ok let INT4 start S1".
+- The gate reviewed v1 (ea649322) and approved it with changes, none of which needs the user.
+- v2 applies those changes: R0 is the reference (§3), the pick order (§7), band C (§6), S4's wording (§4), and
+  N3's runtime (§8). The gate's rulings on v1's questions are in §10.
+
+The rules:
+- This text is committed before anything heavy runs.
+- The rules are tools/hybrid_s1.py's verdict code.
+- Branch worktree-hybrid-stack, from worktree-llm-study at 25cbc09. Held local.
+
+Tags: MEASURED (with its log), DERIVED (arithmetic here), SPEC (a vendor source, read 2026-09-24), ESTIMATE.
+
+## 0. What S1 decides, and what it does not
+
+- **It decides**, per numerics N1, N2 and N3 (§4): PASS, FAIL or INCOMPLETE on model quality, against the
+  reference R0 (§3), on real 2,048-token prompts.
+- **It feeds**:
+  - the hybrid's NPU numerics (§7);
+  - the user's U6 call ("Decide after S1"). If nothing passes, U6 or stop is the user's call.
+- **It does not decide**:
+  - speed or energy (3c measured them; S5 measures the whole prompt);
+  - generation, which stays on the GPU in Q4_0;
+  - prompts of 8,192 tokens, which would be a separate run;
+  - the GPU runtimes' accuracy (S0 and S3).
+- **Why no NPU is needed** (MEASURED in 3c):
+  - N1 and N2 reproduce the NPU's int32 output bit for bit. 3c's N-i8 int32 equalled the exact int8 product in
+    every window, as C-i8's MatMulInteger did.
+  - N3 reproduces N-bf16 up to fp32 accumulation order (§4).
+
+## 1. A correction to the design (accepted by the gate)
+
+- 3c's N-i8 quantizes W per output column, not per tensor:
+  - `quant_w` (tools/llm_prefill3c.py:162-165) sets s_w[n] = max_k |W[k, n]| / 127;
+  - X is quantized per tensor, one scale over the whole M-row tile (`quant_x`, :168-171; `quant_x(a[:M])`,
+    :587);
+  - so N2 differs from N1 only in X, which becomes per token.
+- b1()'s printed fractions are fractions that match (gemma_decode.py:239-253).
+
+## 2. The text set
+
+- **Corpus:** WikiText-2 raw, test split, as (c) pinned it (gemma_decode_suite.py:96-98):
+  - Salesforce/wikitext @ b08601e04326c79dfdd32d625aee71d232d685c3;
+  - wikitext-2-raw-v1/test-00000-of-00001.parquet;
+  - 732,610 B, sha256 5f1bea067869d04849c0f975a2b29c4ff47d867f484f5010ea5e861eab246d91.
+
+  It is real encyclopedic English, and it is llama.cpp's perplexity text.
+- **Tokenizer:** (c)'s, the text-only copy's AutoTokenizer:
+  - its files are the checkpoint's: tokenizer.json sha256 7d4046bf…, tokenizer.model 1299c11d…
+    (gemma_decode.CK_LFS), and the others by git blob sha1 (CK_BLOB);
+  - (c)'s prereg checked it equal to SentencePiece and to the raw tokenizer.json.
+- **Ids:**
+  1. The parquet's text column is joined with "\n\n", as (c) did.
+  2. The whole joined text is tokenized with add_special_tokens=False, giving T. (c)'s prereg counts 292,282
+     tokens; S1 prints its own count.
+  3. Sequence s = 0…15 is [2] + T[2047·s : 2047·(s+1)]: BOS and 2,047 consecutive text tokens. That is 2,048
+     ids, no overlap, no chat template.
+  4. Band C's sequences c = 0…3 are [2] + T[2047·c : 2047·c + 3071]: 3,072 ids, whose first 2,048 are
+     sequence c.
+- **Pins:** the prereg log prints the sha256 of every sequence's ids (int32 little-endian, (c)'s ids_sha form)
+  and of all 16 concatenated. Every later step refuses other ids.
+- **The link to (c)** (report-only): the prereg reports whether sequence 0's first 1,024 ids equal (c)'s
+  IDS_SHA c87fda3e….
+
+## 3. The model, and the reference R0
+
+- **Weights:** the pinned GGUF (google/gemma-3-4b-it-qat-q4_0-gguf @ 15f73f5e, 3,155,051,328 B, sha256
+  76aed0a8…).
+- **The graph:** (c)'s built C0-H16 model, copied from the LLM study's scratch, not rebuilt:
+  - checked against (c)'s pins: model.onnx sha256 33c47ffa…, model.onnx.data 7,644,053,504 B, 11edd445…
+    (gemma_decode_suite.MODEL_SHA; build log line 596);
+  - the 238 linears are MatMulNBits (bits 4, block 32, the release's codes and d, no zero points);
+  - the F16 embedding and head are held in fp32;
+  - GQA local windows are 1023 (F3), with RoPE caches (F1);
+  - from text_only, only config.json and the tokenizer files are copied. The torch reference takes every
+    weight from the GGUF.
+- **Surgery, identical for every model:** /lm_head/MatMul and its weight are removed, and the graph's output
+  is the final norm's output: the hidden states, [2048, 2560] fp32. The head is applied in the verdict,
+  identically for every model (§6).
+- **R0, the reference:** the graph with accuracy_level 0 on the 238 MatMulNBits. That is exact d·(q − 8)
+  against fp32 activations: (c)'s C0-H16 with the head cut.
+  - The anchor (§7) was measured against torch fp32, and C4 ties R0 to torch at ≤ 1e-4 per position. So R0 is
+    the like-for-like reference.
+- **R** (a report-only arm, scored like the others): the same graph with accuracy_level 4. It is the closest
+  ORT form to llama.cpp's Q4_0 × Q8_0:
+
+  | | llama.cpp, x86 | ORT MLAS, CompInt8 |
+  |---|---|---|
+  | Function | quantize_row_q8_0 | QuantizeARow_CompInt8_avx2 |
+  | Codes | RNE of x · 127/amax | the same |
+  | Activation block scale | stored fp16(amax/127) | kept in fp32 |
+  | Dot | per-block integer sum × fp16(d_w) × fp16(d_x), float accumulator (ggml_vec_dot_q4_0_q8_0) | integer dot per block × d_w × d_x, fp32 accumulate |
+
+  Both columns are SPEC, read from source on 2026-09-24: llama.cpp master, and ORT rel-1.23.2's AVX2 kernel.
+  - KL(R0 ‖ R) is P4: what an int8-activation path costs.
+  - The gap, named:
+    1. the block scale: fp32 in ORT, fp16 in llama.cpp;
+    2. fp32 summation order;
+    3. llama.cpp's GPU backends: their MMQ kernels use Q8_1 blocks (an fp16 d, plus an fp16 sum of the
+       block's unquantized values); a Vulkan device without integer dot products dequantizes to fp16 instead;
+    4. the head: llama.cpp's CPU converts the activations to fp16 for an F16 weight. It is common to every
+       model here.
+  - The ORT here is onnxruntime 1.23.3.dev20260320, as resnet_env17 logs it, on Zen 4 (AVX-512 VNNI). So C2
+    measures the form R takes, not assumes it.
+- **Everything outside the 238 linears** is identical in R0, R, N1, N2 and N3 (C3): the embedding, the norms,
+  QK-norm, RoPE, GQA, GELU and the residuals, in fp32 on the CPU EP.
+
+## 4. The three numerics (the arms)
+
+- Each arm replaces all 238 MatMulNBits (7 linears × 34 layers) with the subgraph below. Nothing else changes.
+- **W** is the release's exact d·(q − 8), 3c's dense().
+- **The input X** is the linear's fp32 input, [1, 2048, K]:
+  - q, k and v share one X, and so one quantization, as in 3c;
+  - gate and up share another.
+- **Quantization is float64, exactly 3c's quant_x:**
+  1. s = float64(max |X|) / 127.0;
+  2. q = Round(float64(X) / s), where ONNX Round is half to even, as np.rint is;
+  3. q = Clip(q, −127, 127), then u8 = q + 128.
+
+  In ONNX: Abs → ReduceMax → Cast(double) → Div → Round → Clip → Add → Cast(uint8). A zero scale divides by 1
+  instead of 0, which gives codes of 0 and an output of 0.
+
+**N1: int8, X per tensor × W per column. 3c's N-i8 exactly.**
+- s_x is one scale over the whole [2048, K] prompt tile, BOS row included. This is 3c's M = 2048 tile.
+- W_q = quant_w(W): per output column, float64, RNE, clipped to ±127.
+- The product: MatMulInteger(u8 X with zero point 128, s8 W_q) → int32. This is 3c's C-i8 form, which
+  returned the exact int8 product in every window.
+- The epilogue: y = fp32(float64(int32) · s_x · s_w[n]), evaluated left to right in float64, with one rounding
+  to fp32.
+- **S4's requirement:**
+  - the NPU's int32 must be bit-exact for identical int8 codes;
+  - the hybrid's quantize and epilogue (likely fp32, on the GPU or host) must hold the codes and outputs within
+    a stated tolerance of S1's, with the number of flipped codes reported.
+
+**N2: int8, X per token × W per column.**
+- As N1, except s_x[m] = float64(max_k |X[m, k]|) / 127.0 per row.
+- The epilogue is y = fp32(float64(int32) · s_x[m] · s_w[n]).
+- Same NPU kernel and same W codes as N1; only the per-row scale is new, in the epilogue. N2 is invariant to
+  how the prompt is batched.
+
+**N3: bf16, N-bf16's arithmetic.**
+- X is rounded to bf16 by Cast(float→bfloat16), round to nearest even, then Cast(→float).
+- W is rounded on the host to bf16 by ml_dtypes (RNE), as 3c rounded N-bf16's W, and stored as bf16. Cast(→float)
+  runs at run time. No graph optimizer runs (§8), so it is neither folded nor removed.
+- The product is MatMul in fp32 (MLAS SGEMM, fp32 accumulator). The output is fp32, as N-bf16's is.
+- **The gap to the NPU, named:** the accumulation order only.
+  - 3c MEASURED N-bf16 against the float64 product of its bf16-rounded X and W at rel-L2 3.03e-7 to 3.44e-7 per
+    linear (bf16_own, the same in A2 and B). That includes the NPU's split-K down.
+  - C1 prints S1's own N3 against the same product.
+  - Their sum, about 1e-6, is the bound between S1's N3 and the NPU, against bf16 rounding itself at about
+    3e-3 (DERIVED).
+
+## 5. Checks (the check log). A failed check stops what it guards.
+
+- **C1, the bit-exact link to 3c.** It runs on 3c's own inputs:
+  - X is regenerated from 3c's seed 20260924 (default_rng, standard_normal float32, INPUTS order);
+  - W and W_q for blk.16 are re-derived from the GGUF;
+  - every one's .npy sha256 must equal 3c's INPUT_FILE_JSON pin (llm_prefill3c_inputs_desktop2_20260924.log).
+  - Then one probe per arm and linear is built with S1's own subgraph builder. It sees 2,048 rows and exposes
+    the int32 (or the cast values):
+
+  | Arm | What must hold |
+  |---|---|
+  | N1 | the int32's sha256 equals that log's EXACT_INT32_SHA256 i8_{name}_M2048, all seven |
+  | N2 | the int32 equals the exact per-token product (float64 BLAS, 3c's exact_int), all seven |
+  | N3 | the cast X and W equal ml_dtypes' RNE values; the output's rel-L2 against the float64 product of the rounded X and W is at most 1e-4 (3c's BF16_ACC_MAX), and it is printed |
+
+  A failure voids that arm (INCOMPLETE).
+- **C2, R's form** (report-only). It uses sequence 0's layer-16 linear inputs from R0:
+  - for each of the seven linears, ORT's accuracy_level 4 output is compared by rel-L2 with two emulations:
+    - (a) the ORT form: fp32 block scale, RNE;
+    - (b) llama.cpp's x86 form: fp16 block scale, and codes from the fp32 127/amax;
+  - and (a) is compared with (b).
+  - The check log prints only these form figures. R's error against the exact product goes into the verdict
+    log.
+- **C3, graph identity:**
+  - the five graphs are equal node by node outside the 238 replaced linears;
+  - their shared initializers point at the same bytes of the same data file;
+  - R and R0 differ only in 238 accuracy_level attributes;
+  - every MatMulNBits node's qweight and scales equal the GGUF tensor it names (pack_ort(codes),
+    f16→f32(d)), K and N included;
+  - the verdict's head (the GGUF's F16 token_embd, upcast) equals the removed lm_head weight by sha256.
+- **C4, R0 against torch at 2,048 real tokens.** It is a gate:
+  - sequence 0, R0's hidden states against (c)'s reference: transformers' fp32 Gemma 3 with the release's
+    weights, streamed (reference_hidden);
+  - both pass through the same head;
+  - the rule: max per-position KL ≤ 1e-4 (the builder's FID_KL_MAX).
+  - The evidence so far: (c)'s fidelity gate ran this model as one plain-ORT prefill (ort_logits) at 1,100
+    random ids. Its max KL was 3.73e-09 past the window (build log line 582), against 0.901 before F3
+    (line 568). C4 repeats that test on real text, at 2,048 tokens and under S1's session options.
+  - A failure stops S1 (INCOMPLETE).
+  - The check log prints PASS or FAIL only; the value goes into the verdict log.
+- **C5, determinism:** R0 runs sequence 0 twice, and the two hidden states' sha256 must be equal.
+- **C6, band C's control:**
+  - R0 runs chunked on band C's sequence 0: its own KV from [0, 2048), then [2048, 3072) with that past;
+  - it is compared with R0 one-shot over [0, 3072);
+  - the rule: max per-position KL ≤ 1e-5 over positions 2048-3070;
+  - PASS or FAIL in the check log, the value in the verdict log;
+  - a failure stops band C only.
+
+## 6. The metrics (computed only in the verdict step)
+
+- **The head:** the release's F16 token_embd upcast to fp32, [262,144, 2,560] (C3).
+  - logits = h · headᵀ in fp32, by numpy's BLAS, in chunks of 256 positions;
+  - the same code for every model.
+- **Per position** i (the logits after ids[0..i], predicting ids[i+1]), with log-softmax in float64:
+  - KL_i(R0 ‖ A) = Σ_v p_R0(v) · (log p_R0(v) − log p_A(v)), over the full 262,144 vocabulary;
+  - top-1 = [argmax z_A = argmax z_R0], with numpy's first index on ties.
+- **Band L:** i = 0…1,023. Every local layer sees the whole prefix.
+- **Band H:** i = 1,024…2,046. The 1,024 window is active. With n_ctx = 2,048, these are the positions
+  llama.cpp's --kl-divergence scores.
+- **Band C** (REPORT-ONLY; the rule is unchanged):
+  - The hybrid runs the prompt under the arm, and everything after it on the GPU, attending to the arm's KV
+    cache. L and H score every position under the arm, which is stricter.
+  - So a PASS carries over to the hybrid, but a FAIL does not prove the hybrid fails. Band C measures that
+    case, for the U6 call.
+  - For c = 0…3:
+    1. the arm runs [0, 2048), and its present KV is kept on disk;
+    2. R0 runs [2048, 3072) with that past;
+    3. positions 2048-3070 (4 × 1,023) are scored against R0's own one-shot run over [0, 3072).
+  - It reports mean KL, p99 and top-1. It runs for R, N1, N2 and N3, and for R0 itself, which is C6 on all four
+    sequences.
+- **Per arm, in bands L and H:**
+  - mean KL, pooled over the 16 sequences, with p50, p99 and max;
+  - top-1 agreement;
+  - the arm's perplexity on the next tokens (R0's too).
+- **Report-only:**
+  - a bootstrap 95% interval of mean KL and top-1 over the 16 sequences (10,000 resamples, seed 20260924);
+  - the values of C2 against the exact product, C4 and C6;
+  - for layer 16 of sequence 0:
+    - the per-linear rel-L2 of N1, N2 and N3 (numpy emulations of §4) against the exact product on R0's real
+      inputs;
+    - the outlier ratio: per-tensor amax / median per-token amax, per linear input.
+- **Any non-finite hidden state or logit** is a FAIL for that arm, as in (c).
+
+## 7. The thresholds and the verdict
+
+**The anchor: (c)'s int4-head arms** (gemma_decode_accuracy_desktop2_20260924.log, MEASURED, 1,023 positions,
+against torch fp32):
+
+| Arm | Mean KL | Top-1 |
+|---|---|---|
+| C0-H4 | 0.012269 | 0.95601 |
+| C4-H4 | 0.013383 | 0.95406 |
+| D-H4 | 0.012289 | 0.95601 |
+
+C0-H4's secondary KL, 1.4e-11, shows its 0.0123 is the int4 head's cost alone.
+
+**The rule:** an NPU numerics may cost the model no more than the int4 head cost it in (c). Per arm N1, N2 and
+N3, against R0:
+- **PASS** if, in both bands L and H:
+  - mean KL ≤ 0.0123 (C0-H4's 0.012269, rounded to three figures);
+  - and top-1 agreement ≥ 0.956 (C0-H4's 0.95601, rounded to three figures).
+- **FAIL** otherwise, or on a non-finite value.
+- **INCOMPLETE** if:
+  - C1 voided the arm;
+  - C3, C4 or C5 failed;
+  - or any of its 16 sequences has no states after one re-run of its process.
+- The verdict reads the point estimates. If a threshold lies inside the bootstrap interval, the line adds
+  NARROW, but the verdict stands.
+- **The comparability, named:** the anchor is a size, not a like-for-like. It is one 1,023-position text,
+  where S1 is 16 × 2,047 positions.
+- R is scored like the arms and printed with its would-be outcome under the rule, but it decides nothing.
+
+**The pick** (printed; it decides nothing beyond S1):
+1. **N2**, if it passes.
+2. **N1**, only if N2 fails and N1 passes. Then it is named as a requirement: "the hybrid must feed 2,048-row
+   prompt tiles (llama.cpp n_ubatch = 2,048)". llama.cpp's default ubatch is 512, and N2 is batch-invariant.
+3. **N3**, if neither int8 arm passes and N3 passes. Its caveats come from 3c:
+   - 1.40× on energy above idle;
+   - 1.04× with the idle, under the 1.10 margin (post hoc);
+   - 2.09× slower than DirectML.
+4. **None:** the hybrid has no NPU numerics, and U6 or stop is the user's call. Band C is reported for that
+   call.
+
+**Predictions** (report-only, scored HIT or MISS, decide nothing):
+- P1: N1 FAILS. Per-tensor int8 over real activations, whose BOS row and outlier channels set the tile's amax.
+- P2: N2 PASSES, against R0.
+- P3: N3 PASSES, against R0, with mean KL below 0.1 × 0.0123 in both bands.
+- P4: KL(R0 ‖ R) is below 0.0123 in both bands.
+
+**Frozen, as in 3c:**
+- VERDICT_CODE_SHA256, over the named functions and constants;
+- PROTOCOL_JSON and its sha256;
+- this text's sha256.
+
+All three are printed in the prereg log and in every later S1 log, and the verdict refuses a mismatch.
+
+## 8. RAM, runtime, and the announcements
+
+- **(c)'s incident:** the accuracy pass sat at 12.9 GB private when a memory guard fired, with 6.0 GB free and
+  4.0 GB commit free (99a7eec). Most of that was three fp32 heads.
+- **This machine:** 31.1 GB of RAM, 16.9 GB free at the read, and a page file of only 2.4 GB.
+- **One model at a time.** Every step runs as a sequence of child processes, each holding one session or the
+  torch reference, never two:
+  - the build's probes;
+  - the five states runs, then R0's band-C continuations;
+  - C4's torch forward;
+  - the verdict's head.
+- **The start gate:** each heavy child refuses to start below 15 GB available. That is not a verdict; it is
+  re-run later.
+- **Session options**, pinned in PROTOCOL_JSON and identical everywhere:
+  - graph_optimization_level = ORT_DISABLE_ALL, so no fusion, constant folding or cast elimination can touch
+    an arm;
+  - the built graph already holds its fused contrib ops (GQA, SkipSimplifiedLayerNormalization, MatMulNBits),
+    and kernel prepacking still runs;
+  - 8 intra-op threads, unpinned. S1 times nothing that decides.
+- **What survives, checked from what actually ran:**
+  - the build's one pass per model runs with ORT's profiler, and the executed nodes are counted by op type:
+    - R0 and R: 238 MatMulNBits;
+    - N1 and N2: 238 MatMulInteger and 136 Round;
+    - N3: 238 MatMul, and 510 Cast beyond the base graph's 2;
+  - every other op count must equal R0's, and no fused op (MatMulIntegerToFloat, DynamicQuantizeMatMul,
+    FusedMatMul) may appear;
+  - a full optimized-model dump would rewrite about 10 GB per model; the profile shows what ran.
+- **Memory:** the build MEASURES each model's session memory and its one pass on sequence 0 (peak working set
+  and private bytes, by psutil).
+- **N3's runtime:** its W is a Cast output, so MLAS cannot prepack it, and every run re-packs. The build's
+  timed pass MEASURES it, and the states window is sized from that.
+- **ESTIMATE of each process's peak:**
+
+  | Process | Peak |
+  |---|---|
+  | R0 and R | about 5-7 GB |
+  | N1 and N2 | about 6-9.5 GB |
+  | N3 | about 9.5-10.5 GB |
+  | activations and float64 temporaries | about 1-1.5 GB more |
+  | torch (C4) | about 5 GB |
+  | the verdict | about 5 GB |
+
+  Band C's KV (570 MB per model and sequence, 11.4 GB for all) goes to disk and is deleted after the
+  continuations.
+- **BFP16:**
+  - START REQUEST 1: build and check, with RAM and duration (about 30 min). FINISHED after.
+  - START REQUEST 2: states and band C, sized from the build's measured times. FINISHED after.
+  - The verdict (about 5 GB, about 15 min) is announced on its own.
+
+## 9. Files, logs and order
+
+- **New:**
+  - tools/hybrid_s1.py (selftest, prereg, build, check, states, verdict, and their child modes);
+  - scripts/hybrid-stack.sh: stages s1-selftest, s1-prereg, s1-build, s1-check, s1-states, s1-verdict, with
+    refuse, logged and use_env as in llm-study.sh, and resnet_env17 for all.
+- **Scratch** (git-ignored):
+  - scratch/llm/hybrid_s1/models/: c0h16.onnx and base.onnx.data, copied from (c)'s C0-H16 and checked
+    against its pins, plus the five graphs and int8.onnx.data and bf16.onnx.data;
+  - scratch/llm/gemma/text_only/: config.json and the tokenizer files, checked (config.json against build
+    log line 484's record);
+  - scratch/llm/hybrid_s1/{check,states,kv,prof}/.
+
+  The copies are manual, and no committed log names their source path.
+- **Logs:** results/llm/hybrid_s1_{prereg,build,check,states,verdict}_desktop2_YYYYMMDD.log, UTF-8, the profile
+  path scrubbed, never overwritten.
+- **The order:**
+  1. The code, with synthetic tests (no model).
+  2. s1-prereg: the text pins, PROTOCOL_JSON and the frozen hashes. Committed before anything heavy.
+  3. START REQUEST 1, then s1-build and s1-check, then FINISHED.
+  4. START REQUEST 2, then s1-states (the five models, then band C), then FINISHED.
+  5. Commit the build, check and states logs as measured, report the HEAD, and wait. No KL or agreement figure
+     exists before the verdict.
+  6. The gate checks them blind; then s1-verdict, commit, report.
+
+## 10. The gate's rulings on v1 (2026-09-24)
+
+- N = 16 and the 15 GB start gate: accepted.
+- The thresholds: 0.0123 / 0.956 in both bands, against R0, with no stricter anchor.
+- C4: PASS or FAIL only in the check log, the value in the verdict log.
+- The copy of C0-H16 and text_only's config and tokenizer: accepted, with C3 and C4 re-proving it.
+- ORT_DISABLE_ALL: accepted; C4 re-proves R0 under it.
+- The design corrections: accepted, and applied by the gate.
+PROTOCOL_JSON {"stage": "hybrid S1", "plan": "v2", "arms": ["R0", "R", "N1", "N2", "N3"], "deciding": ["N1", "N2", "N3"], "report_only": ["R"], "reference": "R0", "n_seq": 16, "seq_len": 2048, "stride": 2047, "bos": 2, "c_seq": 4, "c_len": 3072, "bands": {"L": [0, 1023], "H": [1024, 2046]}, "band_c": [2048, 3070], "t_kl": 0.0123, "t_top1": 0.956, "anchor": {"C0-H4": [0.012269480565198573, 0.9560117302052786], "C4-H4": [0.013382885385917895, 0.9540566959921799], "D-H4": [0.012289061755960435, 0.9560117302052786]}, "c4_kl_max": 0.0001, "c6_kl_max": 1e-05, "bf16_acc_max": 0.0001, "seed": 20260924, "boot_n": 10000, "chunk": 256, "min_avail_gb": 15.0, "session": {"graph_optimization_level": "ORT_DISABLE_ALL", "intra_op_num_threads": 8, "providers": ["CPUExecutionProvider"], "prepacking": "on (ORT's default)"}, "fused_forbidden": ["MatMulIntegerToFloat", "DynamicQuantizeMatMul", "FusedMatMul", "DynamicQuantizeLinear"], "text_pin": {"repo": "Salesforce/wikitext", "revision": "b08601e04326c79dfdd32d625aee71d232d685c3", "file": "wikitext-2-raw-v1/test-00000-of-00001.parquet", "size": 732610, "sha256": "5f1bea067869d04849c0f975a2b29c4ff47d867f484f5010ea5e861eab246d91"}, "c_ids_sha": "c87fda3e20a29a5fd9af2104661438ff63a3c29cd496cb4d95a9000820dfb15e", "gguf_pin": {"repo": "google/gemma-3-4b-it-qat-q4_0-gguf", "file": "gemma-3-4b-it-q4_0.gguf", "revision": "15f73f5eee9c28f53afefef5723e29680c2fc78a", "size": 3155051328, "sha256": "76aed0a8285b83102f18b5d60e53c70d09eb4e9917a20ce8956bd546452b56e2"}, "src_pin": {"model.onnx": [433879, "33c47ffa21a77bda96870e97ad6ce6df9213fca93c1e7e624091d3d2ac4e019c"], "model.onnx.data": [7644053504, "11edd445f01760ab1d44d8197fd75e40ae805b968522848d101373c804fb8380"]}, "quantize": "float64: s = float64(max|X|) / 127.0; q = Clip(Round(X / s), -127, 127); u8 = q + 128 (zero point 128); a zero scale divides by 1", "epilogue": "fp32(float64(int32) * s_x * s_w[n])", "bf16": "Cast(float->bfloat16) RNE, Cast(->float); W by ml_dtypes RNE, stored bf16; MatMul fp32", "pick": ["N2", "N1 (requires 2,048-row prompt tiles: llama.cpp n_ubatch = 2,048)", "N3", "none"]}
+PREDICTIONS_JSON [{"id": "P1", "text": "N1 FAILS: per-tensor int8 over real activations, whose BOS row and outlier channels set the tile's amax"}, {"id": "P2", "text": "N2 PASSES, against R0"}, {"id": "P3", "text": "N3 PASSES, against R0, with mean KL below 0.1 x 0.0123 in both bands"}, {"id": "P4", "text": "KL(R0 || R) is below 0.0123 in both bands"}]
+TEXT_JSON {"text_tokens": 292282, "seq_sha": ["37c5135c8934e458092e0f8dbd2c083e506a305bfa12206f917049b10fda08a2", "1e96657b3d680532ff8cd88e54a1082252b70ec0e9d6980b7681a946f94156a4", "339efa32483936dde7f8e0fd23d7a04aaea99f1b5329ab528be698ae86a8c4f1", "4b6900519985fdb12c7747fcefebf29f3ab085401912368a724110371e28d686", "8bf1ad3281d31b4fbee30dc384832d634bbb165535757136b46c012dffd3d2d1", "c01d559eacab9bb17d68e42404e26fe21ccf0c7e34992c89fcd2a919e3b3ea2e", "0316fb8dee40c08a016f211ed719118f90f0ade7f0dfdd3e0cba90c389eb618b", "6314572743e1663131c2a13e7be06cdfc1d7c9ead40d8d9f9e12eee6102af939", "7133a80f6e5b8f2e05c28744fe511f0edcd38f47a2ae36fddc12fd843114387e", "16cac4d59659db6722411591dadff9625bced38a912192d1b5bad9e5ce8496f7", "ba6bf0d85dfd7df7e6572b415c0570b86276db9b5401458e230699cb431e5c50", "38abea44789dddb96ddd1e230bdc2107a59ad55b3c67cf41a6ccda36b7b32dd5", "e00723111f039ca6dcc3a12df57e70b9d0c0959a98ebe5d38aeb264180cff889", "cf047606e15522ed0b15d9f60dc230fc0921a0c7440f5aed784f04f251a661f9", "082f7ef96d742e22decf453551d5bf80f92d0173c7538d82959181e117c546cd", "8f5c8dc35ca4cb9d5638f075f0b80c37057e117a9f8fd4eeaa2e60f56664b781"], "all_sha": "575609aba1779753713bdf1c15a6ad7a815daebbb1fa6b7b381ac1e9bd20be9b", "c_sha": ["a54130e140cf2625bf13a34b2727ea236b0706a37078597e2d8621cb06712104", "62a206005ccc4c06c459af61700692421f45679aebf5fb7c989529a06c967e8b", "26a184e5c4a114f10b90603bb91c4ad86bbf184c1d59328d2fb114b028e79ab4", "fee18e94d8a6e440c760870dc55a8aba313a978e963eb14c20abe5e0570b76bd"], "c_link_equal": true}
+TEXT: 292282 tokens in the joined test split; 16 sequences of 2,048 ids, sha256 of all 575609aba1779753713bdf1c15a6ad7a815daebbb1fa6b7b381ac1e9bd20be9b; sequence 0's first 1,024 ids equal (c)'s IDS_SHA (report-only)
+SOURCE_LOG results/llm/llm_prefill3c_inputs_desktop2_20260924.log: LF sha256 3492a2057aeeac80cfcef19f3bbf7e27128de8ab050287f3997335dca98c3e21
+SOURCE_LOG results/llm/gemma_decode_build_desktop2_20260924.log: LF sha256 5743652ccb5000e7c5a52d19f287b374d3ae7ce938ba873be1a7f7a160960bfe
+PREREG_TEXT_SHA256 59ed095aa950328e6cfb968426e52e25a8fabff50f01ea3aa7d452ffe5037bb7
+PROTOCOL_JSON_SHA256 17bfbefa85caf6eb75e33d2d7fe838a298fe15c7fe4ab0322d7ec3ecac5aa044
+VERDICT_CODE_SHA256 d78b0f48d978b52d773caf11cd228cddc2a46f3c5c8575651c5efeda61df50b7
+PREREG OK

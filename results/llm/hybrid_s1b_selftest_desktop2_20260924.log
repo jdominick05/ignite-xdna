@@ -1,0 +1,69 @@
+The windows and the three non-overlap asserts (synthetic ids of the real text's length):
+  84 windows, the first at 32,752: (84, 32752)
+  the last window ends at 290,716, leaving 1,566 tokens: (290716, 1566)
+  every window is 3,072 ids: True
+  the real windows pass all asserts: True
+  the deliberate case overlaps by one token: 1
+  a deliberate overlap (stride 3,070, windows of 3,071) fails pairwise_disjoint: False
+  a start at 32,751 fails start_after_s1: False
+  85 windows overrun the text: False
+  a prompt equal to an S1 sequence fails no_s1_prompt_sha: False
+The KV slice to 0-2,046 on a small causal attention (numpy): prompt, slice, one step = the one-shot row:
+  the slice keeps 2,047 positions, contiguous: (2047, True)
+  one step on the sliced KV equals the one-shot at 2,047: True
+  the continuation on the full KV equals the one-shot at 2,048-3,071: True
+The set C, P-arm, P-R0 and L/H slicing on synthetic hidden states (a small head):
+  sets per arm: (['C', 'H', 'L', 'P_R0', 'P_arm'], ['C', 'P_R0', 'P_arm'])
+  positions: C 1,023, P 1 and 1, L 1,024, H 1,023: [1023, 1, 1, 1024, 1023]
+  equal states give KL 0 and top-1 1 everywhere: True
+  changing prompt row 2,047 moves P-arm only: ['P_arm']
+  changing prompt row 100 moves band L only: ['L']
+  changing prompt row 2,046 moves band H only: ['H']
+  changing continuation row 0 moves set C only: ['C']
+  changing continuation row 1,023 (position 3,071, unscored) moves nothing: []
+  changing the P-R0 row moves P-R0 only: ['P_R0']
+  a last-row-only prompt: its row moves P-arm only: ['P_arm']
+  set C's first row scores id 2,049 (the next id): True
+  halves split set C at 2,560: 1023
+  halves of equal states are 0: True
+The rule, NARROW, P's granularity, INCOMPLETE and the pick:
+  rule: PASS at the thresholds: PASS
+  rule: FAIL above T_KL: FAIL
+  rule: FAIL below T_TOP1: FAIL
+  rule: FAIL when non-finite: FAIL
+  rule: NARROW when the interval holds T_TOP1: ('PASS', True)
+  rule: NARROW when the interval holds T_KL: ('FAIL', True)
+  P granularity: 81/84 passes: PASS
+  P granularity: 80/84 fails: FAIL
+  N2: a set C PASS with a P-arm FAIL is a PASS (P is report-only): PASS
+  N2: a missing window is INCOMPLETE: INCOMPLETE
+  N2: C5' failing is INCOMPLETE: INCOMPLETE
+  N2: set C FAIL: FAIL
+  the pick is S1's N3, fixed: True
+The R0 control: each path failing alone is a STOP:
+  all paths at 0: PASS: PASS
+  path (a) above 1e-5 on one window: FAIL: FAIL
+  path (b) above 1e-5 on one window: FAIL: FAIL
+  path (c) above 1e-5 on one window: FAIL: FAIL
+  a non-finite path: FAIL: FAIL
+  exactly 1e-5: PASS: PASS
+  a missing control window: FAIL: FAIL
+The predictions' scoring:
+  all HIT: {'Q1': 'HIT', 'Q2': 'HIT', 'Q3': 'HIT', 'Q4': 'HIT', 'Q5': 'HIT', 'Q6': 'HIT', 'Q7': 'HIT', 'Q8': 'HIT'}
+  Q2 MISS when KL rises: MISS
+  Q7 MISS when (c) is not sha-equal: MISS
+  NOT SCORED without N2: NOT SCORED
+The memory watchdog (S1's amendment 1), in a child whose main thread sleeps 3 s:
+  threshold 1e+06 GB: rc: 4
+  threshold 1e+06 GB: MEMORY_ABORT_JSON printed: True
+  threshold 0 GB: rc: 0
+  threshold 0 GB: MEMORY_ABORT_JSON printed: False
+The frozen hashes and the verdict sources:
+  VERDICT_CODE covers S1b's functions and the imported S1 kernels: ['offsets', 'window_asserts', 'slice_kv', 'window_metrics', 'set_aggregate', 'halves', 'rule_set', 'control_outcome', 'outcome_n2', 'score_predictions', 'hybrid_s1.log_softmax_rows', 'hybrid_s1.logits_chunk', 'hybrid_s1.kl_top1_chunk', 'hybrid_s1.band_rows', 'hybrid_s1.bootstrap', 'hybrid_s1.aggregate', 'hybrid_s1.max_kl']
+  the imported sources change VERDICT_CODE: True
+  PREREG_TEXT_SHA256 7fdc89d9acc9c55810edad7ed431bcb3e11f8aef36e537f55898601171226fdc
+  PROTOCOL_JSON_SHA256 de717533e387da275b4e21faf05771beb6934685b8d94edded1fddcfdaa97df1
+  VERDICT_CODE_SHA256 3059986ac857146041302e3ab6d84a423bf59278208972a5cb235dafea5c3133
+  PREREG holds the plan: True
+  tools/hybrid_s1.py's blob equals c67d6d2's: True
+SELFTEST OK

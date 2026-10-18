@@ -1,0 +1,46 @@
+INT8_CONTROL S1 M=512: 5 int8 rows, int32 outputs identical
+INT8_CONTROL S1 M=2048: 5 int8 rows, int32 outputs identical
+INT8_CONTROL S2 M=512: 6 int8 rows, int32 outputs identical
+INT8_CONTROL S2 M=2048: 6 int8 rows, int32 outputs identical
+INT8_CONTROL S3 M=512: 5 int8 rows, int32 outputs identical
+INT8_CONTROL S3 M=2048: 5 int8 rows, int32 outputs identical
+per layer = 4 x S1 + 2 x S2 + 1 x S3; ms are the mean of two pass medians
+
+M = 512
+  chip arm             S1 ms     S2 ms     S3 ms   layer ms  32 layers s  TFLOPS    rel-L2  config
+  cpu int8              4.24     11.14     11.02      50.26        1.608    4.12  1.54e-02  16 threads
+  dml fp16              6.63     11.41     11.98      61.31        1.962    3.38  3.61e-04  
+  npu int8              4.84     15.55     11.27      61.73        1.975    3.36  1.54e-02  S1:S1-P S2:S2s-P S3:S3-P
+  npu bf16              6.71     21.33     17.14      86.64        2.773    2.39  2.35e-03  S1:S1-P S2:S2s-P S3:S3-P
+  dml fp32             11.97     39.42     30.84     157.55        5.042    1.32  1.33e-06  
+  cpu fp32             22.79     60.55     42.64     254.89        8.157    0.81  3.12e-07  16 threads
+  dml int8             29.77     75.18    103.03     372.48       11.919    0.56  1.54e-02  
+  npu bf16 vs cpu: BEATS -- fp32 2.94x (rival time / NPU time)
+  npu bf16 vs dml: does not beat -- fp16 0.71x, fp32 1.82x (rival time / NPU time)
+  npu int8 vs cpu: does not beat -- fp32 4.13x, int8 0.81x (rival time / NPU time)
+  npu int8 vs dml: does not beat -- fp16 0.99x, fp32 2.55x, int8 6.03x (rival time / NPU time)
+  M = 512: no NPU arm beats both chips
+
+M = 2048
+  chip arm             S1 ms     S2 ms     S3 ms   layer ms  32 layers s  TFLOPS    rel-L2  config
+  npu int8             17.78     48.66     43.12     211.58        6.770    3.92  1.54e-02  S1:S1-P S2:S2s-P S3:S3-P
+  cpu int8             17.82     49.52     47.79     218.10        6.979    3.80  1.54e-02  16 threads
+  dml fp16             22.69     44.40     71.80     251.36        8.043    3.30  3.61e-04  
+  npu bf16             25.55     72.03     66.41     312.67       10.006    2.65  2.35e-03  S1:S1-P S2:S2s-P S3:S3-P
+  dml fp32             49.22    151.41    120.96     620.64       19.860    1.34  1.33e-06  
+  cpu fp32             90.39    227.91    211.35    1028.72       32.919    0.81  3.12e-07  8 threads
+  dml int8            114.98    297.23    381.47    1435.86       45.947    0.58  1.54e-02  
+  npu bf16 vs cpu: BEATS -- fp32 3.29x (rival time / NPU time)
+  npu bf16 vs dml: does not beat -- fp16 0.80x, fp32 1.98x (rival time / NPU time)
+  npu int8 vs cpu: does not beat -- fp32 4.86x, int8 1.03x (rival time / NPU time)
+  npu int8 vs dml: BEATS -- fp16 1.19x, fp32 2.93x, int8 6.79x (rival time / NPU time)
+  M = 2048: no NPU arm beats both chips
+
+PROBLEMS
+  ('cpu', 'fp32', 8, '', 'S1', 512): passes 24.3364 / 21.6502 ms, 11.7% apart
+  ('cpu', 'fp32', 8, '', 'S3', 512): passes 66.3089 / 44.9566 ms, 38.4% apart
+  ('cpu', 'int8', 8, '', 'S1', 512): passes 5.1018 / 6.6532 ms, 26.4% apart
+  ('cpu', 'int8', 8, '', 'S1', 2048): passes 25.929 / 20.6629 ms, 22.6% apart
+  ('cpu', 'int8', 8, '', 'S2', 512): passes 13.4482 / 16.6142 ms, 21.1% apart
+  ('cpu', 'int8', 8, '', 'S3', 512): passes 12.6654 / 16.3113 ms, 25.2% apart
+VERDICT INCOMPLETE

@@ -1,0 +1,117 @@
+Measurement noise on this APU: the two sources stage 3 left unattributed, pre-registered before
+any sitting (the user's decision: "study the noise")
+
+This is a finding about measuring on this machine, not about the NPU. It re-scores nothing:
+stage 3 stays INCOMPLETE. What it can change is how later pre-registrations time the CPU and
+DirectML arms, written as a recommendation.
+
+(A) The CPU's 8-thread bimodality
+  Seen: stage 3's 8-thread rows flip from rep to rep. int8 S1 at M = 512 in sitting 1 ranged
+  4.1-7.3 ms within a pass, 14 of its 20 reps near 4.2 or near 7.2, in runs of consecutive reps.
+  In sitting 2, where each row opened its own session, both passes sat near the slow level
+  (medians 7.19 and 7.69 ms). Its 16-thread rows held in both sittings (this row: medians
+  4.10-4.35 ms). Stage 3 sitting 2's clock witness read 103-114% throughout.
+  Rows (ONNX Runtime CPU EP, the stage 3 inputs and models): int8 MatMulInteger S1 at M = 512
+  decides; fp32 MatMul S1 at M = 512 is reported with the same measures.
+  Arms, in two passes, the second in reverse order. Each arm and pass is several fresh sessions,
+  pooled: A0 and AD 5 sessions of 2 s, the others 3 of 1 s, each timed after 20 warmups.
+  Several, because in stage 3 sitting 2 a row's level held for a whole session: one session per
+  arm could sit at one level and hide the other.
+    A0   8 threads, default scheduling
+    A1   8 threads pinned to 8 distinct physical cores (one SMT sibling of each)
+    A3   8 threads pinned to 7 cores: both siblings of one core and one sibling of six others
+    A2   8 threads pinned to 4 cores x 2 siblings
+    A16  16 threads, default scheduling
+    AD   ORT's own default, intra_op_num_threads 0. ORT's documentation says the default makes one
+         thread per physical core and pins them. A functional smoke before this pre-registration (a
+         64 x 64 model, no timing) read back 7 pool threads plus the caller, every one with all 16
+         logical CPUs in its affinity mask and no CPU sets: this build does not pin by default.
+  ORT pins its 7 pool threads (session.intra_op_thread_affinities); the calling thread, which also
+  computes, is pinned to the arm's first CPU with SetThreadAffinityMask. The CPUs come from
+  GetLogicalProcessorInformation at run time and are printed in the log.
+  Recorded: every rep's time and start; once a second, every logical CPU's % Processor Time and
+  % Processor Performance, and the total clock; once per session, after the warmups, every ORT thread's
+  affinity and ideal processor, read back (GetThreadGroupAffinity, GetThreadIdealProcessorEx), which
+  checks the pinning and counts the threads ORT's default creates. The sampler is one Get-Counter
+  process: a small load outside ORT, present in every arm.
+  Measures, per arm and pass (its sessions pooled), against the pooled 10th percentile p10:
+    slow reps > 1.30 x p10; fast reps <= 1.15 x p10
+    bimodal   if both slow and fast reps are at least 10% of the pooled reps
+    unimodal  if p90 / p10 <= 1.15; otherwise broad
+    levels    the median of the fast reps and of the slow reps
+    per second: the slow share of the reps started in it, the logical CPUs at >= 50% busy, and
+    the physical cores with both siblings busy ("doubled")
+  Candidates and what each predicts:
+    ORT-thread doubling (the scheduler puts two of ORT's 8 threads on one core's two siblings, and
+      the GEMM waits on that core): A0 bimodal; A1 unimodal at A0's fast level; A3 unimodal near
+      A0's slow level; A2 unimodal, no faster than A3; AD like A0 (it does not pin); in A0,
+      seconds with a doubled core carry more slow reps.
+    Scheduler migration (ORT's threads moving between logical CPUs without doubling up): A0
+      bimodal; A1 unimodal; A3's level unrelated to A0's slow level; no such association.
+    A thread outside ORT on a free sibling (a system or sampler thread sharing an ORT thread's
+      core): A1 not unimodal either, since its 8 free siblings stay open to it; A2 unimodal, since
+      its 4 cores are full and 4 other cores idle.
+    Clock or power state: pinning does not help, so neither A1 nor A2 is unimodal, and slow
+      seconds run at a lower total clock.
+    Core parking: on AC this plan's minimum parked-cores setting is 100% (printed in the log), so
+      parking is not expected to act.
+  Rules (the reference row):
+    Not reproduced if A0 is bimodal in neither pass: no attribution.
+    ORT's own placement, not the clock and not a thread outside ORT, if A0 is bimodal and A1 is
+    unimodal in both passes. Then:
+      ORT-thread doubling if A3 is unimodal within 15% of A0's slow level in both passes, and in
+      A0 the slow share in seconds with a doubled core exceeds that in seconds without by >= 0.30.
+      If A3 matches but that association is absent or untestable: placement, doubling versus
+      migration not separated. If A3 does not match: placement, not a single doubled core; not
+      separated.
+    If A1 is not unimodal in a pass: the clock is implicated if the total clock in slow seconds
+      (slow share >= 0.5, over A0 and A1) is at least 3 points below that in fast seconds (<= 0.1).
+      Otherwise, if A2 is unimodal in both passes: a thread outside ORT on a free sibling, not
+      separated from an effect of the number of busy cores (A1 keeps 8 busy, A2 4). Otherwise
+      non-attribution.
+  Controls and witnesses (printed, not deciding): each pinned arm's busy logical CPUs must be its
+  own; A16 and AD with their mode and median; every session's median; the unpinned sessions (A0
+  and AD) with a core holding two of their threads' ideal processors against those without.
+
+(B) DirectML's level shifts
+  Seen: stage 3 sitting 2's DirectML rows held one level within a pass and another in the next
+  (fp32 S2 at M = 2048: medians 141.71 ms, then 107.02). Sitting 2 opened one session per row.
+  Sitting 1 kept one session per arm and shape open for the whole sitting, and its DirectML rows
+  held (the same row: 152.02 and 150.79 ms).
+  Rows (the stage 3 models, device 0, CPU fallback disabled): fp32 MatMul S2 at M = 2048 decides;
+  fp16 MatMul S1 at M = 2048 is reported.
+    B1  20 fresh sessions one after another: open, 3 warmups, 10 reps, the GPU memory witness
+        (this process's GPU Process Memory, Dedicated and Shared Usage), close
+    B2  one session, 3 warmups, then 20 blocks of 10 reps with the memory witness between blocks
+        (B1's gaps also hold a session's close and open)
+  A session's or block's level is the median of its reps; it is steady if p90 / p10 <= 1.10.
+  Candidates: allocation placement (where a session's weights land, dedicated or shared memory);
+  GPU clock or power state; the driver's queue.
+  Rules (the reference row):
+    Reproduced if the steady B1 sessions' levels span max / min >= 1.10. If not: no attribution.
+    Per-session state if reproduced and B2's block levels span < 1.10 (one session holds its level).
+      Allocation placement, in addition, if the 5 slowest and 5 fastest steady sessions do not
+      overlap in Dedicated or in Shared Usage. Otherwise the per-session cause is unattributed.
+    If B2's blocks also span >= 1.10: not per-session; clock or power state and the driver's queue
+      are not separated (non-attribution).
+
+Written predictions (stated expectations; the rules decide, these do not)
+  P1 (A) reproduces: A0 bimodal in the int8 row (across its sessions more than within them), A16
+     unimodal.
+  P2 (A) ORT-thread doubling: A1 unimodal near 4.2 ms; A3 at 7-8.5 ms, near A0's slow level;
+     A2 about 8 ms (16 threads ran no faster than 8, so a core running two halves each one's
+     share). The association is the weakest part: the flips come in runs of a few reps, tens of
+     ms, far shorter than the 1 s busy map, so "not separated" is a likely outcome of that sub-rule.
+  P3 The fp32 row shows the same pattern, less cleanly (stage 3's fp32 8-thread rows were broad).
+  P4 (B) reproduces across fresh sessions, and one long-lived session holds its level.
+  P5 (B) The memory witness separates slow sessions from fast ones: the least certain call here.
+  P6 AD behaves like A0 (bimodal), since the smoke read back no pinning: 8 threads, placed freely.
+
+Unverified by design: per-rep thread placement (the busy map is per second, the thread witness
+once per session, and an ideal processor is a preference, not a placement); GPU clocks (no counter
+for the 780M's clock here); the driver's queue; other CPU stacks and DirectML IO binding.
+
+TOPOLOGY_JSON {"cores": [[0, 1], [2, 3], [4, 5], [6, 7], [8, 9], [10, 11], [12, 13], [14, 15]], "parking_ac_percent": {"CPMINCORES": 100, "CPMAXCORES": 100, "scheme": "Balanced"}, "arms": {"A0": null, "A1": [0, 2, 4, 6, 8, 10, 12, 14], "A3": [0, 1, 2, 4, 6, 8, 10, 12], "A2": [0, 1, 2, 3, 4, 5, 6, 7], "A16": null, "AD": null}}
+PINS inputs manifest 9c5454169184a4b307059fbcbb8519cc31403b48d902918ea66c8023e43dbaf1
+git HEAD b986185cbd3f3b07a8153b292d2e8c405af308f7 (+2 uncommitted paths, this study's own files)
+PREREG_JSON {"rows_a": [["int8", "S1", 512], ["fp32", "S1", 512]], "arms_a": ["A0", "A1", "A3", "A2", "A16", "AD"], "sessions_a": {"A0": 5, "AD": 5}, "sessions_a_default": 3, "run_s": {"A0": 2.0, "AD": 2.0}, "run_s_default": 1.0, "warmup_a": 20, "slow": 1.3, "fast": 1.15, "mode_frac": 0.1, "unimodal": 1.15, "level_match": 0.15, "busy": 50.0, "assoc": 0.3, "clock_points": 3.0, "rows_b": [["fp32", "S2", 2048], ["fp16", "S1", 2048]], "sessions_b": 20, "blocks": 20, "reps_b": 10, "warmup_b": 3, "steady": 1.1, "shift": 1.1, "edge": 5, "git_head": "b986185cbd3f3b07a8153b292d2e8c405af308f7"}

@@ -1,0 +1,124 @@
+LLM study, Gemma 3 4B, pre-registration (a): lossless compressibility of the QAT q4_0 weights.
+Designed on the user's decisions of 2026-09-23 (locked decision 10) and the gate's review of the
+drafts (v2). Offline and CPU-only: no timing, no NPU or GPU. Committed before any file is fetched.
+
+INPUTS, pinned from the Hub's LFS metadata and verified after download (size and SHA-256); a
+mismatch stops the run and nothing is measured. They go to the HF cache; nothing enters git.
+  google/gemma-3-4b-it-qat-q4_0-gguf @ 15f73f5eee9c28f53afefef5723e29680c2fc78a
+    gemma-3-4b-it-q4_0.gguf  3,155,051,328 B  sha256 76aed0a8285b83102f18b5d60e53c70d09eb4e9917a20ce8956bd546452b56e2
+  google/gemma-3-4b-it-qat-int4-unquantized @ 554bd242505753eef6dfae71f76ddd50c335fc46
+    model-00001-of-00002.safetensors  4,961,251,752 B  sha256 069e91c41faa7febba9c62cf97b9167acfc87f42b67d6061c52a89fed93cb56c
+    model-00002-of-00002.safetensors  3,639,026,128 B  sha256 efcb40cfc23a68ed0f45e1d089373f351fcdc050dee639481171535de243d636
+  The run also checks the census from the header (SPEC): 238 Q4_0 tensors, 3,208,642,560 params;
+  token_embd.weight [2560, 262144] F16, 671,088,640 params, the tied head (no separate output
+  tensor); the rest F32. Per token as shipped: 1,804,861,440 + 1,342,177,280 = 3,147,038,720 B.
+
+Q1, LAYOUT AND GRID (a check, not assumed; reported, it does not decide the verdict)
+  For each of the 238 linears: parse the q4_0 blocks as ggml defines them, an f16 d, then 16 bytes
+  where the low nibble is element j and the high nibble element j + 16; w = d * (q - 8); 32-element
+  blocks along ne0, the input dimension. Compare bf16(d * (q - 8)) with the BF16 checkpoint's weight
+  at the same index (HF [out, in]), as values (+0 equals -0). Report the exact-match fraction and
+  max |diff| / |d| per tensor. A wrong layout shows as a failed match, so Q1 also checks the layout.
+  Also report the fraction of blocks with a code at q = 0 (q4_0 maps a block's signed extreme to -8,
+  so it should be 100%: a structural redundancy a coder can use), and the blocks with d = 0.
+  The same grid test on the embedding: llama.cpp's reference q4_0 rule (the first signed extreme,
+  d = max / -8 in fp32 and stored f16, q = min(15, trunc(x / d + 8.5))) applied to the checkpoint's
+  BF16 embedding (all 262,208 rows), to see whether the head was trained on an int4 grid.
+  Q1c: the GGUF's F16 head against f16(bf16) of the checkpoint's embedding over the shared 262,144
+  rows (the exact-match fraction). This fixes what "the release's head" is for (c)'s reference.
+  The kill line does not depend on Q1: order-0 entropies and the table-driven coders do not depend
+  on the order of the codes within a tensor.
+
+Q2, ENTROPY (on paper, DERIVED)
+  Order-0 entropy of the codes, per tensor (weighted by size) and pooled over all 238; of the f16
+  scales as 16-bit symbols per tensor (the empirical histogram; biased low on small tensors), and
+  split sign+exponent (6 bits) / mantissa (10 bits); for the F16 head, of its high bytes, its low
+  bytes and its sign+exponent fields.
+
+Q3, REAL CODERS. Sizes include every table and length field. Each coder round-trips to the exact
+input, or its row is void.
+  C1: zstd level 19 on each tensor's raw q4_0 blocks.
+  C2: zstd level 19 on split streams: the codes one per byte, then the f16 scales.
+  C3: a static per-tensor canonical Huffman on the codes (16 symbols, in numpy), scales raw.
+  C4: C3, with the scales' high byte coded by a static per-tensor canonical Huffman and their low
+      byte raw.
+  C5 (the head): a static canonical Huffman on the F16 high byte (sign, the 5 exponent bits and
+      the top 2 mantissa bits), the low byte raw.
+  On the head, also reported: C1 (zstd 19 on the raw F16 bytes) and a byte-split zstd (the high and
+  the low bytes as separate streams).
+  C3, C4 and C5 are the table-driven class, the simplest class a core might decode: one table
+  lookup per symbol. zstd is not in that class. No coder's decode rate is measured in (a).
+  Implementation (fixed here):
+    zstd: zstandard 19, with 8 worker threads, the content size in each frame;
+      a stream costs its frame plus an 8-byte length. The linears' frames are compressed
+      8 at a time in a thread pool (scheduling only: each frame is the one it would be alone).
+    Huffman: code lengths limited to 20 bits (the rarest counts flattened until the code
+      fits; the cost is in the size). The stream is coded in chunks of 1,048,576 symbols, each padded
+      to a byte. A stream costs its chunks plus one byte of code length per symbol of its alphabet
+      (16 or 256), an 8-byte symbol count, and 4 bytes per chunk.
+    Round trip: every Huffman chunk is decoded from its own bytes through a table built from the
+      stored code lengths alone. The 20-bit-or-less window at each code start must name
+      that code's symbol and length, which by induction is what a sequential decoder produces.
+      Every zstd frame is decompressed and compared byte for byte.
+
+DECODE BUDGET (DERIVED, so the class is not called NPU-ready)
+  16 reachable compute cores x the MEASURED 1.7972 GHz = 28.755 G core-cycles/s. SILICON:252-258
+  gives the core counts, 20 physical and 16 on the 4x4 overlay. SILICON:63 gives the unreachable
+  column, column 0 by elimination.
+  An NPU decode fed at 47.62 GB/s must produce:
+    84.66 G codes/s at the shipped 4.5 bits: 2.94 codes per cycle per core;
+    93.12 G codes/s at K1's 4.0909 bits: 3.24 per cycle per core;
+    for the head, 23.81 G weights/s at 16 bits: 0.83 high-byte symbols per cycle per core,
+      rising as the coder saves.
+  Whether a core can sustain that is a later decode-rate test, not (a).
+
+METRIC: bits per streamed weight, (coded bytes x 8) / weights, for
+  L, the linear stack, against 4.5 as shipped and 4.125 (block-128 f16 scales: a lossy
+     re-quantization, reported, not the baseline);
+  H, the head, against 16;
+  T, the whole per-token stream as shipped (3,147,038,720 B).
+  The best C3/C4 is the smaller of the two whole-stack totals.
+
+KILL LINE (DERIVED from the study's 1.10 line; decode time is proportional to bytes read)
+  Lossless compaction survives as a byte cut for decode only if a table-driven real coder saves at
+  least 1/11 of the bytes (at least 1.10x fewer) on EITHER
+    K1, the linear stack alone, C3/C4: at most 4.0909 bits/weight
+        (exactly: 1,804,861,440 x 10 >= coded x 11);
+    K2, the whole shipped stream, the linears by C3/C4 and the head by C5: at most
+        3,147,038,720 / 1.1 = 2,860,944,290.9 B/token (exactly: 3,147,038,720 x 10 >= coded x 11).
+  Exactly 1.10x passes. If neither holds, compaction is KILLED as a lossless byte cut. Entropy (Q2)
+  and zstd (C1/C2) are reported, but cannot pass it: entropy is on paper, and zstd is not
+  table-driven.
+  INCOMPLETE, with no kill and no survival, if:
+    a fetched file differs from its pin;
+    the census differs;
+    a row is missing;
+    or C3, C4 or C5 fails a round trip.
+  A zstd round-trip failure voids only that reported row.
+
+PASSING (a) IS NECESSARY, NOT SUFFICIENT. The CPU and the 780M could read the same coded stream, so a
+byte cut can help every chip. Whether the NPU gains relative to them is (d)'s question, plus a
+decode-rate test against the budget above.
+
+PREDICTIONS (scored by the verdict; P5 and P7 in two parts, the range and the outcome)
+  P1: at least 99.9% of linear weights match the grid exactly.
+  P2: 100% of blocks hold a q = 0 code.
+  P3: pooled H0 of the codes is 3.60-3.85 bits.
+  P4: scales cost 0.28-0.38 bits/weight at order 0.
+  P5: the best C3/C4 on L is 3.95-4.20 bits/weight (point 4.12, a 8.4% saving), so K1 FAILS,
+      narrowly.
+  P6: C5 codes the head to 13.0-14.2 bits/weight (saves 11-19% of the head).
+  P7: K2 saves 8-13% of 3.147 GB (point 11%), so it PASSES, narrowly.
+  P8: C1 on the raw blocks is at least 4.3 bits/weight.
+  P9: the embedding is not on an int4 grid (under 10% exact).
+  P10: Q1c, the GGUF's F16 head equals bf16 -> f16 of the checkpoint's embedding for at least 99.9%
+       of the shared rows.
+
+RUNNER: bash scripts/llm-study.sh compress-prereg | compress | compress-verdict (resnet_env17).
+  Logs: results/llm/gemma_compress_{prereg,run,verdict}_desktop2_<date>.log.
+  The run is a heavy CPU load, not a timing sitting. It is announced to BFP16, and the gate hears
+  the result before (b) starts.
+
+BUDGET core_cycles_per_s 2.876e+10, codes_per_cycle_core_4.5 2.944, codes_per_cycle_core_k1 3.238, head_symbols_per_cycle_core_16 0.828
+git HEAD 3167e75ed0c0aad421b5f8ea0e7aba9339a1a264 (+2 uncommitted paths, this stage's own files)
+PREREG_JSON {"stage": "gemma (a) compress", "pins": [{"repo": "google/gemma-3-4b-it-qat-q4_0-gguf", "revision": "15f73f5eee9c28f53afefef5723e29680c2fc78a", "file": "gemma-3-4b-it-q4_0.gguf", "size": 3155051328, "sha256": "76aed0a8285b83102f18b5d60e53c70d09eb4e9917a20ce8956bd546452b56e2"}, {"repo": "google/gemma-3-4b-it-qat-int4-unquantized", "revision": "554bd242505753eef6dfae71f76ddd50c335fc46", "file": "model-00001-of-00002.safetensors", "size": 4961251752, "sha256": "069e91c41faa7febba9c62cf97b9167acfc87f42b67d6061c52a89fed93cb56c"}, {"repo": "google/gemma-3-4b-it-qat-int4-unquantized", "revision": "554bd242505753eef6dfae71f76ddd50c335fc46", "file": "model-00002-of-00002.safetensors", "size": 3639026128, "sha256": "efcb40cfc23a68ed0f45e1d089373f351fcdc050dee639481171535de243d636"}], "n_lin": 3208642560, "n_head": 671088640, "shipped": {"l": 1804861440, "h": 1342177280, "t": 3147038720}, "margin": [11, 10], "k1_bits": 4.090909090909091, "k2_bytes": 2860944290.909091, "chunk": 1048576, "huff_max_len": 20, "zstd": [19, 8], "len_field": 8, "chunk_field": 4, "predictions": {"P1": [0.999, null], "P2": [1.0, null], "P3": [3.6, 3.85], "P4": [0.28, 0.38], "P5": [3.95, 4.2], "P6": [13.0, 14.2], "P7": [0.08, 0.13], "P8": [4.3, null], "P9": [null, 0.1], "P10": [0.999, null]}, "budget": {"core_cycles_per_s": 28755200000.0, "codes_per_cycle_core_4.5": 2.9440858619581074, "codes_per_cycle_core_k1": 3.2384944481539186, "head_symbols_per_cycle_core_16": 0.8280241486757178}, "git_head": "3167e75ed0c0aad421b5f8ea0e7aba9339a1a264"}

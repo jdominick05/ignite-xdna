@@ -1,0 +1,83 @@
+INPUTS (3c step 4), no chip. 2026-09-24T17:07:18Z
+PREREG_TEXT_SHA256 f7fa696b608d22b7ad2a5b228b1b93d2e617a40b34385c1e85f361faf5fca6d9
+PROTOCOL_JSON_SHA256 a997580c4e04dbe8e1506d7033031bb098e696ef3d8e788a1251fa9b8292868c
+VERDICT_CODE_SHA256 6e459e560c838909295e554994c950ad3ce32cf0b15a150123ab5481d17dc549
+GGUF_JSON {"file": "gemma-3-4b-it-q4_0.gguf", "revision": "15f73f5eee9c28f53afefef5723e29680c2fc78a", "size": 3155051328, "sha256": "76aed0a8285b83102f18b5d60e53c70d09eb4e9917a20ce8956bd546452b56e2", "ok": true}
+LINEAR_JSON {"name": "q", "tensor": "blk.16.attn_q.weight", "type": "Q4_0", "K": 2560, "N": 2048}
+LINEAR_JSON {"name": "k", "tensor": "blk.16.attn_k.weight", "type": "Q4_0", "K": 2560, "N": 1024}
+LINEAR_JSON {"name": "v", "tensor": "blk.16.attn_v.weight", "type": "Q4_0", "K": 2560, "N": 1024}
+LINEAR_JSON {"name": "o", "tensor": "blk.16.attn_output.weight", "type": "Q4_0", "K": 2048, "N": 2560}
+LINEAR_JSON {"name": "gate", "tensor": "blk.16.ffn_gate.weight", "type": "Q4_0", "K": 2560, "N": 10240}
+LINEAR_JSON {"name": "up", "tensor": "blk.16.ffn_up.weight", "type": "Q4_0", "K": 2560, "N": 10240}
+LINEAR_JSON {"name": "down", "tensor": "blk.16.ffn_down.weight", "type": "Q4_0", "K": 10240, "N": 2560}
+INPUT_FILE_JSON {"name": "x_attn", "dtype": "float32", "shape": [8192, 2560], "bytes": 83886208, "sha256": "e4e67eebcbc7420a94a6354de9cd3e6bbd0e708cacab195faead3fb7f317909c"}
+INPUT_FILE_JSON {"name": "x_attn_q_M2048", "dtype": "int8", "shape": [2048, 2560], "bytes": 5243008, "sha256": "d452cb141dc0cabde02c80486ab44f004e3e4797286ca3fb186c48f738534df3"}
+INPUT_FILE_JSON {"name": "sx_attn_M2048", "dtype": "float64", "shape": [1], "bytes": 136, "sha256": "07a285867a322af37736a676f50d87e481734b33b951b250864fa975baa0e976"}
+INPUT_FILE_JSON {"name": "x_attn_q_M8192", "dtype": "int8", "shape": [8192, 2560], "bytes": 20971648, "sha256": "b39ed78b03fc79e02510c802657467471c3d5eda9ea32660ff7a3f3c5217862d"}
+INPUT_FILE_JSON {"name": "sx_attn_M8192", "dtype": "float64", "shape": [1], "bytes": 136, "sha256": "07a285867a322af37736a676f50d87e481734b33b951b250864fa975baa0e976"}
+INPUT_FILE_JSON {"name": "x_o", "dtype": "float32", "shape": [8192, 2048], "bytes": 67108992, "sha256": "3c9c06e80216e50487ac451017c9a451991e28feb648fc47746835bf8b528fc1"}
+INPUT_FILE_JSON {"name": "x_o_q_M2048", "dtype": "int8", "shape": [2048, 2048], "bytes": 4194432, "sha256": "383de9e540cd296a6bfb9728f00dc26c9bc37f4aaaac185daf6c5b251da09eca"}
+INPUT_FILE_JSON {"name": "sx_o_M2048", "dtype": "float64", "shape": [1], "bytes": 136, "sha256": "03b2ff2890e154c5cefbf4d01dc1381110602722d49df1d05f1affd63549acdb"}
+INPUT_FILE_JSON {"name": "x_o_q_M8192", "dtype": "int8", "shape": [8192, 2048], "bytes": 16777344, "sha256": "c2b0a9190f8f52bb66dd82b4e14a014fab7fff036ff3ec6bf893910adb2e593e"}
+INPUT_FILE_JSON {"name": "sx_o_M8192", "dtype": "float64", "shape": [1], "bytes": 136, "sha256": "0f7a013a6440eec7f6729e9ac01235823bc88619de8c25c79bbddf6e3f1beb26"}
+INPUT_FILE_JSON {"name": "x_ffn", "dtype": "float32", "shape": [8192, 2560], "bytes": 83886208, "sha256": "b823cc128d899a82e3af1d46d8b33c1e260de751fc1beec1fdfa902a890cf7ff"}
+INPUT_FILE_JSON {"name": "x_ffn_q_M2048", "dtype": "int8", "shape": [2048, 2560], "bytes": 5243008, "sha256": "3c7e405147ea47de3151ef670da47d6001334113439e768c9ee55cd35e3f18e4"}
+INPUT_FILE_JSON {"name": "sx_ffn_M2048", "dtype": "float64", "shape": [1], "bytes": 136, "sha256": "87284c766861d6de51c7b022e2c292c1eb35d265d0f1b2c3f69bef32ab945439"}
+INPUT_FILE_JSON {"name": "x_ffn_q_M8192", "dtype": "int8", "shape": [8192, 2560], "bytes": 20971648, "sha256": "21717ad979c2dcb4f768e64a231efee899ca6cfada511ba5d1d07b3e4018294d"}
+INPUT_FILE_JSON {"name": "sx_ffn_M8192", "dtype": "float64", "shape": [1], "bytes": 136, "sha256": "d9a7537dc0f295445296020492b380790ac17a69303521eafdd46b3c6c3cc5bf"}
+INPUT_FILE_JSON {"name": "x_down", "dtype": "float32", "shape": [8192, 10240], "bytes": 335544448, "sha256": "d783eae4978b159bf7162cb5d4d623bc0f2be30f5c271dae3730fa22dcee88c9"}
+INPUT_FILE_JSON {"name": "x_down_q_M2048", "dtype": "int8", "shape": [2048, 10240], "bytes": 20971648, "sha256": "c35a28079cec42e360ee909ff4cc4cfaa22e0bc98f1e5b415636a0a5abf0c189"}
+INPUT_FILE_JSON {"name": "sx_down_M2048", "dtype": "float64", "shape": [1], "bytes": 136, "sha256": "3afc6b76b600ff82527b77b41736519237d6c319351bdffe0f2eed9d3f8f27e8"}
+INPUT_FILE_JSON {"name": "x_down_q_M8192", "dtype": "int8", "shape": [8192, 10240], "bytes": 83886208, "sha256": "ebc2efb8e5d78b5758815c9c265e5b9f236d0b7b13caef9d19946d8452f8f80f"}
+INPUT_FILE_JSON {"name": "sx_down_M8192", "dtype": "float64", "shape": [1], "bytes": 136, "sha256": "b5a79ac7f222c04b7e6d86a42f31341d1d828a5850071ccdfdc2df8e436421e6"}
+INPUT_FILE_JSON {"name": "w_q", "dtype": "float32", "shape": [2560, 2048], "bytes": 20971648, "sha256": "802ff8a9df30a51ddd3e850874d66a649b5f618e22c241331bc172afce95eedb"}
+INPUT_FILE_JSON {"name": "w_q_q", "dtype": "int8", "shape": [2560, 2048], "bytes": 5243008, "sha256": "60c18e39b8a5b70140dfe4ff22f6a0ed1d260e294fc87397402af64dc6056fa9"}
+INPUT_FILE_JSON {"name": "sw_q", "dtype": "float64", "shape": [2048], "bytes": 16512, "sha256": "bad2547e9b74ce0a914531b979a425329c1f194dbf22890527bd77c3cea18289"}
+INPUT_FILE_JSON {"name": "b4_q", "dtype": "int8", "shape": [2560, 2048], "bytes": 5243008, "sha256": "1f33dc47541f2675f0671d82ade3a0e8c9d1279cfd3134133eebe44685e93506"}
+INPUT_FILE_JSON {"name": "ref_q", "dtype": "float64", "shape": [8192, 2048], "bytes": 134217856, "sha256": "a15ab673790f169e87f8245d846d6d224fb8d60c4f4b633600025129ec7b477f"}
+INPUT_FILE_JSON {"name": "ref_bf16_q", "dtype": "float64", "shape": [8192, 2048], "bytes": 134217856, "sha256": "85aad136261acc69ee161004d1cb9b4e871e818fcdad5edf31e9c2c6b216c0ab"}
+LINEAR_DONE_JSON {"name": "q", "K": 2560, "N": 2048, "seconds": 1.7}
+INPUT_FILE_JSON {"name": "w_k", "dtype": "float32", "shape": [2560, 1024], "bytes": 10485888, "sha256": "29c00c8d15eb9488e5208eba3858b92f9d110185b6490640d9218a30dbc67aaf"}
+INPUT_FILE_JSON {"name": "w_k_q", "dtype": "int8", "shape": [2560, 1024], "bytes": 2621568, "sha256": "b5e45f76ee85383ab0c0c05237b794a5175dff6eb0a3d086dc13a95c18957485"}
+INPUT_FILE_JSON {"name": "sw_k", "dtype": "float64", "shape": [1024], "bytes": 8320, "sha256": "0966df9b0238a31ba16e4d20d164774e5234820fc85b4907692778e39d847acf"}
+INPUT_FILE_JSON {"name": "b4_k", "dtype": "int8", "shape": [2560, 1024], "bytes": 2621568, "sha256": "e14b0d76c1fbc584e334d6966ea0d20980debb4bf5e6745c61f4ebd04019644f"}
+INPUT_FILE_JSON {"name": "ref_k", "dtype": "float64", "shape": [8192, 1024], "bytes": 67108992, "sha256": "5540e71b7eab55d6fa9893822a7f42a950eb6f954ebde151217d03bdfcab0195"}
+INPUT_FILE_JSON {"name": "ref_bf16_k", "dtype": "float64", "shape": [8192, 1024], "bytes": 67108992, "sha256": "e033881efdfd40a8d85295010115743bf2154e279ae0d238837032ace26be740"}
+LINEAR_DONE_JSON {"name": "k", "K": 2560, "N": 1024, "seconds": 1.0}
+INPUT_FILE_JSON {"name": "w_v", "dtype": "float32", "shape": [2560, 1024], "bytes": 10485888, "sha256": "0719eec7333da344ae41b9c47bc6a97eb3242f5ed1fd495b7822a6180aeffe36"}
+INPUT_FILE_JSON {"name": "w_v_q", "dtype": "int8", "shape": [2560, 1024], "bytes": 2621568, "sha256": "2ce4cf28b0d4d177cc2b55af0a4c7a8c8532df96d37d65cee2c6654c6c40713c"}
+INPUT_FILE_JSON {"name": "sw_v", "dtype": "float64", "shape": [1024], "bytes": 8320, "sha256": "e1966e2cf500ebec69deb09c8cdcf21a0c51d86adcd9f4e8643a9883674ec054"}
+INPUT_FILE_JSON {"name": "b4_v", "dtype": "int8", "shape": [2560, 1024], "bytes": 2621568, "sha256": "7a8e3e7864fc510e4575ebbf2ada3a6f197d9c56e378ec01f0191e31ccd220e0"}
+INPUT_FILE_JSON {"name": "ref_v", "dtype": "float64", "shape": [8192, 1024], "bytes": 67108992, "sha256": "bf26c4bd5bad6cbeb0c66678a8459afb933fa2c73bb9506e52b84550ed931aee"}
+INPUT_FILE_JSON {"name": "ref_bf16_v", "dtype": "float64", "shape": [8192, 1024], "bytes": 67108992, "sha256": "5d2841689779da3d98105bbb1201b33a16a1c6ee43d72b91cd2000d778acb0f7"}
+LINEAR_DONE_JSON {"name": "v", "K": 2560, "N": 1024, "seconds": 0.9}
+INPUT_FILE_JSON {"name": "w_o", "dtype": "float32", "shape": [2048, 2560], "bytes": 20971648, "sha256": "ecc868fb66a72da49fc2add17a03dcd3ce6091f197c1df9b64607190fd1606f0"}
+INPUT_FILE_JSON {"name": "w_o_q", "dtype": "int8", "shape": [2048, 2560], "bytes": 5243008, "sha256": "cfeacc1e1c7ff409fb31eefa9d189a5f8c5a2a04aed1eb5199451e8f3d5eba68"}
+INPUT_FILE_JSON {"name": "sw_o", "dtype": "float64", "shape": [2560], "bytes": 20608, "sha256": "20e6dee471120d0d22744db5530232ad4c483b1ca0d95d1a19c374161eed2137"}
+INPUT_FILE_JSON {"name": "b4_o", "dtype": "int8", "shape": [2048, 2560], "bytes": 5243008, "sha256": "929d03fa33b6721cf952f4a4f16a1e467681d48c59c5db376bd33fe984eb9c1e"}
+INPUT_FILE_JSON {"name": "ref_o", "dtype": "float64", "shape": [8192, 2560], "bytes": 167772288, "sha256": "40d784ca3a938257f2e7dd1d69709eb41dc6ea9ddb4cd5ba258d4fdca90e8ca0"}
+INPUT_FILE_JSON {"name": "ref_bf16_o", "dtype": "float64", "shape": [8192, 2560], "bytes": 167772288, "sha256": "5324590e9a4e127767ee8b354a590a433664a443f1470a49f5e33c684a6b21b4"}
+LINEAR_DONE_JSON {"name": "o", "K": 2048, "N": 2560, "seconds": 2.0}
+INPUT_FILE_JSON {"name": "w_gate", "dtype": "float32", "shape": [2560, 10240], "bytes": 104857728, "sha256": "7cd481c5a5455ec28d1b85ce9c6d2f0045e866c166eaecead27e80b0851d6c7e"}
+INPUT_FILE_JSON {"name": "w_gate_q", "dtype": "int8", "shape": [2560, 10240], "bytes": 26214528, "sha256": "664585ff5ac691d89731e1c765e9e8c760823872b0b7ac5c5a885841168a4cf0"}
+INPUT_FILE_JSON {"name": "sw_gate", "dtype": "float64", "shape": [10240], "bytes": 82048, "sha256": "02dca9db3c714e56b8d16d4ff2cb414dd9ac589eab2ebf3f99f040ca69f6e54c"}
+INPUT_FILE_JSON {"name": "b4_gate", "dtype": "int8", "shape": [2560, 10240], "bytes": 26214528, "sha256": "c4610fbf0db0833711d223b1d2a335d13135e8aac6b1d796f98be1c17fb9cdc5"}
+INPUT_FILE_JSON {"name": "ref_gate", "dtype": "float64", "shape": [8192, 10240], "bytes": 671088768, "sha256": "f61c311c61729152a22366786be6e3d70c3653e9c220017a8509cbd9b4b11365"}
+INPUT_FILE_JSON {"name": "ref_bf16_gate", "dtype": "float64", "shape": [8192, 10240], "bytes": 671088768, "sha256": "372389ca6fdaacf78db09714da49ebb4ae2669cadbbe27982300bf39eb568225"}
+LINEAR_DONE_JSON {"name": "gate", "K": 2560, "N": 10240, "seconds": 8.1}
+INPUT_FILE_JSON {"name": "w_up", "dtype": "float32", "shape": [2560, 10240], "bytes": 104857728, "sha256": "51caf5fd790d5fc93a748169f6f00ff05d1a131351393ddcd4b296d65e5ca5c9"}
+INPUT_FILE_JSON {"name": "w_up_q", "dtype": "int8", "shape": [2560, 10240], "bytes": 26214528, "sha256": "c1eec626f27358e9356f4dc7e0d5fea37561af9e1d85a9a6a7c66c5444056429"}
+INPUT_FILE_JSON {"name": "sw_up", "dtype": "float64", "shape": [10240], "bytes": 82048, "sha256": "8787f2ff812283bf59d483278d7fcd3ac980074d7d4b30d261b9f8e595c940cc"}
+INPUT_FILE_JSON {"name": "b4_up", "dtype": "int8", "shape": [2560, 10240], "bytes": 26214528, "sha256": "15a28446588b96f4a491ca1808425198d3b82a6c397d9246b577f764adc17636"}
+INPUT_FILE_JSON {"name": "ref_up", "dtype": "float64", "shape": [8192, 10240], "bytes": 671088768, "sha256": "b89e5fbe4cef55a013d17a6784b3ccab7372f132abd1318486c8201e917ac020"}
+INPUT_FILE_JSON {"name": "ref_bf16_up", "dtype": "float64", "shape": [8192, 10240], "bytes": 671088768, "sha256": "0c60acc13eebd97cf50e8eb3fdb5213bfcbdbc4237cd71e7ca118191d4b4e177"}
+LINEAR_DONE_JSON {"name": "up", "K": 2560, "N": 10240, "seconds": 7.8}
+INPUT_FILE_JSON {"name": "w_down", "dtype": "float32", "shape": [10240, 2560], "bytes": 104857728, "sha256": "7456c2d7b321de08fa16ac7f3a27da683ca0acddcb12b2e8f86ebd49c0f2089a"}
+INPUT_FILE_JSON {"name": "w_down_q", "dtype": "int8", "shape": [10240, 2560], "bytes": 26214528, "sha256": "896d735f8c04213079d79bcf4f70063f48df29f64a47ead1bc7a879069fffdf5"}
+INPUT_FILE_JSON {"name": "sw_down", "dtype": "float64", "shape": [2560], "bytes": 20608, "sha256": "12a3b205c62ee684ee7b931c09f7f6f8ac886e1fd5c10fae601f335b66ea4650"}
+INPUT_FILE_JSON {"name": "b4_down", "dtype": "int8", "shape": [10240, 2560], "bytes": 26214528, "sha256": "8af272beea441d0895d35dc7292832bccefc2e32a9b4b0f0d3768edecebfb8f8"}
+INPUT_FILE_JSON {"name": "ref_down", "dtype": "float64", "shape": [8192, 2560], "bytes": 167772288, "sha256": "90df1310f2160fc3d0b8bb874e82d80baf6b06e904305a7cf7c5f9e677c1dac4"}
+INPUT_FILE_JSON {"name": "ref_bf16_down", "dtype": "float64", "shape": [8192, 2560], "bytes": 167772288, "sha256": "8e49ac68e97a79e2d8fc0d3448eae6e3174c6a4026ec4dfc6d17f309fcf926e4"}
+LINEAR_DONE_JSON {"name": "down", "K": 10240, "N": 2560, "seconds": 6.0}
+EXACT_INT32_SHA256_JSON {"i8_q_M2048": "b46d7865bac504b609de60ee519db8d3d5a7c21fdcc01711038cf212b6a742f7", "w4_q_M2048": "f2d17bf780d87c51fd53cfb99497e0df1bd887b39d8009ec7e7d4fcf5d0b3b39", "i8_q_M8192": "fc2015936756b493d2a241d5a70b0f6632acc1a811267c833e1d19f37e7f6f36", "w4_q_M8192": "e78728d4ff383dbba757d20ec520387d3f58585650a6f20c43b6def65666b684", "i8_k_M2048": "6ca9cdcff6cd9a7c218dbdb4c0b781f25fdf6debd8210d6ca177c8af83d5b2eb", "w4_k_M2048": "7e09e80a4789da82446c7549b656fc976fd4590bbb88f6892642344610134016", "i8_k_M8192": "7fed30f2fea5206c1934ff0ee125e8e7e0ecdd0259d6089ea334f92c46b15723", "w4_k_M8192": "7129006c5dc12129da0e6d22e0a6a5ff89148c3931e9e920811a9ad812b02970", "i8_v_M2048": "8ccb00acdc4aa52952b37f5e0dbcef1abfca1be74ff068e89dd278c410b6683b", "w4_v_M2048": "9d560df4b70542354e751a9ff17ed1efcf7c0f02e2791d9372d822e72b30c6b0", "i8_v_M8192": "fa0b1bda6988deae90d20017d57114e2850e588db1d4f68d5ee15874ea7af89e", "w4_v_M8192": "2718bb9a8df4631aa9a23dd652f7dbccb5c58242d348537ccd0f5a728e42fdd2", "i8_o_M2048": "4a0bdf62236d5d16c926cb68080d37c5ae954aaaf06cc2c72ec06b8d10ce429c", "w4_o_M2048": "d0baa371bdbd8990723c85bf5dcda47db7ca1f439c0e6aef86e77db222b2aa1e", "i8_o_M8192": "f85ef53852f299fa5c2f66d550a95547bb7e1c71cff060cee8c166c3c6452106", "w4_o_M8192": "fba2e93e346b1786fb5b6d5419b93b7e5362b41f36274c45e3c9e2867ba98ea2", "i8_gate_M2048": "75853f13de3eaa236633e6a316f29e4aaa76eefa42d010f3678694d20acc0abd", "w4_gate_M2048": "b3527e87af9406106eac81d5641d086a8fa8bd2d7f0f3358304cc6351ebfa293", "i8_gate_M8192": "b7ca302bc63f0fbf55aff3450cd3e3edcb035059ed2aea3fad7a8cbcd1cb5c75", "w4_gate_M8192": "ac36ac4889b7e28e36a8a98d82f1f90c887c1264890a7dd900399c841a0225f0", "i8_up_M2048": "b203737f17a28458be0431694ff5019d676337b98a7c35d49570a1273109d668", "w4_up_M2048": "12feb7a23253171010a1a2dfed32ac533c84a42b5173772c02f3153f3a0301f8", "i8_up_M8192": "95155f03a7cfd897a7d02e78d5a5f47490ee0a3c7d87412bae0ea69672e8a671", "w4_up_M8192": "4dd795d1521480f626997b57202f8cc19f9ad2058d51dac6518fc5273678572f", "i8_down_M2048": "69b86a3e345b37a22d2f5e879baca1b49f4fae118cbf58ef5972eba70294b6d0", "w4_down_M2048": "043d10bf7ddb60cf0868159821aaee7503e2b8d51b6515f603905f68080f1b72", "i8_down_M8192": "94fa553444983506460f3462bbc9a3320b5731d1e50079b1655d2ea5647c92f3", "w4_down_M8192": "305766de7744f462ed2effa998f8c850edb0b50097feb923e8ccaedf8b3e5888"}
+INPUTS_MANIFEST_SHA256 d462ee7b0cb03f4ad12b0430586fe3842f4589c858c2c2a7ca5316633ad16e90 (62 files)

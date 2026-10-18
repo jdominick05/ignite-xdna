@@ -1,0 +1,68 @@
+Concurrent DDR reads on the 8700G: CPU, DirectML (Radeon 780M) and NPU (LLM study stage 2),
+pre-registered before any sitting
+
+Question (the user's re-scope, item 2)
+  Do the chips' DDR reads add when they run together? All three share one DDR5-6000 on two
+  channels, 96 GB/s theoretical (DERIVED). Each chip's best read rate alone (MEASURED): CPU
+  60.59 GB/s and DirectML 68.81 (ORT ReduceSum, Phase 1), NPU 47.62 (stage 1). This is the
+  combined-chip read ceiling, and the first question under any split of decode across chips.
+
+Design (tools/concurrent_read_bw.py)
+  Readers, one process each, set up and warmed up (3 reads) before the common start:
+    cpu  ORT CPU EP ReduceSum over the 1 GiB fp32 initializer of Phase 1's readbw model, 8 threads
+    dml  the same graph on the DirectML EP, device_id 0 (the Radeon 780M), CPU fallback disabled
+    npu  stage 1's c4x2_m1024 artifact: 8 shim MM2S streams, 1 GiB per dispatch, nothing written back
+  Each reader reads 1 GiB at a time. The coordinator hands every reader one start time, 3 s
+  after the last READY, and one stop time 20 s later, both on perf_counter_ns. Each reader
+  loops until the stop time and returns every read's start and end. Its rate is the bytes read
+  inside [start + 1 s, stop - 1 s], with a read that straddles an edge counted pro rata,
+  over those 18 s.
+  Configurations, each run twice in mirrored order, 14 runs in all:
+    cpu, dml, npu, cpu+dml, cpu+npu, dml+npu, cpu+dml+npu, cpu+dml+npu, dml+npu, cpu+npu, cpu+dml, npu, dml, cpu
+  A configuration's rate is the mean of its two runs; its total is the sum of its readers' rates.
+  The sitting: the host-load gate at the start (busy cores < 2, no peer >= 0.5), xrt-smi idle
+  before and after every run, a GPU engine snapshot before every run, and the whole sitting
+  recorded by tools/silicon_probe_record.py with its device witnesses. It is announced to the
+  other sessions, and nothing else runs.
+  One counter sample mid-window per run, reported and not deciding: the CPU's % Processor
+  Performance (its clock against base) and the GPU engines. The sampler is one short
+  PowerShell process on an idle core, the same in every run.
+
+Rules (mechanical; S_x a chip's rate alone in this sitting, P_xy a pair's total, T the three's)
+  R1 CPU+DML    ADD iff P_cpu+dml >= 1.1 x max(S_cpu, S_dml); otherwise SHARE.
+  R2 NPU pairs  for dml+npu and cpu+npu: ADD iff the pair's total >= 1.1 x the better of its two
+                solo rates; otherwise SHARE.
+  R3 NPU onto the other two   ADDS iff T >= 1.1 x P_cpu+dml; otherwise NO.
+  R4 ceiling    the best total of the 7 configurations, reported against 96 GB/s and each solo.
+  R5 split      the NPU earns a bandwidth role in a split iff the best total of a configuration
+                with it is >= 1.1 x the best total of one without it. Otherwise a split that
+                includes the NPU is killed on bandwidth. If it passes, the split is OPEN, not
+                established: no split decode is measured here, and whether decode kernels return is
+                the user's decision (the stage 1 rule kept them out below 59.7 GB/s).
+  Reported, not deciding: each chip's rate in each configuration against its rate alone, and
+  the mid-window counters.
+  Attribution: SHARE names no cause. DRAM itself, the data fabric between the chips and the
+  memory controllers, and the package power limit (the 8700G's 65 W, which could lower clocks
+  with all three busy) are candidates. A CPU clock that drops in the combined runs would point
+  at the last; a steady one argues against it.
+  INCOMPLETE    a reader that fails or never reaches READY; a reader mid-read for less than
+                90% of the window; a configuration whose two totals differ by more than 10%;
+                an xrt-smi witness that is not idle (the suite stops); a missing run.
+
+Written predictions (stated expectations; the rules decide)
+  Q1 alone, in this harness: CPU 55-65, DML 62-72, NPU 44-50 GB/s.
+  Q2 R1 ADD: CPU+DML totals 76-85 GB/s, 79-89% of the theoretical; each chip slows.
+  Q3 R2 ADD for dml+npu (76-85) and for cpu+npu (70-85).
+  Q4 R3 NO: all three total within 1.05x of CPU+DML; near 80 GB/s one shared limit binds,
+     whoever reads.
+  Q5 R5: the NPU earns no bandwidth role; the best total with it is < 1.10x the best without it.
+
+Unverified by design: reads through the chips' GEMV kernels (these are reductions and a DMA
+sink); writes; the CPU at other thread counts; DirectML fp16 (its ReduceSum anomaly, Phase 1);
+any split decode itself.
+
+PINS
+  npu c4x2_m1024 insts_sha256 c3aa45a3c6013bbcf1170e0cb9d68cb0a20ecbf063bc6eb2d52621e06314fe3a
+  readbw model scratch/llm/readbw_fp32_65536x4096/model.onnx sha256 1871f393faa54fde25815f47858b1c14455cc844dff5a0251a33f4ce4a4457a1 weights.bin bytes 1073741824
+git HEAD cf2d94abc54bb42e54b756f8ab7f2e1a1d60802f (plus this log's own commit)
+PREREG_JSON {"configs": [["cpu"], ["dml"], ["npu"], ["cpu", "dml"], ["cpu", "npu"], ["dml", "npu"], ["cpu", "dml", "npu"], ["cpu", "dml", "npu"], ["dml", "npu"], ["cpu", "npu"], ["cpu", "dml"], ["npu"], ["dml"], ["cpu"]], "window_s": 20.0, "trim_s": 1.0, "lead_s": 3.0, "warmup": 3, "cpu_threads": 8, "solo_before": {"cpu": 60.59, "dml": 68.81, "npu": 47.62}, "ddr_gbps": 96.0, "add_ratio": 1.1, "coverage_min": 0.9, "repeat_agree": 0.1, "git_head": "cf2d94abc54bb42e54b756f8ab7f2e1a1d60802f"}
