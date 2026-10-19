@@ -4538,3 +4538,8 @@ corpus, queries, qrels), never the gate documents.
   the numpy emulator with the device substitutions, but that was estimated at 6-10 h and was stopped unscored. The
   substitutions are gated separately and are common to both formats.
 - **On a fail, stop and report.**
+
+- **No hand-scheduled bf16 GEMM kernel for the generic GEMM while it is transport-bound (2026-10-19).** The hollow m64
+  build (no MACs) runs the forward-pass GEMMs in 231.0 ms at M = 2048, the same as the owned `mm_bf16.cc`
+  (230.0). A faster core cannot move the device time; reopen only if the transport floor drops below the kernel's
+  core time ([BENCHMARKS](BENCHMARKS.md#with-the-owned-kernel-the-m64-gemm-is-transport-bound-a-hand-scheduled-kernel-cannot-pay-on-the-device-2026-10-19-desktop-2)).

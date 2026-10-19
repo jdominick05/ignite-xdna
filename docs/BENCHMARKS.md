@@ -25835,3 +25835,23 @@ So [`geglu_epilogue.cc`](../kernels/embedgemma/geglu_epilogue.cc) now loops over
 - **At 2048 the batch is one document either way.** 1371.9 against 1406.2 is the spread between sittings, not an
   effect of the batch.
 - **Since the start of the bf16 maturation, the 2048-token document has gone from 2613.9 to 1371.9-1406.2 ms.**
+
+#### With the owned kernel, the m64 GEMM is transport-bound: a hand-scheduled kernel cannot pay on the device (2026-10-19, Desktop 2)
+
+The hollow m64 build (`--hollow-matmul`) keeps every DMA and lock step and drops the MACs
+([log](../results/aie/embedgemma_gemm_hollow_m64_floor_desktop2_20261019T062037Z.log); contention clean, same day as the owned m64 runs above). Forward-pass weight GEMMs, ms:
+
+| m64 build | M = 512 | 2048 |
+|---|---:|---:|
+| `mm.cc` | 91.6 | 292.1 |
+| owned `mm_bf16.cc` | 76.9 | 230.0 |
+| hollow (no MACs) | 76.7 | 231.0 |
+
+**What this means:**
+- The owned kernel already sits at the transport floor. A faster kernel, even one that cost zero cycles, saves
+  nothing here.
+- **Plan stage 2 (a hand-scheduled `.s`) is stopped on this measurement before any code was written.**
+- **Its own ceiling was modest anyway (DERIVED).** At a 64-wide K tile, each 4x4 block's 64 accumulator transfers
+  bunch at the block boundary under the one-per-bundle accumulator port. That leaves about 35-43 boundary bundles
+  per 128 MAC bundles, about 75-80% of peak.
+- **The lever is now data movement:** the DMA and tiling of the generic GEMM, and the fixed cost per call.
