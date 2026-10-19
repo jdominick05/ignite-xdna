@@ -26482,7 +26482,7 @@ and the frozen energy comparison remain on the registered control.
 ### Prefix binding through Ignition and the terminal frontend
 
 The separate checkout-only
-[`PrefixBoundAssistant`](../Ignition/src/ignition/experimental/prefix_bound.py)
+[`PrefixBoundAssistant`](https://github.com/jdominick05/Ignition/blob/main/src/ignition/experimental/prefix_bound.py)
 wraps the same GPU/NPU backend and installs the qualified host candidate. Its
 implementation imports must resolve inside the selected study checkout, and
 its source map includes the adapter, binding/cache modules and prepared arena.
@@ -26493,7 +26493,7 @@ files and frozen energy protocol remain the control.
 The [chat frontend](../tools/gemma4_chat.py) now accepts `--prefix-binding`
 with `--input-depth 2 --vector-copy`; the
 [PowerShell launcher](../tools/gemma4-chat.ps1) exposes `-PrefixBinding`.
-The SDK's [contract and command](../Ignition/docs/HYBRID-ASSISTANT.md) explain
+The SDK's [contract and command](https://github.com/jdominick05/Ignition/blob/main/docs/HYBRID-ASSISTANT.md) explain
 the opt-in interface. Neither stable vision exports nor release badges change.
 
 The [first binding lifecycle check](../results/aie/gemma4_prefix_binding_lifecycle_20261018.log)
@@ -29360,3 +29360,30 @@ Logs:
 - [sitting](../results/aie/head_to_head_overlap_phoenix_20261015T2243Z.log), every run's command and output lines;
 - [record](../results/aie/head_to_head_overlap_record_phoenix_20261015T2243Z.log): the pre-registration verbatim,
   hashes and the per-arm summary.
+
+## Beyond AMD's stack: what runs on this NPU that Ryzen AI does not offer (summary, 2026-10-19, Desktop 2)
+
+This section gathers results measured elsewhere on this page. It adds no new number; each row links to its working
+and log. **Why there is no AMD column:** the current Ryzen AI releases run XDNA1 as CNN INT8 only. Their Vitis AI EP
+places none of a float graph on the NPU: 0 of 150 nodes in fp32 and 0 of 430 in bf16, against 502 of 507 for the
+same model quantized
+([placement](#amds-ep-takes-nothing-from-a-float-graph-and-502-of-507-nodes-from-the-same-model-quantized-2026-09-22-desktop-2)).
+RyzenAI-SW 1.1–1.3.1 (2024) did ship a w4abf16 LLM path for Phoenix, so this is a statement about the current
+releases, not about AMD ever. Laya and EmbeddingGemma were not themselves run through the EP. The comparisons
+are therefore against the CPU and the 780M iGPU on the same chip.
+
+| Workload | Result | Against | Caveats |
+|---|---|---|---|
+| **Laya** (ModernBERT-large decision model, bf16), 512 tokens | **607.9 ms**, the fastest of three backends, with the same choice as the CPU on 48/48 | 780M 754.9 ms, CPU (8 threads) 869.5 ms, same sitting ([working](#laya-end-to-end-with-its-weight-products-on-the-npu-at-512-tokens-it-is-the-fastest-backend-608-ms-against-755-780m-and-870-cpu-2026-10-14-desktop-2)) | A hybrid: the weight products run on the NPU, attention and GeGLU on the host. Questions are padded to 512 tokens; real 60–90-token questions are faster on the CPU ([daemon](#laya-as-a-resident-decision-service-the-reference-ticket-passes-on-both-backends-and-short-questions-are-faster-on-the-cpu-2026-10-14-desktop-2)) |
+| **Laya entirely on the NPU** | Embeddings, the 28-layer encoder and both heads with **zero CPU neural ops**; the frozen accuracy gates C0–C5 pass on 2,400 labelled items, accuracy delta 0 ([working](#laya-native-frozen-accuracy-c0c5-pass-2026-10-16-desktop-2)) | — | **Slower**: 1,889 ms against the hybrid's 589 ms at matched 512 rows ([working](#laya-full512-polynomial-adopted-speed-goal-still-open-2026-10-17-desktop-2)) |
+| **EmbeddingGemma 2** (bf16 encoder), per document | **87.5 / 242.8 / 1,158.9 ms** at 128 / 512 / 2,048 tokens; weight GEMMs, local and global attention and GeGLU on the NPU; cosine ≥ 0.99998 against fp32, nearest neighbours 100% ([working](#global-attention-on-the-npu-head_dim-512-exact-against-its-emulation-11589-against-13602-ms-per-2048-token-document-2026-10-19-desktop-2)) | CPU torch bf16 1,500 ms at 2,048, cross-sitting | **The 780M is 2.7× faster** (433 ms) and faster at every op measured ([op by op](#the-780m-igpu-against-the-npu-op-by-op-the-igpu-is-faster-at-every-op-measured-2026-10-19-desktop-2)). Norms, RoPE and residuals run as native host code |
+| **NPU beside the 780M**, 2,048-token documents | **+13–14% documents per second** with both working | 780M alone with flash attention, same sitting ([working](#the-780m-and-the-npu-together-on-2048-token-documents-a-throughput-role-for-the-npu-an-energy-role-only-against-the--fa-off-gpu-2026-10-19-desktop-2)) | A throughput role only: energy per document is no better (1.01–1.03× the GPU's) |
+| **bf16 GEMM** | **2,072.5 GFLOPS** at 1024³, 1.18–1.78× CPU bf16 once M, N ≥ 1024 ([working](#bf16-gemm-the-first-genuine-npu-win-in-this-project)) | CPU torch bf16 | Loses at 512³ |
+| **Owned bf16 matmul kernel** | **1.57× upstream `mm.cc`** in L1, bit-identical; −20% on the device's forward GEMMs ([working](#an-owned-bf16-matmul-kernel-157x-upstream-mmcc-in-l1-from-freeing-the-move-slot-2026-10-19-desktop-2)) | mlir-aie's own kernel, same sitting | The m64 GEMM is now transport-bound, so further kernel work cannot pay there |
+| **Energy per byte read** | **0.33 J per GB**, against DirectML's 0.75 and the CPU's 0.88 ([working](#the-780m-and-the-npu-both-register-in-the-package-power-counter-and-the-npu-reads-a-gb-for-033-j-against-directmls-075-and-the-cpus-088-2026-09-24-desktop-2)) | Same sitting, package power counter | A DMA read stream, not a model; package counter only, no DRAM power |
+| **A small sensor model** (20×20 maps, int8) | Whole model on the NPU, bit-exact, **3.1–4.4× one CPU thread** ([working](#twenty-rows-cost-the-npu-what-five-did-the-same-sensor-model-at-20x20-is-31x-faster-than-one-cpu-thread-on-main-2026-09-28-desktop-2)) | ORT CPU, 1 thread, same sitting | Untrained model, so speed only; not run through AMD's stack |
+
+**What this does not establish.** No transformer here beats the 780M except Laya at 512 tokens, and it does so as a
+hybrid. Decoding a 7B LLM on the NPU alone stays ruled out by DDR read bandwidth: 47.6 GB/s, against the 56–64 GB/s
+at which the CPU and the 780M read int4 weights
+([working](#the-npu-reads-ddr-at-476-gbs-when-nothing-is-written-back-silicons-2628-gbs-cap-does-not-bind-reads-and-7b-decode-stays-killed-2026-09-23-desktop-2)).
