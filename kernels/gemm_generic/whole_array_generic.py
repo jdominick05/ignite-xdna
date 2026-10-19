@@ -95,6 +95,7 @@ def _build_design(
     b_w8=0,  # local change: B as host pre-swizzled W8 tiles (kernels/embedgemma/w8_dequant.cc)
     w8_dequant_src="",  # local change: the W8 dequant kernel (absent: no dequant, a transport probe)
     mm_src="",  # local change: an owned bf16 matmul in mm.cc's place (kernels/gemm_bf16/mm_bf16.cc)
+    b_resident=0,  # local change: each column's K x n B strip leaves DDR once; its MemTile re-sends it per row block
     *,
     generate_taps=False,
 ):
@@ -224,23 +225,43 @@ def _build_design(
         )
         A_l2l1_fifos.extend(a_tmp_fifos)
 
+    b_repeat = M // (m * n_aie_rows)  # local change: row blocks per B strip under --b-resident
+    if b_resident:
+        assert not (b_w8 or b_col_maj or c_col_maj), "--b-resident: bf16 row-major B and C only"
+        assert 1 <= b_repeat <= 255, "MemTile repeat_count is 1..255"
+        B_strip_ty = np.ndarray[(K * n,), np.dtype[dtype_in]]
+        strip_depth = 2 if 2 * K * n * np.dtype(dtype_in).itemsize <= 256 * 1024 else 1
     for col in range(n_aie_cols):
-        b_l3l2 = ObjectFifo(B_l2_ty, name=f"B_L3L2_{col}", depth=fifo_depth)
-        B_l3l2_fifos.append(b_l3l2)
-        b_dims: StreamDims = (
-            [(n // t, t * k), (k // s, s), (t, k), (s, 1)]
-            if b_col_maj
-            else [(k // s, s * n), (n // t, t), (s, n), (t, 1)]
-        )
-        B_l2l1_fifos.append(
-            b_l3l2.cons().forward(obj_type=B8_l1_ty, name=f"B_L2L1_{col}")  # local change: pre-swizzled, linear
-            if b_w8 else
-            b_l3l2.cons().forward(
-                obj_type=B_l1_ty,
+        if b_resident:  # local change: L2 holds the whole K x n strip; the cores still take k x n tiles
+            b_l3l2 = ObjectFifo(B_strip_ty, name=f"B_L3L2_{col}", depth=strip_depth)
+            B_l3l2_fifos.append(b_l3l2)
+            fwd = b_l3l2.cons().forward(
+                obj_type=B_strip_ty,
+                depth=strip_depth,
                 name=f"B_L2L1_{col}",
-                dims_to_stream=b_dims,
+                # today's per-tile pattern over all of K: the strip's k x n tiles are consecutive rows
+                dims_to_stream=[(K // s, s * n), (n // t, t), (s, n), (t, 1)],
+                repeat_count=b_repeat,
             )
-        )
+            fwd._consumer_obj_type = B_l1_ty  # asymmetric granularity (ObjectFifo consumer_obj_type); forward() lacks it
+            B_l2l1_fifos.append(fwd)
+        else:
+            b_l3l2 = ObjectFifo(B_l2_ty, name=f"B_L3L2_{col}", depth=fifo_depth)
+            B_l3l2_fifos.append(b_l3l2)
+            b_dims: StreamDims = (
+                [(n // t, t * k), (k // s, s), (t, k), (s, 1)]
+                if b_col_maj
+                else [(k // s, s * n), (n // t, t), (s, n), (t, 1)]
+            )
+            B_l2l1_fifos.append(
+                b_l3l2.cons().forward(obj_type=B8_l1_ty, name=f"B_L2L1_{col}")  # local change: pre-swizzled, linear
+                if b_w8 else
+                b_l3l2.cons().forward(
+                    obj_type=B_l1_ty,
+                    name=f"B_L2L1_{col}",
+                    dims_to_stream=b_dims,
+                )
+            )
 
         c_dims: StreamDims = (
             [(m // r, r * n), (r, t), (n // t, r * t), (t, 1)]
@@ -420,6 +441,24 @@ def _build_design(
             for row in range(n_aie_rows):
                 for col in range(n_aie_cols):
                     barriers[row][col].set(1)
+        if b_resident:  # local change: per column n-tile j, its B strip once; A and C over every row block
+            J, rb = N // n // n_aie_cols, M // (m * n_aie_rows)
+            tg = TaskGroup()
+            for jj in range(J):
+                for col in range(n_aie_cols):
+                    nb = col + jj * n_aie_cols  # this column's jj-th n-tile
+                    C_hs[col].drain(C, tap=TensorAccessPattern((M, N), nb * n, [1, rb, m * n_aie_rows, n],
+                                                               [0, m * n_aie_rows * N, N, 1]), wait=True, group=tg)
+                    if col < n_aie_rows:  # A shim col feeds core row col: its m rows of every row block, K tiles inner
+                        A_hs[col].fill(A, tap=TensorAccessPattern((M, K), col * m * K, [rb, K // k, m, k],
+                                                                  [m * n_aie_rows * K, k, K, 1]), group=tg)
+                    B_hs[col].fill(B, tap=TensorAccessPattern((K, N), nb * n, [1, K // k, k, n], [0, k * N, N, 1]),
+                                   group=tg)
+                if jj > 0:
+                    tg.finish()
+                    tg = TaskGroup()
+            tg.finish()
+            return
         c_index = 0
         tg = TaskGroup()
         for tb in range(iron.ceildiv(M // m // n_aie_rows, tb_max_n_rows)):
@@ -514,6 +553,7 @@ def whole_array(
     b_w8: CompileTime[int] = 0,  # local change
     w8_dequant_src: CompileTime[str] = "",  # local change
     mm_src: CompileTime[str] = "",  # local change
+    b_resident: CompileTime[int] = 0,  # local change
 ):
     return _build_design(
         iron.get_current_device(),
@@ -539,6 +579,7 @@ def whole_array(
         b_w8,  # local change
         w8_dequant_src,  # local change
         mm_src,  # local change
+        b_resident,  # local change
     )
 
 
@@ -604,6 +645,9 @@ def _make_argparser():
     p.add_argument("--hollow-matmul", default="", help="local change: timing probe, link this no-op in matmul's place")
     p.add_argument("--b-w8", type=int, default=0, help="local change: B as pre-swizzled W8 tiles (uint8)")
     p.add_argument("--w8-dequant-src", default="", help="local change: link this egemm_w8_dequant (else no dequant)")
+    p.add_argument("--b-resident", type=int, default=0, help="local change: weight-resident B - each column's K x n "
+                   "strip leaves DDR once and its MemTile re-sends it to the column's cores for every row block "
+                   "(ObjectFifo repeat_count = M / (rows m), so M and K are compile-time)")
     p.add_argument("--mm-src", default="", help="local change: an owned bf16 x bf16 -> f32 matmul in mm.cc's place, same "
                    "layouts (kernels/gemm_bf16/mm_bf16.cc); mm.cc still supplies zero_f32")
     p.add_argument(
@@ -705,6 +749,7 @@ def _compile_kwargs(opts):
         b_w8=opts.b_w8,  # local change
         w8_dequant_src=opts.w8_dequant_src,  # local change
         mm_src=opts.mm_src,  # local change
+        b_resident=opts.b_resident,  # local change
     )
 
 
@@ -768,6 +813,7 @@ def _run_and_verify(opts):
         b_w8=opts.b_w8,  # local change
         w8_dequant_src=opts.w8_dequant_src,  # local change
         mm_src=opts.mm_src,  # local change
+        b_resident=opts.b_resident,  # local change
         warmup=opts.warmup,
         iters=opts.iters,
     )

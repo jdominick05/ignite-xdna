@@ -25913,3 +25913,38 @@ read N/256 times, B M/256 times (8 at M = 2048), and C is written once in f32.
   against 231** (the iGPU's GEMMs: 177).
 - **A higher DMA rate** (more shim channels busy, toward the 47.6 GB/s ceiling) would cut it further.
 - **Not measured:** whether the reordered loop keeps the rate, and whether the MemTile buffers fit once allocated.
+- **Superseded for the B row (measured the same day):** B resident is exact but saves 3% of a hollow call, not
+  the ~29% this model predicts for 2048x512x4096, so the B re-reads are not what binds
+  ([below](#weight-resident-b-is-exact-and-not-faster-the-b-re-reads-do-not-bind-the-m64-gemm-2026-10-19-desktop-2)). The ~56 ms and the 116 ms total no longer stand.
+
+#### Weight-resident B is exact and not faster: the B re-reads do not bind the m64 GEMM (2026-10-19, Desktop 2)
+
+`whole_array_generic.py --b-resident 1` keeps each column's K x 64 B strip in its MemTile (depth 2 at K = 512) and
+re-sends it to the column's cores once per 256-row block (`ObjectFifo` `repeat_count` = M / 256, a compile-time
+value). The sequence runs n-tile outer, row block inner, so B leaves DDR once per product. The core program is
+unchanged. [`gemm_resident_ab.py`](../tools/gemm_resident_ab.py) opened four contexts in one sitting on 2048x512x4096
+(gate|up, the largest byte share) with the same seeded A and B
+([log](../results/aie/embedgemma_gemm_bresident_ab_2048x512x4096_desktop2_20261019T065654Z.log)). The NPU was idle before and after; host load CLEAR.
+
+| Build | ms/call (median of 30) | DDR MB per call (DERIVED) |
+|---|---:|---:|
+| generic, owned kernel | 3.155 | 100.7 |
+| resident, owned kernel | 3.643 | 71.3 |
+| generic, no MACs | 3.414 | 100.7 |
+| resident, no MACs | 3.312 | 71.3 |
+
+- **Exact:** the resident C equals the generic C in all 8,388,608 words, repeats bit-equal, rel err 4.7e-07
+  against fp32.
+- **Not faster.** 29% fewer bytes cut the no-MAC call by 3%, and the real resident call is 15% slower than the
+  generic one. So B's DDR reads are not what binds this shape, and the byte model's rate assumption (time scales with
+  bytes) fails here.
+- **What binds is still unexplained.** Candidates not yet ruled out:
+  - the shim DMAs read A and B in 128-byte runs (one 64-wide bf16 tile row), far from the linear reads that reached
+    47.6 GB/s;
+  - the per-tile lock and BD handshakes at the MemTile and the cores;
+  - the C drain, single-buffered, which the core waits on after every tile.
+- **The real build sits below the generic no-MAC build in this sitting** (3.155 against 3.414 ms), so the no-MAC
+  build is not a strict floor with four contexts open. Earlier sittings had one context.
+- **Switching contexts is expensive:** calls alternating between the generic and resident contexts take 4.674 and
+  5.129 ms, 1.5 ms more each. A per-(M, K) xclbin set would add about that per switch, so that form of Stage B is
+  out regardless.
