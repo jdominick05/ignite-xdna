@@ -25976,3 +25976,22 @@ before and after, host load CLEAR, 2048x512x4096:
   4.874 / 3.873 ms (no MACs). Stage B therefore needs one xclbin: B's MemTile path as runtime-sequence BDs, so the
   repeat count and strip length live in each shape's `.bin`. The per-(M, K) xclbin form is ruled out.
 - **Not measured:** the other six shapes, and whole forward passes.
+
+#### End to end, W8 owned and bf16 owned m64 are the same speed (2026-10-19, Desktop 2)
+
+The hybrid ran both builds back to back in one sitting, with the same settings: batch 4, GeGLU mode 6 on the NPU,
+NPU local attention, and the native QKV and rowops passes. The NPU was idle before each run, host load CLEAR, and
+both runs are timing-eligible. W8 (`--w4 64 --wbits 8 --wclip 20 --npu-w8`) is gated against its own emulation
+reference, with HF fp32 as the quality reference; bf16 is gated against HF fp32.
+
+| Build | 128 | 512 | 2048 ms/doc | gate cos min | NN kept |
+|---|---:|---:|---:|---:|---:|
+| W8 owned ([log](../results/aie/embedgemma_hybrid_w8own_m64_desktop2_20261019T070456Z.log)) | 82.1 | 258.4 | 1401.3 | 0.9999618 | 100% (and vs fp32) |
+| bf16 owned ([log](../results/aie/embedgemma_hybrid_bf16own_m64_desktop2_20261019T070558Z.log)) | 84.0 | 255.3 | 1389.9 | 0.9999883 | 100% |
+
+- **No difference that one sitting can resolve:** -2.3%, +1.2% and +0.8% for W8 at the three lengths, with one run per
+  build.
+- **Where the probe's gap went.** The probe's 36.8 ms per GEMM pass at 2048 for W8 shows here only as npu_call
+  341.0 against 330.7 ms per document, and the stages around it vary by as much.
+- **What W8 buys is half the weight memory, not speed.** bf16 stays the default because it gates tighter against
+  fp32 and needs no quantized weights.
