@@ -25344,3 +25344,25 @@ emulation with host GeGLU read 0.9999890.
 - **It also takes this work off the CPU.**
 - **It has headroom by its own bundle count:** about 1.1 ms predicted against 5.05 measured at 2048, unexplained
   above.
+
+**The epilogue table above is SUPERSEDED by one eligible same-sitting run**
+([log](../results/aie/embedgemma_gemm_epilogue_allmodes_desktop2_20261019T002827Z.log)).
+- **Why.** Every per-mode log in that table exited 1 (the JSON bool) or 139 (teardown). The research wrapper marks
+  such a run `timing_eligible: false`.
+- **Its rows also came from different sittings.** Mode 5's row has a mode-0 baseline of 1.021 ms at M = 256,
+  against about 0.75 elsewhere.
+- **The fix.** The 139 was a BO handle (`ib0`) outliving the device in the probe's teardown, now deleted. This run
+  exits 0 with no foreign context, and all 21 plain products PASS.
+
+| Mode | Added per call, M = 256 / 512 / 2048 (same sitting, mode 0 = 0.735 / 1.318 / 4.714 ms) |
+|---|---:|
+| 1 fp32 | 2.197 / 4.253 / 17.709 |
+| 2 bf16 + tables | 0.772 / 1.350 / 6.292 |
+| 5 bf16, no tables | 0.747 / 1.358 / 6.342 |
+| 6 mode 5 unrolled | **0.716 / 1.301 / 5.598** |
+
+All modes are again bit-exact to their models (modes 2/5/6), or within 3.1e-07 of fp64 (mode 1).
+
+**Against the native host GeGLU, re-read on these figures.** Mode 6 per document is ~8.6 / ~31.2 / ~134 ms,
+against native 12.2 / 47.5 / 188.9. That is **1.4–1.5x faster**, superseding the 1.5–1.7x above, which used the
+ineligible mode-6 log.

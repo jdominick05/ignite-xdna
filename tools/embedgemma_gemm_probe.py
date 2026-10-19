@@ -258,7 +258,7 @@ def cmd_run(a) -> int:
                 report.setdefault("epilogue", {})[f"{M}_m{md}"] = dict(worst=worst, vs_fp64=vs_exact, mode0_ms=d0,
                                                                       mode_ms=dm, passed=bool(good))
             np.savez_compressed(a.out / f"epilogue_{M}.npz", **{f"c{md}": outs[md][0] for md in outs})
-            del Bp, streams, ib_   # every BO handle before the device (a leftover one segfaulted teardown, exit 139)
+            del Bp, streams, ib_, ib0, words_   # every BO handle before the device (a leftover one segfaults teardown, exit 139)
             if a.epilogue_only:
                 continue
         for sh in shapes:   # correctness gate before any timing

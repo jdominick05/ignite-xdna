@@ -1769,3 +1769,4 @@ hardware contexts running on device"; the sweep is offline and needs no witness.
   - [Mode-2 CPU-emulation gate](embedgemma_geglu_mode2_numerics_cpu_desktop2_20261018T232830Z.json).
   - [End-to-end gate on device with mode 6](embedgemma_hybrid_npu_attnlocal_geglu6_desktop2_20261019T001519Z.log), PASS.
 - [Host GeGLU comparison point](embedgemma_host_geglu_bench_desktop2_20261019T001900Z.log) — NumPy 801.6, native 188.9, NPU epilogue ~121 ms per 2048 document.
+- [GeGLU epilogue, all modes, one eligible sitting](embedgemma_gemm_epilogue_allmodes_desktop2_20261019T002827Z.log) — supersedes the per-mode logs above (exit 1/139, cross-sitting).
