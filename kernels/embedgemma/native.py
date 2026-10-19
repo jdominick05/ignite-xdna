@@ -61,10 +61,12 @@ def main() -> int:
     b = sub.add_parser("build")
     b.add_argument("--out", type=Path, required=True)
     b.add_argument("--attn", action="store_true", help="build attn_pack.c -> egattn_pack.dll instead")
+    b.add_argument("--host-geglu", action="store_true", help="build host_geglu.c -> egemm_host_geglu.dll instead")
     sub.add_parser("check").add_argument("--dll", type=Path, required=True)
     a = ap.parse_args()
     if a.cmd == "build":
-        print(build(a.out, "attn_pack.c", "egattn_pack.dll") if a.attn else build(a.out))
+        print(build(a.out, "attn_pack.c", "egattn_pack.dll") if a.attn else
+              build(a.out, "host_geglu.c", "egemm_host_geglu.dll") if a.host_geglu else build(a.out))
         return 0
     sys.path.insert(0, str(HERE))
     from model import bf16_bits

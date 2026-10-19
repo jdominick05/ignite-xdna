@@ -1768,3 +1768,4 @@ hardware contexts running on device"; the sweep is offline and needs no witness.
   - Cycle-counter attempts: [link failure](embedgemma_gemm_epilogue_cycles_desktop2_20261019T000445Z.log), [timeout](embedgemma_gemm_epilogue_cycles_desktop2_20261019T000938Z.log).
   - [Mode-2 CPU-emulation gate](embedgemma_geglu_mode2_numerics_cpu_desktop2_20261018T232830Z.json).
   - [End-to-end gate on device with mode 6](embedgemma_hybrid_npu_attnlocal_geglu6_desktop2_20261019T001519Z.log), PASS.
+- [Host GeGLU comparison point](embedgemma_host_geglu_bench_desktop2_20261019T001900Z.log) — NumPy 801.6, native 188.9, NPU epilogue ~121 ms per 2048 document.

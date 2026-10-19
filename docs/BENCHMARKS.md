@@ -25325,3 +25325,22 @@ emulation with host GeGLU read 0.9999890.
   (AVX2/OpenMP) has not been measured yet, so the saving against a tuned host is not established.
 - **Still not a CPU win.** CPU torch bf16 does the 2048-token document in 1,500 ms. What remains on the host is
   norms 591, global attention 405 and RoPE 284 ms.
+
+**The host comparison point, measured** ([log](../results/aie/embedgemma_host_geglu_bench_desktop2_20261019T001900Z.log),
+[`embedgemma_host_geglu_bench.py`](../tools/embedgemma_host_geglu_bench.py),
+[`host_geglu.c`](../kernels/embedgemma/host_geglu.c)). This fills the "comparison point is unmeasured" bullet above.
+- **The run.** The MLP's GeGLU on the CPU at 24 layers per document, same input layout, research wrapper, no
+  foreign context. Both host versions are accurate to ≤ 1.0e-07 of the max against fp64.
+- **The NPU figure** is mode 6's added device time per gate|up call. At 128 tokens one M = 256 call carries two
+  documents, so the per-call figure is halved per document.
+
+| ms per document | 128 | 512 | 2048 |
+|---|---:|---:|---:|
+| NumPy, single-threaded (the hybrid's old host path) | 53.8 | 246.9 | 801.6 |
+| native host, OpenMP + AVX2 (`/fp:fast`) | 12.2 | 47.5 | 188.9 |
+| NPU epilogue, mode 6 | ~7.1 | ~31.4 | ~121 |
+
+- **Against a tuned host the epilogue is 1.5–1.7x faster**, not the ~6x the NumPy baseline suggests.
+- **It also takes this work off the CPU.**
+- **It has headroom by its own bundle count:** about 1.1 ms predicted against 5.05 measured at 2048, unexplained
+  above.
