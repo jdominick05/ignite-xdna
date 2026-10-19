@@ -26,8 +26,10 @@ Gates, fixed before any run (2026-10-18):
 online-softmax form: key blocks of --k-block, BF16 Q/K/V, BF16 exp and P); --bf16-inputs rounds every weight
 product's input to BF16 as the NPU GEMM does. --attention npu-local runs every local (sliding-window) layer's
 attention on the device: kernels/embedgemma/attn_array.py's 16-core fused kernel, one dispatch per document per
-layer (all four heads), in its own context on --attn-build's doc2048 xclbin; global layers stay host fp32. It is
-held to the npu gate. Both are numerics checks: their timings mean nothing.
+layer (all four heads), in its own context on --attn-build's doc2048 xclbin; global layers stay host fp32.
+--attention npu-all also runs the global layers there (head_dim 512, one KV head): attn_array.py's g128 / g512 /
+g2048 cases (W = L, every key visible), in a second context on --attn-build's g2048 xclbin. Both are held to the npu
+gate. Both are numerics checks: their timings mean nothing.
 Timing: wall time per batch divided by its documents, median per length, after one untimed warm-up batch per
 (length, batch size). Phases: ``gemm`` is the whole weight-product hook; inside it ``npu_pack`` (round to BF16
 into the mapped A), ``npu_write`` (A sync), ``npu_call`` (submit + wait), ``npu_read`` (C sync) and ``npu_unpack``
@@ -230,7 +232,7 @@ def main():
     ap.add_argument("--builds", type=Path, help="tools/embedgemma_gemm_probe.py compile --out DIR (npu)")
     ap.add_argument("--ms", type=int, nargs="+", default=[256, 512, 2048])
     ap.add_argument("--batch", type=int, default=1, help="consecutive same-length documents per row batch")
-    ap.add_argument("--attention", choices=["exact", "blockwise", "npu-local"], default="exact")
+    ap.add_argument("--attention", choices=["exact", "blockwise", "npu-local", "npu-all"], default="exact")
     ap.add_argument("--geglu", choices=["host", "model1", "model2", "model5"], default="host",
                     help="MLP GeGLU: host fp32, or (cpu emulation) geglu_epilogue.cc's mode 1 / mode 2 arithmetic")
     ap.add_argument("--wchannel", action="store_true", help="--w4: one scale per output column over all of K "
@@ -366,24 +368,30 @@ def main():
             enc.timings["qkv_norm_rope"] += time.perf_counter() - t
             return q, k, v
         enc.qkv_hook = qkv_native
-    attn = None
-    if a.attention == "npu-local":
+    attn = gattn = None
+    if a.attention in ("npu-local", "npu-all"):
         if not idle():
             print("NPU not idle: refusing (a foreign context is contention, not a finding)")
             return 3
         import attn_array
         attn = attn_array.Session(a.attn_build, "doc2048", a.attn_pack_dll)
+        if a.attention == "npu-all":
+            gattn = attn_array.Session(a.attn_build, "g2048", a.attn_pack_dll)
         host_attention = enc._attention
 
-        def npu_local(q, k, v, layer, segs):   # q [R, H, 256], k/v [R, KV, 256]; one dispatch per document
-            if layer["kind"] != "sliding_attention":
+        def npu_local(q, k, v, layer, segs):   # q [R, H, hd], k/v [R, KV, hd]; one dispatch per document
+            glob = layer["kind"] != "sliding_attention"
+            if glob and gattn is None:
                 return host_attention(q, k, v, layer, segs)
+            sess = gattn if glob else attn
+            win = (lambda n: n) if glob else (lambda n: enc.window)   # a global layer: every key of its document
             t = time.perf_counter()
-            out = np.concatenate([attn.run(q[x:y], k[x:y], v[x:y], enc.window).reshape(y - x, -1) for x, y in segs])
-            enc.timings["attn_npu"] = enc.timings.get("attn_npu", 0.0) + time.perf_counter() - t
-            for key, val in attn.t.items():
+            out = np.concatenate([sess.run(q[x:y], k[x:y], v[x:y], win(y - x)).reshape(y - x, -1) for x, y in segs])
+            name = "attn_glob" if glob else "attn_npu"
+            enc.timings[name] = enc.timings.get(name, 0.0) + time.perf_counter() - t
+            for key, val in sess.t.items():
                 enc.timings[key] = enc.timings.get(key, 0.0) + val
-            attn.t = dict.fromkeys(attn.t, 0.0)
+            sess.t = dict.fromkeys(sess.t, 0.0)
             return out
         enc._attention = npu_local
     print(f"weights loaded in {time.perf_counter() - t:.1f} s; {len(enc.shapes())} weight products per document", flush=True)
@@ -498,6 +506,8 @@ def main():
             print(f"LOOP_DONE {len(spans)} groups", flush=True)
         return 0 if passed else 1
     finally:
+        if gattn:
+            gattn.close()
         if attn:
             attn.close()
         if npu:

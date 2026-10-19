@@ -21,8 +21,18 @@
 // [2] W = window radius, [3..15] reserved; then Q as bf16 mmul A tiles [4][32] of 4x8 (16 x 256).
 // State (fp32 words): O tiles [4][64] of 4x4 (4096) | S tiles [4][8] (512) | unused (512) |
 // m (16) | l (16) | skip flag (16) | P bf16 A tiles [4][4] of 4x8 (256 words).
+//
+// EGATTN_HD (default 256) is the head dim; ROWS = 4096 / HD query rows per call keep every buffer above at its
+// HD = 256 size: Q 2048 words, O 4096, out 2048 (the model's global layers, HD = 512, run 8 rows a call). The
+// chunks per block are HD / 64 K^T then HD / 64 V; S, P, m and l use the first ROWS rows (lanes 0..ROWS-1).
 #include <aie_api/aie.hpp>
 #include <stdint.h>
+
+#ifndef EGATTN_HD
+#define EGATTN_HD 256
+#endif
+constexpr int HD = EGATTN_HD, ROWS = 4096 / HD, R4 = ROWS / 4, NC = HD / 64, OT = HD / 4, QT = HD / 8;
+static_assert(HD == 256 || HD == 512, "head dim 256 (16 rows) or 512 (8 rows)");
 
 using F = aie::vector<float, 16>;
 using MM = aie::mmul<4, 8, 4, bfloat16, bfloat16, accfloat>;
@@ -80,8 +90,8 @@ constexpr float NEG = -3.402823466e38f;
 // 0: no row sees any key of block kb, 1: every row sees every key, 2: partial.
 static inline int visibility(const int32_t *hdr, int kb) {
   int q0 = hdr[0], k0 = hdr[1] + 32 * kb, W = hdr[2];
-  if (k0 - (q0 + 15) > W || q0 - (k0 + 31) > W) return 0;
-  if ((k0 + 31) - q0 <= W && (q0 + 15) - k0 <= W) return 1;
+  if (k0 - (q0 + ROWS - 1) > W || q0 - (k0 + 31) > W) return 0;
+  if ((k0 + 31) - q0 <= W && (q0 + ROWS - 1) - k0 <= W) return 1;
   return 2;
 }
 
@@ -98,7 +108,7 @@ extern "C" void egattn_score(const int32_t *qpkt, const bfloat16 *kt, float *sta
 #endif
   const bfloat16 *q = reinterpret_cast<const bfloat16 *>(qpkt + 16);
   float *s = state + S_OFF;
-  for (int a = 0; a < 4; a += 2)
+  for (int a = 0; a < R4; a += 2)
     for (int b = 0; b < 8; b += 4) {
       MM c00, c01, c02, c03, c10, c11, c12, c13;
       if (c == 0) {
@@ -111,7 +121,7 @@ extern "C" void egattn_score(const int32_t *qpkt, const bfloat16 *kt, float *sta
         c12 = MM(aie::load_v<16>(s + ((a + 1) * 8 + b + 2) * 16)); c13 = MM(aie::load_v<16>(s + ((a + 1) * 8 + b + 3) * 16));
       }
       for (int k = 0; k < 8; ++k) {
-        auto a0 = aie::load_v<32>(q + (a * 32 + c * 8 + k) * 32), a1 = aie::load_v<32>(q + ((a + 1) * 32 + c * 8 + k) * 32);
+        auto a0 = aie::load_v<32>(q + (a * QT + c * 8 + k) * 32), a1 = aie::load_v<32>(q + ((a + 1) * QT + c * 8 + k) * 32);
         auto b0 = aie::load_v<32>(kt + (k * 8 + b) * 32), b1 = aie::load_v<32>(kt + (k * 8 + b + 1) * 32);
         auto b2 = aie::load_v<32>(kt + (k * 8 + b + 2) * 32), b3 = aie::load_v<32>(kt + (k * 8 + b + 3) * 32);
         c00.mac(a0, b0); c01.mac(a0, b1); c02.mac(a0, b2); c03.mac(a0, b3);
@@ -119,7 +129,7 @@ extern "C" void egattn_score(const int32_t *qpkt, const bfloat16 *kt, float *sta
       }
       // the last chunk writes S as fixed point (8 fraction bits) for the integer softmax
       auto put = [&](int tile, MM &acc) {
-        if (c == 3) aie::store_v(reinterpret_cast<int32_t *>(s) + tile * 16, aie::to_fixed<int32>(acc.to_vector<float>(), 8));
+        if (c == NC - 1) aie::store_v(reinterpret_cast<int32_t *>(s) + tile * 16, aie::to_fixed<int32>(acc.to_vector<float>(), 8));
         else aie::store_v(s + tile * 16, acc.to_vector<float>());
       };
       put(a * 8 + b, c00); put(a * 8 + b + 1, c01); put(a * 8 + b + 2, c02); put(a * 8 + b + 3, c03);
@@ -142,7 +152,7 @@ extern "C" void egattn_softmax(const int32_t *qpkt, float *state, int32_t kb) {
     int base = qpkt[1] + 32 * kb - qpkt[0], W = qpkt[2];   // key - row at a = b = 0, r = c = 0
     I off;                                                 // c - r
     for (int j = 0; j < 16; ++j) off.set((j & 3) - (j >> 2), j);
-    for (int a = 0; a < 4; ++a)
+    for (int a = 0; a < R4; ++a)
       for (int b = 0; b < 8; ++b) {
         auto d = aie::add(off, ifull(base + 4 * (b - a)));
         auto bad = aie::gt(d, ifull(W)) | aie::lt(d, ifull(-W));
@@ -155,7 +165,8 @@ extern "C" void egattn_softmax(const int32_t *qpkt, float *state, int32_t kb) {
     for (int b = 1; b < 8; ++b) mx = aie::max(mx, aie::load_v<16>(s + (a * 8 + b) * 16));
     return aie::max(aie::filter_even(mx, 1), aie::filter_odd(mx, 1));   // lane r*2 + c'
   };
-  I v01 = aie::concat(group8(0), group8(1)), v23 = aie::concat(group8(2), group8(3));
+  I v01 = aie::concat(group8(0), group8(1));
+  I v23 = R4 == 4 ? aie::concat(group8(R4 - 2), group8(R4 - 1)) : v01;   // ROWS = 8: lanes 8..15 repeat rows 0..7
   I rowmax = aie::concat(aie::max(aie::filter_even(v01, 1), aie::filter_odd(v01, 1)),
                          aie::max(aie::filter_even(v23, 1), aie::filter_odd(v23, 1)));   // lane i: row i
   int32_t *mi = reinterpret_cast<int32_t *>(state + M_OFF);
@@ -169,11 +180,11 @@ extern "C" void egattn_softmax(const int32_t *qpkt, float *state, int32_t kb) {
   alpha = aie::select(alpha, full(0), aie::eq(oldl.cast_to<int32>(), aie::zeros<int32, 16>()));   // l == +0
 #ifndef EGATTN_HOLLOW_RESCALE
   if (!up.empty()) {
-    for (int a = 0; a < 4; ++a) {
+    for (int a = 0; a < R4; ++a) {
       F scale = row_factors(alpha, a);
       if (aie::eq(scale, full(1)).full()) continue;
-      for (int b = 0; b < 64; ++b) {
-        float *o = state + O_OFF + (a * 64 + b) * 16;
+      for (int b = 0; b < OT; ++b) {
+        float *o = state + O_OFF + (a * OT + b) * 16;
         aie::store_v(o, mul(aie::load_v<16>(o), scale));
       }
     }
@@ -184,7 +195,7 @@ extern "C" void egattn_softmax(const int32_t *qpkt, float *state, int32_t kb) {
   aie::vector<float, 8> sum8[4] = {aie::zeros<float, 8>(), aie::zeros<float, 8>(), aie::zeros<float, 8>(),
                                    aie::zeros<float, 8>()};
 #ifndef EGATTN_HOLLOW_EXP
-  for (int a = 0; a < 4; ++a) {
+  for (int a = 0; a < R4; ++a) {
     I mx = irow_factors(newm, a);
     aie::accum<accfloat, 16> acc = aie::zeros<accfloat, 16>();
     for (int k = 0; k < 4; ++k) {
@@ -203,7 +214,7 @@ extern "C" void egattn_softmax(const int32_t *qpkt, float *state, int32_t kb) {
     F t = acc.to_vector<float>();
     sum8[a] = aie::add(aie::filter_even(t, 1), aie::filter_odd(t, 1));   // lane r*2 + c'
   }
-  F w01 = aie::concat(sum8[0], sum8[1]), w23 = aie::concat(sum8[2], sum8[3]);
+  F w01 = aie::concat(sum8[0], sum8[1]), w23 = R4 == 4 ? aie::concat(sum8[2], sum8[3]) : w01;
   F sums = aie::concat(aie::add(aie::filter_even(w01, 1), aie::filter_odd(w01, 1)),
                        aie::add(aie::filter_even(w23, 1), aie::filter_odd(w23, 1)));   // lane i: row i
 #else
@@ -220,13 +231,13 @@ extern "C" void egattn_pv(const bfloat16 *v, float *state, int32_t c) {
 #endif
   const bfloat16 *p = reinterpret_cast<const bfloat16 *>(state + P_OFF);
   float *o = state + O_OFF;
-  for (int a = 0; a < 4; a += 2)
+  for (int a = 0; a < R4; a += 2)
     for (int b = 0; b < 16; b += 4) {
       int n = c * 16 + b;
-      MM c00(aie::load_v<16>(o + (a * 64 + n) * 16)), c01(aie::load_v<16>(o + (a * 64 + n + 1) * 16));
-      MM c02(aie::load_v<16>(o + (a * 64 + n + 2) * 16)), c03(aie::load_v<16>(o + (a * 64 + n + 3) * 16));
-      MM c10(aie::load_v<16>(o + ((a + 1) * 64 + n) * 16)), c11(aie::load_v<16>(o + ((a + 1) * 64 + n + 1) * 16));
-      MM c12(aie::load_v<16>(o + ((a + 1) * 64 + n + 2) * 16)), c13(aie::load_v<16>(o + ((a + 1) * 64 + n + 3) * 16));
+      MM c00(aie::load_v<16>(o + (a * OT + n) * 16)), c01(aie::load_v<16>(o + (a * OT + n + 1) * 16));
+      MM c02(aie::load_v<16>(o + (a * OT + n + 2) * 16)), c03(aie::load_v<16>(o + (a * OT + n + 3) * 16));
+      MM c10(aie::load_v<16>(o + ((a + 1) * OT + n) * 16)), c11(aie::load_v<16>(o + ((a + 1) * OT + n + 1) * 16));
+      MM c12(aie::load_v<16>(o + ((a + 1) * OT + n + 2) * 16)), c13(aie::load_v<16>(o + ((a + 1) * OT + n + 3) * 16));
       for (int k = 0; k < 4; ++k) {
         auto a0 = aie::load_v<32>(p + (a * 4 + k) * 32), a1 = aie::load_v<32>(p + ((a + 1) * 4 + k) * 32);
         auto b0 = aie::load_v<32>(v + (k * 16 + b) * 32), b1 = aie::load_v<32>(v + (k * 16 + b + 1) * 32);
@@ -234,10 +245,10 @@ extern "C" void egattn_pv(const bfloat16 *v, float *state, int32_t c) {
         c00.mac(a0, b0); c01.mac(a0, b1); c02.mac(a0, b2); c03.mac(a0, b3);
         c10.mac(a1, b0); c11.mac(a1, b1); c12.mac(a1, b2); c13.mac(a1, b3);
       }
-      aie::store_v(o + (a * 64 + n) * 16, c00.to_vector<float>()); aie::store_v(o + (a * 64 + n + 1) * 16, c01.to_vector<float>());
-      aie::store_v(o + (a * 64 + n + 2) * 16, c02.to_vector<float>()); aie::store_v(o + (a * 64 + n + 3) * 16, c03.to_vector<float>());
-      aie::store_v(o + ((a + 1) * 64 + n) * 16, c10.to_vector<float>()); aie::store_v(o + ((a + 1) * 64 + n + 1) * 16, c11.to_vector<float>());
-      aie::store_v(o + ((a + 1) * 64 + n + 2) * 16, c12.to_vector<float>()); aie::store_v(o + ((a + 1) * 64 + n + 3) * 16, c13.to_vector<float>());
+      aie::store_v(o + (a * OT + n) * 16, c00.to_vector<float>()); aie::store_v(o + (a * OT + n + 1) * 16, c01.to_vector<float>());
+      aie::store_v(o + (a * OT + n + 2) * 16, c02.to_vector<float>()); aie::store_v(o + (a * OT + n + 3) * 16, c03.to_vector<float>());
+      aie::store_v(o + ((a + 1) * OT + n) * 16, c10.to_vector<float>()); aie::store_v(o + ((a + 1) * OT + n + 1) * 16, c11.to_vector<float>());
+      aie::store_v(o + ((a + 1) * OT + n + 2) * 16, c12.to_vector<float>()); aie::store_v(o + ((a + 1) * OT + n + 3) * 16, c13.to_vector<float>());
     }
 }
 
@@ -252,17 +263,17 @@ extern "C" void egattn_finish(const float *state, bfloat16 *out) {
   return;
 #endif
   F inv = reciprocal16(aie::load_v<16>(state + L_OFF));
-  for (int a = 0; a < 4; ++a) {
+  for (int a = 0; a < R4; ++a) {
     F scale = row_factors(inv, a);
-    for (int b = 0; b < 64; b += 4) {
+    for (int b = 0; b < OT; b += 4) {
       // four adjacent O tiles hold rows a*4..a*4+3, columns b*4..b*4+15: emit each row's 16 columns as one bf16 store
-      F t0 = mul(aie::load_v<16>(state + O_OFF + (a * 64 + b) * 16), scale);
-      F t1 = mul(aie::load_v<16>(state + O_OFF + (a * 64 + b + 1) * 16), scale);
-      F t2 = mul(aie::load_v<16>(state + O_OFF + (a * 64 + b + 2) * 16), scale);
-      F t3 = mul(aie::load_v<16>(state + O_OFF + (a * 64 + b + 3) * 16), scale);
+      F t0 = mul(aie::load_v<16>(state + O_OFF + (a * OT + b) * 16), scale);
+      F t1 = mul(aie::load_v<16>(state + O_OFF + (a * OT + b + 1) * 16), scale);
+      F t2 = mul(aie::load_v<16>(state + O_OFF + (a * OT + b + 2) * 16), scale);
+      F t3 = mul(aie::load_v<16>(state + O_OFF + (a * OT + b + 3) * 16), scale);
       for (int r = 0; r < 4; ++r) {
         F row = aie::concat(t0.extract<4>(r), t1.extract<4>(r), t2.extract<4>(r), t3.extract<4>(r));
-        aie::store_v(out + (a * 4 + r) * 256 + b * 4, bf(row));
+        aie::store_v(out + (a * 4 + r) * HD + b * 4, bf(row));
       }
     }
   }

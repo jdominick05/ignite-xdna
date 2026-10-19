@@ -26071,3 +26071,63 @@ word:
 
 Whether the channel 4/5 limit is silicon, firmware or the lowering is **unexplained**. Static programs on
 channel 5 work.
+
+#### Global attention on the NPU: head_dim 512, exact against its emulation, 1158.9 against 1360.2 ms per 2048-token document (2026-10-19, Desktop 2)
+
+EmbeddingGemma 2's four global layers (5, 11, 17, 23) ran on the host in fp32, about 405 ms of every 2048-token
+document. They are not unmasked local layers: per the model's `per_layer_config` they have **head_dim 512 and one
+KV head**, against 256 and two in the local layers.
+
+**The kernel.** `attn_local.cc` now takes `-DEGATTN_HD` (256 or 512):
+- At 512 a core takes **8 query rows a call instead of 16**, so every buffer keeps its 256 size: Q 2,048 words,
+  O 4,096 and out 2,048. The 64 KB core memory has no room for more.
+- A 32-key block streams eight K^T chunks then eight V chunks; S, P, m and l use the first 8 rows.
+- The head_dim 256 object is byte-identical to the one before the change.
+
+**The array harness.** `attn_array.py` reads the head dim from the case:
+- a column group is 32 rows;
+- the global cases `g128`, `g512` and `g2048` set W = L, so every key is visible and every window starts at 0;
+- they build their own xclbin, opened in a second context.
+
+The native packer `attn_pack.c` takes the head dim too, and `check-native` matches it bit for bit against the NumPy
+pack on every case.
+
+**Device check** ([log](../results/aie/embedgemma_attn_hd512_global_device_desktop2_20261019T111726Z.log), one context on g2048's xclbin, NPU idle before and after):
+
+| Case | worst / (2 row ulps) | repeat bit-equal | dispatch ms (median of 5) |
+|---|---:|---|---:|
+| g2048 | 0.500 | yes | 42.560 |
+| g512 | 0.500 | yes | 3.174 |
+| g128 | 0.250 | yes | 0.431 |
+
+Every output is within half the 2-ulp bound of the kernel's NumPy emulation, all finite. The emulation itself
+tracks an fp64 softmax to 0.34% (g128) and 0.44% (g512) relative.
+
+**Slower than estimated.** A layer at 2048 takes 42.6 ms, against the 31 ms estimated beforehand from the local kernel.
+DERIVED rates: 34.4 GFLOP in 42.6 ms is 0.81 TFLOPS. The local doc2048 case is about 1.05 TFLOPS (9.1 GFLOP,
+counting every streamed key, in 8.69 ms, [log](../results/aie/embedgemma_attn_glob2048_device_desktop2_20261019T110056Z.log)). Per FLOP, head_dim 512 is about 23% slower.
+- One candidate: the per-block softmax at 8 rows leaves half of each 16-lane vector idle, and a core makes twice
+  as many calls.
+- Not isolated; **unexplained** until a profile separates it.
+
+**End to end**, one sitting, both arms on the same GEMM build (weight-resident m64, GeGLU mode 6) and the same
+attention build, `--batch 4`:
+
+| Length | local only ms/doc ([log](../results/aie/embedgemma_hybrid_bres_attn-npu-local_desktop2_20261019T111932Z.log)) | local + global ms/doc ([log](../results/aie/embedgemma_hybrid_bres_attn-npu-all_desktop2_20261019T111902Z.log)) | change |
+|---:|---:|---:|---:|
+| 128 | 85.3 | 87.5 | +2.2 |
+| 512 | 248.9 | 242.8 | -6.1 |
+| 2048 | 1360.2 | 1158.9 | -201.3 |
+
+- **Gate:** both arms PASS. Cos min is 0.9999879 with global on the NPU and 0.9999883 without; NN kept 100.0%.
+- **At 2048:** the global layers cost 198.4 ms per document on the NPU, against 404.7 ms on the host. Of the 198.4,
+  about 176 ms is dispatch (`attn_call` 385.2 less the local arm's 209.6).
+- **At 128 it is slower.** The host's global attention there is 4.3 ms, and the NPU path costs 5.3 ms. The rest of
+  the +2.2 ms is not attributed; the second context's switches are one candidate.
+- The 780M runs a 2048-token document in 433 ms; the NPU is now at 1158.9.
+
+**What was tried first** (kept as logs):
+- The global mask on the local layers' geometry (head_dim 256, two KV heads) passes on the device, 15.5 ms at 2048
+  ([log](../results/aie/embedgemma_attn_glob2048_device_desktop2_20261019T110056Z.log)). It is not the model's shape.
+- The first hybrid run of `--attention npu-all` failed with `no build for L=128 W=512 heads=4 kv=1`, which is how
+  the one-KV-head geometry came to light ([log](../results/aie/embedgemma_hybrid_bres_attn-npu-all_desktop2_20261019T110212Z.log); its paired local-only run is [here](../results/aie/embedgemma_hybrid_bres_attn-npu-local_desktop2_20261019T110224Z.log)).

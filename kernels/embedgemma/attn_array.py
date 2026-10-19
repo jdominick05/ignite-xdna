@@ -24,6 +24,11 @@ of both to_fixed rounding models. Cases (random q/k/v as attn_probe's):
     band    L = 512,  W = 48    narrow band: most blocks skipped
     model   L = 1088, W = 512   the single-core probe's size
     long    L = 2048, W = 512   the model's local layer at 2048 tokens
+    glob2048 L = 2048, W = 2048, 4 heads on 2 KV, head_dim 256: the global mask at the local layers' geometry
+    g128 / g512 / g2048   the model's global layers: W = L, 4 heads on ONE KV head, head_dim 512
+
+Head dim 512 (attn_local.cc built with -DEGATTN_HD=512, its own xclbin): every buffer keeps its 256 size, so a core
+takes 8 query rows a call, a column group is 32 rows, and a 32-key block streams eight K^T then eight V chunks.
 """
 import argparse
 import gc
@@ -43,18 +48,33 @@ from attention_oracle import MINIT, fixed_block  # noqa: E402
 QWORDS, CHUNK, OUTW, STATE, STACK = P.QWORDS, P.CHUNK, P.OUTW, P.STATE, P.STACK
 COLS, ROWS, GROUP = 4, 4, 64
 CASES = dict(dense=(256, 512, 1, 1), band=(512, 48, 1, 1), model=(1088, 512, 1, 1), long=(2048, 512, 1, 1),
-             doc128=(128, 512, 4, 2), doc512=(512, 512, 4, 2), doc2048=(2048, 512, 4, 2))   # doc*: one layer, 4 heads on 2 KV heads
+             doc128=(128, 512, 4, 2), doc512=(512, 512, 4, 2), doc2048=(2048, 512, 4, 2),   # doc*: one layer, 4 heads on 2 KV heads
+             glob2048=(2048, 2048, 4, 2),   # the global mask at the local geometry: every key visible (NKB 64)
+             g128=(128, 128, 4, 1, 512), g512=(512, 512, 4, 1, 512), g2048=(2048, 2048, 4, 1, 512))   # global layers
 
 
-def layout(L, W, heads=1):
+def case(name):
+    """-> (L, W, heads, kv, head dim)."""
+    c = CASES[name]
+    return c if len(c) == 5 else c + (256,)
+
+
+def geom(hd):
+    """-> (query rows per core call, rows per column group, K^T (= V) chunks per 32-key block)."""
+    tr = 4096 // hd
+    return tr, ROWS * tr, hd // 64
+
+
+def layout(L, W, heads=1, hd=256):
     """-> (nkb, groups): groups[c] = list of work items (head, q0 of the 64-row group, window start s) for column
     c. Items in (head, group) order are split into COLS contiguous runs (sizes differ by at most one), so with four
     heads each column takes one head, and along a run the window start moves by a constant step except where it
     is clamped: the runtime sequence reads each such stretch as ONE strided DMA over a single copy of the head's
     K/V (windows overlap in DDR; nothing is duplicated host side)."""
-    assert L % GROUP == 0
-    starts = list(range(0, L, GROUP))
-    span = [(max(0, g - W), min(L - 1, g + GROUP - 1 + W)) for g in starts]
+    group = geom(hd)[1]
+    assert L % group == 0
+    starts = list(range(0, L, group))
+    span = [(max(0, g - W), min(L - 1, g + group - 1 + W)) for g in starts]
     nkb = max(hi // 32 - lo // 32 + 1 for lo, hi in span)
     items = []
     for h in range(heads):
@@ -89,8 +109,9 @@ def runs(items, rep_):
     return out
 
 
-def harness(L, W, heads=1, kv=1):
-    nkb, groups = layout(L, W, heads)
+def harness(L, W, heads=1, kv=1, hd=256):
+    nkb, groups = layout(L, W, heads, hd)
+    nch = geom(hd)[2]
     nb, rep_ = L // 32, heads // kv
     parts = ["module {", "  aie.device(npu1) {",
              f"    func.func private @egattn_score(memref<{QWORDS}xi32>, memref<{CHUNK}xi32>, memref<{STATE}xi32>, i32, i32)",
@@ -118,7 +139,7 @@ def harness(L, W, heads=1, kv=1):
       %c0 = arith.constant 0 : index
       %c1 = arith.constant 1 : index
       %c3 = arith.constant 3 : index
-      %c4 = arith.constant 4 : index
+      %c4 = arith.constant {nch} : index
       %forever = arith.constant 4294967295 : index
       scf.for %it = %c0 to %forever step %c1 {{
         %sq = aie.objectfifo.acquire @qF_{i}(Consume, 1) : !aie.objectfifosubview<memref<{QWORDS}xi32>>
@@ -159,7 +180,7 @@ def harness(L, W, heads=1, kv=1):
     parts.extend(cores)
     parts.append("    aie.runtime_sequence(%qa: memref<?xi32>, %kva: memref<?xi32>, %oa: memref<?xi32>) {")
     qoff = 0
-    blk = 8 * CHUNK   # words per 32-key block (four K^T then four V chunks)
+    blk = 2 * nch * CHUNK   # words per 32-key block (nch K^T then nch V chunks)
     for col in range(COLS):
         n = len(groups[col])
         parts += [
@@ -169,7 +190,7 @@ def harness(L, W, heads=1, kv=1):
         assert len(rr) <= 13, f"column {col}: {len(rr)} window runs exceed the shim's BDs"
         for j, (_, cnt, kvh, b0, step) in enumerate(rr):
             parts.append(
-                f"      aiex.npu.dma_memcpy_nd(%kva[0, 0, 0, {(kvh * nb + b0) * blk}][{cnt}, 1, {nkb * 8}, {CHUNK}][{step * blk}, 0, {CHUNK}, 1]) {{id = {2 + j} : i64, metadata = @kvL2_{col}}} : memref<?xi32>")
+                f"      aiex.npu.dma_memcpy_nd(%kva[0, 0, 0, {(kvh * nb + b0) * blk}][{cnt}, 1, {nkb * 2 * nch}, {CHUNK}][{step * blk}, 0, {CHUNK}, 1]) {{id = {2 + j} : i64, metadata = @kvL2_{col}}} : memref<?xi32>")
         qoff += n * ROWS * QWORDS
     parts += [f"      aiex.npu.dma_wait {{symbol = @oL2_{col}}}" for col in range(COLS)]
     return "\n".join(parts + ["    }", "  }", "}"]) + "\n"
@@ -189,68 +210,77 @@ def audit(out):
     return cores
 
 
+def kdir(out, hd):
+    return out if hd == 256 else out / f"k{hd}"
+
+
 def build(out: Path, variant="full", cases=None):
+    names = [n for n in CASES if not cases or n in cases]
     meta = P.compile_kernel(out, variant)
-    for name, (L, W, H, KV) in CASES.items():
-        if cases and name not in cases:
-            continue
+    meta["kernels"] = {"256": meta["kernel_sha256"]}
+    for hd in sorted({case(n)[4] for n in names} - {256}):
+        meta["kernels"][str(hd)] = P.compile_kernel(kdir(out, hd), variant, hd=hd)["kernel_sha256"]
+    for name in names:
+        L, W, H, KV, hd = case(name)
         d = out / name
         d.mkdir(exist_ok=True)
-        (d / "harness.mlir").write_text(harness(L, W, H, KV), encoding="utf-8")
-        (d / "kernel.o").write_bytes((out / "kernel.o").read_bytes())
+        (d / "harness.mlir").write_text(harness(L, W, H, KV, hd), encoding="utf-8")
+        (d / "kernel.o").write_bytes((kdir(out, hd) / "kernel.o").read_bytes())
         P.command([P.IRON / "Scripts/aiecc.exe", d / "harness.mlir", f"--peano={P.PEANO}", "--get-npu-insts",
                    "--npu-insts-name=insts.bin", "--get-xclbin", "--xclbin-name=final.xclbin", f"--tmpdir={d / 'prj'}"], d)
-        nkb, groups = layout(L, W, H)
-        meta["cases"][name] = dict(L=L, W=W, heads=H, kv=KV, nkb=nkb, transport="strided", groups=[len(g) for g in groups], cores=audit(d),
+        nkb, groups = layout(L, W, H, hd)
+        meta["cases"][name] = dict(L=L, W=W, heads=H, kv=KV, hd=hd, nkb=nkb, transport="strided", groups=[len(g) for g in groups], cores=audit(d),
                                    xclbin_sha256=P.sha(d / "final.xclbin"), insts_sha256=P.sha(d / "insts.bin"))
-        print(f"BUILD {name}: L={L} W={W} NKB={nkb} groups per column {[len(g) for g in groups]} ok", flush=True)
+        print(f"BUILD {name}: L={L} W={W} hd={hd} NKB={nkb} groups per column {[len(g) for g in groups]} ok", flush=True)
     (out / "build.json").write_text(json.dumps(meta, indent=2) + "\n", encoding="utf-8")
     return 0
 
 
 def pack(q, k, v, W):
-    """q [L, H, 256], k/v [L, KV, 256] (bf16 values) -> (Q packets column-major as the runtime sequence reads them,
-    K/V blocks [KV, L/32, 8, CHUNK] (one copy; the DMA reads each window out of it), order): order[i] = (head, q0)
-    of output tile i."""
-    L, H = q.shape[:2]
+    """q [L, H, hd], k/v [L, KV, hd] (bf16 values) -> (Q packets column-major as the runtime sequence reads them,
+    K/V blocks [KV, L/32, 2 hd/64, CHUNK] (one copy; the DMA reads each window out of it), order): order[i] =
+    (head, q0) of output tile i (4096 / hd rows)."""
+    L, H, hd = q.shape
     KV = k.shape[1]
-    nkb, groups = layout(L, W, H)
+    tr, _, nch = geom(hd)
+    nkb, groups = layout(L, W, H, hd)
     nb = L // 32
-    blocks = np.zeros((KV, nb, 8, CHUNK), np.uint32)
-    raw = blocks.view(np.uint16).reshape(KV, nb, 8, 2 * CHUNK)
-    for c in range(4):   # chunk c of block b: K^T [64 dims, 32 keys] and V [32 keys, 64 dims], each as 8x4 tiles
+    blocks = np.zeros((KV, nb, 2 * nch, CHUNK), np.uint32)
+    raw = blocks.view(np.uint16).reshape(KV, nb, 2 * nch, 2 * CHUNK)
+    for c in range(nch):   # chunk c of block b: K^T [64 dims, 32 keys] and V [32 keys, 64 dims], each as 8x4 tiles
         kt = P.bits(k[:, :, 64 * c:64 * c + 64]).reshape(nb, 32, KV, 64).transpose(2, 0, 3, 1)   # kv, b, dim, key
         raw[:, :, c] = kt.reshape(KV, nb, 8, 8, 8, 4).transpose(0, 1, 2, 4, 3, 5).reshape(KV, nb, -1)
         vb = P.bits(v[:, :, 64 * c:64 * c + 64]).reshape(nb, 32, KV, 64).transpose(2, 0, 1, 3)   # kv, b, key, dim
-        raw[:, :, 4 + c] = vb.reshape(KV, nb, 4, 8, 16, 4).transpose(0, 1, 2, 4, 3, 5).reshape(KV, nb, -1)
-    # Q tile: [16 rows, 256] as 4x8 tiles, as attn_probe.tiled(bits(q[q0:q0+16]), 4, 8)
-    qt = P.bits(q).transpose(1, 0, 2).reshape(H, L // 16, 4, 4, 32, 8).transpose(0, 1, 2, 4, 3, 5).reshape(H, L // 16, -1)
+        raw[:, :, nch + c] = vb.reshape(KV, nb, 4, 8, 16, 4).transpose(0, 1, 2, 4, 3, 5).reshape(KV, nb, -1)
+    # Q tile: [tr rows, hd] as 4x8 tiles, as attn_probe.tiled(bits(q[q0:q0+tr]), 4, 8)
+    qt = P.bits(q).transpose(1, 0, 2).reshape(H, L // tr, tr // 4, 4, hd // 8, 8).transpose(0, 1, 2, 4, 3, 5).reshape(H, L // tr, -1)
     items = [it for col in range(COLS) for it in groups[col]]
     qp = np.zeros((len(items), ROWS, QWORDS), np.uint32)
     order = []
     for i, (h, g, s) in enumerate(items):
         for r in range(ROWS):
-            q0 = g + 16 * r
+            q0 = g + tr * r
             qp[i, r, :4] = [q0, s, W, nkb]
             order.append((h, q0))
-        qp[i, :, 16:].view(np.uint16)[:] = qt[h, g // 16:g // 16 + ROWS]
+        qp[i, :, 16:].view(np.uint16)[:] = qt[h, g // tr:g // tr + ROWS]
     return qp.reshape(-1, QWORDS), blocks, order
 
 
 def emulate(q, k, v, W, mode="round"):
-    """attn_probe.emulate on the array's windows: each 16-row tile walks its group's NKB blocks. q [L, H, 256],
-    k/v [L, KV, 256] -> [L, H, 256]."""
-    L, H = q.shape[:2]
-    nkb, groups = layout(L, W, H)
-    out = np.zeros((L, H, 256), np.float32)
+    """attn_probe.emulate on the array's windows: each tile (4096 / hd rows) walks its group's NKB blocks.
+    q [L, H, hd], k/v [L, KV, hd] -> [L, H, hd]."""
+    L, H, hd = q.shape
+    tr = geom(hd)[0]
+    nkb, groups = layout(L, W, H, hd)
+    out = np.zeros((L, H, hd), np.float32)
     for col in range(COLS):
         for h, g, s in groups[col]:
             qh, kh, vh = q[:, h], k[:, h // (H // k.shape[1])], v[:, h // (H // k.shape[1])]
             for r in range(ROWS):
-                rows = np.arange(g + 16 * r, g + 16 * r + 16)
-                m = np.full(16, MINIT, np.int64)
-                l = np.zeros(16, np.float32)
-                O = np.zeros((16, 256), np.float32)
+                rows = np.arange(g + tr * r, g + tr * r + tr)
+                m = np.full(tr, MINIT, np.int64)
+                l = np.zeros(tr, np.float32)
+                O = np.zeros((tr, hd), np.float32)
                 for b in range(nkb):
                     cols = np.arange(s + 32 * b, s + 32 * b + 32)
                     vis = np.abs(rows[:, None] - cols[None, :]) <= W
@@ -263,11 +293,11 @@ def emulate(q, k, v, W, mode="round"):
 
 
 def case_data(name):
-    L, W, H, KV = CASES[name]
-    rng = np.random.default_rng({"dense": 3, "band": 5, "model": 7, "long": 11}.get(name, L))
-    q = P.bf16(rng.standard_normal((L, H, 256)).astype(np.float32) * 0.35)
-    k = P.bf16(rng.standard_normal((L, KV, 256)).astype(np.float32) * 0.35)
-    v = P.bf16(rng.standard_normal((L, KV, 256)).astype(np.float32))
+    L, W, H, KV, hd = case(name)
+    rng = np.random.default_rng({"dense": 3, "band": 5, "model": 7, "long": 11}.get(name, L + hd))
+    q = P.bf16(rng.standard_normal((L, H, hd)).astype(np.float32) * 0.35)
+    k = P.bf16(rng.standard_normal((L, KV, hd)).astype(np.float32) * 0.35)
+    v = P.bf16(rng.standard_normal((L, KV, hd)).astype(np.float32))
     return q, k, v, L, W
 
 
@@ -278,33 +308,33 @@ class Packer:
         import ctypes
         self.lib = ctypes.CDLL(str(dll))
         vp, i64, i32 = ctypes.c_void_p, ctypes.c_int64, ctypes.c_int32
-        self.lib.egattn_pack_q.argtypes = [vp, i64, i64, i32, i32, vp, i64, vp]
-        self.lib.egattn_pack_kv.argtypes = [vp, vp, i64, i64, vp]
-        self.lib.egattn_unpack.argtypes = [vp, vp, i64, i64, vp]
+        self.lib.egattn_pack_q.argtypes = [vp, i64, i64, i32, i32, i32, vp, i64, vp]
+        self.lib.egattn_pack_kv.argtypes = [vp, vp, i64, i64, i32, vp]
+        self.lib.egattn_unpack.argtypes = [vp, vp, i64, i64, i32, vp]
         for f in (self.lib.egattn_pack_q, self.lib.egattn_pack_kv, self.lib.egattn_unpack):
             f.restype = None
 
     @staticmethod
-    def items(L, W, H):
-        nkb, groups = layout(L, W, H)
+    def items(L, W, H, hd=256):
+        nkb, groups = layout(L, W, H, hd)
         return nkb, np.ascontiguousarray([it for col in range(COLS) for it in groups[col]], np.int32)
 
     def pack_into(self, q, k, v, W, qdst, kvdst):
-        """q [L, H, 256], k/v [L, KV, 256] fp32 -> Q packets into ``qdst`` and K/V blocks into ``kvdst`` (uint32
+        """q [L, H, hd], k/v [L, KV, hd] fp32 -> Q packets into ``qdst`` and K/V blocks into ``kvdst`` (uint32
         views, e.g. mapped BOs); returns the items array for unpack."""
-        L, H = q.shape[:2]
+        L, H, hd = q.shape
         KV = k.shape[1]
         q, k, v = (np.ascontiguousarray(x, np.float32) for x in (q, k, v))
-        nkb, items = self.items(L, W, H)
-        if qdst.size < len(items) * ROWS * QWORDS or kvdst.size < KV * (L // 32) * 8 * CHUNK:
+        nkb, items = self.items(L, W, H, hd)
+        if qdst.size < len(items) * ROWS * QWORDS or kvdst.size < KV * (L // 32) * 2 * geom(hd)[2] * CHUNK:
             raise ValueError("destination too small")
-        self.lib.egattn_pack_q(q.ctypes.data, L, H, W, nkb, items.ctypes.data, len(items), qdst.ctypes.data)
-        self.lib.egattn_pack_kv(k.ctypes.data, v.ctypes.data, L, KV, kvdst.ctypes.data)
+        self.lib.egattn_pack_q(q.ctypes.data, L, H, W, nkb, hd, items.ctypes.data, len(items), qdst.ctypes.data)
+        self.lib.egattn_pack_kv(k.ctypes.data, v.ctypes.data, L, KV, hd, kvdst.ctypes.data)
         return items
 
-    def unpack(self, raw, items, L, H):
-        out = np.empty((L, H, 256), np.float32)
-        self.lib.egattn_unpack(raw.ctypes.data, items.ctypes.data, len(items), H, out.ctypes.data)
+    def unpack(self, raw, items, L, H, hd=256):
+        out = np.empty((L, H, hd), np.float32)
+        self.lib.egattn_unpack(raw.ctypes.data, items.ctypes.data, len(items), H, hd, out.ctypes.data)
         return out
 
 
@@ -318,7 +348,9 @@ class Session:
         import pyxrt
         self.pyxrt, self.out = pyxrt, Path(out)
         self.meta = json.loads((self.out / "build.json").read_text(encoding="utf-8"))
-        if self.meta["source_sha256"] != P.sha(HERE / "attn_local.cc") or self.meta["kernel_sha256"] != P.sha(self.out / "kernel.o"):
+        kernels = self.meta.get("kernels", {"256": self.meta["kernel_sha256"]})
+        if self.meta["source_sha256"] != P.sha(HERE / "attn_local.cc") or any(
+                v != P.sha(kdir(self.out, int(hd)) / "kernel.o") for hd, v in kernels.items()):
             raise RuntimeError("build is stale: kernel source or object changed since build")
         for name, c in self.meta["cases"].items():
             d = self.out / name
@@ -331,33 +363,33 @@ class Session:
         self.kern = pyxrt.kernel(self.ctx, self.xb.get_kernels()[0].get_name())
         self.to = pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_TO_DEVICE
         self.fr = pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_FROM_DEVICE
-        self.shapes = {}   # (L, W, H, KV) -> (case, instruction BO, its bytes, q BO, kv BO, out BO)
+        self.shapes = {}   # (L, W, H, KV, hd) -> (case, instruction BO, its bytes, q BO, kv BO, out BO)
         self.times = []
         self.t = dict(attn_pack=0.0, attn_write=0.0, attn_call=0.0, attn_read=0.0, attn_unpack=0.0)
         self.packer = Packer(pack_dll) if pack_dll else None
 
-    def _shape(self, L, W, H, KV):
-        key = (L, W, H, KV)
+    def _shape(self, L, W, H, KV, hd=256):
+        key = (L, W, H, KV, hd)
         if key not in self.shapes:
             name = next((n for n, c in self.meta["cases"].items()
-                         if (c["L"], c["W"], c.get("heads", 1), c.get("kv", 1)) == key), None)
+                         if (c["L"], c["W"], c.get("heads", 1), c.get("kv", 1), c.get("hd", 256)) == key), None)
             if name is None:
-                raise KeyError(f"no build for L={L} W={W} heads={H} kv={KV}")
+                raise KeyError(f"no build for L={L} W={W} heads={H} kv={KV} hd={hd}")
             pyxrt, kern, dev = self.pyxrt, self.kern, self.dev
             words = np.frombuffer((self.out / name / "insts.bin").read_bytes(), dtype=np.uint32)
             ib = pyxrt.bo(dev, words.nbytes, pyxrt.bo.cacheable, kern.group_id(1))
             ib.write(words.tobytes(), 0)
             ib.sync(self.to)
-            nkb, groups = layout(L, W, H)
+            nkb, groups = layout(L, W, H, hd)
             items = sum(len(g) for g in groups)
             bq = pyxrt.bo(dev, items * ROWS * QWORDS * 4, pyxrt.bo.host_only, kern.group_id(3))
-            bkv = pyxrt.bo(dev, KV * (L // 32) * 8 * CHUNK * 4, pyxrt.bo.host_only, kern.group_id(4))
+            bkv = pyxrt.bo(dev, KV * (L // 32) * 2 * geom(hd)[2] * CHUNK * 4, pyxrt.bo.host_only, kern.group_id(4))
             bo = pyxrt.bo(dev, items * ROWS * OUTW * 4, pyxrt.bo.host_only, kern.group_id(5))
             self.shapes[key] = (name, ib, words.nbytes, bq, bkv, bo)
         return self.shapes[key]
 
     def dispatch(self, qp, kv, shape, poison=True):
-        """Raw dispatch of packed inputs -> (output words as uint16 [tiles, 16, 256], ms)."""
+        """Raw dispatch of packed inputs -> (output words as uint16 [tiles, 4096 / hd, hd], ms)."""
         name, ib, nbytes, bq, bkv, bo = self._shape(*shape)
         t = time.perf_counter()
         np.frombuffer(bq.map(), np.uint32)[:qp.size] = qp.reshape(-1)   # straight into the mapped BOs
@@ -377,15 +409,17 @@ class Session:
         self.t["attn_call"] += ms / 1000
         t = time.perf_counter()
         bo.sync(self.fr)
-        raw = np.frombuffer(bo.map(), np.uint16)[:2 * n].reshape(-1, 16, 256).copy()
+        hd = shape[4] if len(shape) > 4 else 256
+        raw = np.frombuffer(bo.map(), np.uint16)[:2 * n].reshape(-1, 4096 // hd, hd).copy()
         self.t["attn_read"] += time.perf_counter() - t
         return raw, ms
 
     def run(self, q, k, v, W):
-        """q [L, H, 256], k/v [L, KV, 256] -> [L, H, 256] fp32 (each value a bf16)."""
-        L, H = q.shape[:2]
+        """q [L, H, hd], k/v [L, KV, hd] -> [L, H, hd] fp32 (each value a bf16)."""
+        L, H, hd = q.shape
+        tr = geom(hd)[0]
         if self.packer:   # native: pack straight into the mapped BOs, unpack straight out of the mapped output
-            shape = (L, W, H, k.shape[1])
+            shape = (L, W, H, k.shape[1], hd)
             name, ib, nbytes, bq, bkv, bo = self._shape(*shape)
             t = time.perf_counter()
             items = self.packer.pack_into(q, k, v, W, np.frombuffer(bq.map(), np.uint32), np.frombuffer(bkv.map(), np.uint32))
@@ -405,18 +439,18 @@ class Session:
             bo.sync(self.fr)
             self.t["attn_read"] += time.perf_counter() - t
             t = time.perf_counter()
-            out = self.packer.unpack(np.frombuffer(bo.map(), np.uint16), items, L, H)
+            out = self.packer.unpack(np.frombuffer(bo.map(), np.uint16), items, L, H, hd)
             self.t["attn_unpack"] += time.perf_counter() - t
             return out
         t = time.perf_counter()
         qp, kv, order = pack(q, k, v, W)
         self.t["attn_pack"] += time.perf_counter() - t
-        raw, ms = self.dispatch(qp, kv, (L, W, H, k.shape[1]), poison=False)
+        raw, ms = self.dispatch(qp, kv, (L, W, H, k.shape[1], hd), poison=False)
         self.times.append(ms)
         t = time.perf_counter()
-        rows = np.empty((L, H, 256), np.uint16)
+        rows = np.empty((L, H, hd), np.uint16)
         for i, (h, q0) in enumerate(order):
-            rows[q0:q0 + 16, h] = raw[i]
+            rows[q0:q0 + tr, h] = raw[i]
         out = (rows.astype(np.uint32) << 16).view(np.float32)
         self.t["attn_unpack"] += time.perf_counter() - t
         return out
@@ -446,17 +480,18 @@ def run(out: Path, names, reps, save=None, xclbin_from=None):
             if xclbin_from:
                 print(f"every case runs on {xclbin_from}'s xclbin (cross-use check)", flush=True)
         q, k, v, L, W = case_data(name)
-        H = q.shape[1]
+        H, hd = q.shape[1:]
+        tr = geom(hd)[0]
         qp, kv, order = pack(q, k, v, W)
         refs = {mode: emulate(q, k, v, W, mode) for mode in ("round", "floor")}
         results, times = [], []
         try:
             for i in range(1 + reps):
-                raw, ms = sess.dispatch(qp, kv, (L, W, H, k.shape[1]))
+                raw, ms = sess.dispatch(qp, kv, (L, W, H, k.shape[1], hd))
                 times.append(ms)
-                dev_rows = np.empty((L, H, 256), np.uint16)
+                dev_rows = np.empty((L, H, hd), np.uint16)
                 for t, (h, q0) in enumerate(order):
-                    dev_rows[q0:q0 + 16, h] = raw[t]
+                    dev_rows[q0:q0 + tr, h] = raw[t]
                 results.append(dev_rows)
         except RuntimeError as e:
             ok = False
@@ -480,7 +515,7 @@ def run(out: Path, names, reps, save=None, xclbin_from=None):
         med = float(np.median(times[1:]) if reps else times[0])
         mb = (qp.nbytes + kv.nbytes + qp.shape[0] * OUTW * 4) / 1e6
         print(f"  to_fixed model fit: " + ", ".join(f"{k} {v:.3f}" for k, v in fits.items()) + f" -> {mode}", flush=True)
-        print(f"CASE {name}: L={L} W={W} heads={H} NKB={c['nkb']} items/col {c['groups']}: worst |diff| / (2 row ulps) "
+        print(f"CASE {name}: L={L} W={W} heads={H} hd={hd} NKB={c['nkb']} items/col {c['groups']}: worst |diff| / (2 row ulps) "
               f"{worst:.3f}, rel err {rel:.2e}, finite {finite}, repeat bit-equal {same}: "
               f"{'PASS' if good else 'FAIL'}; dispatch median {med:.3f} ms over {reps} "
               f"(min {min(times[1:] or times):.3f}); {mb:.1f} MB moved, {mb / med:.2f} GB/s", flush=True)
@@ -512,13 +547,16 @@ def main():
             qp, kvb, order = pack(q, k, v, W)
             qd, kd = np.zeros(qp.size + 7, np.uint32), np.zeros(kvb.size + 7, np.uint32)
             items = pk.pack_into(q, k, v, W, qd, kd)
-            raw = np.random.default_rng(1).integers(0, 1 << 16, (len(order), 16, 256)).astype(np.uint16)
-            want = np.empty((L, q.shape[1], 256), np.uint16)
+            raw = np.random.default_rng(1).integers(0, 1 << 16, (len(order), 4096)).astype(np.uint16)
+            hd = q.shape[2]
+            tr = geom(hd)[0]
+            raw = raw.reshape(-1, tr, hd)
+            want = np.empty((L, q.shape[1], hd), np.uint16)
             for i, (h, q0) in enumerate(order):
-                want[q0:q0 + 16, h] = raw[i]
+                want[q0:q0 + tr, h] = raw[i]
             good = (np.array_equal(qd[:qp.size], qp.reshape(-1)) and np.array_equal(kd[:kvb.size], kvb.reshape(-1))
                     and not qd[qp.size:].any() and not kd[kvb.size:].any()
-                    and np.array_equal(pk.unpack(raw, items, L, q.shape[1]).view(np.uint32) >> 16, want))
+                    and np.array_equal(pk.unpack(raw, items, L, q.shape[1], hd).view(np.uint32) >> 16, want))
             ok &= good
             print(f"CHECK {name}: {'PASS' if good else 'FAIL'}", flush=True)
         return 0 if ok else 1

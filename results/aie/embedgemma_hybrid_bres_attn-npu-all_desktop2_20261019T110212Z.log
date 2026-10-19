@@ -1,0 +1,38 @@
+RESEARCH_PLATFORM {"machine": "Desktop 2", "cpu": "AMD Ryzen 7 8700G w/ Radeon 780M Graphics", "os": "Windows-11-10.0.26200-SP0", "ram_bytes": 33381138432, "source_sha256": {"tools/research_process.py": "ffeb1857f190b482eed101b5f5a928f455de26bfa61d23f78a2eacec08e2663e", "tools/quant_calib_alphabet.py": "2dc0b2878c564853f340880209a425dfcf63b8536b2b8e9fd32344daade58d37", "tools/xint8_arithmetic_probe.py": "6aa3df08b9870c3c2264b868459d7ffbac3070dddc1349d7c6f3f480075f7041", "scripts/research-lowlevel.sh": "3455ad7933697936487712665505c216891865c6deada647302785f6e37020bd", "scripts/research-iron.sh": "4c863a262646ddab39b5005006ba8e03809895e6386c6310e2fd9d0a9e9609ee", "kernels/memory_placement/probe.py": "e8d990169ad6091fa1b53852e9f61eff495b5def72d35165a5c5cf1759e38898", "kernels/memory_placement/memory_kernels.cc": "182e7af7071a1e851afb4a7ca266069c489aea1fbaaa85eca129708daeba5ba6", "scripts/research-matrix.sh": "739254171629deae822b0ad7dabc875aee19ace56dde77d3e8aab61663f97516", "kernels/memory_placement/gemm.py": "17c905ad66110d3346bbf0db898dfc6b780df59fae1dfb0c1747057ce1e5844e", "kernels/memory_placement/gemm_placement.cc": "f21acf7250b12914ea30cc1f77613239dfa18421a85a1b9a5199017dd916278a", "tools/research_summary.py": "0c00dcceef07053d06731b41a1f1ed58d3ba4ea09f82497de354ce9cef17da20", "tools/research_toolchain.py": "f0a126a24ae213acfaa43460cfd9def0c86d9cb70cfee0228aa271688467b314"}, "commit": "f1ce369af71d100e37bb5bbac60a1544b8a986a6", "command": ["bash", "scripts/research-iron.sh", "tools/embedgemma_hybrid.py", "--backend", "npu", "--batch", "4", "--round-dll", "scratch/egemma-native/embedgemma_round.dll", "--builds", "scratch/egemm-bres", "--npu-b-resident", "--ms", "512", "2048", "--npu-geglu", "6", "--attn-build", "scratch/egemma-attn-glob", "--attn-pack-dll", "scratch/egemma-native/egattn_pack.dll", "--native-qkv", "scratch/egemma-native/eg_qkv_norm_rope.dll", "--native-rowops", "scratch/egemma-native/eg_rowops.dll", "--docs", "C:/Users/<user>/gemma4-embedding-baseline/logs/docs-heldout-v1.json", "--reference", "C:/Users/<user>/gemma4-embedding-baseline/logs/hf-fp32-cpu-20261018T174113Z.npz", "--attention", "npu-all", "--save-embeddings", "scratch/bres-cmp/hyb-npu-all.npz", "--out", "scratch/hyb-npu-all-20261019T110212Z.json"], "seconds_limit": 2400.0, "rss_gib_limit": 16.0, "checks_only": false, "free_ram_bytes": 23168036864}
+HOST_LOAD busy_cores=0.41 logical_cores=16 free_ram_gb=21.5 sample_sec=1
+HOST_LOAD_TOP 0.14 dev-agent:4816 ws_mb=515
+HOST_LOAD_TOP 0.11 powershell:76340 ws_mb=82
+HOST_LOAD_TOP 0.09 Taskmgr:83048 ws_mb=138
+HOST_LOAD_TOP 0.03 dev-agent:13204 ws_mb=311
+HOST_LOAD_TOP 0.02 dev-agent:82224 ws_mb=119
+HOST_LOAD_VERDICT CLEAR
+
+PRE_NPU_CONTEXT_WITNESS "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [16552, 28172, 77572, 83068, 85348], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 4.172, "tree_rss_bytes": 887939072, "foreign_peers": []}
+weights loaded in 5.6 s; 146 weight products per document
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [16552, 28172, 77572, 79728, 83068, 85348], "foreign_pids": []}
+idle after: True
+Traceback (most recent call last):
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\<tooling>\worktrees\embedgemma-gemm\tools\embedgemma_hybrid.py", line 516, in <module>
+    sys.exit(main())
+             ~~~~^^
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\<tooling>\worktrees\embedgemma-gemm\tools\embedgemma_hybrid.py", line 436, in main
+    enc.embed_documents(ids, matmul, bf16)
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\<tooling>\worktrees\embedgemma-gemm\kernels\embedgemma\model.py", line 236, in embed_documents
+    a = self._mm(self._attention(q, k, v, lay, segs), "o", i, matmul, bf16_inputs)
+                 ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\<tooling>\worktrees\embedgemma-gemm\tools\embedgemma_hybrid.py", line 388, in npu_local
+    out = np.concatenate([attn.run(q[x:y], k[x:y], v[x:y], win(y - x)).reshape(y - x, -1) for x, y in segs])
+                          ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\<tooling>\worktrees\embedgemma-gemm\kernels\embedgemma\attn_array.py", line 392, in run
+    name, ib, nbytes, bq, bkv, bo = self._shape(*shape)
+                                    ~~~~~~~~~~~^^^^^^^^
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\<tooling>\worktrees\embedgemma-gemm\kernels\embedgemma\attn_array.py", line 348, in _shape
+    raise KeyError(f"no build for L={L} W={W} heads={H} kv={KV}")
+KeyError: 'no build for L=128 W=512 heads=4 kv=1'
+POST_NPU_CONTEXT_WITNESS "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+RESEARCH_PROCESS_RESULT {"exit_code": 1, "stop": null, "peak_tree_rss_bytes": 1669009408, "rss_measurement": "maximum observed across sampled descendant working sets; zero observations reported as null", "elapsed_seconds": 7.657000000006519, "foreign_contention_observed": false, "timing_eligible": false}
