@@ -25470,3 +25470,40 @@ All figures are ms.
   - an encoding that drops the shift (sign-extending unpack plus masks);
   - m = 64 tiles, which halve both the dequant per MAC and the B re-streaming.
   - Both are DERIVED until measured.
+
+#### W8 optimisation: a shift-free dequant and 64-row tiles; both builds now bound by the matmul kernel (2026-10-19, Desktop 2)
+
+**Two changes to the W8 build above:**
+- **A shift-free dequant** ([`w8_dequant.cc`](../kernels/embedgemma/w8_dequant.cc)). The host keeps its sign-magnitude
+  byte; a sign-extending unpack and three masks build both bf16 operands. The loop goes from 55 bundles per 128
+  weights to 94 per 256, which is 15% fewer per weight. What remains is 36 `vmov` (the 16-lane bf16 MACs want a
+  zeroed upper half), address moves, and the two MACs per lane.
+- **m = 64 tiles** (`--tile-m 64`, for bf16 and W8 alike). Each dequantized B tile then serves 64 A rows, not 32,
+  and B is re-streamed half as often. The cost: M must be a multiple of 512, so 128-token documents batch four per
+  call. The GeGLU epilogue is still written for m = 32.
+
+**Timed runs.** The timed builds ran in one sitting, then the hollow builds right after it. Every log exits 0,
+`timing_eligible`, with no foreign context. Every W8 build passes the product check and the one-hot exactness check
+(14 of 14).
+
+| Build | M = 512 | 2048 | Log |
+|---|---:|---:|---|
+| bf16, m = 32 | 98.3 | 340.8 | [log](../results/aie/embedgemma_gemm_w8opt_bf16m32_desktop2_20261019T012017Z.log) |
+| W8 first dequant, m = 32 | 133.0 | 474.6 | [log](../results/aie/embedgemma_gemm_w8opt_w8v1m32_desktop2_20261019T012030Z.log) |
+| W8 shift-free, m = 32 | 120.5 | 429.2 | [log](../results/aie/embedgemma_gemm_w8opt_w8v2m32_desktop2_20261019T012046Z.log) |
+| bf16, m = 64 | 92.7 | **302.0** | [log](../results/aie/embedgemma_gemm_w8opt_bf16m64_desktop2_20261019T012102Z.log) |
+| W8 shift-free, m = 64 | 106.7 | **348.0** | [log](../results/aie/embedgemma_gemm_w8opt_w8v2m64_desktop2_20261019T012115Z.log) |
+| hollow bf16, m = 64 (transport) | 77.9 | 236.1 | [log](../results/aie/embedgemma_gemm_w8opt_m64hbf16_desktop2_20261019T012806Z.log) |
+| hollow W8, m = 64 (transport) | 66.2 | 182.1 | [log](../results/aie/embedgemma_gemm_w8opt_m64hw8a_desktop2_20261019T012818Z.log) |
+| hollow W8 + dequant, m = 64 | 66.6 | 180.4 | [log](../results/aie/embedgemma_gemm_w8opt_m64hw8b_desktop2_20261019T012831Z.log) |
+
+All figures are ms per forward pass of weight GEMMs.
+
+- **W8 went from 474.6 to 348.0 ms at 2048**, now 15% behind bf16 at m = 64 rather than 39%.
+- **m = 64 also makes bf16 11% faster** (340.8 to 302.0).
+- **With the matmul removed, the dequant costs nothing.** It hides under W8's transport (180.4 vs 182.1).
+- **So both builds are core-bound on the matmul kernel** (upstream `mm.cc`): 560 GFLOP in 302 ms is 25% of the
+  7.4 TFLOPS bf16 peak.
+- **W8's transport floor is 23% below bf16's** (182.1 vs 236.1).
+- **What a faster matmul would give is DERIVED.** A matmul near its hand-scheduled 86% (SILICON.md) would put W8 at
+  its transport floor, about 180 ms, and bf16 at about 236. Not measured.

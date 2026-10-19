@@ -1,0 +1,63 @@
+RESEARCH_PLATFORM {"machine": "Desktop 2", "cpu": "AMD Ryzen 7 8700G w/ Radeon 780M Graphics", "os": "Windows-11-10.0.26200-SP0", "ram_bytes": 33381138432, "source_sha256": {"tools/research_process.py": "ffeb1857f190b482eed101b5f5a928f455de26bfa61d23f78a2eacec08e2663e", "tools/quant_calib_alphabet.py": "2dc0b2878c564853f340880209a425dfcf63b8536b2b8e9fd32344daade58d37", "tools/xint8_arithmetic_probe.py": "6aa3df08b9870c3c2264b868459d7ffbac3070dddc1349d7c6f3f480075f7041", "scripts/research-lowlevel.sh": "3455ad7933697936487712665505c216891865c6deada647302785f6e37020bd", "scripts/research-iron.sh": "4c863a262646ddab39b5005006ba8e03809895e6386c6310e2fd9d0a9e9609ee", "kernels/memory_placement/probe.py": "e8d990169ad6091fa1b53852e9f61eff495b5def72d35165a5c5cf1759e38898", "kernels/memory_placement/memory_kernels.cc": "182e7af7071a1e851afb4a7ca266069c489aea1fbaaa85eca129708daeba5ba6", "scripts/research-matrix.sh": "739254171629deae822b0ad7dabc875aee19ace56dde77d3e8aab61663f97516", "kernels/memory_placement/gemm.py": "17c905ad66110d3346bbf0db898dfc6b780df59fae1dfb0c1747057ce1e5844e", "kernels/memory_placement/gemm_placement.cc": "f21acf7250b12914ea30cc1f77613239dfa18421a85a1b9a5199017dd916278a", "tools/research_summary.py": "0c00dcceef07053d06731b41a1f1ed58d3ba4ea09f82497de354ce9cef17da20", "tools/research_toolchain.py": "f0a126a24ae213acfaa43460cfd9def0c86d9cb70cfee0228aa271688467b314"}, "commit": "bf094daabb2b977ff955e89669bc5a4a56c70152", "command": ["bash", "scripts/research-iron.sh", "tools/embedgemma_gemm_probe.py", "run", "--out", "scratch/egemm-w8-c2", "--ms", "512", "2048", "--seqs", "5", "--w8"], "seconds_limit": 1200.0, "rss_gib_limit": 12.0, "checks_only": false, "free_ram_bytes": 22410014720}
+HOST_LOAD busy_cores=0.49 logical_cores=16 free_ram_gb=20.8 sample_sec=1
+HOST_LOAD_TOP 0.14 llm-top-new:17996 ws_mb=67
+HOST_LOAD_TOP 0.08 powershell:82688 ws_mb=83
+HOST_LOAD_TOP 0.06 Taskmgr:62436 ws_mb=224
+HOST_LOAD_TOP 0.06 dev-agent:4816 ws_mb=499
+HOST_LOAD_TOP 0.03 hwinfo_npu_bridge:25548 ws_mb=16
+HOST_LOAD_VERDICT CLEAR
+
+PRE_NPU_CONTEXT_WITNESS "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+WEIGHTS W8: 7.04 MiB in B buffers over 7 distinct shapes (bf16 would be 13.25 MiB)
+RUN one context on g_512_512_512.xclbin: 148 products per forward pass, 7 distinct (K, N), M in [512, 2048]
+  CHECK 512x512x512: rel err 4.30e-07: PASS
+  W8 ONE-HOT 512x512x512: device dequant bit-equal to bf16(q s): PASS
+  CHECK 512x512x768: rel err 6.06e-07: PASS
+  W8 ONE-HOT 512x512x768: device dequant bit-equal to bf16(q s): PASS
+  CHECK 512x512x2048: rel err 5.23e-07: PASS
+  W8 ONE-HOT 512x512x2048: device dequant bit-equal to bf16(q s): PASS
+  CHECK 512x512x3072: rel err 4.33e-07: PASS
+  W8 ONE-HOT 512x512x3072: device dequant bit-equal to bf16(q s): PASS
+  CHECK 512x512x4096: rel err 4.61e-07: PASS
+  W8 ONE-HOT 512x512x4096: device dequant bit-equal to bf16(q s): PASS
+  CHECK 512x1024x512: rel err 7.54e-07: PASS
+  W8 ONE-HOT 512x1024x512: device dequant bit-equal to bf16(q s): PASS
+  CHECK 512x2048x512: rel err 1.02e-06: PASS
+  W8 ONE-HOT 512x2048x512: device dequant bit-equal to bf16(q s): PASS
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 74 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |39612               |62         |909         |0           |0    |Normal   |\n      |python.exe          |Active     |909         |0           |     |N/A      |\n      |74 MB               |128 KB     |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [39612], "owned_pids": [39612, 60804, 74992, 82796, 83200], "foreign_pids": []}
+PASS M=512: forward-pass weight GEMMs median 120.5 ms (min 119.8, max 120.9, 5 passes), 140.0 GFLOP -> 1161 GFLOPS
+    512x512x512: median 0.383 ms/call, 700 GFLOPS
+    512x512x768: median 0.474 ms/call, 850 GFLOPS
+    512x512x2048: median 0.893 ms/call, 1202 GFLOPS
+    512x512x3072: median 1.248 ms/call, 1290 GFLOPS
+    512x512x4096: median 1.603 ms/call, 1339 GFLOPS
+    512x1024x512: median 0.525 ms/call, 1023 GFLOPS
+    512x2048x512: median 0.869 ms/call, 1235 GFLOPS
+  CHECK 2048x512x512: rel err 4.93e-07: PASS
+  W8 ONE-HOT 2048x512x512: device dequant bit-equal to bf16(q s): PASS
+  CHECK 2048x512x768: rel err 5.84e-07: PASS
+  W8 ONE-HOT 2048x512x768: device dequant bit-equal to bf16(q s): PASS
+  CHECK 2048x512x2048: rel err 6.25e-07: PASS
+  W8 ONE-HOT 2048x512x2048: device dequant bit-equal to bf16(q s): PASS
+  CHECK 2048x512x3072: rel err 4.91e-07: PASS
+  W8 ONE-HOT 2048x512x3072: device dequant bit-equal to bf16(q s): PASS
+  CHECK 2048x512x4096: rel err 5.66e-07: PASS
+  W8 ONE-HOT 2048x512x4096: device dequant bit-equal to bf16(q s): PASS
+  CHECK 2048x1024x512: rel err 9.98e-07: PASS
+  W8 ONE-HOT 2048x1024x512: device dequant bit-equal to bf16(q s): PASS
+  CHECK 2048x2048x512: rel err 1.31e-06: PASS
+  W8 ONE-HOT 2048x2048x512: device dequant bit-equal to bf16(q s): PASS
+HOST_TIMELINE {"elapsed_seconds": 4.734, "tree_rss_bytes": 348852224, "foreign_peers": []}
+PASS M=2048: forward-pass weight GEMMs median 429.2 ms (min 417.8, max 450.5, 5 passes), 560.0 GFLOP -> 1305 GFLOPS
+    2048x512x512: median 1.104 ms/call, 973 GFLOPS
+    2048x512x768: median 1.433 ms/call, 1124 GFLOPS
+    2048x512x2048: median 3.202 ms/call, 1342 GFLOPS
+    2048x512x3072: median 4.531 ms/call, 1422 GFLOPS
+    2048x512x4096: median 5.866 ms/call, 1464 GFLOPS
+    2048x1024x512: median 1.823 ms/call, 1178 GFLOPS
+    2048x2048x512: median 3.179 ms/call, 1351 GFLOPS
+RESULT {"ok": true, "report": {"512": {"pass_ms": [119.79650001740083, 120.86130000534467, 120.39830000139773, 120.53839999134652, 120.55890000192448], "median_ms": 120.53839999134652, "gflops": 1161.3650945594918, "per_shape_ms": {"512x4096": 1.6032999847084284, "512x2048": 0.8933500066632405, "1024x512": 0.5245499924058095, "2048x512": 0.8691499970154837, "512x512": 0.38329999370034784, "512x3072": 1.2482000020099804, "512x768": 0.4737000272143632}}, "2048": {"pass_ms": [437.6572999753989, 450.5211000214331, 429.2295000050217, 419.7340999962762, 417.80920000746846], "median_ms": 429.2295000050217, "gflops": 1304.5616883495868, "per_shape_ms": {"512x4096": 5.86559998919256, "512x2048": 3.2015500037232414, "1024x512": 1.8228499975521117, "2048x512": 3.1793000089237466, "512x512": 1.1040499957744032, "512x3072": 4.531450002104975, "512x768": 1.433299999916926}}}}
+idle after: True
+POST_NPU_CONTEXT_WITNESS "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+RESEARCH_PROCESS_RESULT {"exit_code": 0, "stop": null, "peak_tree_rss_bytes": 487084032, "rss_measurement": "maximum observed across sampled descendant working sets; zero observations reported as null", "elapsed_seconds": 7.155999999988126, "foreign_contention_observed": false, "timing_eligible": true}
