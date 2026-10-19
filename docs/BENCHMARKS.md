@@ -25252,3 +25252,76 @@ own attention context failed the GEMM backend's idle check; the check now runs o
 - **This is still not a CPU win.** The whole document is now dominated by host NumPy elementwise work: GELU 808,
   norms 592, RoPE 278, global attention 405 ms at 2048. CPU torch bf16 does the whole document in 1,500 ms. The
   fused MLP and the elementwise ops are next.
+
+#### Fused GeGLU as a GEMM epilogue, and the end-to-end gate with it (2026-10-18/19, Desktop 2)
+
+[`geglu_epilogue.cc`](../kernels/embedgemma/geglu_epilogue.cc) is linked into the generic GEMM's core program
+(`whole_array_generic.py --epilogue-src`). A third RTP word picks a mode, so one xclbin still serves every
+weight product. Mode 0 leaves the tile alone.
+- **Layout.** The host interleaves gate|up's columns at weight upload. Each 64-column output tile then holds 32
+  gate columns and the same 32 up columns, in 4×4 blocks. `gelu_tanh(gate) * up` replaces the gate block in place
+  and stays fp32 in C, so no DMA changes.
+- **GELU.** It uses the exact identity `x·σ(2√(2/π)(x + 0.044715x³))`, not an approximation.
+- **Checks.** [`embedgemma_gemm_probe.py`](../tools/embedgemma_gemm_probe.py) runs mode 0 and each mode on the same
+  A, judges each against criteria fixed before its first run, and re-runs every plain product as a regression.
+- **Every run's regression: all 21 plain products PASS** at M = 256 / 512 / 2048. Forward-pass weight GEMMs read
+  62.7–63.7 / 96.6–98.1 / 332.1–333.6 ms, unchanged from before the epilogue.
+- **Exit codes.** Runs that exit 1 did so from a JSON dump of a NumPy bool after every result printed. Runs that
+  exit 139 segfaulted in teardown after every result printed and with the device idle; that is still unexplained.
+
+| Mode | Arithmetic | Accuracy (device) | Added per gate\|up call, M = 256 / 512 / 2048 | Log |
+|---|---|---|---:|---|
+| 1 | fp32 (emulated on AIE2), 2^f by a degree-7 polynomial, Newton reciprocal | 2.6–3.1e-07 of row max vs fp64 | 2.14 / 4.35 / 17.23 ms | [log](../results/aie/embedgemma_gemm_epilogue_geglu_desktop2_20261018T232643Z.log) |
+| 2 | native bf16 products, fp32 accumulation, exp from v5's two tables | **bit-exact to its model**; 1.1–1.3e-02 of row max vs fp64 | 0.75 / 1.35 / 6.00 | [log](../results/aie/embedgemma_gemm_epilogue_geglu_m2_desktop2_20261018T234426Z.log) |
+| 5 | mode 2 without tables (2^f by a degree-3 polynomial in bf16 MACs) | bit-exact to its model | 0.35 / 1.47 / 6.04 | [log](../results/aie/embedgemma_gemm_epilogue_geglu_m5_desktop2_20261018T235740Z.log) |
+| 6 | mode 5 with two vectors per iteration | bit-exact to the mode-5 model | **0.59 / 1.31 / 5.05** | [log](../results/aie/embedgemma_gemm_epilogue_geglu_m6_desktop2_20261019T000310Z.log) |
+
+**The first mode-1 run FAILED** ([log](../results/aie/embedgemma_gemm_epilogue_geglu_desktop2_20261018T231940Z.log),
+[diagnosis](../results/aie/embedgemma_gemm_epilogue_geglu_diag_desktop2_20261018T232039Z.log)): worst 0.359 of the
+row max.
+- The output was right to 2.7e-7 where z ≥ 0 and wrong only where z < 0.
+- It matched `aie::abs` on a float vector taking the **integer** abs of the bits. For example, z = −0.8 reads as
+  about 5.6, so e^−5.6 ≈ 0.0037, which is the observed ratio.
+- The kernel now clears the sign bit.
+
+**Mode 2's numerics passed the frozen gate under CPU emulation first**
+([record](../results/aie/embedgemma_geglu_mode2_numerics_cpu_desktop2_20261018T232830Z.json)): cosine min 0.9999880,
+nearest neighbours 100% kept. That run emulated bf16 inputs and the integer softmax on every layer. The same
+emulation with host GeGLU read 0.9999890.
+
+**Where the epilogue's time goes is unexplained.** Hollow probes timed parts of mode 2
+([log](../results/aie/embedgemma_gemm_epilogue_profile_desktop2_20261018T235109Z.log)) at M = 2048:
+
+| Probe | Added per call |
+|---|---:|
+| loads and stores only | +0.0 ms |
+| the lookups replaced by a constant | +1.47 ms |
+| full mode 2 | +5.87 ms |
+
+- **I first read that as "the lookups cost 4.4 ms". Mode 5 refuted it:** with no tables at all it costs the same.
+  The constant had also let the compiler fold away the whole 1 / (1 + e) chain.
+- **The bundle count does not explain it either.** SILICON.md measures a hardware loop at exactly its bundle count.
+  Mode 6's loop is about 117 bundles per vector, which predicts about 1.1 ms at M = 2048, against 5.05 measured.
+  The likely candidates are waits on DMA or locks, or a stall source not yet characterised. Nothing here isolates
+  them.
+- **A cycle-counter probe was attempted twice.** `get_cycles()` does not link under Peano
+  ([log](../results/aie/embedgemma_gemm_epilogue_cycles_desktop2_20261019T000445Z.log)). Reading 0x340F8 through
+  `read_tm` hung the core: dispatch timeout ([log](../results/aie/embedgemma_gemm_epilogue_cycles_desktop2_20261019T000938Z.log)).
+  The device was idle again right afterwards.
+
+**End-to-end gate on device** (`--npu-geglu 6`, with NPU weight GEMMs and NPU local attention)
+([log](../results/aie/embedgemma_hybrid_npu_attnlocal_geglu6_desktop2_20261019T001519Z.log)): **PASS**, cosine min
+0.9999855, mean 0.9999932, nearest neighbours 100% kept.
+
+| Run | 128 | 512 | 2048 |
+|---|---:|---:|---:|
+| host GeGLU (previous section) | 198.5 | 844.4 | 3264.9 |
+| fused GeGLU, mode 6 | **165.5** | **735.6** | **2689.0** |
+
+- All figures are ms per document.
+- **The host `gelu` left (148 ms at 2048) is the per-layer-input gate's GELU.**
+- **`npu_call` rose by 121 ms at 2048**, as predicted from the probe.
+- **The comparison point is unmeasured.** The saving is against single-threaded NumPy. A native host GeGLU pass
+  (AVX2/OpenMP) has not been measured yet, so the saving against a tuned host is not established.
+- **Still not a CPU win.** CPU torch bf16 does the 2048-token document in 1,500 ms. What remains on the host is
+  norms 591, global attention 405 and RoPE 284 ms.

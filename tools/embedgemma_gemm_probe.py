@@ -21,6 +21,13 @@ The design is kernels/gemm_generic/whole_array_generic.py --rtp-generic, the til
 n64, C single-buffered, bf16 in, f32 out, 4 columns). ``run`` uses ONE xclbin for every (M, K, N) and checks every
 product against numpy (relative max error < 1e-3, padded columns zero, repeat bit-equal) before timing; a shape whose
 device image differs from the shared one shows up as a failed check, not as a silent wrong number.
+``compile --epilogue FILE`` links FILE's egemm_epilogue into every shape (mode 0, so every product above must still
+pass) and adds a mode-1 stream ``g_M_K_N_m1`` / ``_m2`` for gate|up (kernels/embedgemma/geglu_epilogue.cc: GeGLU on the
+accumulator, mode 1 fp32, mode 2 native bf16). ``run`` then also checks each ``_m1`` shape: gate|up's columns interleaved per 64-column tile, the
+SAME A through mode 0 and mode 1, mode 1's gate columns against fp64 gelu_tanh(gate) * up computed from mode 0's
+own C. Criteria, fixed before each mode's first run (2026-10-18): mode 1, worst |device - fp64| <= 1e-5 of that
+row's max |reference|; mode 2, worst |device - geglu_model mode 2| <= 2 bf16 ulps of that row's max, its error
+against fp64 reported beside it; both finite and repeat bit-equal. The added device time per call (mode 1 minus mode 0) is reported.
 Timing is the device side per product, as tools/gemm_generic_probe.py does: sync A in, call, wait, sync C out. It
 excludes the fp32 -> bf16 conversion of each output (host work Laya measured separately), every non-GEMM op and
 attention. Activations are fixed random data. Run it under scripts/research-lowlevel.sh --npu so foreign contexts
@@ -36,6 +43,9 @@ import time
 from pathlib import Path
 
 import numpy as np
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "kernels" / "embedgemma"))
+import geglu_model  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 DESIGN = ROOT / "kernels" / "gemm_generic" / "whole_array_generic.py"
@@ -66,16 +76,38 @@ def forward(config: Path) -> list[tuple[str, int, int]]:
     return seq + [("output", d, t["embedding_dim"])]
 
 
-def stem(out: Path, M: int, K: int, N: int) -> Path:
-    return out / f"g_{M}_{K}_{N}"
+def stem(out: Path, M: int, K: int, N: int, mode: int = 0) -> Path:
+    return out / (f"g_{M}_{K}_{N}" + (f"_m{mode}" if mode else ""))
+
+
+def gate_up_shape(config: Path) -> tuple[int, int]:
+    return next((K, N) for name, K, N in forward(config) if name == "gate|up")
+
+
+def interleave(w: np.ndarray) -> np.ndarray:
+    """gate|up [K, 2F] -> per 64-column output tile p: gate columns 32p..32p+31 then up columns 32p..32p+31."""
+    K, N = w.shape
+    return w.reshape(K, 2, N // 64, 32).transpose(0, 2, 1, 3).reshape(K, N)
+
+
+def gate_columns(c: np.ndarray, N: int) -> np.ndarray:
+    """An interleaved gate|up output [M, N] -> its gate positions [M, N / 2] (mode 1: the GeGLU result)."""
+    return c[:, :N].reshape(c.shape[0], N // 64, 2, 32)[:, :, 0, :].reshape(c.shape[0], N // 2)
+
+
+def gelu_tanh(x):
+    x = np.asarray(x, np.float64)
+    return 0.5 * x * (1 + np.tanh(np.sqrt(2 / np.pi) * (x + 0.044715 * x ** 3)))
 
 
 def cmd_compile(a) -> int:
     a.out.mkdir(parents=True, exist_ok=True)
     shapes = sorted({(K, N) for _, K, N in forward(a.config)})
-    for M in a.ms:
-        for K, N in shapes:
-            s = stem(a.out, M, K, N)
+    jobs = [(M, K, N, 0) for M in a.ms for K, N in shapes]
+    if a.epilogue:
+        jobs += [(M, *gate_up_shape(a.config), md) for M in a.ms for md in a.modes]
+    for M, K, N, mode in jobs:
+            s = stem(a.out, M, K, N, mode)
             if Path(f"{s}.xclbin").exists():
                 print(f"COMPILE {s.name}: exists", flush=True)
                 continue
@@ -83,6 +115,8 @@ def cmd_compile(a) -> int:
                    "-m", str(TILE["m"]), "-k", str(TILE["k"]), "-n", str(TILE["n"]), "--c-single-buffer", "1",
                    "--dtype_in", "bf16", "--dtype_out", "f32", "--xclbin-path", f"{s}.xclbin",
                    "--insts-path", f"{s}.bin", "--rtp-generic"]
+            if a.epilogue:
+                cmd += ["--epilogue-src", str(a.epilogue.resolve()), "--epilogue-mode", str(mode)]
             r = subprocess.run(cmd, capture_output=True, text=True, timeout=1800)
             ok = r.returncode == 0 and Path(f"{s}.xclbin").exists()
             print(f"COMPILE {s.name} (N run as {padded(N)}): {'ok' if ok else 'FAIL rc=%d' % r.returncode}", flush=True)
@@ -156,6 +190,77 @@ def cmd_run(a) -> int:
                 raise RuntimeError(f"M={M} {sh}: {st}")
             C.sync(from_dev)
 
+        gu = gate_up_shape(a.config)
+        modes = [md for md in (1, 2, 3, 4, 5, 6) if Path(f"{stem(a.out, M, *gu, md)}.bin").exists()]
+        if modes:   # the epilogue: mode 0 and each mode on the same A and the interleaved weights
+            K, N = gu
+            wp = to_bf16_bits(interleave(bf16_float(weights[gu])[:, :N]))
+            Bp = bo(wp.nbytes)
+            Bp.write(wp.tobytes(), 0)
+            Bp.sync(to_dev)
+            ib0, nb0, A, C, _ = prods[gu]
+            streams = {0: (ib0, nb0)}
+            for md in modes:
+                words_ = np.frombuffer(Path(f"{stem(a.out, M, *gu, md)}.bin").read_bytes(), dtype=np.uint32)
+                ib_ = pyxrt.bo(dev, words_.nbytes, pyxrt.bo.cacheable, kern.group_id(1))
+                ib_.write(words_.tobytes(), 0)
+                ib_.sync(to_dev)
+                streams[md] = (ib_, words_.nbytes)
+            outs, times = {}, {md: [] for md in streams}
+            for rep_ in range(1 + a.seqs):
+                for mode, (ib_, nb_) in streams.items():
+                    A.sync(to_dev)
+                    t = time.perf_counter()
+                    st = kern(3, ib_, nb_, A, Bp, C).wait(WAIT_MS)
+                    if st != pyxrt.ert_cmd_state.ERT_CMD_STATE_COMPLETED:
+                        raise RuntimeError(f"M={M} {gu} mode {mode}: {st}")
+                    times[mode].append((time.perf_counter() - t) * 1000)
+                    C.sync(from_dev)
+                    outs.setdefault(mode, []).append(
+                        np.frombuffer(C.read(M * padded(N) * 4, 0), dtype=np.float32).reshape(M, -1).copy())
+            c0 = outs[0][0]
+            g0 = c0[:, :N].reshape(M, N // 64, 2, 32)[:, :, 0, :].reshape(M, N // 2)
+            u0 = c0[:, :N].reshape(M, N // 64, 2, 32)[:, :, 1, :].reshape(M, N // 2)
+            exact = gelu_tanh(g0) * u0.astype(np.float64)
+            plain = np.abs(c0[:, :N] - (bf16_float(prods[gu][4]) @ bf16_float(wp))).max() / np.abs(c0[:, :N]).max()
+            d0 = statistics.median(times[0][1:])
+            for md in modes:
+                if md in (3, 4, 7):   # timing probe: wrong output by construction, no check
+                    dm = statistics.median(times[md][1:])
+                    extra = ""
+                    if md == 7:   # each tile's epilogue cycles, written over its row 0, column 32
+                        cyc = outs[7][0][::32, 32:N:64].view(np.int32).astype(np.float64)
+                        extra = (f"; epilogue cycles per tile median {np.median(cyc):.0f} (min {cyc.min():.0f}, max "
+                                 f"{cyc.max():.0f}) over {cyc.size} tiles -> {np.median(cyc) * cyc.size / 16 / 1.8e6:.3f} ms "
+                                 f"per core at 1.80 GHz")
+                    print(f"  PROBE mode {md} {M}x{K}x{N}: call median {dm:.3f} ms (+{dm - d0:.3f} over mode 0){extra}",
+                          flush=True)
+                    report.setdefault("epilogue", {})[f"{M}_m{md}"] = dict(mode0_ms=d0, mode_ms=dm, probe=True)
+                    continue
+                got = gate_columns(outs[md][0], N).astype(np.float64)
+                vs_exact = float((np.abs(got - exact) / np.abs(exact).max(axis=1, keepdims=True)).max())
+                if md == 1:   # fp32: against fp64 at 1e-5 of the row max
+                    worst, crit = vs_exact, "<= 1e-5 of row max vs fp64"
+                    passed_ = worst <= 1e-5
+                else:         # bf16: against its own op-for-op model at 2 bf16 ulps of the row max
+                    ref = geglu_model.geglu(g0, u0, 5 if md == 6 else md).astype(np.float64)
+                    rowmax = np.abs(ref).max(axis=1, keepdims=True)
+                    tol = 2 * np.exp2(np.floor(np.log2(np.maximum(rowmax, 1e-30))) - 7)
+                    worst, crit = float((np.abs(got - ref) / tol).max()), "<= 1 (2 bf16 ulps of row max) vs model"
+                    passed_ = worst <= 1.0
+                same = all(np.array_equal(outs[md][0].view(np.uint32), o.view(np.uint32)) for o in outs[md][1:])
+                good = bool(np.isfinite(got).all()) and same and passed_ and plain < 1e-3
+                ok &= good
+                dm = statistics.median(times[md][1:])
+                print(f"  EPILOGUE mode {md} {M}x{K}x{N} GeGLU: worst {worst:.3e} ({crit}), vs fp64 {vs_exact:.2e} of row max, "
+                      f"mode-0 product rel err {plain:.2e}, repeat bit-equal {same}: {'PASS' if good else 'FAIL'}; "
+                      f"call median mode 0 {d0:.3f} ms, mode {md} {dm:.3f} ms (+{dm - d0:.3f})", flush=True)
+                report.setdefault("epilogue", {})[f"{M}_m{md}"] = dict(worst=worst, vs_fp64=vs_exact, mode0_ms=d0,
+                                                                      mode_ms=dm, passed=bool(good))
+            np.savez_compressed(a.out / f"epilogue_{M}.npz", **{f"c{md}": outs[md][0] for md in outs})
+            del Bp, streams, ib_   # every BO handle before the device (a leftover one segfaulted teardown, exit 139)
+            if a.epilogue_only:
+                continue
         for sh in shapes:   # correctness gate before any timing
             K, N = sh
             step(sh)
@@ -190,7 +295,7 @@ def cmd_run(a) -> int:
             print(f"    {M}x{K}x{N}: median {m:.3f} ms/call, {2.0 * M * K * N / m / 1e6:.0f} GFLOPS", flush=True)
         prods.clear()
         gc.collect()
-    print("RESULT " + json.dumps(dict(ok=ok, report={str(k): v for k, v in report.items()})), flush=True)
+    print("RESULT " + json.dumps(dict(ok=bool(ok), report={str(k): v for k, v in report.items()})), flush=True)
     # Release in dependency order (BOs, kernel, context, xclbin, device) before returning. The setup loop's own
     # ib/A/C names still hold the last M's BOs; left bound, they were freed after the device when cmd_run's frame was
     # torn down, and the process segfaulted (exit 139) after every result had printed (faulthandler: at return).
@@ -218,6 +323,11 @@ def main() -> int:
         p.add_argument("--config", type=Path, default=CONFIG)
         if name == "run":
             p.add_argument("--seqs", type=int, default=5, help="timed forward passes per M")
+            p.add_argument("--epilogue-only", action="store_true", help="only the epilogue check (no plain checks, no timing)")
+        else:
+            p.add_argument("--epilogue", type=Path, help="link this egemm_epilogue source; adds gate|up mode streams")
+            p.add_argument("--modes", type=int, nargs="+", default=[1, 2],
+                           help="epilogue modes to build gate|up streams for (3, 4: timing probes)")
     a = ap.parse_args()
     return cmd_compile(a) if a.cmd == "compile" else cmd_run(a)
 

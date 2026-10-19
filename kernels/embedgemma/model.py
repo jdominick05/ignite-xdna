@@ -100,6 +100,7 @@ class Encoder:
                 q_norm=w[a + "q_norm.weight"], k_norm=w[a + "k_norm.weight"],
                 ple_norm=w[p + "ple_block.post_per_layer_input_norm.weight"], scalar=float(w[p + "layer_scalar"][0])))
         self.timings = defaultdict(float)
+        self.geglu_hook = None   # gu [rows, 2F] -> ff [rows, F]; None = host fp32 gelu_tanh(gate) * up
 
     def shapes(self) -> list[tuple[str, int, int, int]]:
         """(name, layer, K, N) of every weight product, in forward order."""
@@ -209,7 +210,10 @@ class Encoder:
             x = res + self._rms(a, lay["post_attn_norm"])
             res = x
             gu = self._mm(self._rms(x, lay["pre_ff_norm"]), "gate_up", i, matmul, bf16_inputs)
-            ff = self._gelu(gu[:, :gu.shape[1] // 2]) * gu[:, gu.shape[1] // 2:]
+            if self.geglu_hook:   # a device GeGLU model (geglu_model), or the device's fused result (already ff)
+                ff = self.geglu_hook(gu)
+            else:
+                ff = self._gelu(gu[:, :gu.shape[1] // 2]) * gu[:, gu.shape[1] // 2:]
             x = res + self._rms(self._mm(ff, "down", i, matmul, bf16_inputs), lay["post_ff_norm"])
             g = self._gelu(self._mm(x, "ple_gate", i, matmul, bf16_inputs)) * ple[:, i, :]
             x = x + self._rms(self._mm(g, "ple_proj", i, matmul, bf16_inputs), lay["ple_norm"])

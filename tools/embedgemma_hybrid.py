@@ -69,8 +69,8 @@ def idle():
 class Npu:
     """Every weight product through one generic-GEMM context. Weight BOs resident; one A/C BO pair per (M, K, N)."""
 
-    def __init__(self, enc, builds, ms, rounder=None):
-        self.rounder = rounder
+    def __init__(self, enc, builds, ms, rounder=None, geglu_mode=0):
+        self.rounder, self.geglu_mode = rounder, geglu_mode
         sys.path.insert(0, "C:/Xilinx/XRT/xrt_sdk/xrt/python")
         import pyxrt
         self.x, self.ms, self.builds = pyxrt, sorted(ms), builds
@@ -85,6 +85,8 @@ class Npu:
         self.B, self.io = {}, {}
         for key, w in enc.weights.items():   # [K, N] fp32 holding exact BF16 values
             K, N = w.shape
+            if geglu_mode and key[0] == "gate_up":   # per 64-column tile: 32 gate columns, then the same 32 up columns
+                w = w.reshape(K, 2, N // 64, 32).transpose(0, 2, 1, 3).reshape(K, N)
             chunks = []
             for c in range(0, N, CHUNK):
                 part = w[:, c:c + CHUNK]
@@ -100,10 +102,11 @@ class Npu:
     def _bo(self, nbytes):
         return self.x.bo(self.dev, nbytes, self.x.bo.host_only, 0)
 
-    def _io(self, M, K, Np):
-        key = (M, K, Np)
+    def _io(self, M, K, Np, mode=0):
+        key = (M, K, Np, mode)
         if key not in self.io:
-            words = np.frombuffer((self.builds / f"g_{M}_{K}_{Np}.bin").read_bytes(), dtype=np.uint32)
+            name = f"g_{M}_{K}_{Np}" + (f"_m{mode}" if mode else "")
+            words = np.frombuffer((self.builds / f"{name}.bin").read_bytes(), dtype=np.uint32)
             ib = self.x.bo(self.dev, words.nbytes, self.x.bo.cacheable, self.kern.group_id(1))
             ib.write(words.tobytes(), 0)
             ib.sync(self.to_dev)
@@ -121,11 +124,12 @@ class Npu:
         L, K = x.shape
         M = next(m for m in self.ms if m >= L)
         chunks = self.B[(name, layer)]
+        mode = self.geglu_mode if name == "gate_up" else 0
         outs = []
         packed = None
         for bo_w, n in chunks:
             Np = padded(n)
-            ib, nb, A, C, av, cv = self._io(M, K, Np)
+            ib, nb, A, C, av, cv = self._io(M, K, Np, mode)
             t0 = time.perf_counter()
             if packed is None:   # round once per product; every chunk shares the input
                 if self.rounder:
@@ -146,7 +150,10 @@ class Npu:
             C.sync(self.from_dev)
             t4 = time.perf_counter()
             # chunks of one product share an (M, K, N) and so one C buffer: copy each before the next call
-            outs.append(cv[:L, :n] if len(chunks) == 1 else cv[:L, :n].copy())
+            if mode:   # the device's GeGLU sits at each tile's gate columns: ff [L, n / 2]
+                outs.append(cv[:L, :n].reshape(L, n // 64, 2, 32)[:, :, 0, :].reshape(L, n // 2))
+            else:
+                outs.append(cv[:L, :n] if len(chunks) == 1 else cv[:L, :n].copy())
             self.t["npu_pack"] += t1 - t0
             self.t["npu_write"] += t2 - t1
             self.t["npu_call"] += t3 - t2
@@ -178,6 +185,10 @@ def main():
     ap.add_argument("--ms", type=int, nargs="+", default=[256, 512, 2048])
     ap.add_argument("--batch", type=int, default=1, help="consecutive same-length documents per row batch")
     ap.add_argument("--attention", choices=["exact", "blockwise", "npu-local"], default="exact")
+    ap.add_argument("--geglu", choices=["host", "model1", "model2", "model5"], default="host",
+                    help="MLP GeGLU: host fp32, or (cpu emulation) geglu_epilogue.cc's mode 1 / mode 2 arithmetic")
+    ap.add_argument("--npu-geglu", type=int, default=0, help="npu: run gate|up with this geglu_epilogue.cc mode "
+                    "(--builds compiled with tools/embedgemma_gemm_probe.py compile --epilogue); 0 = host GeGLU")
     ap.add_argument("--attn-build", type=Path, help="npu-local: kernels/embedgemma/attn_array.py build --out DIR")
     ap.add_argument("--attn-pack-dll", type=Path, help="npu-local: egattn_pack.dll (native.py build --attn)")
     ap.add_argument("--k-block", type=int, default=32)
@@ -205,6 +216,17 @@ def main():
                                                               q_block=y - x, k_block=a.k_block, exp=a.exp,
                                                               tau=a.tau) for x, y in segs])
         enc._attention = blockwise
+    if a.geglu.startswith("model"):
+        import geglu_model
+        mode = int(a.geglu[-1])
+
+        def geglu_emulated(gu):
+            t = time.perf_counter()
+            h = gu.shape[1] // 2
+            out = geglu_model.geglu(gu[:, :h], gu[:, h:], mode)
+            enc.timings["gelu"] += time.perf_counter() - t
+            return out
+        enc.geglu_hook = geglu_emulated
     attn = None
     if a.attention == "npu-local":
         if not idle():
@@ -235,10 +257,12 @@ def main():
         if a.round_dll:
             from native import Rounder
             rounder = Rounder(a.round_dll)
-        npu = Npu(enc, a.builds, a.ms, rounder)
+        npu = Npu(enc, a.builds, a.ms, rounder, a.npu_geglu)
+        if a.npu_geglu:
+            enc.geglu_hook = lambda gu: gu   # gate|up already returned ff from the device
     matmul = npu.matmul if npu else None
     bf16 = a.backend == "npu" or a.bf16_inputs
-    emulation = a.backend == "cpu" and (a.bf16_inputs or a.attention == "blockwise")
+    emulation = a.backend == "cpu" and (a.bf16_inputs or a.attention == "blockwise" or a.geglu != "host")
     try:
         embeds, times, phases = [None] * len(docs), {}, {}
         groups = []   # consecutive same-length documents, up to --batch and (npu) the largest compiled M in rows
@@ -279,7 +303,7 @@ def main():
         strict = a.backend == "cpu" and not emulation and a.attention == "exact"
         threshold = 0.99999 if strict else 0.9999
         passed = bool(cos.min() >= threshold and (strict or nn_kept == 1.0))
-        rec = dict(backend=a.backend, docs=str(a.docs), reference=str(a.reference), batch=a.batch, round_dll=bool(a.round_dll), attention=a.attention, k_block=a.k_block, exp=a.exp, tau=a.tau,
+        rec = dict(backend=a.backend, docs=str(a.docs), reference=str(a.reference), batch=a.batch, round_dll=bool(a.round_dll), attention=a.attention, geglu=a.geglu, npu_geglu=a.npu_geglu, k_block=a.k_block, exp=a.exp, tau=a.tau,
                    bf16_inputs=a.bf16_inputs, passed=passed,
                    gate=dict(cos_min=threshold, nn_kept=None if strict else 1.0),
                    cos_min=float(cos.min()), cos_mean=float(cos.mean()), nn_kept=nn_kept,

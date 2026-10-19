@@ -1762,3 +1762,9 @@ hardware contexts running on device"; the sweep is offline and needs no witness.
 - **End-to-end gate on device, local attention on the NPU** (all PASS, cosine min 0.9999832):
   - [duplicated windows](embedgemma_hybrid_npu_b2_native_attnlocal_desktop2_20261018T225343Z.log), [strided](embedgemma_hybrid_npu_b2_native_attnlocal_strided_desktop2_20261018T225824Z.log), [native pack](embedgemma_hybrid_npu_b2_native_attnlocal_native_desktop2_20261018T230328Z.log).
   - [Exit 3: harness idle-check bug](embedgemma_hybrid_npu_b2_native_attnlocal_desktop2_20261018T225259Z.log).
+- **Fused GeGLU GEMM epilogue**:
+  - Mode 1: [first, FAIL (`aie::abs` bug)](embedgemma_gemm_epilogue_geglu_desktop2_20261018T231940Z.log), [diagnosis](embedgemma_gemm_epilogue_geglu_diag_desktop2_20261018T232039Z.log), [fixed, PASS](embedgemma_gemm_epilogue_geglu_desktop2_20261018T232643Z.log).
+  - [Mode 2](embedgemma_gemm_epilogue_geglu_m2_desktop2_20261018T234426Z.log), [hollow-probe profile](embedgemma_gemm_epilogue_profile_desktop2_20261018T235109Z.log), [mode 5](embedgemma_gemm_epilogue_geglu_m5_desktop2_20261018T235740Z.log), [mode 6](embedgemma_gemm_epilogue_geglu_m6_desktop2_20261019T000310Z.log).
+  - Cycle-counter attempts: [link failure](embedgemma_gemm_epilogue_cycles_desktop2_20261019T000445Z.log), [timeout](embedgemma_gemm_epilogue_cycles_desktop2_20261019T000938Z.log).
+  - [Mode-2 CPU-emulation gate](embedgemma_geglu_mode2_numerics_cpu_desktop2_20261018T232830Z.json).
+  - [End-to-end gate on device with mode 6](embedgemma_hybrid_npu_attnlocal_geglu6_desktop2_20261019T001519Z.log), PASS.

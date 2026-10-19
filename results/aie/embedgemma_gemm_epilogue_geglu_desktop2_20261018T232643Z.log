@@ -1,0 +1,87 @@
+RESEARCH_PLATFORM {"machine": "Desktop 2", "cpu": "AMD Ryzen 7 8700G w/ Radeon 780M Graphics", "os": "Windows-11-10.0.26200-SP0", "ram_bytes": 33381138432, "source_sha256": {"tools/research_process.py": "ffeb1857f190b482eed101b5f5a928f455de26bfa61d23f78a2eacec08e2663e", "tools/quant_calib_alphabet.py": "2dc0b2878c564853f340880209a425dfcf63b8536b2b8e9fd32344daade58d37", "tools/xint8_arithmetic_probe.py": "6aa3df08b9870c3c2264b868459d7ffbac3070dddc1349d7c6f3f480075f7041", "scripts/research-lowlevel.sh": "3455ad7933697936487712665505c216891865c6deada647302785f6e37020bd", "scripts/research-iron.sh": "4c863a262646ddab39b5005006ba8e03809895e6386c6310e2fd9d0a9e9609ee", "kernels/memory_placement/probe.py": "e8d990169ad6091fa1b53852e9f61eff495b5def72d35165a5c5cf1759e38898", "kernels/memory_placement/memory_kernels.cc": "182e7af7071a1e851afb4a7ca266069c489aea1fbaaa85eca129708daeba5ba6", "scripts/research-matrix.sh": "739254171629deae822b0ad7dabc875aee19ace56dde77d3e8aab61663f97516", "kernels/memory_placement/gemm.py": "17c905ad66110d3346bbf0db898dfc6b780df59fae1dfb0c1747057ce1e5844e", "kernels/memory_placement/gemm_placement.cc": "f21acf7250b12914ea30cc1f77613239dfa18421a85a1b9a5199017dd916278a", "tools/research_summary.py": "0c00dcceef07053d06731b41a1f1ed58d3ba4ea09f82497de354ce9cef17da20", "tools/research_toolchain.py": "f0a126a24ae213acfaa43460cfd9def0c86d9cb70cfee0228aa271688467b314"}, "commit": "9bc18c20f46813ac8aad6eb5aa027193aa16b606", "command": ["bash", "scripts/research-iron.sh", "tools/embedgemma_gemm_probe.py", "run", "--out", "scratch/egemma-gemm-epi", "--ms", "256", "512", "2048", "--seqs", "5"], "seconds_limit": 1200.0, "rss_gib_limit": 12.0, "checks_only": false, "free_ram_bytes": 22768926720}
+HOST_LOAD busy_cores=0.24 logical_cores=16 free_ram_gb=21.2 sample_sec=1
+HOST_LOAD_TOP 0.06 llm-top-new:17996 ws_mb=67
+HOST_LOAD_TOP 0.06 powershell:76864 ws_mb=83
+HOST_LOAD_TOP 0.05 Taskmgr:62436 ws_mb=211
+HOST_LOAD_TOP 0.03 dev-agent:4816 ws_mb=467
+HOST_LOAD_TOP 0.02 WindowsTerminal:11024 ws_mb=168
+HOST_LOAD_VERDICT CLEAR
+
+PRE_NPU_CONTEXT_WITNESS "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+RUN one context on g_256_512_512.xclbin: 148 products per forward pass, 7 distinct (K, N), M in [256, 512, 2048]
+  EPILOGUE 256x512x4096 GeGLU: worst |diff| / row max 2.71e-07 (<= 1e-5), mode-0 product rel err 5.02e-07, repeat bit-equal True: PASS; call median mode 0 0.756 ms, mode 1 2.892 ms (+2.135)
+  CHECK 256x512x512: rel err 4.84e-07: PASS
+  CHECK 256x512x768: rel err 3.66e-07: PASS
+  CHECK 256x512x2048: rel err 4.19e-07: PASS
+  CHECK 256x512x3072: rel err 5.43e-07: PASS
+  CHECK 256x512x4096: rel err 5.02e-07: PASS
+  CHECK 256x1024x512: rel err 6.21e-07: PASS
+  CHECK 256x2048x512: rel err 1.45e-06: PASS
+PASS M=256: forward-pass weight GEMMs median 63.7 ms (min 63.0, max 64.8, 5 passes), 70.0 GFLOP -> 1098 GFLOPS
+    256x512x512: median 0.255 ms/call, 526 GFLOPS
+    256x512x768: median 0.280 ms/call, 719 GFLOPS
+    256x512x2048: median 0.458 ms/call, 1172 GFLOPS
+    256x512x3072: median 0.584 ms/call, 1380 GFLOPS
+    256x512x4096: median 0.769 ms/call, 1397 GFLOPS
+    256x1024x512: median 0.305 ms/call, 881 GFLOPS
+    256x2048x512: median 0.416 ms/call, 1292 GFLOPS
+  EPILOGUE 512x512x4096 GeGLU: worst |diff| / row max 2.56e-07 (<= 1e-5), mode-0 product rel err 5.22e-07, repeat bit-equal True: PASS; call median mode 0 1.302 ms, mode 1 5.656 ms (+4.354)
+  CHECK 512x512x512: rel err 4.67e-07: PASS
+  CHECK 512x512x768: rel err 6.08e-07: PASS
+  CHECK 512x512x2048: rel err 4.48e-07: PASS
+  CHECK 512x512x3072: rel err 5.30e-07: PASS
+  CHECK 512x512x4096: rel err 5.22e-07: PASS
+  CHECK 512x1024x512: rel err 8.99e-07: PASS
+  CHECK 512x2048x512: rel err 9.20e-07: PASS
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 105 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |81600               |41         |1254        |0           |0    |Normal   |\n      |python.exe          |Active     |1253        |0           |     |N/A      |\n      |105 MB              |416 KB     |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [81600], "owned_pids": [77092, 81124, 81600, 82096, 83564], "foreign_pids": []}
+PASS M=512: forward-pass weight GEMMs median 98.1 ms (min 97.7, max 100.9, 5 passes), 140.0 GFLOP -> 1427 GFLOPS
+    512x512x512: median 0.337 ms/call, 797 GFLOPS
+    512x512x768: median 0.364 ms/call, 1107 GFLOPS
+    512x512x2048: median 0.709 ms/call, 1515 GFLOPS
+    512x512x3072: median 0.976 ms/call, 1650 GFLOPS
+    512x512x4096: median 1.342 ms/call, 1600 GFLOPS
+    512x1024x512: median 0.429 ms/call, 1251 GFLOPS
+    512x2048x512: median 0.657 ms/call, 1635 GFLOPS
+  EPILOGUE 2048x512x4096 GeGLU: worst |diff| / row max 3.06e-07 (<= 1e-5), mode-0 product rel err 5.55e-07, repeat bit-equal True: PASS; call median mode 0 4.599 ms, mode 1 21.831 ms (+17.232)
+HOST_TIMELINE {"elapsed_seconds": 4.328, "tree_rss_bytes": 803348480, "foreign_peers": []}
+  CHECK 2048x512x512: rel err 4.53e-07: PASS
+  CHECK 2048x512x768: rel err 4.50e-07: PASS
+  CHECK 2048x512x2048: rel err 5.10e-07: PASS
+  CHECK 2048x512x3072: rel err 5.48e-07: PASS
+  CHECK 2048x512x4096: rel err 5.55e-07: PASS
+  CHECK 2048x1024x512: rel err 7.99e-07: PASS
+  CHECK 2048x2048x512: rel err 1.13e-06: PASS
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 189 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |81600               |41         |2684        |0           |0    |Normal   |\n      |python.exe          |Active     |2683        |0           |     |N/A      |\n      |189 MB              |416 KB     |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [81600], "owned_pids": [77092, 81124, 81600, 82096, 83564], "foreign_pids": []}
+PASS M=2048: forward-pass weight GEMMs median 333.0 ms (min 330.6, max 336.5, 5 passes), 560.0 GFLOP -> 1682 GFLOPS
+    2048x512x512: median 0.901 ms/call, 1191 GFLOPS
+    2048x512x768: median 1.132 ms/call, 1423 GFLOPS
+    2048x512x2048: median 2.452 ms/call, 1751 GFLOPS
+    2048x512x3072: median 3.480 ms/call, 1851 GFLOPS
+    2048x512x4096: median 4.880 ms/call, 1760 GFLOPS
+    2048x1024x512: median 1.400 ms/call, 1534 GFLOPS
+    2048x2048x512: median 2.326 ms/call, 1847 GFLOPS
+Traceback (most recent call last):
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\<tooling>\worktrees\embedgemma-gemm\tools\embedgemma_gemm_probe.py", line 302, in <module>
+    sys.exit(main())
+             ~~~~^^
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\<tooling>\worktrees\embedgemma-gemm\tools\embedgemma_gemm_probe.py", line 298, in main
+    return cmd_compile(a) if a.cmd == "compile" else cmd_run(a)
+                                                     ~~~~~~~^^^
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\<tooling>\worktrees\embedgemma-gemm\tools\embedgemma_gemm_probe.py", line 266, in cmd_run
+    print("RESULT " + json.dumps(dict(ok=ok, report={str(k): v for k, v in report.items()})), flush=True)
+                      ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\<user>\miniforge3\envs\mlir-aie-iron\Lib\json\__init__.py", line 235, in dumps
+    return _default_encoder.encode(obj)
+           ~~~~~~~~~~~~~~~~~~~~~~~^^^^^
+  File "C:\Users\<user>\miniforge3\envs\mlir-aie-iron\Lib\json\encoder.py", line 202, in encode
+    chunks = self.iterencode(o, _one_shot=True)
+  File "C:\Users\<user>\miniforge3\envs\mlir-aie-iron\Lib\json\encoder.py", line 263, in iterencode
+    return _iterencode(o, 0)
+  File "C:\Users\<user>\miniforge3\envs\mlir-aie-iron\Lib\json\encoder.py", line 182, in default
+    raise TypeError(f'Object of type {o.__class__.__name__} '
+                    f'is not JSON serializable')
+TypeError: Object of type bool is not JSON serializable
+POST_NPU_CONTEXT_WITNESS "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+RESEARCH_PROCESS_RESULT {"exit_code": 1, "stop": null, "peak_tree_rss_bytes": 853766144, "rss_measurement": "maximum observed across sampled descendant working sets; zero observations reported as null", "elapsed_seconds": 7.672000000020489, "foreign_contention_observed": false, "timing_eligible": false}

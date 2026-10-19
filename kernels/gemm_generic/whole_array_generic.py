@@ -23,6 +23,12 @@ baking ``(M//m)*(N//n)//cores`` and ``K//k`` into the core program. With m, k, n
 fixed, every (M, K, N) then compiles to the same core program and differs only in its runtime sequence, so one
 loaded design can serve several GEMM shapes through their instruction streams alone. Whether the device images
 really are identical across shapes is checked by tools/gemm_generic_probe.py, not assumed here.
+
+Local change (ignite-xdna): ``--epilogue-src FILE --epilogue-mode N`` (with --rtp-generic). Links FILE's
+``egemm_epilogue(float *c_tile, int32_t mode)`` into every core, which calls it on each output tile after its last
+K step, with a third RTP word that this shape's runtime sequence sets to N. With the epilogue linked, every
+shape's core program is again identical, so one xclbin serves all modes; mode 0 must leave the tile alone.
+kernels/embedgemma/geglu_epilogue.cc is the one in use (mode 1 = GeGLU).
 """
 
 import argparse
@@ -49,6 +55,8 @@ from aie.iron import (
     str_to_dtype,
 )
 from aie.iron.controlflow import range_
+from aie.iron.kernel import ExternalFunction  # local change: epilogue
+from aie.utils import config  # local change: epilogue
 from aie.iron.device import NPU2, from_name
 from aie.utils.benchmark import run_iters
 from aie.utils.hostruntime.argparse import add_benchmark_args, add_compile_args
@@ -81,6 +89,8 @@ def _build_design(
     scalar,
     c_single_buffer=False,
     rtp_generic=False,  # local change
+    epilogue_src="",  # local change
+    epilogue_mode=0,  # local change
     *,
     generate_taps=False,
 ):
@@ -114,6 +124,15 @@ def _build_design(
     )
     zero_kernel = matmul_kernel.zero
     r, s, t = matmul_kernel.mac_dims
+    epilogue_kernel = None  # local change: the tile epilogue
+    if epilogue_src:
+        assert rtp_generic, "--epilogue-src needs --rtp-generic (its mode is an RTP word)"
+        epilogue_kernel = ExternalFunction(
+            "egemm_epilogue",
+            source_file=str(epilogue_src),
+            arg_types=[np.ndarray[(m, n), np.dtype[str_to_dtype(dtype_out_str)]], np.int32],
+            include_dirs=[config.cxx_header_path()],
+        )
 
     if dev_str == "npu" and n_aie_cols > 4:
         raise AssertionError("Invalid configuration: NPU (Phoenix/Hawk) has 4 columns")
@@ -249,10 +268,11 @@ def _build_design(
             out_c.release(1)
 
     # Local change: the shape-generic core. rtp[0] = output tiles per core, rtp[1] = K // k.
-    def core_fn_generic(in_a, in_b, out_c, zero, matmul, rtp, barrier):
+    def core_fn_generic(in_a, in_b, out_c, zero, matmul, rtp, barrier, *epilogue):
         barrier.wait_for_value(1)
         n_tiles = arith.index_cast(rtp[0], to=T.index())
         k_tiles = arith.index_cast(rtp[1], to=T.index())
+        mode = rtp[2] if epilogue else None  # local change: the epilogue's mode, read once per call
         for _ in range_(n_tiles):
             elem_out = out_c.acquire(1)
             zero(elem_out)
@@ -262,13 +282,16 @@ def _build_design(
                 matmul(elem_in_a, elem_in_b, elem_out)
                 in_a.release(1)
                 in_b.release(1)
+            if epilogue:
+                epilogue[0](elem_out, mode)
             out_c.release(1)
         # Hand the barrier back: acquire-equal does not consume it, so without this the core never waits
         # again and runs the next call on this call's parameters (results/laya/laya_gemm_onectx_desktop2_20261013T012132Z.log). Upstream's
         # ml/mm_activation_epilogue ends each epoch the same way.
         barrier.release_with_value(1)
 
-    rtps = [[Buffer(np.ndarray[(2,), np.dtype[np.int32]], initial_value=np.zeros(2, np.int32),
+    n_rtp = 3 if epilogue_kernel else 2  # local change: [tiles, K tiles, epilogue mode]
+    rtps = [[Buffer(np.ndarray[(n_rtp,), np.dtype[np.int32]], initial_value=np.zeros(n_rtp, np.int32),
                     name=f"rtp_{row}_{col}", use_write_rtp=True)
              for col in range(n_aie_cols)] for row in range(n_aie_rows)] if rtp_generic else None
     barriers = [[WorkerRuntimeBarrier() for _ in range(n_aie_cols)] for _ in range(n_aie_rows)] if rtp_generic else None
@@ -285,7 +308,8 @@ def _build_design(
                 zero_kernel,
                 matmul_kernel,
             ]
-            + ([rtps[row][col], barriers[row][col]] if rtp_generic else []),  # local change
+            + ([rtps[row][col], barriers[row][col]] if rtp_generic else [])  # local change
+            + ([epilogue_kernel] if epilogue_kernel else []),  # local change
             stack_size=0xD00,
         ),
     )
@@ -348,6 +372,8 @@ def _build_design(
                 for col in range(n_aie_cols):
                     rtps[row][col][0] = n_tiles_per_core
                     rtps[row][col][1] = K // k
+                    if epilogue_kernel:
+                        rtps[row][col][2] = epilogue_mode
             for row in range(n_aie_rows):
                 for col in range(n_aie_cols):
                     barriers[row][col].set(1)
@@ -439,6 +465,8 @@ def whole_array(
     scalar: CompileTime[bool] = False,
     c_single_buffer: CompileTime[bool] = False,
     rtp_generic: CompileTime[bool] = False,  # local change
+    epilogue_src: CompileTime[str] = "",  # local change
+    epilogue_mode: CompileTime[int] = 0,  # local change
 ):
     return _build_design(
         iron.get_current_device(),
@@ -458,6 +486,8 @@ def whole_array(
         scalar,
         c_single_buffer,
         rtp_generic,  # local change
+        epilogue_src,  # local change
+        epilogue_mode,  # local change
     )
 
 
@@ -518,6 +548,8 @@ def _make_argparser():
         action="store_true",
         help="shape-generic core: loop counts come from a runtime parameter, not the compiled program",
     )
+    p.add_argument("--epilogue-src", default="", help="local change: link egemm_epilogue(c, mode) from this file")
+    p.add_argument("--epilogue-mode", type=int, default=0, help="local change: the mode this shape's call runs")
     p.add_argument(
         "--c-single-buffer",
         type=int,
@@ -611,6 +643,8 @@ def _compile_kwargs(opts):
         scalar=bool(opts.scalar),
         c_single_buffer=bool(opts.c_single_buffer),
         rtp_generic=bool(opts.rtp_generic),  # local change
+        epilogue_src=opts.epilogue_src,  # local change
+        epilogue_mode=opts.epilogue_mode,  # local change
     )
 
 
@@ -668,6 +702,8 @@ def _run_and_verify(opts):
         scalar=bool(opts.scalar),
         c_single_buffer=bool(opts.c_single_buffer),
         rtp_generic=bool(opts.rtp_generic),  # local change
+        epilogue_src=opts.epilogue_src,  # local change
+        epilogue_mode=opts.epilogue_mode,  # local change
         warmup=opts.warmup,
         iters=opts.iters,
     )
