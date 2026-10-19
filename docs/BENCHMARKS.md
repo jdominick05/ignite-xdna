@@ -25733,3 +25733,34 @@ Pass 1 / pass 2:
     [N p2](../results/aie/embedgemma_concurrency_n_npu_desktop2_20261019T045002Z_p2.log),
     [GN p1](../results/aie/embedgemma_concurrency_gn_npu_desktop2_20261019T045002Z_p1.log),
     [GN p2](../results/aie/embedgemma_concurrency_gn_npu_desktop2_20261019T045002Z_p2.log).
+
+#### An owned bf16 matmul kernel: 1.57x upstream mm.cc in L1, from freeing the move slot (2026-10-19, Desktop 2)
+
+**Why `mm.cc` is slow.** [Schedule notes](../results/aie/notes_mm_bf16_schedule.md), from Peano's disassembly at
+64^3:
+- The K loop issues 16 `vmac.f` in 33 bundles, because 30 of those bundles are pointer moves on the single move
+  slot. The source keeps eight post-incremented A and B pointers.
+- Each of the 16 output blocks also pays a 51-bundle C-load prologue and a 45-bundle store epilogue.
+
+[`kernels/gemm_bf16/mm_bf16.cc`](../kernels/gemm_bf16/mm_bf16.cc) (AGPL, written here) is a drop-in for
+`matmul_bf16_f32` and `zero_f32`:
+- same layouts and the same per-accumulator K order;
+- one A and one B base pointer per block, the other rows and columns at fixed offsets.
+
+Its K loop is 19 bundles for 16 `vmac.f`.
+
+`tools/l1_tile_bench.py` direct mode at 64^3, one sitting, contention clean
+([log](../results/aie/l1_tile_own_bf16_v1_64x64x64_desktop2_20261019T053617Z.log), [wrapper](../results/aie/l1_tile_own_bf16_v1_64x64x64_desktop2_20261019T053617Z_wrapper.log)). Both outputs are exact on the bench's small-integer
+case:
+
+| kernel | cycles/call | over empty | % peak | GFLOPS |
+|---|---:|---:|---:|---:|
+| `mm.cc` | 5427.7 | 5408.3 | 37.7% | 173.9 |
+| `mm_bf16.cc` v1 | **3446.9** | 3427.4 | **59.4%** | 273.8 |
+
+- **The remaining cost is the C traffic per block**, about 82 of about 215 cycles. One accumulator load or store
+  fits per bundle, and 64 half-transfers are needed per block.
+- **Only a hand schedule can overlap that traffic with the next block's MACs** (notes, target 2). That is stage
+  2; v1 is below its 70% bar for stopping at C++.
+- **Not yet checked:** bit-identity to `mm.cc` on random bf16. The bench's integers are exact in any order, so
+  that check runs on the device GEMM.
