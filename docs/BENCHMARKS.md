@@ -25855,3 +25855,26 @@ The hollow m64 build (`--hollow-matmul`) keeps every DMA and lock step and drops
   bunch at the block boundary under the one-per-bundle accumulator port. That leaves about 35-43 boundary bundles
   per 128 MAC bundles, about 75-80% of peak.
 - **The lever is now data movement:** the DMA and tiling of the generic GEMM, and the fixed cost per call.
+
+#### W8 on the owned kernel: 23% faster than W8 on mm.cc, still slower than bf16 - the dequant makes it core-bound (2026-10-19, Desktop 2)
+
+**Setup.** m64, W8 weights (G = 64, clip 20) with `w8_dequant.cc` and the owned `mm_bf16.cc`. The probe's GeGLU check
+now uploads W8 tiles under `--w8`. One sitting, contention clean. Forward-pass weight GEMMs, ms:
+
+| m64 build | M = 512 | 2048 | log |
+|---|---:|---:|---|
+| bf16, owned | **79.2** | **234.1** | [log](../results/aie/embedgemma_gemm_w8own_bf16own_m64_desktop2_20261019T063053Z.log) |
+| W8, owned | 86.7 | 270.9 | [log](../results/aie/embedgemma_gemm_w8own_w8own_m64_desktop2_20261019T063005Z.log) |
+| W8, `mm.cc` | 106.1 | 352.2 | [log](../results/aie/embedgemma_gemm_w8own_w8mmcc_m64_desktop2_20261019T063024Z.log) |
+| W8 hollow (no MACs, no dequant) | 66.7 | 181.9 | [log](../results/aie/embedgemma_gemm_w8own_w8hollow_m64_desktop2_20261019T063040Z.log) |
+
+- **Checks:** W8 owned passes every check. The dequant one-hot is bit-equal, and GeGLU mode 6 matches the model
+  exactly.
+- **Why W8 still loses (DERIVED):** it halves the weight bytes, so its floor is 182 ms against bf16's 231. But the
+  on-core dequant adds work to each tile (about 1,500 cycles against the matmul's 3,447 at 64^3), and W8 runs
+  about 89 ms above its floor. bf16 is transport-bound; W8 is core-bound.
+- **What could make W8 pay:** dequantizing inside the matmul's K loop, so B never goes through a bf16 scratch
+  tile in L1. That is not built.
+- **Not run:** the end-to-end W8 hybrid, since its GEMMs are slower than bf16's.
+
+Also: `embedgemma_gemm_probe.py compile --jobs N` (default 8) now builds xclbins in parallel. 5 builds took 3 min.

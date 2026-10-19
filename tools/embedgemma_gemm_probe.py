@@ -130,11 +130,12 @@ def cmd_compile(a) -> int:
     jobs = [(M, K, N, 0) for M in a.ms for K, N in shapes]
     if a.epilogue:
         jobs += [(M, *gate_up_shape(a.config), md) for M in a.ms for md in a.modes]
-    for M, K, N, mode in jobs:
+    def one(job):   # each xclbin builds in its own .prj directory, so jobs run in parallel safely
+            M, K, N, mode = job
             s = stem(a.out, M, K, N, mode)
             if Path(f"{s}.xclbin").exists():
                 print(f"COMPILE {s.name}: exists", flush=True)
-                continue
+                return 0
             cmd = [sys.executable, str(DESIGN), "--dev", "npu", "-M", str(M), "-K", str(K), "-N", str(padded(N)),
                    "-m", str(a.tile_m), "-k", str(TILE["k"]), "-n", str(TILE["n"]), "--c-single-buffer", "0" if a.c_double else "1",
                    "--dtype_in", "bf16", "--dtype_out", "f32", "--xclbin-path", f"{s}.xclbin",
@@ -153,7 +154,10 @@ def cmd_compile(a) -> int:
             if not ok:
                 print(r.stdout[-3000:] + r.stderr[-3000:])
                 return 1
-    return 0
+            return 0
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=max(1, a.jobs)) as ex:
+        return max(ex.map(one, jobs), default=0)
 
 
 def idle() -> bool:
@@ -179,7 +183,7 @@ def cmd_run(a) -> int:
     seq = forward(a.config)
     shapes = sorted({(K, N) for _, K, N in seq})
     rng = np.random.default_rng(3)
-    weights, w8 = {}, {}
+    weights, w8, w8qs = {}, {}, {}
     for K, N in shapes:
         w = np.zeros((K, padded(N)), np.float32)
         w[:, :N] = rng.standard_normal((K, N)) * 0.02
@@ -187,6 +191,7 @@ def cmd_run(a) -> int:
         if a.w8:   # the device reads the W8 buffer; every check is against its dequantized bf16 values
             q, sc, dq = w8_weights(w, N)
             w8[(K, N)] = w8_tiles(q, sc)
+            w8qs[(K, N)] = (q, sc)
             weights[(K, N)] = to_bf16_bits(dq)
     shared = Path(f"{stem(a.out, a.ms[0], *shapes[0])}.xclbin")
     dev = pyxrt.device(0)
@@ -232,8 +237,10 @@ def cmd_run(a) -> int:
         if modes:   # the epilogue: mode 0 and each mode on the same A and the interleaved weights
             K, N = gu
             wp = to_bf16_bits(interleave(bf16_float(weights[gu])[:, :N]))
-            Bp = bo(wp.nbytes)
-            Bp.write(wp.tobytes(), 0)
+            # the device's B: the interleaved bf16 weights, or under --w8 the same permutation of q and its scales
+            bp = w8_tiles(interleave(w8qs[gu][0]), interleave(w8qs[gu][1])) if a.w8 else wp
+            Bp = bo(bp.nbytes)
+            Bp.write(bp.tobytes(), 0)
             Bp.sync(to_dev)
             ib0, nb0, A, C, _ = prods[gu]
             streams = {0: (ib0, nb0)}
@@ -384,6 +391,7 @@ def main() -> int:
         else:
             p.add_argument("--epilogue", type=Path, help="link this egemm_epilogue source; adds gate|up mode streams")
             p.add_argument("--hollow-matmul", type=Path, help="timing probe: link this no-op in matmul's place")
+            p.add_argument("--jobs", type=int, default=8, help="xclbins built in parallel (each aiecc is one thread)")
             p.add_argument("--mm-src", type=Path, help="link this owned bf16 matmul in mm.cc's place "
                            "(kernels/gemm_bf16/mm_bf16.cc)")
             p.add_argument("--c-double", action="store_true", help="double-buffer the C tile (default single)")
