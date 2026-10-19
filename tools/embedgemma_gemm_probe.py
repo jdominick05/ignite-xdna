@@ -117,6 +117,8 @@ def cmd_compile(a) -> int:
                    "--insts-path", f"{s}.bin", "--rtp-generic"]
             if a.epilogue:
                 cmd += ["--epilogue-src", str(a.epilogue.resolve()), "--epilogue-mode", str(mode)]
+            if a.hollow_matmul:
+                cmd += ["--hollow-matmul", str(a.hollow_matmul.resolve())]
             r = subprocess.run(cmd, capture_output=True, text=True, timeout=1800)
             ok = r.returncode == 0 and Path(f"{s}.xclbin").exists()
             print(f"COMPILE {s.name} (N run as {padded(N)}): {'ok' if ok else 'FAIL rc=%d' % r.returncode}", flush=True)
@@ -261,7 +263,7 @@ def cmd_run(a) -> int:
             del Bp, streams, ib_, ib0, words_   # every BO handle before the device (a leftover one segfaults teardown, exit 139)
             if a.epilogue_only:
                 continue
-        for sh in shapes:   # correctness gate before any timing
+        for sh in ([] if a.timing_only else shapes):   # correctness gate before any timing
             K, N = sh
             step(sh)
             r1 = np.frombuffer(prods[sh][3].read(M * padded(N) * 4, 0), dtype=np.float32).reshape(M, -1).copy()
@@ -324,8 +326,11 @@ def main() -> int:
         if name == "run":
             p.add_argument("--seqs", type=int, default=5, help="timed forward passes per M")
             p.add_argument("--epilogue-only", action="store_true", help="only the epilogue check (no plain checks, no timing)")
+            p.add_argument("--timing-only", action="store_true", help="hollow builds: skip the correctness checks "
+                           "(their output is wrong by construction) and report timing only")
         else:
             p.add_argument("--epilogue", type=Path, help="link this egemm_epilogue source; adds gate|up mode streams")
+            p.add_argument("--hollow-matmul", type=Path, help="timing probe: link this no-op in matmul's place")
             p.add_argument("--modes", type=int, nargs="+", default=[1, 2],
                            help="epilogue modes to build gate|up streams for (3, 4: timing probes)")
     a = ap.parse_args()

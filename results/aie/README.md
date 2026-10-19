@@ -1771,3 +1771,4 @@ hardware contexts running on device"; the sweep is offline and needs no witness.
 - [Host GeGLU comparison point](embedgemma_host_geglu_bench_desktop2_20261019T001900Z.log) — NumPy 801.6, native 188.9, NPU epilogue ~121 ms per 2048 document.
 - [GeGLU epilogue, all modes, one eligible sitting](embedgemma_gemm_epilogue_allmodes_desktop2_20261019T002827Z.log) — supersedes the per-mode logs above (exit 1/139, cross-sitting).
 - [W4 RTN g128 CPU emulation, FAIL](embedgemma_w4_g128_numerics_cpu_desktop2_20261019T003002Z.json) — cos min 0.9502, NN 82.1%.
+- GEMM transport probe: [hollow](embedgemma_gemm_transport_hollow_desktop2_20261019T003621Z.log), [real](embedgemma_gemm_transport_real_desktop2_20261019T003634Z.log) — hollow is 95-97% of real: transport-bound.

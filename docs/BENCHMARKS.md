@@ -25381,3 +25381,28 @@ path with bf16 weights PASSES at 0.99999+. So plain RTN W4 changes this model fa
 held to. No device W4 code was written: the quality bar and quantization method W4 must meet are the owner's call.
 Candidates, none run: a finer group, calibrated methods (GPTQ / AWQ), or keeping the most sensitive products in
 bf16, each chosen on documents other than the gate set.
+
+#### The weight GEMMs are transport-bound: removing every MAC leaves 95-97% of the time (2026-10-19, Desktop 2)
+
+- **The probe.** A hollow build (`whole_array_generic.py --hollow-matmul`,
+  [`nomatmul.cc`](../kernels/gemm_generic/nomatmul.cc)) links a no-op in place of `matmul`. Every DMA, lock and
+  object-FIFO step is kept; only the MACs go.
+- **The run.** Hollow and real ran back to back, both exit 0 and `timing_eligible`, no foreign context:
+  [hollow](../results/aie/embedgemma_gemm_transport_hollow_desktop2_20261019T003621Z.log), [real](../results/aie/embedgemma_gemm_transport_real_desktop2_20261019T003634Z.log).
+
+| M | Hollow forward pass | Real | Hollow / real |
+|---|---:|---:|---:|
+| 256 | 61.3 ms | 63.8 ms | 96% |
+| 512 | 94.2 ms | 97.6 ms | 97% |
+| 2048 | 320.5 ms | 335.9 ms | 95% |
+
+- **This refutes "compute-bound at M >= 256"** for this design. The measured 1.1-1.7 TFLOPS (15-23% of the
+  7.4 TFLOPS bf16 peak at 1.80 GHz) is a data-movement ceiling, not a MAC one.
+- **Traffic per gate|up call at M = 2048, DERIVED from the tiling, not measured:**
+  - A re-streamed per 256-column block: about 32 MB.
+  - B re-streamed per 128-row block: about 64 MB.
+  - C in f32: about 32 MB.
+  - In all about 128 MB in 4.9 ms, about 26 GB/s.
+- **What binds is not identified.** It could be DDR or NoC bandwidth, or MemTile or stream overhead.
+- **What follows.** Cutting bytes should speed these products up: W4 B (64 -> 16 MB), a bf16 C (32 -> 16 MB), or
+  a larger M block per B read. That is DERIVED until a build measures it.

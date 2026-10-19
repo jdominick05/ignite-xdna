@@ -91,6 +91,7 @@ def _build_design(
     rtp_generic=False,  # local change
     epilogue_src="",  # local change
     epilogue_mode=0,  # local change
+    hollow_src="",  # local change: timing probe, a no-op in matmul's place
     *,
     generate_taps=False,
 ):
@@ -296,6 +297,9 @@ def _build_design(
              for col in range(n_aie_cols)] for row in range(n_aie_rows)] if rtp_generic else None
     barriers = [[WorkerRuntimeBarrier() for _ in range(n_aie_cols)] for _ in range(n_aie_rows)] if rtp_generic else None
 
+    if hollow_src:  # local change: every DMA/lock step kept, the MACs dropped (output wrong by construction)
+        matmul_kernel = ExternalFunction("egemm_nomatmul", source_file=str(hollow_src),
+                                         arg_types=[A_l1_ty, B_l1_ty, C_l1_ty], include_dirs=[config.cxx_header_path()])
     workers = Worker.grid(
         n_aie_rows,
         n_aie_cols,
@@ -467,6 +471,7 @@ def whole_array(
     rtp_generic: CompileTime[bool] = False,  # local change
     epilogue_src: CompileTime[str] = "",  # local change
     epilogue_mode: CompileTime[int] = 0,  # local change
+    hollow_src: CompileTime[str] = "",  # local change
 ):
     return _build_design(
         iron.get_current_device(),
@@ -488,6 +493,7 @@ def whole_array(
         rtp_generic,  # local change
         epilogue_src,  # local change
         epilogue_mode,  # local change
+        hollow_src,  # local change
     )
 
 
@@ -550,6 +556,7 @@ def _make_argparser():
     )
     p.add_argument("--epilogue-src", default="", help="local change: link egemm_epilogue(c, mode) from this file")
     p.add_argument("--epilogue-mode", type=int, default=0, help="local change: the mode this shape's call runs")
+    p.add_argument("--hollow-matmul", default="", help="local change: timing probe, link this no-op in matmul's place")
     p.add_argument(
         "--c-single-buffer",
         type=int,
@@ -645,6 +652,7 @@ def _compile_kwargs(opts):
         rtp_generic=bool(opts.rtp_generic),  # local change
         epilogue_src=opts.epilogue_src,  # local change
         epilogue_mode=opts.epilogue_mode,  # local change
+        hollow_src=opts.hollow_matmul,  # local change
     )
 
 
@@ -704,6 +712,7 @@ def _run_and_verify(opts):
         rtp_generic=bool(opts.rtp_generic),  # local change
         epilogue_src=opts.epilogue_src,  # local change
         epilogue_mode=opts.epilogue_mode,  # local change
+        hollow_src=opts.hollow_matmul,  # local change
         warmup=opts.warmup,
         iters=opts.iters,
     )
