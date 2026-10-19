@@ -25502,8 +25502,29 @@ All figures are ms per forward pass of weight GEMMs.
 - **W8 went from 474.6 to 348.0 ms at 2048**, now 15% behind bf16 at m = 64 rather than 39%.
 - **m = 64 also makes bf16 11% faster** (340.8 to 302.0).
 - **With the matmul removed, the dequant costs nothing.** It hides under W8's transport (180.4 vs 182.1).
-- **So both builds are core-bound on the matmul kernel** (upstream `mm.cc`): 560 GFLOP in 302 ms is 25% of the
-  7.4 TFLOPS bf16 peak.
+- **Both builds are core-bound.** An interim correction, written the same day and now withdrawn, said "lost
+  overlap, not MAC speed". It compared the L1 matmul estimate against the hollow runs, but those include a fixed
+  cost per dispatch.
+  - **The fit.** Per shape, [`embedgemma_gemm_fit.py`](../tools/embedgemma_gemm_fit.py) gives:
+    real call = **0.34-0.35 ms fixed + 1.16-1.21 x the L1-resident core estimate**. The estimate is `mm.cc` 64x64x64
+    bf16 at 5,427 cycles ([log](../results/aie/l1_tile_mm_direct_64x64x64_desktop2_20260923T0538Z.log)), plus the
+    dequant's static 1,504. The worst residual over 7 shapes is 0.056 ms.
+  - **Per forward pass at M = 2048:** core 243 ms (bf16) and 297 (W8), fixed 50 ms over 148 dispatches. Transport
+    with its fixed part taken out is 208 and 118 ms, below the core in both builds.
+  - **Ruled out:** per-shape imbalance (the sum of per-shape max(transport, core) is 234.7 ms, against 293.9
+    measured). The single-buffered C drain is only 2-4% (m = 32 double-buffered, below).
+  - **Not separated:** what the 1.2x over the L1 bench is (per-K-tile lock and call overhead, bank conflicts).
 - **W8's transport floor is 23% below bf16's** (182.1 vs 236.1).
-- **What a faster matmul would give is DERIVED.** A matmul near its hand-scheduled 86% (SILICON.md) would put W8 at
-  its transport floor, about 180 ms, and bf16 at about 236. Not measured.
+- **The levers, in order of size for W8:**
+  - the matmul kernel (37.9% of peak in L1, and 1.2x slower than that in the design);
+  - the dequant;
+  - about 50 ms of fixed dispatch cost.
+  - W8's transport (118 ms) sits far below its core (297), so a faster matmul is what W8 needs to beat bf16
+    (DERIVED).
+
+| Same-sitting check | M = 512 | 2048 | Log |
+|---|---:|---:|---|
+| bf16 m = 32, C double-buffered | 97.4 | 332.0 | [log](../results/aie/embedgemma_gemm_w8opt_m32cdbf16_desktop2_20261019T013504Z.log) |
+| W8 m = 32, C double-buffered | 116.5 | 410.9 | [log](../results/aie/embedgemma_gemm_w8opt_m32cdw8_desktop2_20261019T013518Z.log) |
+| bf16 m = 64 (repeat) | 93.3 | 292.9 | [log](../results/aie/embedgemma_gemm_w8opt_m64bf16b_desktop2_20261019T013534Z.log) |
+| W8 m = 64 (repeat) | 106.6 | 351.0 | [log](../results/aie/embedgemma_gemm_w8opt_m64w8b_desktop2_20261019T013547Z.log) |

@@ -136,7 +136,7 @@ def cmd_compile(a) -> int:
                 print(f"COMPILE {s.name}: exists", flush=True)
                 continue
             cmd = [sys.executable, str(DESIGN), "--dev", "npu", "-M", str(M), "-K", str(K), "-N", str(padded(N)),
-                   "-m", str(a.tile_m), "-k", str(TILE["k"]), "-n", str(TILE["n"]), "--c-single-buffer", "1",
+                   "-m", str(a.tile_m), "-k", str(TILE["k"]), "-n", str(TILE["n"]), "--c-single-buffer", "0" if a.c_double else "1",
                    "--dtype_in", "bf16", "--dtype_out", "f32", "--xclbin-path", f"{s}.xclbin",
                    "--insts-path", f"{s}.bin", "--rtp-generic"]
             if a.epilogue:
@@ -377,6 +377,7 @@ def main() -> int:
         else:
             p.add_argument("--epilogue", type=Path, help="link this egemm_epilogue source; adds gate|up mode streams")
             p.add_argument("--hollow-matmul", type=Path, help="timing probe: link this no-op in matmul's place")
+            p.add_argument("--c-double", action="store_true", help="double-buffer the C tile (default single)")
             p.add_argument("--tile-m", type=int, default=TILE["m"], help="rows per core tile (32; 64 halves B "
                            "re-streaming and W8 dequant per MAC; the GeGLU epilogue is written for 32)")
             p.add_argument("--w8-dequant", type=Path, help="with --w8: link this egemm_w8_dequant (else none: a probe)")
