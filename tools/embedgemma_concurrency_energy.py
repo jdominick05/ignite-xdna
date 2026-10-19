@@ -7,6 +7,7 @@ energy per document?
 
 Arms, each in its own window after its own idle (pass 2 runs them in reverse order, so drift shows):
   G    tools/embedgemma_gpu_loop.py: llama-server on ROCm0, the GPU baseline's command, one document per request
+       (-fa off, as the baseline; --gpu-fa on runs the same sitting with flash attention)
   N    tools/embedgemma_hybrid.py --loop-go under scripts/research-lowlevel.sh --npu: the best bf16 hybrid
        (fused GeGLU, NPU local attention, native QKV and row ops), its 56-document gate first, then --batch 2 groups
   GN   both, started N first (the wrapper needs a clear host at start), each in its own loop over the same window
@@ -50,6 +51,7 @@ REF = BASE / "hf-fp32-cpu-20261018T174113Z.npz"
 PY = Path.home() / "miniforge3/envs/mlir-aie-iron/python.exe"
 TRIM, MIN_ROWS = 2.0, 10
 LOG_DIR = "results/aie"   # the NPU arms' wrapper logs; --log-dir for a smoke run
+GPU_FA = "off"            # llama-server -fa for the G arms (--gpu-fa); "off" is the GPU baseline's command
 
 
 def npu_cmd(log, go, out):
@@ -64,7 +66,8 @@ def npu_cmd(log, go, out):
 
 
 def gpu_cmd(go, out):
-    return [str(PY), "-I", "tools/embedgemma_gpu_loop.py", "--docs", str(DOCS), "--go", str(go), "--out", str(out)]
+    return [str(PY), "-I", "tools/embedgemma_gpu_loop.py", "--docs", str(DOCS), "--go", str(go), "--out", str(out),
+            "--fa", GPU_FA]
 
 
 def typeperf(samples, path):
@@ -200,15 +203,16 @@ def verdict(passes):
 
 
 def main():
-    global LOG_DIR  # noqa: PLW0603
+    global LOG_DIR, GPU_FA  # noqa: PLW0603
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--passes", type=int, default=2)
     ap.add_argument("--window", type=int, default=60)
     ap.add_argument("--idle", type=int, default=60)
     ap.add_argument("--log-dir", default="results/aie")
+    ap.add_argument("--gpu-fa", choices=["on", "off"], default="off", help="llama-server -fa in the G arms")
     a = ap.parse_args()
-    LOG_DIR = a.log_dir
+    LOG_DIR, GPU_FA = a.log_dir, a.gpu_fa
     if a.out.exists():
         raise FileExistsError(a.out)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -231,7 +235,7 @@ def main():
         passes.append(ps)
     v = verdict(passes)
     print("VERDICT " + json.dumps(v), flush=True)
-    a.out.write_text(json.dumps(dict(stamp=stamp, window_s=a.window, idle_s=a.idle, trim_s=TRIM, verdict=v,
+    a.out.write_text(json.dumps(dict(stamp=stamp, gpu_fa=GPU_FA, window_s=a.window, idle_s=a.idle, trim_s=TRIM, verdict=v,
                                      passes=passes, arms=recs, npu_command=npu_cmd("LOG", "GO", "OUT"),
                                      gpu_command=gpu_cmd("GO", "OUT")), indent=1) + "\n", encoding="utf-8")
     print(a.out)
