@@ -26288,3 +26288,48 @@ Upstream tests this only on npu2 with a full ELF. `tools/reconfig_probe.py` test
   tiles and routes. Designs that differ (other tiles, MemTile programs, stream routes) may depend on that reset.
 - **Not measured:** the real designs. The GEMM and the attention each use 16 cores (about 11 KB of program each)
   plus MemTile and shim configuration, so the stream and its write time grow with that. That is the next probe.
+
+#### Swapping the 16-core GEMM and attention inside one context: about 1 ms a swap, no cheaper than a context switch, and not yet correct (2026-10-19, Desktop 2)
+
+`tools/reconfig_gemm_attn_probe.py` scales the [one-core probe](#one-xdna1-context-can-switch-designs-from-its-instruction-stream-one-core-in-about-002-ms-loadpdi-refused-2026-10-19-desktop-2)
+to the real designs: the weight-resident GEMM (512x512x512) and the fused attention (doc512), each on 16 cores.
+- `aiex.run` cannot inline the GEMM's runtime sequence: it references MemTile `aie.buffer`s, and the
+  materialization pass accepts only tiles and locks.
+- So the host assembles the stream from parts: per-design configuration blobs (an empty `aiex.configure`, expanded,
+  LOADPDI stripped), plus each kernel's own compiled instruction stream, with its DDR_PATCH arguments renumbered
+  onto one 5-buffer kernel call.
+
+One process per plan, with the NPU idle after every plan, in every sitting:
+
+| Plan | Result | Median |
+|---|---|---:|
+| GEMM stream, re-assembled, on its own context | bit-equal | 0.288 ms |
+| attention stream, re-assembled, on its own context | bit-equal | 1.263 ms |
+| GEMM configuration over itself, then GEMM | `ERT_CMD_STATE_TIMEOUT` ([log](../results/aie/reconfig_gemm_attn_probe_desktop2_20261019T122803Z.log); first try [here](../results/aie/reconfig_gemm_attn_probe_desktop2_20261019T122726Z.log): a header bug stopped it before the merged stream reached the device) | n/a |
+| GEMM, then attention; and GEMM, attention, GEMM | `ERT_CMD_STATE_TIMEOUT` (same log) | n/a |
+| attention configuration over itself, then attention | completes, **output not bit-equal** ([log](../results/aie/reconfig_gemm_attn_isolate_desktop2_20261019T122939Z.log)) | 2.171 ms |
+| GEMM configuration alone, 331 KB | completes | 1.020 ms |
+| attention configuration alone, 280 KB | completes | 0.931 ms |
+
+**Cost model** ([log](../results/aie/reconfig_gemm_attn_cost_desktop2_20261019T123045Z.log), configuration writes alone, median of 20):
+
+| Written | GEMM | attention |
+|---|---:|---:|
+| everything | 330,960 B, 1.022 ms | 280,320 B, 0.897 ms |
+| without core program memory | 101,072 B, 0.449 ms | 101,120 B, 0.443 ms |
+| DMA, locks and routes only (no program or data memory) | 34,832 B, 0.282 ms | 35,328 B, 0.257 ms |
+
+- **Configuration writes run at about 0.4 GB/s** (DERIVED: 229,888 B of program memory cost 0.573 ms).
+- **A full 16-core swap costs about 1 ms**, the same as a context switch (1.0-1.4 ms).
+- **A swap that kept both programs and their data resident** would write only the ~35 KB of DMA, locks and routes:
+  0.26-0.28 ms per stream including the dispatch, against ~0.13 ms for an empty one-core call.
+- **That does not fit on this array.** Per core the GEMM's program is ~14.4 KB and the attention's ~11.2 KB, with
+  16 KB of program memory. Each design also writes ~4 KB of data memory per core.
+- **Correctness: unexplained.** Rewriting a live 16-core design hangs (GEMM) or gives wrong output (attention).
+  The one-core probe was correct without the LOADPDI that was stripped, which is an empty-device reset. The
+  candidate is that cores, DMA queues and lock values left by the running design need that reset at this scale.
+  It is not isolated.
+- **Consequence for the VM:** swapping whole 16-core designs inside one context saves nothing over the broker's
+  context switches. What remains:
+  - designs that share the array by columns (no swap at all);
+  - kernels small enough to stay resident together, so only the ~35 KB of DMA state changes.
