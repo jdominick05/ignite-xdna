@@ -4539,11 +4539,12 @@ corpus, queries, qrels), never the gate documents.
   substitutions are gated separately and are common to both formats.
 - **On a fail, stop and report.**
 
-- **No weight-resident (B-stationary) generic GEMM (2026-10-19).** Reading B once per product instead of once per
-  256-row block is exact, but on 2048x512x4096 it cut 29% of the bytes and 3% of the no-MAC time, and the real call
-  was 15% slower (3.643 against 3.155 ms). It also needs one xclbin per (M, K), and switching contexts costs about
-  1.5 ms per call. Reopen only once what binds the m64 GEMM is identified and it is B's DDR reads
-  ([BENCHMARKS](BENCHMARKS.md#weight-resident-b-is-exact-and-not-faster-the-b-re-reads-do-not-bind-the-m64-gemm-2026-10-19-desktop-2)).
+- **Weight-resident (B-stationary) generic GEMM, as one xclbin (2026-10-19).** Reading B once per product,
+  with one n-tile's task group kept in flight, is exact and cut 2048x512x4096 from 3.485 to 2.932 ms (no MACs: 3.435
+  to 2.359). Switching contexts costs 1.0-1.4 ms per call, so one xclbin per (M, K) is ruled out. The MemTile B path
+  goes in the runtime sequence instead. An earlier entry here rejected the approach; its measurement had every
+  n-tile's drains awaited before the next was issued, and it is superseded
+  ([BENCHMARKS](BENCHMARKS.md#weight-resident-b-with-one-task-group-in-flight-16-faster-and-exact-so-the-b-re-reads-did-bind-2026-10-19-desktop-2)).
 - **No hand-scheduled bf16 GEMM kernel for the generic GEMM while it is transport-bound (2026-10-19).** The hollow m64
   build (no MACs) runs the forward-pass GEMMs in 231.0 ms at M = 2048, the same as the owned `mm_bf16.cc`
   (230.0). A faster core cannot move the device time; reopen only if the transport floor drops below the kernel's

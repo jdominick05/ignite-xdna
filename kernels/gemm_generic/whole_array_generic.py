@@ -443,8 +443,9 @@ def _build_design(
                     barriers[row][col].set(1)
         if b_resident:  # local change: per column n-tile j, its B strip once; A and C over every row block
             J, rb = N // n // n_aie_cols, M // (m * n_aie_rows)
-            tg = TaskGroup()
+            prev = None  # one n-tile's group stays in flight while the next is issued (awaiting each drains the pipe)
             for jj in range(J):
+                tg = TaskGroup()
                 for col in range(n_aie_cols):
                     nb = col + jj * n_aie_cols  # this column's jj-th n-tile
                     C_hs[col].drain(C, tap=TensorAccessPattern((M, N), nb * n, [1, rb, m * n_aie_rows, n],
@@ -454,10 +455,10 @@ def _build_design(
                                                                   [m * n_aie_rows * K, k, K, 1]), group=tg)
                     B_hs[col].fill(B, tap=TensorAccessPattern((K, N), nb * n, [1, K // k, k, n], [0, k * N, N, 1]),
                                    group=tg)
-                if jj > 0:
-                    tg.finish()
-                    tg = TaskGroup()
-            tg.finish()
+                if prev is not None:
+                    prev.finish()
+                prev = tg
+            prev.finish()
             return
         c_index = 0
         tg = TaskGroup()

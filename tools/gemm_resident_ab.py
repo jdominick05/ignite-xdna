@@ -49,6 +49,7 @@ def main():
     ap.add_argument("-K", type=int, required=True)
     ap.add_argument("-N", type=int, required=True)
     ap.add_argument("--calls", type=int, default=30)
+    ap.add_argument("--timing-only", action="store_true", help="no-MAC builds: report the check, do not fail on it")
     a = ap.parse_args()
     sys.path.insert(0, "C:/Xilinx/XRT/xrt_sdk/xrt/python")
     import pyxrt
@@ -113,9 +114,9 @@ def main():
     bit = bool(np.array_equal(r1.view(np.uint32), g.view(np.uint32)))
     rep = bool(np.array_equal(r1.view(np.uint32), r2.view(np.uint32)))
     ndiff = int((r1.view(np.uint32) != g.view(np.uint32)).sum())
-    ok = bit and rep and err < 1e-3
+    ok = (bit and rep and err < 1e-3) or a.timing_only
     print(f"CHECK resident vs generic: bit-equal {bit} ({ndiff} of {r1.size} words differ), repeat bit-equal {rep}, "
-          f"rel err vs fp32 {err:.2e}: {'PASS' if ok else 'FAIL'}", flush=True)
+          f"rel err vs fp32 {err:.2e}: {'NOT A CHECK (--timing-only)' if a.timing_only else 'PASS' if ok else 'FAIL'}", flush=True)
     res = dict(shape=[M, K, N], bit_equal=bit, repeat_equal=rep, rel_err=err, ok=ok)
     for name in arms:
         for _ in range(3):

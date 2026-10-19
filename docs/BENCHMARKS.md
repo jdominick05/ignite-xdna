@@ -25913,11 +25913,17 @@ read N/256 times, B M/256 times (8 at M = 2048), and C is written once in f32.
   against 231** (the iGPU's GEMMs: 177).
 - **A higher DMA rate** (more shim channels busy, toward the 47.6 GB/s ceiling) would cut it further.
 - **Not measured:** whether the reordered loop keeps the rate, and whether the MemTile buffers fit once allocated.
-- **Superseded for the B row (measured the same day):** B resident is exact but saves 3% of a hollow call, not
-  the ~29% this model predicts for 2048x512x4096, so the B re-reads are not what binds
-  ([below](#weight-resident-b-is-exact-and-not-faster-the-b-re-reads-do-not-bind-the-m64-gemm-2026-10-19-desktop-2)). The ~56 ms and the 116 ms total no longer stand.
+- **The B row, measured the same day:** with one task group in flight, B resident cuts the no-MAC 2048x512x4096
+  call 31% for the 29% of bytes this model removes, so the model holds for B on that shape
+  ([measured](#weight-resident-b-with-one-task-group-in-flight-16-faster-and-exact-so-the-b-re-reads-did-bind-2026-10-19-desktop-2)).
+  A first build that awaited every n-tile read 3% and was briefly taken to refute it.
 
 #### Weight-resident B is exact and not faster: the B re-reads do not bind the m64 GEMM (2026-10-19, Desktop 2)
+
+> **Superseded the same day** ([below](#weight-resident-b-with-one-task-group-in-flight-16-faster-and-exact-so-the-b-re-reads-did-bind-2026-10-19-desktop-2)). This build's runtime sequence awaited every n-tile's C drains
+> before issuing the next n-tile (64 awaits per call against the generic build's 16), so nothing was in flight at
+> 16 boundaries and the strip never prefetched. The conclusion "B re-reads do not bind" came from that confound, and
+> the four contexts open at once put the real build below the no-MAC build. The numbers below stay as measured.
 
 `whole_array_generic.py --b-resident 1` keeps each column's K x 64 B strip in its MemTile (depth 2 at K = 512) and
 re-sends it to the column's cores once per 256-row block (`ObjectFifo` `repeat_count` = M / 256, a compile-time
@@ -25948,3 +25954,25 @@ unchanged. [`gemm_resident_ab.py`](../tools/gemm_resident_ab.py) opened four con
 - **Switching contexts is expensive:** calls alternating between the generic and resident contexts take 4.674 and
   5.129 ms, 1.5 ms more each. A per-(M, K) xclbin set would add about that per switch, so that form of Stage B is
   out regardless.
+
+#### Weight-resident B with one task group in flight: 16% faster and exact, so the B re-reads did bind (2026-10-19, Desktop 2)
+
+The [build above](#weight-resident-b-is-exact-and-not-faster-the-b-re-reads-do-not-bind-the-m64-gemm-2026-10-19-desktop-2) changed two things at once: B residency and
+the barrier structure. This one keeps one n-tile's task group in flight. It issues n-tile j, then awaits j - 1, so the
+awaits fall after the next group's starts, checked in the lowered MLIR. Two sittings, two contexts each, NPU idle
+before and after, host load CLEAR, 2048x512x4096:
+
+| Sitting | generic ms/call | resident ms/call | change | DDR MB per call (DERIVED) |
+|---|---:|---:|---:|---:|
+| owned kernel ([log](../results/aie/embedgemma_gemm_bresident_rot_real_2048x512x4096_desktop2_20261019T070153Z.log)) | 3.485 | 2.932 | -16% | 100.7 -> 71.3 |
+| no MACs ([log](../results/aie/embedgemma_gemm_bresident_rot_hollow_2048x512x4096_desktop2_20261019T070225Z.log)) | 3.435 | 2.359 | -31% | 100.7 -> 71.3 |
+
+- **Exact:** the resident C equals the generic C in all 8,388,608 words, repeats bit-equal, rel err 4.7e-07.
+- **B's DDR reads did bind.** The no-MAC call fell 31% for 29% fewer bytes.
+  - An earlier no-MAC sitting ([log](../results/aie/embedgemma_gemm_bresident_rot_hollow_2048x512x4096_desktop2_20261019T070159Z.log)) read 3.422 / 2.360 ms. It exited 1 only because the
+    runner then judged the meaningless no-MAC check, which marked it timing-ineligible; `--timing-only` fixes that.
+- **The real build is now core-bound on this shape:** 2.932 ms against a 2.359 ms floor.
+- **Switching contexts costs 1.0-1.4 ms per call:** alternating calls take 4.667 / 4.217 ms (real) and
+  4.874 / 3.873 ms (no MACs). Stage B therefore needs one xclbin: B's MemTile path as runtime-sequence BDs, so the
+  repeat count and strip length live in each shape's `.bin`. The per-(M, K) xclbin form is ruled out.
+- **Not measured:** the other six shapes, and whole forward passes.
