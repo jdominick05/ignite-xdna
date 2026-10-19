@@ -26037,7 +26037,18 @@ word:
   ([above](#byte-accounting-of-the-m64-gemm-it-moves-24x-the-minimum-and-its-floor-can-drop-from-231-to-about-116-ms-2026-10-19-desktop-2))
   came out as 21.7 ms at 2048. The 2048x512x4096 shape is now core-bound (2.687 ms against its 2.359 ms no-MAC
   floor, measured on the compile-time form), and no no-MAC build of this form has been timed.
-- **Not run:** the end-to-end hybrid on this build; it needs the hybrid to upload swizzled B.
+- **End to end** (`embedgemma_hybrid.py --npu-b-resident`, which uploads B swizzled): one sitting, same flags
+  (batch 4, GeGLU 6, npu-local attention, native passes), both timing-eligible
+  ([resident](../results/aie/embedgemma_hybrid_bres_m64_desktop2_20261019T075635Z.log), [owned m64](../results/aie/embedgemma_hybrid_owned_m64_desktop2_20261019T075708Z.log)):
+
+  | Build | 128 | 512 | 2048 ms/doc | npu_call at 2048 |
+  |---|---:|---:|---:|---:|
+  | resident | 84.6 | 246.7 | 1360.8 | 278.4 |
+  | owned m64 | 84.2 | 257.9 | 1385.2 | 323.7 |
+
+  - Both gates PASS (cos min 0.9999883, NN 100%), and the 56 embeddings are bit-equal between the two builds.
+  - The GEMM saving shows at 512 (-4.3%) and 2048 (-1.8%) per document. At 2048 the document is dominated by
+    attention and host work.
 
 **How it was debugged** (each step one variable; the logs are the record):
 1. **Six hangs.** The first builds hung on every shape
