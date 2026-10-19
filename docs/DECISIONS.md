@@ -778,7 +778,10 @@ The measurement and verdict will be folded into BENCHMARKS after the run.
   `results/bench/diag_dml_node_placement.log`.
 
 - Small language models on this NPU: unsupported by the vendor support matrix (no
-  BF16, no NLP path on XDNA1). Scope redirected to CNN inference.
+  BF16, no NLP path on XDNA1). Scope redirected to CNN inference. **Reopened 2026-10-19 for the
+  engine's own path, not the vendor's:** a SmolLM2-135M token's 121 weight projections run exact
+  on the whole array in one dispatch, 8.19–8.42 ms at 32–33 GB/s (BENCHMARKS, "Small-LLM decode,
+  step 1"). The vendor statement still stands: Ryzen AI ships no LLM path for XDNA1.
 - Ryzen AI 1.8.0 for inference: no Phoenix xclbin (see locked #1).
 - Driver-resolved firmware (no xclbin) on Phoenix: compiles for Strix, DPU timeout.
 - Driver xclbins from `System32\AMD` with the 1.8 EP: fingerprint mismatch.

@@ -138,6 +138,15 @@ Reusable source and replay instructions live in
 | [transformer_bf16_resident_replay_20261018.log](transformer_bf16_resident_replay_20261018.log), [structured replay](transformer_bf16_resident_replay_20261018.json) | E2B/E4B/E2B/E4B in one resident session: repeat tensors bit-identical, no new warm contexts; E4B numerical failure retained; not live throughput |
 | [transformer_bf16_e2b_matrix_full_20261018.log](transformer_bf16_e2b_matrix_full_20261018.log), [structured E2B check](transformer_bf16_e2b_matrix_full_20261018.json) | E2B-only follow-up: 8/12 numerical passes, 11/12 reference greedy tokens match; failed qualification remains open |
 
+## Small-LLM decode: the whole-array M=1 GEMV (2026-10-19, Desktop 2)
+
+Backs [Small-LLM decode, step 1](../../docs/BENCHMARKS.md#small-llm-decode-step-1-a-tokens-smollm2-135m-projections-run-exact-on-the-whole-array-819842-ms-in-one-dispatch-at-3233-gbs-2026-10-19-desktop-2).
+
+| Log | Evidence |
+|---|---|
+| [llm_gemv_exact_desktop2_20261019T194800Z.log](llm_gemv_exact_desktop2_20261019T194800Z.log) | `--checks-only`: SmolLM2-135M's 121 projections exact to the exp_sum oracle in all three dispatch arms, seeds 0 and 1; no timing claim |
+| [llm_gemv_probe_desktop2_20261019T194822Z.log](llm_gemv_probe_desktop2_20261019T194822Z.log) | The timed sitting: exactness again, then one token's projections per projection (121 dispatches), per layer (31) and per token (1), 2 rounds; `timing_eligible: true` |
+
 ## Cross-audit against Hello XDNA! (2026-09-23, Desktop 2)
 
 This repo checked against Steinert and Breuer's [Hello XDNA!](https://tnzr.org/xdna/), the XDNA1 ISA

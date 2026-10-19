@@ -3687,6 +3687,63 @@ NPU INSIDE.**
 - The 780M's clocks under a duty cycle.
 - Other read paths, thread counts and dtypes.
 
+### Small-LLM decode, step 1: a token's SmolLM2-135M projections run exact on the whole array, 8.19–8.42 ms in one dispatch at 32–33 GB/s (2026-10-19, Desktop 2)
+
+The 7B decode above is killed by DDR bandwidth. A 135M model is not: SmolLM2-135M-Instruct reads 269 MB of bf16
+weights per token. The open question for running a small LLM with every neural op on the NPU was whether an M=1
+projection could stream those weights through compute cores near the 47.62 GB/s that the bare read probe reached,
+and what dispatch overhead adds. Nothing in the repo did an M=1 projection across the array before this.
+
+**The kernel** (`kernels/llm_gemv`, ignite-xdna `945dfa44`):
+- **Layout:** 16 cores behind that probe's 8-channel layout. Per column, 2 shim MM2S feed a MemTile split to 4 cores,
+  which join back into 1 shim S2MM.
+- **Weights** are packed once into a resident 269 MB arena, as mmul<4,8,4> tiles of 12 outputs × 192 inputs.
+- **x** rides as each call's first object on every core, so one xclbin serves every shape.
+- **Arithmetic:** fp32 accumulation over all of K, then one round-to-nearest-even to bf16.
+
+**The run** (`tools/llm_gemv_probe.py`, run from `a90ace35`):
+- **Projections:** one token's 121 projections use the model's real weights: 30 layers × {qkv 960×576, o 576×576,
+  gate+up 3072×576, down 576×1536}, plus the tied 49152×576 head.
+- **Arms:** the 121 projections are issued three ways:
+  - **A** one dispatch per projection (121), each on an XRT sub-buffer at its matrix;
+  - **B** one per layer (31);
+  - **C** one per token (1).
+- **Timing:** 3 warm-up and 20 timed tokens per arm, in 2 rounds.
+- **Witnesses:** host load CLEAR, `xrt-smi` idle before and after, and no foreign context or peer during the run
+  (`timing_eligible: true`).
+
+**Exact.** Every projection equals the oracle bit for bit: the same 8-wide MAC walk under `engine_bf16_emulator`'s
+`exp_sum` model (`kernels/llm_gemv/oracle.py`). That holds in all three arms, for x seeds 0 and 1: 247 checks per seed,
+0 mismatched elements, in a `--checks-only` run
+([log](../results/aie/llm_gemv_exact_desktop2_20261019T194800Z.log)) and again at the start of the timed sitting
+([log](../results/aie/llm_gemv_probe_desktop2_20261019T194822Z.log)). Against float64 the oracle's median relative
+error is 1.3–1.45e-3 (the size of bf16's final rounding), so an exact match is not a match to garbage.
+
+| Arm | Dispatches per token | Median ms per token, round 1 / 2 | Min | GB/s (weights) | Projections-only tok/s |
+|---|---|---|---|---|---|
+| A, per projection | 121 | 20.041 / 19.834 | 19.598 | 13.42 / 13.56 | 49.9 / 50.4 |
+| B, per layer | 31 | 11.360 / 11.295 | 11.222 | 23.68 / 23.81 | 88.0 / 88.5 |
+| **C, per token** | **1** | **8.416 / 8.188** | **8.110** | **31.96 / 32.85** | **118.8 / 122.1** |
+
+**What it says:**
+- **Dispatch count matters:** about 0.1 ms per extra dispatch (DERIVED). (A − C) / 120 = 0.097 ms in both rounds,
+  and (B − C) / 30 = 0.10 ms.
+- **The decode is worth building.** The plan's stop line was a projections-only ceiling under 15 tok/s; arm C sits at
+  about 120. A whole token issued as one dispatch is the shape the decoder should take.
+- **Arm C reads 32–33 GB/s, 69% of the 47.62 GB/s read probe.** This is **unexplained**, and the candidates are not
+  separated yet:
+  - the drain at each projection's end: each of the 121 awaits its outputs before the next reuses the shim BDs;
+  - the two small projections per layer (o and down, 0.66 MB each), where fixed per-call costs weigh most;
+  - the MemTile split giving each core half a channel;
+  - x traffic, about 74 KB per call and 9 MB per token, about 3% (DERIVED).
+
+**What this does not establish:**
+- **Any decode.** Nothing feeds one projection's output into the next. x is one random vector per shape, reused by
+  every layer. There is no attention, norm, RoPE, SiLU or argmax yet.
+- **A decode rate.** The tok/s column is a ceiling for the projections alone, not a rate.
+- **Power,** **other weight dtypes,** **other machines.**
+- **The 5.7 ms bandwidth floor** stays DERIVED: 269 MB at 47.62 GB/s.
+
 ### Gemma 3 4B decode on the CPU and DirectML: INCOMPLETE in both sittings on the page-in witness, and the three complete arms decode at 10.8–17.6 tok/s (2026-09-24, Desktop 2)
 
 The question, (c) of the Gemma plan with its rule (d)
