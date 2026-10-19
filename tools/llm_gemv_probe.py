@@ -30,7 +30,6 @@ import argparse
 import gc
 import json
 import statistics
-import struct
 import subprocess
 import sys
 import time
@@ -43,11 +42,11 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "src"))
 
 from kernels.llm_gemv import oracle, pack  # noqa: E402
+from kernels.llm_gemv.reference import MODEL, model_file, safetensors  # noqa: E402,F401
 
 # v2: x at the front of a call's first object and the header at its end, so a call can chain on an earlier output.
 # The step-1 sitting's builds (header first) stay in build/llm_gemv, as its log recorded them.
 BUILD = ROOT / "build" / "llm_gemv_v2"
-MODEL = "HuggingFaceTB/SmolLM2-135M-Instruct"
 LAYERS, HIDDEN, MLP, VOCAB, KV = 30, 576, 1536, 49152, 192
 SHAPES = {"qkv": (HIDDEN + 2 * KV, HIDDEN), "o": (HIDDEN, HIDDEN), "gu": (2 * MLP, HIDDEN),
           "down": (HIDDEN, MLP), "head": (VOCAB, HIDDEN)}
@@ -93,33 +92,6 @@ def matrix_offset(layer, shape):
 
 
 # ---------------------------------------------------------------------------- weights
-
-def safetensors(path):
-    """name -> uint16 array of bf16 bits, read with numpy alone (the iron env has no safetensors package)."""
-    raw = Path(path).read_bytes()
-    n = struct.unpack("<Q", raw[:8])[0]
-    head = json.loads(raw[8:8 + n])
-    base = 8 + n
-    out = {}
-    for name, meta in head.items():
-        if name == "__metadata__":
-            continue
-        if meta["dtype"] != "BF16":
-            raise ValueError(f"{name}: {meta['dtype']}, expected BF16")
-        a, b = meta["data_offsets"]
-        out[name] = np.frombuffer(raw, np.uint16, (b - a) // 2, base + a).reshape(meta["shape"])
-    return out
-
-
-def model_file():
-    """The cached model.safetensors (fetch it once with ``hf download HuggingFaceTB/SmolLM2-135M-Instruct``)."""
-    import os
-    home = Path(os.environ.get("HF_HOME", Path.home() / ".cache" / "huggingface"))
-    found = sorted((home / "hub" / ("models--" + MODEL.replace("/", "--")) / "snapshots").glob("*/model.safetensors"))
-    if len(found) != 1:
-        raise SystemExit(f"expected one cached {MODEL} snapshot under {home}, found {len(found)}")
-    return found[0]
-
 
 def matrices(path):
     """(layer, shape) -> uint16 [N][K], the projection as y = W x."""

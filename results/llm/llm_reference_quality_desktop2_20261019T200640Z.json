@@ -1,0 +1,150 @@
+{
+ "model": "HuggingFaceTB/SmolLM2-135M-Instruct",
+ "tokens": 128,
+ "reference_mode": "fast (float64 sums, one rounding)",
+ "prompts": [
+  {
+   "prompt": "What is the capital of France? Answer in one sentence.",
+   "prompt_tokens": 42,
+   "ref_seconds": 3.6,
+   "ref_vs_fp32": {
+    "match": 8,
+    "of": 8,
+    "first_divergence": null
+   },
+   "ref_vs_bf16": {
+    "match": 8,
+    "of": 8,
+    "first_divergence": null
+   },
+   "bf16_vs_fp32": {
+    "match": 8,
+    "of": 8,
+    "first_divergence": null
+   },
+   "ref_text": "The capital of France is Paris.<|im_end|>",
+   "fp32_text": "The capital of France is Paris.<|im_end|>",
+   "bf16_text": "The capital of France is Paris.<|im_end|>"
+  },
+  {
+   "prompt": "Write a short poem about the ocean.",
+   "prompt_tokens": 38,
+   "ref_seconds": 13.1,
+   "ref_vs_fp32": {
+    "match": 8,
+    "of": 128,
+    "first_divergence": 5
+   },
+   "ref_vs_bf16": {
+    "match": 16,
+    "of": 128,
+    "first_divergence": 13
+   },
+   "bf16_vs_fp32": {
+    "match": 12,
+    "of": 128,
+    "first_divergence": 5
+   },
+   "ref_text": "The ocean's a vast, ethereal realm,\nA vast, ethereal realm, where the sky and the sea\nA place of endless wonder, where the stars shine bright,\nA place of mystery, where the sea and the sky blend\n\nThe ocean's a place of endless wonder, where the sky and the sea\nA place of endless mystery, where the stars shine bright,\nA place of mystery, where the sea and the sky blend\nA place of endless wonder, where the sky and the sea shine bright\n\nThe ocean's a place of endless wonder, where the sky and the sea\n",
+   "fp32_text": "The ocean's a vast and mysterious sea,\nA realm of endless blue, where the waves crash,\nA place of wonder and awe, where the sun dips,\nA place where the stars shine bright,\n\nThe ocean's a place of endless possibility,\nWhere the tides rise and fall,\nA place of endless beauty, where the sea meets the sky,\nA place where the ocean's secrets are hidden,\n\nThe ocean's a place of mystery and awe,\nWhere the creatures of the sea roam,\nA place where the ocean's secrets are known,\nA place where the ocean's mysteries are",
+   "bf16_text": "The ocean's a vast, ethereal realm,\nA realm of endless blue, where the waves crash,\nA place of wonder, where the stars shine bright,\nA place of mystery, where the tides roll,\n\nThe ocean's a mirror, reflecting the sky above,\nA canvas of colors, where the sun's rays dance,\nA place of endless possibility, where dreams unfold,\nA place of endless beauty, where the sea's secrets are known.\n\nThe ocean's a place of wonder, where the tides rise and fall,\nA place of mystery, where the sea's secrets are hidden"
+  },
+  {
+   "prompt": "Explain what a neural network is to a ten-year-old.",
+   "prompt_tokens": 44,
+   "ref_seconds": 13.7,
+   "ref_vs_fp32": {
+    "match": 7,
+    "of": 128,
+    "first_divergence": 6
+   },
+   "ref_vs_bf16": {
+    "match": 35,
+    "of": 128,
+    "first_divergence": 28
+   },
+   "bf16_vs_fp32": {
+    "match": 7,
+    "of": 128,
+    "first_divergence": 6
+   },
+   "ref_text": "Imagine you have a big box of toys, and you want to help your friend find the perfect toy. A neural network is like a special machine that can help you find the perfect toy. It's like a super-smart assistant that can learn and remember how to find the toy.\n\nThe neural network is like a big, smart computer that can learn from lots of different toys. It's like a big, smart computer that can learn how to find the toy. It's like a super-smart assistant that can learn how to find the toy.\n\nThe neural network is like a big, smart computer that can learn how",
+   "fp32_text": "Imagine you have a big box full of different toys, like cars, dolls, and blocks. A neural network is like a super-smart toy box that can learn and remember things. It's like a computer program that can understand what you want to do with the toys and make it happen.\n\nThe neural network is like a special kind of computer program that can learn and remember things. It's like a big, smart computer that can look at all the toys and see what they like. It can see what toys are good for, what toys are bad for, and what toys are just like them.\n\nThe neural network",
+   "bf16_text": "Imagine you have a big box of toys, and you want to help your friend find the perfect toy. A neural network is like a special box that helps your friend find the perfect toy.\n\nThe box has lots of toys, but it's not just any box. It's a special box that uses special computers to help your friend find the perfect toy. These computers are like super-smart helpers that can look at all the toys and find the one that's the best for your friend.\n\nThe box has a special \"smart\" part that looks like a little computer. This computer is like a brain that helps the box"
+  },
+  {
+   "prompt": "List three uses for a paperclip.",
+   "prompt_tokens": 38,
+   "ref_seconds": 11.0,
+   "ref_vs_fp32": {
+    "match": 77,
+    "of": 103,
+    "first_divergence": 57
+   },
+   "ref_vs_bf16": {
+    "match": 103,
+    "of": 103,
+    "first_divergence": null
+   },
+   "bf16_vs_fp32": {
+    "match": 77,
+    "of": 103,
+    "first_divergence": 57
+   },
+   "ref_text": "Here are three uses for a paperclip:\n\n1. **Paperclip for Writing**: A paperclip can be used to write on a piece of paper, making it a versatile tool for writing.\n\n2. **Paperclip for Cutting**: A paperclip can be used to cut a piece of paper, making it a useful tool for cutting paper.\n\n3. **Paperclip for Cutting**: A paperclip can be used to cut a piece of paper, making it a useful tool for cutting paper.<|im_end|>",
+   "fp32_text": "Here are three uses for a paperclip:\n\n1. **Paperclip for Writing**: A paperclip can be used to write on a piece of paper, making it a versatile tool for writing.\n\n2. **Paperclip for Cutting**: A paperclip can be used to cut paper, making it a useful tool for cutting paper or other materials.\n\n3. **Paperclip for Cutting**: A paperclip can be used to cut paper, making it a useful tool for cutting paper or other materials.<|im_end|>",
+   "bf16_text": "Here are three uses for a paperclip:\n\n1. **Paperclip for Writing**: A paperclip can be used to write on a piece of paper, making it a versatile tool for writing.\n\n2. **Paperclip for Cutting**: A paperclip can be used to cut a piece of paper, making it a useful tool for cutting paper.\n\n3. **Paperclip for Cutting**: A paperclip can be used to cut a piece of paper, making it a useful tool for cutting paper.<|im_end|>"
+  },
+  {
+   "prompt": "Summarize the water cycle in two sentences.",
+   "prompt_tokens": 40,
+   "ref_seconds": 8.6,
+   "ref_vs_fp32": {
+    "match": 72,
+    "of": 72,
+    "first_divergence": null
+   },
+   "ref_vs_bf16": {
+    "match": 72,
+    "of": 72,
+    "first_divergence": null
+   },
+   "bf16_vs_fp32": {
+    "match": 72,
+    "of": 72,
+    "first_divergence": null
+   },
+   "ref_text": "The water cycle, also known as the hydrologic cycle, is a continuous process by which water circulates through the Earth's atmosphere and environment. It involves the movement of water from the oceans, lakes, rivers, and streams to the atmosphere, where it evaporates into the air, condenses into clouds, and eventually falls back to the Earth as precipitation.<|im_end|>",
+   "fp32_text": "The water cycle, also known as the hydrologic cycle, is a continuous process by which water circulates through the Earth's atmosphere and environment. It involves the movement of water from the oceans, lakes, rivers, and streams to the atmosphere, where it evaporates into the air, condenses into clouds, and eventually falls back to the Earth as precipitation.<|im_end|>",
+   "bf16_text": "The water cycle, also known as the hydrologic cycle, is a continuous process by which water circulates through the Earth's atmosphere and environment. It involves the movement of water from the oceans, lakes, rivers, and streams to the atmosphere, where it evaporates into the air, condenses into clouds, and eventually falls back to the Earth as precipitation.<|im_end|>"
+  }
+ ],
+ "greedy_totals": {
+  "ref_vs_fp32": {
+   "match": 172,
+   "of": 439,
+   "rate": 0.3918
+  },
+  "ref_vs_bf16": {
+   "match": 234,
+   "of": 439,
+   "rate": 0.533
+  },
+  "bf16_vs_fp32": {
+   "match": 176,
+   "of": 439,
+   "rate": 0.4009
+  }
+ },
+ "passage_tokens": 96,
+ "nll": {
+  "hf_fp32": 1.979543924331665,
+  "hf_bf16": 1.977203369140625,
+  "reference": 1.9810655271597524
+ },
+ "perplexity": {
+  "hf_fp32": 7.2394404994624075,
+  "hf_bf16": 7.22251600350591,
+  "reference": 7.250464437500853
+ }
+}

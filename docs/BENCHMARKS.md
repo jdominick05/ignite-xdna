@@ -3757,6 +3757,30 @@ mismatched elements, so no error crept in anywhere along the chain. The step-1 a
 exact again in the same run: 250 checks per seed. No host data moves after the first call. This is still not a
 decoder: there is no norm, attention or activation between the projections.
 
+**The decoder's rounding points keep SmolLM2's quality** (CPU only, `kernels/llm_gemv/reference.py`,
+[log](../results/llm/llm_reference_quality_desktop2_20261019T200640Z.log),
+[record](../results/llm/llm_reference_quality_desktop2_20261019T200640Z.json)). Before any op beyond the projection
+becomes a kernel, a numpy reference fixes what each one will compute:
+- bf16 between every pair of ops, and one rounding per accumulated sum;
+- RMSNorm's scale rounded to bf16;
+- exp, SiLU and the softmax reciprocal as correctly rounded tables indexed by bf16 bits;
+- attention bounded by length, with no −inf mask.
+
+Its fast mode does each sum in float64 with one rounding, which can differ from the exp_sum MAC only in the last bit of
+rare sums. Against Hugging Face on the CPU, 5 chat prompts × 128 greedy tokens and a 96-token passage:
+
+| Comparison | Greedy positions matching | First divergence per prompt |
+|---|---|---|
+| HF bf16 against HF fp32 (the yardstick) | 176 / 439 | none, 5, 6, 57, none |
+| **Reference against HF fp32** | **172 / 439** | none, 5, 6, 57, none |
+| Reference against HF bf16 | 234 / 439 | none, 13, 28, none, none |
+
+Teacher-forced perplexity on the passage: HF fp32 7.239, HF bf16 7.223, **reference 7.250** (+0.15% on fp32). The
+reference departs from fp32 exactly where HF's own bf16 does: the same prompts, at the same positions. Those are
+near-ties on open-ended prompts, and the text stays fluent on both sides. So the rounding points are not the
+problem, and the kernels for these ops can be built to them. The semantics of the scalar steps (RMSNorm's reciprocal
+square root, the table edges at underflow) are not pinned to the bit yet; they will be when their kernels are written.
+
 ### Gemma 3 4B decode on the CPU and DirectML: INCOMPLETE in both sittings on the page-in witness, and the three complete arms decode at 10.8–17.6 tok/s (2026-09-24, Desktop 2)
 
 The question, (c) of the Gemma plan with its rule (d)
