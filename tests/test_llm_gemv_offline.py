@@ -65,11 +65,74 @@ def test_x_slot_is_x_then_the_tail_twice():
     assert slot.shape == (pack.X_SLOT_WORDS,)
     obj = slot[:pack.OBJ_WORDS]
     hdr = obj[-pack.HDR_WORDS:]
-    assert list(hdr[:3]) == [pack.groups(960), pack.chunks(576), 576]
+    assert list(hdr[:5]) == [pack.groups(960), pack.chunks(576), 576, 960, 0]
     assert np.array_equal(obj.view(np.uint16)[:576], x)
     assert np.array_equal(obj[288:], pack.tail(960, 576))       # what a chained call reads from the constant region
     assert not obj[288:-pack.HDR_WORDS].any()
     assert np.array_equal(slot[pack.OBJ_WORDS:], obj)
+
+
+def test_a_residual_slot_is_x_then_h_and_its_header_names_both():
+    x, h = np.arange(1536, dtype=np.uint16), np.arange(576, dtype=np.uint16) + 7
+    obj = pack.x_slot(x, 576, h, pack.F_INIT)[:pack.OBJ_WORDS]
+    hdr = obj[-pack.HDR_WORDS:]
+    assert [hdr[pack.H_G], hdr[pack.H_Q], hdr[pack.H_K], hdr[pack.H_N]] == [3, 8, 1536, 576]
+    assert hdr[pack.H_FLAGS] == pack.F_INIT and hdr[pack.H_INIT_OFF] == 1536 and hdr[pack.H_COPY] == 2112
+    e = obj.view(np.uint16)
+    assert np.array_equal(e[:1536], x) and np.array_equal(e[1536:2112], h)
+    with pytest.raises(ValueError):
+        pack.x_slot(x, 576, None, pack.F_INIT)                 # F_INIT without h
+    with pytest.raises(ValueError):
+        pack.tail(1152, 1536, pack.F_INIT)                     # x and h past the core's buffer
+    with pytest.raises(ValueError):
+        pack.tail(576, 576, 4)                                 # an unknown flag
+
+
+def test_the_cores_residual_rows_are_pack_core_rows():
+    # gemv.cc: base = (core / ROWS) * (N / 4) + g * (ROWS * GROUP) + (core % ROWS) * GROUP, core = c * ROWS + j
+    n = 576
+    for core in range(pack.CORES):
+        for g in range(pack.groups(n)):
+            base = (core // pack.ROWS) * (n // 4) + g * (pack.ROWS * 12) + (core % pack.ROWS) * 12
+            assert pack.core_rows(n, core // pack.ROWS, core % pack.ROWS, g).start == base
+
+
+def test_the_norm_scale_is_the_table_at_the_sums_bits():
+    from kernels.llm_gemv import reference as R
+    assert R.RSQ.dtype == np.uint16 and R.RSQ.size == R.RSQ_SIZE
+    r = em.from_bf16_bits(R.RSQ).astype(np.float64)
+    assert np.all(np.diff(r) <= 0)                             # 1/sqrt is non-increasing in ss
+    rng = np.random.default_rng(5)
+    h = em.from_bf16_bits(bf16(rng, 576, 3.0)).astype(np.float32)
+    ss = em.bf16_bits(em.from_bf16_bits(oracle.gemv(np.tile(em.bf16_bits(h), (4, 1)), em.bf16_bits(h))[:1]))[0]
+    assert R.rscale(h, True) == em.from_bf16_bits(np.uint16(R.RSQ[int(ss) - R.RSQ_BASE]))
+    assert R.rscale(np.zeros(576, np.float32), True) == em.from_bf16_bits(np.uint16(R.RSQ[0]))   # clamped low
+
+
+def test_a_residual_add_is_the_accumulators_start():
+    from kernels.llm_gemv import reference as R
+    rng = np.random.default_rng(6)
+    w, x, h = bf16(rng, (576, 576), 0.05), bf16(rng, 576), bf16(rng, 576)
+    f = lambda b: em.from_bf16_bits(b).astype(np.float32)  # noqa: E731
+    y = em.bf16_bits(R.matvec(f(w), f(x), True, init=f(h)))
+    assert np.array_equal(y, oracle.gemv(w, x, init=h))
+    assert not np.array_equal(y, oracle.gemv(w, x))
+
+
+def test_a_chained_residual_call_reads_x_and_h_from_out_within_16_bds():
+    from kernels.llm_gemv import design, patch
+    n, k = 576, 1536
+    call = design.Call(0, 0, 1000, n, k, x_out=0, flags=pack.F_INIT, h_out=768)
+    tail = call.header().size
+    text = design.harness([call], pack.block_words(n, k), tail, 2000)
+    assert text.count("%o[0,0,0,0][1,1,1,768]") == 16 and text.count("%o[0,0,0,768][1,1,1,288]") == 16
+    assert text.count(f"%x[0,0,0,0][1,1,1,{tail}]") == 16
+    ids = [int(i) for i in __import__("re").findall(r"id = (\d+) : i64", text)]
+    assert max(ids) == 14 and len(set(ids)) == 15
+    roles = [(e[0], e[1]) for e in patch._expected(call)[:7]]
+    assert roles == [("o", "x"), ("o", "h"), ("x", "tail")] * 2 + [("w", "w")]
+    with pytest.raises(ValueError):
+        design.Call(0, 0, 1000, n, k, x_out=0, flags=pack.F_INIT)            # no h source
 
 
 @pytest.mark.parametrize("n,k", [(100, 576), (576, 100), (576, 2304), (0, 576)])

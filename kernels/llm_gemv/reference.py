@@ -7,7 +7,8 @@ semantics below are what each kernel must reproduce bit for bit.
 
 Rounding points, per layer at position p (``fused=True``, the default and the device's plan; ``fused=False`` is v0,
 which ran the norms as their own op and added rounded projection outputs to the residual):
-  norm+qkv  r = bf16(1/sqrt(sum(h*h)/576 + eps)) (the sum through the MAC); gamma folded into the weights at pack
+  norm+qkv  r = RSQ[bf16(sum(h*h))] (the sum through the MAC, clamped to [1, 2^32); RSQ a correctly rounded
+            table of 1/sqrt(ss/576 + eps) by ss's bits); gamma folded into the weights at pack
             time, W_g = bf16(W * gamma); qkv = bf16(bf16(W_g h) * r)
   (v0)      RMSNorm y = bf16(gamma * bf16(h * r)) as its own op, then qkv = projection of y
   RoPE      bf16(q*cos + rotate_half(q)*sin), the two products exact and summed once; cos/sin are HF's bf16 tables
@@ -132,10 +133,30 @@ def matvec(w: np.ndarray, x: np.ndarray, exact: bool, init: np.ndarray | None = 
     return bf16_from64(acc if init is None else acc + init.astype(np.float64))
 
 
+RSQ_BASE, RSQ_SIZE = 0x3F80, 0x1000     # bf16 bits of 1.0 up to the largest bf16 below 2^32
+
+
+def rsq_table() -> np.ndarray:
+    """uint16 [RSQ_SIZE]: r = bf16(1/sqrt(ss/576 + eps)) for every bf16 ss in [1, 2^32), correctly rounded. The core
+    looks r up by ss's bits, clamped to the table (on 13,481 real norm evaluations ss ran from 4.0 to 6.8e8)."""
+    ss = em.from_bf16_bits((RSQ_BASE + np.arange(RSQ_SIZE)).astype(np.uint16)).astype(np.float64)
+    return em.bf16_bits(bf16_from64(1.0 / np.sqrt(ss / HIDDEN + EPS)))
+
+
+RSQ = rsq_table()
+
+
 def rscale(h, exact):
-    """RMSNorm's scale r = bf16(1/sqrt(sum(h*h)/576 + eps)), the sum through the MAC."""
-    ss = dot(h, h, exact)
-    return bf16_from64(1.0 / np.sqrt(np.float64(np.float32(ss)) / HIDDEN + EPS))
+    """RMSNorm's scale: ss = bf16(sum(h*h)), the sum walked by the core's MAC from zero; r = RSQ[ss's bits], clamped
+    to the table's range."""
+    if exact:
+        from kernels.llm_gemv import oracle
+        hb = em.bf16_bits(h)
+        u = int(oracle.gemv(np.tile(hb, (4, 1)), hb)[0])
+    else:
+        u = int(em.bf16_bits(bf16_from64(np.dot(h.astype(np.float64), h.astype(np.float64)))))
+    u = min(max(u, RSQ_BASE), RSQ_BASE + RSQ_SIZE - 1)
+    return em.from_bf16_bits(np.uint16(RSQ[u - RSQ_BASE])).astype(np.float32)
 
 
 def rmsnorm(h, gamma, exact):

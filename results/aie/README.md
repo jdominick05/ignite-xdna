@@ -146,6 +146,8 @@ Backs [Small-LLM decode, step 1](../../docs/BENCHMARKS.md#small-llm-decode-step-
 |---|---|
 | [llm_gemv_exact_desktop2_20261019T194800Z.log](llm_gemv_exact_desktop2_20261019T194800Z.log) | `--checks-only`: SmolLM2-135M's 121 projections exact to the exp_sum oracle in all three dispatch arms, seeds 0 and 1; no timing claim |
 | [llm_gemv_probe_desktop2_20261019T194822Z.log](llm_gemv_probe_desktop2_20261019T194822Z.log) | The timed sitting: exactness again, then one token's projections per projection (121 dispatches), per layer (31) and per token (1), 2 rounds; `timing_eligible: true` |
+| [llm_ops_fused_exact_desktop2_20261019T204911Z.log](llm_ops_fused_exact_desktop2_20261019T204911Z.log) | `--checks-only`: RMSNorm (F_NORM, table rsqrt) and the residual add (F_INIT) fused into the projections, one-shot and chained on layer 0 and the head, exact on seeds 0 and 1 (108,288 elements each) |
+| [llm_ops_fused_exact_desktop2_20261019T204842Z.log](llm_ops_fused_exact_desktop2_20261019T204842Z.log) | The same check's first run: exact, then exit 0xC0000005 at teardown (an instruction BO outlived the harness); kept as the record |
 | [llm_gemv_patch_exact_desktop2_20261019T201123Z.log](llm_gemv_patch_exact_desktop2_20261019T201123Z.log) | `--checks-only`: the compiled chain with 20 DDR addresses patched (layer 29's output moved, the head reading it from the new place) exact, the old region untouched; every other arm exact |
 | [llm_gemv_chain_exact_desktop2_20261019T200035Z.log](llm_gemv_chain_exact_desktop2_20261019T200035Z.log) | `--checks-only`, step 2: 30 o-projections chained on the device (each x DMA'd from the previous output) plus the head, exact to the chained oracle; the step-1 arms exact on the new object layout |
 

@@ -36,13 +36,30 @@ class Call:
     n: int
     k: int
     x_out: Optional[int] = None   # chained: x is the K/2 words at this offset of the out argument (an earlier
-                                  # call's output), and x_offset names the shape's constant tail
+                                  # call's output), and x_offset names the call's constant tail (pack.tail)
+    flags: int = 0                # pack.F_INIT (residual) and pack.F_NORM (RMSNorm folded in)
+    h_out: Optional[int] = None   # chained with F_INIT: the residual h, N/2 words at this offset of the out argument
 
     def __post_init__(self):
-        pack.check_shape(self.n, self.k)
+        pack.check_call(self.n, self.k, self.flags)
+        if (self.h_out is not None) != (self.x_out is not None and bool(self.flags & pack.F_INIT)):
+            raise ValueError("h_out is given exactly for a chained call with F_INIT")
+
+    def header(self):
+        """The tail this call's x region must hold: pad and header, from the same (n, k, flags) as the streams."""
+        return pack.tail(self.n, self.k, self.flags)
 
     def x_words_used(self) -> int:
-        return pack.X_SLOT_WORDS if self.x_out is None else pack.OBJ_WORDS - self.k // 2
+        return pack.X_SLOT_WORDS if self.x_out is None else self.header().size
+
+    def lead(self) -> list:
+        """(argument, word offset, words) for each piece of one first object, in stream order."""
+        if self.x_out is None:
+            return [("x", self.x_offset, pack.X_SLOT_WORDS)]
+        pieces = [("o", self.x_out, self.k // 2)]
+        if self.flags & pack.F_INIT:
+            pieces.append(("o", self.h_out, self.n // 2))
+        return pieces + [("x", self.x_offset, self.header().size)]
 
 
 def _core(i: int) -> str:
@@ -53,26 +70,28 @@ def _core(i: int) -> str:
       %z = arith.constant 0 : index
       %one = arith.constant 1 : index
       %forever = arith.constant 4294967295 : index
+      %core = arith.constant {i} : i32
       scf.for %it = %z to %forever step %one {{
         %hs = aie.objectfifo.acquire @wF{i}(Consume, 1) : {view}
         %h = aie.objectfifo.subview.access %hs[0] : {view} -> memref<{O}xi32>
-        func.call @gemv_begin(%h, %xl{i}, %ctl{i}) : (memref<{O}xi32>, memref<{pack.MAX_K // 2}xi32>, memref<16xi32>) -> ()
+        func.call @gemv_begin(%h, %xl{i}, %ctl{i}, %core) : (memref<{O}xi32>, memref<{pack.MAX_K // 2}xi32>, memref<16xi32>, i32) -> ()
         aie.objectfifo.release @wF{i}(Consume, 1)
         %g32 = memref.load %ctl{i}[%z] : memref<16xi32>
         %q32 = memref.load %ctl{i}[%one] : memref<16xi32>
         %G = arith.index_cast %g32 : i32 to index
         %Q = arith.index_cast %q32 : i32 to index
         scf.for %g = %z to %G step %one {{
+          %gi = arith.index_cast %g : index to i32
           scf.for %q = %z to %Q step %one {{
             %ws = aie.objectfifo.acquire @wF{i}(Consume, 1) : {view}
             %w = aie.objectfifo.subview.access %ws[0] : {view} -> memref<{O}xi32>
             %qi = arith.index_cast %q : index to i32
-            func.call @gemv_chunk(%w, %xl{i}, %acc{i}, %qi) : (memref<{O}xi32>, memref<{pack.MAX_K // 2}xi32>, memref<48xf32>, i32) -> ()
+            func.call @gemv_chunk(%w, %xl{i}, %acc{i}, %qi, %ctl{i}, %core, %gi) : (memref<{O}xi32>, memref<{pack.MAX_K // 2}xi32>, memref<48xf32>, i32, memref<16xi32>, i32, i32) -> ()
             aie.objectfifo.release @wF{i}(Consume, 1)
           }}
           %os = aie.objectfifo.acquire @oF{i}(Produce, 1) : {oview}
           %o = aie.objectfifo.subview.access %os[0] : {oview} -> memref<6xi32>
-          func.call @gemv_emit(%acc{i}, %o) : (memref<48xf32>, memref<6xi32>) -> ()
+          func.call @gemv_emit(%acc{i}, %o, %ctl{i}) : (memref<48xf32>, memref<6xi32>, memref<16xi32>) -> ()
           aie.objectfifo.release @oF{i}(Produce, 1)
         }}
       }}
@@ -89,10 +108,13 @@ def harness(program: Sequence[Call], w_words: int, x_words: int, out_words: int)
             raise ValueError(f"{call}: x or out runs past its argument")
         if call.x_out is not None and call.x_out + call.k // 2 > out_words:
             raise ValueError(f"{call}: chained x runs past the out argument")
+        if call.h_out is not None and call.h_out + call.n // 2 > out_words:
+            raise ValueError(f"{call}: chained h runs past the out argument")
     L = ["module {", "  aie.device(npu1) {",
-         f"    func.func private @gemv_begin(memref<{O}xi32>, memref<{XK}xi32>, memref<16xi32>)",
-         f"    func.func private @gemv_chunk(memref<{O}xi32>, memref<{XK}xi32>, memref<48xf32>, i32)",
-         "    func.func private @gemv_emit(memref<48xf32>, memref<6xi32>)"]
+         f"    func.func private @gemv_begin(memref<{O}xi32>, memref<{XK}xi32>, memref<16xi32>, i32)",
+         f"    func.func private @gemv_chunk(memref<{O}xi32>, memref<{XK}xi32>, memref<48xf32>, i32, memref<16xi32>, "
+         "i32, i32)",
+         "    func.func private @gemv_emit(memref<48xf32>, memref<6xi32>, memref<16xi32>)"]
     cores = []
     for c in range(pack.COLS):
         L += [f"    %s{c} = aie.tile({c}, 0)", f"    %m{c} = aie.tile({c}, 1)"]
@@ -125,21 +147,21 @@ def harness(program: Sequence[Call], w_words: int, x_words: int, out_words: int)
     for call in program:
         sw = pack.stream_elems(call.n, call.k) // 2
         ow = call.n // 2 // pack.COLS
-        xk, tw = call.k // 2, pack.OBJ_WORDS - call.k // 2
+        # the host-built pair is one transfer; a chained first object is x (and h) from earlier outputs, then the
+        # constant tail, once per core of the pair. BD ids per shim tile: channel h uses 7h..7h+5 for these and
+        # 7h+6 for its weights, the output 14 (16 per tile).
+        xs = call.lead() if call.x_out is None else call.lead() * 2
+        sizes = {"x": x_words, "o": out_words}
         for c in range(pack.COLS):
             for h in range(2):
                 ch, fifo = c * 2 + h, f"@wL{c}_{h}"
-                if call.x_out is None:     # the host-built pair, one transfer (BD ids 0-1, 4-5 per shim tile)
-                    xs = [("x", call.x_offset, pack.X_SLOT_WORDS, x_words)]
-                else:                      # x from an earlier output, then the constant tail; twice, one per core
-                    xs = [("o", call.x_out, xk, out_words), ("x", call.x_offset, tw, x_words)] * 2
-                for j, (arg, off, length, size) in enumerate(xs):
+                for j, (arg, off, length) in enumerate(xs):
                     L.append(f"      aiex.npu.dma_memcpy_nd(%{arg}[0,0,0,{off}][1,1,1,{length}][0,0,0,1]) "
-                             f"{{id = {5 * h + j} : i64, metadata = {fifo}}} : memref<{size}xi32>")
+                             f"{{id = {7 * h + j} : i64, metadata = {fifo}}} : memref<{sizes[arg]}xi32>")
                 L.append(f"      aiex.npu.dma_memcpy_nd(%w[0,0,0,{call.w_offset + ch * sw}][1,1,1,{sw}][0,0,0,1]) "
-                         f"{{id = {5 * h + 4} : i64, metadata = {fifo}}} : memref<{w_words}xi32>")
+                         f"{{id = {7 * h + 6} : i64, metadata = {fifo}}} : memref<{w_words}xi32>")
             L.append(f"      aiex.npu.dma_memcpy_nd(%o[0,0,0,{call.out_offset + c * ow}][1,1,1,{ow}][0,0,0,1]) "
-                     f"{{id = 10 : i64, metadata = @oL{c}, issue_token = true}} : memref<{out_words}xi32>")
+                     f"{{id = 14 : i64, metadata = @oL{c}, issue_token = true}} : memref<{out_words}xi32>")
         for c in range(pack.COLS):
             L.append(f"      aiex.npu.dma_wait {{symbol = @oL{c}}}")
     L += ["    }", "  }", "}"]
@@ -149,13 +171,25 @@ def harness(program: Sequence[Call], w_words: int, x_words: int, out_words: int)
 def sources() -> dict:
     root = HERE.parents[1]
     return {str(p.relative_to(root)).replace("\\", "/"): sha(p)
-            for p in (HERE / "gemv.cc", HERE / "design.py", HERE / "pack.py")}
+            for p in (HERE / "gemv.cc", HERE / "design.py", HERE / "pack.py", HERE / "reference.py")}
+
+
+def rsq_header() -> str:
+    """rsq_table.h: RMSNorm's reciprocal-square-root table, the same array reference.RSQ indexes."""
+    from kernels.llm_gemv import reference
+    rows = [", ".join(f"0x{v:04x}" for v in reference.RSQ[i:i + 16]) for i in range(0, reference.RSQ_SIZE, 16)]
+    return ("// generated by design.py from kernels/llm_gemv/reference.py: bf16(1/sqrt(ss/576 + eps)) by ss's bits\n"
+            "#pragma once\n#include <stdint.h>\n"
+            f"constexpr uint32_t RSQ_BASE = 0x{reference.RSQ_BASE:04x};\nconstexpr int RSQ_SIZE = {reference.RSQ_SIZE};\n"
+            "alignas(32) static const uint16_t RSQ[RSQ_SIZE] = {\n    " + ",\n    ".join(rows) + "\n};\n")
 
 
 def compile_kernel(folder: Path) -> Path:
     obj = folder / "gemv.o"
+    (folder / "rsq_table.h").write_text(rsq_header(), encoding="utf-8")
     command([PEANO / "bin/clang++.exe", "-O2", "-std=c++20", "--target=aie2-none-unknown-elf", "-DNDEBUG",
-             "-fstack-size-section", "-D__AIE_API_AIE_ADF_HPP__", f"-I{INSTALL / 'include'}", "-Wno-attributes",
+             "-fstack-size-section", "-D__AIE_API_AIE_ADF_HPP__", f"-I{INSTALL / 'include'}", f"-I{folder}",
+             "-Wno-attributes",
              "-c", HERE / "gemv.cc", "-o", obj], folder)
     if command([PEANO / "bin/llvm-nm.exe", "-u", obj], folder).strip():
         raise ValueError("unresolved helpers in gemv.o")
@@ -175,7 +209,8 @@ def audit(folder: Path) -> List[dict]:
             raise ValueError(f"{elf.name}: software float helper")
         if not 0 < code <= 16384 or not frames or sum(frames) + 256 > STACK:
             raise ValueError(f"{elf.name}: code {code} B or stack {frames} out of bounds")
-        out.append(dict(elf=elf.name, code_bytes=code, stack_frames=frames))
+        data = sum(int(s) for s in re.findall(r"^\.(?:data|rodata|bss)\S*\s+(\d+)\s+", sections, re.M))
+        out.append(dict(elf=elf.name, code_bytes=code, data_bytes=data, stack_frames=frames))
     if len(out) != pack.CORES:
         raise ValueError(f"expected {pack.CORES} core images, found {len(out)}")
     return out

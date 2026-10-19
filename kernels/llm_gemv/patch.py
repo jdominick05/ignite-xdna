@@ -27,7 +27,7 @@ class Site:
     value_offset: int    # byte offset of the arg_offset field in the instruction stream
     arg: str
     arg_offset: int      # bytes, as compiled
-    role: str            # "x", "tail", "w" or "out"
+    role: str            # "x", "h", "tail", "w" or "out"
     column: int
     channel: int         # 0 or 1 for MM2S roles; -1 for "out"
     copy: int            # which core of the pair an x/tail transfer feeds (0 or 1); 0 otherwise
@@ -38,13 +38,12 @@ def _expected(call) -> List[tuple]:
     rows = []
     sw = pack.stream_elems(call.n, call.k) // 2
     ow = call.n // 2 // pack.COLS
+    roles = ["x"] if call.x_out is None else (["x", "h", "tail"] if call.flags & pack.F_INIT else ["x", "tail"])
+    pieces = list(zip(roles, call.lead()))
     for c in range(pack.COLS):
         for h in range(2):
-            if call.x_out is None:
-                rows.append(("x", "x", c, h, 0, call.x_offset))
-            else:
-                for e in range(2):
-                    rows += [("o", "x", c, h, e, call.x_out), ("x", "tail", c, h, e, call.x_offset)]
+            for e in range(1 if call.x_out is None else 2):
+                rows += [(arg, role, c, h, e, off) for role, (arg, off, _) in pieces]
             rows.append(("w", "w", c, h, 0, call.w_offset + (c * 2 + h) * sw))
         rows.append(("o", "out", c, -1, 0, call.out_offset + c * ow))
     return rows

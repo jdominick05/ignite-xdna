@@ -87,23 +87,53 @@ def pack(w: np.ndarray) -> np.ndarray:
     return out.view(np.uint32)
 
 
-def tail(n: int, k: int) -> np.ndarray:
-    """uint32 [OBJ_WORDS - K/2]: what follows x in a call's first object, zero pad then the header. Constant per
-    shape, so a chained call (x DMA'd from the previous call's output) reads it from a fixed region."""
+# Header words, the last HDR_WORDS of a call's first object (gemv.cc reads the same indices)
+H_G, H_Q, H_K, H_N, H_FLAGS, H_INIT_OFF, H_COPY = range(7)
+F_INIT = 1        # the residual: accumulators start at h, which follows x in the object
+F_NORM = 2        # RMSNorm folded in: gamma is in W; the epilogue scales by RSQ[bf16(sum x*x)]
+
+
+def lead_elems(n: int, k: int, flags: int = 0) -> int:
+    """bf16 elements at the front of a call's first object: x, then h when the call adds a residual."""
+    return k + (n if flags & F_INIT else 0)
+
+
+def check_call(n: int, k: int, flags: int = 0) -> None:
     check_shape(n, k)
-    t = np.zeros(OBJ_WORDS - k // 2, np.uint32)
-    t[-HDR_WORDS], t[-HDR_WORDS + 1], t[-HDR_WORDS + 2] = groups(n), chunks(k), k
+    if flags & ~(F_INIT | F_NORM):
+        raise ValueError(f"unknown flags {flags:#x}")
+    lead = lead_elems(n, k, flags)
+    if lead > MAX_K or lead % 32:
+        raise ValueError(f"x and h are {lead} elements: more than the core's {MAX_K}-element buffer, or not a "
+                         "multiple of 32 (the core copies 16 words at a time)")
+
+
+def tail(n: int, k: int, flags: int = 0) -> np.ndarray:
+    """uint32 [OBJ_WORDS - lead/2]: what follows x (and h) in a call's first object, zero pad then the header. The
+    only source of headers: G and Q come from the same (n, k) the design derives its object counts from, so the
+    core consumes exactly what the runtime sequence sends. Constant per (shape, flags), so a chained call reads it
+    from a fixed region."""
+    check_call(n, k, flags)
+    lead = lead_elems(n, k, flags)
+    t = np.zeros(OBJ_WORDS - lead // 2, np.uint32)
+    hdr = t[-HDR_WORDS:]
+    hdr[H_G], hdr[H_Q], hdr[H_K], hdr[H_N], hdr[H_FLAGS] = groups(n), chunks(k), k, n, flags
+    hdr[H_INIT_OFF], hdr[H_COPY] = k, lead
     return t
 
 
-def x_slot(x: np.ndarray, n: int) -> np.ndarray:
-    """uint16 [K] bf16 bits -> uint32 [X_SLOT_WORDS]: the [x][pad][header] object, twice (one per core of a pair)."""
+def x_slot(x: np.ndarray, n: int, h: np.ndarray | None = None, flags: int = 0) -> np.ndarray:
+    """uint16 [K] bf16 bits (and h [N] with F_INIT) -> uint32 [X_SLOT_WORDS]: the [x][h][pad][header] object, twice
+    (one per core of a pair)."""
     x = np.ascontiguousarray(x)
     if x.dtype != np.uint16 or x.ndim != 1:
         raise TypeError("x_slot takes bf16 bits as a 1-D uint16 array")
+    if (h is not None) != bool(flags & F_INIT):
+        raise ValueError("h is given exactly when F_INIT is set")
     k = x.shape[0]
-    check_shape(n, k)
-    obj = np.concatenate([x.view(np.uint32), tail(n, k)])
+    lead = [x] if h is None else [x, np.ascontiguousarray(h, dtype=np.uint16)]
+    obj = np.concatenate([np.concatenate(lead).view(np.uint32), tail(n, k, flags)])
+    assert obj.size == OBJ_WORDS
     return np.concatenate([obj, obj])
 
 

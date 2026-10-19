@@ -3815,6 +3815,32 @@ The fused reference diverges from fp32 on one more prompt than HF bf16 does: the
 ("groundwater" against "streams"), a near-tie, with both texts fluent. Its perplexity is slightly better than v0's.
 The fused semantics are what the kernels implement.
 
+**The fused projections run exact on the device** (`tools/llm_ops_probe.py`, `--checks-only`;
+[log](../results/aie/llm_ops_fused_exact_desktop2_20261019T204911Z.log)). The GEMV core now takes header flags:
+- **F_INIT:** the accumulators start at h. h follows x in the call's first object, and a chained call DMAs it from an
+  earlier output (3 BDs per core: x, h, tail; 15 of the shim tile's 16 BDs in all).
+- **F_NORM:** the core walks `sum x*x` through the same mmul from zero, rounds it to bf16 and looks r up in a
+  4,096-entry table of correctly rounded `bf16(1/sqrt(ss/576 + eps))` over ss in [1, 2^32), clamped at both ends.
+  On 13,481 real norm evaluations ss ran from 4.0 to 6.8e8. The epilogue is `bf16(bf16(acc)·r)`.
+
+The core is 4,464 B of code plus the 8 KB table. On layer 0's real weights and the head (γ folded in), the device
+matches the reference's exact mode (exp_sum MAC) bit for bit:
+- one-shot calls: qkv+norm, o+res, gate/up+norm, down+res, head+norm, and a plain o-projection;
+- a chain with every x, h and norm input taken from earlier outputs: o+res, then gate/up+norm, down+res, head+norm.
+
+That holds for seeds 0 and 1, the inputs drawn at standard deviation 1 and 30: 10 outputs and 108,288 elements per
+seed, 0 mismatched. The [first run](../results/aie/llm_ops_fused_exact_desktop2_20261019T204842Z.log) was exact too,
+but exited 0xC0000005 after the verdict, with the context already released. An instruction BO was still referenced
+after the harness closed. The probe now drops it, and the run above exited 0.
+
+Rounding ss to bf16 before the table moves quality a little
+([log](../results/llm/llm_reference_quality_rsq_desktop2_20261019T204930Z.log),
+[record](../results/llm/llm_reference_quality_rsq_desktop2_20261019T204930Z.json), same gate): passage perplexity
+**7.269**, against 7.247 for the fused semantics with an fp32 ss, and fp32's 7.239 (+0.41%). Greedy match against
+fp32 is 214/441, with divergences on the same three prompts where HF bf16 diverges. The cause of the +0.3% over the
+fp32-ss variant is the bf16 rounding of ss (relative error up to 2^-9, so up to 2^-10 in r), the only change between
+the two runs. It is kept: the bar is HF bf16's own departure, and the text stays fluent.
+
 ### Gemma 3 4B decode on the CPU and DirectML: INCOMPLETE in both sittings on the page-in witness, and the three complete arms decode at 10.8–17.6 tok/s (2026-09-24, Desktop 2)
 
 The question, (c) of the Gemma plan with its rule (d)
