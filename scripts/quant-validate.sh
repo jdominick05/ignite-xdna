@@ -65,9 +65,14 @@ if [ "$NPU_ONLY" = 0 ]; then
     done
 fi
 if [ "$CPU_ONLY" = 0 ]; then
+    # Ask long-lived NPU users to step aside for these runs (tools/npu_quiet.py), and withdraw on every exit.
+    QUIET_PID="$(cat /proc/$$/winpid)"
+    python tools/npu_quiet.py hold --reason "quant-validate $TAG" --pid "$QUIET_PID" >/dev/null
+    trap 'python tools/npu_quiet.py release --pid "$QUIET_PID" >/dev/null' EXIT
     for role in reference own; do
         path="$REFERENCE"; [ "$role" = reference ] || path="$MODEL"
         witness="results/quant/contexts_${TAG}_${role}.log"
+        python tools/npu_quiet.py wait --seconds 10 >/dev/null || true   # the logged witness below decides
         newlog "$witness" /c/Windows/System32/AMD/xrt-smi.exe examine -r aie-partitions
         grep -q "No hardware contexts running" "$witness" || die "NPU has foreign contexts; wait for a clean paired run"
         eval_model "$role" "$path" npu --fresh

@@ -19,6 +19,8 @@ import winreg
 
 import psutil
 
+import npu_quiet
+
 ROOT = Path(__file__).resolve().parents[1]
 SMI = Path('C:/Windows/System32/AMD/xrt-smi.exe')
 PRODUCER = re.compile(r'3\w*_quantize|1_export\.py|-m\s+quant\b|quant_adaround|acc_spill_probe|aie_disasm', re.I)
@@ -56,7 +58,7 @@ def machine():
 
 
 def source_manifest():
-    paths = [ROOT / p for p in ('tools/research_process.py', 'tools/quant_calib_alphabet.py',
+    paths = [ROOT / p for p in ('tools/research_process.py', 'tools/npu_quiet.py', 'tools/quant_calib_alphabet.py',
              'tools/xint8_arithmetic_probe.py', 'scripts/research-lowlevel.sh',
              'scripts/research-iron.sh', 'kernels/memory_placement/probe.py',
              'kernels/memory_placement/memory_kernels.cc', 'scripts/research-matrix.sh',
@@ -153,7 +155,11 @@ def main():
                 return 3
             time.sleep(1)
     if a.npu:
-        witness = context_report()
+        # Ask cooperating long-lived NPU users to step aside (tools/npu_quiet.py), then give them the
+        # --wait-clear time (at least npu_quiet.MIN_WAIT_S) to do it before calling the device busy.
+        request = npu_quiet.hold(scrub(' '.join(command))[:200])
+        emit('NPU_QUIET_REQUEST', {'file': scrub(str(request)), 'pid': os.getpid()})
+        witness = npu_quiet.wait_idle(a.wait_clear, context_report)
         emit('PRE_NPU_CONTEXT_WITNESS', witness)
         if 'No hardware contexts running' not in witness:
             return 3
@@ -226,5 +232,12 @@ def main():
     return 4 if stop else 5 if contended and not a.checks_only and rc == 0 else rc
 
 
+def run():
+    try:
+        return main()
+    finally:
+        npu_quiet.release()      # only this process's own request file, if it wrote one
+
+
 if __name__ == '__main__':
-    raise SystemExit(main())
+    raise SystemExit(run())

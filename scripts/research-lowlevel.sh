@@ -9,6 +9,9 @@
 # correctness runs without performance claims; --npu still requires an idle device.
 # Existing log names are refused.
 # --wait-clear <0..60> waits for an idle host before starting a timing run.
+# With --npu it also writes an NPU quiet request (tools/npu_quiet.py) for the whole run, so a
+# cooperating long-lived NPU user releases the device, and waits up to --wait-clear seconds
+# (at least 5) for xrt-smi to show no context before calling the device busy.
 
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 LOG="" opts=()
