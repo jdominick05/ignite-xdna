@@ -29285,7 +29285,7 @@ sitting, barrier build against default; `timing_eligible: true`):
 - **SESR's small gain fits its shape** (DERIVED, not measured): 8 boundaries against the detectors' 65–74.
 
 **What this does not establish.**
-- **No comparison against AMD.** The README's "AMD stays ahead on YOLOv8s and SESR M7" may be stale. *[Run the same day: [Ignition is faster on YOLOv8s now](#against-amds-stack-on-the-overlap-default-yolov8s-flips-to-ignition-1582-against-1729-ms-yolov8n-and-pose-widen-their-lead-amd-keeps-sesr-m7-2026-10-15-desktop-2), 15.82 against 17.29 ms; AMD keeps SESR M7.]* The
+- **No comparison against AMD.** The README's "AMD stays ahead on YOLOv8s and SESR M7" may be stale. *[Run the same day: [Ignition is faster on YOLOv8s now](#against-amds-stack-on-the-overlap-default-yolov8s-flips-to-ignition-1582-against-1729-ms-yolov8n-and-pose-widen-their-lead-amd-keeps-sesr-m7-2026-10-15-desktop-2), 15.82 against 17.29 ms; AMD keeps SESR M7. On 2026-10-19 that held against AMD's default only: [AMD's tuned build is faster](#the-release-re-sit-against-amds-stack-ignition-faster-on-yolov8n-pose-yolo11n-and-yolo26n-amd-faster-on-sesr-m7-yolov8m-l-and-x-and-on-yolov8s-once-tuned-2026-10-19-desktop-2), 14.60–14.66 against 15.77 ms.]* The
   [release sitting](#the-v033-release-sitting-sigmoid-silu-containers-on-the-host-fast-paths-against-amds-stack-2026-09-17-desktop-2)
   had Ignition's YOLOv8s 1.4 ms behind AMD's stack glass-to-glass (18.2 against 16.8 ms), and the default now takes
   1.3 ms off the dispatch. But those are different days and different sittings, and dispatch is not glass-to-glass.
