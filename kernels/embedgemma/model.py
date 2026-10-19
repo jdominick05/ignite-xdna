@@ -101,6 +101,7 @@ class Encoder:
                 ple_norm=w[p + "ple_block.post_per_layer_input_norm.weight"], scalar=float(w[p + "layer_scalar"][0])))
         self.timings = defaultdict(float)
         self.geglu_hook = None   # gu [rows, 2F] -> ff [rows, F]; None = host fp32 gelu_tanh(gate) * up
+        self.qkv_hook = None     # (qkv, layer, cos, sin) -> (q, k, v) normed and rotated; None = _rms/_rope below
 
     def shapes(self) -> list[tuple[str, int, int, int]]:
         """(name, layer, K, N) of every weight product, in forward order."""
@@ -200,12 +201,15 @@ class Encoder:
             res = x
             hs = self._rms(x, lay["input_norm"])
             qkv = self._mm(hs, "qkv", i, matmul, bf16_inputs)
-            q = qkv[:, :H * hd].reshape(L, H, hd)
-            k = qkv[:, H * hd:(H + kv) * hd].reshape(L, kv, hd)
-            v = qkv[:, (H + kv) * hd:].reshape(L, kv, hd)
-            q = self._rope(self._rms(q, lay["q_norm"]), cos, sin)
-            k = self._rope(self._rms(k, lay["k_norm"]), cos, sin)
-            v = self._rms(v)
+            if self.qkv_hook:   # a fused pass (e.g. kernels/embedgemma/qkv_norm_rope.c)
+                q, k, v = self.qkv_hook(qkv, lay, cos, sin)
+            else:
+                q = qkv[:, :H * hd].reshape(L, H, hd)
+                k = qkv[:, H * hd:(H + kv) * hd].reshape(L, kv, hd)
+                v = qkv[:, (H + kv) * hd:].reshape(L, kv, hd)
+                q = self._rope(self._rms(q, lay["q_norm"]), cos, sin)
+                k = self._rope(self._rms(k, lay["k_norm"]), cos, sin)
+                v = self._rms(v)
             a = self._mm(self._attention(q, k, v, lay, segs), "o", i, matmul, bf16_inputs)
             x = res + self._rms(a, lay["post_attn_norm"])
             res = x

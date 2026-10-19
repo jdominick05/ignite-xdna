@@ -4523,3 +4523,18 @@ mmul (256 MAC/cycle, against bf16's 128) and int32 accumulation. W8A16 and W8A8 
   against it, NN 100% against HF).
 - **The device numerics:** fp32(P) times s_a times s_w, by an exact bf16 split, modelled with `exp_sum` and checked
   bit-exact.
+
+**Quality bar for W8A8, registered 2026-10-19 before any run (the owner's choice).** The 56-document NN bar proved too
+coarse (BENCHMARKS, "W8A8 ... under CPU emulation"), so W8A8 is judged on MTEB SciFact retrieval (test split:
+corpus, queries, qrels), never the gate documents.
+- Prompts: the model's own, "task: search result | query: " for queries and "title: {title or none} | text: " for
+  documents. Documents are truncated at 512 tokens.
+- Scored by cosine ranking.
+- **Pass:** nDCG@10 at most 0.5 points below fp32 HF's (absolute), **and** mean top-10 overlap with fp32 HF's
+  retrieved set of at least 90%.
+- W8A16 (the device-gated configuration) is scored beside it as the control.
+- **Amended before any score was read.** The formats are fake-quantized inside HF fp32 torch
+  (`tools/embedgemma_retrieval_eval.py hf --quant`), using w4.py's exact functions. The first plan ran them through
+  the numpy emulator with the device substitutions, but that was estimated at 6-10 h and was stopped unscored. The
+  substitutions are gated separately and are common to both formats.
+- **On a fail, stop and report.**

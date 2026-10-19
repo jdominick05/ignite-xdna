@@ -209,6 +209,8 @@ def main():
     ap.add_argument("--wclip", type=int, default=0, help="--w4: per-group MSE clip search points over alpha in [0.85, 1]; 0 = RTN")
     ap.add_argument("--w4", type=int, default=0, help="quantize every weight product to int4 (kernels/embedgemma/w4.py) "
                     "with this group size along K, and run on its bf16 dequantization; 0 = bf16 weights")
+    ap.add_argument("--native-qkv", type=Path, help="run the post-QKV norms and RoPE through this "
+                    "eg_qkv_norm_rope.dll (kernels/embedgemma/native.py build --qkv) instead of model.py's numpy")
     ap.add_argument("--npu-w8", action="store_true", help="npu: upload the --w4 64 --wbits 8 weights as W8 tiles "
                     "(--builds compiled with embedgemma_gemm_probe.py compile --w8 --w8-dequant)")
     ap.add_argument("--npu-geglu", type=int, default=0, help="npu: run gate|up with this geglu_epilogue.cc mode "
@@ -265,6 +267,25 @@ def main():
             enc.timings["gelu"] += time.perf_counter() - t
             return out
         enc.geglu_hook = geglu_emulated
+    if a.native_qkv:
+        import ctypes
+        lib = ctypes.CDLL(str(a.native_qkv.resolve()))
+        P = ctypes.c_void_p
+        lib.eg_qkv_norm_rope.argtypes = [P, ctypes.c_int64, ctypes.c_int, ctypes.c_int, ctypes.c_int, P, P, P, P,
+                                         ctypes.c_float, P, P, P]
+
+        def qkv_native(qkv, lay, cos, sin):
+            t = time.perf_counter()
+            L, hd, kv, H = qkv.shape[0], lay["hd"], lay["kv"], enc.H
+            src = np.ascontiguousarray(qkv, np.float32)
+            q, k, v = (np.empty((L, n, hd), np.float32) for n in (H, kv, kv))
+            qw, kw = (np.ascontiguousarray(lay[n], np.float32) for n in ("q_norm", "k_norm"))
+            c, s = np.ascontiguousarray(cos, np.float32), np.ascontiguousarray(sin, np.float32)
+            lib.eg_qkv_norm_rope(src.ctypes.data, L, H, kv, hd, qw.ctypes.data, kw.ctypes.data, c.ctypes.data,
+                                 s.ctypes.data, float(enc.eps), q.ctypes.data, k.ctypes.data, v.ctypes.data)
+            enc.timings["qkv_norm_rope"] += time.perf_counter() - t
+            return q, k, v
+        enc.qkv_hook = qkv_native
     attn = None
     if a.attention == "npu-local":
         if not idle():
@@ -355,7 +376,7 @@ def main():
         strict = a.backend == "cpu" and not emulation and a.attention == "exact"
         threshold = 0.99999 if strict else 0.9999
         passed = bool(cos.min() >= threshold and (strict or nn_kept == 1.0) and nn_quality in (None, 1.0))
-        rec = dict(backend=a.backend, docs=str(a.docs), reference=str(a.reference), batch=a.batch, round_dll=bool(a.round_dll), attention=a.attention, geglu=a.geglu, npu_geglu=a.npu_geglu, npu_w8=a.npu_w8, w4=a.w4, wchannel=a.wchannel, a8=a.a8, wbits=a.wbits, wclip=a.wclip, k_block=a.k_block, exp=a.exp, tau=a.tau,
+        rec = dict(backend=a.backend, docs=str(a.docs), reference=str(a.reference), batch=a.batch, round_dll=bool(a.round_dll), attention=a.attention, geglu=a.geglu, npu_geglu=a.npu_geglu, npu_w8=a.npu_w8, native_qkv=bool(a.native_qkv), w4=a.w4, wchannel=a.wchannel, a8=a.a8, wbits=a.wbits, wclip=a.wclip, k_block=a.k_block, exp=a.exp, tau=a.tau,
                    bf16_inputs=a.bf16_inputs, passed=passed,
                    gate=dict(cos_min=threshold, nn_kept=None if strict else 1.0),
                    cos_min=float(cos.min()), cos_mean=float(cos.mean()), nn_kept=nn_kept,

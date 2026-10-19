@@ -25581,3 +25581,31 @@ match the W8A16 reference.
   on a sturdier quality measure.
 - **Attribution, from these two runs:** per-token activations carry most of the cosine loss (0.9997 to 0.9980);
   per-channel weights cost about 2x W8A16's error on their own.
+
+#### bf16 maturation, item 1a: a native fused post-QKV pass (q/k/v norms + RoPE) cuts 22% at 2048 (2026-10-19, Desktop 2)
+
+[`qkv_norm_rope.c`](../kernels/embedgemma/qkv_norm_rope.c) does in one OpenMP + AVX2 pass over each row what
+`model.py` does with three `_rms` and two `_rope` calls (`--native-qkv`, `model.py` `qkv_hook`). Offline it matches
+the numpy path to 1.8e-7 of the max, on both local and global head shapes.
+
+**Same sitting:** both runs exit 0 and `timing_eligible`, with no foreign context. Each has bf16 weights, the fused
+GeGLU (mode 6) and NPU local attention.
+
+| ms per document | 128 | 512 | 2048 | Log |
+|---|---:|---:|---:|---|
+| numpy norms and RoPE | 158.6 | 701.5 | 2613.9 | [log](../results/aie/embedgemma_hybrid_npu_qkv_numpy_desktop2_20261019T040357Z.log) |
+| native fused QKV pass | **127.3** | **556.3** | **2035.0** | [log](../results/aie/embedgemma_hybrid_npu_qkv_native_desktop2_20261019T040306Z.log) |
+
+- **Gate PASS:** cos min 0.9999783, nearest neighbours 100%.
+- **At 2048, norms + RoPE fall from 831 to 344 ms:** 306 ms for the remaining numpy norms and 38 for the fused
+  pass.
+- **What is left on the host at 2048:**
+  - norms before and after the GEMMs: 306 ms;
+  - global attention: 409;
+  - the per-layer-input GELU: 141;
+  - packing and copies: about 120.
+- **The CPU comparison point:** torch bf16 does this document in 1,500 ms, and the GPU (llama-server, 780M) in
+  717.5.
+- **Quantization thread parked** at the owner's call. The SciFact fake-quant scoring was stopped unscored.
+  `tools/embedgemma_retrieval_eval.py` and the SciFact fp32 HF reference (nDCG@10 85.42, 300 queries, in
+  `scratch/`) are kept for when it resumes.
