@@ -95,6 +95,29 @@ def test_program_text_covers_every_call():
         design.harness(calls, w_words - 1, 2 * pack.X_SLOT_WORDS, 768)
 
 
+def test_patch_finds_every_transfer_of_the_compiled_chain_and_moves_only_what_it_names():
+    sys.path.insert(0, str(ROOT / "tools"))
+    import llm_gemv_probe as P
+    from kernels.llm_gemv import design, patch
+    insts = P.BUILD / "chain" / "insts.bin"
+    if not insts.exists():
+        pytest.skip("build/llm_gemv_v2/chain is not compiled (tools/llm_gemv_probe.py compile)")
+    calls = P.chain_calls(design.Call)
+    raw = insts.read_bytes()
+    sites = patch.calls(raw, calls)
+    assert [len(s) for s in sites] == [20] + [44] * (len(calls) - 1)
+    changes = {**patch.move_output(sites[-2], calls[-2], P.OUT["o"]), **patch.move_x(sites[-1], P.OUT["o"])}
+    assert len(changes) == 4 + 16
+    new = patch.apply(raw, changes)
+    moved = patch.calls(new, calls[:-2] + [design.Call(calls[-2].w_offset, calls[-2].x_offset, P.OUT["o"],
+                                                       calls[-2].n, calls[-2].k, calls[-2].x_out),
+                                           design.Call(calls[-1].w_offset, calls[-1].x_offset, calls[-1].out_offset,
+                                                       calls[-1].n, calls[-1].k, P.OUT["o"])])
+    assert len(moved) == len(calls)                       # the patched stream is exactly the moved program
+    with pytest.raises(ValueError):
+        patch.calls(raw, calls[:-1])                      # a stream with transfers past its program is refused
+
+
 def test_a_chained_call_reads_x_from_the_out_argument_and_stays_within_16_bds():
     from kernels.llm_gemv import design
     n = 576

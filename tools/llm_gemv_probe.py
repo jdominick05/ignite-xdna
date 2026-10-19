@@ -143,6 +143,16 @@ def programs():
     return P
 
 
+def patched_chain() -> bytes:
+    """Arm E: the compiled chain with two address patches and nothing else. Layer 29 writes its output to the "o"
+    region instead of chain_b, and the head reads its x from there. What a decode step does per position."""
+    from kernels.llm_gemv import design, patch
+    calls = chain_calls(design.Call)
+    raw = (BUILD / "chain" / "insts.bin").read_bytes()
+    sites = patch.calls(raw, calls)
+    return patch.apply(raw, {**patch.move_output(sites[-2], calls[-2], OUT["o"]), **patch.move_x(sites[-1], OUT["o"])})
+
+
 def chain_calls(Call):
     """Layer 0's o-projection on the host's x, then layers 1-29's each on the previous one's output (ping-pong
     between chain_a and chain_b), then the head on layer 29's: 31 calls with no host data after the first."""
@@ -235,6 +245,7 @@ class Device:
         self.out = h.create_host_bo(OUT_WORDS * 4, 5)
         self.insts = {label: h.create_instruction_bo((BUILD / label / "insts.bin").as_posix())
                       for label in programs()}
+        self.insts["chain_patched"] = h.create_instruction_bo_from_bytes(patched_chain())
         self.subs = []   # keep sub-buffers alive while their runs exist
 
     def sub(self, offset_words, n_words):
@@ -256,7 +267,8 @@ class Device:
         b.append(self.run("one_head", self.sub(matrix_offset(0, "head"), words("head"))))
         c = [self.run("token", self.arena)]
         d = [self.run("chain", self.arena)]
-        return {"A": a, "B": b, "C": c, "D": d}
+        e = [self.run("chain_patched", self.arena)]
+        return {"A": a, "B": b, "C": c, "D": d, "E": e}
 
     def set_x(self, x):
         v = np.concatenate([pack.x_slot(x[s], SHAPES[s][0]) for s in SHAPES]
@@ -306,6 +318,14 @@ def check(dev, arms, seed, ref):
     for i in (LAYERS - 2, LAYERS - 1):
         bad[f"D_chain_{i}"] = int(np.count_nonzero(dev.y("chain_a" if i % 2 == 0 else "chain_b") != ref[f"chain_{i}"]))
     bad["D_chain_head"] = int(np.count_nonzero(dev.y("head") != ref["chain_head"]))
+    # E: the same chain with layer 29's output address and the head's x address patched in the instruction stream.
+    # Layer 29 must land in "o", the head must still be exact, and chain_b must still hold layer 27's output (the
+    # last write the patch left there), so the old address was not also written.
+    dev.poison()
+    dev.go(arms["E"][0])
+    bad["E_chain_29_at_o"] = int(np.count_nonzero(dev.y("o") != ref[f"chain_{LAYERS - 1}"]))
+    bad["E_chain_b_holds_27"] = int(np.count_nonzero(dev.y("chain_b") != ref[f"chain_{LAYERS - 3}"]))
+    bad["E_chain_head"] = int(np.count_nonzero(dev.y("head") != ref["chain_head"]))
     total = sum(bad.values())
     print("EXACT_JSON " + json.dumps(dict(seed=seed, checked=len(bad), mismatched_elements=total,
                                           failures={k: v for k, v in bad.items() if v})), flush=True)
