@@ -3,13 +3,16 @@
 //
 // One core's share of an M=1 bf16 GEMV, y = W x, for the whole-array decoder projection (see design.py).
 //
-// Every object the core receives is OBJ_WORDS long. The first of a call carries a header and x; each one after it is a
-// weight chunk of 12 outputs x 192 inputs in mmul<4,8,4> order, [kstep 24][acc 3][kk 8][n 4]. The 12 outputs are
-// three accumulators of 4; x is replicated into the four A rows, so every row of C is the same dot product and row 0
-// is read out. Accumulation is fp32 across every chunk of a group, then one round-to-nearest-even to bf16.
+// Every object the core receives is OBJ_WORDS long. The first of a call is [x][zero pad][header]: x at the front and
+// the header in the last HDR_WORDS, so a call's x can be DMA'd straight from where the previous call wrote it and the
+// pad + header from a constant region (design.py). Each object after it is a weight chunk of 12 outputs x 192 inputs
+// in mmul<4,8,4> order, [kstep 24][acc 3][kk 8][n 4]. The 12 outputs are three accumulators of 4; x is replicated into
+// the four A rows, so every row of C is the same dot product and row 0 is read out. Accumulation is fp32 across every
+// chunk of a group, then one round-to-nearest-even to bf16.
 #include <aie_api/aie.hpp>
 #include <stdint.h>
 
+constexpr int OBJ_WORDS = 1152;
 constexpr int HDR_WORDS = 16;
 constexpr int KCHUNK = 192;
 constexpr int KSTEPS = KCHUNK / 8;
@@ -19,11 +22,12 @@ extern "C" {
 
 // Header words: [0] groups of 12 outputs this core makes, [1] K chunks per group, [2] K.
 void gemv_begin(const int32_t *obj, int32_t *x_local, int32_t *ctl) {
+    const int32_t *hdr = obj + OBJ_WORDS - HDR_WORDS;
     for (int i = 0; i < HDR_WORDS; i += 16)
-        aie::store_v(ctl + i, aie::load_v<16>(obj + i));
-    const int words = obj[2] / 2;
+        aie::store_v(ctl + i, aie::load_v<16>(hdr + i));
+    const int words = hdr[2] / 2;
     for (int i = 0; i < words; i += 16)
-        aie::store_v(x_local + i, aie::load_v<16>(obj + HDR_WORDS + i));
+        aie::store_v(x_local + i, aie::load_v<16>(obj + i));
 }
 
 void gemv_chunk(const int32_t *obj, const int32_t *x_local, float *acc, int32_t q) {

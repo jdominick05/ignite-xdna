@@ -23,8 +23,7 @@ OUT_GROUP = 12                       # outputs one core makes per group: three m
 KCHUNK = 192                         # inputs per weight object; gcd(576, 1536), so no SmolLM2 shape pads
 OBJ_ELEMS = OUT_GROUP * KCHUNK       # 2304 bf16
 OBJ_WORDS = OBJ_ELEMS // 2           # 1152
-HDR_WORDS = 16
-X_OFFSET_ELEMS = HDR_WORDS * 2       # x starts after the header
+HDR_WORDS = 16                       # the header is the LAST HDR_WORDS of a call's first object; x is at its front
 MAX_K = (OBJ_WORDS - HDR_WORDS) * 2 // KCHUNK * KCHUNK
 X_SLOT_WORDS = 2 * OBJ_WORDS         # one x object per core of a channel's pair
 N_QUANTUM = CORES * OUT_GROUP        # 192
@@ -88,16 +87,23 @@ def pack(w: np.ndarray) -> np.ndarray:
     return out.view(np.uint32)
 
 
+def tail(n: int, k: int) -> np.ndarray:
+    """uint32 [OBJ_WORDS - K/2]: what follows x in a call's first object, zero pad then the header. Constant per
+    shape, so a chained call (x DMA'd from the previous call's output) reads it from a fixed region."""
+    check_shape(n, k)
+    t = np.zeros(OBJ_WORDS - k // 2, np.uint32)
+    t[-HDR_WORDS], t[-HDR_WORDS + 1], t[-HDR_WORDS + 2] = groups(n), chunks(k), k
+    return t
+
+
 def x_slot(x: np.ndarray, n: int) -> np.ndarray:
-    """uint16 [K] bf16 bits -> uint32 [X_SLOT_WORDS]: the header-and-x object, twice (one per core of a pair)."""
+    """uint16 [K] bf16 bits -> uint32 [X_SLOT_WORDS]: the [x][pad][header] object, twice (one per core of a pair)."""
     x = np.ascontiguousarray(x)
     if x.dtype != np.uint16 or x.ndim != 1:
         raise TypeError("x_slot takes bf16 bits as a 1-D uint16 array")
     k = x.shape[0]
     check_shape(n, k)
-    obj = np.zeros(OBJ_WORDS, np.uint32)
-    obj[0], obj[1], obj[2] = groups(n), chunks(k), k
-    obj.view(np.uint16)[X_OFFSET_ELEMS:X_OFFSET_ELEMS + k] = x
+    obj = np.concatenate([x.view(np.uint32), tail(n, k)])
     return np.concatenate([obj, obj])
 
 

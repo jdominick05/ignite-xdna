@@ -18,7 +18,7 @@ import json
 import re
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import List, Sequence
+from typing import List, Optional, Sequence
 
 from kernels.llm_gemv import pack
 from kernels.transformer_bf16.common import INSTALL, IRON, PEANO, command, save, sha
@@ -31,13 +31,18 @@ FIFO_DEPTH = 2
 @dataclass(frozen=True)
 class Call:
     w_offset: int      # words into the weights argument
-    x_offset: int      # words into the x argument: a pack.x_slot of X_SLOT_WORDS
+    x_offset: int      # words into the x argument: a pack.x_slot (X_SLOT_WORDS), or with x_out a pack.tail
     out_offset: int    # words into the out argument; N/2 are written
     n: int
     k: int
+    x_out: Optional[int] = None   # chained: x is the K/2 words at this offset of the out argument (an earlier
+                                  # call's output), and x_offset names the shape's constant tail
 
     def __post_init__(self):
         pack.check_shape(self.n, self.k)
+
+    def x_words_used(self) -> int:
+        return pack.X_SLOT_WORDS if self.x_out is None else pack.OBJ_WORDS - self.k // 2
 
 
 def _core(i: int) -> str:
@@ -80,8 +85,10 @@ def harness(program: Sequence[Call], w_words: int, x_words: int, out_words: int)
     for call in program:
         if call.w_offset + pack.block_words(call.n, call.k) > w_words:
             raise ValueError(f"{call}: weights run past the {w_words}-word argument")
-        if call.x_offset + pack.X_SLOT_WORDS > x_words or call.out_offset + call.n // 2 > out_words:
+        if call.x_offset + call.x_words_used() > x_words or call.out_offset + call.n // 2 > out_words:
             raise ValueError(f"{call}: x or out runs past its argument")
+        if call.x_out is not None and call.x_out + call.k // 2 > out_words:
+            raise ValueError(f"{call}: chained x runs past the out argument")
     L = ["module {", "  aie.device(npu1) {",
          f"    func.func private @gemv_begin(memref<{O}xi32>, memref<{XK}xi32>, memref<16xi32>)",
          f"    func.func private @gemv_chunk(memref<{O}xi32>, memref<{XK}xi32>, memref<48xf32>, i32)",
@@ -118,15 +125,21 @@ def harness(program: Sequence[Call], w_words: int, x_words: int, out_words: int)
     for call in program:
         sw = pack.stream_elems(call.n, call.k) // 2
         ow = call.n // 2 // pack.COLS
+        xk, tw = call.k // 2, pack.OBJ_WORDS - call.k // 2
         for c in range(pack.COLS):
             for h in range(2):
-                ch = c * 2 + h
-                L += [f"      aiex.npu.dma_memcpy_nd(%x[0,0,0,{call.x_offset}][1,1,1,{pack.X_SLOT_WORDS}][0,0,0,1]) "
-                      f"{{id = {2 * h} : i64, metadata = @wL{c}_{h}}} : memref<{x_words}xi32>",
-                      f"      aiex.npu.dma_memcpy_nd(%w[0,0,0,{call.w_offset + ch * sw}][1,1,1,{sw}][0,0,0,1]) "
-                      f"{{id = {2 * h + 1} : i64, metadata = @wL{c}_{h}}} : memref<{w_words}xi32>"]
+                ch, fifo = c * 2 + h, f"@wL{c}_{h}"
+                if call.x_out is None:     # the host-built pair, one transfer (BD ids 0-1, 4-5 per shim tile)
+                    xs = [("x", call.x_offset, pack.X_SLOT_WORDS, x_words)]
+                else:                      # x from an earlier output, then the constant tail; twice, one per core
+                    xs = [("o", call.x_out, xk, out_words), ("x", call.x_offset, tw, x_words)] * 2
+                for j, (arg, off, length, size) in enumerate(xs):
+                    L.append(f"      aiex.npu.dma_memcpy_nd(%{arg}[0,0,0,{off}][1,1,1,{length}][0,0,0,1]) "
+                             f"{{id = {5 * h + j} : i64, metadata = {fifo}}} : memref<{size}xi32>")
+                L.append(f"      aiex.npu.dma_memcpy_nd(%w[0,0,0,{call.w_offset + ch * sw}][1,1,1,{sw}][0,0,0,1]) "
+                         f"{{id = {5 * h + 4} : i64, metadata = {fifo}}} : memref<{w_words}xi32>")
             L.append(f"      aiex.npu.dma_memcpy_nd(%o[0,0,0,{call.out_offset + c * ow}][1,1,1,{ow}][0,0,0,1]) "
-                     f"{{id = 4 : i64, metadata = @oL{c}, issue_token = true}} : memref<{out_words}xi32>")
+                     f"{{id = 10 : i64, metadata = @oL{c}, issue_token = true}} : memref<{out_words}xi32>")
         for c in range(pack.COLS):
             L.append(f"      aiex.npu.dma_wait {{symbol = @oL{c}}}")
     L += ["    }", "  }", "}"]

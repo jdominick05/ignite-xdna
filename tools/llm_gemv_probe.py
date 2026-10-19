@@ -44,7 +44,9 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from kernels.llm_gemv import oracle, pack  # noqa: E402
 
-BUILD = ROOT / "build" / "llm_gemv"
+# v2: x at the front of a call's first object and the header at its end, so a call can chain on an earlier output.
+# The step-1 sitting's builds (header first) stay in build/llm_gemv, as its log recorded them.
+BUILD = ROOT / "build" / "llm_gemv_v2"
 MODEL = "HuggingFaceTB/SmolLM2-135M-Instruct"
 LAYERS, HIDDEN, MLP, VOCAB, KV = 30, 576, 1536, 49152, 192
 SHAPES = {"qkv": (HIDDEN + 2 * KV, HIDDEN), "o": (HIDDEN, HIDDEN), "gu": (2 * MLP, HIDDEN),
@@ -61,12 +63,17 @@ def words(name):
 LAYER_WORDS = sum(words(s) for s in LAYER_ORDER)          # 1,769,472: 7.08 MB, a multiple of 4 KiB
 ARENA_WORDS = LAYERS * LAYER_WORDS + words("head")
 X_SLOTS = {s: i * pack.X_SLOT_WORDS for i, s in enumerate(SHAPES)}
-X_WORDS = len(SHAPES) * pack.X_SLOT_WORDS
+# Then each shape's constant tail (pad + header), what a chained call reads after its x.
+X_TAILS, _x = {}, len(SHAPES) * pack.X_SLOT_WORDS
+for _s in SHAPES:
+    X_TAILS[_s] = _x
+    _x += pack.OBJ_WORDS - SHAPES[_s][1] // 2
+X_WORDS = _x
 OUT = {}
 _o = 0
-for _s in SHAPES:
+for _s in (*SHAPES, "chain_a", "chain_b"):    # chain_a/b: the ping-pong of the o-projection chain
     OUT[_s] = _o
-    _o += SHAPES[_s][0] // 2
+    _o += SHAPES.get(_s, SHAPES["o"])[0] // 2
 OUT_WORDS = _o
 
 
@@ -160,7 +167,21 @@ def programs():
     P["layer"] = (layer, LAYER_WORDS)
     P["token"] = ([Call(matrix_offset(i, s), X_SLOTS[s], OUT[s], *SHAPES[s]) for i, s in token_calls()],
                   ARENA_WORDS)  # arm C: the whole arena
+    P["chain"] = (chain_calls(Call), ARENA_WORDS)   # arm D: the o-projection chain, every x from the device
     return P
+
+
+def chain_calls(Call):
+    """Layer 0's o-projection on the host's x, then layers 1-29's each on the previous one's output (ping-pong
+    between chain_a and chain_b), then the head on layer 29's: 31 calls with no host data after the first."""
+    n, k = SHAPES["o"]
+    calls = [Call(matrix_offset(0, "o"), X_SLOTS["o"], OUT["chain_a"], n, k)]
+    for i in range(1, LAYERS):
+        src, dst = ("chain_a", "chain_b") if i % 2 else ("chain_b", "chain_a")
+        calls.append(Call(matrix_offset(i, "o"), X_TAILS["o"], OUT[dst], n, k, x_out=OUT[src]))
+    last = "chain_b" if (LAYERS - 1) % 2 else "chain_a"
+    calls.append(Call(matrix_offset(0, "head"), X_TAILS["head"], OUT["head"], *SHAPES["head"], x_out=OUT[last]))
+    return calls
 
 
 def compile_all():
@@ -201,6 +222,10 @@ def compute_oracle(seed):
     t0 = time.perf_counter()
     for i, s in token_calls():
         out[f"{i}_{s}"] = oracle.gemv(m[i, s], x[s])
+    y = x["o"]                                   # the chain: each o-projection on the previous one's output
+    for i in range(LAYERS):
+        y = out[f"chain_{i}"] = oracle.gemv(m[i, "o"], y)
+    out["chain_head"] = oracle.gemv(m[0, "head"], y)
     np.savez(path, **out, **{f"x_{s}": v for s, v in x.items()})
     print(f"ORACLE seed {seed}: {len(out)} GEMVs in {time.perf_counter() - t0:.1f} s -> {path}", flush=True)
 
@@ -258,10 +283,13 @@ class Device:
         b = [self.run("layer", self.sub(layer_offset(i), LAYER_WORDS)) for i in range(LAYERS)]
         b.append(self.run("one_head", self.sub(matrix_offset(0, "head"), words("head"))))
         c = [self.run("token", self.arena)]
-        return {"A": a, "B": b, "C": c}
+        d = [self.run("chain", self.arena)]
+        return {"A": a, "B": b, "C": c, "D": d}
 
     def set_x(self, x):
-        v = np.concatenate([pack.x_slot(x[s], SHAPES[s][0]) for s in SHAPES])
+        v = np.concatenate([pack.x_slot(x[s], SHAPES[s][0]) for s in SHAPES]
+                           + [pack.tail(*SHAPES[s]) for s in SHAPES])
+        assert v.size == X_WORDS
         self.x.write(v.tobytes(), 0)
         self.x.sync(self.to)
 
@@ -272,7 +300,7 @@ class Device:
     def y(self, shape):
         self.out.sync(self.fr)
         w = np.frombuffer(self.out.read(OUT_WORDS * 4, 0), np.uint32)
-        return pack.unpack_y(w[OUT[shape]:], SHAPES[shape][0])
+        return pack.unpack_y(w[OUT[shape]:], SHAPES.get(shape, SHAPES["o"])[0])
 
     def go(self, r):
         r.start()
@@ -299,6 +327,13 @@ def check(dev, arms, seed, ref):
     for s in LAYER_ORDER:
         bad[f"C_{LAYERS - 1}_{s}"] = int(np.count_nonzero(dev.y(s) != ref[f"{LAYERS - 1}_{s}"]))
     bad["C_0_head"] = int(np.count_nonzero(dev.y("head") != ref["0_head"]))
+    # D: 30 chained o-projections and the head, no host data after the first x. Layer i's output is in chain_a for
+    # even i and chain_b for odd i; the last two remain, and any earlier error would have propagated into them.
+    dev.poison()
+    dev.go(arms["D"][0])
+    for i in (LAYERS - 2, LAYERS - 1):
+        bad[f"D_chain_{i}"] = int(np.count_nonzero(dev.y("chain_a" if i % 2 == 0 else "chain_b") != ref[f"chain_{i}"]))
+    bad["D_chain_head"] = int(np.count_nonzero(dev.y("head") != ref["chain_head"]))
     total = sum(bad.values())
     print("EXACT_JSON " + json.dumps(dict(seed=seed, checked=len(bad), mismatched_elements=total,
                                           failures={k: v for k, v in bad.items() if v})), flush=True)
@@ -342,15 +377,18 @@ def run(seeds, exact_only=False):
             if exact_only:
                 print("TIMING SKIPPED: --exact-only", flush=True)
                 return 0
+            # D reads 30 o-projections and the head, not a token's weights; its tok/s field is not a token rate.
+            chain_bytes = (LAYERS * words("o") + words("head")) * 4
             for rnd in range(1, ROUNDS + 1):
-                for arm in ("A", "B", "C"):
+                for arm in ("A", "B", "C", "D"):
                     t = time_arm(dev, arms[arm])
                     med = statistics.median(t)
+                    nbytes = chain_bytes if arm == "D" else weight_bytes
                     print("RESULT_JSON " + json.dumps(dict(
                         round=rnd, arm=arm, dispatches_per_token=len(arms[arm]), tokens=TOKENS, warmup=WARMUP,
                         times_ms=t, median_ms=med, min_ms=min(t), max_ms=max(t),
-                        weight_bytes=weight_bytes, gbps=weight_bytes / med / 1e6,
-                        tokens_per_s_weights_only=1e3 / med)), flush=True)
+                        weight_bytes=nbytes, gbps=nbytes / med / 1e6,
+                        tokens_per_s_weights_only=None if arm == "D" else 1e3 / med)), flush=True)
             del arms, dev
     finally:
         gc.collect()

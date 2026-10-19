@@ -59,13 +59,16 @@ def test_oracle_sits_near_float64():
     assert np.max(np.abs(y - ref) / (np.abs(ref) + 1e-3)) < 2 ** -7
 
 
-def test_x_slot_header_and_duplicate():
+def test_x_slot_is_x_then_the_tail_twice():
     x = np.arange(576, dtype=np.uint16)
     slot = pack.x_slot(x, 960)
     assert slot.shape == (pack.X_SLOT_WORDS,)
     obj = slot[:pack.OBJ_WORDS]
-    assert list(obj[:3]) == [pack.groups(960), pack.chunks(576), 576]
-    assert np.array_equal(obj.view(np.uint16)[pack.X_OFFSET_ELEMS:pack.X_OFFSET_ELEMS + 576], x)
+    hdr = obj[-pack.HDR_WORDS:]
+    assert list(hdr[:3]) == [pack.groups(960), pack.chunks(576), 576]
+    assert np.array_equal(obj.view(np.uint16)[:576], x)
+    assert np.array_equal(obj[288:], pack.tail(960, 576))       # what a chained call reads from the constant region
+    assert not obj[288:-pack.HDR_WORDS].any()
     assert np.array_equal(slot[pack.OBJ_WORDS:], obj)
 
 
@@ -90,3 +93,18 @@ def test_program_text_covers_every_call():
     assert text.count("aie.core(") == pack.CORES
     with pytest.raises(ValueError):
         design.harness(calls, w_words - 1, 2 * pack.X_SLOT_WORDS, 768)
+
+
+def test_a_chained_call_reads_x_from_the_out_argument_and_stays_within_16_bds():
+    from kernels.llm_gemv import design
+    n = 576
+    calls = [design.Call(0, 0, 0, n, n),                                     # host x
+             design.Call(pack.block_words(n, n), pack.X_SLOT_WORDS, 288, n, n, x_out=0)]   # x = call 0's output
+    text = design.harness(calls, 2 * pack.block_words(n, n), pack.X_SLOT_WORDS + pack.OBJ_WORDS, 576)
+    second = text.split("aiex.npu.dma_wait")[4]
+    assert second.count("%o[0,0,0,0][1,1,1,288]") == 16         # x from out: 8 channels x the 2 cores each feeds
+    assert second.count(f"%x[0,0,0,{pack.X_SLOT_WORDS}][1,1,1,{pack.OBJ_WORDS - 288}]") == 16
+    ids = {int(i) for i in __import__("re").findall(r"id = (\d+) : i64", text)}
+    assert max(ids) < 16
+    with pytest.raises(ValueError):                              # chained x past the out argument
+        design.harness([design.Call(0, 0, 0, n, n, x_out=400)], pack.block_words(n, n), pack.OBJ_WORDS, 576)
