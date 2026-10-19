@@ -187,6 +187,8 @@ def main():
     ap.add_argument("--attention", choices=["exact", "blockwise", "npu-local"], default="exact")
     ap.add_argument("--geglu", choices=["host", "model1", "model2", "model5"], default="host",
                     help="MLP GeGLU: host fp32, or (cpu emulation) geglu_epilogue.cc's mode 1 / mode 2 arithmetic")
+    ap.add_argument("--wbits", type=int, choices=[4, 8], default=4, help="bits for --w4 (kernels/embedgemma/w4.py)")
+    ap.add_argument("--wclip", type=int, default=0, help="--w4: per-group MSE clip search points over alpha in [0.85, 1]; 0 = RTN")
     ap.add_argument("--w4", type=int, default=0, help="quantize every weight product to int4 (kernels/embedgemma/w4.py) "
                     "with this group size along K, and run on its bf16 dequantization; 0 = bf16 weights")
     ap.add_argument("--npu-geglu", type=int, default=0, help="npu: run gate|up with this geglu_epilogue.cc mode "
@@ -213,8 +215,8 @@ def main():
     if a.w4:
         import w4
         for key, w in list(enc.weights.items()):
-            enc.weights[key] = w4.dequant(*w4.quantize(w, a.w4))
-        print(f"W4: {len(enc.weights)} weight products quantized, group {a.w4} along K", flush=True)
+            enc.weights[key] = w4.dequant(*w4.quantize(w, a.w4, a.wbits, a.wclip))
+        print(f"W{a.wbits}: {len(enc.weights)} weight products quantized, group {a.w4} along K, clip points {a.wclip}", flush=True)
     if a.attention == "blockwise":
         import attention_oracle
 
@@ -310,7 +312,7 @@ def main():
         strict = a.backend == "cpu" and not emulation and a.attention == "exact"
         threshold = 0.99999 if strict else 0.9999
         passed = bool(cos.min() >= threshold and (strict or nn_kept == 1.0))
-        rec = dict(backend=a.backend, docs=str(a.docs), reference=str(a.reference), batch=a.batch, round_dll=bool(a.round_dll), attention=a.attention, geglu=a.geglu, npu_geglu=a.npu_geglu, w4=a.w4, k_block=a.k_block, exp=a.exp, tau=a.tau,
+        rec = dict(backend=a.backend, docs=str(a.docs), reference=str(a.reference), batch=a.batch, round_dll=bool(a.round_dll), attention=a.attention, geglu=a.geglu, npu_geglu=a.npu_geglu, w4=a.w4, wbits=a.wbits, wclip=a.wclip, k_block=a.k_block, exp=a.exp, tau=a.tau,
                    bf16_inputs=a.bf16_inputs, passed=passed,
                    gate=dict(cos_min=threshold, nn_kept=None if strict else 1.0),
                    cos_min=float(cos.min()), cos_mean=float(cos.mean()), nn_kept=nn_kept,

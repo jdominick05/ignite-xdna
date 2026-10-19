@@ -25406,3 +25406,21 @@ bf16, each chosen on documents other than the gate set.
 - **What binds is not identified.** It could be DDR or NoC bandwidth, or MemTile or stream overhead.
 - **What follows.** Cutting bytes should speed these products up: W4 B (64 -> 16 MB), a bf16 C (32 -> 16 MB), or
   a larger M block per B read. That is DERIVED until a build measures it.
+
+#### W8 weights: 100% nearest neighbours kept, but just under the 0.9999 cosine gate (2026-10-19, Desktop 2)
+
+The user proposed two configurations, and each was run once as stated, with no other configuration tried.
+Everything else is the same CPU emulation path as the W4 run above.
+
+| Configuration | cos min | mean | NN kept | Gate | Record |
+|---|---:|---:|---:|---|---|
+| W4 RTN G=128 (above) | 0.9502285 | 0.9632142 | 82.1% | FAIL | above |
+| W8 RTN G=128 | 0.9998203 | 0.9998771 | 100% | FAIL (cos) | [json](../results/aie/embedgemma_w8_g128_clip0_numerics_cpu_desktop2_20261019T003914Z.json) |
+| W8 G=64 + 20-point per-group MSE clip, alpha in [0.85, 1] | 0.9998626 | 0.9998943 | 100% | FAIL (cos) | [json](../results/aie/embedgemma_w8_g64_clip20_numerics_cpu_desktop2_20261019T004100Z.json) |
+
+- **The RTN prediction held.** The user predicted cos min about 0.99981 for W8 RTN; 0.9998203 was measured.
+- **The G=64 + clip prediction did not.** It predicted a 2.1x cut in 1 - cos, enough to pass. The measured cut is
+  1.797e-4 to 1.374e-4, which is 1.31x, and it does not pass.
+- **Not separated:** how much of that came from the smaller group and how much from the clip search. Only the
+  combined configuration was run.
+- **Clip search uses no data.** It picks alpha from weight error alone, so nothing was tuned on the gate documents.

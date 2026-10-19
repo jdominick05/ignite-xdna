@@ -1772,3 +1772,4 @@ hardware contexts running on device"; the sweep is offline and needs no witness.
 - [GeGLU epilogue, all modes, one eligible sitting](embedgemma_gemm_epilogue_allmodes_desktop2_20261019T002827Z.log) — supersedes the per-mode logs above (exit 1/139, cross-sitting).
 - [W4 RTN g128 CPU emulation, FAIL](embedgemma_w4_g128_numerics_cpu_desktop2_20261019T003002Z.json) — cos min 0.9502, NN 82.1%.
 - GEMM transport probe: [hollow](embedgemma_gemm_transport_hollow_desktop2_20261019T003621Z.log), [real](embedgemma_gemm_transport_real_desktop2_20261019T003634Z.log) — hollow is 95-97% of real: transport-bound.
+- W8 CPU emulation: [RTN G128](embedgemma_w8_g128_clip0_numerics_cpu_desktop2_20261019T003914Z.json) cos min 0.99982, [G64 + MSE clip](embedgemma_w8_g64_clip20_numerics_cpu_desktop2_20261019T004100Z.json) 0.99986; NN 100%, both under the 0.9999 gate.
