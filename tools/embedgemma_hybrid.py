@@ -227,6 +227,11 @@ def main():
     ap.add_argument("--round-dll", type=Path, help="npu: kernels/embedgemma/native.py build's embedgemma_round.dll "
                                                     "(AVX2 + OpenMP, bit-identical) instead of NumPy rounding")
     ap.add_argument("--out", type=Path, required=True)
+    ap.add_argument("--loop-go", type=Path, help="after the gated run: write FILE.ready, wait for FILE to hold "
+                    "'START STOP' (epoch seconds), then encode --loop-length documents in --batch groups from START "
+                    "until STOP and write OUT.loop.json with each group's wall-clock span "
+                    "(tools/embedgemma_concurrency_energy.py)")
+    ap.add_argument("--loop-length", type=int, default=2048)
     ap.add_argument("--save-embeddings", type=Path, help="also write the embeddings as an npz (key 'embeddings'), "
                     "e.g. to serve as a W8-emulation --reference")
     ap.add_argument("--quality-reference", type=Path, help="W8 gate: when --reference is a W8 CPU emulation, also "
@@ -432,6 +437,26 @@ def main():
                   + ", ".join(f"{k} {v:.1f}" for k, v in sorted(ph.items(), key=lambda kv: -kv[1])), flush=True)
         a.out.write_text(json.dumps(rec, indent=2) + "\n", encoding="utf-8")
         print(a.out, flush=True)
+        if a.loop_go and passed:
+            loop_groups = [[docs[j]["ids"] for j in g] for g in groups if docs[g[0]]["length"] == a.loop_length]
+            Path(str(a.loop_go) + ".ready").write_text(f"{time.time()}\n", encoding="utf-8")
+            print("LOOP_READY", flush=True)
+            while not a.loop_go.exists():
+                time.sleep(0.1)
+            time.sleep(0.2)
+            start, stop = map(float, a.loop_go.read_text(encoding="utf-8").split())
+            while time.time() < start:
+                time.sleep(0.005)
+            spans, i = [], 0
+            while time.time() < stop:
+                ids = loop_groups[i % len(loop_groups)]
+                t0 = time.time()
+                enc.embed_documents(ids, matmul, bf16)
+                spans.append([t0, time.time(), len(ids)])
+                i += 1
+            Path(str(a.out) + ".loop.json").write_text(json.dumps(dict(
+                device="npu", length=a.loop_length, start=start, stop=stop, spans=spans)) + "\n", encoding="utf-8")
+            print(f"LOOP_DONE {len(spans)} groups", flush=True)
         return 0 if passed else 1
     finally:
         if attn:
