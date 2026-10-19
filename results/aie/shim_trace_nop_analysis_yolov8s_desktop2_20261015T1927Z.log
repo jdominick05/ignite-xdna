@@ -1,0 +1,308 @@
+traced NOP sitting 20261015T1927Z: pre-registration, budgets and verdict. Desktop 2 (DESKTOP-CBL5NUA), written 2026-10-15T19:30Z
+
+== 1. Pre-registration, verbatim, and hashes (containers, scripts, tools) taken before the sitting ==
+865ae17a362f0097ef2afc2462349d10dbb84dd9bddf5451fcbebb8e662f7deb *build/yolov8s_tr_ctl_nop.ignite
+c3eb59c5070f57622a296c081a99b290b1d574e69dde8dce5e4a055a6561e81f *build/yolov8s_tr_ctl.ignite
+5485d2edd30cf4e786914ddd42bcdf453adc988a018079f281168669e56e2e3d *scratch/b45/prereg_nop.txt
+8b9e548e15a9de467652e67d9107673106ce1c86c52b67c8500be52577210782 *scratch/b45/sit_nop.py
+c6f60f49813d25d7f847eda20c5980b4b0cc4d64d6787c24944bce9cd8e40473 *scratch/b45/verdict.py
+18e5fe4db46ec804ca545209c39b4811a77a6321dfe360d05f51a96f112a0f2d *tools/shim_trace_budget.py
+9c4a87f4ca800e5c82467475e3670461804b87612ed1a2728e40be60d8977a8a *tools/engine_shim_trace.py
+882a4c425588a513843dfca69e4f335da8a6ba3b5b8e49ebae2972219edd5307 *tools/trace_runs.py
+--- begin ---
+PRE-REGISTRATION: traced NOP copy of the YOLOv8s control, shim view. Desktop 2 (DESKTOP-CBL5NUA), 2026-10-15.
+Written before any traced dispatch of the NOP copy. build/yolov8s_tr_ctl_nop.ignite = tools/engine_dispatch_floor
+.write_nop_copy of build/yolov8s_tr_ctl.ignite (3,114 weight packets, header op set to NOP; instruction stream, xclbin
+and trace manifest unchanged). It has not been dispatched.
+
+Question (from the shim budget, results/aie/shim_trace_budget_yolov8s_desktop2_20261015T1922Z): on the compute-heavy
+layers the MemTile pushes back on the activation stream 20% of the window. Is that the arithmetic? Do weights stay
+ahead with no arithmetic? Is the unexplained residual compute-related?
+
+Method. scratch/b45/sit_nop.py --rounds 6: per round ctl and nop (order alternated), each a separate process running
+tools/engine_shim_trace.py --runs 1 (cold first dispatch, logical column 0). Under research-lowlevel.sh --npu; void
+unless timing_eligible true. Then tools/shim_trace_budget.py on each arm (same build dir: the NOP copy's insts.bin is
+the control's), then scratch/b45/verdict.py. Groups are FIXED from the committed control budget's warm compute share
+(13 Oct real/NOP): lo < 10% (18 layers), mid 10-35% (17), hi >= 35% (31). Fractions are window-weighted per group.
+
+Gates (if either fails, P1-P3 are not read):
+- C, calibration: NOP/ctl frame windows 0.70-0.82 (warm 13 Oct: 12.29/16.14 = 0.76), and the lo group's windows
+  NOP/ctl 0.90-1.10 (those layers have <10% compute).
+- S, stability: this sitting's ctl hi-group activation backpressure 15-25% (the earlier sitting read 20%).
+
+Predictions and rules:
+- P1 (is the MemTile fill compute?): NOP hi-group A_bp <= 5% -> COMPUTE; >= 15% -> NOT COMPUTE (a stage below the
+  MemTile other than the arithmetic: the MemTile-to-core split, core DMA or lock handshake); else PARTIAL.
+  Expected: COMPUTE.
+- P2 (are weights ahead without compute?): NOP W_bp over the 62 layers whose control weights move > 5% of the window:
+  >= 45% -> AHEAD WITHOUT COMPUTE (weight backpressure is set by activation delivery/handshake, not arithmetic);
+  < 30% -> WAITED ON COMPUTE; else BETWEEN. Expected: AHEAD WITHOUT COMPUTE (the 18 lo layers already read 60%).
+- P3 (the activation residual, A_resid ~ a_tasks + const per arm):
+  P3a per-task coefficient NOP/ctl within +-25% -> UNCHANGED (the per-task part is not compute: issue gaps or a slow
+  strided rate); < 0.5 -> SHRANK; else CHANGED.
+  P3b per-layer constant NOP/ctl < 0.5 -> SHRANK (the tail was compute); within +-25% -> UNCHANGED; else CHANGED.
+  Expected: P3a UNCHANGED, P3b SHRANK. No expectation is strong; the residual is DERIVED (rate and clock).
+Named alternatives: the NOP copy changes only the arithmetic (and the cores' cycle count per packet); data volume,
+tasks, issue order and trace setup are identical. A changed DDR/thermal state between arms is controlled by
+interleaving. Reported, not verdict-bearing: every other fraction, per layer.
+
+A hang, a refused trace or contention voids the sitting; no rerun of the same design without a new pre-registration.
+--- end ---
+verdict script, verbatim (sha256 above):
+--- begin ---
+"""Scratch: the pre-registered NOP verdict. Groups come from the COMMITTED control budget's warm compute share
+(results/aie/shim_trace_budget_yolov8s_desktop2_20261015T1922Z.json), fixed before this sitting.
+python -I verdict.py <budget ctl.json> <budget nop.json>"""
+import json
+import sys
+from pathlib import Path
+
+import numpy as np
+
+ROOT = Path(__file__).resolve().parents[2]
+ref = json.loads((ROOT / "results/aie/shim_trace_budget_yolov8s_desktop2_20261015T1922Z.json").read_text(encoding="utf-8"))
+cs = np.array([r["compute_share"] for r in ref["layers"]])
+G = {"lo (<10%)": cs < 0.10, "mid (10-35%)": (cs >= 0.10) & (cs < 0.35), "hi (>=35%)": cs >= 0.35}
+arms = {n: json.loads(Path(p).read_text(encoding="utf-8")) for n, p in (("ctl", sys.argv[1]), ("nop", sys.argv[2]))}
+for n, b in arms.items():
+    if [r["name"] for r in b["layers"]] != [r["name"] for r in ref["layers"]]:
+        raise SystemExit(f"{n}: layer list differs")
+KEYS = ("W_bp", "W_mem", "W_move", "W_resid", "A_bp", "A_mem", "A_move", "A_resid", "O_starve")
+
+
+def frac(b, m, k):
+    rows = [r for r, keep in zip(b["layers"], m) if keep]
+    return sum(r[k] for r in rows) / sum(r["window"] for r in rows)
+
+
+def win(b, m=None):
+    return sum(r["window"] for r, keep in zip(b["layers"], m if m is not None else [True] * len(b["layers"])) if keep)
+
+
+def resid_fit(b):
+    y = np.array([r["A_resid"] for r in b["layers"]])
+    x = np.array([r["a_tasks"] for r in b["layers"]], float)
+    A = np.column_stack([x, np.ones(len(y))])
+    coef, *_ = np.linalg.lstsq(A, y, rcond=None)
+    pred = A @ coef
+    return coef, 1 - ((y - pred) ** 2).sum() / ((y - y.mean()) ** 2).sum()
+
+
+print(f"{'group':14} {'arm':4} {'n':>3} {'ms':>6} " + " ".join(f"{k:>8}" for k in KEYS))
+for g, m in G.items():
+    for n, b in arms.items():
+        print(f"{g:14} {n:4} {m.sum():3d} {win(b, m) / 1.8e6:6.3f} " + " ".join(f"{frac(b, m, k):8.1%}" for k in KEYS))
+span = {n: win(b) for n, b in arms.items()}
+ratio = span["nop"] / span["ctl"]
+print(f"\nframe windows: ctl {span['ctl'] / 1.8e6:.3f} ms, nop {span['nop'] / 1.8e6:.3f} ms (DERIVED); nop/ctl {ratio:.3f}")
+lo = G["lo (<10%)"]
+dlo = win(arms["nop"], lo) / win(arms["ctl"], lo)
+print(f"lo group windows nop/ctl {dlo:.3f}")
+fits = {n: resid_fit(b) for n, b in arms.items()}
+for n, (coef, r2) in fits.items():
+    print(f"A_resid ~ a_tasks [{n}]: {coef[0]:,.0f} cycles per task + {coef[1]:,.0f} per layer, R2 {r2:.2f}")
+
+print("\n== rules (pre-registered) ==")
+ok_c = 0.70 <= ratio <= 0.82 and 0.90 <= dlo <= 1.10
+ctl_hi_abp = frac(arms["ctl"], G["hi (>=35%)"], "A_bp")
+ok_s = 0.15 <= ctl_hi_abp <= 0.25
+print(f"C (calibration): nop/ctl frame 0.70-0.82 and lo-group windows 0.90-1.10: {ratio:.3f}, {dlo:.3f} -> "
+      f"{'PASS' if ok_c else 'FAIL'}")
+print(f"S (stability): ctl hi-group A_bp 15-25% (was 20%): {ctl_hi_abp:.1%} -> {'PASS' if ok_s else 'FAIL'}")
+if not (ok_c and ok_s):
+    print("C or S failed: P1-P3 are not read")
+nop_hi_abp = frac(arms["nop"], G["hi (>=35%)"], "A_bp")
+p1 = "COMPUTE" if nop_hi_abp <= 0.05 else "NOT COMPUTE" if nop_hi_abp >= 0.15 else "PARTIAL"
+print(f"P1: nop hi-group A_bp {nop_hi_abp:.1%} (<=5% COMPUTE, >=15% NOT COMPUTE, else PARTIAL) -> {p1}")
+nop_wbp = frac(arms["nop"], [r["W_move"] / r["window"] > 0.05 for r in ref["layers"]], "W_bp")
+p2 = "AHEAD WITHOUT COMPUTE" if nop_wbp >= 0.45 else "WAITED ON COMPUTE" if nop_wbp < 0.30 else "BETWEEN"
+print(f"P2: nop W_bp over the 62 weight-moving layers {nop_wbp:.1%} (>=45% ahead without compute, <30% waited on "
+      f"compute) -> {p2}")
+k_ctl, k_nop = fits["ctl"][0][0], fits["nop"][0][0]
+c_ctl, c_nop = fits["ctl"][0][1], fits["nop"][0][1]
+p3a = "UNCHANGED" if abs(k_nop / k_ctl - 1) <= 0.25 else "SHRANK" if k_nop < 0.5 * k_ctl else "CHANGED"
+p3b = "SHRANK" if c_nop < 0.5 * c_ctl else "UNCHANGED" if abs(c_nop / c_ctl - 1) <= 0.25 else "CHANGED"
+print(f"P3a: per-task residual nop/ctl {k_nop / k_ctl:.2f} (within +-25% UNCHANGED = not compute; <0.5 SHRANK) -> {p3a}")
+print(f"P3b: per-layer residual nop/ctl {c_nop / c_ctl:.2f} (<0.5 SHRANK = tail was compute; within +-25% UNCHANGED) -> {p3b}")
+--- end ---
+
+== 2. The NOP copy (scratch/b45/make_nop.py) ==
+{'packets': 3114, 'ops_before': [0, 3089, 4, 21], 'bytes': 30738240, 'instruction_bytes': 936512}; trace manifest kept
+
+== 3.ctl Budget of the ctl arm (tools/shim_trace_budget.py) ==
+[budget] 6 traced runs (cold first dispatches), logical column 0; rate 6.79 GB/s = 3.774 B/cycle at 1.8 GHz (DERIVED); ms DERIVED at 1.8 GHz
+[budget] column 0 per frame: weights 99 tasks 20,999,424 B; activations 1387 tasks 59,673,600 B; output 226 tasks 6,976,000 B
+[budget] frame window 27,935,540 cycles = 15.520 ms
+[budget] weights    : bp 15,266,390 (55%); mem 2,657,807 (10%); move 5,564,809 (20%); resid 4,446,535 (16%)
+[budget] activations: bp 3,413,980 (12%); mem 3,502,676 (13%); move 15,813,394 (57%); resid 5,205,491 (19%)
+[budget] output starvation 22,607,448 (81%); lead 128,898 (0%)
+
+ k    window  Wt  W_bp W_mem  W_mv  W_res   At  A_bp A_mem  A_mv  A_res  O_st   (fractions of the layer window; window in cycles; real/nop warm ms)
+ 0   835,329   1    0%    0%    0%   100%    4   19%   21%   52%     8%   62%  /model.0/conv/Conv
+ 1 1,296,300   2   62%   10%   25%     4%   32   12%   19%   67%     2%   79%  /model.1/conv/Conv
+ 2   350,291   1    0%    0%    1%    99%    4    0%   28%   62%    10%   43%  /model.2/cv1/conv/Conv
+ 3   324,124   1    0%    0%    1%    99%    2   27%    8%   33%    31%   71%  /model.2/m.0/cv1/conv/Conv
+ 4   394,715   1   57%    9%   20%    13%   32    8%   16%   55%    21%   66%  /model.2/m.0/cv2/conv/Conv
+ 5   665,988   2   65%    6%   24%     5%   64    0%   17%   65%    18%   81%  /model.2/cv2/conv/Conv
+ 6 1,266,662   4   64%    8%   25%     3%   16   18%   11%   69%     3%   85%  /model.3/conv/Conv
+ 7   296,340   4   54%    9%   27%    11%   16    0%   18%   73%     9%   72%  /model.4/cv1/conv/Conv
+ 8   316,930   2   50%   21%   13%    16%   16   15%   21%   34%    30%   57%  /model.4/m.0/cv1/conv/Conv
+ 9   338,570   2   55%   14%   18%    13%   24   10%   17%   48%    24%   67%  /model.4/m.0/cv2/conv/Conv
+10   299,428   2   63%    8%   13%    16%   16   26%   11%   36%    26%   78%  /model.4/m.1/cv1/conv/Conv
+11   338,762   2   57%   12%   18%    13%   24   11%   13%   48%    28%   81%  /model.4/m.1/cv2/conv/Conv
+12   631,604   4   62%    3%   25%     9%   64    0%    7%   69%    24%   87%  /model.4/cv2/conv/Conv
+13 1,245,294   1   64%    8%   26%     3%    8   18%   10%   70%     2%   90%  /model.5/conv/Conv
+14   278,729   1   53%    9%   29%    10%    8    0%   12%   78%    10%   77%  /model.6/cv1/conv/Conv
+15   311,271   1   50%   17%   13%    20%   16   18%   19%   35%    28%   65%  /model.6/m.0/cv1/conv/Conv
+16   335,160   1   54%   15%   15%    16%   20   17%   14%   40%    28%   74%  /model.6/m.0/cv2/conv/Conv
+17   288,260   1   60%   10%   14%    16%   16   24%    8%   38%    30%   88%  /model.6/m.1/cv1/conv/Conv
+18   303,528   1   62%    8%   17%    14%   20   16%   10%   45%    29%   84%  /model.6/m.1/cv2/conv/Conv
+19   579,118   1   63%    5%   28%     5%   56    0%    6%   75%    19%   91%  /model.6/cv2/conv/Conv
+20 1,211,761   1   66%    6%   27%     2%    4   18%    8%   72%     2%   96%  /model.7/conv/Conv
+21   287,907   1   48%    9%   28%    15%    4    0%   10%   75%    15%   81%  /model.8/cv1/conv/Conv
+22   302,321   1   48%   18%   13%    21%   16   15%   18%   36%    32%   81%  /model.8/m.0/cv1/conv/Conv
+23   299,638   1   50%   23%   15%    11%   18   15%   16%   41%    27%   91%  /model.8/m.0/cv2/conv/Conv
+24   442,146   1   60%    6%   27%     6%   36    0%    9%   74%    17%   92%  /model.8/cv2/conv/Conv
+25   169,755   1   41%   10%   24%    25%    2    0%    9%   64%    27%   72%  /model.9/cv1/conv/Conv
+26    99,657   1   25%   11%   10%    54%    4    0%    1%   27%    72%   51%  /model.9/m/MaxPool
+27    93,170   1   25%    2%   11%    62%    4    0%    1%   29%    70%   52%  /model.9/m_1/MaxPool
+28    79,519   1   39%    0%   13%    49%    4    0%    2%   34%    64%   64%  /model.9/m_2/MaxPool
+29   586,323   1   62%    4%   27%     7%   52    0%    7%   74%    19%   94%  /model.9/cv2/conv/Conv
+30   777,034   1   63%    3%   31%     3%   40    0%    4%   84%    12%   93%  /model.12/cv1/conv/Conv
+31   289,327   1   57%   12%   14%    17%   16   25%    9%   38%    29%   88%  /model.12/m.0/cv1/conv/Conv
+32   301,027   1   55%   11%   13%    21%   16   15%   15%   36%    35%   80%  /model.12/m.0/cv2/conv/Conv
+33   465,069   1   59%    5%   26%    11%   40    0%    8%   70%    22%   84%  /model.12/cv2/conv/Conv
+34   862,924   4   65%    2%   28%     6%   96    0%    3%   75%    21%   90%  /model.15/cv1/conv/Conv
+35   330,947   2   50%   22%   12%    16%   16   17%   14%   33%    36%   67%  /model.15/m.0/cv1/conv/Conv
+36   330,796   2   50%   15%   12%    23%   16   15%   21%   33%    31%   61%  /model.15/m.0/cv2/conv/Conv
+37   485,146   4   59%    1%   25%    15%   48    0%    3%   67%    30%   82%  /model.15/cv2/conv/Conv
+38   663,108   1   61%    7%   24%     8%    4   19%    6%   65%    10%   91%  /model.16/conv/Conv
+39   569,404   2   57%   19%   14%     9%   32   24%   17%   38%    21%   82%  /model.22/cv2.0/cv2.0.0/conv/Conv
+40 1,071,009   4   66%   12%   15%     6%   64   31%   19%   41%     9%   78%  /model.22/cv3.0/cv3.0.0/conv/Conv
+41   317,054   2   51%   18%   13%    18%   16   16%   20%   34%    30%   60%  /model.22/cv2.0/cv2.0.1/conv/Conv
+42 1,074,174   4   60%   20%   15%     5%   64   27%   23%   40%     9%   74%  /model.22/cv3.0/cv3.0.1/conv/Conv
+43   445,351   1   63%    4%   27%     6%   40    0%    5%   73%    22%   89%  /model.18/cv1/conv/Conv
+44   105,207   1    0%    9%    5%    86%    2    0%   21%   52%    28%   57%  /model.22/cv2.0/cv2.0.2/Conv
+45   228,121   3   54%    7%   26%    12%   12    0%   17%   71%    11%   73%  /model.22/cv3.0/cv3.0.2/Conv
+46   300,550   1   53%   15%   13%    19%   16   17%   17%   36%    29%   76%  /model.18/m.0/cv1/conv/Conv
+47   297,605   1   53%   15%   13%    19%   16   19%   16%   36%    29%   75%  /model.18/m.0/cv2/conv/Conv
+48   436,234   1   65%    1%   28%     6%   40    0%    4%   75%    22%   89%  /model.18/cv2/conv/Conv
+49   627,723   1   63%    6%   26%     5%    2   16%    7%   69%     8%   94%  /model.19/conv/Conv
+50   294,997   1   51%   16%   14%    19%   16   16%   16%   37%    31%   83%  /model.22/cv2.1/cv2.1.0/conv/Conv
+51   547,939   1   58%   17%   15%    10%   32   27%   16%   40%    18%   83%  /model.22/cv3.1/cv3.1.0/conv/Conv
+52   111,175   1   30%   20%    9%    41%    4    0%    0%   24%    75%   57%  /model.22/cv2.1/cv2.1.1/conv/Conv
+53   291,853   1   63%    4%   14%    19%   16   24%   10%   37%    30%   80%  /model.22/cv3.1/cv3.1.1/conv/Conv
+54   409,990   1   51%    9%   29%    11%    8    0%   11%   79%    10%   87%  /model.21/cv1/conv/Conv
+55    61,544   1    0%    2%    8%    90%    2    0%    3%   22%    75%   61%  /model.22/cv2.1/cv2.1.2/Conv
+56    80,556   1   31%   17%   19%    33%    3    0%   11%   51%    38%   60%  /model.22/cv3.1/cv3.1.2/Conv
+57   305,428   1   48%   22%   13%    16%   16   13%   17%   36%    35%   82%  /model.21/m.0/cv1/conv/Conv
+58   293,478   1   51%   16%   14%    19%   16   16%   17%   37%    31%   84%  /model.21/m.0/cv2/conv/Conv
+59   441,695   1   61%    6%   27%     7%   36    0%    9%   74%    17%   92%  /model.21/cv2/conv/Conv
+60   284,636   1   52%   17%   14%    17%   16   16%   16%   38%    30%   91%  /model.22/cv2.2/cv2.2.0/conv/Conv
+61   298,058   1   47%   23%   13%    16%   16   13%   20%   36%    31%   89%  /model.22/cv3.2/cv3.2.0/conv/Conv
+62    64,728   1    0%   17%    8%    76%    2    0%    0%   21%    79%   75%  /model.22/cv2.2/cv2.2.1/conv/Conv
+63   114,036   1   27%   16%    9%    48%    4    0%    3%   24%    73%   70%  /model.22/cv3.2/cv3.2.1/conv/Conv
+64    36,583   1    0%   27%    7%    66%    1    0%    0%   19%    81%   57%  /model.22/cv2.2/cv2.2.2/Conv
+65    52,435   1    0%   20%   10%    71%    1    0%    0%   26%    74%   39%  /model.22/cv3.2/cv3.2.2/Conv
+
+== 3.nop Budget of the nop arm (tools/shim_trace_budget.py) ==
+[budget] 6 traced runs (cold first dispatches), logical column 0; rate 6.79 GB/s = 3.774 B/cycle at 1.8 GHz (DERIVED); ms DERIVED at 1.8 GHz
+[budget] column 0 per frame: weights 99 tasks 20,999,424 B; activations 1387 tasks 59,673,600 B; output 226 tasks 6,976,000 B
+[budget] frame window 21,653,598 cycles = 12.030 ms
+[budget] weights    : bp 11,407,041 (53%); mem 1,160,526 (5%); move 5,564,809 (26%); resid 3,521,222 (16%)
+[budget] activations: bp 8,940 (0%); mem 2,195,128 (10%); move 15,813,394 (73%); resid 3,636,135 (17%)
+[budget] output starvation 18,129,059 (84%); lead 117,291 (1%)
+
+ k    window  Wt  W_bp W_mem  W_mv  W_res   At  A_bp A_mem  A_mv  A_res  O_st   (fractions of the layer window; window in cycles; real/nop warm ms)
+ 0   672,194   1    0%    0%    0%   100%    4    0%   31%   65%     4%   65%  /model.0/conv/Conv
+ 1 1,023,971   2   60%    7%   31%     2%   32    0%   17%   85%    -2%   87%  /model.1/conv/Conv
+ 2   336,695   1    0%    0%    1%    98%    4    0%   29%   64%     6%   59%  /model.2/cv1/conv/Conv
+ 3   172,686   1    0%    0%    1%    98%    2    0%   21%   63%    16%   58%  /model.2/m.0/cv1/conv/Conv
+ 4   321,459   1   59%    2%   25%    13%   32    0%   13%   68%    19%   77%  /model.2/m.0/cv2/conv/Conv
+ 5   655,906   2   63%    6%   24%     7%   64    0%   17%   66%    17%   79%  /model.2/cv2/conv/Conv
+ 6   935,502   4   59%    5%   34%     1%   16    0%    8%   93%    -1%   92%  /model.3/conv/Conv
+ 7   293,710   4   57%    5%   27%    11%   16    0%   18%   74%     8%   71%  /model.4/cv1/conv/Conv
+ 8   179,646   2   44%    9%   22%    25%   16    0%   14%   60%    26%   70%  /model.4/m.0/cv1/conv/Conv
+ 9   259,505   2   50%    7%   23%    19%   24    0%   13%   63%    25%   79%  /model.4/m.0/cv2/conv/Conv
+10   164,851   2   44%    3%   24%    28%   16    0%    6%   66%    28%   68%  /model.4/m.1/cv1/conv/Conv
+11   265,677   2   50%    7%   23%    21%   24    0%    7%   61%    32%   82%  /model.4/m.1/cv2/conv/Conv
+12   628,472   4   59%    4%   26%    12%   64    0%    7%   69%    24%   83%  /model.4/cv2/conv/Conv
+13   925,738   1   59%    5%   35%     1%    8    0%    8%   94%    -2%   95%  /model.5/conv/Conv
+14   275,186   1   54%    8%   29%     9%    8    0%   14%   79%     7%   76%  /model.6/cv1/conv/Conv
+15   188,402   1   57%    2%   21%    19%   16    0%   12%   58%    30%   71%  /model.6/m.0/cv1/conv/Conv
+16   226,611   1   54%    6%   22%    18%   20    0%    9%   60%    31%   83%  /model.6/m.0/cv2/conv/Conv
+17   183,642   1   57%    6%   22%    15%   16    0%    6%   59%    35%   81%  /model.6/m.1/cv1/conv/Conv
+18   214,356   1   53%    4%   23%    20%   20    0%    8%   63%    29%   85%  /model.6/m.1/cv2/conv/Conv
+19   577,379   1   62%    4%   28%     6%   56    0%    6%   75%    18%   91%  /model.6/cv2/conv/Conv
+20   945,659   1   59%    6%   34%     1%    4    0%   10%   92%    -2%   96%  /model.7/conv/Conv
+21   271,487   1   51%   10%   30%    10%    4    0%   12%   80%     8%   85%  /model.8/cv1/conv/Conv
+22   180,149   1   49%   10%   22%    18%   16    0%   12%   60%    28%   83%  /model.8/m.0/cv1/conv/Conv
+23   193,434   1   49%   10%   23%    18%   18    0%    8%   63%    29%   87%  /model.8/m.0/cv2/conv/Conv
+24   442,120   1   61%    6%   27%     5%   36    0%   11%   74%    15%   92%  /model.8/cv2/conv/Conv
+25   150,761   1   44%   12%   27%    18%    2    0%   12%   72%    16%   81%  /model.9/cv1/conv/Conv
+26    71,891   1   18%   15%   14%    53%    4    0%   11%   38%    51%   48%  /model.9/m/MaxPool
+27    64,956   1   21%    1%   15%    62%    4    0%   15%   42%    43%   51%  /model.9/m_1/MaxPool
+28    61,097   1   26%    0%   16%    57%    4    0%    2%   44%    53%   46%  /model.9/m_2/MaxPool
+29   570,743   1   63%    4%   28%     4%   52    0%    7%   76%    17%   94%  /model.9/cv2/conv/Conv
+30   783,853   1   61%    4%   31%     4%   40    0%    5%   83%    12%   90%  /model.12/cv1/conv/Conv
+31   171,806   1   50%    9%   23%    18%   16    0%    3%   63%    34%   78%  /model.12/m.0/cv1/conv/Conv
+32   176,624   1   56%    1%   23%    21%   16    0%    5%   61%    33%   75%  /model.12/m.0/cv2/conv/Conv
+33   437,259   1   61%    5%   28%     6%   40    0%    8%   74%    17%   88%  /model.12/cv2/conv/Conv
+34   893,614   4   61%    4%   27%     8%   96    0%    6%   73%    21%   90%  /model.15/cv1/conv/Conv
+35   180,856   2   43%    6%   22%    29%   16    0%    2%   60%    38%   69%  /model.15/m.0/cv1/conv/Conv
+36   182,701   2   37%   12%   22%    28%   16    0%    6%   59%    34%   71%  /model.15/m.0/cv2/conv/Conv
+37   491,781   4   58%    2%   24%    15%   48    0%    6%   66%    28%   82%  /model.15/cv2/conv/Conv
+38   464,026   1   57%    4%   35%     4%    4    0%    5%   94%     1%   93%  /model.16/conv/Conv
+39   333,117   2   58%    4%   24%    13%   32    0%    7%   65%    28%   86%  /model.22/cv2.0/cv2.0.0/conv/Conv
+40   640,193   4   59%    2%   25%    13%   64    0%    7%   68%    26%   84%  /model.22/cv3.0/cv3.0.0/conv/Conv
+41   181,995   2   43%    8%   22%    26%   16    0%    6%   60%    34%   70%  /model.22/cv2.0/cv2.0.1/conv/Conv
+42   653,261   4   60%    3%   25%    12%   64    0%   12%   66%    22%   86%  /model.22/cv3.0/cv3.0.1/conv/Conv
+43   437,108   1   61%    4%   28%     7%   40    0%    5%   74%    21%   87%  /model.18/cv1/conv/Conv
+44   106,998   1    0%   10%    5%    85%    2    0%   22%   51%    27%   59%  /model.22/cv2.0/cv2.0.2/Conv
+45   221,593   3   56%    6%   27%    11%   12    0%   18%   73%     8%   74%  /model.22/cv3.0/cv3.0.2/Conv
+46   177,684   1   47%    9%   23%    21%   16    0%    6%   61%    33%   76%  /model.18/m.0/cv1/conv/Conv
+47   176,224   1   49%    8%   23%    21%   16    0%    4%   62%    34%   76%  /model.18/m.0/cv2/conv/Conv
+48   423,628   1   64%    2%   28%     5%   40    0%    5%   77%    18%   89%  /model.18/cv2/conv/Conv
+49   495,772   1   56%    8%   32%     4%    2    0%   11%   88%     1%   95%  /model.19/conv/Conv
+50   172,458   1   56%    1%   23%    20%   16    0%    6%   63%    31%   80%  /model.22/cv2.1/cv2.1.0/conv/Conv
+51   301,007   1   57%    5%   27%    11%   32    0%    5%   72%    23%   86%  /model.22/cv3.1/cv3.1.0/conv/Conv
+52    61,379   1   17%   19%   16%    47%    4    0%    6%   44%    50%   59%  /model.22/cv2.1/cv2.1.1/conv/Conv
+53   186,105   1   57%    2%   22%    19%   16    0%    8%   58%    34%   76%  /model.22/cv3.1/cv3.1.1/conv/Conv
+54   385,695   1   54%    9%   31%     6%    8    0%   12%   84%     3%   91%  /model.21/cv1/conv/Conv
+55    61,180   1    0%    0%    8%    92%    2    0%    5%   22%    73%   59%  /model.22/cv2.1/cv2.1.2/Conv
+56    78,759   1   29%   16%   19%    36%    3    0%   13%   52%    36%   59%  /model.22/cv3.1/cv3.1.2/Conv
+57   181,636   1   48%    9%   22%    21%   16    0%    8%   60%    32%   79%  /model.21/m.0/cv1/conv/Conv
+58   190,809   1   48%   11%   21%    20%   16    0%    8%   57%    35%   80%  /model.21/m.0/cv2/conv/Conv
+59   441,997   1   61%    6%   27%     6%   36    0%    9%   74%    17%   92%  /model.21/cv2/conv/Conv
+60   152,493   1   47%    9%   26%    18%   16    0%    4%   71%    25%   85%  /model.22/cv2.2/cv2.2.0/conv/Conv
+61   168,955   1   49%    8%   24%    20%   16    0%    9%   64%    26%   84%  /model.22/cv3.2/cv3.2.0/conv/Conv
+62    39,734   1    0%   32%   13%    55%    2    0%    0%   34%    66%   65%  /model.22/cv2.2/cv2.2.1/conv/Conv
+63    66,553   1   14%   26%   15%    44%    4    0%   10%   41%    49%   67%  /model.22/cv3.2/cv3.2.1/conv/Conv
+64    30,884   1    0%   33%    8%    59%    1    0%    5%   22%    73%   61%  /model.22/cv2.2/cv2.2.2/Conv
+65    49,975   1    0%   25%   10%    65%    1    0%    6%   27%    67%   46%  /model.22/cv3.2/cv3.2.2/Conv
+
+== 4. Verdict (scratch/b45/verdict.py, as registered) ==
+group          arm    n     ms     W_bp    W_mem   W_move  W_resid     A_bp    A_mem   A_move  A_resid O_starve
+lo (<10%)      ctl   18  4.570    59.7%     4.6%    26.8%     8.8%     0.0%     8.0%    73.1%    18.9%    86.6%
+lo (<10%)      nop   18  4.523    59.3%     4.9%    27.1%     8.7%     0.0%     8.9%    73.8%    17.2%    86.5%
+mid (10-35%)   ctl   17  5.148    52.3%     7.2%    21.1%    19.3%    14.0%    12.8%    63.9%     9.3%    80.6%
+mid (10-35%)   nop   17  4.048    48.0%     5.4%    26.9%    19.7%     0.0%    13.4%    81.3%     5.3%    85.1%
+hi (>=35%)     ctl   31  5.801    52.7%    15.4%    13.4%    18.5%    20.2%    15.9%    37.2%    26.7%    76.8%
+hi (>=35%)     nop   31  3.459    49.5%     6.0%    22.5%    22.0%     0.0%     7.9%    62.3%    29.7%    78.5%
+
+frame windows: ctl 15.520 ms, nop 12.030 ms (DERIVED); nop/ctl 0.775
+lo group windows nop/ctl 0.990
+A_resid ~ a_tasks [ctl]: 1,182 cycles per task + 54,024 per layer, R2 0.50
+A_resid ~ a_tasks [nop]: 1,795 cycles per task + 17,377 per layer, R2 0.75
+
+== rules (pre-registered) ==
+C (calibration): nop/ctl frame 0.70-0.82 and lo-group windows 0.90-1.10: 0.775, 0.990 -> PASS
+S (stability): ctl hi-group A_bp 15-25% (was 20%): 20.2% -> PASS
+P1: nop hi-group A_bp 0.0% (<=5% COMPUTE, >=15% NOT COMPUTE, else PARTIAL) -> COMPUTE
+P2: nop W_bp over the 62 weight-moving layers 56.0% (>=45% ahead without compute, <30% waited on compute) -> AHEAD WITHOUT COMPUTE
+P3a: per-task residual nop/ctl 1.52 (within +-25% UNCHANGED = not compute; <0.5 SHRANK) -> CHANGED
+P3b: per-layer residual nop/ctl 0.32 (<0.5 SHRANK = tail was compute; within +-25% UNCHANGED) -> SHRANK
+
+== 5. Absolute activation residual (scratch/b45/derived.py) ==
+ctl: activation residual 5,205,491 cycles per frame; on the compute-heavy layers 2,789,071 cycles = 1.55 ms (DERIVED at 1.80 GHz)
+nop: activation residual 3,636,135 cycles per frame; on the compute-heavy layers 1,849,137 cycles = 1.03 ms (DERIVED at 1.80 GHz)

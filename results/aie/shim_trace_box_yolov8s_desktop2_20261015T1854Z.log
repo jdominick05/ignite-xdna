@@ -1,0 +1,224 @@
+RESEARCH_PLATFORM {"machine": "Desktop 2", "cpu": "AMD Ryzen 7 8700G w/ Radeon 780M Graphics", "os": "Windows-11-10.0.26200-SP0", "ram_bytes": 33381138432, "source_sha256": {"tools/research_process.py": "ffeb1857f190b482eed101b5f5a928f455de26bfa61d23f78a2eacec08e2663e", "tools/quant_calib_alphabet.py": "2dc0b2878c564853f340880209a425dfcf63b8536b2b8e9fd32344daade58d37", "tools/xint8_arithmetic_probe.py": "6aa3df08b9870c3c2264b868459d7ffbac3070dddc1349d7c6f3f480075f7041", "scripts/research-lowlevel.sh": "3455ad7933697936487712665505c216891865c6deada647302785f6e37020bd", "scripts/research-iron.sh": "4c863a262646ddab39b5005006ba8e03809895e6386c6310e2fd9d0a9e9609ee", "kernels/memory_placement/probe.py": "e8d990169ad6091fa1b53852e9f61eff495b5def72d35165a5c5cf1759e38898", "kernels/memory_placement/memory_kernels.cc": "182e7af7071a1e851afb4a7ca266069c489aea1fbaaa85eca129708daeba5ba6", "scripts/research-matrix.sh": "739254171629deae822b0ad7dabc875aee19ace56dde77d3e8aab61663f97516", "kernels/memory_placement/gemm.py": "17c905ad66110d3346bbf0db898dfc6b780df59fae1dfb0c1747057ce1e5844e", "kernels/memory_placement/gemm_placement.cc": "f21acf7250b12914ea30cc1f77613239dfa18421a85a1b9a5199017dd916278a", "tools/research_summary.py": "0c00dcceef07053d06731b41a1f1ed58d3ba4ea09f82497de354ce9cef17da20", "tools/research_toolchain.py": "f0a126a24ae213acfaa43460cfd9def0c86d9cb70cfee0228aa271688467b314"}, "commit": "ace54c85df8ff29ef1eef9c6d19f1f9e35cc353e", "command": ["bash", "scripts/research-iron.sh", "scratch/b43/sit.py", "--rounds", "6", "--out", "scratch/b43/sit/run_20261015T1854Z"], "seconds_limit": 1800.0, "rss_gib_limit": 8, "checks_only": false, "free_ram_bytes": 24141676544}
+HOST_LOAD busy_cores=0.06 logical_cores=16 free_ram_gb=22.5 sample_sec=1
+HOST_LOAD_TOP 0.02 powershell:5632 ws_mb=80
+HOST_LOAD_TOP 0.02 dev-agent:7624 ws_mb=500
+HOST_LOAD_TOP 0.02 dev-agent:408 ws_mb=269
+HOST_LOAD_VERDICT CLEAR
+
+PRE_NPU_CONTEXT_WITNESS "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [8176, 10744, 13488, 13864, 14380, 14396, 14704, 15352, 16544], "foreign_pids": []}
+round 0 ctl       [trace] run 0: dispatch 17.118 ms (first in its context); buffer 429,504 B; shims ['1'] (physical columns); marker span 27,835,918 cycles = 15.464 ms at 1.8 GHz (DERIVED); 129 markers
+HOST_TIMELINE {"elapsed_seconds": 2.281, "tree_rss_bytes": 149508096, "foreign_peers": []}
+round 0 box       [trace] run 0: dispatch 18.077 ms (first in its context); buffer 387,904 B; shims ['1'] (physical columns); marker span 29,113,545 cycles = 16.174 ms at 1.8 GHz (DERIVED); 130 markers
+HOST_TIMELINE {"elapsed_seconds": 4.578, "tree_rss_bytes": 385802240, "foreign_peers": []}
+round 0 boxplain  [trace] run 0: dispatch 17.609 ms (first in its context); buffer 378,752 B; shims ['1'] (physical columns); marker span 27,705,975 cycles = 15.392 ms at 1.8 GHz (DERIVED); 130 markers
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [2388, 7104, 8176, 9552, 9964, 10744, 11152, 12700, 13488, 13860, 13864, 14380, 14396, 14704, 14836, 15024, 15352, 15992, 16544, 16660, 17044], "foreign_pids": []}
+round 1 box       [trace] run 0: dispatch 18.127 ms (first in its context); buffer 388,736 B; shims ['1'] (physical columns); marker span 29,037,043 cycles = 16.132 ms at 1.8 GHz (DERIVED); 130 markers
+HOST_TIMELINE {"elapsed_seconds": 6.844, "tree_rss_bytes": 41930752, "foreign_peers": []}
+round 1 boxplain  [trace] run 0: dispatch 17.414 ms (first in its context); buffer 391,808 B; shims ['1'] (physical columns); marker span 27,753,988 cycles = 15.419 ms at 1.8 GHz (DERIVED); 130 markers
+HOST_TIMELINE {"elapsed_seconds": 9.125, "tree_rss_bytes": 360706048, "foreign_peers": []}
+round 1 ctl       [trace] run 0: dispatch 17.133 ms (first in its context); buffer 442,368 B; shims ['1'] (physical columns); marker span 27,778,990 cycles = 15.433 ms at 1.8 GHz (DERIVED); 121 markers
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [2388, 5740, 7104, 8176, 8412, 9552, 9964, 10744, 11152, 11784, 12296, 12700, 13368, 13488, 13664, 13860, 13864, 14380, 14396, 14704, 14732, 14836, 14992, 15024, 15352, 15788, 15992, 16088, 16468, 16544, 16660, 16976, 17044], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 11.453, "tree_rss_bytes": 280911872, "foreign_peers": []}
+round 2 boxplain  [trace] run 0: dispatch 17.065 ms (first in its context); buffer 401,600 B; shims ['1'] (physical columns); marker span 27,758,405 cycles = 15.421 ms at 1.8 GHz (DERIVED); 123 markers
+round 2 ctl       [trace] run 0: dispatch 17.251 ms (first in its context); buffer 424,896 B; shims ['1'] (physical columns); marker span 28,023,145 cycles = 15.568 ms at 1.8 GHz (DERIVED); 127 markers
+HOST_TIMELINE {"elapsed_seconds": 13.812, "tree_rss_bytes": 113430528, "foreign_peers": []}
+round 2 box       [trace] run 0: dispatch 18.105 ms (first in its context); buffer 391,424 B; shims ['1'] (physical columns); marker span 29,022,703 cycles = 16.124 ms at 1.8 GHz (DERIVED); 130 markers
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [2388, 2912, 3100, 3460, 4808, 5740, 6252, 7104, 8176, 8412, 9552, 9964, 10744, 11152, 11784, 11808, 12296, 12532, 12700, 13116, 13368, 13488, 13664, 13860, 13864, 14380, 14396, 14556, 14704, 14732, 14836, 14932, 14992, 15024, 15352, 15468, 15788, 15992, 16088, 16468, 16544, 16660, 16960, 16976, 17044], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 16.141, "tree_rss_bytes": 375238656, "foreign_peers": []}
+round 3 ctl       [trace] run 0: dispatch 17.215 ms (first in its context); buffer 420,864 B; shims ['1'] (physical columns); marker span 27,963,770 cycles = 15.535 ms at 1.8 GHz (DERIVED); 130 markers
+HOST_TIMELINE {"elapsed_seconds": 18.391, "tree_rss_bytes": 281501696, "foreign_peers": []}
+round 3 box       [trace] run 0: dispatch 18.146 ms (first in its context); buffer 388,096 B; shims ['1'] (physical columns); marker span 29,113,932 cycles = 16.174 ms at 1.8 GHz (DERIVED); 119 markers
+round 3 boxplain  [trace] run 0: dispatch 17.308 ms (first in its context); buffer 394,048 B; shims ['1'] (physical columns); marker span 27,772,798 cycles = 15.429 ms at 1.8 GHz (DERIVED); 127 markers
+HOST_TIMELINE {"elapsed_seconds": 20.672, "tree_rss_bytes": 189411328, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [2388, 2912, 3100, 3460, 4808, 5740, 6252, 7104, 8176, 8412, 9276, 9552, 9616, 9964, 10188, 10744, 11152, 11784, 11808, 12296, 12532, 12560, 12632, 12700, 13116, 13368, 13488, 13664, 13860, 13864, 13996, 14128, 14380, 14396, 14556, 14704, 14732, 14756, 14836, 14932, 14992, 15024, 15184, 15352, 15468, 15788, 15836, 15992, 16088, 16468, 16544, 16660, 16960, 16976, 16988, 17020, 17044], "foreign_pids": []}
+round 4 box       [trace] run 0: dispatch 17.697 ms (first in its context); buffer 395,840 B; shims ['1'] (physical columns); marker span 29,026,020 cycles = 16.126 ms at 1.8 GHz (DERIVED); 127 markers
+HOST_TIMELINE {"elapsed_seconds": 23.0, "tree_rss_bytes": 399413248, "foreign_peers": []}
+round 4 boxplain  [trace] run 0: dispatch 17.396 ms (first in its context); buffer 393,280 B; shims ['1'] (physical columns); marker span 27,762,026 cycles = 15.423 ms at 1.8 GHz (DERIVED); 130 markers
+round 4 ctl       [trace] run 0: dispatch 17.417 ms (first in its context); buffer 428,224 B; shims ['1'] (physical columns); marker span 27,947,352 cycles = 15.526 ms at 1.8 GHz (DERIVED); 127 markers
+HOST_TIMELINE {"elapsed_seconds": 25.344, "tree_rss_bytes": 84946944, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 4 KB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |16920               |107        |0           |0           |0    |Normal   |\n      |python.exe          |Active     |0           |0           |     |N/A      |\n      |4 KB                |N/A        |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [16920], "owned_pids": [2388, 2912, 3100, 3460, 4092, 4808, 5740, 6252, 7104, 7776, 8176, 8412, 9276, 9552, 9616, 9964, 10188, 10744, 11152, 11784, 11808, 12296, 12532, 12560, 12632, 12700, 13116, 13368, 13416, 13444, 13488, 13664, 13860, 13864, 13996, 14128, 14380, 14396, 14428, 14556, 14704, 14732, 14756, 14836, 14932, 14992, 15024, 15184, 15228, 15352, 15468, 15788, 15836, 15904, 15980, 15992, 16088, 16168, 16212, 16468, 16544, 16660, 16920, 16960, 16976, 16988, 17020, 17044, 17172], "foreign_pids": []}
+round 5 boxplain  [trace] run 0: dispatch 16.991 ms (first in its context); buffer 381,696 B; shims ['1'] (physical columns); marker span 27,636,026 cycles = 15.353 ms at 1.8 GHz (DERIVED); 127 markers
+HOST_TIMELINE {"elapsed_seconds": 27.609, "tree_rss_bytes": 364355584, "foreign_peers": []}
+round 5 ctl       [trace] run 0: dispatch 17.423 ms (first in its context); buffer 422,720 B; shims ['1'] (physical columns); marker span 27,827,828 cycles = 15.460 ms at 1.8 GHz (DERIVED); 121 markers
+HOST_TIMELINE {"elapsed_seconds": 29.844, "tree_rss_bytes": 278331392, "foreign_peers": []}
+round 5 box       [trace] run 0: dispatch 17.909 ms (first in its context); buffer 401,024 B; shims ['1'] (physical columns); marker span 29,201,891 cycles = 16.223 ms at 1.8 GHz (DERIVED); 130 markers
+
+===== box - ctl =====
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [2388, 2912, 3100, 3460, 4092, 4808, 4980, 5352, 5740, 6252, 6684, 7104, 7640, 7776, 8176, 8412, 9276, 9552, 9616, 9964, 10188, 10744, 11152, 11784, 11808, 12296, 12532, 12560, 12632, 12700, 13116, 13368, 13416, 13440, 13444, 13488, 13664, 13860, 13864, 13996, 14128, 14380, 14396, 14428, 14556, 14704, 14732, 14744, 14756, 14836, 14932, 14992, 15024, 15184, 15228, 15352, 15468, 15692, 15788, 15836, 15904, 15980, 15992, 16088, 16168, 16212, 16468, 16480, 16544, 16624, 16660, 16920, 16960, 16976, 16988, 17020, 17044, 17072, 17172], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 32.187, "tree_rss_bytes": 161943552, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 34.453, "tree_rss_bytes": 183242752, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [2388, 2912, 3100, 3460, 4092, 4808, 4980, 5352, 5740, 6252, 6684, 7104, 7640, 7776, 8176, 8412, 9276, 9552, 9616, 9964, 10188, 10744, 11152, 11784, 11808, 12296, 12532, 12560, 12632, 12700, 13116, 13368, 13416, 13440, 13444, 13488, 13664, 13860, 13864, 13996, 14128, 14380, 14396, 14428, 14556, 14704, 14732, 14744, 14756, 14836, 14932, 14992, 15024, 15184, 15228, 15352, 15468, 15692, 15788, 15836, 15904, 15980, 15992, 16088, 16168, 16212, 16468, 16480, 16544, 16624, 16660, 16920, 16960, 16976, 16988, 17020, 17044, 17072, 17172], "foreign_pids": []}
+[compare] control 6 runs, test 6 runs; frame (marker span) control 15.498 ms, test 16.159 ms (DERIVED at 1.8 GHz; per-run control [15.464, 15.433, 15.568, 15.535, 15.526, 15.46], test [16.174, 16.132, 16.124, 16.174, 16.126, 16.223])
+
+set   layers         cycles           lead           W_bp           A_bp       O_starve          W_mem          A_mem   (test - control, cycles)
+box       28        600,577        599,646       -129,271        960,615        -93,432        133,082        140,351
+         ctl      9,290,158         51,124      5,000,607      1,888,148      7,037,258      1,502,062      1,527,608
+rest      38        589,111        687,126        287,654        395,054        138,916       -303,760       -367,199
+         ctl     18,606,009         74,967     10,264,458      1,617,903     15,543,669      1,158,294      1,822,451
+
+per layer (test - control): k, boxed, cycles, lead, W_bp, A_bp, O_starve, W_mem, A_mem, name
+   0 .      34,490      46,643          12      -3,178     -52,536       2,146      16,312  /model.0/conv/Conv
+   1 .      -7,690           0     108,074     157,641     129,348    -110,182    -162,211  /model.1/conv/Conv
+   2 .       7,555          14           1          32       3,636          25       6,898  /model.2/cv1/conv/Conv
+   3 .        -851        -472          -0     -18,271     -52,598         352      22,691  /model.2/m.0/cv1/conv/Conv
+   4 .       1,535         -24     -10,380     -12,846      -8,138      11,843        -268  /model.2/m.0/cv2/conv/Conv
+   5 .      -4,978           2     -17,913          54     -13,532      -1,038     -21,490  /model.2/cv2/conv/Conv
+   6 .     -12,468        -113      55,048      78,088      75,933     -58,154     -81,013  /model.3/conv/Conv
+   7 .      -3,596           1      -1,039          33       3,293      -2,752      -3,432  /model.4/cv1/conv/Conv
+   8 B      62,540      54,100     -31,300       4,250     -25,284      40,501      35,546  /model.4/m.0/cv1/conv/Conv
+   9 .      38,294      50,476      24,419       7,654      29,398     -30,804     -26,871  /model.4/m.0/cv2/conv/Conv
+  10 B      49,150      43,820      -8,683      24,968     -19,584      10,833       4,812  /model.4/m.1/cv1/conv/Conv
+  11 .      46,888      53,057       3,050      13,491      -5,394      -9,889     -14,598  /model.4/m.1/cv2/conv/Conv
+  12 .      -2,422         -94      18,090          65       5,404      -3,136      -6,776  /model.4/cv2/conv/Conv
+  13 .     -13,312          -7      37,985      55,958      42,120     -47,722     -62,768  /model.5/conv/Conv
+  14 .      20,627          33       8,512          35       7,418       9,076      17,911  /model.6/cv1/conv/Conv
+  15 B      45,189      53,526      -3,020      27,284      10,330      -5,567        -323  /model.6/m.0/cv1/conv/Conv
+  16 .      66,028      54,070      -1,614         247       4,324       8,760       5,290  /model.6/m.0/cv2/conv/Conv
+  17 B      45,797      43,421      -4,814      28,794       1,470       2,424       6,642  /model.6/m.1/cv1/conv/Conv
+  18 .      50,142      53,825       5,829      25,663      -1,150      -6,481      -3,181  /model.6/m.1/cv2/conv/Conv
+  19 .       1,592         -21      -1,945          67      -1,873      -3,052       3,331  /model.6/cv2/conv/Conv
+  20 .       1,981          58      33,853      40,834      10,146     -29,351     -33,101  /model.7/conv/Conv
+  21 .      -2,538         -48         428          20         816         348         744  /model.8/cv1/conv/Conv
+  22 B      47,247      43,793     -12,241      13,199       9,534      19,279      23,464  /model.8/m.0/cv1/conv/Conv
+  23 .      66,964      53,703       6,506      13,929       2,967       5,107       5,750  /model.8/m.0/cv2/conv/Conv
+  24 .       3,074           2       7,893          51       2,943      -5,030      -5,036  /model.8/cv2/conv/Conv
+  25 .       2,128          -8        -263           9        -614         637         119  /model.9/cv1/conv/Conv
+  26 B      50,062      43,778        -700           4      -7,727      13,909         551  /model.9/m/MaxPool
+  27 B      12,904      -3,444       3,923           6      -8,777      17,417      -1,428  /model.9/m_1/MaxPool
+  28 B      -3,607         -11      -3,417           4      -1,780         -27        -521  /model.9/m_2/MaxPool
+  29 .      44,597      51,310      -7,613          58      -8,388        -472       1,498  /model.9/cv2/conv/Conv
+  30 .     -14,642           1      -9,304          92     -10,906        -379       1,176  /model.12/cv1/conv/Conv
+  31 B      49,254      50,817      -5,853      26,911      -4,465       4,124      10,608  /model.12/m.0/cv1/conv/Conv
+  32 B       6,055          -2     -17,990      29,188     -20,244      21,593      22,306  /model.12/m.0/cv2/conv/Conv
+  33 .      16,417      50,310       1,394          52     -10,776      -9,477      -1,341  /model.12/cv2/conv/Conv
+  34 .         374          25      -6,799          91      -3,042       9,006      -1,692  /model.15/cv1/conv/Conv
+  35 B      41,299      43,291     -18,007      31,014        -694      23,974      27,890  /model.15/m.0/cv1/conv/Conv
+  36 B      -7,509      -1,537     -26,707      12,028     -36,361      26,177      24,664  /model.15/m.0/cv2/conv/Conv
+  37 .      52,347      54,069       2,344          48       1,220         635         484  /model.15/cv2/conv/Conv
+  38 .     -14,318        -595      15,430      21,077      -2,084     -27,758     -24,844  /model.16/conv/Conv
+  39 B      53,934      43,266      12,119      96,056       7,463      -2,012      -2,978  /model.22/cv2.0/cv2.0.0/conv/Conv
+  40 B     -20,281         608      20,592     165,782      22,366     -41,963     -55,859  /model.22/cv3.0/cv3.0.0/conv/Conv
+  41 B       7,046         -44     -29,207      10,674     -38,846      36,698      38,277  /model.22/cv2.0/cv2.0.1/conv/Conv
+  42 B     -19,139           0      29,720     173,759      26,733     -49,991     -35,528  /model.22/cv3.0/cv3.0.1/conv/Conv
+  43 .      45,832      43,298       1,394          42       2,476       1,174         684  /model.18/cv1/conv/Conv
+  44 .       2,743         -48           2           5        -986         328       1,953  /model.22/cv2.0/cv2.0.2/Conv
+  45 .       4,970          60       2,935          27         562       1,935       5,237  /model.22/cv3.0/cv3.0.2/Conv
+  46 B      55,075      43,495     -18,444      27,757      -6,216      27,735      17,637  /model.18/m.0/cv1/conv/Conv
+  47 B       8,911          20     -11,942      21,562      -2,504      20,765      22,054  /model.18/m.0/cv2/conv/Conv
+  48 .      33,024      43,492     -11,927          51     -10,030       1,599       2,859  /model.18/cv2/conv/Conv
+  49 .      -1,216         -18      12,938      13,850       2,263     -13,553      -8,297  /model.19/conv/Conv
+  50 B      50,278      53,912       4,426      51,321      -1,679     -11,978      -7,366  /model.22/cv2.1/cv2.1.0/conv/Conv
+  51 B     -11,270           8      -1,538      66,069      11,767      -7,913      -6,514  /model.22/cv3.1/cv3.1.0/conv/Conv
+  52 B      -3,038         -60      -1,928           4         373        -557        -683  /model.22/cv2.1/cv2.1.1/conv/Conv
+  53 B       3,517          -4     -17,468      28,361      -8,478      19,198       8,728  /model.22/cv3.1/cv3.1.1/conv/Conv
+  54 .      52,650      43,767        -836          31      -1,544        -134      -2,114  /model.21/cv1/conv/Conv
+  55 .     -16,938       3,436          11          -0     -18,121       2,194        -916  /model.22/cv2.1/cv2.1.2/Conv
+  56 .       1,037           7        -811           6         382         958         409  /model.22/cv3.1/cv3.1.2/Conv
+  57 B      36,470      43,397      14,444      40,951      -1,785     -28,958      -7,967  /model.21/m.0/cv1/conv/Conv
+  58 B       1,595          11     -17,489      15,664        -335      23,988      26,804  /model.21/m.0/cv2/conv/Conv
+  59 .      54,398      43,270      11,946          45      10,291        -936        -888  /model.21/cv2/conv/Conv
+  60 B      31,892      43,487      13,542      44,501      -4,433     -16,251     -16,402  /model.22/cv2.2/cv2.2.0/conv/Conv
+  61 B       3,783          -5        -976      20,502       2,586      -6,383       7,980  /model.22/cv3.2/cv3.2.0/conv/Conv
+  62 B        -516         -12          -2           2        -640        -484         -34  /model.22/cv2.2/cv2.2.1/conv/Conv
+  63 B       3,937          14       3,690           2       3,778      -3,450      -2,009  /model.22/cv3.2/cv3.2.1/conv/Conv
+  64 .      41,700      43,616           0           1      -1,706      -1,462         -18  /model.22/cv2.2/cv2.2.2/Conv
+  65 .      -7,303          29           3           2       7,394       1,883         308  /model.22/cv3.2/cv3.2.2/Conv
+
+[compare] box set: dC 600,577 cycles (+0.334 ms), dW_bp -129,271; share of the frame's dC on boxed layers 50% (total +0.661 ms)
+[compare] rule (dW <= -0.5 dC: H-W; dW >= +0.5 dC: H-A): neither
+
+===== boxplain - ctl =====
+HOST_TIMELINE {"elapsed_seconds": 36.734, "tree_rss_bytes": 111169536, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 39.016, "tree_rss_bytes": 167370752, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [2004, 2388, 2912, 3100, 3460, 4092, 4808, 4980, 5352, 5740, 6252, 6684, 7104, 7640, 7776, 8176, 8412, 9276, 9552, 9616, 9964, 10188, 10744, 11152, 11784, 11808, 12296, 12532, 12560, 12632, 12700, 13116, 13368, 13416, 13440, 13444, 13488, 13664, 13860, 13864, 13996, 14128, 14380, 14396, 14428, 14556, 14704, 14732, 14744, 14756, 14836, 14932, 14992, 15024, 15184, 15228, 15352, 15468, 15692, 15788, 15836, 15904, 15964, 15980, 15992, 16088, 16168, 16212, 16468, 16480, 16544, 16624, 16660, 16920, 16960, 16976, 16988, 17020, 17044, 17072, 17172], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 41.219, "tree_rss_bytes": 187072512, "foreign_peers": []}
+[compare] control 6 runs, test 6 runs; frame (marker span) control 15.498 ms, test 15.406 ms (DERIVED at 1.8 GHz; per-run control [15.464, 15.433, 15.568, 15.535, 15.526, 15.46], test [15.392, 15.419, 15.421, 15.429, 15.423, 15.353])
+
+set   layers         cycles           lead           W_bp           A_bp       O_starve          W_mem          A_mem   (test - control, cycles)
+box       28       -122,184         -4,676        330,926        450,589         68,309       -410,388       -505,924
+         ctl      9,290,158         51,124      5,000,607      1,888,148      7,037,258      1,502,062      1,527,608
+rest      38        -42,447         57,111        285,085        420,724        139,103       -332,312       -420,415
+         ctl     18,606,009         74,967     10,264,458      1,617,903     15,543,669      1,158,294      1,822,451
+
+per layer (test - control): k, boxed, cycles, lead, W_bp, A_bp, O_starve, W_mem, A_mem, name
+   0 .      33,909      46,544           8        -448     -27,099       1,578      10,759  /model.0/conv/Conv
+   1 .      -8,845           4     107,301     161,510     123,714    -109,319    -165,797  /model.1/conv/Conv
+   2 .       2,778          -8          -1          29      14,196         -36       2,435  /model.2/cv1/conv/Conv
+   3 .      -4,319           2           0     -24,086     -64,946         528      28,423  /model.2/m.0/cv1/conv/Conv
+   4 .       6,436         -24     -14,083     -12,302     -11,835      19,565       2,305  /model.2/m.0/cv2/conv/Conv
+   5 .      -6,707         529     -19,309          54     -15,555      -3,435     -23,382  /model.2/cv2/conv/Conv
+   6 .     -10,263        -102      56,625      80,132      79,527     -58,356     -82,952  /model.3/conv/Conv
+   7 .      -5,216          -0      -1,153          28       2,871      -3,873      -4,696  /model.4/cv1/conv/Conv
+   8 B       3,412           1       1,232       1,680         830      -1,024      -6,075  /model.4/m.0/cv1/conv/Conv
+   9 .       1,675           4      10,151       8,434      13,655      -7,776      -9,602  /model.4/m.0/cv2/conv/Conv
+  10 B       7,442          34       4,794       8,974         638        -593      -9,584  /model.4/m.1/cv1/conv/Conv
+  11 .      21,284       8,062      -4,246      12,727      -1,340       7,986       5,138  /model.4/m.1/cv2/conv/Conv
+  12 .      -1,795        -108       8,461          60         265      -1,697      -2,377  /model.4/cv2/conv/Conv
+  13 .     -10,840         -11      40,165      58,377      44,613     -47,993     -64,247  /model.5/conv/Conv
+  14 .       1,664          21          58          28         281       1,408       1,600  /model.6/cv1/conv/Conv
+  15 B     -20,498          37      31,162      32,528      34,460     -48,103     -51,938  /model.6/m.0/cv1/conv/Conv
+  16 .      -5,680          11       1,472       4,689       1,738      -3,074      -5,848  /model.6/m.0/cv2/conv/Conv
+  17 B        -981          51       8,628      13,593      -3,587     -12,263     -10,256  /model.6/m.1/cv1/conv/Conv
+  18 .      -5,349           0       1,644      13,285      -2,359      -2,554         513  /model.6/m.1/cv2/conv/Conv
+  19 .      -3,795         -22      -4,229          62      -9,818      -7,345       3,804  /model.6/cv2/conv/Conv
+  20 .      -3,450          51      37,719      53,393       8,609     -35,067     -50,595  /model.7/conv/Conv
+  21 .       1,529          64      -1,290          19       1,138         700        -487  /model.8/cv1/conv/Conv
+  22 B        -899           0      17,700      22,002       4,859     -22,434     -21,968  /model.8/m.0/cv1/conv/Conv
+  23 .      -7,164       3,447      24,118      28,796      -6,430     -32,782     -25,597  /model.8/m.0/cv2/conv/Conv
+  24 .       4,068          74      12,505          54       6,962      -5,454      -3,136  /model.8/cv2/conv/Conv
+  25 .       6,096          50         170          12         458       1,230        -135  /model.9/cv1/conv/Conv
+  26 B      -7,564          -6        -137           4         806         144         344  /model.9/m/MaxPool
+  27 B        -360      -3,547       7,424           6      -6,133       1,334        -548  /model.9/m_1/MaxPool
+  28 B       7,615         -41          86           4          34         -35        -626  /model.9/m_2/MaxPool
+  29 .     -14,600        -852      -6,410          56     -14,825      -3,286      -1,980  /model.9/cv2/conv/Conv
+  30 .     -22,500          -1     -18,760          93     -20,911        -981      -1,478  /model.12/cv1/conv/Conv
+  31 B     -12,355         -23      18,987      16,471     -13,299     -30,523     -19,876  /model.12/m.0/cv1/conv/Conv
+  32 B      -5,769          40      18,226      39,533       1,783     -19,903     -28,443  /model.12/m.0/cv2/conv/Conv
+  33 .     -27,637         -81        -758          46          31      -1,029      -3,283  /model.12/cv2/conv/Conv
+  34 .      25,202         -14      15,411         100      16,421       1,769      -1,816  /model.15/cv1/conv/Conv
+  35 B     -18,212          83       9,617      17,269      16,250     -26,055     -30,636  /model.15/m.0/cv1/conv/Conv
+  36 B      -2,123          26       3,990      14,934         528      -1,830     -12,871  /model.15/m.0/cv2/conv/Conv
+  37 .      -4,987          47       9,600          48       1,891      -1,894       2,363  /model.15/cv2/conv/Conv
+  38 .     -17,980        -644      14,373      21,572      -6,242     -29,696     -29,460  /model.16/conv/Conv
+  39 B     -19,096        -104      37,253      62,648       4,597     -53,132     -56,047  /model.22/cv2.0/cv2.0.0/conv/Conv
+  40 B      -3,946      -1,025      10,875       7,660      -2,919      -5,375     -26,514  /model.22/cv3.0/cv3.0.0/conv/Conv
+  41 B      -6,490         -43       7,894      18,411       4,507      -7,103     -18,624  /model.22/cv2.0/cv2.0.1/conv/Conv
+  42 B      -2,983          -0      14,175      15,334     -10,128     -17,254     -17,686  /model.22/cv3.0/cv3.0.1/conv/Conv
+  43 .       4,460         -15       1,372          44       4,245       2,920         427  /model.18/cv1/conv/Conv
+  44 .      10,338         -52           1           8        -751         532          36  /model.22/cv2.0/cv2.0.2/Conv
+  45 .       4,613         -92       2,524          24      -2,114         263       2,050  /model.22/cv3.0/cv3.0.2/Conv
+  46 B       2,858          19       2,042      15,067       2,869      -1,414     -10,287  /model.18/m.0/cv1/conv/Conv
+  47 B       1,455          34      11,226      22,175      10,160     -10,249     -19,270  /model.18/m.0/cv2/conv/Conv
+  48 .     -10,480         170     -11,230          49      -9,994       1,056       1,639  /model.18/cv2/conv/Conv
+  49 .       2,478         -29      14,622      13,740       2,941     -12,908      -8,293  /model.19/conv/Conv
+  50 B      -9,820         -59      34,574      31,327       1,086     -43,374     -34,547  /model.22/cv2.1/cv2.1.0/conv/Conv
+  51 B      -6,216          -1       3,263       2,073       9,858      -7,847      -9,954  /model.22/cv3.1/cv3.1.0/conv/Conv
+  52 B        -219         -64         -60           4      -2,800      -2,876        -562  /model.22/cv2.1/cv2.1.1/conv/Conv
+  53 B       3,467          41      18,210      21,778      15,646     -13,846     -26,212  /model.22/cv3.1/cv3.1.1/conv/Conv
+  54 .       2,517         -12       3,745          37        -805      -3,352         359  /model.21/cv1/conv/Conv
+  55 .       4,358         -41           0           2       2,019          29       1,494  /model.22/cv2.1/cv2.1.2/Conv
+  56 .      -1,146           0        -405           4        -562         -11         499  /model.22/cv3.1/cv3.1.2/Conv
+  57 B      -8,449         -97      22,406      28,380       6,122     -31,054     -29,387  /model.21/m.0/cv1/conv/Conv
+  58 B      -6,580         -16       1,395      11,136       2,862        -571      -1,335  /model.21/m.0/cv2/conv/Conv
+  59 .       3,854           3       4,909          43       2,858        -686         561  /model.21/cv2/conv/Conv
+  60 B     -15,466          -1      26,088      30,923      -8,109     -32,721     -36,665  /model.22/cv2.2/cv2.2.0/conv/Conv
+  61 B        -242         -24      18,272      16,670      -1,456     -19,098     -25,814  /model.22/cv3.2/cv3.2.0/conv/Conv
+  62 B         -32           9          -2           2         -82         -85           2  /model.22/cv2.2/cv2.2.1/conv/Conv
+  63 B        -134           0       1,605           3      -1,072      -3,104        -546  /model.22/cv3.2/cv3.2.1/conv/Conv
+  64 .        -677          55           1           1        -608        -610         -18  /model.22/cv2.2/cv2.2.2/Conv
+  65 .      -6,276          83           2           2       6,865       1,334         359  /model.22/cv3.2/cv3.2.2/Conv
+
+[compare] box set: dC -122,184 cycles (-0.068 ms), dW_bp 330,926; share of the frame's dC on boxed layers 74% (total -0.091 ms)
+[compare] rule (dW <= -0.5 dC: H-W; dW >= +0.5 dC: H-A): no loss located on the box set
+POST_NPU_CONTEXT_WITNESS "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+RESEARCH_PROCESS_RESULT {"exit_code": 0, "stop": null, "peak_tree_rss_bytes": 416845824, "rss_measurement": "maximum observed across sampled descendant working sets; zero observations reported as null", "elapsed_seconds": 43.03100000000268, "foreign_contention_observed": false, "timing_eligible": true}

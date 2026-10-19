@@ -762,6 +762,8 @@ class LayerSchedule:
     w_fills: int
     # Set when the MemTile activation ring serves this layer: the geometry the instruction stream arms it with.
     ring: Optional["RingPlan"] = None
+    # Set when box fills serve this layer (compiler/box_fills.py): the MemTile's cut, written per layer.
+    box: Optional[object] = None
 
 
 def round_packets(layer, group: int, chunks: List[Chunk], coarse: bool = False,
@@ -1410,6 +1412,10 @@ def emulate_layer(sched: LayerSchedule, store: PacketStore, ws_arr: np.ndarray, 
                     consume(stream)
                 else:
                     tile.extend(stream)
+            elif kind == "X":
+                # A box fill (compiler/box_fills.py): the MemTile cuts each box into the cores' packets.
+                from ignite_xdna.compiler.box_fills import box_packets
+                consume(box_packets(it, sched.box, ws_arr))
             elif kind == "R":
                 tile = []
             elif kind == "S":

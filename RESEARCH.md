@@ -1531,6 +1531,17 @@ been closed:
     under compute.
   - **Unanswered:** which input the cores stall on. A core lock-stall trace (weights against activations) answers
     it, and it is the next measurement this project needs before another transport lever is sized.
+  - *[Progress, 2026-10-15. The cores could not be traced (inferred cause: their southbound ports carry the output
+    join), so the stall input is still unmeasured. A shim trace measured around it instead.*
+    - *It found where the computing frame waits: at the layer boundaries, while the cores finish their backlog.*
+    - *Dropping the per-layer barrier for exact workspace dependencies recovers that wait. It is now the compiler's
+      default: −1.31 ms on YOLOv8s, −1.00 on YOLOv8n, all exact
+      ([BENCHMARKS](docs/BENCHMARKS.md#layer-overlap-is-the-compilers-default-yolov8n-100-ms-yolov8s-131-pose-114-sesr-m7-008-every-container-exact-2026-10-15-desktop-2)).*
+    - *About 1.0 ms DERIVED of the YOLOv8s gain is the backlog after compute-heavy layers, now hidden under the next
+      layer's transfers
+      ([BENCHMARKS](docs/BENCHMARKS.md#where-layer-overlaps-gain-comes-from-the-boundary-gaps-and-after-compute-heavy-layers-the-cores-backlog-itself-2026-10-15-desktop-2)).*
+    - *Inside a layer, the spans overlap lengthens fill with backpressure, not DDR starvation.*
+    - *The stall input stays open.]*
 
 ## Future pipeline test plans (Categories A through E)
 

@@ -9,7 +9,8 @@ and must reproduce the container (workspace size and every weight-packet byte), 
 task count then cuts `insts.bin` at its layer barrier (`engine_sequence.split_instruction_stream`; the emitter
 retires every task at each barrier, so the pieces are position independent). Each piece, the whole stream and an
 empty stream (header only, no ops) get one pre-built XRT run each, the same start/wait path `GraphSession.dispatch`
-uses.
+uses. The compiler overlaps layers by default since 2026-10-15, leaving no barrier to cut at: time a container built
+with `--no-overlap-layers` (the tool refuses an overlap container).
 
 One round = the whole stream once, then every layer piece in order, then the empty stream `--empty` times; rounds
 repeat `--rounds` times after `--warmup` rounds, on the same staged frame. Reported per layer: the median dispatch
@@ -72,6 +73,9 @@ def pieces_for(container: Path, onnx: Path):
     ge = manifest["graph_engine"]
     if ge.get("segments"):
         raise ValueError("container has host segments; this tool times monolithic containers only")
+    if ge.get("overlap_layers"):
+        # The cut below relies on every layer ending in a barrier; with layer overlap the stream has none.
+        raise ValueError("container was built with overlap_layers; its stream has no layer barriers to cut at")
     ir, ws, scheds, store = relower(onnx, manifest)
     if ws.nbytes != manifest.get("workspace_bytes", ge.get("workspace_bytes")):
         raise ValueError(f"re-lowered workspace {ws.nbytes} differs from the container's")

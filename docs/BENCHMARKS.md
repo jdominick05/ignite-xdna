@@ -20209,7 +20209,9 @@ so the two are separable here. Fit of each layer's NOP time ([log](../results/ai
 - **It is consistent with the activation ring result.** The ring cut DDR traffic 38%, but every core still
   received one packet per chunk per group. Its time rose with its instruction stream.
 - **Still open:** whether the cost is per packet or per byte (every packet is 6,400 B), and which stage of
-  the path (shim, MemTile, core DMA, lock handshake) sets it.
+  the path (shim, MemTile, core DMA, lock handshake) sets it. *[Partly answered 2026-10-15 by the
+  [shim budget](#where-the-control-frames-time-goes-seen-from-the-shim-activation-bytes-on-the-transport-bound-layers-the-memtile-filling-on-the-compute-heavy-ones-exploratory-offline-2026-10-15-desktop-2): on the transport-bound layers the shim's activation stream (the MemTile
+  never pushes back), on the compute-heavy ones a stage below the MemTile. Per packet against per byte stays open.]*
 
 **Lever sizes (DERIVED, at 0.235 µs per packet).** A layer's packet count is 4 × G × T × C:
 - G = ceil(Cout / 32), the output-channel groups;
@@ -20332,7 +20334,7 @@ the array, roughly 6.8 GB/s per column. That is close to one 32-bit stream at th
 (7.2 GB/s), and to the 7 GB/s the one-core MemTile hop probe measured (0.143 ms per MB). That suggests a
 per-column ceiling: one shim-to-MemTile activation stream feeding four cores. This is DERIVED and untested.
 - **If it holds,** the lever is more activation streams per column, not packet shape. Each column's second
-  shim MM2S channel carries only weights, about 57 MB per frame against 237 MB of activations.
+  shim MM2S channel carries only weights, about 57 MB per frame against 237 MB of activations. *[83.6 MB, not ~57: 20.99 MB per column with the replay, from the schedule and the instruction stream ([shim budget](#where-the-control-frames-time-goes-seen-from-the-shim-activation-bytes-on-the-transport-bound-layers-the-memtile-filling-on-the-compute-heavy-ones-exploratory-offline-2026-10-15-desktop-2)), as the sizing section below already reads.]*
 - **If the ceiling is per core instead,** shape and bytes are the lever and the sizing above applies.
 
 A probe that drives one, two and four cores of one column from one shim channel, and four cores from two,
@@ -20389,7 +20391,7 @@ The four columns are independent (3.95x one column).
 - **It explains why earlier transport experiments could not win.** The MemTile hop costs nothing, the ring and
   the weight buffer moved bytes around the same single stream, and packet shape only trims bytes on it.
 - **The lever is a second stream per column.** Today each column's second shim MM2S channel carries only
-  weights: about 57 MB per YOLOv8s frame (29.5 MB of packets plus the stride-0 replay), against 237 MB of
+  weights: about 57 MB per YOLOv8s frame (29.5 MB of packets plus the stride-0 replay) *[83.6 MB, not ~57: 20.99 MB per column with the replay, from the schedule and the instruction stream ([shim budget](#where-the-control-frames-time-goes-seen-from-the-shim-activation-bytes-on-the-transport-bound-layers-the-memtile-filling-on-the-compute-heavy-ones-exploratory-offline-2026-10-15-desktop-2)), as the sizing section below already reads.]*, against 237 MB of
   activations.
 
 At the measured rates, the activations alone take about 8.7 ms per frame at 27.17 GB/s and about 4.7 ms at
@@ -28502,3 +28504,859 @@ One process per plan, with the NPU idle after every plan, in every sitting:
   context switches. What remains:
   - designs that share the array by columns (no swap at all);
   - kernels small enough to stay resident together, so only the ~35 KB of DMA state changes.
+
+#### Block 5: AMD's split of roles, built as a probe: the shim moves one box, the MemTile cuts it per core (2026-10-15, Desktop 2)
+
+**Question.** The decode above shows AMD's shim moving coarse tiles while MemTile descriptor chains cut them into
+per-core objects. Does that split work under the engine's own shapes, and what does it save?
+
+**Why the engine's fills stay one quad (offline).**
+- Of YOLOv8s's 5,509 activation fills, 4,774 still carry one quad.
+- 4,508 of them are 4-D, with the core index on the repeat. So no second quad fits in a shim BD.
+- **For all 4,508, the union of the four core slices is one 3-D box.** The test is exact set equality of byte
+  offsets. A box leaves the repeat free, so consecutive boxes merge. They fall into three groups (shape counts in
+  the census, section 1 of the sizing log):
+
+  | group | example | count | box | bytes per quad |
+  |---|---|---:|---|---:|
+  | 8-row windows at a 5-row step, a 3-row halo | `(4, 4, 8, 200)` at `(3280, 53792, 656, 1)` | 2,308 | 4 × 23 × 200 B | 18,400 |
+  | other overlaps, 2-row and 11-row halos | `(4, 10, 4, 160)`, `(4, 2, 16, 200)` | 304 | 4 × 10 × 160 B / 2 × 16 × 200 B | 16,000 / 12,400 |
+  | disjoint 5-row slices, no halo | `(4, 8, 5, 160)` | 1,896 | 8 × 20 × 160 B | 25,600 |
+
+  Every other one-quad shape moves 25,600 B. Only the 2,612 overlapping fills save bytes, and they account for all
+  19.7 MB of the byte saving below. The 1,896 disjoint ones save tasks only.
+- **The probe below tests the first group,** the largest one.
+- *Corrected 2026-10-15, before any push:* this paragraph first said all 4,508 were 3-row-halo windows of 18,400 B.
+  The sizing figures were computed per fill and are unchanged.
+
+**Sizing (DERIVED, kill line pre-registered first, sha256 `6628b9e3...`).** Every boxable fill becomes its box,
+and runs of boxes merge by repeat, at most 8 per task.
+- **How runs are formed:** a run is consecutive boxes in a column program's sequence of activation fills. Weight
+  and drain items between them are skipped.
+- **Open for the engine block:** whether the emitter may legally move fills past those items. The MemTile buffer
+  depth and the cores' consumption order are the constraints.
+- YOLOv8s tasks fall from 6,795 to 3,857, and activation bytes from 237.7 to 218.0 MB.
+- The saving is **3.27 ms under model A and 1.81 ms under model C**. Caps of 4 and 16 change it by under 0.05 ms.
+- 424 boxes stay unmerged.
+- The line was 1 ms under A at cap 8, so the probe went ahead.
+
+**The probe (`tools/task_issue_probe.py`, shapes `o4`, `o4raw`, `boxraw`).** It uses the probe's activation path
+with the engine's retire order. The DDR quad is laid out like the engine's dominant fill.
+
+**The split does not go through IRON's ObjectFifo.**
+- **What failed:** a `split` with `dims_to_stream` and offsets 0 / 1,000 / 2,000 / 3,000 timed out on its first
+  dispatch (`ERT_CMD_STATE_TIMEOUT`).
+- **Why:** the lowered IR shows the cause (DECODED). `split` models a disjoint partition, so each child's MM2S BD
+  gets the gap to the next offset as its length (1,000 / 1,000 / 1,000 / 15,400 B) while its pattern streams
+  6,400 B. The S2MM side is chunked at the same offsets.
+- **Ruled out:** the shim BD (its length matches its pattern), and the cores and drain, which are identical in the
+  `o4` build that came back exact.
+- **The working route is a hand-written design.** `o4raw` and `boxraw` give the MemTile two 18,400 B buffers.
+  - **Producer locks:** one per buffer, initialised to 4 and taken 4 at a time.
+  - **Consumer locks:** one per core.
+  - **The S2MM chain** has five chunks. The CDO generator requires every locked BD to acquire and release, and it
+    rejects a zero acquire. So the first chunk puts 4 tokens on a relay lock, and chunk i takes one and releases
+    core i−1, after that core's last byte has landed.
+  - **Each core's MM2S BD** reads its 6,400 B as `[4 @ 4,600, 8 @ 200, 200 @ 1]` from offset 1,000 j: four
+    channels reading overlapping ranges of one buffer.
+  - **Descriptor budget:** the input S2MM moved to MemTile channel 1, because the check build overflowed the
+    24-descriptor half of the even channels.
+
+**Exact on silicon (MEASURED).** In the check builds the cores copy every object back through a MemTile join; the
+input bytes are random (seed 1234):
+- `o4raw`, `boxraw` k1 and k4, on 1 column × 16 quads: 0 of 409,600 bytes differ.
+- `o4raw` k1, `boxraw` k16 and k64, on 4 columns × 64 quads: 0 of 6,553,600 differ.
+- IRON's `o4`: 0 of 409,600 differ.
+
+This is four channels each walking an overlapping range, not one BD re-reading its own addresses. So it does not
+settle the self-overlap question that the 09-09 im2col probe left open.
+
+**The sitting.**
+- **Setup:** pre-registered (sha256 `196d9db8...`), timing builds only (the cores just acquire and release), 3
+  rounds × 30 dispatches, rotated, `timing_eligible: true`, no foreign contention.
+- **Issue held equal:** instruction bytes per task are identical across `o4`, `o4raw` and `boxraw` (581,648 B for
+  4,096 tasks).
+
+| Q = 1,024 quads per column | tasks | shim MB | mean of rounds | vs `o4raw` k1 |
+|---|---:|---:|---:|---:|
+| 4 col `o4` (IRON, the engine's form) k1 | 4,096 | 104.9 | 5.838 ms | +0.055 |
+| 4 col `o4raw` k1 | 4,096 | 104.9 | 5.783 | - |
+| 4 col `boxraw` k1 | 4,096 | 75.4 | 6.577 | **+0.794** |
+| 4 col `boxraw` k2 | 2,048 | 75.4 | 3.079 | −2.704 |
+| 4 col `boxraw` k8 | 512 | 75.4 | 3.133 | **−2.650** |
+| 4 col `boxraw` k64 | 64 | 75.4 | 3.095 | −2.688 |
+| 1 col `o4raw` k1 | 1,024 | 26.2 | 4.170 | - |
+| 1 col `boxraw` k1 | 1,024 | 18.8 | 2.882 | −1.288 |
+| 1 col `boxraw` k8 | 128 | 18.8 | 3.041 | −1.129 |
+
+**Verdicts by the pre-registered rules:**
+- **R1, the protocol is like-for-like:** `o4raw` reads within 0.055 ms of IRON's `o4`.
+- **R2, neither model.**
+  - A predicted 0 for a one-box task and C predicted −1.07 ms. It reads **+0.794 ms**, slower than the engine's
+    one-quad task by 0.19 µs per task, though it moves 28% fewer bytes. The cause is unexplained.
+  - **Ruled out:** instruction bytes (equal), the MemTile/core protocol (shared by `o4raw` and `boxraw`), and
+    contention (none observed).
+  - **Still standing:** task size. An 18.4 KB task may fall further behind its own transfer than a 25.6 KB one.
+    That is the same unexplained step the contiguous grid showed between 25.6 and 51.2 KB tasks.
+  - **On one column,** where issue is not binding, the same box saves 1.29 ms, slightly more than both models'
+    byte term (1.07).
+- **R3, kill line:** neither model was favoured, so the rule scales A's frame saving by the measured k8 delta:
+  3.27 × 2.650 / 3.09 = **2.80 ms projected for YOLOv8s (DERIVED)**. That clears the 1 ms line.
+  *[Measured against the same day: lowered into the engine, YOLOv8s read +0.685 ms real and -0.251 ms NOP,
+  verdict KILL; see [box fills in the engine](#block-5-box-fills-in-the-engine-exact-on-the-device-and-069-ms-slower-transport-gains-025-ms-but-compute-exposure-grows-094-ms-2026-10-15-desktop-2).]*
+  - The 424 unmerged boxes would pay the one-box penalty, at most about 0.08 ms.
+  - **Implication for the build:** a fill that does not merge should stay in today's form.
+- **R4, the step:** k2 and k64 read within 0.016 ms, so merging past two boxes buys nothing at this traffic. This
+  matches the contiguous grid.
+
+**What this does and does not establish.**
+- **Established:** the split works on this silicon, exactly, at the engine's own shape. It halves this traffic's
+  time once boxes merge, 5.78 → 3.08–3.13 ms, at 6.1 GB/s per column.
+- **Not established:** that the engine gains 2.80 ms. This is a NOP probe. The stream-sharing precedent turned a
+  −0.48 ms NOP gain into a +0.93 ms real loss through compute exposure.
+- **The engine work would need:**
+  - a raw-BD MemTile program per layer shape, in place of the ObjectFifo split, with its descriptor budget;
+  - weights and drains beside it;
+  - an exact oracle per layer before any frame is timed.
+
+That block was built and measured the same day: [box fills in the engine](#block-5-box-fills-in-the-engine-exact-on-the-device-and-069-ms-slower-transport-gains-025-ms-but-compute-exposure-grows-094-ms-2026-10-15-desktop-2), verdict KILL.
+
+Logs:
+- [sitting](../results/aie/mtsplit_probe_phoenix_desktop2_20261015T1245Z.log) and its
+  [JSON](../results/aie/mtsplit_probe_phoenix_desktop2_20261015T1245Z.json);
+- [sizing, census and exactness checks](../results/aie/role_split_sizing_checks_yolov8s_desktop2_20261015T124818Z.log),
+  which quotes both pre-registrations verbatim.
+
+Its scripts are git-ignored scratch files (`scratch/b41/`).
+
+#### Block 5: box fills in the engine: exact on the device, and 0.69 ms slower; transport gains 0.25 ms but compute exposure grows 0.94 ms (2026-10-15, Desktop 2)
+
+**Question.** The probe above proved AMD's split of roles exact at the engine's shape and projected 2.80 ms
+(DERIVED, NOP) for YOLOv8s. Lowered into the engine, what does it do to a real frame?
+
+**What was built (`--box-fills`, off by default, int8 engine only).**
+- **`compiler/box_fills.py`:** finds the layers whose one-quad fills all share one box geometry, 28 of YOLOv8s's
+  66, and rewrites their fills as `("X", pattern, boxes)` items.
+  - **Only adjacent fills merge.** A run breaks at any weight or drain item, so issue order is unchanged; at most 8
+    boxes per task.
+  - **Mixed layers are skipped,** 18 of them with two geometries.
+  - **The emulator replays the cut,** and YOLOv8n and YOLOv8s emulate byte-identical to the default schedule
+    (`tests/test_box_fills_offline.py`).
+- **`design.py`, `_activation_box`:** replaces the ObjectFifo split with the probe's hand-written MemTile program.
+  - It has two 25,600 B buffers and the relay-lock protocol.
+  - The fill is S2MM 5 with descriptors 24–33; the serves are MM2S 0–3 with descriptors 0–3 and 34–37; the locks
+    are 16–22.
+  - **On the core side,** two raw buffers, picked by a parity word, keep the default's double buffering.
+  - **`BOX_ADDRESS`** is checked against the allocator after every build, as the weight buffer's is.
+- **`engine_sequence.py`, `_configure_box`:** rewrites all 18 descriptors and resets the five channels' locks at
+  each layer whose cut differs from the column's last one.
+  - The order is reset, descriptors, locks, then push the heads, the same as the ring and the weight buffer use.
+  - An unconverted layer is cut as plain quads.
+- **One encoding fact found on the way (DECODED).** mlir-aie's `npu.writebd` never packs a MemTile descriptor's D2
+  wrap (`AIEDmaToNpu.cpp`, "TODO: D2Size"). The emitter writes word 4 itself: wrap in bits 17 and up, stride
+  below.
+  - All 18 descriptors of the stream's first configure equal the configuration CDO's word for word.
+- **Two controls were built in the same tree.** `ctl` is the default, and its MLIR, CDOs and instruction stream are
+  byte-identical to a build of `32b8eec`. `boxplain` (`--box-cap 0`) has the box path with every layer plain: the
+  path's own cost, with no merges.
+
+**Instruction streams (census, checks log section 2).**
+
+| container | shim tasks | ops | stream bytes | MemTile configuration ops |
+|---|---:|---:|---:|---:|
+| `ctl` | 6,795 | 25,731 | 933,012 | 0 |
+| `boxplain` | 6,795 | 25,995 | 941,236 | 264 (one configure) |
+| `box` | 5,353 | 27,537 | 960,108 | 7,128 (27 configures) |
+
+**Exact on the device (MEASURED).**
+- **One dispatch, every layer:** `--no-workspace-reuse` YOLOv8s read 66/66 layers EXACT
+  (`tools/verify_engine_container.py`).
+- **Across dispatches:** all three timed containers ran 300 dispatches each on one frame. 0 dispatches differ from
+  the first, and every container's heads equal `ctl`'s byte for byte (`tools/repeat_dispatch_exact.py`, first run
+  from scratch with the same code). Both checks ran before the sitting.
+
+**The sitting.**
+- **Setup:** pre-registered (sha256 `e83df060...`, quoted verbatim in the checks log); `tools/bench_dispatch_ab.py`,
+  4 rounds × 300 dispatches, real and all-NOP, order reversed on even rounds; `timing_eligible: true`, no foreign
+  contention.
+- **Smoke disclosed in the pre-registration:** the no-reuse verify run's 16.58 ms mean, not comparable and
+  pointing against.
+
+| pair | arm | control | test | delta | rounds lower |
+|---|---|---:|---:|---:|---:|
+| `box` − `ctl` | real dispatch | 15.865 ms | 16.550 ms | **+0.685 ms** | 0/4 |
+| | all-NOP | 12.040 | 11.790 | −0.251 | 4/4 |
+| `boxplain` − `ctl` | real dispatch | 15.851 | 15.800 | −0.051 | 4/4 |
+| | all-NOP | 12.038 | 12.034 | −0.004 | 3/4 |
+
+**Verdict: KILL**, by the pre-registered rule (real delta ≥ 0, lower in 0/4 rounds). `--box-fills` stays in the
+tree, off by default.
+- **Predictions against readings:**
+  - NOP was predicted at −0.6 to −1.4 ms under the per-task model and above 0 under the per-op model. It read
+    −0.251, between the two, so the sitting does not discriminate them.
+  - Real was predicted at −0.4 to −1.1 and read +0.685.
+- **The path itself costs nothing:** `boxplain` reads −0.05 ms real, so the MemTile cut, its channel use, the
+  core's parity select and one configure per frame are not the loss.
+- **The loss is under compute, as with stream sharing.** Real minus NOP is 3.825 ms for `ctl` and 4.760 ms for
+  `box`, +0.935 ms, while transport gains 0.25 ms.
+- **The cause is unexplained.** *[Found the same day: the whole loss is 26 mid-frame MemTile configures, 26.5 µs each
+  (DERIVED), and net of them box fills save about 0.05 ms in real dispatch; see [the shim trace](#block-5-the-shim-trace-finds-what-box-fills-lost-26-mid-frame-memtile-configures-at-265-microseconds-each-2026-10-15-desktop-2).]*
+  - **Ruled out:** the path's own cost (`boxplain`), wrong data (exact at every dispatch), contention (none
+    observed), and the control being a different design (byte-identical to `32b8eec`).
+  - **Still standing:**
+    - a merged task of up to 8 boxes behind a 2-box MemTile buffer, which may stall the activation channel under
+      compute where the default's per-quad tasks do not;
+    - the 26 extra mid-frame configures, whose channel resets may cost more with cores busy than in NOP;
+    - the ~0.9 ms of predicted NOP saving that did not appear, for which the probe's +0.19 µs one-box penalty
+      is a candidate.
+  - The sitting cannot separate these. A `--box-cap 1` arm and per-layer timing would. `engine_layer_timing.py`
+    cannot split a box stream today: the configure writes break `split_instruction_stream`'s task count.
+- **The probe's 2.80 ms is not reachable this way.** It was a NOP projection on one traffic shape, and this frame's
+  NOP saving was 0.25 ms. The precedent held: a NOP gain turned into a real loss.
+
+Logs:
+- [sitting](../results/aie/box_fills_ab_yolov8s_desktop2_20261015T1423Z.log) and its
+  [JSON](../results/aie/box_fills_ab_yolov8s_desktop2_20261015T1423Z.json);
+- [layer-by-layer verify](../results/aie/box_fills_verify_yolov8s_desktop2_20261015T1415Z.log);
+- [repeat-dispatch exactness](../results/aie/box_fills_repeat_exact_yolov8s_desktop2_20261015T1422Z.log);
+- [checks](../results/aie/box_fills_checks_yolov8s_desktop2_20261015T1430Z.log): the pre-registration verbatim, the
+  census, the descriptor-against-CDO check, and the control and rebuild identities.
+
+#### Block 5: the shim trace finds what box fills lost: 26 mid-frame MemTile configures at 26.5 microseconds each (2026-10-15, Desktop 2)
+
+**Question.** Box fills read −0.25 ms all-NOP and +0.69 ms real. The section above names three candidates and could
+not separate them. Which input is late on the layers box fills changes?
+
+**The cores cannot be traced in this design.**
+- A build tracing any single core, with any egress column, fails in aiecc with "Unable to find a legal routing".
+- **Why (inferred, not named by aiecc):** every core tile's four southbound switch ports already carry the column's
+  output join to the MemTile, so a core's trace packets have no way out. The inference is from the design's four
+  output flows per column through the row-2 south ports; aiecc reports only the failure.
+- The shim tile's trace unit routes inside its own switch, so it is the instrument.
+
+**The instrument (`--trace-shims`, a measurement build).**
+- **Events:** the trace of logical column 0's shim records eight events (`design.TRACE_SHIM_EVENTS`):
+  - weight-stream backpressure: MM2S 1 blocked, so weights are ahead of the cores;
+  - activation-stream backpressure: MM2S 0 blocked by the MemTile;
+  - output starvation: S2MM 0 waiting on the cores;
+  - DDR starvation of each stream;
+  - two task-finish pulses;
+  - a layer marker.
+- **Wiring:**
+  - `engine_compile.inject_shim_trace` writes the raw `aie.trace` ops, because IRON traces worker tiles only.
+  - The emitter fires the marker before every layer, and 64 more times at the end to flush the trace.
+  - `GraphSession` passes the trace buffer as XRT argument 5.
+- **Three facts found while building it:**
+  - **The marker has to be `USER_EVENT_1`.** For a shim tile, `-aie-insert-trace-flows` makes `USER_EVENT_1` the
+    start event and `USER_EVENT_0` the stop event (`Trace_Control0 = 0x7E7F0000`). A first build that marked with
+    `USER_EVENT_0` stopped its own trace and returned an empty buffer. The start event, re-fired while the trace
+    runs, is harmless.
+  - **One traced dispatch per hardware context.** The trace's S2MM 1 task is one descriptor as long as the 4 MiB
+    buffer, and a frame never fills it, so the task outlives the dispatch. The next dispatch's trace queues behind it
+    and lands mid-buffer: a second dispatch read 121 of 130 markers, a de-interleave error, and once 45 ms.
+    `tools/engine_shim_trace.py` therefore runs each traced dispatch in its own process. Every traced number is a
+    context's first, cold dispatch.
+  - **Decoding has to keep runs.** `clock_probe.decode_event_time` expands one hit per cycle, which took 5.1 GB for one
+    frame. `tools/trace_runs.py` keeps its frame parser as runs and equals it on a full frame: all 8 slots, 22.8 M
+    hits in the largest.
+- **Checks before the sitting** (checks log):
+  - The traced containers are exact: 20 dispatches each, with heads equal to the untraced control.
+  - Untraced builds from the final code are byte-identical to the timed ones.
+  - All 66 layer markers arrive in every run; only the flush tail loses some. The tool checks the gap structure per
+    run.
+  - Per-layer windows track the per-layer times from 13 Oct (`engine_layer_timing`) at r = 0.997.
+  - **Not verified:** the trace timer's clock. The fit gives 1.695 GHz, but those times include each separate
+    dispatch's ramp, so every ms below is DERIVED at 1.80 GHz.
+
+**The sitting.**
+- **Setup:** pre-registered (sha256 `6447cdca...`, verbatim in the checks log, amended once before any box trace);
+  6 rounds of `ctl`, `box` and `boxplain`, order rotated; `timing_eligible: true`, no foreign contention.
+- **Cold traced dispatch, mean of 6 per arm:**
+
+  | arm | dispatch | marker span (DERIVED) |
+  |---|---:|---:|
+  | `ctl` | 17.13–17.52 ms | 15.50 ms |
+  | `box` | 17.70–18.15 ms | 16.16 ms (+0.66) |
+  | `boxplain` | 16.99–17.41 ms | 15.41 ms (−0.09) |
+
+  The +0.66 ms agrees with the warm sitting's +0.685 ms.
+
+| box − ctl, cycles | boxed layers (28) | other layers (38) |
+|---|---:|---:|
+| layer windows | +600,577 | +589,111 |
+| **lead** (marker to the layer's first DMA event) | **+599,646** | **+687,126** |
+| weight backpressure | −129,271 | +287,654 |
+| activation backpressure | +960,615 | +395,054 |
+| output starvation | −93,432 | +138,916 |
+
+**Verdict by the pre-registered rule: the attribution is not read.**
+- **Rule L** required at least 60% of the frame's added cycles on the boxed layers. They hold 50%, so neither H-W
+  (weights late) nor H-A (activations late) is tested.
+  - The sitting log's printed rule line reads "neither": `shim_trace_compare.py` implements only the minimum-loss
+    guard. Rule L's share test is applied here from the registered text.
+- **The null holds:** `boxplain` reads −122,184 cycles on the box set, within the registered ±300,000.
+
+**What the trace does show (the lead was a registered confound, reported but not verdict-bearing).**
+- **All of the loss is configure.** Box fills rewrite the MemTile's 18 descriptors at every layer whose cut differs
+  from the previous layer's. That is 27 layers, including the plain layers that follow a boxed one, which is why
+  half the loss sits on "other" layers.
+- **Per layer:**
+  - each of the 27 configuring layers' lead grows by 43,266–54,100 cycles;
+  - the 39 others' grows by −57 on average (−3,444 to +3,436);
+  - `boxplain`'s single configure shows as +46,544 at layer 0.
+- **The cost (DERIVED):** one configure, 264 MemTile writes across the 4 columns (8,224 B), costs about 47,800 cycles,
+  26.5 µs.
+  - **Against `ctl`, which never configures,** the box build pays 27: +1,286,772 cycles of lead, **+0.715 ms**.
+    Everything else nets −97,084 cycles (−0.054 ms), so the trace reads +0.661 ms in all, against +0.685 ms in the
+    warm sitting.
+  - **Against `boxplain`,** which configures once, the box build pays 26 extra: 0.690 ms.
+- **Net of configures, box fills save almost nothing in real dispatch:** −27,053 cycles on the configuring layers and
+  −70,030 on the rest, about −0.05 ms.
+  - So the all-NOP saving was task issue that the real frame already hides under compute.
+  - **This corrects the box-fills section's reading.** Real minus NOP grew because the NOP frame has no compute to hide
+    the saved issue behind, not because transport disturbed the overlap.
+- **Activation backpressure rises on the boxed layers (+0.96 M cycles)** while their windows, net of lead, do not move.
+  The merged tasks wait on the MemTile's two buffers without costing time.
+- **Not established:** why one configure costs 26.5 µs, about 100 ns per write against the ~75 µs amortised dispatch
+  floor. Also unmeasured: whether the same holds warm, since every traced number is cold.
+- **What it means for the lever:** free configures would recover only about 0.05 ms on YOLOv8s. Box fills are not
+  worth rescuing on this model. The stream-sharing loss (+1.30 ms of compute exposure) was not traced here and stays
+  unexplained.
+
+Logs:
+- [sitting](../results/aie/shim_trace_box_yolov8s_desktop2_20261015T1854Z.log), with per-arm JSONs
+  ([ctl](../results/aie/shim_trace_box_yolov8s_desktop2_20261015T1854Z_ctl.json),
+  [box](../results/aie/shim_trace_box_yolov8s_desktop2_20261015T1854Z_box.json),
+  [boxplain](../results/aie/shim_trace_box_yolov8s_desktop2_20261015T1854Z_boxplain.json)) and comparisons
+  ([box](../results/aie/shim_trace_box_yolov8s_desktop2_20261015T1854Z_compare_box.json),
+  [boxplain](../results/aie/shim_trace_box_yolov8s_desktop2_20261015T1854Z_compare_boxplain.json));
+- [checks](../results/aie/shim_trace_checks_yolov8s_desktop2_20261015T1854Z.log): the pre-registration, the routing
+  failure, the decoder self-test, the marker structure, the second-dispatch failure, exactness, rebuild identity,
+  calibration, noise, and the lead-against-configure analysis.
+
+#### Where the control frame's time goes, seen from the shim: activation bytes on the transport-bound layers, the MemTile filling on the compute-heavy ones (exploratory, offline, 2026-10-15, Desktop 2)
+
+**Question.** The shim trace above was used only as a baseline for box fills. Read on its own, which stage holds
+each layer of the YOLOv8s control frame? This is part of the open question in "What sets a layer's time" (which
+stage of the path sets the per-packet cost).
+
+**A lead given before this analysis was wrong.** Before the analysis, weight backpressure on 53–60% of the window
+was read as "the cores hold most layers, not the weights", which would put the 12.3 ms transport figure in question.
+The budget below shows otherwise:
+- On the layers with almost no compute, the MemTile never pushes back and the activation stream is what the layer
+  waits on.
+- Weight backpressure is the normal state of a weight stream kept deliberately ahead. It is not a compute signal.
+
+The 12.3 ms transport figure stands.
+
+**Method.** `tools/shim_trace_budget.py` adds bytes to the trace.
+- **Bytes per layer:** it disassembles the traced control's `insts.bin`, splits it at the layer markers, and sums
+  what column 0's task pushes move (BD length × (repeat + 1)).
+  - The result equals the compiler's schedule exactly: 99 weight tasks (20,999,424 B), 1,387 activation tasks
+    (59,673,600 B) and 226 drains (6,976,000 B) per frame.
+- **Moving time:** bytes at the MEASURED four-column stream rate, 6.79 GB/s per column (the stream-ceiling route).
+- **The budget per channel:** `window − backpressure − DDR starvation − moving = residual`.
+- **Compute share:** joined from the 13 Oct per-layer real/NOP sitting as (real − NOP) / real, warm.
+  - That container's per-layer packets and rounds equal the traced build's on 66 of 66 layers.
+  - Its layer windows track the trace's at r = 0.997.
+
+**Two kinds of number, and the caveats.**
+- **Measured cycles:** backpressure, starvation and the windows, independent of the trace clock.
+- **DERIVED twice:** moving time, and so the residual, from the rate and from the assumed 1.80 GHz clock.
+  - At the 1.695 GHz calibration fit, the activation stream moves 53% of the frame instead of 57%, and the residual
+    is 22% instead of 19%.
+  - **The product is bounded.** On the 19 layers whose weights move at least 25% of the window, the weight channel
+    reads backpressure + starvation + moving = 84–98%, never over 100%.
+- **Caveats:** every traced run is a cold first dispatch, and only logical column 0 is seen.
+
+**The frame, column 0** (6 runs, 15.50 ms of windows, DERIVED):
+
+| channel | blocked downstream | DDR starved | moving (DERIVED) | residual (DERIVED) |
+|---|---:|---:|---:|---:|
+| activations (MM2S 0 → MemTile) | 13% | 12% | 57% | 19% |
+| weights (MM2S 1, broadcast to 4 cores) | 55% | 10% | 20% | 16% |
+| output join (S2MM 0) | starved 81% | | | |
+
+**By warm compute share** (window-weighted; thresholds chosen after seeing the data):
+
+| layers | n | ms | W blocked | A blocked | A DDR starved | A moving | A residual |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| compute < 10% (1×1 over wide inputs) | 18 | 4.57 | 60% | **0%** | 7% | **73%** | 19% |
+| 10–35% | 17 | 5.13 | 53% | 15% | 12% | 64% | 9% |
+| ≥ 35% (mostly the 3×3s in the C2f blocks) | 31 | 5.80 | 53% | **20%** | 16% | 37% | 26% |
+
+- **Weights are ahead everywhere.** Weight backpressure is 53–60% in every group and does not track compute share
+  (r = −0.13 over the 62 layers that move weights).
+  - The weight broadcast is blocked when any one of the four cores' two weight buffers is full. The instrument
+    cannot say whether that core is computing or waiting on its activations.
+  - **What it rules out:** that weight delivery holds the frame.
+- **On the transport-bound layers the shim's activation stream is the stage.**
+  - The stream moves for 73% of the window and is DDR-starved for 7%.
+  - The MemTile never pushes back. Whatever is downstream of the MemTile keeps up.
+  - This is the stream-ceiling finding seen inside the real frame, per layer, rather than inferred from a fit.
+  - It is not "at the ceiling": the stream is idle or slower than the rate for 19% of these windows.
+- **On the compute-heavy layers the MemTile fills.**
+  - Activation backpressure is 20% there and tracks compute share (r = +0.71). The stage below the MemTile holds
+    the stream: the MemTile-to-core split, the core DMA or handshake, or the arithmetic. The shim cannot see which.
+  - DDR starvation also rises, to 16% (r = +0.39). Strided halo reads would produce that, but it is not attributed.
+- **The residual (5.23 M cycles, 19%, DERIVED) is unexplained.**
+  - Across layers it fits about 1,230 cycles per activation task plus about 53,000 per layer (R² 0.52).
+  - **The per-layer part, about 3.5 M cycles, is mostly not issue.** A window runs marker to marker, so after a
+    layer's last activation task every channel sits task-less through the last compute, the last drains and the
+    barrier. The weight channel's residual, 16% of the frame, bounds that shared head and tail from above.
+  - **The per-task part, about 1.7 M cycles (0.68 µs per task, DERIVED),** could be gaps with no task queued, or a
+    slower effective rate on short strided reads. The trace does not separate them.
+  - It agrees with the earlier packets + ops fit but is not independent evidence. Per-packet against per-byte stays
+    open, because moving time here is per-byte by construction.
+- **Output starvation, 81%,** says only that drains are queued far ahead of the cores' output. It does not identify a
+  bottleneck.
+
+**What it means for the levers.**
+- **On about 4.6 ms of the frame, activation bytes per second on the shim stream are the cost.** That is what the
+  second-stream and fewer-bytes designs target.
+- **On the 5.8 ms of compute-heavy layers, the stream is already held back from below 20% of the time.** Moving the
+  same bytes faster there fills the MemTile sooner.
+  - This is consistent with stream sharing and box fills losing in the real frame what they saved in NOP.
+  - It does not explain those losses: neither was traced this way.
+
+**Next, on hardware** *([run the same day](#the-traced-nop-copy-the-memtile-fill-on-the-compute-heavy-layers-is-the-arithmetic-weights-stay-ahead-without-it-and-with-compute-gone-the-residual-tracks-task-count-2026-10-15-desktop-2): P1 COMPUTE, P2 AHEAD WITHOUT COMPUTE, P3a CHANGED, P3b SHRANK)*: a traced NOP copy of the control. If A blocked on the compute-heavy layers falls
+toward 0% and W blocked stays near 55%, the MemTile fill is compute. If the per-task residual is unchanged it is issue;
+if it shrinks it was tail.
+
+Logs:
+- [shim_trace_budget_yolov8s_desktop2_20261015T1922Z.log](../results/aie/shim_trace_budget_yolov8s_desktop2_20261015T1922Z.log):
+  the budget, the byte cross-check against the schedule, the workload match, the groups, the residual fit and the
+  clock sensitivity.
+- [JSON](../results/aie/shim_trace_budget_yolov8s_desktop2_20261015T1922Z.json): per layer.
+
+#### The traced NOP copy: the MemTile fill on the compute-heavy layers is the arithmetic, weights stay ahead without it, and with compute gone the residual tracks task count (2026-10-15, Desktop 2)
+
+**Question.** The shim budget above left three readings open:
+- Is the compute-heavy layers' 20% MemTile backpressure the arithmetic?
+- Are weights ahead even with no arithmetic?
+- Is the activation residual compute-related?
+
+**Method.**
+- **Containers:** the traced control and its all-NOP-weights copy (`write_nop_copy`). The copy keeps the same
+  instruction stream, data and trace and changes only the cores' arithmetic.
+- **Runs:** 6 rounds, order alternated, one cold traced dispatch per process; `timing_eligible: true`, and no
+  foreign context before, during or after.
+- **Analysis:** `tools/shim_trace_budget.py` on each arm.
+- **Groups:** fixed beforehand from the committed control budget's warm compute share.
+- **Pre-registration:** sha256 `5485d2ed...`, verbatim in the analysis log, with the verdict script.
+
+**Gates.**
+- **C, calibration, pass.** The NOP frame is 0.775 of the control's (DERIVED; registered 0.70–0.82; warm 13 Oct
+  0.76), and the low-compute layers' windows are 0.990 of the control's.
+- **S, stability, pass.** This sitting's control reads 20.2% activation backpressure on the compute-heavy layers;
+  the earlier sitting read 20%.
+
+| group (by 13 Oct compute share) | arm | ms (DERIVED) | W blocked | A blocked | A DDR starved | A moving | A residual |
+|---|---|---:|---:|---:|---:|---:|---:|
+| < 10% (18 layers) | ctl | 4.570 | 59.7% | 0.0% | 8.0% | 73.1% | 18.9% |
+| | nop | 4.523 | 59.3% | 0.0% | 8.9% | 73.8% | 17.2% |
+| 10–35% (17) | ctl | 5.148 | 52.3% | 14.0% | 12.8% | 63.9% | 9.3% |
+| | nop | 4.048 | 48.0% | **0.0%** | 13.4% | 81.3% | 5.3% |
+| ≥ 35% (31) | ctl | 5.801 | 52.7% | 20.2% | 15.9% | 37.2% | 26.7% |
+| | nop | 3.459 | 49.5% | **0.0%** | 7.9% | 62.3% | 29.7% |
+
+**Verdicts, as registered.**
+- **P1: COMPUTE.** With no arithmetic, the compute-heavy layers' MemTile backpressure falls from 20.2% to 0.0%
+  (registered: ≤ 5%). The stage below the MemTile that held the stream was the cores' arithmetic. In the
+  NOP frame, the MemTile-to-core split and the handshake keep up with the shim stream on every layer.
+- **P2: AHEAD WITHOUT COMPUTE.** Weight backpressure stays at 56.0% over the 62 weight-moving layers (registered:
+  ≥ 45%). Weights wait on the cores whether or not they compute. Inferred, not traced: the cores consume a weight
+  object per round of activations, so their pace is the activations' pace, and weight backpressure is set by
+  activation delivery.
+- **P3a: CHANGED, not a registered outcome.** The per-task part of the activation residual rose to 1.52x (1,182 →
+  1,795 cycles per task).
+- **P3b: SHRANK.** The per-layer part fell to 0.32x (54,024 → 17,377 cycles per layer). The per-layer tail was
+  mostly the last compute.
+
+**What the residual now looks like.**
+- **With compute gone, the residual tracks task count:** R² 0.75 in NOP against 0.50 in the control, at about 1,795
+  cycles (1.0 µs, DERIVED) per activation task.
+- **In absolute terms it fell** from 5.21 M to 3.64 M cycles per frame. On the compute-heavy layers it fell from about
+  1.55 to 1.03 ms. The per-task coefficient rises because the shrunken per-layer tail stops absorbing it.
+- **What could produce it, both still standing:**
+  - issue gaps: the channel has no task queued while the command processor awaits tokens and pushes the next task;
+  - a lower effective rate on short strided reads than the 6.79 GB/s used for moving time.
+
+  The trace separates neither, so the per-task cost stays **unexplained**.
+
+**What it means.**
+- **The NOP frame is the activation stream everywhere.** The MemTile never pushes back on any layer. The stream
+  moves 73% of the time (DERIVED), DDR starves it 10%, and the remaining 17% is the per-task residual.
+- **Compute adds 3.49 ms (DERIVED) to the traced frame,** and it does so by holding the MemTile on the 48 layers with
+  ≥ 10% compute. The 18 transport-bound layers are unchanged (0.99x).
+- **For the levers:**
+  - Faster activation transport pays fully only on the transport-bound layers and in the stream's own residual.
+  - *[Across layer boundaries, [layer overlap](#layer-overlap-no-barrier-between-layers-only-exact-workspace-dependencies-yolov8s-122-ms-faster-and-exact-outside-its-prediction-2026-10-15-desktop-2) measured −1.22 ms.]* On the compute-heavy layers it waits on the arithmetic, unless compute and transport overlap better: the cores
+    would have to compute while the next packets land, which the MemTile buffers already allow to depth 2.
+  - Neither stream sharing's nor box fills' loss is explained by this. Neither was traced in NOP.
+
+Logs:
+- [sitting](../results/aie/shim_trace_nop_yolov8s_desktop2_20261015T1927Z.log), with the merged runs
+  ([ctl](../results/aie/shim_trace_nop_yolov8s_desktop2_20261015T1927Z_ctl.json),
+  [nop](../results/aie/shim_trace_nop_yolov8s_desktop2_20261015T1927Z_nop.json));
+- [analysis](../results/aie/shim_trace_nop_analysis_yolov8s_desktop2_20261015T1927Z.log): the pre-registration and
+  verdict script verbatim, both budgets and the verdict, with budget JSONs
+  ([ctl](../results/aie/shim_trace_nop_yolov8s_desktop2_20261015T1927Z_budget_ctl.json),
+  [nop](../results/aie/shim_trace_nop_yolov8s_desktop2_20261015T1927Z_budget_nop.json)).
+
+#### Overlap, sized: at most ~3.6 ms on YOLOv8s, and 1.23 ms of it is compute left exposed at layer ends (2026-10-15, Desktop 2)
+
+**Question.** The NOP trace showed compute adding 3.49 ms to the traced frame by holding the MemTile. How much could
+better overlap of transport and compute recover, and where is it?
+
+**Offline ceiling (exploratory, data on record).** Per layer:
+- **Inputs:** the warm real time R and NOP time N (13 Oct), and the single-buffered `d111` time S from the 13 Oct
+  core-depth probe.
+- **Total compute C is unknown,** because the cores cannot be traced. It is at least the exposed compute E = R − N.
+  It is roughly at least S − N, if `d111` still overlaps something; its MemTile side stays at depth 2.
+- **The bound:** perfect overlap gives max(N, C), so the saving is at most R − max(N, C_lo).
+
+| layers (by compute share) | n | R | N | E = R − N | C_lo | saving at most |
+|---|---:|---:|---:|---:|---:|---:|
+| < 10% | 18 | 4.667 | 4.466 | 0.201 | 0.585 | 0.201 |
+| 10–35% | 17 | 5.490 | 4.040 | 1.450 | 2.943 | 1.398 |
+| ≥ 35% | 31 | 6.252 | 3.476 | 2.777 | 4.213 | 2.030 |
+| all | 66 | 16.409 | 11.982 | 4.427 | 7.741 | **3.629** |
+
+- **How firm the bound is.** If `d111`'s single-buffered output adds drain waits, C_lo overstates compute, and the
+  hard ceiling is E itself, 4.43 ms. If true compute exceeds C_lo, the saving is smaller.
+- **On 28 of the 31 compute-heavy layers, C_lo already exceeds N.** Perfect overlap would leave them compute-bound.
+  Past that point only a faster core kernel helps; its conv loops issue 0.17–0.35 `vmac` per cycle.
+- **Why not measure on a wider model.** Compute is a near-constant share on every YOLOv8 size (25–27%, 20 Sep split
+  sitting): a packet's compute is set by the layer type, and wider layers add packets and compute together. So
+  YOLOv8s carries the same question as YOLOv8x at a seventh of the cost.
+
+**Where the overlap is lost: the layer tail, measured.**
+- **What `tools/engine_shim_trace.py` now records:** per layer, the first and last completion of each stream's
+  tasks, and the tail, from the last activation completion to the next marker.
+- **The completion pulses are exact:** 1,387 of 1,387 activation and 99 of 99 weight completions on every layer in
+  all 6 control runs.
+- **Run-endpoint lookups were checked:** `first_hit` and `last_hit` equal the expanded hit times on 1,600 random
+  windows of a full frame.
+- **The sitting:** pre-registered (sha256 `10c457ea...`, with one control smoke run disclosed); 6 rounds of control
+  and NOP copy, alternated, cold traced dispatches; `timing_eligible: true`.
+- **Gates:** C, NOP/ctl 0.775, pass; S, control frame within 2% of the previous sitting's, pass.
+
+| layers | n | control tail | NOP tail | difference (cycles) | ms (DERIVED) |
+|---|---:|---:|---:|---:|---:|
+| < 10% | 18 | 546,486 | 390,750 | 155,736 | 0.087 |
+| 10–35% | 17 | 813,468 | 291,234 | 522,233 | 0.290 |
+| ≥ 35% | 31 | 2,251,386 | 717,663 | 1,533,724 | 0.852 |
+| **all** | 66 | 3,611,340 | 1,399,647 | **2,211,693** | **1.229** |
+
+**Verdict T: GO** (registered: ≥ 1,800,000 cycles).
+- **What the tail is.** After a layer's last activation task completes, the control frame spends 12.9% of its window
+  in the tail, and 1.23 ms of that (DERIVED) is compute: the cores' backlog of buffered packets runs while no
+  transport does.
+- **Where it sits:** mostly on the compute-heavy layers, 0.85 ms.
+- **The NOP tail, 1.40 M cycles,** is the last drains and the barrier with no compute behind them.
+- **This agrees with the earlier fit's ~1.34 ms,** but is measured per layer rather than inferred.
+
+**What GO does and does not mean.**
+- **It is the opportunity, not a reachable saving.** *[Traced after the build: about 1.0 ms of it is reachable, [hidden by the next layer's transfers](#where-layer-overlaps-gain-comes-from-the-boundary-gaps-and-after-compute-heavy-layers-the-cores-backlog-itself-2026-10-15-desktop-2).]* *[Built the same day: [layer overlap](#layer-overlap-no-barrier-between-layers-only-exact-workspace-dependencies-yolov8s-122-ms-faster-and-exact-outside-its-prediction-2026-10-15-desktop-2) reads −1.220 ms real, −0.454 NOP; its mechanism is unexplained.]* The next layer usually reads this layer's output, so how much of
+  the tail its transport can cover depends on which rows its first packets need.
+- **Weights can be fetched early regardless.** A weight object prefetched into a core must never be consumed as the
+  wrong layer's, the hazard `design.py` documents.
+- **Candidates for the prototype:**
+  - issue the next layer's first weight fill (and, where the data allows, its first activation fills) before the
+    barrier;
+  - relax the barrier between layers that do not depend on each other, such as the detection-head branches.
+
+Logs:
+- [sitting](../results/aie/shim_trace_tail_yolov8s_desktop2_20261015T1959Z.log), with the merged runs
+  ([ctl](../results/aie/shim_trace_tail_yolov8s_desktop2_20261015T1959Z_ctl.json),
+  [nop](../results/aie/shim_trace_tail_yolov8s_desktop2_20261015T1959Z_nop.json));
+- [analysis](../results/aie/shim_trace_tail_analysis_yolov8s_desktop2_20261015T1959Z.log): the pre-registration and
+  verdict script verbatim, the pulse completeness check, the run-endpoint check, the verdict and the offline
+  overlap sizing.
+
+#### Layer overlap: no barrier between layers, only exact workspace dependencies; YOLOv8s 1.22 ms faster and exact, outside its prediction (2026-10-15, Desktop 2)
+
+**The prediction missed, in both arms.**
+- **Real gained more than the model allowed.** The pre-registration predicted −0.30 to −1.10 ms. It read
+  **−1.220 ms**, beyond even the 1.084 ms boundary-gap ceiling it derived.
+- **NOP gained less, and the registered relation inverted.** The prediction was that NOP would gain at least as much
+  as real less 0.2 ms. NOP read **−0.454 ms**, below its range and below the 0.770 ms NOP tail.
+- **The rule reads PASS, but the model behind the prediction is wrong.** That model said removing the barrier
+  recovers only the idle gap at each boundary, not the cores' backlog. The real frame recovered more than the
+  modelled gap, so that reading was too narrow.
+- *[Traced the same day: [the gain is at the boundaries](#where-layer-overlaps-gain-comes-from-the-boundary-gaps-and-after-compute-heavy-layers-the-cores-backlog-itself-2026-10-15-desktop-2), and after compute-heavy layers it is the backlog itself, about 1.0 ms DERIVED.]* **This is not shown to be the backlog either.** That the gain is close to the tail sitting's 1.23 ms is a number
+  to test, not a finding.
+
+**The change** (`--overlap-layers`, off by default). *[The compiler's default since the [same day](#layer-overlap-is-the-compilers-default-yolov8n-100-ms-yolov8s-131-pose-114-sesr-m7-008-every-container-exact-2026-10-15-desktop-2); `--no-overlap-layers` keeps the barrier.]*
+- **Today** every layer ends in a barrier: every task of every column is awaited before the next layer's first push.
+- **With the flag** the barrier goes. Before each fill or drain, the emitter awaits exactly the earlier-layer tasks
+  it conflicts with in the workspace: read after write, write after read, write after write.
+  - The conflicts come from `compiler/layer_overlap.py`, at exact 8-byte cells: every offset, length and stride on
+    these layouts is a multiple of 8.
+  - The queues persist across layers, and one frame barrier ends the stream (`finish_frame`, which reuses the last
+    layer's retire closure).
+  - The per-layer order of items within a column is unchanged, since a channel runs its tasks in order.
+- **One tolerance.** Over-reads within a layer are not dependencies. On 16 layers a tile's last fill reads padding
+  rows past its input, into the layer's own output, and the barrier design already races those. Where such an entry
+  masks an older earlier-layer task, the wait falls back to all of the earlier layers' tasks on that column and
+  channel.
+- **The flag is refused** with host regions, dense recipes, stream sharing, the ring, the weight buffer, box fills
+  and split layers, each of which writes MemTile state or ends a dispatch at a layer boundary.
+
+**What the exactness rests on.**
+- **An offline proof over the emitted stream** (`tests/test_layer_overlap_offline.py`), independent of the tracker:
+  exact byte sets, completion known only from awaits plus in-order channel completion, and no task pushed while a
+  conflicting earlier-layer task may run.
+  - It passes on YOLOv8s and YOLOv8n.
+  - The barrier stream passes and never overlaps.
+  - With the waits withheld, the checker finds hazards, including read after write.
+  - It covers only those two default schedules.
+- **On the device:** 300 dispatches each, 0 differ, heads equal to the control's.
+- **Rebuild check:** the default rebuild is byte-identical to the shipped stream.
+- **Offline, before timing,** the next layer's first fill can be pushed before the previous layer is known complete
+  at all 65 boundaries.
+
+**The sitting** (pre-registered, sha256 `bb4d28b6...`; `tools/bench_dispatch_ab.py`, 4 rounds × 300, order
+alternated; `timing_eligible: true`):
+
+| arm | control (4 rounds) | overlap (4 rounds) | delta | lower |
+|---|---|---|---:|---:|
+| real | 15.731 / 15.818 / 15.737 / 15.834 | 14.572 / 14.554 / 14.580 / 14.532 | **−1.220 ms** | 4/4 |
+| NOP | 11.964 / 12.017 / 12.029 / 12.000 | 11.554 / 11.572 / 11.546 / 11.523 | −0.454 ms | 4/4 |
+
+**Verdict: PASS** (registered: real ≤ −0.30 ms and 4/4). Compute exposure (real − NOP) falls 0.766 ms.
+
+**Why real gains 2.7x NOP is unexplained.** *[Answered by the [traced sitting](#where-layer-overlaps-gain-comes-from-the-boundary-gaps-and-after-compute-heavy-layers-the-cores-backlog-itself-2026-10-15-desktop-2): pre-staging during the backlog, plus a boundary cost that exists with no compute.]* Candidates that fit:
+- **Issue moved off the critical path.** The command processor's issue work for the next layer, up to ~14 tasks per
+  column, now runs while the cores finish the current one. In the NOP frame issue is already on the critical path,
+  so it gains less: the compute-exposure pattern in reverse.
+- **Pre-staging.** The next layer's weight object and first quads land in the core and MemTile buffers during the
+  backlog.
+- **Fewer serialized awaits at the boundary.** The op count is the same, but the control's barrier awaits about 14
+  tasks per column while every core is idle.
+
+A shim trace of the overlap build against the control (per-layer lead and tail) would discriminate these. It is
+the next step and has not been run.
+
+**Not established:**
+- the effect on any other container: YOLOv8n, pose and SESR are proved or tested only as far as stated above;
+- any change against AMD: the README's YOLOv8s comparison comes from same-sitting AMD arms, and none ran here.
+
+Logs:
+- [exactness](../results/aie/overlap_layers_exact_yolov8s_desktop2_20261015T2057Z.log);
+- [sitting](../results/aie/overlap_layers_ab_yolov8s_desktop2_20261015T2058Z.log)
+  ([JSON](../results/aie/overlap_layers_ab_yolov8s_desktop2_20261015T2058Z.json));
+- [analysis](../results/aie/overlap_layers_analysis_yolov8s_desktop2_20261015T2058Z.log): the pre-registration
+  verbatim, the proof run, the predictor, the gap sizing, the merge groups, the tolerated over-reads and the build
+  identity.
+
+#### Where layer overlap's gain comes from: the boundary gaps, and after compute-heavy layers the cores' backlog itself (2026-10-15, Desktop 2)
+
+**Verdict: BOUNDARY in both arms.** Removing the barrier recovers more than the idle gap at each boundary. After
+compute-heavy layers it also hides the cores' backlog: the next layer's activations stream in while the cores finish
+the previous one.
+- **This corrects the reading given before the build.** It held that removing barriers recovers only the idle
+  gap, not the backlog, and the prediction was sized from that. The measurement says otherwise.
+- **The [tail sitting](#overlap-sized-at-most-36-ms-on-yolov8s-and-123-ms-of-it-is-compute-left-exposed-at-layer-ends-2026-10-15-desktop-2)'s 1.23 ms was a reachable saving in part.** The [overlap section](#layer-overlap-no-barrier-between-layers-only-exact-workspace-dependencies-yolov8s-122-ms-faster-and-exact-outside-its-prediction-2026-10-15-desktop-2)'s "not shown to be
+  the backlog" is answered here.
+
+**The method, and an amendment made after a first sitting.** The sitting was pre-registered (sha256 `b204957a...`):
+- four traced containers: the control, the overlap build, and their NOP copies;
+- 6 rounds, the order rotated, one cold traced dispatch per process;
+- exactness checked first (20 dispatches each, heads equal to the control's).
+
+The registered decomposition splits the frame into the activation stream's pieces: the span from each layer's first
+activation completion to its last, the gaps between layers, and the frame's head and end.
+- **What the first sitting showed.**
+  - It passed gate C: −1.171 ms real and −0.422 ms NOP, against the warm −1.220 and −0.454.
+  - It could not compute rule V. Under overlap, a layer's marker fires when that layer starts issuing, so some
+    layers finish no activation task inside their own marker window, and the window method reads NaN.
+- **The amendment** (sha256 `18afabb7...`, written before the second sitting). It attributes completions to layers by
+  count: column 0's activation channel completes in order, and its 1,387 pulses per frame are exact.
+  - **Method check:** dry-run on old control dumps, it agrees with the window method where the windows are valid
+    (within-layer 21.36M against 21.44M cycles; gaps 6.257M against 6.256M).
+  - **Both sittings' gains are disclosed.** The first sitting's partial figure (the change inside the compute-heavy
+    layers) was seen and is disclosed too.
+  - **The verdict is read from the second sitting only.**
+
+**The second sitting** (gate C PASS: −1.190 ms real, −0.432 ms NOP; `timing_eligible: true`). Means over 6 dumps,
+in cycles at 1.80 GHz; "gaps" are from layer k's last activation completion to layer k+1's first:
+
+| arm | frame gain | gaps | gap gain | after compute-heavy layers (≥35%) | within-layer change |
+|---|---:|---:|---:|---:|---:|
+| real | 2,141,222 = 1.190 ms | 6,194,782 → 3,515,248 | **2,679,534 (125%)** | 1,668,195 | −514,421 (spans longer) |
+| NOP | 778,029 = 0.432 ms | 4,037,036 → 3,161,256 | 875,781 (113%) | 276,788 | −86,099 |
+
+**Two components, measured.**
+- **The boundary cost with no compute: 0.88M cycles, 0.49 ms DERIVED.** This is the NOP arm's gap gain: issue,
+  first-packet transit and awaits at each boundary. It sets a floor on what overlap saves without compute.
+- **The backlog now hidden: about 1.8M cycles, 1.0 ms DERIVED.** This is the real arm's gap gain beyond the NOP's,
+  and it sits after the compute-heavy layers.
+  - In the control, a real frame's gaps hold 2.16M cycles more than the NOP frame's: the next layer waiting at the
+    barrier while the cores finish.
+  - With overlap, real gaps fall to 3.52M, within 0.36M of the NOP frame's 3.16M.
+- **This resolves the [overlap section](#layer-overlap-no-barrier-between-layers-only-exact-workspace-dependencies-yolov8s-122-ms-faster-and-exact-outside-its-prediction-2026-10-15-desktop-2)'s three candidates.** Issue moved off the critical path and fewer awaits
+  are the boundary-cost component. Pre-staging during the backlog is the larger one.
+
+**The within-layer spans get longer, and the cause is not DDR.** Reported, not verdict-bearing; split named after the
+sitting, from the same dumps. Cycles inside the within-layer spans, control → overlap, real arm:
+
+| shim event (column 0) | change | on compute-heavy layers |
+|---|---:|---:|
+| activation backpressure (MemTile/cores not taking it) | +901,412 | +578,819 |
+| weight backpressure | +1,805,112 | +742,220 |
+| activation DDR starvation | −765,133 | −541,095 |
+| weight DDR starvation | −628,665 | −458,883 |
+
+- **DDR starvation falls on both channels**, so DDR contention against the previous layer's drains is not the cause.
+- **The longer spans fill with backpressure.** The next layer's stream starts during the backlog and then waits on
+  MemTile and the cores. This fits fills pre-staged up to the buffer depth.
+- **Not measured:** whether the cores themselves run slower. The cores cannot be traced.
+
+**What is left.** Real-frame gaps still hold 3.52M cycles: 3.52M / 65 boundaries ≈ 54,000 cycles ≈ 30 µs each,
+DERIVED. That is the next target.
+- **Deeper MemTile activation buffering**, which would let more of the next layer pre-stage during the backlog,
+  would act on it.
+
+Logs:
+- [first sitting](../results/aie/overlap_explain_yolov8s_desktop2_20261015T2120Z.log);
+- [second sitting](../results/aie/overlap_explain2_yolov8s_desktop2_20261015T2122Z.log);
+- [analysis](../results/aie/overlap_explain_analysis_yolov8s_desktop2_20261015T2122Z.log): the pre-registration and
+  the amendment verbatim, both decompositions, and the stall split.
+
+#### Layer overlap is the compiler's default: YOLOv8n −1.00 ms, YOLOv8s −1.31, pose −1.14, SESR M7 −0.08, every container exact (2026-10-15, Desktop 2)
+
+**What changed.** `ignite-compile` now overlaps layers by default.
+- **When it applies.** Wherever a build allows it: the int8 design, no host layer, and none of ring, weight buffer,
+  box fills, stream sharing, split layers or dense recipe. Every workspace pattern must also sit on the 8-byte grain,
+  which is checked before the choice is made.
+- **The flags.**
+  - `--no-overlap-layers` keeps the barrier after every layer.
+  - `--overlap-layers` makes a build that cannot take it an error. The error names the blocking modes.
+- **The manifest records the choice both ways.**
+  - `graph_engine.overlap_layers` is true or false.
+  - `overlap_layers_blocked_by` lists what kept a default build on the barrier.
+  - A container without the key predates the change and has the barrier.
+
+**What the default reaches**, from the built manifests:
+
+| graph | default | why |
+|---|---|---|
+| YOLOv8n and YOLOv8s (with and without `--silu-sigmoid`), YOLOv8n-pose, SESR M7 | overlap | monolithic int8 graph |
+| ResNet50 head | overlap, no effect | one layer, no boundary: the default and barrier streams are byte-identical |
+| YOLOv8n-cls 640 | barrier | its graph lowers a host layer (`blocked_by: host layers`); both streams byte-identical |
+| anything with `--host-region` (YOLO11n, YOLO26n, YOLO-World), split and dense containers | barrier | host layers, split layers or a dense recipe |
+
+So a model with a CPU step gives up the overlap as well as paying for the step.
+
+**Proof, exactness and identity.**
+- **The offline proof** (`tests/test_layer_overlap_offline.py`) now covers every graph above:
+  - YOLOv8n and YOLOv8s with and without the SiLU sigmoid, pose, SESR M7, both classifiers;
+  - hazard-free on each, from exact byte sets and the stream's own awaits;
+  - plus the default decision itself, and a pattern off the grain being refused rather than truncated.
+- **On the device**, 300 dispatches per container, each default build against its own barrier build:
+  - **Heads** (`repeat_dispatch_exact.py`): YOLOv8n and YOLOv8s with `--silu-sigmoid`, and pose.
+  - **The whole workspace** (`--workspace`, a new mode): every byte of every layer's output, for SESR M7 (11.2 MB), the
+    ResNet50 head, YOLOv8n and YOLOv8s with `--silu-sigmoid`, and pose.
+  - All exact.
+  - The first whole-workspace run stopped at the ResNet head: the tool staged channel-major input into a
+    channel-blocked plane. Its log is kept; the tool now fills the raw plane, and the second run passed all five.
+- **Byte identity.**
+  - YOLOv8s's barrier build is byte-identical to the stream shipped before the change, and its default build to the
+    `--overlap-layers` build timed earlier.
+  - For the other graphs the claim is only that `--no-overlap-layers` runs the unchanged emitter path.
+
+**The sitting** (pre-registered, sha256 `725b19ac...`; `bench_dispatch_ab.py`, 4 rounds × 300; four pairs in one
+sitting, barrier build against default; `timing_eligible: true`):
+- **Registered:** sign only, with a per-pair KILL rule.
+- **Result:** every pair reads **PASS**.
+
+| graph | barrier (ms, real) | default | real delta | lower | NOP delta |
+|---|---:|---:|---:|---:|---:|
+| YOLOv8n, `--silu-sigmoid` | 7.342 | 6.343 | **−1.000 (−13.6%)** | 4/4 | −0.284 |
+| YOLOv8s, `--silu-sigmoid` | 16.229 | 14.921 | **−1.307 (−8.1%)** | 4/4 | −0.430 |
+| YOLOv8n-pose | 7.509 | 6.368 | **−1.141 (−15.2%)** | 4/4 | −0.449 |
+| SESR M7 | 4.267 | 4.184 | −0.083 (−1.9%) | 4/4 | −0.105 |
+
+- **Not attributed: the per-graph pattern.** In every detector the real gain is 2.5–3.5x the NOP gain, the pattern
+  the YOLOv8s trace attributed to the cores' backlog. These graphs were not traced, so for them it is a resemblance,
+  not an attribution.
+- **SESR's small gain fits its shape** (DERIVED, not measured): 8 boundaries against the detectors' 65–74.
+
+**What this does not establish.**
+- **No comparison against AMD.** The README's "AMD stays ahead on YOLOv8s and SESR M7" may be stale. *[Run the same day: [Ignition is faster on YOLOv8s now](#against-amds-stack-on-the-overlap-default-yolov8s-flips-to-ignition-1582-against-1729-ms-yolov8n-and-pose-widen-their-lead-amd-keeps-sesr-m7-2026-10-15-desktop-2), 15.82 against 17.29 ms; AMD keeps SESR M7.]* The
+  [release sitting](#the-v033-release-sitting-sigmoid-silu-containers-on-the-host-fast-paths-against-amds-stack-2026-09-17-desktop-2)
+  had Ignition's YOLOv8s 1.4 ms behind AMD's stack glass-to-glass (18.2 against 16.8 ms), and the default now takes
+  1.3 ms off the dispatch. But those are different days and different sittings, and dispatch is not glass-to-glass.
+  A same-sitting AMD arm comes before any README change; it is the first follow-up.
+- **The figures above are dispatch only:** warm, one staged frame, no pre- or post-processing.
+
+Logs:
+- [exactness, heads](../results/aie/overlap_default_exact_desktop2_20261015T2142Z.log);
+- exactness, whole workspace: [first run](../results/aie/overlap_default_exact_ws_desktop2_20261015T2143Z.log)
+  (stopped at the ResNet head on the tool's staging) and [second](../results/aie/overlap_default_exact_ws_desktop2_20261015T2144Z.log);
+- [sitting](../results/aie/overlap_default_ab_desktop2_20261015T2145Z.log)
+  ([JSON](../results/aie/overlap_default_ab_desktop2_20261015T2145Z.json));
+- [record](../results/aie/overlap_default_record_desktop2_20261015T2145Z.log): the pre-registration verbatim, stream
+  identities, every manifest's decision and the proof run.
+
+#### Against AMD's stack on the overlap default: YOLOv8s flips to Ignition (15.82 against 17.29 ms), YOLOv8n and pose widen their lead, AMD keeps SESR M7 (2026-10-15, Desktop 2)
+
+**The question.** Does the layer-overlap default reach the frame, and who is faster now? This re-runs the
+[v0.3.3 release sitting](#the-v033-release-sitting-sigmoid-silu-containers-on-the-host-fast-paths-against-amds-stack-2026-09-17-desktop-2)
+with its method, plus one more arm per model: the same build with `--no-overlap-layers`.
+- **Pre-registered** (sha256 `d2d5ecff...`).
+- **Commits:** ignite-xdna `653084f`, Ignition `4f23442`.
+- **Every Ignition container was verified layer-exact on the NPU first.** Every readable layer exact, every reused
+  slot holding its planned final tenant: 28/28 per YOLOv8 container, 37/37 per pose container, 5/5 per SESR container.
+- **Runs:**
+  - AMD's stack: Ryzen AI 1.7.1 in `resnet_env17`, its caches compiled fresh by an untimed run first.
+  - Ignition: `live_ignition.py`.
+  - Each run: 50 warm-up and 500 timed frames of `bus.jpg`, balanced mode, `xrt-smi` idle before every run.
+  - Two interleaved rounds, the second in reverse order; `timing_eligible: true`.
+
+Glass to glass, mean ms, rounds 1 / 2:
+
+| Model | AMD's stack | Ignition, overlap (default) | Ignition, barrier | Pre-registered verdict |
+|---|---:|---:|---:|---|
+| YOLOv8n, `--silu-sigmoid` | 10.787 / 10.731 | **7.251 / 7.235** | 8.278 / 8.240 | Ignition faster |
+| YOLOv8s, `--silu-sigmoid` | 17.249 / 17.327 | **15.818 / 15.815** | 17.146 / 17.238 | **Ignition faster** |
+| YOLOv8n-pose, `--silu-sigmoid` | ≈12.2 (below) | **7.703 / 7.750** | 8.961 / 8.858 | Ignition faster |
+| SESR M7 | **3.833 / 3.739** | 4.794 / 4.766 | 4.937 / 4.989 | AMD faster |
+
+**What it shows.**
+- **YOLOv8s flips.** Ignition is 1.47 ms faster than AMD's stack, below it in both rounds.
+  - Its barrier arm is level with AMD in this sitting (17.15 / 17.24 against 17.25 / 17.33), so the flip is the
+    overlap's.
+  - In the release sitting Ignition trailed by 1.4 ms (18.21 against 16.79): a different day, and its own sitting.
+- **The overlap reaches the frame almost one for one.** Overlap minus barrier, glass to glass:
+
+  | Model | Glass to glass | Dispatch A/B earlier the same day |
+  |---|---:|---:|
+  | YOLOv8n | −1.016 ms | −1.000 ms |
+  | YOLOv8s | −1.376 ms | −1.307 ms |
+  | YOLOv8n-pose | −1.183 ms | −1.141 ms |
+  | SESR M7 | −0.183 ms | −0.083 ms |
+
+  - The SESR difference is within that model's run-to-run spread here. Its per-100-frame samples vary by ±0.3 ms.
+- **YOLOv8n is now 3.5 ms faster than AMD's stack and pose about 4.5 ms.** Accuracy is unchanged: every overlap
+  container is exact against its barrier build, so the
+  [mAP figures](#the-sigmoid-silu-containers-against-amds-stack-more-accurate-on-all-5000-coco-images-faster-on-yolov8n-and-yolov8n-pose-slower-on-yolov8s-2026-09-17-desktop-2)
+  stand. That includes YOLOv8s's 42.37 against AMD's 37.31 mAP@50-95. On YOLOv8s Ignition is now both faster and
+  more accurate.
+- **AMD keeps SESR M7**, by about 1.0 ms. The overlap has 8 boundaries to work with there.
+
+**AMD's pose arm.** As in the release sitting, it is `pipelines/yolov8n-pose/4_pose.py --ep npu`, which prints its
+stages, not one mean.
+- **Logged:** pre 2.954 / 3.035 ms and infer 9.13 / 9.12 ms.
+- **Not logged:** this sitting's driver filtered out the post line, so AMD's pose mean is an estimate. Its frame
+  samples read 12.0–12.9 ms; the release sitting had post at 0.10 ms. The verdict does not depend on it: AMD's pre
+  plus infer alone is 12.1 ms against Ignition's 7.7.
+
+**Not re-run here:** YOLO11n, which keeps its barrier because of its host segment, and the performance power mode.
+
+Logs:
+- [sitting](../results/aie/head_to_head_overlap_phoenix_20261015T2243Z.log), every run's command and output lines;
+- [record](../results/aie/head_to_head_overlap_record_phoenix_20261015T2243Z.log): the pre-registration verbatim,
+  hashes and the per-arm summary.

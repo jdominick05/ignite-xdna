@@ -1,5 +1,7 @@
 # Model zoo on Phoenix: ONNX CPU baselines and bare-metal `.ignite` containers
 
+*[Every engine dispatch figure on this page is a barrier build. Since 2026-10-15 the compiler overlaps layers by default, which is 1.00-1.31 ms faster on the YOLOv8 containers and 0.08 ms on SESR M7: see [BENCHMARKS](BENCHMARKS.md#layer-overlap-is-the-compilers-default-yolov8n-100-ms-yolov8s-131-pose-114-sesr-m7-008-every-container-exact-2026-10-15-desktop-2). The figures here are kept as measured.]*
+
 Four ONNX models timed on the CPU through Ignition, and two of them (YOLOv8s and SESR M7)
 lowered onto the 16-core convolution engine that already runs YOLOv8n
 ([engine design](BENCHMARKS.md#whole-network-yolov8n-on-a-16-core-convolution-engine-every-layer-on-the-npu-bit-exact-2026-09-13-desktop-2),

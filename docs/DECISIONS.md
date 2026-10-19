@@ -1423,6 +1423,25 @@ The measurement and verdict will be folded into BENCHMARKS after the run.
     - The pre-registration is embedded in `tools/w4v_verdict.py` (v2.4 as amended by v2.5);
       branch `worktree-int4-vision`.
 
+- **Pitfall: IRON's ObjectFifo `split` cannot cut overlapping per-core objects out of one MemTile buffer
+  (2026-10-15).** It times out on the first dispatch, and the cause is decoded from the lowered IR.
+  - **Why:** `split` models a disjoint partition. Each child's MM2S BD gets the gap to the next offset as its
+    length (1,000 / 1,000 / 1,000 / 15,400 B), whatever its `dims_to_stream` pattern streams (6,400 B). Its S2MM
+    side is chunked and locked at the same offsets.
+  - **Don't patch `len` in the lowered MLIR.** The per-chunk locks would still release a core before its bytes
+    land.
+  - **The route that works is a hand-written MemTile program:** raw MLIR in `tools/task_issue_probe.py`
+    (`o4raw` / `boxraw`), exact on silicon.
+  - **Its lock protocol:**
+    - one producer lock per buffer, initialised to 4 and taken 4 at a time;
+    - one consumer lock per core;
+    - an S2MM chain whose first chunk puts 4 tokens on a relay lock, with each later chunk taking one and
+      releasing one core.
+  - **Two toolchain rules shape it.** The CDO generator rejects a locked BD without both an acquire and a
+    release, and rejects a zero-value acquire. The MemTile's BDs are split 24 per channel-parity half.
+  - [BENCHMARKS](BENCHMARKS.md#block-5-amds-split-of-roles-built-as-a-probe-the-shim-moves-one-box-the-memtile-cuts-it-per-core-2026-10-15-desktop-2),
+    `results/aie/role_split_sizing_checks_yolov8s_desktop2_20261015T124818Z.log`.
+
 ## The YOLOv8 partitioning failure (resolved)
 
 For a while, YOLOv8 would not reach the NPU at all: the VitisAI EP claimed **zero**
@@ -2468,6 +2487,94 @@ cached reference heads rather than `bo_out`.
   - **What would reopen it:** a measured mechanism, then a new pre-registration for a variant that keeps weights
     off the quads' path (a deeper B, another q, or weights on their own route). Not a rerun of this one
     ([BENCHMARKS](BENCHMARKS.md#block-5-stream-sharing-built-exact-on-the-device-and-093-ms-slower-transport-gains-048-ms-but-compute-exposure-grows-130-ms-2026-10-13-desktop-2)).
+- **Rejected (built and measured): box fills, AMD's split of roles lowered into the engine (2026-10-15, Block 5).**
+  The shim moves one box per quad, the MemTile cuts it per core, and adjacent boxes merge up to 8 per task on the
+  28 single-geometry YOLOv8s layers. It is exact on the device: 66/66 layers, and 300 dispatches equal to the
+  default's heads. It lost its pre-registered sitting: real dispatch was +0.685 ms (0/4 rounds) against a
+  prediction of −0.4 to −1.1 ms. NOP was −0.251 ms (4/4), and compute exposure grew 0.935 ms.
+  - **Ruled out:** the path itself. The same build with every layer cut plain (`--box-cap 0`) reads −0.05 ms.
+  - **The cause is unexplained.** Still standing: merged tasks stalling behind the 2-box MemTile buffer under
+    compute; the 26 extra mid-frame configures; the one-box task penalty the probe measured. *[Found the same day
+    by the shim trace: the loss is the MemTile configures, about 26.5 microseconds each (DERIVED). Against the
+    control the box build pays 27, +0.715 ms, and everything else nets -0.054 ms, for +0.661 ms traced; the 26 extra
+    over the no-merge build are 0.690 ms. Net of them the merged tasks save about 0.05 ms in real dispatch, because the issue they save was
+    already hidden under compute. A rescue that made configures free would recover about 0.05 ms on YOLOv8s, so
+    the rejection stands
+    ([BENCHMARKS](BENCHMARKS.md#block-5-the-shim-trace-finds-what-box-fills-lost-26-mid-frame-memtile-configures-at-265-microseconds-each-2026-10-15-desktop-2)).]*
+  - **What stays on `main`, off by default:** `--box-fills` / `--box-cap`, `compiler/box_fills.py`, and
+    `design.py`'s `_activation_box`.
+  - **Found on the way:** mlir-aie's `npu.writebd` drops a MemTile descriptor's D2 wrap, so the emitter writes
+    word 4 itself.
+  - **What would reopen it:** a measured mechanism, from a cap-1 arm and per-layer timing of a box stream (the
+    configure writes must first be made countable by `split_instruction_stream`). Then a new pre-registration,
+    not a rerun
+    ([BENCHMARKS](BENCHMARKS.md#block-5-box-fills-in-the-engine-exact-on-the-device-and-069-ms-slower-transport-gains-025-ms-but-compute-exposure-grows-094-ms-2026-10-15-desktop-2)).
+- **Decision (2026-10-15): layer overlap is the compiler's default. `--no-overlap-layers` keeps the barrier.**
+  - **Where it applies.** Every build that allows it: the int8 design, no host layer, none of ring, weight buffer,
+    box fills, stream sharing, split layers or dense recipe, and every workspace pattern on the 8-byte grain.
+    - `--overlap-layers` makes a build that cannot take it an error.
+    - The manifest records `graph_engine.overlap_layers` both ways, and `overlap_layers_blocked_by` for a default
+      build kept on the barrier.
+    - A container without the key predates the change and has the barrier.
+  - **Measured.** Pre-registered, every pair PASS, 4/4 rounds: YOLOv8n −1.000 ms, YOLOv8s −1.307 (both
+    `--silu-sigmoid`), YOLOv8n-pose −1.141, SESR M7 −0.083. Every default build is exact against its barrier build:
+    300 dispatches; heads, and the whole workspace.
+  - **The option entry's landing condition, item by item:**
+    - **Proof: met.** `tests/test_layer_overlap_offline.py` covers YOLOv8n and YOLOv8s with and without the SiLU
+      sigmoid, pose, SESR M7 and both classifiers.
+    - **Device exactness: met.** On every container the default changes.
+    - **Consumers: met.** Checked by search, not assumed:
+      - every caller of `split_instruction_stream` runs only under refused modes (host segments, split, dense)
+        or refuses an overlap container (`engine_layer_timing`);
+      - the other two `SequenceEmitter` constructors (hardware tests, the bf16 kernel) keep the barrier;
+      - the runtime dispatches one stream per container;
+      - `tools/rebuild_container_check.py` rebuilds with the reference's own key;
+      - `tools/ring_shape_probe.py` pins the barrier;
+      - `engine_shim_trace.py` prints no per-layer table for an overlap container, and `shim_trace_budget.py` and
+        `shim_trace_compare.py` refuse one.
+    - **The AMD arm: NOT RUN.** The README is unchanged, and its "AMD stays ahead on YOLOv8s and SESR M7" waits on a
+      same-sitting AMD comparison. *[Run the same day: Ignition faster on YOLOv8n, YOLOv8s and pose,
+      AMD on SESR M7; the README follows it. [BENCHMARKS](BENCHMARKS.md#against-amds-stack-on-the-overlap-default-yolov8s-flips-to-ignition-1582-against-1729-ms-yolov8n-and-pose-widen-their-lead-amd-keeps-sesr-m7-2026-10-15-desktop-2).]*
+  - **Tool consequence.** Per-layer timing (`engine_layer_timing`), any barrier control and per-layer trace windows
+    need a `--no-overlap-layers` build.
+  - [BENCHMARKS](BENCHMARKS.md#layer-overlap-is-the-compilers-default-yolov8n-100-ms-yolov8s-131-pose-114-sesr-m7-008-every-container-exact-2026-10-15-desktop-2).
+- **Option (2026-10-15): `--overlap-layers`, no barrier between layers. Measured −1.220 ms on YOLOv8s (real,
+  4/4 rounds, pre-registered), exact. Off by default.** *[The default since the same day: the entry above.]*
+  - **What it does.** Each fill or drain awaits only the earlier-layer tasks it conflicts with in the workspace
+    (`compiler/layer_overlap.py`, exact 8-byte cells); a frame barrier ends the stream.
+  - **What the exactness rests on.** An offline proof over the emitted stream (`tests/test_layer_overlap_offline.py`)
+    plus 300 equal dispatches. The dispatches alone cannot exclude a race. The proof skips over-reads within a layer
+    (padding rows, already raced under the barrier).
+  - **Landing condition for making it the default:**
+    - the proof test passing on every graph-engine container the flag can reach (YOLOv8n, YOLOv8n-pose and SESR M7
+      as well as YOLOv8s);
+    - a device exactness run on each;
+    - a check that every `GraphSession` consumer tolerates a stream without per-layer barriers;
+    - a same-sitting AMD arm, before any README number changes.
+  - **Tool consequences:**
+    - `tools/engine_layer_timing.py` refuses such containers, because it cuts the stream at per-layer barriers, which such
+      a stream lacks;
+    - `tools/engine_shim_trace.py` windows still split at per-layer markers, but a marker now fires when the next
+      layer starts issuing, not after the previous one finished. *[Since the default: the tool prints no per-layer table for such a
+      container, and its readers refuse one.]*
+  - **The mechanism, traced.** Real gains 2.7x NOP and more than the modelled boundary gap. *[Traced: the gain is
+    at the boundaries; 0.49 ms of it exists with no compute, and about 1.0 ms DERIVED is the cores' backlog after
+    compute-heavy layers, now hidden by the next layer's transfers. [BENCHMARKS](BENCHMARKS.md#where-layer-overlaps-gain-comes-from-the-boundary-gaps-and-after-compute-heavy-layers-the-cores-backlog-itself-2026-10-15-desktop-2).]*
+  - [BENCHMARKS](BENCHMARKS.md#layer-overlap-no-barrier-between-layers-only-exact-workspace-dependencies-yolov8s-122-ms-faster-and-exact-outside-its-prediction-2026-10-15-desktop-2).
+- **Pitfall (2026-10-15): the engine's cores cannot be traced, and a traced shim gives one clean dispatch per
+  hardware context.**
+  - **Cores have no route out.** Every core tile's four southbound switch ports carry the column's output join
+    (inferred from the design's four output flows per column; aiecc names no port), so aiecc finds no route for any
+    core's trace packets ("Unable to find a legal routing" for any single core, any
+    egress column). Trace the shim tiles instead: `--trace-shims`, read by `tools/engine_shim_trace.py`.
+  - **On a shim, the marker must be `USER_EVENT_1`.** `-aie-insert-trace-flows` makes `USER_EVENT_1` the start event
+    and `USER_EVENT_0` the stop event, so a `USER_EVENT_0` marker stops the trace it is meant to mark.
+  - **One traced dispatch per context.** The trace's S2MM task is one descriptor as long as the buffer and outlives
+    the dispatch, so the next dispatch's trace lands mid-buffer. Run each traced dispatch in its own process; every
+    traced number is a cold first dispatch.
+  - **Decode as runs, not per cycle.** A whole frame expanded per cycle took 5.1 GB; `tools/trace_runs.py` keeps runs
+    and equals `clock_probe.decode_event_time` exactly.
+  - [BENCHMARKS](BENCHMARKS.md#block-5-the-shim-trace-finds-what-box-fills-lost-26-mid-frame-memtile-configures-at-265-microseconds-each-2026-10-15-desktop-2).
 - **Rejected again, on the container it mattered most for: the activation ring on SESR M7 (2026-09-19, built and
   measured).** SESR is the one zoo model whose dispatch is demonstrably transport-bound (2.650 ms NOP floor for
   ~14 MB of per-frame fill and drain, 5.4 GB/s effective), so the ring's "fetch once, serve several output groups"

@@ -420,6 +420,8 @@ class EngineSession:
         self._input_dtype: np.dtype = np.dtype(np.uint8)
         self.bo_ws = None
         self.bo_wp = None
+        self.bo_trace = None
+        self.trace_bytes = 0
         self.bo_instr_exec = None
         self._run = None
 
@@ -486,6 +488,12 @@ class EngineSession:
             else:
                 self.bo_ws = self.harness.create_host_bo(self.workspace_bytes, 3)
                 self._owns_bo_ws = True
+            # A shim-trace build (graph_engine.trace) patches its trace buffer from the stream's third argument, which
+            # is XRT argument 5. Without it the patch points at nothing, so such a container never runs without one.
+            trace = self.ge.get("trace")
+            if trace:
+                self.trace_bytes = int(trace["buffer_bytes"])
+                self.bo_trace = self.harness.create_host_bo(self.trace_bytes, 5)
             if "wpackets.bin" in self._reader.blobs:
                 wp = self._reader.get_blob_memoryview("wpackets.bin")
                 self.bo_wp = self.harness.create_host_bo(max(64, len(wp)), 4)
@@ -565,10 +573,15 @@ class EngineSession:
             try:
                 for bo_instr, n_instr in self._npu_streams:
                     run = pyxrt.run(self.harness.kernel)
-                    for i, arg in enumerate((3, bo_instr, n_instr, self.bo_ws, self.bo_wp)):
+                    args = (3, bo_instr, n_instr, self.bo_ws, self.bo_wp)
+                    if self.bo_trace is not None:
+                        args += (self.bo_trace,)
+                    for i, arg in enumerate(args):
                         run.set_arg(i, arg)
                     self._runs.append(run)
             except Exception:  # noqa: BLE001 - fall back to one run per dispatch
+                if self.bo_trace is not None:
+                    raise
                 self._runs = []
             self._run = self._runs[0] if self._runs else None
             self._host_steps = [HostStep(self, seg) for seg in self.segments if seg["kind"] == "host"]
@@ -728,6 +741,7 @@ class EngineSession:
         self._input_plane = None
         self.bo_ws = None
         self.bo_wp = None
+        self.bo_trace = None
         self.bo_instr_exec = None
         if hasattr(self, "_weights_mmap") and self._weights_mmap is not None:
             try:

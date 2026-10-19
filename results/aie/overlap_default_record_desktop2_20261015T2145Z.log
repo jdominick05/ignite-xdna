@@ -1,0 +1,111 @@
+layer overlap as the compiler default: pre-registration, builds, decisions, proof, A/B summary. Desktop 2 (DESKTOP-CBL5NUA), written 2026-10-15T21:53Z; A/B sitting 20261015T2145Z
+
+== 1. Pre-registration, verbatim, and hashes taken before the sitting ==
+725b19ac25d0916550970baec2dae723db57feed554bf1e7c8653c76751b789f *scratch/b48/prereg_default.txt
+395de0ddf68d4f302dc732c0654a87c63491733297a3edce8a208076015caa9c *build/df_yolov8n_silu_bar.ignite
+60d8cf0247dd9657f4f6b89913f91e3c8c05733d09384ae99d6d914fee92307a *build/df_yolov8n_silu_def.ignite
+69d9950a5e833d50b2917853224dd14c0c499db70e2eaf3fef711c5083b6de94 *build/df_yolov8s_silu_bar.ignite
+de167433da55ccb1a84a464cb720b9b7a90011f150edcc4037492d07cabe67d3 *build/df_yolov8s_silu_def.ignite
+7e1404a3c0bde91d289a4bea3d7be8f78ea7097820fb3924ae48aefa4ebba31d *build/df_yolov8n_pose_bar.ignite
+6bcab2b8403ebf3761af3e2e209f8aeb004c4e74fe2491c6436c45bfdc63b0b0 *build/df_yolov8n_pose_def.ignite
+9a678fb3cbfb83ae0edc4bd93870be08c8b20a51d087772774476fd569e0b7ca *build/df_sesr_m7_bar.ignite
+ad8dd77cc54e7dfffa7cf8bebe9fd63f958d9362badddcbb9ce896bffd147a5f *build/df_sesr_m7_def.ignite
+38e8deb880f615363595878265af9310a6a904d58c0d0dd5b0a2461d5b2d51e5 *src/ignite_xdna/compiler/layer_overlap.py
+414dc4889d99e24bd585ddcad8c3d275a076958094b53bc19884d6e47c3137f8 *src/ignite_xdna/compiler/engine_compile.py
+10a11bb1ace70b7225a124888400211503949be5d9a6c033f6a339452971ad04 *src/ignite_xdna/compiler/engine_sequence.py
+a3a1663995c89c35cfa92676bfc0875a56b2427783b530ef40a46ac221b2e5e7 *tools/bench_dispatch_ab.py
+--- begin ---
+PRE-REGISTRATION: layer overlap as the compiler's default, every container it reaches, warm dispatch A/B.
+Desktop 2 (DESKTOP-CBL5NUA), 2026-10-15. Written before any timed dispatch of these builds. Their only device runs so
+far are exactness checks (results/aie/overlap_default_exact_desktop2_*: heads, 300 dispatches each, YOLOv8n and
+YOLOv8s with --silu-sigmoid and pose; overlap_default_exact_ws_desktop2_*: whole workspace, 300 dispatches each,
+those three plus SESR M7 and the ResNet50 head). No timing from those runs is read.
+
+Change under test: ignite-compile's new default turns layer overlap on wherever a build allows it (no host layer and
+none of ring, weight buffer, box fills, stream sharing, split layers, dense recipe; int8 design; every pattern on the
+8-byte grain). --no-overlap-layers is the barrier build, byte-identical to the stream before the change (checked on
+YOLOv8s against the shipped control).
+
+Pairs (control = --no-overlap-layers, test = the default; same commit, same flags otherwise):
+  yolov8n_silu  build/df_yolov8n_silu_{bar,def}.ignite  (--silu-sigmoid, what Ignition's docs build)
+  yolov8s_silu  build/df_yolov8s_silu_{bar,def}.ignite  (--silu-sigmoid)
+  yolov8n_pose  build/df_yolov8n_pose_{bar,def}.ignite
+  sesr_m7       build/df_sesr_m7_{bar,def}.ignite
+Not timed: the ResNet50 head (one layer, no boundary: both streams byte-identical) and the 640 classifier (a host
+layer blocks overlap: both streams byte-identical).
+
+Method: tools/bench_dispatch_ab.py with the four --pair, --rounds 4 --iters 300 (real and all-NOP copies, one
+process per run, order reversed every second round), under research-lowlevel.sh --npu; void unless
+timing_eligible true. Hashes below.
+
+Prediction: sign only. Each pair's real delta (test - control) negative. Magnitude is not predicted: only YOLOv8s
+(without the SiLU sigmoid) has a traced boundary decomposition. For orientation only, not a rule: YOLOv8s's
+earlier gain was -1.22 ms; SESR M7 has 9 layers (8 boundaries) and may gain little.
+
+Rules, per pair, on the 4-round means:
+- KILL: real delta > +0.05 ms, or the test lower in fewer than 3 of 4 rounds.
+- PASS: real delta < 0 with the test lower in 4 of 4 rounds.
+- else MARGINAL.
+The default lands as built only if no pair reads KILL. A KILL pair means the default must exclude that container
+class (or the change does not land) - decided after, in the open.
+Reported, not verdict-bearing: each NOP delta; compute exposure change (real - NOP).
+Named alternatives: drift (controlled by interleaving, 4 rounds, and every pair in one sitting); a different
+instruction count (none: each pair's streams are the same size).
+
+A hang, an exactness failure or contention voids the sitting.
+--- end ---
+
+== 2. Builds (ignite-compile --engine graph; default and --no-overlap-layers): stream identity ==
+  yolov8n_silu: default 406276 B, barrier 406276 B, streams differ
+  yolov8s_silu: default 933028 B, barrier 933028 B, streams differ
+  yolov8n_pose: default 413996 B, barrier 413996 B, streams differ
+  sesr_m7: default 144880 B, barrier 144880 B, streams differ
+  resnet50_head: default 9760 B, barrier 9760 B, streams identical
+  cls640: default 187040 B, barrier 187040 B, streams identical
+  yolov8s: default 933028 B, barrier 933028 B, streams differ
+  yolov8s barrier build == the shipped control yolov8s_ab_ctl (stream before the change)
+  yolov8s default build == the --overlap-layers build of edbb8b5's sitting
+
+== 3. What each manifest records (graph_engine.overlap_layers, overlap_layers_blocked_by) ==
+df_cls640_bar.ignite             overlap_layers=False blocked_by=['host layers'] segments=3
+df_cls640_def.ignite             overlap_layers=False blocked_by=['host layers'] segments=3
+df_resnet50_head_bar.ignite      overlap_layers=False blocked_by=None segments=0
+df_resnet50_head_def.ignite      overlap_layers=True  blocked_by=None segments=0
+df_sesr_m7_bar.ignite            overlap_layers=False blocked_by=None segments=0
+df_sesr_m7_bar_nop.ignite        overlap_layers=False blocked_by=None segments=0
+df_sesr_m7_def.ignite            overlap_layers=True  blocked_by=None segments=0
+df_sesr_m7_def_nop.ignite        overlap_layers=True  blocked_by=None segments=0
+df_yolov8n_pose_bar.ignite       overlap_layers=False blocked_by=None segments=0
+df_yolov8n_pose_bar_nop.ignite   overlap_layers=False blocked_by=None segments=0
+df_yolov8n_pose_def.ignite       overlap_layers=True  blocked_by=None segments=0
+df_yolov8n_pose_def_nop.ignite   overlap_layers=True  blocked_by=None segments=0
+df_yolov8n_silu_bar.ignite       overlap_layers=False blocked_by=None segments=0
+df_yolov8n_silu_bar_nop.ignite   overlap_layers=False blocked_by=None segments=0
+df_yolov8n_silu_def.ignite       overlap_layers=True  blocked_by=None segments=0
+df_yolov8n_silu_def_nop.ignite   overlap_layers=True  blocked_by=None segments=0
+df_yolov8s_bar.ignite            overlap_layers=False blocked_by=None segments=0
+df_yolov8s_def.ignite            overlap_layers=True  blocked_by=None segments=0
+df_yolov8s_silu_bar.ignite       overlap_layers=False blocked_by=None segments=0
+df_yolov8s_silu_bar_nop.ignite   overlap_layers=False blocked_by=None segments=0
+df_yolov8s_silu_def.ignite       overlap_layers=True  blocked_by=None segments=0
+df_yolov8s_silu_def_nop.ignite   overlap_layers=True  blocked_by=None segments=0
+
+== 4. Offline proof and the default decision (tests/test_layer_overlap_offline.py) ==
+tests/test_layer_overlap_offline.py::LayerOverlapOffline::test_01_barrier_is_hazard_free PASSED [ 14%]
+tests/test_layer_overlap_offline.py::LayerOverlapOffline::test_02_yolov8s_overlap_hazard_free PASSED [ 28%]
+tests/test_layer_overlap_offline.py::LayerOverlapOffline::test_03_every_default_graph_hazard_free PASSED [ 42%]
+tests/test_layer_overlap_offline.py::LayerOverlapOffline::test_04_checker_catches_missing_waits PASSED [ 57%]
+tests/test_layer_overlap_offline.py::LayerOverlapOffline::test_05_overlap_happens PASSED [ 71%]
+tests/test_layer_overlap_offline.py::LayerOverlapOffline::test_06_default_decision PASSED [ 85%]
+tests/test_layer_overlap_offline.py::LayerOverlapOffline::test_07_off_grain_pattern_blocks PASSED [100%]
+============== 7 passed, 15 subtests passed in 226.79s (0:03:46) ==============
+
+== 5. The A/B summary (from the sitting log) ==
+[summary] yolov8n_silu real: control 7.342 | test 6.343 | delta -1.000 ms | test lower in 4/4 rounds | control rounds 7.262 / 7.379 / 7.400 / 7.329 | test rounds 6.189 / 6.362 / 6.391 / 6.428
+[summary] yolov8n_silu nop : control 5.328 | test 5.043 | delta -0.284 ms | test lower in 4/4 rounds | control rounds 5.145 / 5.396 / 5.412 / 5.358 | test rounds 4.969 / 5.074 / 5.096 / 5.035
+[summary] yolov8s_silu real: control 16.229 | test 14.921 | delta -1.307 ms | test lower in 4/4 rounds | control rounds 16.230 / 16.209 / 16.237 / 16.238 | test rounds 14.931 / 14.965 / 14.892 / 14.897
+[summary] yolov8s_silu nop : control 12.086 | test 11.657 | delta -0.430 ms | test lower in 4/4 rounds | control rounds 12.112 / 12.091 / 12.022 / 12.121 | test rounds 11.672 / 11.659 / 11.671 / 11.625
+[summary] yolov8n_pose real: control 7.509 | test 6.368 | delta -1.141 ms | test lower in 4/4 rounds | control rounds 7.523 / 7.518 / 7.488 / 7.507 | test rounds 6.376 / 6.352 / 6.385 / 6.360
+[summary] yolov8n_pose nop : control 5.536 | test 5.086 | delta -0.449 ms | test lower in 4/4 rounds | control rounds 5.551 / 5.518 / 5.577 / 5.496 | test rounds 5.061 / 5.107 / 5.085 / 5.092
+[summary] sesr_m7    real: control 4.267 | test 4.184 | delta -0.083 ms | test lower in 4/4 rounds | control rounds 4.228 / 4.327 / 4.232 / 4.279 | test rounds 4.206 / 4.159 / 4.192 / 4.179
+[summary] sesr_m7    nop : control 2.805 | test 2.699 | delta -0.105 ms | test lower in 4/4 rounds | control rounds 2.862 / 2.710 / 2.828 / 2.818 | test rounds 2.770 / 2.707 / 2.675 / 2.646

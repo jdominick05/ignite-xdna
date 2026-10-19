@@ -90,7 +90,9 @@ def main() -> int:
     t0 = time.perf_counter()
     manifest = compile_graph_container(model, out, build_dir=ROOT / "scratch" / f"{out.stem}_prj",
                                        task=args.task or want_manifest.get("task"),
-                                       dense_recipe=args.dense_recipe, verbose=False, engine=profile)
+                                       dense_recipe=args.dense_recipe, verbose=False, engine=profile,
+                                       # the reference's own choice; a container without the key has the barrier
+                                       overlap_layers=bool(want.get("overlap_layers", False)))
     wall = time.perf_counter() - t0
     got = manifest["graph_engine"]
 

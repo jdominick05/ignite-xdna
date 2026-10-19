@@ -1,0 +1,71 @@
+RESEARCH_PLATFORM {"machine": "Desktop 2", "cpu": "AMD Ryzen 7 8700G w/ Radeon 780M Graphics", "os": "Windows-11-10.0.26200-SP0", "ram_bytes": 33381138432, "source_sha256": {"tools/research_process.py": "ffeb1857f190b482eed101b5f5a928f455de26bfa61d23f78a2eacec08e2663e", "tools/quant_calib_alphabet.py": "2dc0b2878c564853f340880209a425dfcf63b8536b2b8e9fd32344daade58d37", "tools/xint8_arithmetic_probe.py": "6aa3df08b9870c3c2264b868459d7ffbac3070dddc1349d7c6f3f480075f7041", "scripts/research-lowlevel.sh": "3455ad7933697936487712665505c216891865c6deada647302785f6e37020bd", "scripts/research-iron.sh": "4c863a262646ddab39b5005006ba8e03809895e6386c6310e2fd9d0a9e9609ee", "kernels/memory_placement/probe.py": "e8d990169ad6091fa1b53852e9f61eff495b5def72d35165a5c5cf1759e38898", "kernels/memory_placement/memory_kernels.cc": "182e7af7071a1e851afb4a7ca266069c489aea1fbaaa85eca129708daeba5ba6", "scripts/research-matrix.sh": "739254171629deae822b0ad7dabc875aee19ace56dde77d3e8aab61663f97516", "kernels/memory_placement/gemm.py": "17c905ad66110d3346bbf0db898dfc6b780df59fae1dfb0c1747057ce1e5844e", "kernels/memory_placement/gemm_placement.cc": "f21acf7250b12914ea30cc1f77613239dfa18421a85a1b9a5199017dd916278a", "tools/research_summary.py": "0c00dcceef07053d06731b41a1f1ed58d3ba4ea09f82497de354ce9cef17da20", "tools/research_toolchain.py": "f0a126a24ae213acfaa43460cfd9def0c86d9cb70cfee0228aa271688467b314"}, "commit": "0cdfcabec5d5fe73c3524106e81e76dabf42a731", "command": ["bash", "scripts/research-iron.sh", "scratch/b48/exact_all.py", "300"], "seconds_limit": 2100.0, "rss_gib_limit": 8, "checks_only": false, "free_ram_bytes": 23948468224}
+HOST_LOAD busy_cores=0.13 logical_cores=16 free_ram_gb=22.3 sample_sec=1
+HOST_LOAD_TOP 0.06 powershell:16344 ws_mb=80
+HOST_LOAD_TOP 0.03 dev-agent:7624 ws_mb=560
+HOST_LOAD_TOP 0.02 syncthing:11056 ws_mb=28
+HOST_LOAD_TOP 0.02 dev-agent:408 ws_mb=271
+HOST_LOAD_VERDICT CLEAR
+
+PRE_NPU_CONTEXT_WITNESS "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+== yolov8n_silu
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [8376, 10188, 12520, 13152, 15436, 15804, 16756], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 2.328, "tree_rss_bytes": 434659328, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 4.672, "tree_rss_bytes": 990724096, "foreign_peers": []}
+df_yolov8n_silu_bar.ignite: 300 dispatches, 0 differ from the first; first equals df_yolov8n_silu_bar.ignite's: True; head bytes 3637554
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 85 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |10188               |224        |8           |0           |0    |Normal   |\n      |python.exe          |Active     |8           |0           |     |N/A      |\n      |85 MB               |640 KB     |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [10188], "owned_pids": [8376, 10188, 12520, 13152, 15436, 15804, 16756], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 6.969, "tree_rss_bytes": 570130432, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 9.312, "tree_rss_bytes": 1158107136, "foreign_peers": []}
+df_yolov8n_silu_def.ignite: 300 dispatches, 0 differ from the first; first equals df_yolov8n_silu_bar.ignite's: True; head bytes 3637554
+REPEAT EXACT PASS
+== yolov8s_silu
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 112 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |12892               |225        |16          |0           |0    |Normal   |\n      |python.exe          |Active     |16          |0           |     |N/A      |\n      |112 MB              |1152 KB    |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [12892], "owned_pids": [8376, 10188, 12520, 12892, 13152, 13624, 15436, 15804, 16756], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 11.578, "tree_rss_bytes": 302247936, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 13.844, "tree_rss_bytes": 643776512, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 112 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |12892               |225        |222         |0           |0    |Normal   |\n      |python.exe          |Active     |221         |0           |     |N/A      |\n      |112 MB              |1152 KB    |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [12892], "owned_pids": [8376, 10188, 12520, 12892, 13152, 13624, 15436, 15804, 16756], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 16.156, "tree_rss_bytes": 988794880, "foreign_peers": []}
+df_yolov8s_silu_bar.ignite: 300 dispatches, 0 differ from the first; first equals df_yolov8s_silu_bar.ignite's: True; head bytes 3637554
+HOST_TIMELINE {"elapsed_seconds": 18.406, "tree_rss_bytes": 1383235584, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 112 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |12892               |226        |129         |0           |0    |Normal   |\n      |python.exe          |Active     |128         |0           |     |N/A      |\n      |112 MB              |1152 KB    |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [12892], "owned_pids": [8376, 10188, 12520, 12892, 13152, 13624, 15436, 15804, 16756], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 20.719, "tree_rss_bytes": 694493184, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 23.031, "tree_rss_bytes": 1058721792, "foreign_peers": []}
+df_yolov8s_silu_def.ignite: 300 dispatches, 0 differ from the first; first equals df_yolov8s_silu_bar.ignite's: True; head bytes 3637554
+REPEAT EXACT PASS
+== yolov8n_pose
+HOST_TIMELINE {"elapsed_seconds": 25.328, "tree_rss_bytes": 311775232, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 86 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |6260                |227        |57          |0           |0    |Normal   |\n      |python.exe          |Active     |57          |0           |     |N/A      |\n      |86 MB               |640 KB     |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [6260], "owned_pids": [6260, 8376, 10188, 12520, 12892, 13152, 13624, 15436, 15804, 16756, 16964], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 27.672, "tree_rss_bytes": 630448128, "foreign_peers": []}
+df_yolov8n_pose_bar.ignite: 300 dispatches, 0 differ from the first; first equals df_yolov8n_pose_bar.ignite's: True; head bytes 2923594
+HOST_TIMELINE {"elapsed_seconds": 30.031, "tree_rss_bytes": 394366976, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 86 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |6260                |228        |86          |0           |0    |Normal   |\n      |python.exe          |Active     |86          |0           |     |N/A      |\n      |86 MB               |640 KB     |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [6260], "owned_pids": [6260, 8376, 10188, 12520, 12892, 13152, 13624, 15436, 15804, 16756, 16964], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 32.359, "tree_rss_bytes": 874344448, "foreign_peers": []}
+df_yolov8n_pose_def.ignite: 300 dispatches, 0 differ from the first; first equals df_yolov8n_pose_bar.ignite's: True; head bytes 2923594
+REPEAT EXACT PASS
+== sesr_m7
+Traceback (most recent call last):
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\tools\repeat_dispatch_exact.py", line 36, in <module>
+    s = GraphSession(c)
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\src\ignite_xdna\runtime\graph_session.py", line 787, in __init__
+    raise ValueError(f"{self.path} is a {task} container; open it with "
+                     f"{opener or 'the session for that task'}, or let "
+                     "InferenceSession.from_file pick one")
+ValueError: build\df_sesr_m7_bar.ignite is a super_resolution container; open it with DenseGraphSession, or let InferenceSession.from_file pick one
+== resnet50_head
+HOST_TIMELINE {"elapsed_seconds": 34.64, "tree_rss_bytes": 125472768, "foreign_peers": []}
+Traceback (most recent call last):
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\tools\repeat_dispatch_exact.py", line 36, in <module>
+    s = GraphSession(c)
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\src\ignite_xdna\runtime\graph_session.py", line 787, in __init__
+    raise ValueError(f"{self.path} is a {task} container; open it with "
+                     f"{opener or 'the session for that task'}, or let "
+                     "InferenceSession.from_file pick one")
+ValueError: build\df_resnet50_head_bar.ignite is a classify container; open it with the session for that task, or let InferenceSession.from_file pick one
+2 PAIR(S) FAILED
+POST_NPU_CONTEXT_WITNESS "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+RESEARCH_PROCESS_RESULT {"exit_code": 1, "stop": null, "peak_tree_rss_bytes": 1383235584, "rss_measurement": "maximum observed across sampled descendant working sets; zero observations reported as null", "elapsed_seconds": 34.921999999991385, "foreign_contention_observed": false, "timing_eligible": false}
