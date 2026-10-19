@@ -392,7 +392,9 @@ def run(seeds, exact_only=False):
             del arms, dev
     finally:
         gc.collect()
-        witness("post", wait_s=5)
+        # Informational only: on these runs the context stayed in xrt-smi until the process exited, even with the
+        # harness closed. The wrapper's POST_NPU_CONTEXT_WITNESS, taken after exit, is the one that decides.
+        witness("post_in_process", wait_s=5)
     return 0
 
 

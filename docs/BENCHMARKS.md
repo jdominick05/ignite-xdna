@@ -3744,6 +3744,19 @@ error is 1.3–1.45e-3 (the size of bf16's final rounding), so an exact match is
 - **Power,** **other weight dtypes,** **other machines.**
 - **The 5.7 ms bandwidth floor** stays DERIVED: 269 MB at 47.62 GB/s.
 
+**Step 2 begins: projections chain on the device, exact 30 deep** (ignite-xdna `1cdd823b`,
+[log](../results/aie/llm_gemv_chain_exact_desktop2_20261019T200035Z.log), `--checks-only`, no timing). A call's first
+object is now `[x][pad][header]`, so the runtime sequence can DMA x straight from an earlier call's output, with the pad
+and header from a constant region. Arm D runs, in one dispatch:
+- layer 0's o-projection on the host's x;
+- layers 1–29's o-projections, each on the previous one's output;
+- the 49152×576 head on layer 29's output.
+
+The last two layers' outputs and the head equal the 30-deep chained oracle bit for bit, for seeds 0 and 1, with 0
+mismatched elements, so no error crept in anywhere along the chain. The step-1 arms, rebuilt for the new layout, are
+exact again in the same run: 250 checks per seed. No host data moves after the first call. This is still not a
+decoder: there is no norm, attention or activation between the projections.
+
 ### Gemma 3 4B decode on the CPU and DirectML: INCOMPLETE in both sittings on the page-in witness, and the three complete arms decode at 10.8–17.6 tok/s (2026-09-24, Desktop 2)
 
 The question, (c) of the Gemma plan with its rule (d)
