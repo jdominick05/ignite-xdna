@@ -32,7 +32,7 @@ For a one-line install that runs YOLO on your NPU, use [**Ignition**](https://gi
 
 | | Result |
 |---|---|
-| 🔥 **Whole network, bit-exact** | YOLOv8n, YOLOv8s, YOLOv8n-pose and SESR M7 run every layer on the NPU with **0** CPU partitions ([measured](docs/BENCHMARKS.md#whole-network-yolov8n-on-a-16-core-convolution-engine-every-layer-on-the-npu-bit-exact-2026-09-13-desktop-2)) |
+| 🔥 **Whole network, bit-exact** | YOLOv8n, YOLOv8s, YOLOv8n-pose and SESR M7 run every layer on the NPU with **0** CPU partitions ([measured](docs/BENCHMARKS.md#whole-network-yolov8n-on-a-16-core-convolution-engine-every-layer-on-the-npu-bit-exact-2026-09-13-desktop-2)), and so do YOLOv8m, l and x as single containers, each layer-exact ([verified](docs/BENCHMARKS.md#the-release-re-sit-against-amds-stack-ignition-faster-on-yolov8n-pose-yolo11n-and-yolo26n-amd-faster-on-sesr-m7-yolov8m-l-and-x-and-on-yolov8s-once-tuned-2026-10-19-desktop-2)) |
 | 🎯 **More accurate than AMD's stack** | mAP@50-95 on all 5000 COCO images: **34.12 / 42.37 / 44.16** (v8n / v8s / pose) against AMD's **26.68 / 37.31 / 32.64**, no AdaRound ([accuracy](docs/BENCHMARKS.md#the-sigmoid-silu-containers-against-amds-stack-more-accurate-on-all-5000-coco-images-faster-on-yolov8n-and-yolov8n-pose-slower-on-yolov8s-2026-09-17-desktop-2)) |
 | 🚀 **And faster end to end** | YOLOv8n **7.15 vs 10.84 ms** (AMD tuned 10.17–10.26), pose **7.50 vs ≥ 9.15**, YOLOv8s 15.77 vs 17.22–17.25 against AMD's default, in one pre-registered sitting. On these the network steps are level or AMD's is shorter: the lead is native image prep and decode, ~0.5 ms against the ~4 ms of numpy AMD's runs used ([sitting](docs/BENCHMARKS.md#the-release-re-sit-against-amds-stack-ignition-faster-on-yolov8n-pose-yolo11n-and-yolo26n-amd-faster-on-sesr-m7-yolov8m-l-and-x-and-on-yolov8s-once-tuned-2026-10-19-desktop-2)) |
 | ⚡ **3.4–3.7× faster where attention breaks AMD's stack** | YOLO11n **9.85–9.88 vs 36.2–37.0 ms**, YOLO26n **10.77–10.83 vs 37.18–37.19**, won in the network itself (9.4–10.5 ms against AMD's 32–34 ms `session.run`) ([sitting](docs/BENCHMARKS.md#the-release-re-sit-against-amds-stack-ignition-faster-on-yolov8n-pose-yolo11n-and-yolo26n-amd-faster-on-sesr-m7-yolov8m-l-and-x-and-on-yolov8s-once-tuned-2026-10-19-desktop-2)); YOLO-World v2 **2.75×** glass to glass ([sitting](docs/BENCHMARKS.md#yolo-world-v2-glass-to-glass-275-times-amds-stack-and-against-the-igpu-it-depends-on-the-vocabulary-2026-09-16-desktop-2)) at **4.3–5.0×** less energy per frame ([energy](docs/BENCHMARKS.md#yolo-world-v2-energy-per-frame-43-50-times-less-than-amds-stack-and-the-igpu-spends-less-at-5-fps-2026-09-17-desktop-2)) |
@@ -88,11 +88,13 @@ also share buffers with custom AIE kernels through `ignite_xdna.runtime.KernelSp
 
 `src/ignite_xdna/` lowers supported ONNX graphs to `.ignite` containers and runs them through PyXRT ring
 buffers. Where a model has ops it cannot place, the manifest says so: YOLO11n keeps only its attention core (two
-MatMuls and a softmax) on the CPU, YOLO-World v2 its four text-attention blocks.
+MatMuls and a softmax) on the CPU, YOLO26n its two, YOLO-World v2 its four text-attention blocks.
 
 - **YOLO11n**: with that one host segment it reads **34.63** mAP@50-95 against AMD's 25.82
   ([carve](docs/BENCHMARKS.md#yolo11ns-carve-the-narrow-one-is-free-on-accuracy-074-ms-faster-and-unlocks-883-map-2026-09-21-desktop-2)),
   superseding a first carve measured on 2026-09-15 ([how](docs/BENCHMARKS.md#yolo11ns-c2psa-convolutions-on-the-npu-only-its-attention-core-on-the-host-2026-09-15-desktop-2)).
+- **YOLO26n**: **32.55** mAP@50-95 against AMD's 23.64, 15.92 points of quantization loss cut to 7.11 by the sigmoid
+  epilogue ([accuracy](docs/BENCHMARKS.md#the-yolo26n-accuracy-loss-split-in-two-and-881-map-of-it-came-back-for-026-ms-2026-09-21-desktop-2)).
 - **YOLO-World v2**: class names change on an open container in about 90 ms
   ([how](docs/BENCHMARKS.md#yolo-world-v2s-vocabulary-chosen-at-run-time-one-container-any-class-names-2026-09-16-desktop-2)),
   at 24.7% mAP on the first 300 val images ([how](docs/BENCHMARKS.md#yolo-world-v2-with-only-its-text-attention-on-the-cpu-gptq-and-an-int32-bias-recover-the-four-output-convolutions-2026-09-16-desktop-2)).
