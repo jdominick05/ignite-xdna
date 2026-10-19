@@ -285,7 +285,10 @@ def cmd_build(a) -> int:
         if s.get("npu") and not npu_idle():
             raise SystemExit(f"[recipe] {a.name}:{s['id']} needs the NPU and xrt-smi shows a hardware context")
         env["IGNITE_RECIPE"] = f"{a.name}:{s['id']}"
-        rc = subprocess.run(argv, cwd=root, env=env).returncode
+        # `python -m` puts the working directory first on sys.path, and a checkout's root holds an ignite_xdna
+        # forwarder to its own src: with --root naming another checkout, its compiler would run instead of this one.
+        step_env = dict(env, PYTHONSAFEPATH="1") if s.get("run", [""])[0] == "-m" else env
+        rc = subprocess.run(argv, cwd=root, env=step_env).returncode
         if rc:
             raise SystemExit(f"[recipe] {a.name}:{s['id']} failed (exit {rc})")
         absent = [str(o) for o in outs if not o.exists()]
@@ -294,6 +297,10 @@ def cmd_build(a) -> int:
         bad = hash_mismatches(s, root)
         if bad:
             raise SystemExit(f"[recipe] {a.name}:{s['id']} wrote outputs that differ from the pinned hash {bad}")
+        foreign = unrecorded_containers(a.name, s, root)
+        if foreign:
+            raise SystemExit(f"[recipe] {a.name}:{s['id']} wrote {foreign} without this step's build record: the "
+                             "compiler that ran is not this checkout's")
         moved = hash_mismatches(s, root, "recorded_sha256")
         if moved:
             print(f"[recipe] {a.name}:{s['id']}: NOTE the output differs from the artifact the published numbers "
