@@ -207,10 +207,16 @@ def compute_oracle(seed):
 
 # ---------------------------------------------------------------------------- device
 
-def witness(tag):
-    out = subprocess.run(["C:/Windows/System32/AMD/xrt-smi.exe", "examine", "-r", "aie-partitions"],
-                         capture_output=True, text=True).stdout
-    idle = "No hardware contexts running" in out
+def witness(tag, wait_s=0.0):
+    """xrt-smi idle? With wait_s, poll that long first: a released context takes a moment to leave the report."""
+    deadline = time.monotonic() + wait_s
+    while True:
+        out = subprocess.run(["C:/Windows/System32/AMD/xrt-smi.exe", "examine", "-r", "aie-partitions"],
+                             capture_output=True, text=True).stdout
+        idle = "No hardware contexts running" in out
+        if idle or time.monotonic() >= deadline:
+            break
+        time.sleep(0.5)
     print(f"WITNESS {tag} idle={idle}", flush=True)
     return idle
 
@@ -348,7 +354,7 @@ def run(seeds, exact_only=False):
             del arms, dev
     finally:
         gc.collect()
-        witness("post")
+        witness("post", wait_s=5)
     return 0
 
 
