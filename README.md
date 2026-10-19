@@ -37,6 +37,7 @@ For a one-line install that runs YOLO on your NPU, use [**Ignition**](https://gi
 | 🚀 **And faster on all three** | With layer overlap the compiler default: **7.24 vs 10.76 ms, 15.82 vs 17.29, 7.73 vs ~12.2**, one sitting; AMD keeps SESR M7 ([sitting](docs/BENCHMARKS.md#against-amds-stack-on-the-overlap-default-yolov8s-flips-to-ignition-1582-against-1729-ms-yolov8n-and-pose-widen-their-lead-amd-keeps-sesr-m7-2026-10-15-desktop-2)) |
 | ⚡ **Faster where attention breaks AMD's stack** | YOLO11n **10.46–10.50 ms** against **36.8–38.3 ms** in one sitting ([sitting](docs/BENCHMARKS.md#the-v033-release-sitting-sigmoid-silu-containers-on-the-host-fast-paths-against-amds-stack-2026-09-17-desktop-2)); YOLO-World v2 **2.75×** glass to glass ([sitting](docs/BENCHMARKS.md#yolo-world-v2-glass-to-glass-275-times-amds-stack-and-against-the-igpu-it-depends-on-the-vocabulary-2026-09-16-desktop-2)) at **4.3–5.0×** less energy per frame ([energy](docs/BENCHMARKS.md#yolo-world-v2-energy-per-frame-43-50-times-less-than-amds-stack-and-the-igpu-spends-less-at-5-fps-2026-09-17-desktop-2)) |
 | ⚖️ **Not faster everywhere** | Before overlap, the edge shrank with model size: YOLOv8n 1.34× faster, YOLOv8x **1.47× slower** (115.9 vs 78.7 ms); YOLOv8x is not re-measured on the overlap default ([crossover](docs/BENCHMARKS.md#yolov8x-ptr-scales-to--60-and-the-engines-standing-against-amd-inverts-with-model-size-2026-09-22-desktop-2)) |
+| 🧠 **Transformers AMD's stack does not place** | Laya (ModernBERT-large, bf16) at **607.9 ms**, faster than the 780M (754.9) and the CPU (869.5); EmbeddingGemma's encoder with attention on the NPU, though the 780M is 2.7× faster there ([beyond AMD's stack](#beyond-amds-stack)) |
 | 🧮 **Past the shipped runtime** | Hand-written kernels reach **int4 6,195 GOPS** and **bf16 2,072.5 GFLOPS** (1.18–1.78× the CPU), neither reachable through Quark or the VitisAI EP ([kernels](#hand-written-aie-kernels)) |
 | 📉 **Honest ceilings** | AMD's stack tops out at **39.3%** of the 16 TOPS nameplate, and two earlier answers to that question are retracted ([working](docs/BENCHMARKS.md#achieved-opss-a-real-answer-to--of-16-tops-not-a-gops-estimate)) |
 
@@ -74,6 +75,10 @@ The engine runs in the `mlir-aie-iron` env; the VitisAI study uses `resnet_env` 
 ./scripts/diag.sh           # what the VitisAI EP actually took
 ```
 
+Every model has a recipe in [`recipes/`](recipes/README.md): the pinned download, export, quantize and compile
+steps behind each container, which `python tools/recipe.py build <model>` replays and `status` checks against the
+files on disk. Each container's manifest records the recipe step and compiler commit that built it.
+
 `ignite-compile --engine graph` builds the container above. The older `build/yolov8n.ignite` runs one conv layer
 per stage and carries no heads ([measured](docs/BENCHMARKS.md#whole-network-yolov8n-on-a-16-core-convolution-engine-every-layer-on-the-npu-bit-exact-2026-09-13-desktop-2)).
 Per-model engine results: [`docs/MODEL_ZOO_BENCHMARKS.md`](docs/MODEL_ZOO_BENCHMARKS.md). Native graph stages can
@@ -93,6 +98,22 @@ MatMuls and a softmax) on the CPU, YOLO-World v2 its four text-attention blocks.
   at 24.7% mAP on the first 300 val images ([how](docs/BENCHMARKS.md#yolo-world-v2-with-only-its-text-attention-on-the-cpu-gptq-and-an-int32-bias-recover-the-four-output-convolutions-2026-09-16-desktop-2)).
 - **Dense segmentation and matting** are exact where AMD's stack is not, but about half of each runs on the host,
   so they are not speed results.
+
+## Beyond AMD's stack
+
+The current Ryzen AI releases run XDNA1 as CNN INT8 only: their EP places **0 of 430** nodes of a bf16 graph on the
+NPU. The engine runs bf16 transformers there, so these compare against the CPU and the 780M iGPU on the same chip
+([all of it, with caveats](docs/BENCHMARKS.md#beyond-amds-stack-what-runs-on-this-npu-that-ryzen-ai-does-not-offer-summary-2026-10-19-desktop-2)):
+
+- **Laya**, a ModernBERT-large decision model: **607.9 ms** at 512 tokens, the fastest of three backends (780M
+  754.9, CPU 869.5), as a hybrid with attention on the host. Run entirely on the NPU, with zero CPU neural ops, it
+  passes its frozen accuracy gates on 2,400 items, but takes 1,889 ms.
+- **EmbeddingGemma 2**: weight GEMMs, local and global attention and GeGLU on the NPU, **1,158.9 ms** per
+  2,048-token document at cosine ≥ 0.99998 to fp32. **The 780M is 2.7× faster**; running both together adds
+  13–14% documents per second.
+- **Energy**: the NPU reads a GB for **0.33 J**, against DirectML's 0.75 and the CPU's 0.88.
+- **Not here:** decoding a 7B LLM. The NPU reads DDR at 47.6 GB/s, below the 56–64 GB/s at which the CPU and the
+  780M read int4 weights.
 
 ## The VitisAI study
 
