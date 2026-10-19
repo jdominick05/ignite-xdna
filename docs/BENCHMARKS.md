@@ -25801,3 +25801,10 @@ weight GEMMs, ms:
 - That is -20% at 2048 (2407 GFLOPS).
 - **The hybrid still runs m32**, because the GeGLU epilogue is written for m32. Porting it to m64 is what turns this
   build into an end-to-end gain.
+
+**End to end** (hybrid, m32 + GeGLU mode 6, all native passes; same sitting, contention clean;
+[owned](../results/aie/embedgemma_hybrid_npu_mmown_own_desktop2_20261019T054948Z.log), [mm.cc](../results/aie/embedgemma_hybrid_npu_mmown_mmcc_desktop2_20261019T055029Z.log)):
+- Gate PASS for both: cos min 0.9999883, nearest neighbours 100%.
+- **The 56 embeddings are bit-equal between the two.**
+- ms per document at 128 / 512 / 2048: `mm.cc` 108.7 / 438.2 / 1544.4, owned **108.2 / 423.8 / 1515.8** (-2% at
+  2048). This is the m32 build's transport floor, as above.
