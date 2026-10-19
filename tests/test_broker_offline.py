@@ -85,13 +85,14 @@ def arena():
 
 def test_ipc_roundtrip_results_and_stats():
     address = rf"\\.\pipe\ignite-broker-test-{uuid.uuid4().hex}" if os.name == "nt" else f"/tmp/ib-{uuid.uuid4().hex}"
-    fake, ready = FakeBackend(), threading.Event()
-    t = threading.Thread(target=B.serve, kwargs=dict(address=address, backend=fake, ready=ready), daemon=True)
+    fake, ready, key = FakeBackend(), threading.Event(), uuid.uuid4().hex.encode()
+    t = threading.Thread(target=B.serve, kwargs=dict(address=address, authkey=key, backend=fake, ready=ready),
+                         daemon=True)
     t.start()
     assert ready.wait(10)
     a = np.arange(100, dtype=np.uint8)
     b = np.full(100, 3, np.uint8)
-    with B.BrokerClient(address, slot_bytes=1 << 16) as c:
+    with B.BrokerClient(address, authkey=key, slot_bytes=1 << 16) as c:
         for _ in range(3):
             out, = c.run("ctx_add", b"insts-add", [a, b], [((100,), np.uint8)])
             assert np.array_equal(out, a + b)
@@ -102,14 +103,17 @@ def test_ipc_roundtrip_results_and_stats():
         assert s["stats"]["opens"] == 2 and s["stats"]["switches"] == 1
     rng = np.random.default_rng(0)
     batch = [rng.integers(0, 256, 64, dtype=np.uint8) for _ in range(20)]
-    with B.BrokerClient(address, slot_bytes=1 << 14, depth=4) as c:
+    with B.BrokerClient(address, authkey=key, slot_bytes=1 << 14, depth=4) as c:
         tickets = [c.submit("ctx_neg", b"insts-neg", [x], [((64,), np.uint8)]) for x in batch]
         outs = [c.wait(tk) for tk in reversed(tickets)][::-1]   # waiting out of order still returns each its own
         assert all(np.array_equal(o, -x) for (o,), x in zip(outs, batch))
         with pytest.raises(B.BrokerError, match="slot"):
             c.submit("ctx_neg", b"insts-neg", [np.zeros(1 << 14, np.uint8)], [((1 << 14,), np.uint8)])
-    B.shutdown(address)
+    with pytest.raises(B.connection.AuthenticationError):
+        B.BrokerClient(address, authkey=b"wrong")
+    B.shutdown(address, authkey=key)
     t.join(10)
+    assert not t.is_alive()
     assert sorted(fake.closed) == ["ctx_add", "ctx_neg"]
 
 
@@ -188,3 +192,30 @@ def test_timeout_latches_unhealthy(arena):
     with pytest.raises(B.BrokerError, match="unhealthy"):
         br.submit(_call(0, "ok_neg", arena, a))
     br.close()
+
+
+def test_disconnect_mid_run_keeps_the_arena_until_its_calls_finish():
+    """A client that vanishes with calls queued: the broker finishes them into the still-mapped arena and serves the
+    next client normally."""
+    address = rf"\\.\pipe\ignite-broker-test-{uuid.uuid4().hex}" if os.name == "nt" else f"/tmp/ib-{uuid.uuid4().hex}"
+    gate, ready, key = threading.Event(), threading.Event(), uuid.uuid4().hex.encode()
+    fake = FakeBackend(gate=gate)
+    t = threading.Thread(target=B.serve, kwargs=dict(address=address, authkey=key, backend=fake, ready=ready),
+                         daemon=True)
+    t.start()
+    assert ready.wait(10)
+    x = np.arange(64, dtype=np.uint8)
+    c = B.BrokerClient(address, authkey=key, slot_bytes=1 << 14, depth=4)
+    for _ in range(4):
+        c.submit("ctx_neg", b"insts-neg", [x], [((64,), np.uint8)])
+    c.conn.close()   # gone without bye or reading its replies; its calls are still gated
+    gate.set()
+    with B.BrokerClient(address, authkey=key, slot_bytes=1 << 14) as d:
+        out, = d.run("ctx_neg", b"insts-neg", [x], [((64,), np.uint8)])
+        assert np.array_equal(out, -x)
+        assert d.stats()["healthy"]
+    c.arena.close()
+    c.arena.unlink()
+    B.shutdown(address, authkey=key)
+    t.join(10)
+    assert fake.log.count("ctx_neg") == 5

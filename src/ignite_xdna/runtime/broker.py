@@ -25,8 +25,15 @@ weight-resident Stage A). The broker is the single owner:
   new calls, because after a timed-out dispatch the device can refuse new contexts for minutes. ``close()``
   releases every BO and context.
 
-Transport: ``multiprocessing.connection`` over a local named pipe with an authkey; messages are pickled, so only
-local processes holding the key can submit. Usage::
+Transport: ``multiprocessing.connection`` over a local named pipe. Messages are pickled, so a process that can
+connect can run code inside the broker. The authkey keeps out processes that do not hold it: ``serve`` makes a
+random one (unless ``IGNITE_BROKER_KEY`` is set) and writes it to ``%LOCALAPPDATA%/ignite-xdna/npu-broker.key``,
+which clients read. That file inherits the profile's permissions; it is no defence against code already running as
+the same user.
+
+Stopping: the ``shutdown`` command, Ctrl+C or Ctrl+Break. Each lets the running call finish, then releases every
+BO and context and exits 0. A client that disconnects mid-run (killed, or no ``bye``) keeps its arena mapped in
+the broker until its own queued calls have finished. Usage::
 
     python -m ignite_xdna.runtime.broker serve [--address ADDR] [--max-contexts 4]
 
@@ -57,12 +64,32 @@ from pathlib import Path
 
 import numpy as np
 
-DEFAULT_ADDRESS = r"\\.\pipe\ignite-xdna-npu-broker" if os.name == "nt" else "/tmp/ignite-xdna-npu-broker"
-DEFAULT_AUTHKEY = os.environ.get("IGNITE_BROKER_KEY", "ignite-xdna-local").encode()
-
 
 class BrokerError(RuntimeError):
     pass
+
+
+DEFAULT_ADDRESS = r"\\.\pipe\ignite-xdna-npu-broker" if os.name == "nt" else "/tmp/ignite-xdna-npu-broker"
+KEY_FILE = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "ignite-xdna" / "npu-broker.key"
+
+
+def client_key() -> bytes:
+    """The broker's authkey: IGNITE_BROKER_KEY, else the key file ``serve`` wrote."""
+    if os.environ.get("IGNITE_BROKER_KEY"):
+        return os.environ["IGNITE_BROKER_KEY"].encode()
+    if KEY_FILE.is_file():
+        return KEY_FILE.read_text(encoding="ascii").strip().encode()
+    raise BrokerError(f"no broker key: set IGNITE_BROKER_KEY or start the broker (it writes {KEY_FILE})")
+
+
+def server_key() -> bytes:
+    if os.environ.get("IGNITE_BROKER_KEY"):
+        return os.environ["IGNITE_BROKER_KEY"].encode()
+    import secrets
+    key = secrets.token_hex(32)
+    KEY_FILE.parent.mkdir(parents=True, exist_ok=True)
+    KEY_FILE.write_text(key, encoding="ascii")
+    return key.encode()
 
 
 # ---------------------------------------------------------------------------------------------------- device side
@@ -346,6 +373,7 @@ def _serve_client(broker: Broker, conn, cid: int):
 
     out = threading.Thread(target=sender, daemon=True)
     out.start()
+    mine: list[_Call] = []   # this client's submitted calls: its arenas stay mapped until each has finished
     try:
         while True:
             try:
@@ -373,8 +401,12 @@ def _serve_client(broker: Broker, conn, cid: int):
             except BrokerError as e:
                 replies.put(dict(ok=False, error=str(e), seq=msg["seq"]))
                 continue
+            mine.append(call)
+            mine = [c for c in mine if not c.done.is_set()]
             replies.put(call)
     finally:
+        for c in mine:
+            c.done.wait()
         replies.put(None)
         out.join()
         for a in arenas.values():
@@ -382,35 +414,51 @@ def _serve_client(broker: Broker, conn, cid: int):
         conn.close()
 
 
-def serve(address=DEFAULT_ADDRESS, authkey=DEFAULT_AUTHKEY, max_contexts=4, streak=32, backend=None,
-          ready: threading.Event | None = None, stop: threading.Event | None = None):
+def serve(address=DEFAULT_ADDRESS, authkey=None, max_contexts=4, streak=32, backend=None,
+          ready: threading.Event | None = None, stop: threading.Event | None = None, signals=False):
+    """Run until ``shutdown``, ``stop`` is set, or (``signals``) Ctrl+C / Ctrl+Break. Returns the broker's stats."""
+    authkey = authkey if authkey is not None else server_key()
+    stop = stop if stop is not None else threading.Event()
+    if signals:
+        import signal
+        if os.name == "nt":   # a background job's child inherits "ignore Ctrl+C": take it back
+            import ctypes
+            ctypes.windll.kernel32.SetConsoleCtrlHandler(None, False)
+        for sig in ("SIGINT", "SIGBREAK", "SIGTERM"):
+            if hasattr(signal, sig):
+                signal.signal(getattr(signal, sig), lambda *_: stop.set())
     broker = Broker(backend, max_contexts, streak)
     listener = connection.Listener(address, authkey=authkey)
     print(f"broker listening on {address} (max {max_contexts} contexts, streak {streak})", flush=True)
-    if ready:
-        ready.set()
-    ids = itertools.count(1)
-    threads = []
-    try:
-        while stop is None or not stop.is_set():
+
+    def accept():
+        ids = itertools.count(1)
+        while not stop.is_set():
             try:
                 conn = listener.accept()
-            except (OSError, EOFError):
-                if stop is not None and stop.is_set():
-                    break
+                hello = conn.recv()
+            except (OSError, EOFError, connection.AuthenticationError):
                 continue
-            hello = conn.recv()
             if hello.get("op") == "shutdown":
                 conn.send(dict(ok=True))
                 conn.close()
-                break
+                stop.set()
+                return
             conn.send(dict(ok=True))
-            t = threading.Thread(target=_serve_client, args=(broker, conn, next(ids)), daemon=True)
-            t.start()
-            threads.append(t)
+            threading.Thread(target=_serve_client, args=(broker, conn, next(ids)), daemon=True).start()
+
+    threading.Thread(target=accept, name="npu-broker-accept", daemon=True).start()
+    if ready:
+        ready.set()
+    try:
+        while not stop.wait(0.2):   # short waits: a signal handler runs between them
+            pass
     finally:
-        listener.close()
         broker.close()
+        try:
+            listener.close()
+        except OSError:
+            pass
         print(f"broker stopped: {broker.stats}", flush=True)
     return broker.stats
 
@@ -419,8 +467,8 @@ class BrokerClient:
     """One connection and one shared-memory arena of ``depth`` slots. ``submit`` returns a ticket and blocks only
     when ``depth`` calls are already in flight; ``wait(ticket)`` returns that call's arrays; ``run`` is both."""
 
-    def __init__(self, address=DEFAULT_ADDRESS, authkey=DEFAULT_AUTHKEY, slot_bytes=1 << 24, depth=1):
-        self.conn = connection.Client(address, authkey=authkey)
+    def __init__(self, address=DEFAULT_ADDRESS, authkey=None, slot_bytes=1 << 24, depth=1):
+        self.conn = connection.Client(address, authkey=authkey if authkey is not None else client_key())
         self.conn.send(dict(op="hello"))
         self.conn.recv()
         self.depth, self.slot = depth, slot_bytes
@@ -527,8 +575,8 @@ class BrokerClient:
         self.close()
 
 
-def shutdown(address=DEFAULT_ADDRESS, authkey=DEFAULT_AUTHKEY):
-    c = connection.Client(address, authkey=authkey)
+def shutdown(address=DEFAULT_ADDRESS, authkey=None):
+    c = connection.Client(address, authkey=authkey if authkey is not None else client_key())
     c.send(dict(op="shutdown"))
     c.recv()
     c.close()
@@ -544,7 +592,7 @@ def main(argv=None):
     if a.cmd == "shutdown":
         shutdown(a.address)
         return 0
-    serve(a.address, max_contexts=a.max_contexts, streak=a.streak)
+    serve(a.address, max_contexts=a.max_contexts, streak=a.streak, signals=True)
     return 0
 
 

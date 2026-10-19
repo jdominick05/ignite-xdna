@@ -26134,6 +26134,12 @@ attention build, `--batch 4`:
 
 #### An NPU broker: one owner process, bit-equal through it, and 20-34% faster than two processes contending (2026-10-19, Desktop 2)
 
+> **The 20-34% in this heading is superseded the same day** ([below](#broker-under-contention-from-a-common-start-21-shorter-makespan-at-depth-4-and-31-longer-at-depth-1-2026-10-19-desktop-2)). The contention table compared
+> direct processes at depth 1 (serial copies) with broker clients at depth 4, so pipelining and ownership were
+> confounded. Each client was also timed over its own window, and those windows overlapped by different amounts
+> in each arm. From a common start, the makespan is 21% shorter at depth 4, and the broker at depth 1 is slower
+> than no broker. The overhead table and the per-switch cost below stand.
+
 `src/ignite_xdna/runtime/broker.py` is a user-space broker. One process owns the NPU, and other processes submit
 kernel calls to it over a local named pipe, with data in a shared-memory arena per client. It handles:
 - **Contexts:** cached per xclbin, at most four open, the least recently used evicted. The driver allows five,
@@ -26200,3 +26206,54 @@ step toward one image for several kernels.
 - It still carries two LOADPDI ops (PDI ids 2 and 1, size 0), which name PDIs that an xclbin does not contain.
 - The next probe strips them (`txn_decode.py --strip-loadpdi`) and runs on a context opened on one design's xclbin.
   Not run on the device yet.
+
+#### Broker under contention, from a common start: 21% shorter makespan at depth 4, and 31% longer at depth 1 (2026-10-19, Desktop 2)
+
+The [first broker sittings](#an-npu-broker-one-owner-process-bit-equal-through-it-and-20-34-faster-than-two-processes-contending-2026-10-19-desktop-2) are re-measured here, with the confounds removed
+([log](../results/aie/npu_broker_probe_barrier_desktop2_20261019T121037Z.log)). `tools/npu_broker_probe.py` now:
+- warms each child up (context, instructions, both BO sets, one call);
+- has each child print READY and block, then starts both children on one go line;
+- times the makespan from the go to the later child's last completion. `perf_counter` is system-wide on Windows,
+  so the two processes' timestamps compare directly;
+- runs four arms, alternated forward and back over 3 rounds, in one sitting with the NPU idle before and after.
+
+Every output equals the solo run's SHA-256.
+
+GEMM 2048x512x2048 and attention doc512, 200 calls each:
+
+| Arm | makespan, median of 3 (min-max) | context switches | device-call medians, GEMM / attention |
+|---|---:|---:|---:|
+| two processes, each with its own context, depth 1 | 1110.2 ms (1101.5-1117.0) | not counted | 2.89 / 5.00 ms |
+| broker, depth 1, streak 32 | 1458.6 (1447.5-1480.5) | 358-400 | 2.87 / 2.70 |
+| broker, depth 4, streak 1 | 1057.4 (1047.5-1060.9) | 258-268 | 2.91 / 2.85 |
+| broker, depth 4, streak 32 | **875.0** (869.9-878.1) | 70-76 | 2.05 / 1.29 |
+
+- **At depth 1 the broker is 31% slower than no broker.** Each client has one call queued at a time, so the broker
+  switches context on nearly every call (up to 400 in 404 calls). Two contending processes switch less than that.
+  How often the driver interleaves their contexts is not observable here.
+- **Pipelining gives the scheduler something to group.** At depth 4 with grouping (streak 32) the makespan is 21%
+  shorter than two processes, at 70-76 switches.
+- **Each knob's share:**
+  - depth 4 with forced alternation (streak 1) is 5% shorter than direct;
+  - grouping takes it from 1057.4 to 875.0 ms (-17%);
+  - the direct arm runs at depth 1, since a pipelined direct client was not measured. So the 5% is not a pure
+    ownership effect.
+- **Stop paths, one sitting:**
+  - A depth-4 client killed mid-run: the broker finished its queued calls into the still-mapped arena, and the next
+    client's outputs equal the solo run's.
+  - Ctrl+Break to the broker mid-run: it finished the running call and exited 0 (the client got a call error, as
+    expected).
+  - The NPU was idle after each.
+  - Ctrl+C is not tested on the device. It goes through the same handler (the broker re-enables it for
+    background-job children), but a console Ctrl+C cannot target one process group here.
+- **Authkey:** `serve` now makes a random key per run (or takes `IGNITE_BROKER_KEY`) and writes it to a key file in
+  the user's profile.
+  - Messages are pickled, so any process that can connect can run code in the broker.
+  - The key keeps out processes that do not hold it, and nothing more.
+- **Interpreter:** the device children ran on `research-iron.sh`'s mlir-aie `ironenv` Python. The supervisor's
+  header line in the log names `resnet_env17`, which is the supervisor's own interpreter.
+- **What the broker does not change: the EmbeddingGemma hybrid.**
+  - It is one process, and its GEMM -> attention -> GEMM order within each layer is a data dependency, so there is
+    nothing to regroup. Its per-document switches, and with them the 128-token gap to the 780M, are unchanged.
+  - What would change them: batching documents from several clients into one dispatch (not implemented), or one
+    image holding both kernels (step 2).
