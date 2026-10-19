@@ -25878,3 +25878,38 @@ now uploads W8 tiles under `--w8`. One sitting, contention clean. Forward-pass w
 - **Not run:** the end-to-end W8 hybrid, since its GEMMs are slower than bf16's.
 
 Also: `embedgemma_gemm_probe.py compile --jobs N` (default 8) now builds xclbins in parallel. 5 builds took 3 min.
+
+#### Byte accounting of the m64 GEMM: it moves 2.4x the minimum, and its floor can drop from 231 to about 116 ms (2026-10-19, Desktop 2)
+
+[`gemm_byte_accounting.py`](../tools/gemm_byte_accounting.py) models the design's DDR traffic (DERIVED from
+`whole_array_generic.py`) and divides it by the hollow build's measured per-shape times
+([table](../results/aie/embedgemma_gemm_byte_accounting_m64_desktop2_20261019.log)).
+
+**The traffic model.** Each 256 x 256 block of C streams A's 256 rows over all of K and B's K x 256 strip. So A is
+read N/256 times, B M/256 times (8 at M = 2048), and C is written once in f32.
+
+**Per forward pass at M = 2048:**
+
+| | A | B | C | total |
+|---|---:|---:|---:|---:|
+| moved, MB | 2,187 | 2,187 | 1,751 | 6,126 |
+| minimum (each once), MB | 528 | 273 | 1,751 | 2,553 |
+
+- **The rate reached.** The hollow build takes 228.8 ms per pass. Without the fixed 0.34 ms x 148 calls (50 ms),
+  that is 34.3 GB/s.
+- **Reads use about half the measured read ceiling:** 24.5 GB/s, against 47.6 GB/s on all 8 shim channels
+  (SILICON.md 1.6, MEASURED).
+
+**Where the bytes and the time could go** (each DERIVED at the measured 34.3 GB/s, none built):
+
+| Change | Bytes saved | ms saved | Exact? |
+|---|---:|---:|---|
+| B resident per column in its MemTile, read once (K x 64 strip <= 256 KB fits the 512 KB MemTile beside A and C) | 1,914 MB | ~56 | yes |
+| GeGLU stores only the gate half it computes (gate|up C is 906 MB, half of it unused) | 453 MB | ~13 | yes |
+| bf16 C for the remaining products | ~649 MB | ~19 | no: needs the gate |
+| half the calls (merge products per layer) | | ~25 | yes |
+
+- **All four together:** about 3.1 GB moved, about 91 ms of transport plus about 25 ms fixed, so **about 116 ms
+  against 231** (the iGPU's GEMMs: 177).
+- **A higher DMA rate** (more shim channels busy, toward the 47.6 GB/s ceiling) would cut it further.
+- **Not measured:** whether the reordered loop keeps the rate, and whether the MemTile buffers fit once allocated.
