@@ -25789,3 +25789,15 @@ weight GEMMs, ms:
 - Only 32 ms of that shows. The earlier fit put the m32 build's data movement plus its fixed cost near 258 ms, so
   the m32 GEMM is now close to transport-bound.
 - The m64 tile halves B re-streaming; its build with the owned kernel is next.
+
+**At m64 the owned kernel pays** (same sitting, contention clean; [mm.cc](../results/aie/embedgemma_gemm_mmown_mmcc_m64_desktop2_20261019T054835Z.log), [owned](../results/aie/embedgemma_gemm_mmown_own_m64_desktop2_20261019T054850Z.log),
+[bit-diff](../results/aie/embedgemma_gemm_mmown_bitdiff_m64_desktop2_20261019.log): all 14 bit-equal). Forward-pass weight GEMMs, ms:
+
+| build | M = 512 | 2048 |
+|---|---:|---:|
+| `mm.cc` m64 | 91.6 | 292.1 |
+| owned m64 | **77.5** | **232.6** |
+
+- That is -20% at 2048 (2407 GFLOPS).
+- **The hybrid still runs m32**, because the GeGLU epilogue is written for m32. Porting it to m64 is what turns this
+  build into an end-to-end gain.
