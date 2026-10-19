@@ -3757,6 +3757,18 @@ mismatched elements, so no error crept in anywhere along the chain. The step-1 a
 exact again in the same run: 250 checks per seed. No host data moves after the first call. This is still not a
 decoder: there is no norm, attention or activation between the projections.
 
+**Addresses move between dispatches by patching the instruction stream** (ignite-xdna `e21a67aa`,
+[log](../results/aie/llm_gemv_patch_exact_desktop2_20261019T201123Z.log), `--checks-only`). A decode step's
+per-position addresses are DMA addresses in the stream, not data: the KV append row, RoPE's row and the token's
+embedding row. `kernels/llm_gemv/patch.py` maps every `DDR_PATCH` of a compiled program back to its call, role and
+column, and refuses a stream that disagrees with its program. It then rewrites only the named offsets. Arm E rewrites
+20 fields of the compiled chain:
+- layer 29 writes its output to another region, and the head reads its x from there;
+- layer 29 lands there exactly, and the head is still exact;
+- the old region still holds layer 27's output, so the patched-out address was not also written.
+
+That holds for seeds 0 and 1, with every other arm exact in the same run: 253 checks per seed, 0 mismatched elements.
+
 **The decoder's rounding points keep SmolLM2's quality** (CPU only, `kernels/llm_gemv/reference.py`,
 [log](../results/llm/llm_reference_quality_desktop2_20261019T200640Z.log),
 [record](../results/llm/llm_reference_quality_desktop2_20261019T200640Z.json)). Before any op beyond the projection
