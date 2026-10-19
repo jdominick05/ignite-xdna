@@ -55,6 +55,11 @@ from aie.iron import (
     str_to_dtype,
 )
 from aie.iron.controlflow import range_
+from aie.iron import Acquire, Bd, DmaChannel, Flow, Lock, Release, TileDma  # local change: --b-resident 2
+from aie.iron.device import Tile  # local change: --b-resident 2 pins every tile
+from aie.dialects._aie_enum_gen import AIETileType, DMAChannelDir  # local change
+from aie.dialects.aie import EndOp, LockAction, dma_bd, use_lock  # local change
+from aie.dialects.aiex import bds, dma_configure_task, dma_free_task, dma_start_task, shim_dma_bd  # local change
 from aie.iron.kernel import ExternalFunction  # local change: epilogue
 from aie.utils import config  # local change: epilogue
 from aie.iron.device import NPU2, from_name
@@ -69,6 +74,16 @@ def _device_for(dev_str, n_aie_cols):
     # n_aie_cols == max = 4).  On NPU2 use the unrestricted device
     # regardless of n_aie_cols so the placer has the full 8-column array.
     return from_name(dev_str, n_cols=n_aie_cols if dev_str == "npu" else None)
+
+
+def swizzle_b_resident(B, k=64, n=64, s=8, t=4):
+    """local change: B (K x N) in the order --b-resident 2 streams it: for each 64-column strip, its K / k tiles in K
+    order, each tile in the core's L1 layout (the [(k/s, s n), (n/t, t), (s, n), (t, 1)] pattern the generic design
+    applies on the MemTile). The runtime-sequence MemTile descriptor has three data dimensions, too few for that
+    pattern, so the host lays the weights out once instead."""
+    K, N = B.shape
+    tiles = B.reshape(K // k, k // s, s, N // n, n // t, t)       # kt, ks, si, nb, nt, ti
+    return np.ascontiguousarray(tiles.transpose(3, 0, 1, 4, 2, 5)).reshape(-1)   # nb, kt, ks, nt, si, ti
 
 
 def _build_design(
@@ -203,6 +218,47 @@ def _build_design(
     C_l1l2_fifos: list[list[ObjectFifo]] = [[] for _ in range(n_aie_rows)]
     C_l2l3_fifos: list[ObjectFifo] = []
 
+    b_repeat = M // (m * n_aie_rows)  # local change: row blocks per B strip under --b-resident
+    bres3 = b_resident == 3  # local change: bisect probe - --b-resident 2's B path with a STATIC MemTile program (fixed M, K)
+    bres2 = b_resident in (2, 3)  # local change: the MemTile B path lives in the runtime sequence, so M and K are not baked in
+    if bres2:
+        # Every tile pinned (the hand-written B flows must name the cores): worker (row, col) on (row, 2 + col), as the
+        # placer chose for this design; MemTile col holds A for column col, C and B for row 2 + col.
+        assert not (b_w8 or b_col_maj or c_col_maj) and (n_aie_rows, n_aie_cols) == (4, 4), "--b-resident 2: bf16, 4 x 4"
+        assert (K // k) % 2 == 0, "--b-resident 2: the core takes B tiles in pairs (ping-pong)"
+        shim_t = [Tile(cc, 0, tile_type=AIETileType.ShimNOCTile) for cc in range(n_aie_cols)]
+        mem_t = [Tile(cc, 1, tile_type=AIETileType.MemTile) for cc in range(n_aie_cols)]
+        core_t = [[Tile(rr, 2 + cc, tile_type=AIETileType.CoreTile) for cc in range(n_aie_cols)] for rr in range(n_aie_rows)]
+        # Runtime-sequence MemTile tasks run on channels 0 and 1 and time out on 4 and 5 (2 and 3 untested;
+        # results/aie/memtile_runtime_bd_probe_*), so B takes channel 0 both ways and the static chains are pinned
+        # above it: A in S2MM 5, C in S2MM 1..4, A out MM2S 4, C out MM2S 5.
+        BRES_CH = 0
+        BRES_UNITS = 16  # MemTile space-lock units: two 128 KB slots of 8 units each; a K > 1024 strip takes both
+        bres_buf, bres_space, bres_full, bres_locks, bres_flows, bres_dmas, bres_core = [], [], [], [], [], [], {}
+        for cc in range(n_aie_cols):
+            bres_buf.append(Buffer(np.ndarray[(131072,), np.dtype[dtype_in]], name=f"bres_strip_{cc}", tile=mem_t[cc]))
+            bres_space.append(Lock(mem_t[cc], init=8 if bres3 else BRES_UNITS, name=f"bres_space_{cc}"))
+            bres_full.append(Lock(mem_t[cc], init=0, name=f"bres_full_{cc}"))
+            bres_flows.append(Flow(shim_t[cc], mem_t[cc], src_channel=1, dst_channel=BRES_CH))
+            for rr in range(n_aie_rows):
+                bres_flows.append(Flow(mem_t[cc], core_t[rr][cc], src_channel=BRES_CH, dst_channel=1))
+                bb = [Buffer(B_l1_ty, name=f"bres_b_{rr}_{cc}_{i}", tile=core_t[rr][cc]) for i in range(2)]
+                sp, fu = Lock(core_t[rr][cc], init=2, name=f"bres_bsp_{rr}_{cc}"), Lock(core_t[rr][cc], init=0, name=f"bres_bfu_{rr}_{cc}")
+                bres_dmas.append(TileDma(core_t[rr][cc], [DmaChannel(DMAChannelDir.S2MM, 1, [
+                    Bd(bb[i], acquires=[Acquire(sp)], releases=[Release(fu)], next=1 - i) for i in range(2)])]))
+                bres_locks += [sp, fu]
+                bres_core[(rr, cc)] = (bb[0], bb[1], fu, sp)
+        bres_locks += bres_space + bres_full
+        if bres3:  # one slot; the protocol bres-b's ObjectFifo lowering ran bit-exact: R BDs, each full 1 -> space 1
+            rb3 = M // (m * n_aie_rows)
+            assert K * n <= 65536 and 8 % rb3 == 0
+            for cc in range(n_aie_cols):
+                s2mm = [Bd(bres_buf[cc], offset=0, length=K * n, acquires=[Acquire(bres_space[cc], 8)],
+                           releases=[Release(bres_full[cc], rb3)], next=0)]
+                mm2s = [Bd(bres_buf[cc], offset=0, length=K * n, acquires=[Acquire(bres_full[cc], 1)],
+                           releases=[Release(bres_space[cc], 8 // rb3)], next=(i + 1) % rb3) for i in range(rb3)]
+                bres_dmas.append(TileDma(mem_t[cc], [DmaChannel(DMAChannelDir.S2MM, BRES_CH, s2mm),
+                                                     DmaChannel(DMAChannelDir.MM2S, BRES_CH, mm2s)]))
     for i in range(n_shim_mem_A):
         a_l3l2 = ObjectFifo(A_l2_ty, name=f"A_L3L2_{i}", depth=fifo_depth)
         A_l3l2_fifos.append(a_l3l2)
@@ -217,22 +273,27 @@ def _build_design(
                 (s, 1),
             ]
         ] * (stop_row - start_row)
-        a_tmp_fifos = a_l3l2.cons().split(
+        a_tmp_fifos = a_l3l2.cons(**({"channel": 5} if bres2 else {})).split(
             of_offsets,
             obj_types=[A_l1_ty] * (stop_row - start_row),
             names=[f"A_L2L1_{row}" for row in range(start_row, stop_row)],
             dims_to_stream=a_dims,
+            **({"tile": mem_t[i]} if bres2 else {}),  # local change
         )
+        if bres2:  # local change: split() takes no channel pin; its producer handle carries one
+            for f_ in a_tmp_fifos:
+                f_._prod._channel = 4
         A_l2l1_fifos.extend(a_tmp_fifos)
 
-    b_repeat = M // (m * n_aie_rows)  # local change: row blocks per B strip under --b-resident
     if b_resident:
         assert not (b_w8 or b_col_maj or c_col_maj), "--b-resident: bf16 row-major B and C only"
         assert 1 <= b_repeat <= 255, "MemTile repeat_count is 1..255"
         B_strip_ty = np.ndarray[(K * n,), np.dtype[dtype_in]]
         strip_depth = 2 if 2 * K * n * np.dtype(dtype_in).itemsize <= 256 * 1024 else 1
     for col in range(n_aie_cols):
-        if b_resident:  # local change: L2 holds the whole K x n strip; the cores still take k x n tiles
+        if bres2:
+            pass  # local change: B is the hand-written path above
+        elif b_resident:  # local change: L2 holds the whole K x n strip; the cores still take k x n tiles
             b_l3l2 = ObjectFifo(B_strip_ty, name=f"B_L3L2_{col}", depth=strip_depth)
             B_l3l2_fifos.append(b_l3l2)
             fwd = b_l3l2.cons().forward(
@@ -277,13 +338,16 @@ def _build_design(
         C_l2l3_fifos.append(c_l2l3)
         of_offsets = [m * n * i for i in range(n_aie_rows)]
 
-        c_tmp_fifos = c_l2l3.prod().join(
+        c_tmp_fifos = c_l2l3.prod(**({"channel": 5} if bres2 else {})).join(
             of_offsets,
             obj_types=[C_l1_ty] * n_aie_rows,
             names=[f"C_L1L2_{col}_{row}" for row in range(n_aie_rows)],
             depths=[c_l1l2_depth] * n_aie_rows,
+            **({"tile": mem_t[col]} if bres2 else {}),  # local change
         )
         for j in range(n_aie_rows):
+            if bres2:  # local change: join() takes no channel pin; the MemTile end of each core's fifo carries one
+                c_tmp_fifos[j]._cons[0]._channel = 1 + j
             C_l1l2_fifos[j].append(c_tmp_fifos[j])
 
     def core_fn(in_a, in_b, out_c, zero, matmul):
@@ -331,6 +395,27 @@ def _build_design(
         # ml/mm_activation_epilogue ends each epoch the same way.
         barrier.release_with_value(1)
 
+    def core_fn_bres(in_a, b0, b1, b_full, b_space, out_c, zero, matmul, rtp, barrier, *epilogue):
+        # local change (--b-resident 2): rtp[1] is K tiles / 2; B arrives in the core's own two buffers, in turn
+        barrier.wait_for_value(1)
+        n_tiles = arith.index_cast(rtp[0], to=T.index())
+        k_pairs = arith.index_cast(rtp[1], to=T.index())
+        mode = rtp[2] if epilogue else None
+        for _ in range_(n_tiles):
+            elem_out = out_c.acquire(1)
+            zero(elem_out)
+            for _ in range_(k_pairs):
+                for bb in (b0, b1):
+                    elem_in_a = in_a.acquire(1)
+                    b_full.acquire(1)
+                    matmul(elem_in_a, bb, elem_out)
+                    in_a.release(1)
+                    b_space.release(1)
+            if epilogue:
+                epilogue[0](elem_out, mode)
+            out_c.release(1)
+        barrier.release_with_value(1)
+
     n_rtp = 3 if epilogue_kernel else 2  # local change: [tiles, K tiles, epilogue mode]
     rtps = [[Buffer(np.ndarray[(n_rtp,), np.dtype[np.int32]], initial_value=np.zeros(n_rtp, np.int32),
                     name=f"rtp_{row}_{col}", use_write_rtp=True)
@@ -358,18 +443,21 @@ def _build_design(
         n_aie_rows,
         n_aie_cols,
         lambda row, col: Worker(
-            core_fn_generic if rtp_generic else core_fn,  # local change
+            core_fn_bres if bres2 else core_fn_generic if rtp_generic else core_fn,  # local change
+            ([A_l2l1_fifos[row].cons(), *bres_core[(row, col)], C_l1l2_fifos[row][col].prod(), zero_kernel,
+              matmul_kernel] if bres2 else  # local change
             [
                 A_l2l1_fifos[row].cons(),
                 B_l2l1_fifos[col].cons(),
                 C_l1l2_fifos[row][col].prod(),
                 zero_kernel,
                 matmul_kernel,
-            ]
+            ])
             + ([rtps[row][col], barriers[row][col]] if rtp_generic else [])  # local change
             + ([dequant_kernel, bscratch[row][col]] if b_w8 and w8_dequant_src else [])  # local change
             + ([epilogue_kernel] if epilogue_kernel else []),  # local change
             stack_size=0xD00,
+            **({"tile": core_t[row][col]} if bres2 else {}),  # local change
         ),
     )
 
@@ -435,7 +523,7 @@ def _build_design(
             for row in range(n_aie_rows):
                 for col in range(n_aie_cols):
                     rtps[row][col][0] = n_tiles_per_core
-                    rtps[row][col][1] = K // k
+                    rtps[row][col][1] = K // k // 2 if bres2 else K // k
                     if epilogue_kernel:
                         rtps[row][col][2] = epilogue_mode
             for row in range(n_aie_rows):
@@ -443,7 +531,54 @@ def _build_design(
                     barriers[row][col].set(1)
         if b_resident:  # local change: per column n-tile j, its B strip once; A and C over every row block
             J, rb = N // n // n_aie_cols, M // (m * n_aie_rows)
-            prev = None  # one n-tile's group stays in flight while the next is issued (awaiting each drains the pipe)
+            if bres2:
+                units = 8 if (K * n <= 65536 or bres3) else BRES_UNITS  # a strip fits one 128 KB slot up to K = 1024
+                assert K * n <= 131072 and units % rb == 0, "--b-resident 2: K <= 2048 and M / 256 dividing the units"
+                B_arg = getattr(B, "op", B)
+                lock_once = False  # bisect probe result: a task's repeat re-takes its BD's locks (lock-once hangs too)
+                from aie import ir as _ir
+                with _ir.InsertionPoint(_ir.InsertionPoint.current.block.owner):  # before the runtime_sequence op
+                    for b in ([] if bres3 else bres_buf):  # bres3's static program resolves them  # only the sequence uses these, so nothing else resolves them
+                        b.resolve()
+
+            def b_tasks(jj):
+                tasks = []
+                for col in range(n_aie_cols):
+                    nb = col + jj * n_aie_cols
+                    off = (jj % 2) * 65536 if units == 8 else 0
+                    t_sh = dma_configure_task(shim_t[col].op, DMAChannelDir.MM2S, 1)
+                    with bds(t_sh) as bd:
+                        with bd[0]:
+                            # B pre-swizzled by the host (swizzle_b_resident): strip nb is K x n contiguous, in L1 tile order
+                            shim_dma_bd(B_arg, offset=nb * K * n, sizes=[1, 1, 1, K * n], strides=[0, 0, 0, 1])
+                            EndOp()
+                    if bres3:  # the MemTile side is the static program
+                        tasks.append(t_sh)
+                        continue
+                    t_in = dma_configure_task(mem_t[col].op, DMAChannelDir.S2MM, BRES_CH)
+                    with bds(t_in) as bd:
+                        with bd[0]:
+                            use_lock(bres_space[col].op, LockAction.AcquireGreaterEqual, units)
+                            # explicit BD ids: the runtime-sequence allocator does not reserve the static MemTile
+                            # chains' ids (it starts each tile empty), so its picks overwrite A and C descriptors.
+                            # Channel 0 is even -> ids 0..23; 20..23 stay clear of the static chains (checked per build).
+                            dma_bd(bres_buf[col].op, offset=off, transfer_len=K * n, bd_id=20 + jj % 2)
+                            use_lock(bres_full[col].op, LockAction.Release, 1 if lock_once else rb)
+                            EndOp()
+                    # one strip out per row block: each repeat takes one full unit and hands back units / rb of space
+                    t_out = dma_configure_task(mem_t[col].op, DMAChannelDir.MM2S, BRES_CH, repeat_count=rb - 1)
+                    with bds(t_out) as bd:
+                        with bd[0]:
+                            use_lock(bres_full[col].op, LockAction.AcquireGreaterEqual, 1)
+                            dma_bd(bres_buf[col].op, offset=off, transfer_len=K * n, bd_id=22 + jj % 2)  # linear
+                            use_lock(bres_space[col].op, LockAction.Release, units if lock_once else units // rb)
+                            EndOp()
+                    tasks += [t_sh, t_in, t_out]
+                dma_start_task(*tasks)
+                return tasks
+
+            prev = None
+            prev_raw = None  # one n-tile's group stays in flight while the next is issued (awaiting each drains the pipe)
             for jj in range(J):
                 tg = TaskGroup()
                 for col in range(n_aie_cols):
@@ -453,12 +588,18 @@ def _build_design(
                     if col < n_aie_rows:  # A shim col feeds core row col: its m rows of every row block, K tiles inner
                         A_hs[col].fill(A, tap=TensorAccessPattern((M, K), col * m * K, [rb, K // k, m, k],
                                                                   [m * n_aie_rows * K, k, K, 1]), group=tg)
-                    B_hs[col].fill(B, tap=TensorAccessPattern((K, N), nb * n, [1, K // k, k, n], [0, k * N, N, 1]),
-                                   group=tg)
+                    if not bres2:
+                        B_hs[col].fill(B, tap=TensorAccessPattern((K, N), nb * n, [1, K // k, k, n], [0, k * N, N, 1]),
+                                       group=tg)
+                raw = b_tasks(jj) if bres2 else None
                 if prev is not None:
                     prev.finish()
-                prev = tg
+                    if prev_raw:  # this n-tile's C has landed, so its B tasks have run
+                        dma_free_task(*prev_raw)
+                prev, prev_raw = tg, raw
             prev.finish()
+            if prev_raw:
+                dma_free_task(*prev_raw)
             return
         c_index = 0
         tg = TaskGroup()
@@ -509,6 +650,13 @@ def _build_design(
         sequence,
         [A_ty, B_ty, C_ty, A_prods, B_prods, C_conses],
     )
+    if b_resident in (2, 3):  # local change: the hand-written B path's flows, locks and core DMA programs
+        for f in bres_flows:
+            rt.add_flow(f)
+        for lk in bres_locks:
+            rt.add_lock(lk)
+        for d in bres_dmas:
+            rt.add_tile_dma(d)
 
     # resolve_program() runs the sequence body, which populates the closure
     # A_taps/B_taps/C_taps lists as a side effect. The generate_taps path needs

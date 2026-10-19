@@ -40,6 +40,8 @@ def to_bf16_bits(x):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--resident", type=Path, required=True, help="stem of the resident .xclbin/.bin")
+    ap.add_argument("--resident-xclbin", type=Path, help="run the resident .bin on this xclbin instead of its own "
+                    "(--b-resident 2 builds share one static design across shapes)")
     ap.add_argument("--hollow", type=Path, help="stem of the resident build with no MACs (timing only)")
     ap.add_argument("--generic-hollow", nargs=2, type=Path, metavar=("XCLBIN", "BIN"),
                     help="the generic build with no MACs (timing only), for the same-sitting floor")
@@ -49,6 +51,8 @@ def main():
     ap.add_argument("-K", type=int, required=True)
     ap.add_argument("-N", type=int, required=True)
     ap.add_argument("--calls", type=int, default=30)
+    ap.add_argument("--swizzle-b", action="store_true", help="the resident arm is --b-resident 2: upload B in its "
+                    "pre-swizzled order (whole_array_generic.swizzle_b_resident)")
     ap.add_argument("--timing-only", action="store_true", help="no-MAC builds: report the check, do not fail on it")
     a = ap.parse_args()
     sys.path.insert(0, "C:/Xilinx/XRT/xrt_sdk/xrt/python")
@@ -65,7 +69,7 @@ def main():
     bo = lambda nbytes: pyxrt.bo(dev, nbytes, pyxrt.bo.host_only, 0)
     arms = {}
 
-    def open_arm(name, xclbin, binp):
+    def open_arm(name, xclbin, binp, bw=None):
         xb = pyxrt.xclbin(str(xclbin))
         dev.register_xclbin(xb)
         ctx = pyxrt.hw_context(dev, xb.get_uuid())
@@ -74,10 +78,11 @@ def main():
         ib = pyxrt.bo(dev, words.nbytes, pyxrt.bo.cacheable, kern.group_id(1))
         ib.write(words.tobytes(), 0)
         ib.sync(to_dev)
-        A, B, C = bo(act.nbytes), bo(w.nbytes), bo(M * N * 4)
+        bw = w if bw is None else bw
+        A, B, C = bo(act.nbytes), bo(bw.nbytes), bo(M * N * 4)
         A.write(act.tobytes(), 0)
         A.sync(to_dev)
-        B.write(w.tobytes(), 0)
+        B.write(bw.tobytes(), 0)
         B.sync(to_dev)
         arms[name] = dict(xb=xb, ctx=ctx, kern=kern, ib=ib, nb=words.nbytes, A=A, B=B, C=C)
 
@@ -96,9 +101,14 @@ def main():
         return np.frombuffer(r["C"].read(M * N * 4, 0), dtype=np.float32).reshape(M, N).copy()
 
     open_arm("generic", a.generic_xclbin, a.generic_bin)
-    open_arm("resident", f"{a.resident}.xclbin", f"{a.resident}.bin")
+    wsw = None
+    if a.swizzle_b:
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "kernels" / "gemm_generic"))
+        from whole_array_generic import swizzle_b_resident
+        wsw = swizzle_b_resident(w)
+    open_arm("resident", a.resident_xclbin or f"{a.resident}.xclbin", f"{a.resident}.bin", wsw)
     if a.hollow:
-        open_arm("hollow", f"{a.hollow}.xclbin", f"{a.hollow}.bin")
+        open_arm("hollow", f"{a.hollow}.xclbin", f"{a.hollow}.bin", wsw)
     if a.generic_hollow:
         open_arm("generic_hollow", *a.generic_hollow)
     print(f"OPEN {len(arms)} contexts: {', '.join(arms)}; {M}x{K}x{N}", flush=True)

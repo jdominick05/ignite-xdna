@@ -146,6 +146,8 @@ def cmd_compile(a) -> int:
                 cmd += ["--hollow-matmul", str(a.hollow_matmul.resolve())]
             if a.mm_src:
                 cmd += ["--mm-src", str(a.mm_src.resolve())]
+            if a.b_resident:
+                cmd += ["--b-resident", "2"]
             if a.w8:
                 cmd += ["--b-w8", "1"] + (["--w8-dequant-src", str(a.w8_dequant.resolve())] if a.w8_dequant else [])
             r = subprocess.run(cmd, capture_output=True, text=True, timeout=1800)
@@ -201,8 +203,14 @@ def cmd_run(a) -> int:
     kern = pyxrt.kernel(ctx, xb.get_kernels()[0].get_name())
     to_dev, from_dev = pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_TO_DEVICE, pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_FROM_DEVICE
     bo = lambda nbytes: pyxrt.bo(dev, nbytes, pyxrt.bo.host_only, 0)
+    swz = (lambda bits: bits)
+    if a.b_resident:   # the device reads B strip by strip in L1 tile order
+        sys.path.insert(0, str(DESIGN.parent))
+        from whole_array_generic import swizzle_b_resident
+        swz = swizzle_b_resident
     Bs = {}
     for sh, w in (w8 if a.w8 else weights).items():
+        w = swz(w) if a.b_resident else w
         Bs[sh] = bo(w.nbytes)
         Bs[sh].write(w.tobytes(), 0)
         Bs[sh].sync(to_dev)   # weights written once, resident
@@ -238,7 +246,7 @@ def cmd_run(a) -> int:
             K, N = gu
             wp = to_bf16_bits(interleave(bf16_float(weights[gu])[:, :N]))
             # the device's B: the interleaved bf16 weights, or under --w8 the same permutation of q and its scales
-            bp = w8_tiles(interleave(w8qs[gu][0]), interleave(w8qs[gu][1])) if a.w8 else wp
+            bp = w8_tiles(interleave(w8qs[gu][0]), interleave(w8qs[gu][1])) if a.w8 else swz(wp) if a.b_resident else wp
             Bp = bo(bp.nbytes)
             Bp.write(bp.tobytes(), 0)
             Bp.sync(to_dev)
@@ -381,6 +389,8 @@ def main() -> int:
         p.add_argument("--ms", type=int, nargs="+", default=[256, 512, 2048], help="sequence rows M; this tile needs multiples of 256 (two 128-token docs = 256)")
         p.add_argument("--config", type=Path, default=CONFIG)
         p.add_argument("--w8", action="store_true", help="B as W8 tiles (G 64, clip 20; kernels/embedgemma/w8_dequant.cc)")
+        p.add_argument("--b-resident", action="store_true", help="weight-resident build (whole_array_generic "
+                       "--b-resident 2): one static design for every shape, B uploaded in its swizzled order")
         if name == "run":
             p.add_argument("--seqs", type=int, default=5, help="timed forward passes per M")
             p.add_argument("--epilogue-only", action="store_true", help="only the epilogue check (no plain checks, no timing)")

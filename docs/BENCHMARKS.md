@@ -25995,3 +25995,68 @@ reference, with HF fp32 as the quality reference; bf16 is gated against HF fp32.
   341.0 against 330.7 ms per document, and the stages around it vary by as much.
 - **What W8 buys is half the weight memory, not speed.** bf16 stays the default because it gates tighter against
   fp32 and needs no quantized weights.
+
+#### One-xclbin weight-resident GEMM: every forward shape bit-equal, 210.6 against 232.3 ms per pass at 2048 (2026-10-19, Desktop 2)
+
+`whole_array_generic.py --b-resident 2` serves every (M, K, N) from one static design. The weight strip's
+on-chip path is written into each shape's runtime sequence instead of the xclbin:
+- **MemTile side.** Each column's MemTile holds a 256 KB strip region (two 128 KB slots, or both for K = 2048).
+  Runtime-sequence tasks fill it from DDR and send it to the column's cores once per 256-row block. Their length,
+  repeat count (M / 256 - 1) and lock amounts are per shape.
+- **Core side.** Each core receives B into its own static pair of 64 x 64 buffers.
+- **Host side.** The runtime descriptor has three data dimensions, one short of the generic design's tile swizzle,
+  so the host lays B out once in the cores' L1 tile order (`swizzle_b_resident`, checked offline against the
+  generic pattern). Every hop then moves the strip linearly.
+
+The six shapes' static designs are identical apart from source paths in debug locations.
+
+**Per shape, the resident build against the generic owned build,** each on one shared xclbin, bit-equal in every
+word:
+
+| Shape | generic ms/call | resident ms/call | change |
+|---|---:|---:|---:|
+| 2048x512x4096 ([log](../results/aie/embedgemma_gemm_bres2_ch0_ab_2048x512x4096_desktop2_20261019T075048Z.log)) | 3.173 | 2.687 | -15% |
+| 2048x1024x512 ([log](../results/aie/embedgemma_gemm_bres2_ch0_ab_2048x1024x512_desktop2_20261019T075101Z.log)) | 0.837 | 0.778 | -7% |
+| 512x2048x512 ([log](../results/aie/embedgemma_gemm_bres2_ch0_ab_512x2048x512_desktop2_20261019T075055Z.log)) | 0.482 | 0.555 | +15% |
+
+**Whole forward passes,** one sitting, NPU idle and host load CLEAR, five passes each
+([resident](../results/aie/embedgemma_gemm_fwd_bres_m64_desktop2_20261019T075244Z.log), [owned m64](../results/aie/embedgemma_gemm_fwd_owned_m64_desktop2_20261019T075258Z.log)):
+
+| M | owned m64 ms | resident ms | change |
+|---:|---:|---:|---:|
+| 512 | 79.2 | 81.7 | +3% |
+| 2048 | 232.3 | 210.6 | -9% |
+
+- **Exact:** all 14 checked products and the GeGLU epilogue (modes 0 and 6 at both M) are bit-equal to the owned m64
+  build (`gemm_bitdiff.py`, 18 outputs). The mode 6 check reads worst 0 against the model.
+- **Why 512 is slower: unexplained.** Two candidates, neither isolated:
+  - each strip is re-sent only twice at M = 512;
+  - a K = 2048 strip fills both slots, so the next one cannot load while the current one streams (512x2048x512 is
+    the one slower shape on its own).
+- **Against the derived target:** the byte accounting's ~56 ms for reading B once
+  ([above](#byte-accounting-of-the-m64-gemm-it-moves-24x-the-minimum-and-its-floor-can-drop-from-231-to-about-116-ms-2026-10-19-desktop-2))
+  came out as 21.7 ms at 2048. The 2048x512x4096 shape is now core-bound (2.687 ms against its 2.359 ms no-MAC
+  floor, measured on the compile-time form), and no no-MAC build of this form has been timed.
+- **Not run:** the end-to-end hybrid on this build; it needs the hybrid to upload swizzled B.
+
+**How it was debugged** (each step one variable; the logs are the record):
+1. **Six hangs.** The first builds hung on every shape
+   ([1](../results/aie/embedgemma_gemm_bres2_ab_2048x512x4096_desktop2_20261019T072258Z.log), [2](../results/aie/embedgemma_gemm_bres2_ab_512x2048x512_desktop2_20261019T072312Z.log), [3](../results/aie/embedgemma_gemm_bres2_ab_2048x1024x512_desktop2_20261019T072326Z.log), [4](../results/aie/embedgemma_gemm_bres2_ab_2048x512x4096_desktop2_20261019T072643Z.log), [5](../results/aie/embedgemma_gemm_bres2_ab_512x2048x512_desktop2_20261019T072657Z.log), [6](../results/aie/embedgemma_gemm_bres2_ab_2048x1024x512_desktop2_20261019T072711Z.log)).
+   - The first three ran with BD ids that the runtime-sequence allocator picked, and those overlapped the static
+     MemTile chains' ids. That allocator starts every tile empty and does not reserve static ids.
+   - The next three pinned ids 40-43, and an offline decode of the instruction stream found every field as designed.
+2. **Static MemTile program: bit-exact** ([log](../results/aie/embedgemma_gemm_bres3_static_ab_2048x512x4096_desktop2_20261019T074301Z.log), 2.820 ms). The same design with only the MemTile half made
+   static. This cleared the pinned tiles, the hand-written core channel, the core loop, the swizzle and the shim
+   task.
+3. **Locks taken once per task instead of per repeat: still hangs** ([log](../results/aie/embedgemma_gemm_bres2_lockonce_ab_2048x512x4096_desktop2_20261019T074407Z.log)).
+4. **A shim -> MemTile -> shim loopback** ([log](../results/aie/memtile_runtime_bd_probe_desktop2_20261019T074600Z.log), [channels](../results/aie/memtile_runtime_bd_probe_channels_desktop2_20261019T074731Z.log)):
+   - runtime MemTile tasks with locks, repeats and the GEMM's lock values ran exact on channels 0 and 1, including
+     beside a static program on the same MemTile;
+   - every form timed out on channels 4 and 5, whatever the BD ids;
+   - channels 2 and 3 were not tried;
+   - the lockless variant on channel 0 also timed out; it awaits a MemTile task's token, which is not otherwise
+     tested here.
+5. **Fix:** B moved to channel 0 both ways, and the static chains were pinned onto 1-5.
+
+Whether the channel 4/5 limit is silicon, firmware or the lowering is **unexplained**. Static programs on
+channel 5 work.

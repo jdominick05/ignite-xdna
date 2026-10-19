@@ -4539,6 +4539,17 @@ corpus, queries, qrels), never the gate documents.
   substitutions are gated separately and are common to both formats.
 - **On a fail, stop and report.**
 
+- **Runtime-sequence MemTile DMA tasks: channels 0 and 1, explicit BD ids (2026-10-19).** Two pitfalls found
+  building the one-xclbin weight-resident GEMM:
+  - `aiex.dma_configure_task` on a MemTile timed out on channels 4 and 5 in every form tried, and ran on 0 and 1.
+    Channels 2 and 3 are untried.
+  - The runtime-sequence BD-id allocator starts each tile empty, so on a MemTile with static ObjectFifo chains it
+    hands out ids those chains already own.
+
+  So: put runtime MemTile tasks on channel 0 or 1, pin the static chains above them (handle `channel=`), and pin each
+  runtime BD's `bd_id` in the channel's half (even 0-23, odd 24-47) clear of the static ids. Check those ids per
+  build. Whether the channel limit is silicon, firmware or lowering is unexplained
+  ([BENCHMARKS](BENCHMARKS.md#one-xclbin-weight-resident-gemm-every-forward-shape-bit-equal-2106-against-2323-ms-per-pass-at-2048-2026-10-19-desktop-2)).
 - **Weight-resident (B-stationary) generic GEMM, as one xclbin (2026-10-19).** Reading B once per product,
   with one n-tile's task group kept in flight, is exact and cut 2048x512x4096 from 3.485 to 2.932 ms (no MACs: 3.435
   to 2.359). Switching contexts costs 1.0-1.4 ms per call, so one xclbin per (M, K) is ruled out. The MemTile B path
