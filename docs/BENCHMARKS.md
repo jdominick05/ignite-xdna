@@ -25680,3 +25680,56 @@ Per shape at M = 2048, the iGPU is 1.5-1.8x the NPU m = 64 build: 2.29 against 4
   plus a power reading.
 - **Unexplained:** the iGPU's summed per-op estimate, about 300 ms at 2048, sits far below llama-server's
   717.5 ms per request. The server's request path and its remaining ops are the candidates; neither is separated.
+
+#### The 780M and the NPU together on 2048-token documents: a throughput role for the NPU; an energy role only against the -fa off GPU (2026-10-19, Desktop 2)
+
+**What ran.** [`embedgemma_concurrency_energy.py`](../tools/embedgemma_concurrency_energy.py) runs three arms:
+- **G:** llama-server on ROCm0, one document per request;
+- **N:** the best bf16 hybrid, after its 56-document gate;
+- **GN:** both at once.
+
+Each arm takes 60 s of idle and then a 60 s window. Each sitting runs two passes, the second in reverse order.
+Energy comes from the RAPL package counter only (locked decision 10). Both chips are inside it.
+
+The rules were committed before the first sitting (`5e7ab65`):
+- **T (throughput role):** GN docs/s >= 1.10 x G, in both passes;
+- **E (energy role):** N or GN J/doc above idle <= 0.90 x G, in both passes.
+
+The second sitting ran G with flash attention (`--gpu-fa on`, `0358150`), under the same rules. All 8 NPU arms
+passed the gate (cos min 0.9999883, NN 100%) with no foreign contention flagged. The GPU worker recorded cos min
+0.9999817 against HF with `-fa on`.
+
+Pass 1 / pass 2:
+
+| Sitting | Arm | Docs/s | ms/doc | dPKG W | J/doc above idle | J/doc with idle |
+|---|---|---|---|---|---|---|
+| -fa off ([record](../results/aie/embedgemma_concurrency_energy_desktop2_20261019T043151Z.json)) | G | 1.457 / 1.468 | 686 / 681 | 59.2 / 60.1 | 40.6 / 40.9 | 55.1 / 54.9 |
+| | N | 0.652 / 0.656 | 1535 / 1524 | 34.7 / 33.7 | 53.3 / 51.3 | 84.5 / 84.0 |
+| | GN | 1.808 / 1.818 | GPU 777 / 770, NPU 1920 / 1924 | 63.7 / 63.6 | **35.2 / 35.0** | 46.9 / 46.7 |
+| -fa on ([record](../results/aie/embedgemma_concurrency_energy_fa_on_desktop2_20261019T045001Z.json)) | G | 2.309 / 2.285 | 433 / 438 | 52.9 / 55.6 | 22.9 / 24.3 | 32.0 / 31.4 |
+| | N | 0.654 / 0.649 | 1530 / 1540 | 33.9 / 37.1 | 51.9 / 57.1 | 83.7 / 82.0 |
+| | GN | 2.612 / 2.604 | GPU 483 / 486, NPU 1850 / 1833 | 60.1 / 65.4 | 23.0 / 25.1 | 31.3 / 31.5 |
+
+**Verdicts (mechanical):**
+- **-fa off: T YES** (GN/G 1.24, 1.24); **E YES**, through GN (0.87, 0.86 of G).
+- **-fa on: T YES** (1.13, 1.14); **E NO** (GN 1.01 and 1.03 of G; N 2.3x).
+- **Against the GPU at its best, the NPU adds 13-14% throughput beside it, at the GPU's energy per document.**
+  Running both costs the GPU 11% of its own rate (433 -> 483 ms).
+
+**Notes.**
+- **The GPU's flash attention alone gives it 1.57x** (681-686 -> 433-438 ms). The llama-server baseline's
+  717.5 ms used `-fa off`.
+- **Idle moved between the sittings.** It was about 21 W in the first and in pass 1 of the second, then about
+  16 W in pass 2. Every arm is read against its own idle.
+- **One NPU-engine counter reading in -fa on pass 1 N is garbage** (3.4e12%). It feeds no rule.
+- **What is NOT measured:** whether the slowdown when both run comes from DRAM bandwidth, the shared CPU host work
+  (N uses 20-23% CPU) or thermal limits; the arms do not separate them.
+- **NPU logs:**
+  - -fa off: [N p1](../results/aie/embedgemma_concurrency_n_npu_desktop2_20261019T043151Z_p1.log),
+    [N p2](../results/aie/embedgemma_concurrency_n_npu_desktop2_20261019T043151Z_p2.log),
+    [GN p1](../results/aie/embedgemma_concurrency_gn_npu_desktop2_20261019T043151Z_p1.log),
+    [GN p2](../results/aie/embedgemma_concurrency_gn_npu_desktop2_20261019T043151Z_p2.log);
+  - -fa on: [N p1](../results/aie/embedgemma_concurrency_n_npu_desktop2_20261019T045002Z_p1.log),
+    [N p2](../results/aie/embedgemma_concurrency_n_npu_desktop2_20261019T045002Z_p2.log),
+    [GN p1](../results/aie/embedgemma_concurrency_gn_npu_desktop2_20261019T045002Z_p1.log),
+    [GN p2](../results/aie/embedgemma_concurrency_gn_npu_desktop2_20261019T045002Z_p2.log).
