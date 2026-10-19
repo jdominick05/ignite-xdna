@@ -557,6 +557,7 @@ def compile_graph_container(onnx_path, output_path, build_dir: Optional[Path] = 
                             trace_shims: Optional[Sequence[int]] = None,
                             trace_size: int = 4 << 20,
                             overlap_layers: Optional[bool] = None,
+                            build: Optional[Dict[str, Any]] = None,
                             **kwargs) -> Dict[str, Any]:
     """Lower, schedule, build the device binaries and write the container. Returns the manifest.
 
@@ -820,6 +821,10 @@ def compile_graph_container(onnx_path, output_path, build_dir: Optional[Path] = 
     # than a model hash, so "is this container the model I think it is" has needed an external answer
     # more than once; recording it here lets a harness refuse a stale pairing instead of measuring it.
     manifest["source_model_sha256"] = hashlib.sha256(onnx_path.read_bytes()).hexdigest()
+    # How this container was made: the command, the compiler commit and the recipe that ran it. build/ is not
+    # tracked, so without this a stale container could be rebuilt only by finding its flags in an old commit body.
+    if build:
+        manifest["build"] = dict(build)
     if silu_sigmoid:   # absent means Quark's HardSigmoid form, as every earlier container
         manifest["graph_engine"]["silu"] = "sigmoid4"
     if not workspace_reuse:   # absent means reuse on: co-tenant tensors share a workspace slot

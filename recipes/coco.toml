@@ -1,0 +1,11 @@
+name = "coco"
+description = "COCO 2017 val (5,000 images and instance annotations) and the 300-image calibration subset every YOLO recipe quantizes on"
+status = "reconstructed"
+evidence = ["pipelines/yolov8n/2_fetch_coco.py docstring"]
+
+[[step]]
+id = "fetch"
+env = "resnet_env"
+run = ["pipelines/yolov8n/2_fetch_coco.py", "--n-calib", "300"]
+outputs = ["data/coco/val2017", "data/coco/annotations/instances_val2017.json", "data/coco_calib"]
+note = "about 1 GB from images.cocodataset.org, no login. data/coco_calib is every Nth image of the sorted val2017 list; each quantize takes the first --limit of them"

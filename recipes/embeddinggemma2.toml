@@ -1,0 +1,19 @@
+name = "embeddinggemma2"
+description = "EmbeddingGemma 2 (bf16 encoder): weight GEMMs, local and global attention and GeGLU on the NPU; norms, RoPE and residuals as native host code"
+status = "reconstructed"
+evidence = ["docs/BENCHMARKS.md:26974,27941,28172-28211", "results/aie/embedgemma_hybrid_bres_attn-npu-all_desktop2_20261019T111902Z.log"]
+
+[[step]]
+id = "fetch"
+env = "shell"
+run = ["hf", "download", "google/embeddinggemma-2", "--revision", "914f7f89142e33e77833254d9c9b90c3cef7303b"]
+outputs = ["L:/huggingface/hub/models--google--embeddinggemma-2/snapshots/914f7f89142e33e77833254d9c9b90c3cef7303b/model.safetensors"]
+note = "into the Hugging Face cache (HF_HOME=L:/huggingface on Desktop 2); the code reads the snapshot path directly, no weight conversion. The command is inferred, the revision recorded"
+
+[[step]]
+id = "measure"
+env = "iron"
+run = ["tools/embedgemma_hybrid.py", "--backend", "npu", "--batch", "4", "--round-dll", "scratch/egemma-native/embedgemma_round.dll", "--builds", "scratch/egemm-bres", "--npu-b-resident", "--ms", "512", "2048", "--npu-geglu", "6", "--attn-build", "scratch/egemma-attn-hd", "--attn-pack-dll", "scratch/egemma-native-hd/egattn_pack.dll", "--native-qkv", "scratch/egemma-native/eg_qkv_norm_rope.dll", "--native-rowops", "scratch/egemma-native/eg_rowops.dll", "--attention", "npu-all"]
+inputs = ["scratch/egemm-bres", "scratch/egemma-attn-hd"]
+npu = true
+note = "the 1,158.9 ms/document run also passed --docs (docs-heldout-v1.json) and --reference (an HF fp32 npz) from ~/gemma4-embedding-baseline/logs, outside any repo. NOT YET REBUILDABLE: the compile commands for scratch/egemm-bres (GEMM xclbins with kernels/gemm_bf16/mm_bf16.cc) and scratch/egemma-attn-hd (kernels/embedgemma/attn_array.py build, -DEGATTN_HD) were never recorded, and those builds exist only in the embedgemma-gemm worktree"

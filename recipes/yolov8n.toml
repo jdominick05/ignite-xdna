@@ -1,0 +1,54 @@
+name = "yolov8n"
+description = "YOLOv8n detect, head cut, XINT8: the whole network on the NPU, 0 ONNX Runtime calls per frame; Ignition's golden model"
+status = "reconstructed"
+evidence = ["scratch/b48/build_all.sh:17", "results/aie/overlap_default_record_desktop2_20261015T2145Z.log:6", "results/hf/verify_published_containers_desktop2_20261013.log:9-10"]
+
+[[step]]
+id = "fetch"
+env = "shell"
+run = ["curl", "-L", "--fail", "-o", "models/yolov8n.pt", "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolov8n.pt"]
+outputs = ["models/yolov8n.pt"]
+sha256 = { "models/yolov8n.pt" = "f59b3d833e2ff32e194b5bb8e08d211dc7c5bdf144b90d2c8412c47ccfc83b36" }
+note = "Ultralytics' v8.3.0 release asset, byte-identical to the file the benchmarks were built from. The Hub's Ultralytics/YOLOv8 copy is an older packaging of the same weights (all tensors equal, checked 2026-10-19), so its hash differs."
+
+[[step]]
+id = "export"
+env = "resnet_env"
+run = ["pipelines/yolov8n/1_export.py", "--weights", "models/yolov8n.pt", "--size", "640"]
+inputs = ["models/yolov8n.pt"]
+outputs = ["models/yolov8n.onnx"]
+recorded_sha256 = { "models/yolov8n.onnx" = "94ef26647a32b0ad8e62696f8e9c9abaf69934c5b547e88baefdbe3a5c5f4f4f" }
+note = "opset 17, static batch 1, simplify=True"
+
+[[step]]
+id = "cut"
+env = "resnet_env"
+run = ["pipelines/yolov8n/1b_cut_head.py", "--in", "models/yolov8n.onnx", "--out", "models/yolov8n_cut.onnx"]
+inputs = ["models/yolov8n.onnx"]
+outputs = ["models/yolov8n_cut.onnx"]
+recorded_sha256 = { "models/yolov8n_cut.onnx" = "11b52c2530def3c99bccc4bee39a40683aab8619d4278a334b5f0f78c43fd0a1" }
+
+[[step]]
+id = "quantize"
+env = "resnet_env"
+run = ["pipelines/yolov8n/3b_quantize_cut.py", "--in", "models/yolov8n_cut.onnx", "--out", "models/yolov8n_cut_xint8.onnx", "--calib-dir", "data/coco_calib", "--limit", "32"]
+inputs = ["models/yolov8n_cut.onnx", "data/coco_calib"]
+outputs = ["models/yolov8n_cut_xint8.onnx"]
+recorded_sha256 = { "models/yolov8n_cut_xint8.onnx" = "f02e86ba1bf61ff3fdc159e29b15259567e279df06f68c6d9adeb966fe56c885" }
+note = "Quark XINT8; calibration: 32 images (scripts/yolo-bench.sh:19; BENCHMARKS caveat at :9520)"
+
+[[step]]
+id = "compile"
+env = "iron"
+run = ["-m", "ignite_xdna.compiler.cli", "--engine", "graph", "--input", "models/yolov8n_cut_xint8.onnx", "--output", "build/yolov8n_full.ignite", "--silu-sigmoid"]
+inputs = ["models/yolov8n_cut_xint8.onnx"]
+outputs = ["build/yolov8n_full.ignite"]
+note = "the container Ignition documents: SiLU through the sigmoid epilogue, layer overlap on (the compiler's default since 2026-10-15; was build/df_yolov8n_silu_def.ignite)"
+
+[[step]]
+id = "compile-barrier"
+env = "iron"
+run = ["-m", "ignite_xdna.compiler.cli", "--engine", "graph", "--input", "models/yolov8n_cut_xint8.onnx", "--output", "build/yolov8n_full_barrier.ignite", "--silu-sigmoid", "--no-overlap-layers"]
+inputs = ["models/yolov8n_cut_xint8.onnx"]
+outputs = ["build/yolov8n_full_barrier.ignite"]
+note = "the same with the layer barrier: per-layer timing and shim-trace windows need it"

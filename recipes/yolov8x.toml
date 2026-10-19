@@ -1,0 +1,54 @@
+name = "yolov8x"
+description = "YOLOv8x detect, head cut, XINT8"
+status = "reconstructed"
+evidence = ["docs/BENCHMARKS.md:119,159", "results/yolo_cut_quantize_xint8_x.log", "88c46057 (split suite)"]
+
+[[step]]
+id = "fetch"
+env = "shell"
+run = ["curl", "-L", "--fail", "-o", "models/yolov8x.pt", "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolov8x.pt"]
+outputs = ["models/yolov8x.pt"]
+sha256 = { "models/yolov8x.pt" = "3df4ada6b4dad6d657868f2fdf7faecfb34dcfccf3a25c4b82079064718524c8" }
+note = "Ultralytics' v8.3.0 release asset, byte-identical to the file the benchmarks were built from. The Hub's Ultralytics/YOLOv8 copy is an older packaging of the same weights (all tensors equal, checked 2026-10-19), so its hash differs."
+
+[[step]]
+id = "export"
+env = "resnet_env"
+run = ["pipelines/yolov8n/1_export.py", "--weights", "models/yolov8x.pt", "--size", "640"]
+inputs = ["models/yolov8x.pt"]
+outputs = ["models/yolov8x.onnx"]
+recorded_sha256 = { "models/yolov8x.onnx" = "88f5b3211b2f1a479e2c6d31eaac06677b4f1c23460b7df256ba9c3687d55005" }
+note = "opset 17, static batch 1, simplify=True"
+
+[[step]]
+id = "cut"
+env = "resnet_env"
+run = ["pipelines/yolov8n/1b_cut_head.py", "--in", "models/yolov8x.onnx", "--out", "models/yolov8x_cut.onnx"]
+inputs = ["models/yolov8x.onnx"]
+outputs = ["models/yolov8x_cut.onnx"]
+recorded_sha256 = { "models/yolov8x_cut.onnx" = "924958066e42ac15307c0d2d54af62be41e876250b949cc4fba50da74b8f0598" }
+
+[[step]]
+id = "quantize"
+env = "resnet_env"
+run = ["pipelines/yolov8n/3b_quantize_cut.py", "--in", "models/yolov8x_cut.onnx", "--out", "models/yolov8x_cut_xint8.onnx", "--calib-dir", "data/coco_calib", "--limit", "24"]
+inputs = ["models/yolov8x_cut.onnx", "data/coco_calib"]
+outputs = ["models/yolov8x_cut_xint8.onnx"]
+recorded_sha256 = { "models/yolov8x_cut_xint8.onnx" = "b67b561bf839c51cd2584b2eebeb4e10a4917e0ddc97abe503c8e4a4c25a4795" }
+note = "Quark XINT8; calibration: 24 images (results/yolo_cut_quantize_xint8_x.log)"
+
+[[step]]
+id = "compile"
+env = "iron"
+run = ["-m", "ignite_xdna.compiler.cli", "--engine", "graph", "--input", "models/yolov8x_cut_xint8.onnx", "--output", "build/yolov8x.ignite", "--silu-sigmoid"]
+inputs = ["models/yolov8x_cut_xint8.onnx"]
+outputs = ["build/yolov8x.ignite"]
+note = "monolithic, overlap on: NOT YET BUILT. Every published m/l/x engine number came from the split container below; why those were split is not recorded"
+
+[[step]]
+id = "compile-split"
+env = "iron"
+run = ["-m", "ignite_xdna.compiler.cli", "--engine", "graph", "--input", "models/yolov8x_cut_xint8.onnx", "--output", "build/yolov8x_split.ignite", "--split-layer", "20", "--split-layer", "50", "--decouple-weights"]
+inputs = ["models/yolov8x_cut_xint8.onnx"]
+outputs = ["build/yolov8x_split.ignite", "build/yolov8x_split.weights"]
+note = "INFERRED from the measured container's manifest (segments split at 20 and 50, decoupled weights, no silu key, retire_batch 2); no build command was recorded"

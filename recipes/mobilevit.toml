@@ -1,0 +1,20 @@
+name = "mobilevit"
+description = "MobileViT-XXS (timm mobilevit_xxs) XINT8: a measured negative result (0.10% top-5 at full XINT8)"
+status = "reconstructed"
+evidence = ["b209354c", "docs/MODEL_ZOO_BENCHMARKS.md:540"]
+
+[[step]]
+id = "export"
+env = "resnet_env"
+run = ["pipelines/mobilevit/1_export.py"]
+outputs = ["models/mobilevit_xxs_fp32.onnx"]
+recorded_sha256 = { "models/mobilevit_xxs_fp32.onnx" = "06555e2deaff2c60e4e80a35d582d1204b5027bf9d9eb8d972629228f23c0a13" }
+
+[[step]]
+id = "quantize"
+env = "resnet_env"
+run = ["pipelines/mobilevit/2_quantize.py", "--calib-dir", "data/calib", "--limit", "300"]
+inputs = ["models/mobilevit_xxs_fp32.onnx", "data/calib"]
+outputs = ["models/mobilevit_xxs_xint8.onnx"]
+recorded_sha256 = { "models/mobilevit_xxs_xint8.onnx" = "e71f3651c6c3778699c279358081e0ce7283c59df109983463a2b199436179dd" }
+note = "data/calib comes from the resnet50 recipe's data step. The hybrid and AdaRound (500 iterations) variants and the cut backbone tools/demo_attention.py uses were never given recorded commands. The engine compile stops at /stages.2.0/conv3_1x1/conv/Conv: unexpected consumers ['Concat','Conv']"

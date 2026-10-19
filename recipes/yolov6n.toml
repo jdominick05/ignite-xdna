@@ -1,0 +1,51 @@
+name = "yolov6n"
+description = "YOLOv6n detect, head cut, XINT8 and AdaRound: an AMD-stack (VitisAI EP) study model with no engine container"
+status = "reconstructed"
+evidence = ["pipelines/yolov6n/1_export.py:8-13,71-73", "docs/BENCHMARKS.md:7187,7207", "results/quant_yolov6n_cut_xint8_adaround.log"]
+
+[[step]]
+id = "fetch"
+env = "shell"
+run = ["curl", "-L", "--fail", "-o", "models/yolov6n.pt", "https://github.com/meituan/YOLOv6/releases/download/0.4.0/yolov6n.pt"]
+outputs = ["models/yolov6n.pt"]
+sha256 = { "models/yolov6n.pt" = "085876843bb70585ef2e453901cb7c35bbe474e40bf0897d13266513a9f69808" }
+note = "the pinned hash is the local file's"
+
+[[step]]
+id = "source"
+env = "shell"
+run = ["bash", "-c", "test -d ~/YOLOv6 || git clone --depth 1 https://github.com/meituan/YOLOv6.git ~/YOLOv6"]
+note = "1_export.py imports YOLOv6 from ~/YOLOv6 or YOLOV6_DIR; idempotent"
+
+[[step]]
+id = "export"
+env = "resnet_env"
+run = ["pipelines/yolov6n/1_export.py"]
+inputs = ["models/yolov6n.pt"]
+outputs = ["models/yolov6n.onnx"]
+recorded_sha256 = { "models/yolov6n.onnx" = "525690fef490877d8d5448f22ff96d9d27cf0eddf45c58d7dcf514f51ddfe35c" }
+
+[[step]]
+id = "cut"
+env = "resnet_env"
+run = ["pipelines/yolov6n/1b_cut_head.py"]
+inputs = ["models/yolov6n.onnx"]
+outputs = ["models/yolov6n_cut.onnx"]
+recorded_sha256 = { "models/yolov6n_cut.onnx" = "f3c86d88eb0d973b9d529146354087e964b371cac37bd55d40ef835623adba95" }
+
+[[step]]
+id = "quantize"
+env = "resnet_env"
+run = ["pipelines/yolov6n/3b_quantize_cut.py", "--calib-dir", "data/coco_calib"]
+inputs = ["models/yolov6n_cut.onnx", "data/coco_calib"]
+outputs = ["models/yolov6n_cut_xint8.onnx"]
+recorded_sha256 = { "models/yolov6n_cut_xint8.onnx" = "241d0aa68e4281a93c081cada059bbf505ad99724696bc70cb8a4c09197448e6" }
+note = "300 images, the script's default"
+
+[[step]]
+id = "quantize-adaround"
+env = "resnet_env"
+run = ["pipelines/yolov6n/3b_quantize_cut.py", "--calib-dir", "data/coco_calib", "--adaround"]
+inputs = ["models/yolov6n_cut.onnx", "data/coco_calib"]
+outputs = ["models/yolov6n_cut_xint8_adaround.onnx"]
+recorded_sha256 = { "models/yolov6n_cut_xint8_adaround.onnx" = "33a59c7acb9be569331db6e32a0cbfe46d4628075778ada46d78ba540eb76068" }

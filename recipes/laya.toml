@@ -1,0 +1,44 @@
+name = "laya"
+description = "Laya (receptron's ModernBERT-large decision model, bf16 on the NPU): the hybrid path (weight GEMMs on the NPU) and the native path (the whole model on the NPU)"
+status = "reconstructed"
+evidence = ["docs/BENCHMARKS.md:19055,19358", "results/laya/laya_prep_desktop2_20260926.log", "results/laya/laya_npu_screen_desktop2_20260926.log:8", "results/aie/laya_gemm_onectx_desktop2_20261013T012132Z.log:41-49", "results/laya/laya_three_way_512_desktop2_20261014T152451Z.log"]
+
+[[step]]
+id = "fetch"
+env = "shell"
+run = ["hf", "download", "receptron/laya-onnx", "--revision", "68f27dfe5a27a54fb2b1fefc432f43f972e90868", "--local-dir", "scratch/laya/laya-onnx"]
+outputs = ["scratch/laya/laya-onnx/laya.onnx", "scratch/laya/laya-onnx/laya.onnx.data"]
+sha256 = { "scratch/laya/laya-onnx/laya.onnx" = "a874eb254b58b0fcb1e7ad56fbb188c29d64e08c9a46b689433e1f52c66dba1e" }
+note = "the command is inferred (a local-dir download, from the .cache metadata); the revision and hash are recorded"
+
+[[step]]
+id = "dmlcopy"
+env = "ryzen-ai-1.8.0"
+run = ["tools/laya_baseline.py", "dmlcopy", "--model", "scratch/laya/laya-onnx/laya.onnx"]
+inputs = ["scratch/laya/laya-onnx/laya.onnx"]
+outputs = ["scratch/laya/laya-onnx/laya_az0.onnx"]
+recorded_sha256 = { "scratch/laya/laya-onnx/laya_az0.onnx" = "fd35271c6e5c5083cdb50b8b35f358d5174ac37a7dc81c4507a613d34fd46580" }
+
+[[step]]
+id = "noguard"
+env = "ryzen-ai-1.8.0"
+run = ["tools/laya_npu_screen.py", "noguard", "--model", "scratch/laya/laya-onnx/laya_az0.onnx"]
+inputs = ["scratch/laya/laya-onnx/laya_az0.onnx"]
+outputs = ["scratch/laya/laya-onnx/laya_az0_noguard.onnx"]
+recorded_sha256 = { "scratch/laya/laya-onnx/laya_az0_noguard.onnx" = "9ab43d87c9a696c8439788addfccaff8956d4dcee36ae24549add8d5b0f638bf" }
+note = "the model both the hybrid and the native path serve"
+
+[[step]]
+id = "gemm-xclbins"
+env = "iron"
+run = ["tools/gemm_generic_probe.py", "compile", "--out", "scratch/gemm_generic/aot6"]
+outputs = ["scratch/gemm_generic/aot6"]
+note = "the hybrid path's GEMM designs: m32 k64 n64, C single-buffered, generic (g_*) and plain (p_*) xclbins"
+
+[[step]]
+id = "serve"
+env = "engine"
+run = ["tools/laya_daemon.py", "serve", "--backend", "npu", "--model-dir", "scratch/laya/laya-onnx"]
+inputs = ["scratch/laya/laya-onnx/laya_az0_noguard.onnx", "scratch/gemm_generic/aot6"]
+npu = true
+note = "the hybrid decision service (scripts/laya-start.sh). The native path's base builds (chain_v4_28, vector_v6, head_*, scorer_v2, tail_v4, action_v2, embedding_carry_v1; kernels/laya_transformer/native.py:27) were never given recorded build commands: rebuilding them is open work"

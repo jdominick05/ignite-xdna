@@ -1,0 +1,54 @@
+name = "yolov8s"
+description = "YOLOv8s detect, head cut, XINT8: the whole network on the NPU, 0 ONNX Runtime calls per frame"
+status = "reconstructed"
+evidence = ["scratch/b48/build_all.sh:18", "results/hf/verify_published_containers_desktop2_20261013.log:12"]
+
+[[step]]
+id = "fetch"
+env = "shell"
+run = ["curl", "-L", "--fail", "-o", "models/yolov8s.pt", "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolov8s.pt"]
+outputs = ["models/yolov8s.pt"]
+sha256 = { "models/yolov8s.pt" = "1f47a78bf100391c2a140b7ac73a1caae18c32779be7d310658112f7ac9aa78a" }
+note = "Ultralytics' v8.3.0 release asset, byte-identical to the file the benchmarks were built from. The Hub's Ultralytics/YOLOv8 copy is an older packaging of the same weights (all tensors equal, checked 2026-10-19), so its hash differs."
+
+[[step]]
+id = "export"
+env = "resnet_env"
+run = ["pipelines/yolov8n/1_export.py", "--weights", "models/yolov8s.pt", "--size", "640"]
+inputs = ["models/yolov8s.pt"]
+outputs = ["models/yolov8s.onnx"]
+recorded_sha256 = { "models/yolov8s.onnx" = "b0fe3340fda485e931e58af3c4eb25dda3e770427054d6a3f1e21ac2e863c20c" }
+note = "opset 17, static batch 1, simplify=True"
+
+[[step]]
+id = "cut"
+env = "resnet_env"
+run = ["pipelines/yolov8n/1b_cut_head.py", "--in", "models/yolov8s.onnx", "--out", "models/yolov8s_cut.onnx"]
+inputs = ["models/yolov8s.onnx"]
+outputs = ["models/yolov8s_cut.onnx"]
+recorded_sha256 = { "models/yolov8s_cut.onnx" = "f713208d79578f41240d2ffaca96dfca711ad45bcf251326adb68da212ab04d5" }
+
+[[step]]
+id = "quantize"
+env = "resnet_env"
+run = ["pipelines/yolov8n/3b_quantize_cut.py", "--in", "models/yolov8s_cut.onnx", "--out", "models/yolov8s_cut_xint8.onnx", "--calib-dir", "data/coco_calib", "--limit", "100"]
+inputs = ["models/yolov8s_cut.onnx", "data/coco_calib"]
+outputs = ["models/yolov8s_cut_xint8.onnx"]
+recorded_sha256 = { "models/yolov8s_cut_xint8.onnx" = "065f62523000b806e47e227f0b9d71a689f10d8c5368a7c5b6d0ff3b9f733fcc" }
+note = "Quark XINT8; calibration: NOT RECORDED: 100 is yolo-cut.sh's default (the script's own is 300); no log names the count"
+
+[[step]]
+id = "compile"
+env = "iron"
+run = ["-m", "ignite_xdna.compiler.cli", "--engine", "graph", "--input", "models/yolov8s_cut_xint8.onnx", "--output", "build/yolov8s.ignite", "--silu-sigmoid"]
+inputs = ["models/yolov8s_cut_xint8.onnx"]
+outputs = ["build/yolov8s.ignite"]
+note = "the container Ignition documents: SiLU through the sigmoid epilogue, layer overlap on (the compiler's default since 2026-10-15; was build/df_yolov8s_silu_def.ignite)"
+
+[[step]]
+id = "compile-barrier"
+env = "iron"
+run = ["-m", "ignite_xdna.compiler.cli", "--engine", "graph", "--input", "models/yolov8s_cut_xint8.onnx", "--output", "build/yolov8s_barrier.ignite", "--silu-sigmoid", "--no-overlap-layers"]
+inputs = ["models/yolov8s_cut_xint8.onnx"]
+outputs = ["build/yolov8s_barrier.ignite"]
+note = "the same with the layer barrier: per-layer timing and shim-trace windows need it"

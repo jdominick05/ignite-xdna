@@ -1,0 +1,46 @@
+name = "yolo11n"
+description = "YOLO11n detect, head cut, XINT8; its C2PSA attention core runs as one host segment (one ONNX Runtime call per frame)"
+status = "reconstructed"
+evidence = ["scripts/yolo11-bench.sh:42,50,65", "docs/MODEL_ZOO_BENCHMARKS.md:342,363-365", "326d4001", "7dc7c715", "results/int4/w4v_census_desktop2_20260925.log:42"]
+
+[[step]]
+id = "fetch"
+env = "shell"
+run = ["curl", "-L", "--fail", "-o", "models/yolo11n.pt", "https://huggingface.co/Ultralytics/YOLO11/resolve/8b8ac7d1fae7468f85dbf89670dd66f41f485aab/yolo11n.pt"]
+outputs = ["models/yolo11n.pt"]
+sha256 = { "models/yolo11n.pt" = "0ebbc80d4a7680d14987a577cd21342b65ecfd94632bd9a8da63ae6417644ee1" }
+note = "byte-identical to the file every YOLO11n number was measured on (checked 2026-10-19)"
+
+[[step]]
+id = "export"
+env = "resnet_env"
+run = ["pipelines/yolov11/1_export.py", "--size", "640"]
+inputs = ["models/yolo11n.pt"]
+outputs = ["models/yolo11n.onnx"]
+recorded_sha256 = { "models/yolo11n.onnx" = "cf2499f18458ff84c8a41e7360817530ad3d0576082378770cfc8902cd58ebbf" }
+note = "opset 17, static batch 1, simplify=True"
+
+[[step]]
+id = "cut"
+env = "resnet_env"
+run = ["pipelines/yolov11/1b_cut_head.py", "--in", "models/yolo11n.onnx", "--out", "models/yolo11n_cut.onnx"]
+inputs = ["models/yolo11n.onnx"]
+outputs = ["models/yolo11n_cut.onnx"]
+recorded_sha256 = { "models/yolo11n_cut.onnx" = "4a6283bcc4fd47274b4e6d3e8d66c99acb54281c044fd1c228c4f6a0be0d69f7" }
+
+[[step]]
+id = "quantize"
+env = "resnet_env"
+run = ["pipelines/yolov11/3b_quantize_cut.py", "--in", "models/yolo11n_cut.onnx", "--out", "models/yolo11n_cut_xint8.onnx", "--calib-dir", "data/coco_calib", "--limit", "64"]
+inputs = ["models/yolo11n_cut.onnx", "data/coco_calib"]
+outputs = ["models/yolo11n_cut_xint8.onnx"]
+recorded_sha256 = { "models/yolo11n_cut_xint8.onnx" = "6dd5a29014ba8549f84cca009fae23c5b7ef0dd7bfb3c1e8ef52f26fe04a1ae1" }
+note = "Quark XINT8. 64 is the script's and yolo11-bench.sh's default; no log records the count used"
+
+[[step]]
+id = "compile"
+env = "iron"
+run = ["-m", "ignite_xdna.compiler.cli", "--engine", "graph", "--input", "models/yolo11n_cut_xint8.onnx", "--output", "build/yolo11n.ignite", "--silu-sigmoid", "--host-region", "/model.10/m/m.0/attn/qkv/conv/Conv=/model.10/m/m.0/attn/Reshape_1"]
+inputs = ["models/yolo11n_cut_xint8.onnx"]
+outputs = ["build/yolo11n.ignite"]
+note = "the recommended build (was build/yolo11n_core_silu.ignite): only the attention core on the host, SiLU through the sigmoid epilogue, +8.83 mAP over Quark's HardSigmoid. The older yolo11n.ignite carved all of /model.10/ to the host and is superseded"

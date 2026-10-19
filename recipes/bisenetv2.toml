@@ -1,0 +1,36 @@
+name = "bisenetv2"
+description = "BiSeNetV2 Cityscapes segmentation, XINT8: a dense container with about half its segments on the host (not a whole-network-on-NPU result)"
+status = "reconstructed"
+evidence = ["results/quant_bisenetv2_xint8.log", "results/dense/compile_bisenetv2_20260919.log", "26551819"]
+
+[[step]]
+id = "export"
+env = "resnet_env"
+run = ["pipelines/bisenetv2/1_export.py"]
+inputs = ["models/model_final_v2_city.pth"]
+outputs = ["models/bisenetv2_fp32.onnx"]
+recorded_sha256 = { "models/bisenetv2_fp32.onnx" = "ad98b9053fab1788cc7876563f44ab97fca268d386df2ffe0c320c97f7321a05" }
+note = "weights: CoinCheung/BiSeNet model_final_v2_city.pth (local sha256 a6f4f9f5...); its download URL was never recorded, and Hugging Face publication is held for Cityscapes' terms"
+
+[[step]]
+id = "data"
+env = "resnet_env"
+run = ["pipelines/bisenetv2/2_fetch_data.py"]
+outputs = ["data/bisenetv2_calib"]
+note = "300 COCO val2017 images"
+
+[[step]]
+id = "quantize"
+env = "resnet_env"
+run = ["pipelines/bisenetv2/3_quantize.py"]
+inputs = ["models/bisenetv2_fp32.onnx", "data/bisenetv2_calib"]
+outputs = ["models/bisenetv2_fp32_xint8.onnx"]
+recorded_sha256 = { "models/bisenetv2_fp32_xint8.onnx" = "5206b31103fb80f812b837c9402b4dbaf8f098f0df2c06bc96b18398644aab8e" }
+
+[[step]]
+id = "compile"
+env = "iron"
+run = ["benchmarks/dense_compare.py", "compile", "--family", "bisenetv2", "--pins", "results/dense/bisenetv2_pins_20260919.json", "--artifacts", "build/dense_validation", "--container", "build/bisenetv2_dense.ignite"]
+inputs = ["models/bisenetv2_fp32_xint8.onnx"]
+outputs = ["build/bisenetv2_dense.ignite"]
+note = "dense_recipe bisenetv2, task segment, retire_batch 2; 14 ONNX Runtime calls per frame"

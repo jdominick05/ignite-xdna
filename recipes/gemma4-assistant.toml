@@ -1,0 +1,32 @@
+name = "gemma4-assistant"
+description = "Gemma 4 E2B-it on the 780M (llama.cpp ROCm) with its assistant drafter on the NPU: the model behind Ignition's experimental HybridAssistant"
+status = "reconstructed"
+evidence = ["tools/gemma4-chat.ps1", "npu/gemma-4-E2B-it-assistant.weights.json", "results/aie/gemma4_persistent_long_context_20261018.log"]
+
+[[step]]
+id = "fetch"
+env = "shell"
+run = ["hf", "download", "google/gemma-4-E2B-it", "--revision", "3e22461f65e89153144f8adb70e3b8c2cc9845a7"]
+note = "target model, into the Hugging Face cache; the drafter is google/gemma-4-E2B-it-assistant @ 2d874ef7d29f9a30599a1e4b3c1cbc9595f005df (model.safetensors sha 93682eb1...). Commands inferred"
+
+[[step]]
+id = "gguf"
+env = "laya-ref"
+run = ["L:/llm-work/src/llama.cpp/convert_hf_to_gguf.py", "L:/huggingface/hub/models--google--gemma-4-E2B-it/snapshots/3e22461f65e89153144f8adb70e3b8c2cc9845a7", "--outtype", "bf16", "--outfile", "C:/Users/Ignis/gemma4-assistant/models/gemma-4-E2B-it-BF16.gguf"]
+outputs = ["C:/Users/Ignis/gemma4-assistant/models/gemma-4-E2B-it-BF16.gguf"]
+note = "each output in ~/gemma4-assistant has a sidecar json recording its command; the llama.cpp source commit on the L: share was not readable (git: dubious ownership)"
+
+[[step]]
+id = "quantize"
+env = "shell"
+run = ["C:/Users/Ignis/tools/llamacpp-b1343-rocm/llama-quantize.exe", "--imatrix", "C:/Users/Ignis/gemma4-assistant/calibration/e2b-imatrix.gguf", "--tensor-type", "^per_layer_token_embd\\.weight$=q4_k", "C:/Users/Ignis/gemma4-assistant/models/gemma-4-E2B-it-BF16.gguf", "C:/Users/Ignis/gemma4-assistant/models/gemma-4-E2B-it-Q5_K_M-pleQ4-imatrix.gguf", "Q5_K_M", "8"]
+inputs = ["C:/Users/Ignis/gemma4-assistant/models/gemma-4-E2B-it-BF16.gguf"]
+outputs = ["C:/Users/Ignis/gemma4-assistant/models/gemma-4-E2B-it-Q5_K_M-pleQ4-imatrix.gguf"]
+note = "the imatrix came from llama-imatrix on calibration/engineering-v1.txt (16 chunks, -c 2048); its full command is in the sidecar json"
+
+[[step]]
+id = "measure"
+env = "engine"
+run = ["tools/qualify_gemma4_persistent.py", "--artifacts", "C:/Users/Ignis/gemma4-assistant", "--llama-runtime", "C:/Users/Ignis/tools/llamacpp-b1343-rocm", "--input-depth", "2", "--vector-copy", "--context-tokens", "2560", "--prompt-suite", "C:/Users/Ignis/gemma4-assistant/npu/public-context-20261018"]
+npu = true
+note = "machine-specific paths (Desktop 2). The drafter export (scripts/export_draft.py e2b), rotary tables (scripts/prepare_live_rope.py) and GELU table live in ~/gemma4-assistant, outside this repo; the NPU images compile lazily into npu/arena-images"

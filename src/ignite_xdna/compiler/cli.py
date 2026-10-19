@@ -513,6 +513,23 @@ def verify_on_silicon(container_path: Path, device_idx: int = 0):
         session.close()
 
 
+def build_record(argv: Sequence[str]) -> Dict[str, Any]:
+    """The build record a graph-engine container carries: the command as given, the compiler's commit, and the
+    recipe that ran it (IGNITE_RECIPE, set by tools/recipe.py). A checkout that is not a git repository records no
+    commit rather than a guessed one."""
+    import platform
+    import subprocess
+    src = Path(__file__).resolve().parents[2]
+    try:
+        commit = subprocess.run(["git", "-C", str(src), "describe", "--always", "--dirty", "--abbrev=12"],
+                                capture_output=True, text=True, timeout=10).stdout.strip() or None
+    except (OSError, subprocess.SubprocessError):
+        commit = None
+    return {"command": ["ignite-compile", *argv], "compiler_commit": commit, "recipe": os.environ.get("IGNITE_RECIPE"),
+            "python": platform.python_version(),
+            "built_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
+
+
 def compile_graph_engine(input_path: Union[str, Path], output_path: Union[str, Path],
                          build_dir: Optional[Union[str, Path]] = None, host_regions: Optional[List[str]] = None,
                          silu_sigmoid: bool = False, topology_policy: str = "report",
@@ -522,7 +539,8 @@ def compile_graph_engine(input_path: Union[str, Path], output_path: Union[str, P
                          task: Optional[str] = None, dense_recipe: Optional[str] = None,
                          datapath: str = "int8", stream_share: bool = False, box_fills: bool = False,
                          box_cap: Optional[int] = None, trace_shims: Optional[str] = None,
-                         trace_size: int = 4 << 20, overlap_layers: Optional[bool] = None) -> int:
+                         trace_size: int = 4 << 20, overlap_layers: Optional[bool] = None,
+                         build: Optional[Dict[str, Any]] = None) -> int:
     """Lower the whole graph onto the convolution engine (see engine_compile.py); ``host_regions`` run on the host;
     ``silu_sigmoid`` gives SiLU the sigmoid epilogue; ``retire_batch`` sets the shim retirement cadence;
     ``datapath`` picks the engine profile (int8, or bf16 for W8A16)."""
@@ -549,7 +567,7 @@ def compile_graph_engine(input_path: Union[str, Path], output_path: Union[str, P
                                        task=task, dense_recipe=dense_recipe, engine=datapath,
                                        stream_share=stream_share, box_fills=box_fills, box_cap=box_cap,
                                        trace_shims=([int(v) for v in trace_shims.split(",")] if trace_shims else None),
-                                       trace_size=trace_size, overlap_layers=overlap_layers)
+                                       trace_size=trace_size, overlap_layers=overlap_layers, build=build)
     if no_workspace_reuse:
         print(f"    [OK] workspace reuse off: every tensor owns a slot, so every layer is readable "
               f"after one dispatch")
@@ -636,7 +654,7 @@ def main(args: Optional[List[str]] = None):
                                  datapath=parsed.datapath, stream_share=parsed.stream_share,
                                  box_fills=parsed.box_fills, box_cap=parsed.box_cap,
                                  trace_shims=parsed.trace_shims, trace_size=parsed.trace_size,
-                                 overlap_layers=parsed.overlap_layers)
+                                 overlap_layers=parsed.overlap_layers, build=build_record(argv))
             if parsed.verify_silicon:
                 from ignite_xdna.runtime.graph_session import GraphSession
                 sess = GraphSession(parsed.output, device_index=parsed.device)

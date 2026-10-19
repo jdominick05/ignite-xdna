@@ -1,0 +1,35 @@
+name = "midas"
+description = "MiDaS small monocular depth (bilinear and nearest-resize cuts), XINT8: an AMD-stack (VitisAI EP) study model"
+status = "reconstructed"
+evidence = ["results/quant_midas_small_bilinear_xint8.log", "results/quant_midas_small_nearest_xint8.log", "docs/BENCHMARKS.md:16814"]
+
+[[step]]
+id = "export"
+env = "resnet_env"
+run = ["pipelines/midas/1_export.py"]
+outputs = ["models/midas_small_fp32.onnx", "models/midas_small_cut.onnx", "models/midas_small_nearest_cut.onnx"]
+recorded_sha256 = { "models/midas_small_fp32.onnx" = "5c91409d055a708eb9bded38816a562bf48ed659872bd6a220f2f29033d3d545" }
+note = "torch.hub isl-org/MiDaS MiDaS_small, pretrained; the head cut and nearest-resize surgery are inside the export"
+
+[[step]]
+id = "data"
+env = "resnet_env"
+run = ["pipelines/midas/2_fetch_data.py", "--calib-count", "300"]
+outputs = ["data/midas_calib"]
+
+[[step]]
+id = "quantize-nearest"
+env = "resnet_env"
+run = ["pipelines/midas/3_quantize.py", "--calib-dir", "data/midas_calib"]
+inputs = ["models/midas_small_nearest_cut.onnx", "data/midas_calib"]
+outputs = ["models/midas_small_nearest_cut_xint8.onnx"]
+recorded_sha256 = { "models/midas_small_nearest_cut_xint8.onnx" = "6f690bcb883d9df4a3a23e65bb80b61b142a0a639b8b8e529b35be2976dbcf90" }
+
+[[step]]
+id = "quantize-bilinear"
+env = "resnet_env"
+run = ["pipelines/midas/3_quantize.py", "--in", "models/midas_small_cut.onnx", "--calib-dir", "data/midas_calib", "--out", "models/midas_small_cut_xint8.onnx"]
+inputs = ["models/midas_small_cut.onnx", "data/midas_calib"]
+outputs = ["models/midas_small_cut_xint8.onnx"]
+recorded_sha256 = { "models/midas_small_cut_xint8.onnx" = "96107ec8b272e79c108e62377417d56110580d051ab719e4afac4687b7c32da2" }
+note = "the engine compile stops at asymmetric pads [0, 0, 1, 1] (BENCHMARKS:16814)"

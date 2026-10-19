@@ -1,0 +1,35 @@
+name = "resnet50"
+description = "ResNet50 (timm resnet50.a1_in1k) XINT8 for the VitisAI study, and the classification-head engine container"
+status = "reconstructed"
+evidence = ["results/res/export_resnet50.log", "results/res/quant_resnet50_xint8_c64.log", "e5447596", "da3b6f57", "results/hf/verify_published_containers_desktop2_20261013.log:22", "docs/MODEL_ZOO_BENCHMARKS.md:529"]
+
+[[step]]
+id = "export"
+env = "resnet_env"
+run = ["pipelines/resnet50/1_export.py"]
+outputs = ["models/resnet50_fp32.onnx"]
+recorded_sha256 = { "models/resnet50_fp32.onnx" = "d999c960ea12f9481e6fb43aab28ea3e2741c712fc4c30997b07d9b725cb87e6" }
+
+[[step]]
+id = "data"
+env = "resnet_env"
+run = ["pipelines/resnet50/2_fetch_imagenet.py", "--n-calib", "300", "--n-eval", "1000"]
+outputs = ["data/calib"]
+note = "ILSVRC/imagenet-1k validation parquet from Hugging Face"
+
+[[step]]
+id = "quantize"
+env = "resnet_env"
+run = ["pipelines/resnet50/3_quantize.py", "--calib-dir", "data/calib", "--limit", "64", "--config", "XINT8", "--out", "models/resnet50_xint8_c64.onnx"]
+inputs = ["models/resnet50_fp32.onnx", "data/calib"]
+outputs = ["models/resnet50_xint8_c64.onnx"]
+recorded_sha256 = { "models/resnet50_xint8_c64.onnx" = "bd817280673fe25e67380a6adde1db82275d1aa284924a0e6b67ea97e4315722" }
+note = "the whole-network engine compile is blocked at /maxpool/MaxPool (unsupported maxpool)"
+
+[[step]]
+id = "compile-head"
+env = "iron"
+run = ["-m", "ignite_xdna.compiler.cli", "--engine", "graph", "--input", "build/test_resnet50_head.onnx", "--output", "build/resnet50_head.ignite", "--task", "classify"]
+inputs = ["build/test_resnet50_head.onnx"]
+outputs = ["build/resnet50_head.ignite"]
+note = "input [1,2048,20,20]. The generator of build/test_resnet50_head.onnx (sha 6cb8fcae...) was never recorded, and nor were its weights' origin; do not credit resnet50.a1_in1k without checking"

@@ -1,0 +1,13 @@
+name = "yolov8n-cls"
+description = "YOLOv8n classification at 640: the 640 classifier the layer-overlap proof covers (host-pool carve)"
+status = "blocked"
+blocked_by = "the source is an untracked local export (41911ce2): yolov8n-cls.pt is absent, and the 640 re-export, cut and quantize commands were never recorded. Only the compile step can run, from the existing ONNX"
+evidence = ["41911ce2", "scratch/b48/build_all.sh:22", "results/aie/classifier_host_pool_carve_phoenix_20260918T142628Z.log"]
+
+[[step]]
+id = "compile"
+env = "iron"
+run = ["-m", "ignite_xdna.compiler.cli", "--engine", "graph", "--input", "models/yolov8n-cls_640_cut_xint8.onnx", "--output", "build/yolov8n_cls640.ignite", "--task", "classify"]
+inputs = ["models/yolov8n-cls_640_cut_xint8.onnx"]
+outputs = ["build/yolov8n_cls640.ignite"]
+note = "the pooling is carved to the host automatically since 41911ce2; the host layer keeps it on the barrier"

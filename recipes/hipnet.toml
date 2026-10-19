@@ -1,0 +1,13 @@
+name = "hipnet"
+description = "hipnet v0 sensor model at 20x20 (int8, untrained): the whole model on the NPU, bit-exact"
+status = "blocked"
+blocked_by = "the model comes from a separate project: its FP32 exports and npu_probe/calib_inputs.npy are on no disk here, and the v2 quantize script was not kept, so only the compile step can run, from the existing XINT8 ONNX. The 20x20 measurement cannot be reproduced from local files"
+evidence = ["results/aie/hipnet_probe_20x20_offline_desktop2_20260928.log", "b58ea8f"]
+
+[[step]]
+id = "compile"
+env = "iron"
+run = ["-m", "ignite_xdna.compiler.cli", "--engine", "graph", "--input", "dev-tools/npu_probe_results/v2/models/hipnet_v0_xint8.onnx", "--output", "build/hipnet_v0.ignite", "--task", "segment"]
+inputs = ["dev-tools/npu_probe_results/v2/models/hipnet_v0_xint8.onnx"]
+outputs = ["build/hipnet_v0.ignite"]
+note = "the measured containers are in dev-tools/npu_probe_results/v2/models/ (git-ignored)"

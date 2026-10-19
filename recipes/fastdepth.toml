@@ -1,0 +1,27 @@
+name = "fastdepth"
+description = "FastDepth 256x256 monocular depth, XINT8: an AMD-stack (VitisAI EP) study model"
+status = "reconstructed"
+evidence = ["results/export_fastdepth.log", "results/quant_fastdepth_xint8.log", "results/diag_fastdepth_xint8.log", "docs/BENCHMARKS.md:16814"]
+
+[[step]]
+id = "export"
+env = "resnet_env"
+run = ["pipelines/fastdepth/1_export.py"]
+outputs = ["models/fastdepth_fp32.onnx"]
+recorded_sha256 = { "models/fastdepth_fp32.onnx" = "d99a91d47b9450d34a1784f4fae4ae32883016c21829626dab08e24b1bc3b29a" }
+note = "downloads PINTO model zoo 146_FastDepth resources.tar.gz (fast_depth_256x256.onnx)"
+
+[[step]]
+id = "data"
+env = "resnet_env"
+run = ["pipelines/fastdepth/2_fetch_data.py", "--calib-count", "300"]
+outputs = ["data/fastdepth_calib"]
+
+[[step]]
+id = "quantize"
+env = "resnet_env"
+run = ["pipelines/fastdepth/3_quantize.py", "--calib-dir", "data/fastdepth_calib"]
+inputs = ["models/fastdepth_fp32.onnx", "data/fastdepth_calib"]
+outputs = ["models/fastdepth_fp32_xint8.onnx"]
+recorded_sha256 = { "models/fastdepth_fp32_xint8.onnx" = "ccee16802c3b585b174f73fb163963d5c6e6bf620cb5abb218ed70ae5ccd785c" }
+note = "the engine compile stops at KeyError 'unknown uint8 tensor 386_QuantizeLinear_Output' (BENCHMARKS:16814)"

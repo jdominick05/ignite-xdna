@@ -1,0 +1,64 @@
+name = "yolow"
+description = "YOLO-World v2 (YOLOv8s-worldv2) open-vocabulary detect: head cut, XINT8 with GPTQ-rounded cv2 convs, four attention blocks on the host, CLIP ViT-B/32 text side"
+status = "reconstructed"
+evidence = ["scripts/yolow-bench.sh:45", "docs/MODEL_ZOO_BENCHMARKS.md:452,459", "results/aie/yolow_gptq/gptq_cv2_build.log", "results/aie/yolow_gptq/build_gptqcv2.log", "results/aie/epilogue_yolo11n_yolow_20260921.log:68-81"]
+
+[[step]]
+id = "fetch"
+env = "shell"
+run = ["curl", "-L", "--fail", "-o", "models/yolov8s-worldv2.pt", "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolov8s-worldv2.pt"]
+outputs = ["models/yolov8s-worldv2.pt"]
+sha256 = { "models/yolov8s-worldv2.pt" = "9b2c17ab6124a913e9b3a5c170617920d91b0f01111a8479da69f00e2cf27792" }
+note = "the local file has this asset's size (25,923,032 B); the pinned hash is the local file's"
+
+[[step]]
+id = "export"
+env = "resnet_env"
+run = ["pipelines/yolow/1_export.py", "--size", "640"]
+inputs = ["models/yolov8s-worldv2.pt"]
+outputs = ["models/yolov8s-worldv2.onnx", "models/yolow_coco_txt_feats.npy"]
+recorded_sha256 = { "models/yolov8s-worldv2.onnx" = "0e0eb1d8fbcf80500c4a4331cb4244c890a5a035363180db4214e5c821cb26c6" }
+note = "set_classes with COCO's 80 names bakes the COCO text guides into the graph"
+
+[[step]]
+id = "cut"
+env = "resnet_env"
+run = ["pipelines/yolow/1b_cut_head.py", "--out", "models/yolov8s-worldv2_cut.onnx"]
+inputs = ["models/yolov8s-worldv2.onnx"]
+outputs = ["models/yolov8s-worldv2_cut.onnx"]
+recorded_sha256 = { "models/yolov8s-worldv2_cut.onnx" = "7a9c0c0076f52506f843d171c3102d631f85a3828f0fa974cdbe5b46b4bca777" }
+note = "3 box heads (64 ch) and 3 visual-feature heads (512 ch). 3a_split_attn_conv.py is a negative result"
+
+[[step]]
+id = "quantize"
+env = "resnet_env"
+run = ["pipelines/yolow/3b_quantize_cut.py", "--calib-dir", "data/coco_calib", "--limit", "200"]
+inputs = ["models/yolov8s-worldv2_cut.onnx", "data/coco_calib"]
+outputs = ["models/yolov8s-worldv2_cut_xint8.onnx"]
+recorded_sha256 = { "models/yolov8s-worldv2_cut_xint8.onnx" = "34840abe429a3baa6e0bd77f776f61599800e28c62d078277b212207a16e11ea" }
+
+[[step]]
+id = "gptq-cv2"
+env = "engine"
+run = ["pipelines/yolow/3c_gptq_cv2.py"]
+inputs = ["models/yolov8s-worldv2_cut.onnx", "models/yolov8s-worldv2_cut_xint8.onnx", "data/coco_calib"]
+outputs = ["models/yolov8s-worldv2_cut_xint8_gptqcv2.onnx"]
+recorded_sha256 = { "models/yolov8s-worldv2_cut_xint8_gptqcv2.onnx" = "5ec0850885be34fdc5e8354b13e2eed3752e85b73b7707ea6cec83b31e2e31b6" }
+note = "GPTQ-rounds the four /model.{12,15,18,21}/cv2 convs on 64 images, damp 0.01, int32 biases"
+
+[[step]]
+id = "text-encoder"
+env = "resnet_env"
+run = ["pipelines/yolow/6_text_encoder.py"]
+inputs = ["models/yolov8s-worldv2.pt", "models/yolov8s-worldv2_cut.onnx"]
+outputs = ["models/yolow_text_encoder.onnx", "models/yolow_text.npz"]
+recorded_sha256 = { "models/yolow_text_encoder.onnx" = "d2481c13bd50f7333e21eb3d5eef70804bae671b27377bbbb8f0e093bd3ff709", "models/yolow_text.npz" = "9738bb5f998f1828bc3a504a087a07d7e8011b73fd306e98d1894d571767a782" }
+note = "downloads CLIP ViT-B-32.pt into models/clip on first use; vocabularies are in pipelines/yolow/vocabularies/"
+
+[[step]]
+id = "compile"
+env = "iron"
+run = ["-m", "ignite_xdna.compiler.cli", "--engine", "graph", "--input", "models/yolov8s-worldv2_cut_xint8_gptqcv2.onnx", "--output", "build/yolow.ignite", "--host-region", "/model.12/attn/", "--host-region", "/model.15/attn/", "--host-region", "/model.18/attn/", "--host-region", "/model.21/attn/"]
+inputs = ["models/yolov8s-worldv2_cut_xint8_gptqcv2.onnx"]
+outputs = ["build/yolow.ignite"]
+note = "no --silu-sigmoid: YOLO-World's SiLU scales are not 1/128. The measured container came from a scratch build_container.py (70 layers, 4 on the host) and was copied here. Ignition has no open-vocabulary task, so it does not run this container"

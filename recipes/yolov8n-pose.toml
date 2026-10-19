@@ -1,0 +1,62 @@
+name = "yolov8n-pose"
+description = "YOLOv8n-pose: 17 COCO keypoints per person, head cut, XINT8, the whole network on the NPU"
+status = "reconstructed"
+evidence = ["47db1882", "scratch/b49/sitting.py:25", "results/aie/head_to_head_overlap_phoenix_20261015T2243Z.log:166"]
+
+[[step]]
+id = "fetch"
+env = "shell"
+run = ["curl", "-L", "--fail", "-o", "models/yolov8n-pose.pt", "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolov8n-pose.pt"]
+outputs = ["models/yolov8n-pose.pt"]
+sha256 = { "models/yolov8n-pose.pt" = "c6fa93dd1ee4a2c18c900a45c1d864a1c6f7aba75d84f91648a30b7fb641d212" }
+note = "Ultralytics' v8.3.0 release asset, byte-identical to the file the benchmarks were built from. The Hub's Ultralytics/YOLOv8 copy is an older packaging of the same weights (all tensors equal, checked 2026-10-19), so its hash differs."
+
+[[step]]
+id = "export"
+env = "resnet_env"
+run = ["pipelines/yolov8n-pose/1_export.py", "--weights", "models/yolov8n-pose.pt", "--size", "640"]
+inputs = ["models/yolov8n-pose.pt"]
+outputs = ["models/yolov8n-pose.onnx"]
+recorded_sha256 = { "models/yolov8n-pose.onnx" = "50d797dc2c20972a6bb7c4b51147350f64ead1784422b832637e4b844ab7d559" }
+note = "opset 17, static batch 1, simplify=True"
+
+[[step]]
+id = "cut"
+env = "resnet_env"
+run = ["pipelines/yolov8n-pose/1b_cut_head.py", "--in", "models/yolov8n-pose.onnx", "--out", "models/yolov8n-pose_cut.onnx"]
+inputs = ["models/yolov8n-pose.onnx"]
+outputs = ["models/yolov8n-pose_cut.onnx"]
+recorded_sha256 = { "models/yolov8n-pose_cut.onnx" = "f6c24f4021380810d1ac807efadb1558c5257f3d48151f0e86bec72404f85c28" }
+
+[[step]]
+id = "quantize"
+env = "resnet_env"
+run = ["pipelines/yolov8n-pose/3b_quantize_cut.py", "--in", "models/yolov8n-pose_cut.onnx", "--out", "models/yolov8n-pose_cut_xint8.onnx", "--calib-dir", "data/coco_calib", "--limit", "300"]
+inputs = ["models/yolov8n-pose_cut.onnx", "data/coco_calib"]
+outputs = ["models/yolov8n-pose_cut_xint8.onnx"]
+recorded_sha256 = { "models/yolov8n-pose_cut_xint8.onnx" = "b69b2d87fe3518fdb767e351194cb9632b0b9d222e7c62f10b0751ab18d4557b" }
+note = "Quark XINT8; calibration: NOT RECORDED: 300 is the script's default; the AdaRound variant used 300 (results/pose_cut_quantize_xint8_adaround.log)"
+
+[[step]]
+id = "quantize-adaround"
+env = "resnet_env"
+run = ["pipelines/yolov8n-pose/3b_quantize_cut.py", "--in", "models/yolov8n-pose_cut.onnx", "--calib-dir", "data/coco_calib", "--limit", "300", "--adaround"]
+inputs = ["models/yolov8n-pose_cut.onnx", "data/coco_calib"]
+outputs = ["models/yolov8n-pose_cut_xint8_adaround.onnx"]
+recorded_sha256 = { "models/yolov8n-pose_cut_xint8_adaround.onnx" = "0cb50890ba576d177aed665445c74049ffce7501f9c5df2ecff57f0cd7d6901c" }
+
+[[step]]
+id = "compile"
+env = "iron"
+run = ["-m", "ignite_xdna.compiler.cli", "--engine", "graph", "--input", "models/yolov8n-pose_cut_xint8.onnx", "--output", "build/yolov8n_pose.ignite", "--silu-sigmoid"]
+inputs = ["models/yolov8n-pose_cut_xint8.onnx"]
+outputs = ["build/yolov8n_pose.ignite"]
+note = "the container Ignition documents (was build/df_yolov8n_pose_silu_def.ignite): 17 keypoints, SiLU through the sigmoid epilogue, layer overlap on"
+
+[[step]]
+id = "compile-barrier"
+env = "iron"
+run = ["-m", "ignite_xdna.compiler.cli", "--engine", "graph", "--input", "models/yolov8n-pose_cut_xint8.onnx", "--output", "build/yolov8n_pose_barrier.ignite", "--silu-sigmoid", "--no-overlap-layers"]
+inputs = ["models/yolov8n-pose_cut_xint8.onnx"]
+outputs = ["build/yolov8n_pose_barrier.ignite"]
+note = "the same with the layer barrier"

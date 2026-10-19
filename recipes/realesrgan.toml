@@ -1,0 +1,35 @@
+name = "realesrgan"
+description = "Real-ESRGAN 4x (AMD's 10-RRDB and the compact general-x4v3): an AMD-stack (VitisAI EP) study model with no engine container"
+status = "reconstructed"
+evidence = ["5ca61eb4", "results/diag_realesrgan_rrdb_r64_xint8.log"]
+
+[[step]]
+id = "export"
+env = "resnet_env"
+run = ["pipelines/realesrgan/1_export.py", "--arch", "both", "--res", "64"]
+outputs = ["models/realesrgan_rrdb_r64_fp32.onnx", "models/realesrgan_compact_r64_fp32.onnx"]
+note = "downloads amd/realesrgan-256x256-tiles-amdnpu and xinntao/Real-ESRGAN v0.2.5.0 realesr-general-x4v3.pth; --res 128 and 256 are the other sizes measured"
+
+[[step]]
+id = "data"
+env = "resnet_env"
+run = ["pipelines/realesrgan/2_fetch_data.py", "--n-crops", "100"]
+outputs = ["data/realesrgan_calib"]
+note = "Set5 and Set14 x4, 100 64x64 crops"
+
+[[step]]
+id = "quantize-rrdb"
+env = "resnet_env"
+run = ["pipelines/realesrgan/3_quantize.py", "--in", "models/realesrgan_rrdb_r64_fp32.onnx", "--calib-dir", "data/realesrgan_calib", "--out", "models/realesrgan_rrdb_r64_xint8.onnx"]
+inputs = ["models/realesrgan_rrdb_r64_fp32.onnx", "data/realesrgan_calib"]
+outputs = ["models/realesrgan_rrdb_r64_xint8.onnx"]
+recorded_sha256 = { "models/realesrgan_rrdb_r64_xint8.onnx" = "a5a3d18a92d5ab5fd0bba81d435e7b229c8c9aa32d2573797204e5e9225312d9" }
+note = "no quantize log survives; flags from the script's defaults"
+
+[[step]]
+id = "quantize-compact"
+env = "resnet_env"
+run = ["pipelines/realesrgan/3_quantize.py", "--in", "models/realesrgan_compact_r64_fp32.onnx", "--calib-dir", "data/realesrgan_calib", "--out", "models/realesrgan_compact_r64_xint8.onnx"]
+inputs = ["models/realesrgan_compact_r64_fp32.onnx", "data/realesrgan_calib"]
+outputs = ["models/realesrgan_compact_r64_xint8.onnx"]
+recorded_sha256 = { "models/realesrgan_compact_r64_xint8.onnx" = "e44079ca92a7cdf964b0d154882995c34c10f0355a86dedcb3c9a95081b9cf4a" }

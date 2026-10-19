@@ -1,0 +1,90 @@
+name = "sesr_m7"
+description = "SESR M7 2x super-resolution on 256x256 tiles: int8 (W8A8) and bf16 (W8A16) engine containers, plain and AdaRound weights"
+status = "reconstructed"
+evidence = ["ee4ca60f", "results/quant_sesr_m7_xint8.log", "results/quant_sesr_m7_xint8_adaround.log", "results/hf/verify_published_containers_desktop2_20261013.log", "scratch/b48/build_all.sh:10-19", "results/aie/sesr_m7_bf16_compile_desktop2_20260922.log", "results/aie/sesr_m7_adaround_int8_compile_desktop2_20260923.log"]
+
+[[step]]
+id = "data"
+env = "resnet_env"
+run = ["pipelines/sesr/2_fetch_data.py"]
+outputs = ["data/sesr_calib"]
+note = "Set5 and Set14 x2 from Hugging Face (eugenesiow/Set5, eugenesiow/Set14) and 100 256x256 calibration crops"
+
+[[step]]
+id = "export"
+env = "resnet_env"
+run = ["pipelines/sesr/1_export.py"]
+outputs = ["models/sesr_m7_fp32.onnx"]
+recorded_sha256 = { "models/sesr_m7_fp32.onnx" = "816b87272c9b54a828dd964fe95f711a7480efc3649a7439124bebaff6a3e6b7" }
+note = "downloads amd/sesr-m7-256x256-tiles-amdnpu onnx-models/sesr_nhwc_fp32_256x256.onnx (Apache-2.0) and maps it into an NCHW PyTorch SESR-M7; opset 17, 18 nodes"
+
+[[step]]
+id = "quantize"
+env = "resnet_env"
+run = ["pipelines/sesr/3_quantize.py", "--calib-dir", "data/sesr_calib", "--out", "models/sesr_m7_xint8.onnx"]
+inputs = ["models/sesr_m7_fp32.onnx", "data/sesr_calib"]
+outputs = ["models/sesr_m7_xint8.onnx"]
+recorded_sha256 = { "models/sesr_m7_xint8.onnx" = "bfafba18e93940f84b53f28fc1d4770caeec2e91dc00e8c95f11c2d2cf5b7d00" }
+note = "Quark XINT8, 100 crops; Desktop 2, 8 threads"
+
+[[step]]
+id = "quantize-adaround"
+env = "resnet_env"
+run = ["pipelines/sesr/3_quantize.py", "--calib-dir", "data/sesr_calib", "--adaround", "--iters", "200", "--out", "models/sesr_m7_xint8_adaround.onnx"]
+inputs = ["models/sesr_m7_fp32.onnx", "data/sesr_calib"]
+outputs = ["models/sesr_m7_xint8_adaround.onnx"]
+recorded_sha256 = { "models/sesr_m7_xint8_adaround.onnx" = "b67905b22e6e11aa6110532042df8df143c021dc9317d7498ff56dabf2e3c36f" }
+note = "XINT8 plus FastFinetune AdaRound, 200 iterations"
+
+[[step]]
+id = "compile"
+env = "iron"
+run = ["-m", "ignite_xdna.compiler.cli", "--engine", "graph", "--input", "models/sesr_m7_xint8.onnx", "--output", "build/sesr_m7.ignite", "--task", "super_resolution"]
+inputs = ["models/sesr_m7_xint8.onnx"]
+outputs = ["build/sesr_m7.ignite"]
+note = "the int8 container Ignition documents; layer overlap on (was build/df_sesr_m7_def.ignite)"
+
+[[step]]
+id = "compile-barrier"
+env = "iron"
+run = ["-m", "ignite_xdna.compiler.cli", "--engine", "graph", "--input", "models/sesr_m7_xint8.onnx", "--output", "build/sesr_m7_barrier.ignite", "--task", "super_resolution", "--no-overlap-layers"]
+inputs = ["models/sesr_m7_xint8.onnx"]
+outputs = ["build/sesr_m7_barrier.ignite"]
+note = "the same with the layer barrier"
+
+[[step]]
+id = "compile-bf16"
+env = "iron"
+run = ["-m", "ignite_xdna.compiler.cli", "--engine", "graph", "--input", "models/sesr_m7_xint8.onnx", "--output", "build/sesr_m7_bf16.ignite", "--datapath", "bf16", "--task", "super_resolution"]
+inputs = ["models/sesr_m7_xint8.onnx"]
+outputs = ["build/sesr_m7_bf16.ignite"]
+note = "W8A16: int8 weights dequantized at pack time, bf16 activations"
+
+[[step]]
+id = "compile-bf16-noreuse"
+env = "iron"
+run = ["-m", "ignite_xdna.compiler.cli", "--engine", "graph", "--input", "models/sesr_m7_xint8.onnx", "--output", "build/sesr_m7_bf16_noreuse.ignite", "--datapath", "bf16", "--task", "super_resolution", "--no-workspace-reuse"]
+inputs = ["models/sesr_m7_xint8.onnx"]
+outputs = ["build/sesr_m7_bf16_noreuse.ignite"]
+note = "every tensor owns a slot: the build whole-network exactness is claimed from"
+
+[[step]]
+id = "compile-adaround"
+env = "iron"
+run = ["-m", "ignite_xdna.compiler.cli", "--engine", "graph", "--input", "models/sesr_m7_xint8_adaround.onnx", "--output", "build/sesr_m7_adaround.ignite", "--task", "super_resolution"]
+inputs = ["models/sesr_m7_xint8_adaround.onnx"]
+outputs = ["build/sesr_m7_adaround.ignite"]
+
+[[step]]
+id = "compile-adaround-bf16"
+env = "iron"
+run = ["-m", "ignite_xdna.compiler.cli", "--engine", "graph", "--input", "models/sesr_m7_xint8_adaround.onnx", "--output", "build/sesr_m7_adaround_bf16.ignite", "--datapath", "bf16", "--task", "super_resolution"]
+inputs = ["models/sesr_m7_xint8_adaround.onnx"]
+outputs = ["build/sesr_m7_adaround_bf16.ignite"]
+
+[[step]]
+id = "compile-adaround-bf16-noreuse"
+env = "iron"
+run = ["-m", "ignite_xdna.compiler.cli", "--engine", "graph", "--input", "models/sesr_m7_xint8_adaround.onnx", "--output", "build/sesr_m7_adaround_bf16_noreuse.ignite", "--datapath", "bf16", "--task", "super_resolution", "--no-workspace-reuse"]
+inputs = ["models/sesr_m7_xint8_adaround.onnx"]
+outputs = ["build/sesr_m7_adaround_bf16_noreuse.ignite"]

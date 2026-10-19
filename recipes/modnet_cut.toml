@@ -1,0 +1,37 @@
+name = "modnet_cut"
+description = "MODNet-Cut portrait matting, XINT8: a dense container with about half its segments on the host (not a whole-network-on-NPU result)"
+status = "reconstructed"
+evidence = ["59bf995b", "docs/BENCHMARKS.md:9590-9596", "results/dense/compile_modnet_20260919.log", "npu/paths.py:41-70"]
+
+[[step]]
+id = "data"
+env = "resnet_env"
+run = ["pipelines/modnet/2_fetch_data.py", "--count", "200"]
+outputs = ["data/modnet_calib"]
+note = "person images from COCO val2017"
+
+[[step]]
+id = "export"
+env = "resnet_env"
+run = ["pipelines/modnet/1_export.py"]
+inputs = ["models/modnet/modnet_photographic_portrait_matting.ckpt"]
+outputs = ["models/modnet/modnet_fp32.onnx"]
+recorded_sha256 = { "models/modnet/modnet_fp32.onnx" = "b996ef4372f9515a1f42dc3dd6ce66df5b9884845e46a2b0636ba3c7d01481bb" }
+note = "weights: ZHKKKe/MODNet modnet_photographic_portrait_matting.ckpt (Apache-2.0, local sha256 7c22235f...); its fetch command was never recorded"
+
+[[step]]
+id = "quantize"
+env = "resnet_env"
+run = ["pipelines/modnet/3_quantize.py", "--in-model", "models/modnet/modnet_cut_fp32.onnx", "--config", "XINT8", "--limit", "100", "--out", "models/modnet/modnet_cut_xint8_calibfix.onnx"]
+inputs = ["models/modnet/modnet_cut_fp32.onnx", "data/modnet_calib"]
+outputs = ["models/modnet/modnet_cut_xint8_calibfix.onnx"]
+recorded_sha256 = { "models/modnet/modnet_cut_xint8_calibfix.onnx" = "02e0b993a6aa52244eea912445ccaf827fe785b11d8c6d2a3683e7a25a053ab4" }
+note = "INPUT NOT REPRODUCIBLE: no script that writes models/modnet/modnet_cut_fp32.onnx (sha ffdc0a20...) was found; it folds IBNorm into BN then Conv, turns the SEBlock Linear into 1x1 Conv and cuts the Sigmoid tail. No quantize log survives; flags from the script's defaults. Use npu.paths.modnet_cache_key()"
+
+[[step]]
+id = "compile"
+env = "iron"
+run = ["benchmarks/dense_compare.py", "compile", "--family", "modnet_cut", "--pins", "results/dense/modnet_cut_pins_20260919.json", "--artifacts", "build/dense_validation", "--container", "build/modnet_cut_dense.ignite"]
+inputs = ["models/modnet/modnet_cut_xint8_calibfix.onnx"]
+outputs = ["build/modnet_cut_dense.ignite"]
+note = "dense_recipe modnet_cut, task matte, retire_batch 2; 24 ONNX Runtime calls per frame"

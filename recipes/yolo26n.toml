@@ -1,0 +1,47 @@
+name = "yolo26n"
+description = "YOLO26n detect (DFL-free one2one head), head cut, XINT8; two attention cores run as host segments (two ONNX Runtime calls per frame)"
+status = "reconstructed"
+evidence = ["results/aie/yolo26n_bringup_20260920.log:28-60", "results/aie/yolo26n_requant_vs_amd_20260921.log:9-13,94-101", "146e3eb8", "c16daca8"]
+
+[[step]]
+id = "fetch"
+env = "shell"
+run = ["curl", "-L", "--fail", "-o", "models/yolo26n.pt", "https://huggingface.co/Ultralytics/YOLO26/resolve/070ac3c51435984d992ba92eb3f234daf4e4500d/yolo26n.pt"]
+outputs = ["models/yolo26n.pt"]
+sha256 = { "models/yolo26n.pt" = "9b09cc8bf347f0fc8a5f7657480587f25db09b34bf33b0652110fb03a8ad4fef" }
+note = "byte-identical to the measured file (scratch/yolo26/yolo26n.pt, checked 2026-10-19)"
+
+[[step]]
+id = "export"
+env = "resnet_env"
+run = ["pipelines/yolov11/1_export.py", "--weights", "models/yolo26n.pt", "--size", "640", "--out", "models/yolo26n.onnx"]
+inputs = ["models/yolo26n.pt"]
+outputs = ["models/yolo26n.onnx"]
+recorded_sha256 = { "models/yolo26n.onnx" = "7e41af14c4e8f1df66163f6cce4f06aa023eb22510918cfeda6b3b515245ac28" }
+note = "INFERRED: the original export command was never recorded; this is the generic Ultralytics export (opset 17, 640, batch 1). A 2026-09-21 re-export gave 445 nodes against the measured graph's 405, heads named without one2one_ (unexplained), so expect a recorded-hash difference"
+
+[[step]]
+id = "cut"
+env = "engine"
+run = ["tools/cut_detect_head.py", "models/yolo26n.onnx", "models/yolo26n_cut.onnx", "--heads", "/model.23/one2one_cv2.0/one2one_cv2.0.2/Conv_output_0,/model.23/one2one_cv2.1/one2one_cv2.1.2/Conv_output_0,/model.23/one2one_cv2.2/one2one_cv2.2.2/Conv_output_0,/model.23/one2one_cv3.0/one2one_cv3.0.2/Conv_output_0,/model.23/one2one_cv3.1/one2one_cv3.1.2/Conv_output_0,/model.23/one2one_cv3.2/one2one_cv3.2.2/Conv_output_0"]
+inputs = ["models/yolo26n.onnx"]
+outputs = ["models/yolo26n_cut.onnx"]
+recorded_sha256 = { "models/yolo26n_cut.onnx" = "0f3b0aa387b042fbb9f2bf33d52d10c006b4da5bc106aac1e53ee0c917dd2668" }
+note = "box heads then class heads, coarsest last. Re-run on the measured export 2026-10-19: byte-identical"
+
+[[step]]
+id = "quantize"
+env = "resnet_env"
+run = ["pipelines/yolov8n/3b_quantize_cut.py", "--in", "models/yolo26n_cut.onnx", "--out", "models/yolo26n_cut_xint8.onnx", "--calib-dir", "data/coco_calib", "--limit", "200", "--head-outs", "/model.23/one2one_cv2.0/one2one_cv2.0.2/Conv_output_0,/model.23/one2one_cv2.1/one2one_cv2.1.2/Conv_output_0,/model.23/one2one_cv2.2/one2one_cv2.2.2/Conv_output_0,/model.23/one2one_cv3.0/one2one_cv3.0.2/Conv_output_0,/model.23/one2one_cv3.1/one2one_cv3.1.2/Conv_output_0,/model.23/one2one_cv3.2/one2one_cv3.2.2/Conv_output_0"]
+inputs = ["models/yolo26n_cut.onnx", "data/coco_calib"]
+outputs = ["models/yolo26n_cut_xint8.onnx"]
+recorded_sha256 = { "models/yolo26n_cut_xint8.onnx" = "202c1f8b5d2fdcac20bbdb241da5729968e99cab914c0492ba641d0bb1d67b5b" }
+note = "Quark XINT8 on 200 images. The recorded model is the 2026-09-21 re-derivation; the original was lost"
+
+[[step]]
+id = "compile"
+env = "iron"
+run = ["-m", "ignite_xdna.compiler.cli", "--engine", "graph", "--input", "models/yolo26n_cut_xint8.onnx", "--output", "build/yolo26n.ignite", "--silu-sigmoid", "--host-region", "/model.10/m/m.0/attn/qkv/conv/Conv=/model.10/m/m.0/attn/Reshape_1", "--host-region", "/model.22/m.0/m.0.1/attn/qkv/conv/Conv=/model.22/m.0/m.0.1/attn/Reshape_1"]
+inputs = ["models/yolo26n_cut_xint8.onnx"]
+outputs = ["build/yolo26n.ignite"]
+note = "the shipping build (was build/yolo26n_r2_silu.ignite; r2 = compiled from the re-derived ONNX). The older build/yolo26n.ignite declared reg_max 16 and the runtime refuses it"
