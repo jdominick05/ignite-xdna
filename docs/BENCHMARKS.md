@@ -25764,3 +25764,28 @@ case:
   2; v1 is below its 70% bar for stopping at C++.
 - **Not yet checked:** bit-identity to `mm.cc` on random bf16. The bench's integers are exact in any order, so
   that check runs on the device GEMM.
+
+#### The owned bf16 kernel on the device: bit-identical to mm.cc; the m32 GEMM build is now transport-bound (2026-10-19, Desktop 2)
+
+**Bit-identity.** The generic GEMM was rebuilt with `--mm-src kernels/gemm_bf16/mm_bf16.cc`, at m32 with the GeGLU
+epilogue mode 6. `tools/embedgemma_gemm_probe.py run --save-outputs` fed it and the `mm.cc` build the same seeded
+inputs, and [`gemm_bitdiff.py`](../tools/gemm_bitdiff.py) compared every output: **all 27 bit-equal**
+([diff](../results/aie/embedgemma_gemm_mmown_bitdiff_m32_desktop2_20261019.log)). That covers 21 forward products at M = 256, 512 and 2048, and the GeGLU mode-0 and
+mode-6 streams.
+
+**Timing.** Same sitting, contention clean ([mm.cc](../results/aie/embedgemma_gemm_mmown_mmcc_m32_desktop2_20261019T054404Z.log), [owned](../results/aie/embedgemma_gemm_mmown_own_m32_desktop2_20261019T054433Z.log)). Forward-pass
+weight GEMMs, ms:
+
+| build | M = 256 | 512 | 2048 |
+|---|---:|---:|---:|
+| `mm.cc` m32 | 63.4 | 97.0 | 346.2 |
+| owned m32 | **61.0** | **91.4** | **313.8** |
+
+**In L1 at the m32 tile** ([log](../results/aie/l1_tile_own_bf16_v1_32x64x64_desktop2_20261019T054525Z.log), [wrapper](../results/aie/l1_tile_own_bf16_v1_32x64x64_desktop2_20261019T054525Z_wrapper.log)), the owned kernel is the same
+1.57x: 2730.0 against 1734.8 cycles per 32x64x64 call, 37.5% against 59.0%.
+
+**The device shows 9% of the 1.57x, DERIVED:**
+- Core time per pass at M = 2048 falls from about 203 to about 129 ms (280 GMAC over 16 cores at 1.80 GHz).
+- Only 32 ms of that shows. The earlier fit put the m32 build's data movement plus its fixed cost near 258 ms, so
+  the m32 GEMM is now close to transport-bound.
+- The m64 tile halves B re-streaming; its build with the owned kernel is next.

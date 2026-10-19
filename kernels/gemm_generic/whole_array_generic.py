@@ -94,6 +94,7 @@ def _build_design(
     hollow_src="",  # local change: timing probe, a no-op in matmul's place
     b_w8=0,  # local change: B as host pre-swizzled W8 tiles (kernels/embedgemma/w8_dequant.cc)
     w8_dequant_src="",  # local change: the W8 dequant kernel (absent: no dequant, a transport probe)
+    mm_src="",  # local change: an owned bf16 matmul in mm.cc's place (kernels/gemm_bf16/mm_bf16.cc)
     *,
     generate_taps=False,
 ):
@@ -314,6 +315,13 @@ def _build_design(
              for col in range(n_aie_cols)] for row in range(n_aie_rows)] if rtp_generic else None
     barriers = [[WorkerRuntimeBarrier() for _ in range(n_aie_cols)] for _ in range(n_aie_rows)] if rtp_generic else None
 
+    if mm_src:  # local change: the owned matmul (same layouts and K order as mm.cc); mm.cc keeps zero_f32
+        assert (dtype_in_str, dtype_out_str) == ("bf16", "f32") and (r, s, t) == (4, 8, 4), "--mm-src is bf16 -> f32"
+        matmul_kernel = ExternalFunction("egemm_mm_bf16", source_file=str(mm_src),
+                                         arg_types=[A_l1_ty, Bdq_l1_ty if b_w8 else B_l1_ty, C_l1_ty],
+                                         compile_flags=[f"-DDIM_M={m}", f"-DDIM_K={k}", f"-DDIM_N={n}",
+                                                        "-DMM_SYM=egemm_mm_bf16", "-DMM_NO_ZERO"],
+                                         include_dirs=[config.cxx_header_path()])
     if hollow_src:  # local change: every DMA/lock step kept, the MACs dropped (output wrong by construction)
         matmul_kernel = ExternalFunction("egemm_nomatmul", source_file=str(hollow_src),
                                          arg_types=[A_l1_ty, (B8_l1_ty if not w8_dequant_src else Bdq_l1_ty) if b_w8 else B_l1_ty,
@@ -504,6 +512,7 @@ def whole_array(
     hollow_src: CompileTime[str] = "",  # local change
     b_w8: CompileTime[int] = 0,  # local change
     w8_dequant_src: CompileTime[str] = "",  # local change
+    mm_src: CompileTime[str] = "",  # local change
 ):
     return _build_design(
         iron.get_current_device(),
@@ -528,6 +537,7 @@ def whole_array(
         hollow_src,  # local change
         b_w8,  # local change
         w8_dequant_src,  # local change
+        mm_src,  # local change
     )
 
 
@@ -593,6 +603,8 @@ def _make_argparser():
     p.add_argument("--hollow-matmul", default="", help="local change: timing probe, link this no-op in matmul's place")
     p.add_argument("--b-w8", type=int, default=0, help="local change: B as pre-swizzled W8 tiles (uint8)")
     p.add_argument("--w8-dequant-src", default="", help="local change: link this egemm_w8_dequant (else no dequant)")
+    p.add_argument("--mm-src", default="", help="local change: an owned bf16 x bf16 -> f32 matmul in mm.cc's place, same "
+                   "layouts (kernels/gemm_bf16/mm_bf16.cc); mm.cc still supplies zero_f32")
     p.add_argument(
         "--c-single-buffer",
         type=int,
@@ -691,6 +703,7 @@ def _compile_kwargs(opts):
         hollow_src=opts.hollow_matmul,  # local change
         b_w8=opts.b_w8,  # local change
         w8_dequant_src=opts.w8_dequant_src,  # local change
+        mm_src=opts.mm_src,  # local change
     )
 
 
@@ -753,6 +766,7 @@ def _run_and_verify(opts):
         hollow_src=opts.hollow_matmul,  # local change
         b_w8=opts.b_w8,  # local change
         w8_dequant_src=opts.w8_dequant_src,  # local change
+        mm_src=opts.mm_src,  # local change
         warmup=opts.warmup,
         iters=opts.iters,
     )

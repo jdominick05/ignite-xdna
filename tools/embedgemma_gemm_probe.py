@@ -143,6 +143,8 @@ def cmd_compile(a) -> int:
                 cmd += ["--epilogue-src", str(a.epilogue.resolve()), "--epilogue-mode", str(mode)]
             if a.hollow_matmul:
                 cmd += ["--hollow-matmul", str(a.hollow_matmul.resolve())]
+            if a.mm_src:
+                cmd += ["--mm-src", str(a.mm_src.resolve())]
             if a.w8:
                 cmd += ["--b-w8", "1"] + (["--w8-dequant-src", str(a.w8_dequant.resolve())] if a.w8_dequant else [])
             r = subprocess.run(cmd, capture_output=True, text=True, timeout=1800)
@@ -204,7 +206,7 @@ def cmd_run(a) -> int:
           f"(bf16 would be {sum(w.nbytes for w in weights.values()) / 2**20:.2f} MiB)", flush=True)
     print(f"RUN one context on {shared.name}: {len(seq)} products per forward pass, {len(shapes)} distinct (K, N), "
           f"M in {a.ms}", flush=True)
-    ok, report = True, {}
+    ok, report, saved = True, {}, {}
     for M in a.ms:
         prods = {}
         for K, N in shapes:
@@ -307,6 +309,7 @@ def cmd_run(a) -> int:
             good = err < 1e-3 and not np.abs(r1[:, N:]).any() and np.array_equal(r1.view(np.uint32), r2.view(np.uint32))
             ok &= good
             print(f"  CHECK {M}x{K}x{N}: rel err {err:.2e}: {'PASS' if good else 'FAIL'}", flush=True)
+            saved[f"{M}_{K}_{N}"] = r1
             if a.w8:   # one-hot A rows: each output row is one dequantized B row times 1.0, so C must be bf16(q s)
                 ib, nb, A, C, act = prods[sh]
                 onehot = np.zeros((M, K), np.float32)
@@ -343,6 +346,8 @@ def cmd_run(a) -> int:
         prods.clear()
         gc.collect()
     print("RESULT " + json.dumps(dict(ok=bool(ok), report={str(k): v for k, v in report.items()})), flush=True)
+    if a.save_outputs:
+        np.savez_compressed(a.save_outputs, **saved)
     # Release in dependency order (BOs, kernel, context, xclbin, device) before returning. The setup loop's own
     # ib/A/C names still hold the last M's BOs; left bound, they were freed after the device when cmd_run's frame was
     # torn down, and the process segfaulted (exit 139) after every result had printed (faulthandler: at return).
@@ -372,11 +377,15 @@ def main() -> int:
         if name == "run":
             p.add_argument("--seqs", type=int, default=5, help="timed forward passes per M")
             p.add_argument("--epilogue-only", action="store_true", help="only the epilogue check (no plain checks, no timing)")
+            p.add_argument("--save-outputs", type=Path, help="write every checked product's C (key M_K_N) to this npz, "
+                           "for a bit-for-bit comparison of two builds on the same seeded inputs")
             p.add_argument("--timing-only", action="store_true", help="hollow builds: skip the correctness checks "
                            "(their output is wrong by construction) and report timing only")
         else:
             p.add_argument("--epilogue", type=Path, help="link this egemm_epilogue source; adds gate|up mode streams")
             p.add_argument("--hollow-matmul", type=Path, help="timing probe: link this no-op in matmul's place")
+            p.add_argument("--mm-src", type=Path, help="link this owned bf16 matmul in mm.cc's place "
+                           "(kernels/gemm_bf16/mm_bf16.cc)")
             p.add_argument("--c-double", action="store_true", help="double-buffer the C tile (default single)")
             p.add_argument("--tile-m", type=int, default=TILE["m"], help="rows per core tile (32; 64 halves B "
                            "re-streaming and W8 dequant per MAC; the GeGLU epilogue is written for 32)")

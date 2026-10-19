@@ -18,6 +18,11 @@
 #ifndef DIM_M
 #define DIM_M 64
 #endif
+// Symbol names: mm.cc's by default; a design that also links mm.cc (for zero_f32) renames this matmul with
+// -DMM_SYM=... and drops this zero with -DMM_NO_ZERO.
+#ifndef MM_SYM
+#define MM_SYM matmul_bf16_f32
+#endif
 #ifndef DIM_K
 #define DIM_K 64
 #endif
@@ -35,7 +40,7 @@ using MMUL = aie::mmul<R, S, T, bfloat16, bfloat16, accauto>;
 
 extern "C" {
 
-void matmul_bf16_f32(const bfloat16 *__restrict pA, const bfloat16 *__restrict pB, float *__restrict pC) {
+void MM_SYM(const bfloat16 *__restrict pA, const bfloat16 *__restrict pB, float *__restrict pC) {
   event0();
   for (unsigned z = 0; z < ROWA; z += 4) {
     for (unsigned j = 0; j < COLB; j += 4) {
@@ -75,9 +80,11 @@ void matmul_bf16_f32(const bfloat16 *__restrict pA, const bfloat16 *__restrict p
   event1();
 }
 
+#ifndef MM_NO_ZERO
 void zero_f32(float *__restrict pC) {
   const aie::vector<float, 16> z = aie::zeros<float, 16>();
   for (unsigned i = 0; i < DIM_M * DIM_N; i += 16) aie::store_v(pC + i, z);
 }
+#endif
 
 }  // extern "C"
