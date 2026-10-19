@@ -69,7 +69,8 @@ def idle():
 class Npu:
     """Every weight product through one generic-GEMM context. Weight BOs resident; one A/C BO pair per (M, K, N)."""
 
-    def __init__(self, enc, builds, ms, rounder=None, geglu_mode=0):
+    def __init__(self, enc, builds, ms, rounder=None, geglu_mode=0, w8=None):
+        """w8: {key: (q int8 [K, N], s [K / 64, N])} -> upload W8 tiles (builds compiled with --w8) instead of bf16."""
         self.rounder, self.geglu_mode = rounder, geglu_mode
         sys.path.insert(0, "C:/Xilinx/XRT/xrt_sdk/xrt/python")
         import pyxrt
@@ -83,16 +84,29 @@ class Npu:
         self.kern = pyxrt.kernel(self.ctx, self.xb.get_kernels()[0].get_name())
         self.t = dict(npu_pack=0.0, npu_write=0.0, npu_call=0.0, npu_read=0.0, npu_unpack=0.0)
         self.B, self.io = {}, {}
+        if w8:
+            from embedgemma_gemm_probe import w8_tiles
+
+        def inter(a):   # per 64-column tile: 32 gate columns, then the same 32 up columns
+            return a.reshape(a.shape[0], 2, a.shape[1] // 64, 32).transpose(0, 2, 1, 3).reshape(a.shape)
         for key, w in enc.weights.items():   # [K, N] fp32 holding exact BF16 values
             K, N = w.shape
-            if geglu_mode and key[0] == "gate_up":   # per 64-column tile: 32 gate columns, then the same 32 up columns
-                w = w.reshape(K, 2, N // 64, 32).transpose(0, 2, 1, 3).reshape(K, N)
+            q, sc = w8[key] if w8 else (None, None)
+            if geglu_mode and key[0] == "gate_up":   # q and its scales take the same column permutation
+                w = inter(w)
+                if w8:
+                    q, sc = inter(q), inter(sc)
             chunks = []
             for c in range(0, N, CHUNK):
                 part = w[:, c:c + CHUNK]
                 n = part.shape[1]
-                bits = np.zeros((K, padded(n)), np.uint16)
-                bits[:, :n] = bf16_bits(part)
+                if w8:   # padded columns: q = 0, s = 1 -> exactly 0
+                    qp, sp = np.zeros((K, padded(n)), np.int8), np.ones((K // 64, padded(n)), np.float32)
+                    qp[:, :n], sp[:, :n] = q[:, c:c + n], sc[:, c:c + n]
+                    bits = w8_tiles(qp, sp)
+                else:
+                    bits = np.zeros((K, padded(n)), np.uint16)
+                    bits[:, :n] = bf16_bits(part)
                 bo = self._bo(bits.nbytes)
                 bo.write(bits.tobytes(), 0)
                 bo.sync(self.to_dev)
@@ -191,6 +205,8 @@ def main():
     ap.add_argument("--wclip", type=int, default=0, help="--w4: per-group MSE clip search points over alpha in [0.85, 1]; 0 = RTN")
     ap.add_argument("--w4", type=int, default=0, help="quantize every weight product to int4 (kernels/embedgemma/w4.py) "
                     "with this group size along K, and run on its bf16 dequantization; 0 = bf16 weights")
+    ap.add_argument("--npu-w8", action="store_true", help="npu: upload the --w4 64 --wbits 8 weights as W8 tiles "
+                    "(--builds compiled with embedgemma_gemm_probe.py compile --w8 --w8-dequant)")
     ap.add_argument("--npu-geglu", type=int, default=0, help="npu: run gate|up with this geglu_epilogue.cc mode "
                     "(--builds compiled with tools/embedgemma_gemm_probe.py compile --epilogue); 0 = host GeGLU")
     ap.add_argument("--attn-build", type=Path, help="npu-local: kernels/embedgemma/attn_array.py build --out DIR")
@@ -216,10 +232,14 @@ def main():
         raise ValueError("reference and docs differ in count")
     t = time.perf_counter()
     enc = Encoder()
+    w8_raw = {}
     if a.w4:
         import w4
         for key, w in list(enc.weights.items()):
-            enc.weights[key] = w4.dequant(*w4.quantize(w, a.w4, a.wbits, a.wclip))
+            q, sc = w4.quantize(w, a.w4, a.wbits, a.wclip)
+            enc.weights[key] = w4.dequant(q, sc)
+            if a.npu_w8:
+                w8_raw[key] = (q, sc)
         print(f"W{a.wbits}: {len(enc.weights)} weight products quantized, group {a.w4} along K, clip points {a.wclip}", flush=True)
     if a.attention == "blockwise":
         import attention_oracle
@@ -270,7 +290,9 @@ def main():
         if a.round_dll:
             from native import Rounder
             rounder = Rounder(a.round_dll)
-        npu = Npu(enc, a.builds, a.ms, rounder, a.npu_geglu)
+        if a.npu_w8 and not (a.w4 == 64 and a.wbits == 8):
+            raise SystemExit("--npu-w8 needs --w4 64 --wbits 8 (the device's group is its 64-row K tile)")
+        npu = Npu(enc, a.builds, a.ms, rounder, a.npu_geglu, w8_raw or None)
         if a.npu_geglu:
             enc.geglu_hook = lambda gu: gu   # gate|up already returned ff from the device
     matmul = npu.matmul if npu else None
@@ -321,7 +343,7 @@ def main():
         strict = a.backend == "cpu" and not emulation and a.attention == "exact"
         threshold = 0.99999 if strict else 0.9999
         passed = bool(cos.min() >= threshold and (strict or nn_kept == 1.0) and nn_quality in (None, 1.0))
-        rec = dict(backend=a.backend, docs=str(a.docs), reference=str(a.reference), batch=a.batch, round_dll=bool(a.round_dll), attention=a.attention, geglu=a.geglu, npu_geglu=a.npu_geglu, w4=a.w4, wbits=a.wbits, wclip=a.wclip, k_block=a.k_block, exp=a.exp, tau=a.tau,
+        rec = dict(backend=a.backend, docs=str(a.docs), reference=str(a.reference), batch=a.batch, round_dll=bool(a.round_dll), attention=a.attention, geglu=a.geglu, npu_geglu=a.npu_geglu, npu_w8=a.npu_w8, w4=a.w4, wbits=a.wbits, wclip=a.wclip, k_block=a.k_block, exp=a.exp, tau=a.tau,
                    bf16_inputs=a.bf16_inputs, passed=passed,
                    gate=dict(cos_min=threshold, nn_kept=None if strict else 1.0),
                    cos_min=float(cos.min()), cos_mean=float(cos.mean()), nn_kept=nn_kept,

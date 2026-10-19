@@ -25528,3 +25528,37 @@ All figures are ms per forward pass of weight GEMMs.
 | W8 m = 32, C double-buffered | 116.5 | 410.9 | [log](../results/aie/embedgemma_gemm_w8opt_m32cdw8_desktop2_20261019T013518Z.log) |
 | bf16 m = 64 (repeat) | 93.3 | 292.9 | [log](../results/aie/embedgemma_gemm_w8opt_m64bf16b_desktop2_20261019T013534Z.log) |
 | W8 m = 64 (repeat) | 106.6 | 351.0 | [log](../results/aie/embedgemma_gemm_w8opt_m64w8b_desktop2_20261019T013547Z.log) |
+
+#### End-to-end W8 on the device: the registered gate PASSES; time equals bf16 in the same sitting (2026-10-19, Desktop 2)
+
+**Setup.**
+- All 146 weight products run as W8 tiles (`--w4 64 --wbits 8 --wclip 20 --npu-w8`, builds `--w8 --w8-dequant`, m = 32).
+- The gate|up GeGLU is fused (mode 6). The gate|up interleave is applied to both q and s.
+- Local attention runs on the NPU.
+- Judged as [registered](DECISIONS.md) before the run.
+
+**Result** ([log](../results/aie/embedgemma_hybrid_npu_w8_gate_desktop2_20261019T014509Z.log)): **PASS**.
+- **Against the W8 CPU-emulation reference:** cos min 0.9999810, mean 0.9999926, nearest neighbours 100% kept.
+- **Against fp32 HF (the quality bar):** nearest neighbours 100% kept.
+
+**Bits per weight.**
+- **Logically 8.25:** 8-bit q plus one bf16 scale per 64 weights.
+- **As stored on the device, 8.5:** 4,352 bytes per 4,096-weight tile, because each column's scale is stored twice
+  to build a 16-lane scale vector without shuffles.
+- bf16 is 16.
+
+| ms per document | 128 | 512 | 2048 |
+|---|---:|---:|---:|
+| bf16 weights, fused GeGLU, same sitting ([log](../results/aie/embedgemma_hybrid_npu_bf16_samesitting_desktop2_20261019T014659Z.log), gate PASS 0.9999855) | 158.4 | 704.5 | 2615.3 |
+| W8 weights, fused GeGLU | **148.4** | **703.9** | **2616.8** |
+
+- **W8 costs the same as bf16 end to end.** `npu_call` is 483.4 against 480.0 ms at 2048.
+- **That disagrees with the isolated probe, and the reason is unexplained.** There, W8 at m = 32 was 26% slower
+  than bf16 (429.2 vs 340.8 ms per forward pass). Candidates not separated:
+  - the hybrid's batching and M choice differ from the probe's;
+  - per-call host and sync time dominates `npu_call` in the hybrid;
+  - the probe's random weights and the model's real weights take different paths. They shouldn't: the dequant is
+    data-independent.
+- **The 128-token row's 10 ms gap is not attributed.** It is within run-to-run host variance (`norm` alone moved
+  3.5 ms).
+- **What W8 buys here is the 1.88x weight footprint**, not speed.
