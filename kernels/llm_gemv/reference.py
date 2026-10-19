@@ -13,11 +13,12 @@ which ran the norms as their own op and added rounded projection outputs to the 
   (v0)      RMSNorm y = bf16(gamma * bf16(h * r)) as its own op, then qkv = projection of y
   RoPE      bf16(q*cos + rotate_half(q)*sin), the two products exact and summed once; cos/sin are HF's bf16 tables
   KV        k (after RoPE) and v appended at row p
-  scores    s_j = bf16(MAC(q, k_j)) / 8 (a power of two, exact); d_j = bf16(s_j - max s); e_j = EXP[d_j], a table of
-            correctly rounded exp over bf16; z = bf16(sum e_j); out = bf16(bf16(sum e_j v_j) * RECIP[z])
+  scores    s_j = bf16(MAC(q, k_j)) / 8 (a power of two, exact); d_j = bf16(MAC(s_j - max s)); e_j = exp_bits(d_j);
+            z = bf16(sum e_j); out = bf16(bf16(sum e_j v_j) * recip_bits(z))
   o+res     h = bf16(h + W_o attn): h is the accumulator's starting value, one rounding (v0: bf16(h + bf16(W_o attn)))
-  MLP       gate+up as norm+qkv with the second norm's gamma; m = bf16(SILU[gate] * up), SILU a correctly rounded
-            table; down+res as o+res
+  MLP       gate+up as norm+qkv with the second norm's gamma; m = bf16(silu_bits(gate) * up); down+res as o+res
+  Tables    exp_bits, silu_bits, recip_bits and RSQ are range-reduced device tables (see silu_bits and below):
+            correctly rounded inside their ranges, fixed rules outside, never a subnormal
 Then the final norm folded into the tied head the same way (its own bf16(embed * gamma) copy; the embedding lookup
 keeps the plain table), and argmax (lowest index on a tie).
 
@@ -101,6 +102,94 @@ SILU = _table(lambda x: x / (1.0 + np.exp(-x)))
 RECIP = _table(lambda x: 1.0 / x)
 
 
+# The device's tables are range-reduced: a 65536-entry table is 128 KB, twice a core's data memory. Each function
+# below is the device semantics over bf16 bits, pinned here; tables_header() emits the same arrays for the core.
+# Inside a table's range the value is the correctly rounded one (subnormal results flushed to +0); outside it a
+# rule decides, chosen so no subnormal ever reaches a MAC. Measured over every finite bf16 against the full tables.
+SILU_POS = (0x3B80, 0x4100)      # x in [2^-8, 8)
+SILU_NEG = (0xBB80, 0xC200)      # x in (-32, -2^-8]
+EXP_RANGE = (0xBB00, 0xC300)     # d in (-128, -2^-9]
+
+
+def _flush(bits: np.ndarray) -> np.ndarray:
+    """Subnormal bf16 bits -> +0."""
+    return np.where((bits & 0x7F80) == 0, 0, bits).astype(np.uint16)
+
+
+def silu_table() -> np.ndarray:
+    """uint16 [3072]: SILU at bits SILU_POS then SILU_NEG, correctly rounded."""
+    full = em.bf16_bits(SILU)
+    return _flush(np.concatenate([full[SILU_POS[0]:SILU_POS[1]], full[SILU_NEG[0]:SILU_NEG[1]]]))
+
+
+def exp_table() -> np.ndarray:
+    """uint16 [2048]: exp at bits EXP_RANGE, correctly rounded, underflow to +0."""
+    return _flush(em.bf16_bits(EXP)[EXP_RANGE[0]:EXP_RANGE[1]])
+
+
+def recip_table() -> np.ndarray:
+    """uint16 [128]: bf16(1 / 1.m) for each mantissa m; 1/z for z = 2^e * 1.m is this shifted down by e, exact."""
+    return em.bf16_bits(RECIP)[0x3F80:0x4000].copy()
+
+
+SILU_T, EXP_T, RECIP_T = silu_table(), exp_table(), recip_table()
+
+
+def silu_bits(u: np.ndarray) -> np.ndarray:
+    """The device's SiLU on bf16 bits: x for x >= 8, +0 for x <= -32, x/2 below 2^-8 (signed 0 if subnormal), else
+    the table."""
+    u = np.asarray(u, np.uint16).astype(np.int64)
+    mag = u & 0x7FFF
+    neg = (u & 0x8000) != 0
+    half = np.where((u & 0x7F80) > 0x80, u - 0x80, u & 0x8000)
+    pos_i = np.clip(u - SILU_POS[0], 0, SILU_POS[1] - SILU_POS[0] - 1)
+    neg_i = (SILU_POS[1] - SILU_POS[0]) + np.clip(u - SILU_NEG[0], 0, SILU_NEG[1] - SILU_NEG[0] - 1)
+    out = np.where(neg, SILU_T[neg_i], SILU_T[pos_i])
+    out = np.where(mag < 0x3B80, half, out)
+    out = np.where(~neg & (mag >= 0x4100), u, out)
+    out = np.where(neg & (mag >= 0x4200), 0, out)
+    return out.astype(np.uint16)
+
+
+def exp_bits(u: np.ndarray) -> np.ndarray:
+    """The device's exp on bf16 bits of d <= 0: 1 for |d| < 2^-9, +0 for d <= -128, else the table."""
+    u = np.asarray(u, np.uint16).astype(np.int64)
+    if np.any(((u & 0x8000) == 0) & ((u & 0x7FFF) != 0)):
+        raise ValueError("exp is defined here for d <= 0 only")
+    mag = u & 0x7FFF
+    i = np.clip(u - EXP_RANGE[0], 0, EXP_RANGE[1] - EXP_RANGE[0] - 1)
+    out = np.where(mag < 0x3B00, 0x3F80, np.where(mag >= 0x4300, 0, EXP_T[i]))
+    return out.astype(np.uint16)
+
+
+def recip_bits(u: np.ndarray) -> np.ndarray:
+    """The device's 1/z on bf16 bits of z >= 1 (a softmax denominator): RECIP_T[mantissa] shifted down by e."""
+    u = np.asarray(u, np.uint16).astype(np.int64)
+    if np.any(u < 0x3F80) or np.any(u >= 0x5F80):
+        raise ValueError("recip is defined here for 1 <= z < 2^64 only (1/z stays normal)")
+    e = (u >> 7) - 127
+    return (RECIP_T[u & 0x7F].astype(np.int64) - (e << 7)).astype(np.uint16)
+
+
+def mac_terms(pairs) -> np.ndarray:
+    """sum_t a_t * w_t elementwise through one MAC from zero, fp32: a_t arrays [n], w_t scalars shared by every
+    element (lane t of the core's mmul, B's column 0 holding the w_t)."""
+    if not 0 < len(pairs) <= 8:
+        raise ValueError("one MAC takes 1 to 8 terms")
+    n = np.asarray(pairs[0][0]).size
+    a = np.zeros((1, n, 8), np.float32)
+    w = np.zeros((1, 8, 4), np.float32)
+    for t, (x, y) in enumerate(pairs):
+        a[0, :, t] = np.asarray(x, np.float32).reshape(-1)
+        w[0, t, 0] = np.float32(y)
+    return em.mac(np.zeros((1, 1, n, 4), np.float32), a, w, em.MAC_MODEL)[0, 0, :, 0]
+
+
+def dev(fn, x: np.ndarray) -> np.ndarray:
+    """Apply a bits function to bf16 values, returning float32."""
+    return em.from_bf16_bits(fn(em.bf16_bits(bf16(x))))
+
+
 def lut(table: np.ndarray, x: np.ndarray) -> np.ndarray:
     return table[em.bf16_bits(bf16(x)).astype(np.int64)]
 
@@ -154,7 +243,7 @@ def rscale(h, exact):
         hb = em.bf16_bits(h)
         u = int(oracle.gemv(np.tile(hb, (4, 1)), hb)[0])
     else:
-        u = int(em.bf16_bits(bf16_from64(np.dot(h.astype(np.float64), h.astype(np.float64)))))
+        u = int(em.bf16_bits(bf16_from64(np.dot(h.astype(np.float64), h.astype(np.float64)))).reshape(-1)[0])
     u = min(max(u, RSQ_BASE), RSQ_BASE + RSQ_SIZE - 1)
     return em.from_bf16_bits(np.uint16(RSQ[u - RSQ_BASE])).astype(np.float32)
 
@@ -178,10 +267,23 @@ def rope_tables(positions: int):
     return bf16(np.cos(emb)), bf16(np.sin(emb))
 
 
-def rope(x, cos, sin):
-    """x [heads][64] bf16 -> bf16(x*cos + rotate_half(x)*sin), the two exact products summed once."""
-    rot = np.concatenate([-x[:, HEAD_DIM // 2:], x[:, :HEAD_DIM // 2]], axis=1)
-    return bf16_from64(x.astype(np.float64) * cos + rot.astype(np.float64) * sin)
+def rope(x, cos, sin, exact=False):
+    """x [heads][64] bf16 -> bf16(x*cos + rotate_half(x)*sin): for each pair (a, b) = (x[i], x[i+32]),
+    a' = a*cos_i - b*sin_i and b' = a*sin_i + b*cos_i, each the two products through one MAC from zero (the core's
+    mmul, A = [a, b, ...], B's columns [cos, -sin], [sin, cos]), rounded once."""
+    if not exact:
+        rot = np.concatenate([-x[:, HEAD_DIM // 2:], x[:, :HEAD_DIM // 2]], axis=1)
+        return bf16_from64(x.astype(np.float64) * cos + rot.astype(np.float64) * sin)
+    half = HEAD_DIM // 2
+    out = np.empty_like(x, dtype=np.float32)
+    for i in range(half):
+        a = np.zeros((1, x.shape[0], 8), np.float32)
+        a[0, :, 0], a[0, :, 1] = x[:, i], x[:, i + half]
+        w = np.zeros((1, 8, 4), np.float32)
+        w[0, 0, 0], w[0, 1, 0], w[0, 0, 1], w[0, 1, 1] = cos[i], -sin[i], sin[i], cos[i]
+        acc = em.mac(np.zeros((1, 1, x.shape[0], 4), np.float32), a, w, em.MAC_MODEL)[0, 0]
+        out[:, i], out[:, i + half] = bf16(acc[:, 0]), bf16(acc[:, 1])
+    return out
 
 
 @dataclass
@@ -232,11 +334,12 @@ class Decoder:
         for hd in range(HEADS):
             kv = hd // (HEADS // KV_HEADS)
             s = bf16(dot(K[:, kv], q[hd], self.exact)) / 8.0      # exact: /8 is a power of two
-            d = bf16(s - s.max())
-            e = lut(EXP, d)
+            d = (bf16(mac_terms([(s, 1.0), (np.full_like(s, s.max()), -1.0)]))
+                 if self.exact else bf16(s - s.max()))
+            e = dev(exp_bits, d)
             z = bf16_from64(dot(e, np.ones_like(e), self.exact) if self.exact else e.astype(np.float64).sum())
             acc = bf16_from64(dot(V[:, kv].T, e, self.exact))
-            out[hd] = bf16(acc * lut(RECIP, z))
+            out[hd] = bf16(acc * dev(recip_bits, z))
         return out.reshape(-1)
 
     def step(self, token: int, p: int) -> np.ndarray:
@@ -249,8 +352,8 @@ class Decoder:
                 qkv = normed_matvec(L["qkv_g"], h, x)
             else:
                 qkv = matvec(L["qkv"], rmsnorm(h, L["n1"], x), x)
-            q = rope(qkv[:HIDDEN].reshape(HEADS, HEAD_DIM), cos, sin)
-            k = rope(qkv[HIDDEN:HIDDEN + KV_HEADS * HEAD_DIM].reshape(KV_HEADS, HEAD_DIM), cos, sin)
+            q = rope(qkv[:HIDDEN].reshape(HEADS, HEAD_DIM), cos, sin, x)
+            k = rope(qkv[HIDDEN:HIDDEN + KV_HEADS * HEAD_DIM].reshape(KV_HEADS, HEAD_DIM), cos, sin, x)
             v = qkv[HIDDEN + KV_HEADS * HEAD_DIM:].reshape(KV_HEADS, HEAD_DIM)
             self.k[i].append(k)
             self.v[i].append(v)
@@ -261,7 +364,7 @@ class Decoder:
             else:
                 h = bf16_from64(h.astype(np.float64) + matvec(L["o"], attn, x))
                 gu = matvec(L["gu"], rmsnorm(h, L["n2"], x), x)
-            m = bf16(lut(SILU, gu[:MLP]) * gu[MLP:])
+            m = bf16(dev(silu_bits, gu[:MLP]) * gu[MLP:])
             if self.fused:
                 h = matvec(L["down"], m, x, init=h)
             else:

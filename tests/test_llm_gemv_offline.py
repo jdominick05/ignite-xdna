@@ -77,7 +77,7 @@ def test_a_residual_slot_is_x_then_h_and_its_header_names_both():
     obj = pack.x_slot(x, 576, h, pack.F_INIT)[:pack.OBJ_WORDS]
     hdr = obj[-pack.HDR_WORDS:]
     assert [hdr[pack.H_G], hdr[pack.H_Q], hdr[pack.H_K], hdr[pack.H_N]] == [3, 8, 1536, 576]
-    assert hdr[pack.H_FLAGS] == pack.F_INIT and hdr[pack.H_INIT_OFF] == 1536 and hdr[pack.H_COPY] == 2112
+    assert hdr[pack.H_FLAGS] == pack.F_INIT and hdr[pack.H_AUX_OFF] == 1536 and hdr[pack.H_COPY] == 2112
     e = obj.view(np.uint16)
     assert np.array_equal(e[:1536], x) and np.array_equal(e[1536:2112], h)
     with pytest.raises(ValueError):
@@ -109,6 +109,45 @@ def test_the_norm_scale_is_the_table_at_the_sums_bits():
     assert R.rscale(np.zeros(576, np.float32), True) == em.from_bf16_bits(np.uint16(R.RSQ[0]))   # clamped low
 
 
+def _all_finite_bf16():
+    u = np.arange(1 << 16, dtype=np.uint32).astype(np.uint16)
+    return u[(u & 0x7F80) != 0x7F80]
+
+
+def test_device_silu_departs_from_correct_rounding_only_at_its_rules():
+    from kernels.llm_gemv import reference as R
+    u = _all_finite_bf16()
+    x = em.from_bf16_bits(u).astype(np.float64)
+    got, full = R.silu_bits(u), em.bf16_bits(R.SILU)[u]
+    off = got != full
+    assert not np.any(off & (np.abs(x) >= 2.0 ** -8) & (x > -32))       # inside the table and x >= 8: correct
+    assert np.all(np.abs(em.from_bf16_bits(got[off]).astype(np.float64)
+                         - em.from_bf16_bits(full[off]).astype(np.float64)) < 1e-12)
+    assert not np.any((got & 0x7F80) == 0) or np.all(got[(got & 0x7F80) == 0] & 0x7FFF == 0)   # no subnormal
+
+
+def test_device_exp_and_recip_are_correctly_rounded_in_range():
+    from kernels.llm_gemv import reference as R
+    u = _all_finite_bf16()
+    d = u[(u & 0x8000) != 0]
+    got, full = R.exp_bits(d), em.bf16_bits(R.EXP)[d]
+    normal = (full & 0x7F80) != 0
+    xd = em.from_bf16_bits(d).astype(np.float64)
+    assert np.array_equal(got[normal & (xd > -128)], full[normal & (xd > -128)])
+    assert not np.any(got[~normal] & 0x7FFF)                               # underflow is +0, never subnormal
+    z = u[(u >= 0x3F80) & (u < 0x5F80)]
+    assert np.array_equal(R.recip_bits(z), em.bf16_bits(R.RECIP)[z])     # the mantissa table loses nothing
+
+
+def test_exact_rope_matches_the_fast_rope_but_for_rare_last_bits():
+    from kernels.llm_gemv import reference as R
+    rng = np.random.default_rng(8)
+    x = R.bf16(rng.normal(0, 2, (12, 64)))
+    cos, sin = (t[37] for t in R.rope_tables(64))
+    a, b = R.rope(x, cos, sin, True), R.rope(x, cos, sin, False)
+    assert np.count_nonzero(a != b) <= 8 and np.max(np.abs(a - b)) <= 2 ** -6 * np.max(np.abs(b))
+
+
 def test_a_residual_add_is_the_accumulators_start():
     from kernels.llm_gemv import reference as R
     rng = np.random.default_rng(6)
@@ -128,7 +167,7 @@ def test_a_chained_residual_call_reads_x_and_h_from_out_within_16_bds():
     assert text.count("%o[0,0,0,0][1,1,1,768]") == 16 and text.count("%o[0,0,0,768][1,1,1,288]") == 16
     assert text.count(f"%x[0,0,0,0][1,1,1,{tail}]") == 16
     ids = [int(i) for i in __import__("re").findall(r"id = (\d+) : i64", text)]
-    assert max(ids) == 14 and len(set(ids)) == 15
+    assert max(ids) == 15 and len(set(ids)) == 15
     roles = [(e[0], e[1]) for e in patch._expected(call)[:7]]
     assert roles == [("o", "x"), ("o", "h"), ("x", "tail")] * 2 + [("w", "w")]
     with pytest.raises(ValueError):

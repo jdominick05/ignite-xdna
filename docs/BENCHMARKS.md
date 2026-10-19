@@ -3841,6 +3841,50 @@ fp32 is 214/441, with divergences on the same three prompts where HF bf16 diverg
 fp32-ss variant is the bf16 rounding of ss (relative error up to 2^-9, so up to 2^-10 in r), the only change between
 the two runs. It is kept: the bar is HF bf16's own departure, and the text stays fluent.
 
+**RoPE, the KV append and SiLU in the projection: exact, but the run is a MISMATCH, and the NPU then refused every
+context** ([log](../results/aie/llm_ops_rope_silu_exact_desktop2_20261019T210742Z.log), `--checks-only`, kernel
+v2). The v2 core adds two flags:
+- **F_ROPE:** q and k rows are packed in `pack.rope_perm` order, so each (dim i, dim i+32) pair sits side by side.
+  The epilogue rotates each pair by the position's cos/sin, which open the call's tail. It does this with one mmul
+  from zero: the exp_sum model places nothing for a zero product, so the reference reproduces it exactly.
+- **F_SILU:** a group streams its gate chunks and then its up chunks into two accumulator sets, and emits
+  `bf16(silu(gate)·up)`.
+
+The KV append is the output itself: a call's `out_map` splits a column's S2MM into pieces. q goes to its region,
+and k and v go to the position's cache rows. Columns 2 and 3 take two BDs each.
+
+Silu, exp and the softmax reciprocal are now range-reduced device tables (`reference.silu_bits`, `exp_bits`,
+`recip_bits`), 7.4 KB of code and 14 KB of tables per core:
+- **SiLU:** x for x ≥ 8, +0 for x ≤ −32, x/2 below 2⁻⁸, and a 3,072-entry table between.
+- **exp:** 1 for |d| < 2⁻⁹, +0 for d ≤ −128, and a 2,048-entry table between.
+- **1/z:** a 128-entry mantissa table, exact for 1 ≤ z < 2⁶⁴.
+
+Over every finite bf16, they depart from correct rounding only by those rules, by at most 4e−13. Subnormal results
+flush to +0. The quality gate with them
+([log](../results/llm/llm_reference_quality_tables_desktop2_20261019T210202Z.log)) reads exactly as before: the
+same tokens, perplexity 7.269.
+
+On the device, seeds 0 and 1, every new output matched the exact reference bit for bit, one-shot and chained:
+- q after RoPE;
+- the k and v cache rows, with the other cache rows left untouched;
+- `silu(gate)·up`.
+
+So did every v1 output, **except the chained head (head+norm on a chained x)**. Exactly one quarter of it was wrong,
+12,288 of 49,152 elements, on both seeds. The one-shot head was exact in the same run, and the chained head was
+exact on the v1 kernel. The cause is **unexplained**. The compiled streams match their programs at every DDR
+address (`patch.calls`), and the Windows System log holds no event in the window.
+
+Right after this run, every new hardware context failed with 0xc01e0009. That includes the v1 xclbin that ran clean
+25 minutes earlier, and it was still true 15 minutes later, with `xrt-smi` showing no contexts and no other process
+on the NPU. Those three refused attempts are kept:
+[1](../results/aie/llm_ops_rope_silu_exact_desktop2_20261019T210815Z.log),
+[2](../results/aie/llm_ops_rope_silu_exact_desktop2_20261019T210906Z.log),
+[3](../results/aie/llm_ops_rope_silu_exact_desktop2_20261019T211237Z.log).
+
+Whether the run caused the refusal is not established. The next sitting runs `chain_short` alone first: v1's chain
+on the v2 kernel. That separates "the kernel broke the chained head" from "a later call disturbs the head's
+column". Its mismatch detail compares a bad stretch against every other expected output.
+
 ### Gemma 3 4B decode on the CPU and DirectML: INCOMPLETE in both sittings on the page-in witness, and the three complete arms decode at 10.8–17.6 tok/s (2026-09-24, Desktop 2)
 
 The question, (c) of the Gemma plan with its rule (d)

@@ -18,7 +18,9 @@ import json
 import re
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import List, Optional, Sequence
+from typing import List, Optional, Sequence, Tuple
+
+import numpy as np
 
 from kernels.llm_gemv import pack
 from kernels.transformer_bf16.common import INSTALL, IRON, PEANO, command, save, sha
@@ -37,17 +39,47 @@ class Call:
     k: int
     x_out: Optional[int] = None   # chained: x is the K/2 words at this offset of the out argument (an earlier
                                   # call's output), and x_offset names the call's constant tail (pack.tail)
-    flags: int = 0                # pack.F_INIT (residual) and pack.F_NORM (RMSNorm folded in)
+    flags: int = 0                # pack.F_INIT, F_NORM, F_ROPE, F_SILU
     h_out: Optional[int] = None   # chained with F_INIT: the residual h, N/2 words at this offset of the out argument
+    rope_end: int = 0             # with F_ROPE: output positions below this are rotated
+    out_map: Optional[Tuple[Tuple[int, int, int], ...]] = None
+    # out_map: (first output, outputs, out-argument word offset) pieces covering [0, N) in order; the output goes to
+    # out_offset + position/2 without one. A column's S2MM takes one BD per piece it overlaps (the KV append: k and v
+    # land in the cache rows of the position, q in its own region).
 
     def __post_init__(self):
-        pack.check_call(self.n, self.k, self.flags)
+        pack.check_call(self.n, self.k, self.flags, self.rope_end)
         if (self.h_out is not None) != (self.x_out is not None and bool(self.flags & pack.F_INIT)):
             raise ValueError("h_out is given exactly for a chained call with F_INIT")
+        if self.out_map is not None:
+            at = 0
+            for first, count, _ in self.out_map:
+                if first != at or count <= 0 or first % 2 or count % 2:
+                    raise ValueError("out_map pieces must tile [0, N) in order, in whole words")
+                at += count
+            if at != self.n:
+                raise ValueError("out_map pieces must cover N outputs")
 
-    def header(self):
-        """The tail this call's x region must hold: pad and header, from the same (n, k, flags) as the streams."""
-        return pack.tail(self.n, self.k, self.flags)
+    def header(self, cs=None):
+        """The tail this call's x region must hold: cos/sin with F_ROPE, pad and header, from the same (n, k, flags)
+        as the streams (zero cos/sin unless given: its size is what the design needs)."""
+        if self.flags & pack.F_ROPE and cs is None:
+            cs = np.zeros(pack.CS_ELEMS, np.uint16)
+        return pack.tail(self.n, self.k, self.flags, self.rope_end, cs)
+
+    def weight_words(self) -> int:
+        return pack.weight_words(self.n, self.k, self.flags)
+
+    def out_pieces(self, c: int) -> list:
+        """(out-argument word offset, words) for column c's quarter of the output, in stream order."""
+        lo, hi = c * self.n // pack.COLS, (c + 1) * self.n // pack.COLS
+        pieces = self.out_map or ((0, self.n, self.out_offset),)
+        out = []
+        for first, count, dest in pieces:
+            a, b = max(lo, first), min(hi, first + count)
+            if a < b:
+                out.append((dest + (a - first) // 2, (b - a) // 2))
+        return out
 
     def x_words_used(self) -> int:
         return pack.X_SLOT_WORDS if self.x_out is None else self.header().size
@@ -62,6 +94,9 @@ class Call:
         return pieces + [("x", self.x_offset, self.header().size)]
 
 
+ACC = 96          # two accumulator sets of 3 x 16 fp32 (gate and up with F_SILU)
+
+
 def _core(i: int) -> str:
     O = pack.OBJ_WORDS
     view = f"!aie.objectfifosubview<memref<{O}xi32>>"
@@ -69,6 +104,7 @@ def _core(i: int) -> str:
     return f'''    %core{i} = aie.core(%t{i}) {{
       %z = arith.constant 0 : index
       %one = arith.constant 1 : index
+      %seven = arith.constant 7 : index
       %forever = arith.constant 4294967295 : index
       %core = arith.constant {i} : i32
       scf.for %it = %z to %forever step %one {{
@@ -80,19 +116,24 @@ def _core(i: int) -> str:
         %q32 = memref.load %ctl{i}[%one] : memref<16xi32>
         %G = arith.index_cast %g32 : i32 to index
         %Q = arith.index_cast %q32 : i32 to index
+        %e32 = memref.load %ctl{i}[%seven] : memref<16xi32>
+        %E = arith.index_cast %e32 : i32 to index
         scf.for %g = %z to %G step %one {{
           %gi = arith.index_cast %g : index to i32
           scf.for %q = %z to %Q step %one {{
             %ws = aie.objectfifo.acquire @wF{i}(Consume, 1) : {view}
             %w = aie.objectfifo.subview.access %ws[0] : {view} -> memref<{O}xi32>
             %qi = arith.index_cast %q : index to i32
-            func.call @gemv_chunk(%w, %xl{i}, %acc{i}, %qi, %ctl{i}, %core, %gi) : (memref<{O}xi32>, memref<{pack.MAX_K // 2}xi32>, memref<48xf32>, i32, memref<16xi32>, i32, i32) -> ()
+            func.call @gemv_chunk(%w, %xl{i}, %acc{i}, %qi, %ctl{i}, %core, %gi) : (memref<{O}xi32>, memref<{pack.MAX_K // 2}xi32>, memref<{ACC}xf32>, i32, memref<16xi32>, i32, i32) -> ()
             aie.objectfifo.release @wF{i}(Consume, 1)
           }}
-          %os = aie.objectfifo.acquire @oF{i}(Produce, 1) : {oview}
-          %o = aie.objectfifo.subview.access %os[0] : {oview} -> memref<6xi32>
-          func.call @gemv_emit(%acc{i}, %o, %ctl{i}) : (memref<48xf32>, memref<6xi32>, memref<16xi32>) -> ()
-          aie.objectfifo.release @oF{i}(Produce, 1)
+          scf.for %e = %z to %E step %one {{
+            %ei = arith.index_cast %e : index to i32
+            %os = aie.objectfifo.acquire @oF{i}(Produce, 1) : {oview}
+            %o = aie.objectfifo.subview.access %os[0] : {oview} -> memref<6xi32>
+            func.call @gemv_emit(%acc{i}, %o, %ctl{i}, %xl{i}, %core, %gi, %ei) : (memref<{ACC}xf32>, memref<6xi32>, memref<16xi32>, memref<{pack.MAX_K // 2}xi32>, i32, i32, i32) -> ()
+            aie.objectfifo.release @oF{i}(Produce, 1)
+          }}
         }}
       }}
       aie.end
@@ -102,19 +143,21 @@ def _core(i: int) -> str:
 def harness(program: Sequence[Call], w_words: int, x_words: int, out_words: int) -> str:
     O, XK = pack.OBJ_WORDS, pack.MAX_K // 2
     for call in program:
-        if call.w_offset + pack.block_words(call.n, call.k) > w_words:
+        if call.w_offset + call.weight_words() > w_words:
             raise ValueError(f"{call}: weights run past the {w_words}-word argument")
-        if call.x_offset + call.x_words_used() > x_words or call.out_offset + call.n // 2 > out_words:
-            raise ValueError(f"{call}: x or out runs past its argument")
+        if call.x_offset + call.x_words_used() > x_words:
+            raise ValueError(f"{call}: x runs past its argument")
+        if any(off + n > out_words for c in range(pack.COLS) for off, n in call.out_pieces(c)):
+            raise ValueError(f"{call}: out runs past its argument")
         if call.x_out is not None and call.x_out + call.k // 2 > out_words:
             raise ValueError(f"{call}: chained x runs past the out argument")
         if call.h_out is not None and call.h_out + call.n // 2 > out_words:
             raise ValueError(f"{call}: chained h runs past the out argument")
     L = ["module {", "  aie.device(npu1) {",
          f"    func.func private @gemv_begin(memref<{O}xi32>, memref<{XK}xi32>, memref<16xi32>, i32)",
-         f"    func.func private @gemv_chunk(memref<{O}xi32>, memref<{XK}xi32>, memref<48xf32>, i32, memref<16xi32>, "
+         f"    func.func private @gemv_chunk(memref<{O}xi32>, memref<{XK}xi32>, memref<{ACC}xf32>, i32, memref<16xi32>, "
          "i32, i32)",
-         "    func.func private @gemv_emit(memref<48xf32>, memref<6xi32>, memref<16xi32>)"]
+         f"    func.func private @gemv_emit(memref<{ACC}xf32>, memref<6xi32>, memref<16xi32>, memref<{XK}xi32>, i32, i32, i32)"]
     cores = []
     for c in range(pack.COLS):
         L += [f"    %s{c} = aie.tile({c}, 0)", f"    %m{c} = aie.tile({c}, 1)"]
@@ -122,7 +165,7 @@ def harness(program: Sequence[Call], w_words: int, x_words: int, out_words: int)
             i = c * pack.ROWS + r
             L += [f"    %t{i} = aie.tile({c}, {r + 2})",
                   f'    %xl{i} = aie.buffer(%t{i}) {{sym_name = "xl{i}"}} : memref<{XK}xi32>',
-                  f'    %acc{i} = aie.buffer(%t{i}) {{sym_name = "acc{i}"}} : memref<48xf32>',
+                  f'    %acc{i} = aie.buffer(%t{i}) {{sym_name = "acc{i}"}} : memref<{ACC}xf32>',
                   f'    %ctl{i} = aie.buffer(%t{i}) {{sym_name = "ctl{i}"}} : memref<16xi32>']
         for h in range(2):
             L.append(f"    aie.objectfifo @wL{c}_{h}(%s{c}, {{%m{c}}}, {FIFO_DEPTH} : i32) : "
@@ -145,8 +188,7 @@ def harness(program: Sequence[Call], w_words: int, x_words: int, out_words: int)
     L.append(f"    aie.runtime_sequence(%w: memref<{w_words}xi32>, %x: memref<{x_words}xi32>, "
              f"%o: memref<{out_words}xi32>) {{")
     for call in program:
-        sw = pack.stream_elems(call.n, call.k) // 2
-        ow = call.n // 2 // pack.COLS
+        sw = pack.stream_elems(call.n, call.k, call.flags) // 2
         # the host-built pair is one transfer; a chained first object is x (and h) from earlier outputs, then the
         # constant tail, once per core of the pair. BD ids per shim tile: channel h uses 7h..7h+5 for these and
         # 7h+6 for its weights, the output 14 (16 per tile).
@@ -160,8 +202,14 @@ def harness(program: Sequence[Call], w_words: int, x_words: int, out_words: int)
                              f"{{id = {7 * h + j} : i64, metadata = {fifo}}} : memref<{sizes[arg]}xi32>")
                 L.append(f"      aiex.npu.dma_memcpy_nd(%w[0,0,0,{call.w_offset + ch * sw}][1,1,1,{sw}][0,0,0,1]) "
                          f"{{id = {7 * h + 6} : i64, metadata = {fifo}}} : memref<{w_words}xi32>")
-            L.append(f"      aiex.npu.dma_memcpy_nd(%o[0,0,0,{call.out_offset + c * ow}][1,1,1,{ow}][0,0,0,1]) "
-                     f"{{id = 14 : i64, metadata = @oL{c}, issue_token = true}} : memref<{out_words}xi32>")
+            outs = call.out_pieces(c)
+            if len(xs) * 2 + 2 + len(outs) > 16:
+                raise ValueError(f"{call}: column {c} needs more than the shim tile's 16 BDs")
+            for j, (off, length) in enumerate(outs):     # S2MM BDs from 15 down; only the last issues the token
+                last = j == len(outs) - 1
+                L.append(f"      aiex.npu.dma_memcpy_nd(%o[0,0,0,{off}][1,1,1,{length}][0,0,0,1]) "
+                         f"{{id = {15 - j} : i64, metadata = @oL{c}{', issue_token = true' if last else ''}}} "
+                         f": memref<{out_words}xi32>")
         for c in range(pack.COLS):
             L.append(f"      aiex.npu.dma_wait {{symbol = @oL{c}}}")
     L += ["    }", "  }", "}"]
@@ -174,19 +222,23 @@ def sources() -> dict:
             for p in (HERE / "gemv.cc", HERE / "design.py", HERE / "pack.py", HERE / "reference.py")}
 
 
-def rsq_header() -> str:
-    """rsq_table.h: RMSNorm's reciprocal-square-root table, the same array reference.RSQ indexes."""
-    from kernels.llm_gemv import reference
-    rows = [", ".join(f"0x{v:04x}" for v in reference.RSQ[i:i + 16]) for i in range(0, reference.RSQ_SIZE, 16)]
-    return ("// generated by design.py from kernels/llm_gemv/reference.py: bf16(1/sqrt(ss/576 + eps)) by ss's bits\n"
+def tables_header() -> str:
+    """tables.h: the core's range-reduced tables, the same arrays reference.py's device functions index."""
+    from kernels.llm_gemv import reference as R
+
+    def array(name, values):
+        rows = [", ".join(f"0x{int(v):04x}" for v in values[i:i + 16]) for i in range(0, len(values), 16)]
+        return f"alignas(32) static const uint16_t {name}[{len(values)}] = {{\n    " + ",\n    ".join(rows) + "\n};\n"
+
+    return ("// generated by design.py from kernels/llm_gemv/reference.py; do not edit\n"
             "#pragma once\n#include <stdint.h>\n"
-            f"constexpr uint32_t RSQ_BASE = 0x{reference.RSQ_BASE:04x};\nconstexpr int RSQ_SIZE = {reference.RSQ_SIZE};\n"
-            "alignas(32) static const uint16_t RSQ[RSQ_SIZE] = {\n    " + ",\n    ".join(rows) + "\n};\n")
+            f"constexpr uint32_t RSQ_BASE = 0x{R.RSQ_BASE:04x};\nconstexpr int RSQ_SIZE = {R.RSQ_SIZE};\n"
+            + array("RSQ", R.RSQ) + array("SILU_T", R.SILU_T) + array("EXP_T", R.EXP_T) + array("RECIP_T", R.RECIP_T))
 
 
 def compile_kernel(folder: Path) -> Path:
     obj = folder / "gemv.o"
-    (folder / "rsq_table.h").write_text(rsq_header(), encoding="utf-8")
+    (folder / "tables.h").write_text(tables_header(), encoding="utf-8")
     command([PEANO / "bin/clang++.exe", "-O2", "-std=c++20", "--target=aie2-none-unknown-elf", "-DNDEBUG",
              "-fstack-size-section", "-D__AIE_API_AIE_ADF_HPP__", f"-I{INSTALL / 'include'}", f"-I{folder}",
              "-Wno-attributes",

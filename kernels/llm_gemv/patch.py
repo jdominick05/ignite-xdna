@@ -30,14 +30,13 @@ class Site:
     role: str            # "x", "h", "tail", "w" or "out"
     column: int
     channel: int         # 0 or 1 for MM2S roles; -1 for "out"
-    copy: int            # which core of the pair an x/tail transfer feeds (0 or 1); 0 otherwise
+    copy: int            # which core of the pair an x/tail transfer feeds (0 or 1); for "out", the piece index
 
 
 def _expected(call) -> List[tuple]:
     """(arg, role, column, channel, copy, word offset) in design.harness's emission order for one call."""
     rows = []
-    sw = pack.stream_elems(call.n, call.k) // 2
-    ow = call.n // 2 // pack.COLS
+    sw = pack.stream_elems(call.n, call.k, call.flags) // 2
     roles = ["x"] if call.x_out is None else (["x", "h", "tail"] if call.flags & pack.F_INIT else ["x", "tail"])
     pieces = list(zip(roles, call.lead()))
     for c in range(pack.COLS):
@@ -45,7 +44,7 @@ def _expected(call) -> List[tuple]:
             for e in range(1 if call.x_out is None else 2):
                 rows += [(arg, role, c, h, e, off) for role, (arg, off, _) in pieces]
             rows.append(("w", "w", c, h, 0, call.w_offset + (c * 2 + h) * sw))
-        rows.append(("o", "out", c, -1, 0, call.out_offset + c * ow))
+        rows += [("o", "out", c, -1, j, off) for j, (off, _) in enumerate(call.out_pieces(c))]
     return rows
 
 
@@ -85,9 +84,27 @@ def apply(insts: bytes, changes: Dict[int, int]) -> bytes:
 
 
 def move_output(sites: List[Site], call, out_words: int) -> Dict[int, int]:
-    """Changes that make a call write its output at ``out_words`` instead of where it was compiled to."""
+    """Changes that make a one-piece call write its output at ``out_words`` instead of where it was compiled to."""
+    if call.out_map is not None:
+        raise ValueError("a call with an out_map moves piece by piece (move_piece)")
     ow = call.n // 2 // pack.COLS
     return {s.value_offset: (out_words + s.column * ow) * 4 for s in sites if s.role == "out"}
+
+
+def move_piece(sites: List[Site], call, piece: int, dest_words: int) -> Dict[int, int]:
+    """Changes that send out_map piece ``piece`` to ``dest_words`` (e.g. the KV cache row of this position): every
+    column's BD that writes part of it, each at its own offset into the piece."""
+    first, count, old = call.out_map[piece]
+    out = {}
+    for s in sites:
+        if s.role != "out":
+            continue
+        off = s.arg_offset // 4
+        if old <= off < old + count // 2:
+            out[s.value_offset] = (dest_words + off - old) * 4
+    if not out:
+        raise ValueError(f"no transfer writes piece {piece}")
+    return out
 
 
 def move_x(sites: List[Site], from_out_words: int) -> Dict[int, int]:

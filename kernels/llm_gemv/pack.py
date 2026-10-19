@@ -50,9 +50,18 @@ def block_words(n: int, k: int) -> int:
     return n * k // 2
 
 
-def stream_elems(n: int, k: int) -> int:
-    """bf16 elements one channel reads for the weights of one call."""
-    return groups(n) * chunks(k) * 2 * OBJ_ELEMS
+def stream_elems(n: int, k: int, flags: int = 0) -> int:
+    """bf16 elements one channel reads for the weights of one call (a SiLU call reads gate and up: twice)."""
+    return groups(n) * objects_per_group(k, flags) * 2 * OBJ_ELEMS
+
+
+def objects_per_group(k: int, flags: int = 0) -> int:
+    return chunks(k) * (2 if flags & F_SILU else 1)
+
+
+def weight_words(n: int, k: int, flags: int = 0) -> int:
+    """Words of a call's weight block: N*K/2, or twice that for a SiLU call (gate and up rows)."""
+    return block_words(n, k) * (2 if flags & F_SILU else 1)
 
 
 def core_rows(n: int, c: int, j: int, g: int) -> slice:
@@ -64,6 +73,42 @@ def chunk(w: np.ndarray, rows: slice, q: int) -> np.ndarray:
     """One weight object: W[rows, q*192:(q+1)*192] as [kstep][acc][kk][n], flattened."""
     t = w[rows, q * KCHUNK:(q + 1) * KCHUNK]                      # [12][192] = [acc 3][n 4][kstep 24][kk 8]
     return t.reshape(3, 4, KCHUNK // 8, 8).transpose(2, 0, 3, 1).reshape(-1)
+
+
+def rope_perm(n: int, rotated: int, head_dim: int = 64) -> np.ndarray:
+    """Row order of a projection whose first ``rotated`` rows are RoPE heads: within each head, output position
+    2i holds dim i and 2i+1 holds dim i + head_dim/2, so each rotated pair sits in one core's group. The rest keep
+    their order. A dot product of two vectors in this order equals the dot in the natural one."""
+    if rotated % head_dim or rotated > n:
+        raise ValueError("rotated rows are whole heads")
+    perm = np.arange(n)
+    half = head_dim // 2
+    for h in range(rotated // head_dim):
+        base = h * head_dim
+        perm[base:base + head_dim:2] = base + np.arange(half)
+        perm[base + 1:base + head_dim:2] = base + half + np.arange(half)
+    return perm
+
+
+def pack_silu(gate: np.ndarray, up: np.ndarray) -> np.ndarray:
+    """uint16 [N][K] gate and up bf16 bits -> the weight block of an F_SILU call: for every group and core, the
+    group's gate chunks, then the same rows' up chunks."""
+    if gate.shape != up.shape or gate.dtype != np.uint16 or up.dtype != np.uint16:
+        raise TypeError("pack_silu takes two uint16 [N][K] arrays of one shape")
+    n, k = gate.shape
+    check_shape(n, k)
+    out = np.empty(2 * n * k, np.uint16)
+    pos = 0
+    for c in range(COLS):
+        for h in range(2):
+            for g in range(groups(n)):
+                for w in (gate, up):
+                    for q in range(chunks(k)):
+                        for e in range(2):
+                            out[pos:pos + OBJ_ELEMS] = chunk(w, core_rows(n, c, 2 * h + e, g), q)
+                            pos += OBJ_ELEMS
+    assert pos == out.size
+    return out.view(np.uint32)
 
 
 def pack(w: np.ndarray) -> np.ndarray:
@@ -88,41 +133,65 @@ def pack(w: np.ndarray) -> np.ndarray:
 
 
 # Header words, the last HDR_WORDS of a call's first object (gemv.cc reads the same indices)
-H_G, H_Q, H_K, H_N, H_FLAGS, H_INIT_OFF, H_COPY = range(7)
+H_G, H_Q, H_K, H_N, H_FLAGS, H_AUX_OFF, H_COPY, H_E, H_ROPE_END = range(9)
 F_INIT = 1        # the residual: accumulators start at h, which follows x in the object
 F_NORM = 2        # RMSNorm folded in: gamma is in W; the epilogue scales by RSQ[bf16(sum x*x)]
+F_ROPE = 4        # RoPE in the epilogue on output positions below ROPE_END (rows in rope_perm order); the
+                  # position's cos/sin row (32 + 32 bf16) opens the tail
+F_SILU = 8        # each group reads gate chunks then up chunks into two accumulator sets; emits silu(gate) * up
+FLAGS_ALL = F_INIT | F_NORM | F_ROPE | F_SILU
+CS_ELEMS = 64
 
 
 def lead_elems(n: int, k: int, flags: int = 0) -> int:
-    """bf16 elements at the front of a call's first object: x, then h when the call adds a residual."""
+    """bf16 elements at the front of a call's first object that come from activations: x, then h with F_INIT."""
     return k + (n if flags & F_INIT else 0)
 
 
-def check_call(n: int, k: int, flags: int = 0) -> None:
+def copy_elems(n: int, k: int, flags: int = 0) -> int:
+    """What the core copies into its x buffer: the lead, then cos/sin with F_ROPE."""
+    return lead_elems(n, k, flags) + (CS_ELEMS if flags & F_ROPE else 0)
+
+
+def check_call(n: int, k: int, flags: int = 0, rope_end: int = 0) -> None:
     check_shape(n, k)
-    if flags & ~(F_INIT | F_NORM):
+    if flags & ~FLAGS_ALL:
         raise ValueError(f"unknown flags {flags:#x}")
-    lead = lead_elems(n, k, flags)
-    if lead > MAX_K or lead % 32:
-        raise ValueError(f"x and h are {lead} elements: more than the core's {MAX_K}-element buffer, or not a "
-                         "multiple of 32 (the core copies 16 words at a time)")
+    if flags & F_INIT and flags & (F_SILU | F_NORM | F_ROPE):
+        raise ValueError("a residual call takes no other flag")
+    if flags & F_ROPE and flags & F_SILU:
+        raise ValueError("RoPE and SiLU do not combine")
+    if bool(flags & F_ROPE) != (rope_end > 0) or rope_end % (OUT_GROUP * 2) or rope_end > n:
+        raise ValueError("ROPE_END is a positive multiple of 24 up to N exactly when F_ROPE is set")
+    copy = copy_elems(n, k, flags)
+    if copy > MAX_K or copy % 32:
+        raise ValueError(f"the core copies {copy} elements: more than its {MAX_K}-element buffer, or not a "
+                         "multiple of 32 (it copies 16 words at a time)")
 
 
-def tail(n: int, k: int, flags: int = 0) -> np.ndarray:
-    """uint32 [OBJ_WORDS - lead/2]: what follows x (and h) in a call's first object, zero pad then the header. The
-    only source of headers: G and Q come from the same (n, k) the design derives its object counts from, so the
-    core consumes exactly what the runtime sequence sends. Constant per (shape, flags), so a chained call reads it
-    from a fixed region."""
-    check_call(n, k, flags)
+def tail(n: int, k: int, flags: int = 0, rope_end: int = 0, cs: np.ndarray | None = None) -> np.ndarray:
+    """uint32 [OBJ_WORDS - lead/2]: what follows x (and h) in a call's first object: cos/sin with F_ROPE, zero pad,
+    then the header. The only source of headers: G and Q come from the same (n, k, flags) the design derives its
+    object counts from, so the core consumes exactly what the runtime sequence sends. Constant per call (per
+    position with F_ROPE), so a chained call reads it from a fixed region."""
+    check_call(n, k, flags, rope_end)
+    if (cs is not None) != bool(flags & F_ROPE):
+        raise ValueError("cos/sin are given exactly when F_ROPE is set")
     lead = lead_elems(n, k, flags)
     t = np.zeros(OBJ_WORDS - lead // 2, np.uint32)
+    if cs is not None:
+        cs = np.ascontiguousarray(cs, dtype=np.uint16)
+        if cs.shape != (CS_ELEMS,):
+            raise ValueError("cs is cos[0:32] then sin[0:32], bf16 bits")
+        t[:CS_ELEMS // 2] = cs.view(np.uint32)
     hdr = t[-HDR_WORDS:]
-    hdr[H_G], hdr[H_Q], hdr[H_K], hdr[H_N], hdr[H_FLAGS] = groups(n), chunks(k), k, n, flags
-    hdr[H_INIT_OFF], hdr[H_COPY] = k, lead
+    hdr[H_G], hdr[H_Q], hdr[H_K], hdr[H_N], hdr[H_FLAGS] = groups(n), objects_per_group(k, flags), k, n, flags
+    hdr[H_AUX_OFF], hdr[H_COPY], hdr[H_E], hdr[H_ROPE_END] = k, copy_elems(n, k, flags), 1, rope_end
     return t
 
 
-def x_slot(x: np.ndarray, n: int, h: np.ndarray | None = None, flags: int = 0) -> np.ndarray:
+def x_slot(x: np.ndarray, n: int, h: np.ndarray | None = None, flags: int = 0, rope_end: int = 0,
+           cs: np.ndarray | None = None) -> np.ndarray:
     """uint16 [K] bf16 bits (and h [N] with F_INIT) -> uint32 [X_SLOT_WORDS]: the [x][h][pad][header] object, twice
     (one per core of a pair)."""
     x = np.ascontiguousarray(x)
@@ -132,7 +201,7 @@ def x_slot(x: np.ndarray, n: int, h: np.ndarray | None = None, flags: int = 0) -
         raise ValueError("h is given exactly when F_INIT is set")
     k = x.shape[0]
     lead = [x] if h is None else [x, np.ascontiguousarray(h, dtype=np.uint16)]
-    obj = np.concatenate([np.concatenate(lead).view(np.uint32), tail(n, k, flags)])
+    obj = np.concatenate([np.concatenate(lead).view(np.uint32), tail(n, k, flags, rope_end, cs)])
     assert obj.size == OBJ_WORDS
     return np.concatenate([obj, obj])
 
