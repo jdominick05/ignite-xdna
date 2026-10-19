@@ -26131,3 +26131,72 @@ attention build, `--batch 4`:
   ([log](../results/aie/embedgemma_attn_glob2048_device_desktop2_20261019T110056Z.log)). It is not the model's shape.
 - The first hybrid run of `--attention npu-all` failed with `no build for L=128 W=512 heads=4 kv=1`, which is how
   the one-KV-head geometry came to light ([log](../results/aie/embedgemma_hybrid_bres_attn-npu-all_desktop2_20261019T110212Z.log); its paired local-only run is [here](../results/aie/embedgemma_hybrid_bres_attn-npu-local_desktop2_20261019T110224Z.log)).
+
+#### An NPU broker: one owner process, bit-equal through it, and 20-34% faster than two processes contending (2026-10-19, Desktop 2)
+
+`src/ignite_xdna/runtime/broker.py` is a user-space broker. One process owns the NPU, and other processes submit
+kernel calls to it over a local named pipe, with data in a shared-memory arena per client. It handles:
+- **Contexts:** cached per xclbin, at most four open, the least recently used evicted. The driver allows five,
+  and the sixth fails with 0xc01e0009.
+- **Instruction streams:** kept by SHA-256 and re-uploaded by the broker itself after an eviction.
+- **Scheduling:** it keeps running calls for the context it is on (up to `streak` in a row) without reordering any
+  one client's calls.
+- **Pipelining:** up to `depth` calls in flight per client. The device thread also overlaps the next call's copy-in
+  and the previous call's copy-out with the running call, using two buffer sets per shape.
+- **Timeouts:** a timed-out dispatch latches the broker unhealthy and fails everything queued.
+
+Offline, `tests/test_broker_offline.py` covers these with a fake device:
+- results through the real IPC path, blocking and pipelined;
+- same-context grouping, and the streak limit;
+- eviction with re-upload;
+- the unhealthy latch;
+- that no running call's buffer is overwritten.
+
+**Device probe** (`tools/npu_broker_probe.py`, real kernels, seeded inputs): two sittings, NPU idle before and after.
+The first ([log](../results/aie/npu_broker_probe_desktop2_20261019T115836Z.log)) had no device-thread overlap; the second ([log](../results/aie/npu_broker_probe_pipelined_desktop2_20261019T120107Z.log)) has it. In every case, through
+the broker or not, the output's SHA-256 equals the direct run's.
+
+Overhead, one client, 200 calls (second sitting; per-call wall time, device-call median in brackets):
+
+| Workload | direct, in-process | broker, depth 1 | broker, depth 4 |
+|---|---:|---:|---:|
+| GEMM 512x512x512 | 0.514 ms (0.274) | 1.012 (0.283) | 0.560 (0.285) |
+| GEMM 2048x512x2048 | 3.926 (1.509) | 5.517 (1.477) | 3.634 (1.502) |
+| attention doc512 | 1.545 (1.244) | 2.217 (1.270) | 1.552 (1.254) |
+
+- **A blocking call costs about 0.5-0.7 ms more** than in-process: the round trip, plus one extra copy of the inputs
+  and outputs through the arena.
+- **At depth 4 that cost is hidden:** at most +0.05 ms, and the large GEMM is 7% faster than direct because its
+  copies overlap the device.
+
+Contention: GEMM 2048x512x2048 and attention doc512 as two concurrent processes, 200 calls each. Totals are measured
+in each client from its first timed call to its last:
+
+| Arrangement | GEMM total | attention total | context switches |
+|---|---:|---:|---:|
+| two processes, each with its own context | 1100.8 ms | 947.7 ms | not counted |
+| broker, streak 32, no device-thread overlap (first sitting) | 968.5 | 989.9 | 58 |
+| broker, streak 32 | **876.5** | **627.8** | 66 |
+| broker, streak 1 (forced alternation) | 1067.4 | 963.3 | 266 |
+
+- **Against two contending processes the broker is 20% and 34% faster.** With the processes contending, each
+  one's device-call median was inflated (GEMM 2.887 ms, attention 4.980 ms, against 1.509 and 1.244 alone).
+- **Grouping by context is what pays.** Streak 1 added 200 switches and 276 ms of device time against streak 32,
+  about 1.4 ms per switch (first sitting: 262 extra switches, 363 ms, 1.39 ms). That matches the 1.0-1.4 ms
+  measured in weight-resident Stage A.
+- Under overlap a call's `call_s` runs from its start to its observed completion, so its median is an upper bound.
+- **Not measured:**
+  - more than two clients;
+  - batching that merges two clients' calls into one dispatch, which needs the workload's semantics and is not in
+    the broker;
+  - power;
+  - the hybrid ported onto the broker.
+
+**Parked, with what was found:** in-context reconfiguration (`aiex.configure` with `--expand-load-pdis`), the
+step toward one image for several kernels.
+- Upstream's `reconfigure_loadpdi` test, retargeted to npu1, compiles to an instruction stream. `tools/txn_decode.py`
+  decodes it: it rewrites core program memory (block writes at +0x20000), core control (+0x32000), DMA descriptors
+  and locks from the stream.
+- It still carries two LOADPDI ops (PDI ids 2 and 1, size 0), which name PDIs that an xclbin does not contain.
+- The next probe strips them (`txn_decode.py --strip-loadpdi`) and runs on a context opened on one design's xclbin.
+  Not run on the device yet.
