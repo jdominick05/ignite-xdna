@@ -25562,3 +25562,22 @@ All figures are ms per forward pass of weight GEMMs.
 - **The 128-token row's 10 ms gap is not attributed.** It is within run-to-run host variance (`norm` alone moved
   3.5 ms).
 - **What W8 buys here is the 1.88x weight footprint**, not speed.
+
+#### W8A8 (per-channel weights, per-token activations) under CPU emulation: NN 100%, but cos min falls to 0.998, and the NN bar proves too coarse (2026-10-19, Desktop 2)
+
+The configuration was [registered](DECISIONS.md) before the run, and the run was made once. The other substitutions
+match the W8A16 reference.
+
+| Configuration | cos min | mean | NN kept vs HF | Record |
+|---|---:|---:|---:|---|
+| W8A16, G = 64 + clip (adopted; device-gated) | 0.9998604 | 0.9998894 | 100% | [W8 reference](../results/aie/embedgemma_w8_g64_clip20_emulation_ref_cpu_desktop2_20261019T005047Z.json) |
+| **W8A8**, per-channel W + clip, per-token A | **0.9979589** | 0.9989986 | **100%** | [json](../results/aie/embedgemma_w8a8_channel_token_emulation_cpu_desktop2_20261019T020359Z.json) |
+| diagnostic: per-channel W8 + clip, bf16 A | 0.9997064 | 0.9997979 | 98.2% | [json](../results/aie/embedgemma_w8channel_a16_diag_cpu_desktop2_20261019T021414Z.json) |
+
+- **W8A8 meets the registered bar** (NN 100%), but its worst-document error (1 - cos) is about 15x W8A16's.
+- **The diagnostic shows the NN bar is too coarse at 56 documents.** The per-channel-weights-only run has *less*
+  error than W8A8, yet one document changes its nearest neighbour. The flip is a near-tie, not graded quality.
+- **So the pass is not robust evidence that W8A8 preserves retrieval.** Device work is paused for the owner's call
+  on a sturdier quality measure.
+- **Attribution, from these two runs:** per-token activations carry most of the cosine loss (0.9997 to 0.9980);
+  per-channel weights cost about 2x W8A16's error on their own.

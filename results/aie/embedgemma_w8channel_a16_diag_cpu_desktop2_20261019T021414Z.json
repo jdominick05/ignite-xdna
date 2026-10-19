@@ -1,0 +1,71 @@
+{
+  "backend": "cpu",
+  "docs": "C:\\Users\\<user>\\gemma4-embedding-baseline\\logs\\docs-heldout-v1.json",
+  "reference": "C:\\Users\\<user>\\gemma4-embedding-baseline\\logs\\hf-fp32-cpu-20261018T174113Z.npz",
+  "batch": 2,
+  "round_dll": false,
+  "attention": "blockwise",
+  "geglu": "model5",
+  "npu_geglu": 0,
+  "npu_w8": false,
+  "w4": 64,
+  "wchannel": true,
+  "a8": false,
+  "wbits": 8,
+  "wclip": 20,
+  "k_block": 32,
+  "exp": "fixed",
+  "tau": 8.0,
+  "bf16_inputs": true,
+  "passed": false,
+  "gate": {
+    "cos_min": 0.9999,
+    "nn_kept": 1.0
+  },
+  "cos_min": 0.9997063663671,
+  "cos_mean": 0.9997978989972778,
+  "nn_kept": 0.9821428571428571,
+  "quality_reference": null,
+  "nn_kept_quality": null,
+  "per_length": {
+    "128": {
+      "batches": 16,
+      "median_ms_per_doc": 1224.7636999964016,
+      "cos_min": 0.9997063663671,
+      "phases_ms_per_doc": {
+        "embed": 0.08637500286567956,
+        "round_in": 52.26792504254263,
+        "gemm": 167.070424897247,
+        "norm": 29.853150044800714,
+        "rope": 17.418849995010532,
+        "gelu": 765.3235750331078
+      }
+    },
+    "512": {
+      "batches": 8,
+      "median_ms_per_doc": 5753.093275001447,
+      "cos_min": 0.9997374462307902,
+      "phases_ms_per_doc": {
+        "embed": 0.38609999319305643,
+        "round_in": 237.4517000571359,
+        "gemm": 237.75055002624867,
+        "norm": 149.2756500010728,
+        "rope": 72.63942497957032,
+        "gelu": 3160.0256499950774
+      }
+    },
+    "2048": {
+      "batches": 4,
+      "median_ms_per_doc": 40890.046475004056,
+      "cos_min": 0.9997365431187891,
+      "phases_ms_per_doc": {
+        "embed": 1.9646500004455447,
+        "round_in": 963.1316999657429,
+        "gemm": 708.7784249233664,
+        "norm": 650.6461500612204,
+        "rope": 291.79217499040533,
+        "gelu": 12618.92704996717
+      }
+    }
+  }
+}

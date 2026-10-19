@@ -4496,3 +4496,30 @@ No adoption timing before full accuracy passes; no favorable retiming or metric 
 - **Timing.** W8 and the bf16 GEMM are timed in the same sitting. The main result is the weight footprint, in MB
   from the BO sizes. Any speedup stays DERIVED until a hollow-W8 transport probe measures it: the bf16 GEMMs are
   95-97% transport-bound.
+
+
+## W8A8 for the weight GEMMs: per-channel weights, per-token activations (2026-10-19, Desktop 2)
+
+**Why.** W8A16 passes its gate but is no faster than bf16 end to end (BENCHMARKS, "End-to-end W8 on the device"):
+the bf16 matmul runs on the core, and the core binds. The owner chose W8A8: int8 activations with the native int8
+mmul (256 MAC/cycle, against bf16's 128) and int32 accumulation. W8A16 and W8A8 are not mixed.
+
+**Granularity, chosen in planning.**
+- One weight scale per output column over all of K: symmetric int8, q in [-127, 127], scale from the 20-point MSE
+  clip (`w4.quantize(w, K, 8, 20)`).
+- One activation scale per token over all of K: `w4.quantize_rows`, s = bf16(max|x| / 127), q = clip(rne(x / s)).
+- int32 then accumulates over the whole K, and the scales are applied once per output tile.
+- **A planning-time claim is corrected.** I first said per-token-per-64-group activation scales would cost "about
+  nothing extra". That was wrong: with 64-wide groups the scale step runs every 64 of K for every output element,
+  roughly 1.5-2x the MAC work (DERIVED from op counts). Per-channel / per-token makes it once per tile.
+
+**The gate, registered before the run.**
+- **Step 0, CPU emulation:** `--w4 64 --wchannel --wbits 8 --wclip 20 --a8`, plus the device substitutions (bf16
+  inputs are replaced by the int8 activations, `--attention blockwise --exp fixed --tau 8 --geglu model5`). It is
+  run once, with no sweep on the gate documents.
+- **The bar is W8's:** 100% of nearest neighbours kept against fp32 HF, with cos min and mean reported.
+- **On a FAIL, stop:** no device code; the numbers go to the owner.
+- **On a PASS:** its embeddings become the W8A8 kernel-correctness reference (device: cos >= 0.9999 and NN 100%
+  against it, NN 100% against HF).
+- **The device numerics:** fp32(P) times s_a times s_w, by an exact bf16 split, modelled with `exp_sum` and checked
+  bit-exact.

@@ -201,6 +201,10 @@ def main():
     ap.add_argument("--attention", choices=["exact", "blockwise", "npu-local"], default="exact")
     ap.add_argument("--geglu", choices=["host", "model1", "model2", "model5"], default="host",
                     help="MLP GeGLU: host fp32, or (cpu emulation) geglu_epilogue.cc's mode 1 / mode 2 arithmetic")
+    ap.add_argument("--wchannel", action="store_true", help="--w4: one scale per output column over all of K "
+                    "(group = K; W8A8's weights), --w4's value is then ignored")
+    ap.add_argument("--a8", action="store_true", help="cpu: quantize every weight product's input to int8 per token "
+                    "(w4.quantize_rows) and dequantize it before the fp32 product (W8A8 emulation)")
     ap.add_argument("--wbits", type=int, choices=[4, 8], default=4, help="bits for --w4 (kernels/embedgemma/w4.py)")
     ap.add_argument("--wclip", type=int, default=0, help="--w4: per-group MSE clip search points over alpha in [0.85, 1]; 0 = RTN")
     ap.add_argument("--w4", type=int, default=0, help="quantize every weight product to int4 (kernels/embedgemma/w4.py) "
@@ -236,11 +240,12 @@ def main():
     if a.w4:
         import w4
         for key, w in list(enc.weights.items()):
-            q, sc = w4.quantize(w, a.w4, a.wbits, a.wclip)
+            q, sc = w4.quantize(w, w.shape[0] if a.wchannel else a.w4, a.wbits, a.wclip)
             enc.weights[key] = w4.dequant(q, sc)
             if a.npu_w8:
                 w8_raw[key] = (q, sc)
-        print(f"W{a.wbits}: {len(enc.weights)} weight products quantized, group {a.w4} along K, clip points {a.wclip}", flush=True)
+        print(f"W{a.wbits}: {len(enc.weights)} weight products quantized, group "
+              f"{'K (per channel)' if a.wchannel else a.w4} along K, clip points {a.wclip}", flush=True)
     if a.attention == "blockwise":
         import attention_oracle
 
@@ -296,8 +301,15 @@ def main():
         if a.npu_geglu:
             enc.geglu_hook = lambda gu: gu   # gate|up already returned ff from the device
     matmul = npu.matmul if npu else None
+    if a.a8 and not npu:
+        import w4 as _w4
+
+        def matmul(x, name, layer):   # W8A8 emulation: int8 per-token activations against the (dequantized) weights
+            q, s = _w4.quantize_rows(x)
+            return (q.astype(np.float32) * s[:, None]) @ enc.weights[(name, layer)]
     bf16 = a.backend == "npu" or a.bf16_inputs
-    emulation = a.backend == "cpu" and (a.bf16_inputs or a.attention == "blockwise" or a.geglu != "host" or bool(a.w4))
+    emulation = a.backend == "cpu" and (a.bf16_inputs or a.attention == "blockwise" or a.geglu != "host" or bool(a.w4)
+                                        or a.a8)
     try:
         embeds, times, phases = [None] * len(docs), {}, {}
         groups = []   # consecutive same-length documents, up to --batch and (npu) the largest compiled M in rows
@@ -343,7 +355,7 @@ def main():
         strict = a.backend == "cpu" and not emulation and a.attention == "exact"
         threshold = 0.99999 if strict else 0.9999
         passed = bool(cos.min() >= threshold and (strict or nn_kept == 1.0) and nn_quality in (None, 1.0))
-        rec = dict(backend=a.backend, docs=str(a.docs), reference=str(a.reference), batch=a.batch, round_dll=bool(a.round_dll), attention=a.attention, geglu=a.geglu, npu_geglu=a.npu_geglu, npu_w8=a.npu_w8, w4=a.w4, wbits=a.wbits, wclip=a.wclip, k_block=a.k_block, exp=a.exp, tau=a.tau,
+        rec = dict(backend=a.backend, docs=str(a.docs), reference=str(a.reference), batch=a.batch, round_dll=bool(a.round_dll), attention=a.attention, geglu=a.geglu, npu_geglu=a.npu_geglu, npu_w8=a.npu_w8, w4=a.w4, wchannel=a.wchannel, a8=a.a8, wbits=a.wbits, wclip=a.wclip, k_block=a.k_block, exp=a.exp, tau=a.tau,
                    bf16_inputs=a.bf16_inputs, passed=passed,
                    gate=dict(cos_min=threshold, nn_kept=None if strict else 1.0),
                    cos_min=float(cos.min()), cos_mean=float(cos.mean()), nn_kept=nn_kept,

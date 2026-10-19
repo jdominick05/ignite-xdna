@@ -56,6 +56,15 @@ def quantize(w, group=128, bits=4, clip_points=0, clip_lo=0.85):
     return _q(g, s, lo, qmax).astype(np.int8).reshape(K, N), s
 
 
+def quantize_rows(x):
+    """W8A8 activations, per token over all of K: s = bf16(max |x| / 127) per row (an all-zero row gets 1),
+    q = clip(rne(x / s), -127, 127) -> (q int8 [R, K], s fp32 [R] holding bf16 values)."""
+    x = np.asarray(x, np.float32)
+    s = bf16(np.abs(x).max(axis=1) / np.float32(127))
+    s = np.where(s == 0, np.float32(1), s).astype(np.float32)
+    return np.clip(np.rint(x / s[:, None]), -127, 127).astype(np.int8), s
+
+
 def dequant(q, s):
     K, N = q.shape
     group = K // s.shape[0]
