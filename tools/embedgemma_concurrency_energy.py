@@ -67,7 +67,7 @@ def npu_cmd(log, go, out):
 
 def gpu_cmd(go, out):
     return [str(PY), "-I", "tools/embedgemma_gpu_loop.py", "--docs", str(DOCS), "--go", str(go), "--out", str(out),
-            "--fa", GPU_FA]
+            "--fa", GPU_FA, "--reference", str(REF)]
 
 
 def typeperf(samples, path):

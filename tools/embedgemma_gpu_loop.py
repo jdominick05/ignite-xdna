@@ -8,7 +8,9 @@ The server command is the llama-server GPU baseline's (gemma4-embedding-baseline
 slot, -b = -ub = context, --pooling mean, --embd-normalize 2, -fa off unless --fa on), so a loop request costs what
 a baseline request costs. Protocol: start the server, send --warmup requests, write GO.ready, wait for GO to hold
 'START STOP' (epoch seconds), send one document per request from START until STOP, and write OUT with each
-request's wall-clock span. Every response is checked: 768 finite floats of unit norm.
+request's wall-clock span. Every response is checked: 768 finite floats of unit norm. With --reference (the HF
+fp32 npz, rows in the docs file's order), each --length document is embedded once before the loop and its cosine
+against the reference is recorded (cos_min, cos_mean); it is recorded, not gated.
 
     python tools/embedgemma_gpu_loop.py --docs DOCS.json --go GO --out OUT.json [--length 2048] [--fa off]
 """
@@ -53,8 +55,11 @@ def main():
     ap.add_argument("--threads", type=int, default=8)
     ap.add_argument("--fa", choices=["on", "off"], default="off")
     ap.add_argument("--model", type=Path, default=MODEL)
+    ap.add_argument("--reference", type=Path)
     a = ap.parse_args()
-    docs = [d["ids"] for d in json.loads(a.docs.read_text(encoding="utf-8"))["docs"] if d["length"] == a.length]
+    every = json.loads(a.docs.read_text(encoding="utf-8"))["docs"]
+    picked = [i for i, d in enumerate(every) if d["length"] == a.length]
+    docs = [every[i]["ids"] for i in picked]
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))
         port = s.getsockname()[1]
@@ -80,6 +85,13 @@ def main():
             time.sleep(0.5)
         for i in range(a.warmup):
             embed(base, docs[i % len(docs)])
+        quality = None
+        if a.reference:
+            ref = np.load(a.reference)["embeddings"][picked].astype(np.float64)
+            e = np.stack([embed(base, d) for d in docs])
+            cos = np.sum(e * ref, axis=1) / (np.linalg.norm(e, axis=1) * np.linalg.norm(ref, axis=1))
+            quality = dict(reference=str(a.reference), docs=len(docs), cos_min=float(cos.min()), cos_mean=float(cos.mean()))
+            print(f"QUALITY cos min {cos.min():.7f} mean {cos.mean():.7f} over {len(docs)} documents", flush=True)
         Path(str(a.go) + ".ready").write_text(f"{time.time()}\n", encoding="utf-8")
         print("LOOP_READY", flush=True)
         while not a.go.exists():
@@ -95,7 +107,7 @@ def main():
             spans.append([t0, time.time(), 1])
             i += 1
         a.out.write_text(json.dumps(dict(device="gpu", length=a.length, start=start, stop=stop, spans=spans,
-                                         server_command=cmd)) + "\n", encoding="utf-8")
+                                         server_command=cmd, quality=quality)) + "\n", encoding="utf-8")
         print(f"LOOP_DONE {len(spans)} requests", flush=True)
         return 0
     finally:
