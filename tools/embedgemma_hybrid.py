@@ -209,6 +209,8 @@ def main():
     ap.add_argument("--wclip", type=int, default=0, help="--w4: per-group MSE clip search points over alpha in [0.85, 1]; 0 = RTN")
     ap.add_argument("--w4", type=int, default=0, help="quantize every weight product to int4 (kernels/embedgemma/w4.py) "
                     "with this group size along K, and run on its bf16 dequantization; 0 = bf16 weights")
+    ap.add_argument("--native-rowops", type=Path, help="run every other norm, residual add and the per-layer-input "
+                    "GELU through this eg_rowops.dll (native.py build --rowops)")
     ap.add_argument("--native-qkv", type=Path, help="run the post-QKV norms and RoPE through this "
                     "eg_qkv_norm_rope.dll (kernels/embedgemma/native.py build --qkv) instead of model.py's numpy")
     ap.add_argument("--npu-w8", action="store_true", help="npu: upload the --w4 64 --wbits 8 weights as W8 tiles "
@@ -267,6 +269,42 @@ def main():
             enc.timings["gelu"] += time.perf_counter() - t
             return out
         enc.geglu_hook = geglu_emulated
+    if a.native_rowops:
+        import ctypes
+        rl = ctypes.CDLL(str(a.native_rowops.resolve()))
+        P_, I64, F = ctypes.c_void_p, ctypes.c_int64, ctypes.c_float
+        rl.eg_rms.argtypes = [P_, I64, I64, P_, F, P_]
+        rl.eg_add_rms.argtypes = [P_, P_, I64, I64, P_, F, F, P_]
+        rl.eg_gelu_mul.argtypes = [P_, P_, I64, P_]
+
+        def c32(x):
+            return np.ascontiguousarray(x, np.float32)
+
+        class Rowops:
+            @staticmethod
+            def rms(x, w):
+                x = c32(x)
+                out = np.empty_like(x)
+                wv = c32(w) if w is not None else None
+                rl.eg_rms(x.ctypes.data, x.size // x.shape[-1], x.shape[-1], wv.ctypes.data if wv is not None else None,
+                          float(enc.eps), out.ctypes.data)
+                return out
+
+            @staticmethod
+            def add_rms(res, a_, w, scalar):
+                res, a_, wv = c32(res), c32(a_), c32(w)
+                out = np.empty_like(res)
+                rl.eg_add_rms(res.ctypes.data, a_.ctypes.data, res.size // res.shape[-1], res.shape[-1], wv.ctypes.data,
+                              float(enc.eps), float(scalar), out.ctypes.data)
+                return out
+
+            @staticmethod
+            def gelu_mul(a_, b):
+                a_, b = c32(a_), c32(b)
+                out = np.empty_like(a_)
+                rl.eg_gelu_mul(a_.ctypes.data, b.ctypes.data, a_.size, out.ctypes.data)
+                return out
+        enc.native = Rowops()
     if a.native_qkv:
         import ctypes
         lib = ctypes.CDLL(str(a.native_qkv.resolve()))
@@ -376,7 +414,7 @@ def main():
         strict = a.backend == "cpu" and not emulation and a.attention == "exact"
         threshold = 0.99999 if strict else 0.9999
         passed = bool(cos.min() >= threshold and (strict or nn_kept == 1.0) and nn_quality in (None, 1.0))
-        rec = dict(backend=a.backend, docs=str(a.docs), reference=str(a.reference), batch=a.batch, round_dll=bool(a.round_dll), attention=a.attention, geglu=a.geglu, npu_geglu=a.npu_geglu, npu_w8=a.npu_w8, native_qkv=bool(a.native_qkv), w4=a.w4, wchannel=a.wchannel, a8=a.a8, wbits=a.wbits, wclip=a.wclip, k_block=a.k_block, exp=a.exp, tau=a.tau,
+        rec = dict(backend=a.backend, docs=str(a.docs), reference=str(a.reference), batch=a.batch, round_dll=bool(a.round_dll), attention=a.attention, geglu=a.geglu, npu_geglu=a.npu_geglu, npu_w8=a.npu_w8, native_qkv=bool(a.native_qkv), native_rowops=bool(a.native_rowops), w4=a.w4, wchannel=a.wchannel, a8=a.a8, wbits=a.wbits, wclip=a.wclip, k_block=a.k_block, exp=a.exp, tau=a.tau,
                    bf16_inputs=a.bf16_inputs, passed=passed,
                    gate=dict(cos_min=threshold, nn_kept=None if strict else 1.0),
                    cos_min=float(cos.min()), cos_mean=float(cos.mean()), nn_kept=nn_kept,

@@ -102,6 +102,7 @@ class Encoder:
         self.timings = defaultdict(float)
         self.geglu_hook = None   # gu [rows, 2F] -> ff [rows, F]; None = host fp32 gelu_tanh(gate) * up
         self.qkv_hook = None     # (qkv, layer, cos, sin) -> (q, k, v) normed and rotated; None = _rms/_rope below
+        self.native = None       # object with rms(x, w), add_rms(res, a, w, scalar), gelu_mul(a, b) (rowops.c)
 
     def shapes(self) -> list[tuple[str, int, int, int]]:
         """(name, layer, K, N) of every weight product, in forward order."""
@@ -114,11 +115,33 @@ class Encoder:
     # -- ops -------------------------------------------------------------------------------------------------------
     def _rms(self, x, w=None):
         t = time.perf_counter()
+        if self.native:
+            y = self.native.rms(x, w)
+            self.timings["norm"] += time.perf_counter() - t
+            return y
         y = x * (np.mean(x * x, axis=-1, keepdims=True) + self.eps) ** -0.5
         if w is not None:
             y = y * w
         self.timings["norm"] += time.perf_counter() - t
         return y.astype(np.float32)
+
+    def _add_rms(self, res, a, w, scalar=1.0):
+        """(res + rms(a) * w) * scalar: every post-norm with its residual add."""
+        if self.native:
+            t = time.perf_counter()
+            y = self.native.add_rms(res, a, w, scalar)
+            self.timings["norm"] += time.perf_counter() - t
+            return y
+        y = res + self._rms(a, w)
+        return y if scalar == 1.0 else (y * np.float32(scalar)).astype(np.float32)
+
+    def _gelu_mul(self, a, b):
+        if self.native:
+            t = time.perf_counter()
+            y = self.native.gelu_mul(a, b)
+            self.timings["gelu"] += time.perf_counter() - t
+            return y
+        return self._gelu(a) * b
 
     def _gelu(self, x):
         t = time.perf_counter()
@@ -211,17 +234,16 @@ class Encoder:
                 k = self._rope(self._rms(k, lay["k_norm"]), cos, sin)
                 v = self._rms(v)
             a = self._mm(self._attention(q, k, v, lay, segs), "o", i, matmul, bf16_inputs)
-            x = res + self._rms(a, lay["post_attn_norm"])
+            x = self._add_rms(res, a, lay["post_attn_norm"])
             res = x
             gu = self._mm(self._rms(x, lay["pre_ff_norm"]), "gate_up", i, matmul, bf16_inputs)
             if self.geglu_hook:   # a device GeGLU model (geglu_model), or the device's fused result (already ff)
                 ff = self.geglu_hook(gu)
             else:
                 ff = self._gelu(gu[:, :gu.shape[1] // 2]) * gu[:, gu.shape[1] // 2:]
-            x = res + self._rms(self._mm(ff, "down", i, matmul, bf16_inputs), lay["post_ff_norm"])
-            g = self._gelu(self._mm(x, "ple_gate", i, matmul, bf16_inputs)) * ple[:, i, :]
-            x = x + self._rms(self._mm(g, "ple_proj", i, matmul, bf16_inputs), lay["ple_norm"])
-            x = (x * np.float32(lay["scalar"])).astype(np.float32)
+            x = self._add_rms(res, self._mm(ff, "down", i, matmul, bf16_inputs), lay["post_ff_norm"])
+            g = self._gelu_mul(self._mm(x, "ple_gate", i, matmul, bf16_inputs), ple[:, i, :])
+            x = self._add_rms(x, self._mm(g, "ple_proj", i, matmul, bf16_inputs), lay["ple_norm"], lay["scalar"])
         h = self._mm(self._rms(x, self.final_norm), "out", -1, matmul, bf16_inputs).astype(np.float64)
         v = np.stack([h[a:b].mean(axis=0) for a, b in segs])
         return v / np.linalg.norm(v, axis=1, keepdims=True)

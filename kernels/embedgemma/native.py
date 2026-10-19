@@ -62,11 +62,13 @@ def main() -> int:
     b.add_argument("--out", type=Path, required=True)
     b.add_argument("--attn", action="store_true", help="build attn_pack.c -> egattn_pack.dll instead")
     b.add_argument("--host-geglu", action="store_true", help="build host_geglu.c -> egemm_host_geglu.dll instead")
+    b.add_argument("--rowops", action="store_true", help="build rowops.c -> eg_rowops.dll instead")
     b.add_argument("--qkv", action="store_true", help="build qkv_norm_rope.c -> eg_qkv_norm_rope.dll instead")
     sub.add_parser("check").add_argument("--dll", type=Path, required=True)
     a = ap.parse_args()
     if a.cmd == "build":
-        print(build(a.out, "qkv_norm_rope.c", "eg_qkv_norm_rope.dll") if a.qkv else
+        print(build(a.out, "rowops.c", "eg_rowops.dll") if a.rowops else
+              build(a.out, "qkv_norm_rope.c", "eg_qkv_norm_rope.dll") if a.qkv else
               build(a.out, "attn_pack.c", "egattn_pack.dll") if a.attn else
               build(a.out, "host_geglu.c", "egemm_host_geglu.dll") if a.host_geglu else build(a.out))
         return 0

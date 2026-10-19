@@ -25609,3 +25609,28 @@ GeGLU (mode 6) and NPU local attention.
 - **Quantization thread parked** at the owner's call. The SciFact fake-quant scoring was stopped unscored.
   `tools/embedgemma_retrieval_eval.py` and the SciFact fp32 HF reference (nDCG@10 85.42, 300 queries, in
   `scratch/`) are kept for when it resumes.
+
+#### bf16 maturation, item 1b: native row ops for every other norm, residual add and the per-layer-input GELU: 2032.7 to 1539.1 ms at 2048 (2026-10-19, Desktop 2)
+
+[`rowops.c`](../kernels/embedgemma/rowops.c) covers the rest of the host work, through `model.py`'s `native` hook
+(`--native-rowops`): `eg_rms`, `eg_add_rms` (each post-norm with its residual add and the layer scalar folded in)
+and `eg_gelu_mul`. Offline each matches numpy to 1.8e-7 of the max.
+
+**Same sitting:** both runs exit 0 and `timing_eligible`, with no foreign context. Each has bf16 weights, the fused
+GeGLU, NPU local attention and the native QKV pass.
+
+| ms per document | 128 | 512 | 2048 | Log |
+|---|---:|---:|---:|---|
+| native QKV pass only | 126.9 | 555.9 | 2032.7 | [log](../results/aie/embedgemma_hybrid_npu_native_qkvonly_desktop2_20261019T040858Z.log) |
+| + native row ops | **111.0** | **435.1** | **1539.1** | [log](../results/aie/embedgemma_hybrid_npu_native_rowops_desktop2_20261019T040816Z.log) |
+
+- **Gate PASS:** cos min 0.9999883, nearest neighbours 100%.
+- **At 2048, norm + GELU fall from 447 to 111 ms.** The total saving is 494 ms, which is larger than that. The
+  difference is mostly the residual adds and layer-scalar multiplies that numpy ran *outside* any timed phase.
+  That attribution is DERIVED from the phase split, not measured separately.
+- **Since the start of the bf16 maturation the 2048 document has gone from 2613.9 to 1539.1 ms.** CPU torch bf16
+  is 1,500 and the GPU (llama-server) 717.5.
+- **The largest items left at 2048:**
+  - weight GEMMs: 460 ms `npu_call`, 624 ms `gemm` with host packing;
+  - host global attention: 410;
+  - NPU local attention: 269.
