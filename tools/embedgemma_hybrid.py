@@ -187,6 +187,8 @@ def main():
     ap.add_argument("--attention", choices=["exact", "blockwise", "npu-local"], default="exact")
     ap.add_argument("--geglu", choices=["host", "model1", "model2", "model5"], default="host",
                     help="MLP GeGLU: host fp32, or (cpu emulation) geglu_epilogue.cc's mode 1 / mode 2 arithmetic")
+    ap.add_argument("--w4", type=int, default=0, help="quantize every weight product to int4 (kernels/embedgemma/w4.py) "
+                    "with this group size along K, and run on its bf16 dequantization; 0 = bf16 weights")
     ap.add_argument("--npu-geglu", type=int, default=0, help="npu: run gate|up with this geglu_epilogue.cc mode "
                     "(--builds compiled with tools/embedgemma_gemm_probe.py compile --epilogue); 0 = host GeGLU")
     ap.add_argument("--attn-build", type=Path, help="npu-local: kernels/embedgemma/attn_array.py build --out DIR")
@@ -208,6 +210,11 @@ def main():
         raise ValueError("reference and docs differ in count")
     t = time.perf_counter()
     enc = Encoder()
+    if a.w4:
+        import w4
+        for key, w in list(enc.weights.items()):
+            enc.weights[key] = w4.dequant(*w4.quantize(w, a.w4))
+        print(f"W4: {len(enc.weights)} weight products quantized, group {a.w4} along K", flush=True)
     if a.attention == "blockwise":
         import attention_oracle
 
@@ -262,7 +269,7 @@ def main():
             enc.geglu_hook = lambda gu: gu   # gate|up already returned ff from the device
     matmul = npu.matmul if npu else None
     bf16 = a.backend == "npu" or a.bf16_inputs
-    emulation = a.backend == "cpu" and (a.bf16_inputs or a.attention == "blockwise" or a.geglu != "host")
+    emulation = a.backend == "cpu" and (a.bf16_inputs or a.attention == "blockwise" or a.geglu != "host" or bool(a.w4))
     try:
         embeds, times, phases = [None] * len(docs), {}, {}
         groups = []   # consecutive same-length documents, up to --batch and (npu) the largest compiled M in rows
@@ -303,7 +310,7 @@ def main():
         strict = a.backend == "cpu" and not emulation and a.attention == "exact"
         threshold = 0.99999 if strict else 0.9999
         passed = bool(cos.min() >= threshold and (strict or nn_kept == 1.0))
-        rec = dict(backend=a.backend, docs=str(a.docs), reference=str(a.reference), batch=a.batch, round_dll=bool(a.round_dll), attention=a.attention, geglu=a.geglu, npu_geglu=a.npu_geglu, k_block=a.k_block, exp=a.exp, tau=a.tau,
+        rec = dict(backend=a.backend, docs=str(a.docs), reference=str(a.reference), batch=a.batch, round_dll=bool(a.round_dll), attention=a.attention, geglu=a.geglu, npu_geglu=a.npu_geglu, w4=a.w4, k_block=a.k_block, exp=a.exp, tau=a.tau,
                    bf16_inputs=a.bf16_inputs, passed=passed,
                    gate=dict(cos_min=threshold, nn_kept=None if strict else 1.0),
                    cos_min=float(cos.min()), cos_mean=float(cos.mean()), nn_kept=nn_kept,

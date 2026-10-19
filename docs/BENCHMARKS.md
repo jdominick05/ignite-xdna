@@ -25366,3 +25366,18 @@ All modes are again bit-exact to their models (modes 2/5/6), or within 3.1e-07 o
 **Against the native host GeGLU, re-read on these figures.** Mode 6 per document is ~8.6 / ~31.2 / ~134 ms,
 against native 12.2 / 47.5 / 188.9. That is **1.4–1.5x faster**, superseding the 1.5–1.7x above, which used the
 ineligible mode-6 log.
+
+#### W4 weights (int4, RTN, group 128) fail the frozen gate under CPU emulation (2026-10-19, Desktop 2)
+
+[`w4.py`](../kernels/embedgemma/w4.py) quantizes every weight product to int4 with a configuration fixed before the
+run and not swept on the gate documents:
+- symmetric round-to-nearest, q in [-8, 7];
+- one bf16 scale (max |w| / 7) per 128 K-rows of each output column;
+- the GEMM sees bf16(q * s).
+
+`--backend cpu --bf16-inputs --w4 128`, everything else exact ([record](../results/aie/embedgemma_w4_g128_numerics_cpu_desktop2_20261019T003002Z.json)):
+**cosine min 0.9502285, mean 0.9632142, nearest neighbours 82.1% kept: FAIL** (gate: 0.9999 and 100%). The same
+path with bf16 weights PASSES at 0.99999+. So plain RTN W4 changes this model far beyond the bar the bf16 work is
+held to. No device W4 code was written: the quality bar and quantization method W4 must meet are the owner's call.
+Candidates, none run: a finer group, calibrated methods (GPTQ / AWQ), or keeping the most sensitive products in
+bf16, each chosen on documents other than the gate set.
