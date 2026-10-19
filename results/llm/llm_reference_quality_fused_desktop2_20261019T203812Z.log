@@ -1,0 +1,17 @@
+GREEDY {"prompt": "What is the capital of France? Answer in one sentence.", "ref_vs_fp32": {"match": 8, "of": 8, "first_divergence": null}, "ref_vs_bf16": {"match": 8, "of": 8, "first_divergence": null}, "bf16_vs_fp32": {"match": 8, "of": 8, "first_divergence": null}, "ref_seconds": 3.5}
+  ref : 'The capital of France is Paris.<|im_end|>'
+  fp32: 'The capital of France is Paris.<|im_end|>'
+GREEDY {"prompt": "Write a short poem about the ocean.", "ref_vs_fp32": {"match": 27, "of": 128, "first_divergence": 11}, "ref_vs_bf16": {"match": 13, "of": 128, "first_divergence": 5}, "bf16_vs_fp32": {"match": 12, "of": 128, "first_divergence": 5}, "ref_seconds": 12.4}
+  ref : "The ocean's a vast and mysterious sea,\nA vast and mysterious sea, where the stars shine bright,\nA vast and mysterious sea, where the waves crash,\nA va"
+  fp32: "The ocean's a vast and mysterious sea,\nA realm of endless blue, where the waves crash,\nA place of wonder and awe, where the sun dips,\nA place where th"
+GREEDY {"prompt": "Explain what a neural network is to a ten-year-old.", "ref_vs_fp32": {"match": 6, "of": 128, "first_divergence": 6}, "ref_vs_bf16": {"match": 34, "of": 128, "first_divergence": 28}, "bf16_vs_fp32": {"match": 7, "of": 128, "first_divergence": 6}, "ref_seconds": 13.0}
+  ref : 'Imagine you have a big box of toys, and you want to help your friend find the perfect toy. A neural network is like a special machine that can help yo'
+  fp32: 'Imagine you have a big box full of different toys, like cars, dolls, and blocks. A neural network is like a super-smart toy box that can learn and rem'
+GREEDY {"prompt": "List three uses for a paperclip.", "ref_vs_fp32": {"match": 77, "of": 103, "first_divergence": 57}, "ref_vs_bf16": {"match": 103, "of": 103, "first_divergence": null}, "bf16_vs_fp32": {"match": 77, "of": 103, "first_divergence": 57}, "ref_seconds": 10.4}
+  ref : 'Here are three uses for a paperclip:\n\n1. **Paperclip for Writing**: A paperclip can be used to write on a piece of paper, making it a versatile tool f'
+  fp32: 'Here are three uses for a paperclip:\n\n1. **Paperclip for Writing**: A paperclip can be used to write on a piece of paper, making it a versatile tool f'
+GREEDY {"prompt": "Summarize the water cycle in two sentences.", "ref_vs_fp32": {"match": 52, "of": 78, "first_divergence": 44}, "ref_vs_bf16": {"match": 52, "of": 78, "first_divergence": 44}, "bf16_vs_fp32": {"match": 72, "of": 72, "first_divergence": null}, "ref_seconds": 8.6}
+  ref : "The water cycle, also known as the hydrologic cycle, is a continuous process by which water circulates through the Earth's atmosphere and environment."
+  fp32: "The water cycle, also known as the hydrologic cycle, is a continuous process by which water circulates through the Earth's atmosphere and environment."
+GREEDY_TOTALS {"ref_vs_fp32": {"match": 170, "of": 445, "rate": 0.382}, "ref_vs_bf16": {"match": 210, "of": 445, "rate": 0.4719}, "bf16_vs_fp32": {"match": 176, "of": 439, "rate": 0.4009}}
+NLL {"hf_fp32": 1.979543924331665, "hf_bf16": 1.977203369140625, "reference": 1.980624554458233} PPL {"hf_fp32": 7.2394404994624075, "hf_bf16": 7.22251600350591, "reference": 7.247267885458473}

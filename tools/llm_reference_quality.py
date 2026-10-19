@@ -88,6 +88,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--tokens", type=int, default=64)
     ap.add_argument("--out", type=Path)
+    ap.add_argument("--unfused", action="store_true", help="v0 semantics: norms as their own op, rounded residual adds")
     a = ap.parse_args()
     if a.out and a.out.exists():
         raise SystemExit(f"{a.out} exists")
@@ -99,12 +100,14 @@ def main():
     hf = {d: AutoModelForCausalLM.from_pretrained(MODEL, dtype=getattr(torch, d)).eval()
           for d in ("float32", "bfloat16")}
     w = R.Weights.load(safetensors(model_file()))
-    rec = dict(model=MODEL, tokens=a.tokens, reference_mode="fast (float64 sums, one rounding)", prompts=[])
+    rec = dict(model=MODEL, tokens=a.tokens, reference_mode="fast (float64 sums, one rounding)",
+               semantics="v0 unfused" if a.unfused else "fused (norm in the projection, residual as accumulator start)",
+               prompts=[])
     totals = {k: [0, 0] for k in ("ref_vs_fp32", "ref_vs_bf16", "bf16_vs_fp32")}
     for prompt in PROMPTS:
         ids = tok.apply_chat_template([{"role": "user", "content": prompt}], add_generation_prompt=True)
         t0 = time.perf_counter()
-        ref = R.Decoder(w).generate(ids, a.tokens, eos)
+        ref = R.Decoder(w, fused=not a.unfused).generate(ids, a.tokens, eos)
         secs = time.perf_counter() - t0
         f32, b16 = hf_greedy(hf["float32"], ids, a.tokens, eos), hf_greedy(hf["bfloat16"], ids, a.tokens, eos)
         row = dict(prompt=prompt, prompt_tokens=len(ids), ref_seconds=round(secs, 1),
@@ -122,7 +125,7 @@ def main():
     ids = tok(PASSAGE)["input_ids"]
     rec["passage_tokens"] = len(ids)
     rec["nll"] = dict(hf_fp32=hf_nll(hf["float32"], ids), hf_bf16=hf_nll(hf["bfloat16"], ids),
-                      reference=ref_nll(R.Decoder(w), ids))
+                      reference=ref_nll(R.Decoder(w, fused=not a.unfused), ids))
     rec["perplexity"] = {k: float(np.exp(v)) for k, v in rec["nll"].items()}
     print("GREEDY_TOTALS " + json.dumps(rec["greedy_totals"]), flush=True)
     print("NLL " + json.dumps(rec["nll"]) + " PPL " + json.dumps(rec["perplexity"]), flush=True)

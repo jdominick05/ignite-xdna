@@ -5,16 +5,20 @@ known on this core: the mmul MAC (``engine_bf16_emulator.mac``, exp_sum), bf16 x
 round-to-nearest-even to bf16, and tables indexed by bf16 bits, computed on the host with correct rounding. So the
 semantics below are what each kernel must reproduce bit for bit.
 
-Rounding points, per layer at position p:
-  RMSNorm   ss = sum(h*h) (MAC, fp32); r = bf16(1/sqrt(ss/576 + eps)); y = bf16(gamma * bf16(h * r))
-  qkv       projection (fp32 MAC over K, one rounding)
+Rounding points, per layer at position p (``fused=True``, the default and the device's plan; ``fused=False`` is v0,
+which ran the norms as their own op and added rounded projection outputs to the residual):
+  norm+qkv  r = bf16(1/sqrt(sum(h*h)/576 + eps)) (the sum through the MAC); gamma folded into the weights at pack
+            time, W_g = bf16(W * gamma); qkv = bf16(bf16(W_g h) * r)
+  (v0)      RMSNorm y = bf16(gamma * bf16(h * r)) as its own op, then qkv = projection of y
   RoPE      bf16(q*cos + rotate_half(q)*sin), the two products exact and summed once; cos/sin are HF's bf16 tables
   KV        k (after RoPE) and v appended at row p
   scores    s_j = bf16(MAC(q, k_j)) / 8 (a power of two, exact); d_j = bf16(s_j - max s); e_j = EXP[d_j], a table of
             correctly rounded exp over bf16; z = bf16(sum e_j); out = bf16(bf16(sum e_j v_j) * RECIP[z])
-  o, res    projection; h = bf16(h + o), one rounding of the exact sum
-  MLP       gate, up projections; m = bf16(SILU[gate] * up), SILU a correctly rounded table; down; h = bf16(h + d)
-Then the final RMSNorm, the tied head (projection) and argmax (lowest index on a tie).
+  o+res     h = bf16(h + W_o attn): h is the accumulator's starting value, one rounding (v0: bf16(h + bf16(W_o attn)))
+  MLP       gate+up as norm+qkv with the second norm's gamma; m = bf16(SILU[gate] * up), SILU a correctly rounded
+            table; down+res as o+res
+Then the final norm folded into the tied head the same way (its own bf16(embed * gamma) copy; the embedding lookup
+keeps the plain table), and argmax (lowest index on a tie).
 
 ``exact=True`` runs every MAC through the exp_sum emulator. The default computes each MAC-accumulated sum in float64
 and rounds once, which differs from exp_sum only in the last bit of rare sums: right for judging quality, wrong as a
@@ -117,18 +121,32 @@ def dot(a: np.ndarray, b: np.ndarray, exact: bool) -> np.ndarray:
     return acc.reshape(lead).astype(np.float64)
 
 
-def matvec(w: np.ndarray, x: np.ndarray, exact: bool) -> np.ndarray:
-    """bf16 W [N][K] (float32) times bf16 x -> bf16 y, one rounding: the GEMV."""
+def matvec(w: np.ndarray, x: np.ndarray, exact: bool, init: np.ndarray | None = None) -> np.ndarray:
+    """bf16 W [N][K] times bf16 x -> bf16 y, one rounding: the GEMV. ``init`` (bf16 [N]) is the accumulator's
+    starting value, which is how a residual add rides in the projection: y = bf16(init + W x), rounded once."""
     if exact:
         from kernels.llm_gemv import oracle
-        return em.from_bf16_bits(oracle.gemv(em.bf16_bits(w), em.bf16_bits(x)))
-    return bf16_from64(w @ x.astype(np.float64))
+        start = None if init is None else em.bf16_bits(init)
+        return em.from_bf16_bits(oracle.gemv(em.bf16_bits(w), em.bf16_bits(x), init=start))
+    acc = w @ x.astype(np.float64)
+    return bf16_from64(acc if init is None else acc + init.astype(np.float64))
+
+
+def rscale(h, exact):
+    """RMSNorm's scale r = bf16(1/sqrt(sum(h*h)/576 + eps)), the sum through the MAC."""
+    ss = dot(h, h, exact)
+    return bf16_from64(1.0 / np.sqrt(np.float64(np.float32(ss)) / HIDDEN + EPS))
 
 
 def rmsnorm(h, gamma, exact):
-    ss = dot(h, h, exact)
-    r = bf16_from64(1.0 / np.sqrt(np.float64(np.float32(ss)) / HIDDEN + EPS))
-    return bf16(gamma * bf16(h * r))
+    """v0, unfused: y = bf16(gamma * bf16(h * r)), its own op before the projection."""
+    return bf16(gamma * bf16(h * rscale(h, exact)))
+
+
+def normed_matvec(w_gamma, h, exact):
+    """Fused: gamma folded into the weights at pack time (w_gamma = bf16(W * gamma)), r applied in the epilogue:
+    y = bf16(bf16(w_gamma h) * r). Every core recomputes r from the h its header carries."""
+    return bf16(matvec(w_gamma, h, exact) * rscale(h, exact))
 
 
 def rope_tables(positions: int):
@@ -165,7 +183,13 @@ class Weights:
                 o=f(p + "self_attn.o_proj.weight"),
                 gu=np.concatenate([f(p + "mlp.gate_proj.weight"), f(p + "mlp.up_proj.weight")]),
                 down=f(p + "mlp.down_proj.weight")))
-        return cls(f("model.embed_tokens.weight"), layers, f("model.norm.weight"))
+            L = layers[-1]
+            # gamma folded into the following projection's input columns, rounded to bf16 once at pack time
+            L["qkv_g"] = bf16(L["qkv"] * L["n1"][None, :]).astype(np.float64)
+            L["gu_g"] = bf16(L["gu"] * L["n2"][None, :]).astype(np.float64)
+        w = cls(f("model.embed_tokens.weight"), layers, f("model.norm.weight"))
+        w.head_g = bf16(w.embed * w.norm[None, :]).astype(np.float64)   # the tied head with the final norm's gamma
+        return w
 
 
 @dataclass
@@ -173,6 +197,7 @@ class Decoder:
     w: Weights
     max_positions: int = 2048
     exact: bool = False
+    fused: bool = True        # False: v0 (norms as their own op, residual adds of rounded outputs)
     k: List[list] = field(default_factory=lambda: [[] for _ in range(LAYERS)])
     v: List[list] = field(default_factory=lambda: [[] for _ in range(LAYERS)])
 
@@ -197,21 +222,32 @@ class Decoder:
         """One decode step at position p: returns the bf16 logits [V]."""
         h = self.w.embed[token].copy()
         cos, sin = self.cos[p], self.sin[p]
+        x = self.exact
         for i, L in enumerate(self.w.layers):
-            a = rmsnorm(h, L["n1"], self.exact)
-            qkv = matvec(L["qkv"], a, self.exact)
+            if self.fused:
+                qkv = normed_matvec(L["qkv_g"], h, x)
+            else:
+                qkv = matvec(L["qkv"], rmsnorm(h, L["n1"], x), x)
             q = rope(qkv[:HIDDEN].reshape(HEADS, HEAD_DIM), cos, sin)
             k = rope(qkv[HIDDEN:HIDDEN + KV_HEADS * HEAD_DIM].reshape(KV_HEADS, HEAD_DIM), cos, sin)
             v = qkv[HIDDEN + KV_HEADS * HEAD_DIM:].reshape(KV_HEADS, HEAD_DIM)
             self.k[i].append(k)
             self.v[i].append(v)
-            o = matvec(L["o"], self.attention(i, q, p), self.exact)
-            h = bf16_from64(h.astype(np.float64) + o)
-            b = rmsnorm(h, L["n2"], self.exact)
-            gu = matvec(L["gu"], b, self.exact)
+            attn = self.attention(i, q, p)
+            if self.fused:      # the residual is the accumulator's start: one rounding of h + W x
+                h = matvec(L["o"], attn, x, init=h)
+                gu = normed_matvec(L["gu_g"], h, x)
+            else:
+                h = bf16_from64(h.astype(np.float64) + matvec(L["o"], attn, x))
+                gu = matvec(L["gu"], rmsnorm(h, L["n2"], x), x)
             m = bf16(lut(SILU, gu[:MLP]) * gu[MLP:])
-            h = bf16_from64(h.astype(np.float64) + matvec(L["down"], m, self.exact))
-        return matvec(self.w.embed, rmsnorm(h, self.w.norm, self.exact), self.exact)
+            if self.fused:
+                h = matvec(L["down"], m, x, init=h)
+            else:
+                h = bf16_from64(h.astype(np.float64) + matvec(L["down"], m, x))
+        if self.fused:
+            return normed_matvec(self.w.head_g, h, x)
+        return matvec(self.w.embed, rmsnorm(h, self.w.norm, x), x)
 
     def generate(self, prompt: List[int], new_tokens: int, eos: int | None = None) -> List[int]:
         out = []

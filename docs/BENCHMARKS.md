@@ -3793,6 +3793,28 @@ near-ties on open-ended prompts, and the text stays fluent on both sides. So the
 problem, and the kernels for these ops can be built to them. The semantics of the scalar steps (RMSNorm's reciprocal
 square root, the table edges at underflow) are not pinned to the bit yet; they will be when their kernels are written.
 
+**Fused semantics hold too**
+([log](../results/llm/llm_reference_quality_fused_desktop2_20261019T203812Z.log),
+[record](../results/llm/llm_reference_quality_fused_desktop2_20261019T203812Z.json)). The device runs fewer, larger
+calls, because every call pays a drain at its end. Three ops therefore fold into the projections:
+- **RMSNorm:** γ is folded into the next projection's weights at pack time (`bf16(W·γ)`), and the scale is applied
+  in the epilogue: `bf16(bf16(W_γ h)·r)`. Every core recomputes r from the h its header carries. The tied head gets
+  its own `bf16(embed·γ_final)` copy, and the embedding lookup keeps the plain table.
+- **Residual add:** h is the accumulator's starting value in the o and down projections, so `h + W x` rounds once.
+- **SiLU·up:** moves into gate+up's epilogue.
+
+That takes a layer from about 9 calls to about 6. The same gate, same prompts and passage:
+
+| Comparison | v0 (unfused) | Fused |
+|---|---|---|
+| Greedy match against HF fp32 | 172 / 439 | 170 / 445 |
+| Greedy match against HF bf16 | 234 / 439 | 210 / 445 |
+| Passage perplexity (fp32 7.239, bf16 7.223) | 7.250 | **7.247** |
+
+The fused reference diverges from fp32 on one more prompt than HF bf16 does: the water-cycle summary, at token 44
+("groundwater" against "streams"), a near-tie, with both texts fluent. Its perplexity is slightly better than v0's.
+The fused semantics are what the kernels implement.
+
 ### Gemma 3 4B decode on the CPU and DirectML: INCOMPLETE in both sittings on the page-in witness, and the three complete arms decode at 10.8–17.6 tok/s (2026-09-24, Desktop 2)
 
 The question, (c) of the Gemma plan with its rule (d)
