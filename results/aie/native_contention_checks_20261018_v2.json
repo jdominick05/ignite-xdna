@@ -1,0 +1,318 @@
+{
+  "scope": "Archive qualification reports with verified source/build provenance.\n\nRefuses replacement, verifies referenced source/program artifacts and scrubs the\ncurrent local account prefix. Does not turn a negative report into a pass.\n",
+  "source_sha256": "520a71b565f6df80a25a31904f7a276007be610996ce40c2bfc3591fd31b4f3f",
+  "result_sha256": "61841bc1334711ae03c4c8cee9e518f6a903aa31bfc352e5056510676c8e1fb7",
+  "report": {
+    "passed": true,
+    "scope": "Bounded native sensor checks: idle readout, owned CPU burn and GPU control.\n\nNo foreign workload is stopped. Both GPU sensors must identify the owned worker\nwhile it runs a public-prompt GPU-only control, then the worker is closed.\n",
+    "source_sha256": {
+      "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\tools\\qualify_contention_snapshot.py": "da73a3fa38271378d14919031094650a70455a78df1824c666174b33ae230494",
+      "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\npu\\contention.py": "20c1f184d6daba600c80724d539cb6b2f2672dbd71300bd73420a8288db2f8da",
+      "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\tools\\check-inference-contention.ps1": "c7e54aa33f4fc43e9a6bcd4a83195e010eaa0b41057a325720227ec480dd8021",
+      "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\tools\\ggml_gpu_target\\client.py": "c5f39089340c8d5e1a214e2ac5ae33d3bebcc7489f7005255d755ae629154a04",
+      "C:\\Users\\<user>\\gemma4-assistant\\bin\\ggml_gpu_target.exe": "64f58d311a0c05c512dbb30b35a4e0ff003542563abc756e3dceeaefff521c91"
+    },
+    "idle": {
+      "utc": "2026-10-18T20:11:33.192248+00:00",
+      "sample_seconds": 0.5022984000097495,
+      "snapshot_seconds": 0.7314156000211369,
+      "inference_processes": [
+        {
+          "pid": 11908,
+          "name": "python.exe",
+          "active_cpu_cores": 0
+        },
+        {
+          "pid": 12748,
+          "name": "python.exe",
+          "active_cpu_cores": 0
+        },
+        {
+          "pid": 26776,
+          "name": "python.exe",
+          "active_cpu_cores": 0
+        },
+        {
+          "pid": 64488,
+          "name": "python.exe",
+          "active_cpu_cores": 0
+        },
+        {
+          "pid": 76864,
+          "name": "python.exe",
+          "active_cpu_cores": 0.995
+        },
+        {
+          "pid": 77684,
+          "name": "python.exe",
+          "active_cpu_cores": 0.031
+        }
+      ],
+      "cpu_telemetry_known": true,
+      "gpu_telemetry_known": true,
+      "busy_gpu_engines": [],
+      "gpu_details": {
+        "instances": 307,
+        "invalid_instances": 0
+      },
+      "gpu_error": null,
+      "npu_telemetry_known": true,
+      "npu_idle": true,
+      "idle_verified": false,
+      "blockers": [
+        "CPU inference work: PID 76864"
+      ],
+      "scope": "Read-only preflight snapshot; no process is stopped"
+    },
+    "cpu_burn": {
+      "utc": "2026-10-18T20:11:33.859810+00:00",
+      "sample_seconds": 0.5021100000012666,
+      "snapshot_seconds": 0.5628139000036754,
+      "inference_processes": [
+        {
+          "pid": 11908,
+          "name": "python.exe",
+          "active_cpu_cores": 0
+        },
+        {
+          "pid": 12748,
+          "name": "python.exe",
+          "active_cpu_cores": 0
+        },
+        {
+          "pid": 26776,
+          "name": "python.exe",
+          "active_cpu_cores": 0
+        },
+        {
+          "pid": 63520,
+          "name": "python.exe",
+          "active_cpu_cores": 0.996
+        },
+        {
+          "pid": 64488,
+          "name": "python.exe",
+          "active_cpu_cores": 0
+        },
+        {
+          "pid": 76864,
+          "name": "python.exe",
+          "active_cpu_cores": 0.996
+        },
+        {
+          "pid": 77684,
+          "name": "python.exe",
+          "active_cpu_cores": 0
+        }
+      ],
+      "cpu_telemetry_known": true,
+      "gpu_telemetry_known": true,
+      "busy_gpu_engines": [],
+      "gpu_details": {
+        "instances": 307,
+        "invalid_instances": 0
+      },
+      "gpu_error": null,
+      "npu_telemetry_known": true,
+      "npu_idle": true,
+      "idle_verified": false,
+      "blockers": [
+        "CPU inference work: PID 63520",
+        "CPU inference work: PID 76864"
+      ],
+      "scope": "Read-only preflight snapshot; no process is stopped"
+    },
+    "gpu_worker_pid": 76816,
+    "native_gpu": {
+      "utc": "2026-10-18T20:11:40.024297+00:00",
+      "sample_seconds": 0.5017125000013039,
+      "snapshot_seconds": 0.6060516000143252,
+      "inference_processes": [
+        {
+          "pid": 11908,
+          "name": "python.exe",
+          "active_cpu_cores": 0
+        },
+        {
+          "pid": 12748,
+          "name": "python.exe",
+          "active_cpu_cores": 0
+        },
+        {
+          "pid": 26776,
+          "name": "python.exe",
+          "active_cpu_cores": 0
+        },
+        {
+          "pid": 64488,
+          "name": "python.exe",
+          "active_cpu_cores": 0
+        },
+        {
+          "pid": 76864,
+          "name": "python.exe",
+          "active_cpu_cores": 0.218
+        },
+        {
+          "pid": 77684,
+          "name": "python.exe",
+          "active_cpu_cores": 0.031
+        }
+      ],
+      "cpu_telemetry_known": true,
+      "gpu_telemetry_known": true,
+      "busy_gpu_engines": [
+        {
+          "pid": 76816,
+          "engine": "pid_76816_luid_0x00000000_0x0000CE7A_phys_0_eng_1_engtype_Copy",
+          "utilization_percent": 4.831635263941038
+        },
+        {
+          "pid": 76816,
+          "engine": "pid_76816_luid_0x00000000_0x0000CE7A_phys_0_eng_2_engtype_Compute 0",
+          "utilization_percent": 80.63480617960083
+        },
+        {
+          "pid": 76816,
+          "engine": "pid_76816_luid_0x00000000_0x0000CE7A_phys_0_eng_3_engtype_Compute 1",
+          "utilization_percent": 1.0721181615808584
+        }
+      ],
+      "gpu_details": {
+        "instances": 317,
+        "invalid_instances": 0
+      },
+      "gpu_error": null,
+      "npu_telemetry_known": true,
+      "npu_idle": true,
+      "idle_verified": false,
+      "blockers": [
+        "CPU inference work: PID 76864",
+        "GPU engine activity observed"
+      ],
+      "scope": "Read-only preflight snapshot; no process is stopped"
+    },
+    "legacy_gpu": {
+      "utc": "2026-10-18T20:11:41.5325467Z",
+      "sample_seconds": 0.499,
+      "inference_processes": [
+        {
+          "pid": 11908,
+          "name": "python.exe",
+          "active_cpu_cores": 0
+        },
+        {
+          "pid": 12748,
+          "name": "python.exe",
+          "active_cpu_cores": 0
+        },
+        {
+          "pid": 26776,
+          "name": "python.exe",
+          "active_cpu_cores": 0
+        },
+        {
+          "pid": 64488,
+          "name": "python.exe",
+          "active_cpu_cores": 0
+        },
+        {
+          "pid": 76864,
+          "name": "python.exe",
+          "active_cpu_cores": 1
+        },
+        {
+          "pid": 77684,
+          "name": "python.exe",
+          "active_cpu_cores": 0
+        }
+      ],
+      "gpu_telemetry_known": true,
+      "busy_gpu_engines": [
+        {
+          "pid": 76816,
+          "engine": "pid_76816_luid_0x00000000_0x0000CE7A_phys_0_eng_1_engtype_Copy",
+          "utilization_percent": 4
+        },
+        {
+          "pid": 76816,
+          "engine": "pid_76816_luid_0x00000000_0x0000CE7A_phys_0_eng_2_engtype_Compute 0",
+          "utilization_percent": 84
+        },
+        {
+          "pid": 76816,
+          "engine": "pid_76816_luid_0x00000000_0x0000CE7A_phys_0_eng_3_engtype_Compute 1",
+          "utilization_percent": 1
+        }
+      ],
+      "npu_telemetry_known": true,
+      "npu_idle": true,
+      "idle_verified": false,
+      "blockers": [
+        "CPU inference work: PID 76864",
+        "GPU engine activity observed"
+      ],
+      "scope": "Preflight snapshot only; bounded runs must continue monitoring contention."
+    },
+    "after": {
+      "utc": "2026-10-18T20:11:43.586418+00:00",
+      "sample_seconds": 0.5023758000170346,
+      "snapshot_seconds": 0.6074586999893654,
+      "inference_processes": [
+        {
+          "pid": 11908,
+          "name": "python.exe",
+          "active_cpu_cores": 0
+        },
+        {
+          "pid": 12748,
+          "name": "python.exe",
+          "active_cpu_cores": 0
+        },
+        {
+          "pid": 26776,
+          "name": "python.exe",
+          "active_cpu_cores": 0
+        },
+        {
+          "pid": 64488,
+          "name": "python.exe",
+          "active_cpu_cores": 0
+        },
+        {
+          "pid": 76864,
+          "name": "python.exe",
+          "active_cpu_cores": 0.124
+        },
+        {
+          "pid": 77684,
+          "name": "python.exe",
+          "active_cpu_cores": 0
+        }
+      ],
+      "cpu_telemetry_known": true,
+      "gpu_telemetry_known": true,
+      "busy_gpu_engines": [
+        {
+          "pid": 11024,
+          "engine": "pid_11024_luid_0x00000000_0x0000CE7A_phys_0_eng_0_engtype_3D",
+          "utilization_percent": 1.4382743721205318
+        }
+      ],
+      "gpu_details": {
+        "instances": 307,
+        "invalid_instances": 0
+      },
+      "gpu_error": null,
+      "npu_telemetry_known": true,
+      "npu_idle": true,
+      "idle_verified": false,
+      "blockers": [
+        "CPU inference work: PID 76864",
+        "GPU engine activity observed"
+      ],
+      "scope": "Read-only preflight snapshot; no process is stopped"
+    }
+  },
+  "builds": {}
+}

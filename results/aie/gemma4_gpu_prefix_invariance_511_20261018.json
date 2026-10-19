@@ -1,0 +1,845 @@
+{
+  "scope": "Archive qualification reports with verified source/build provenance.\n\nRefuses replacement, verifies referenced source/program artifacts and scrubs the\ncurrent local account prefix. Does not turn a negative report into a pass.\n",
+  "source_sha256": "d1a776782eb356b2fe7971521bbc4ccf28df90f92a2ebeda446deb46c62d7369",
+  "result_sha256": "a207c38194cbaa4c90278b0cf6b08258ff68e9ae73f1885b87a3a302945bace4",
+  "report": {
+    "passed": false,
+    "diagnostic_completed": true,
+    "scope": "Test shared-prefix KV invariance using only the registered full-prefill worker.\n\nThis isolates the control's batch-length behavior from the experimental GPU\ncache. Exact FP32 bits remain the gate; changed row indices are retained.\n",
+    "source_sha256": {
+      "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\tools\\probe_gemma4_prefix_invariance.py": "9262af345bca16df8b8907dc1aa6bbf70c2158c850e108d45630925177eee014",
+      "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\tools\\ggml_gpu_target\\worker.cpp": "5c4bdeb4cc30528dd73cb73fa9cdb4c447c1aebea7ef5d3db632ca7d4b72943a",
+      "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\tools\\ggml_gpu_target\\client.py": "18b75f386a346688e508fc6062335019c5c756e3e3965a52fc3140d462721dbf",
+      "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\tools\\profile_gemma4_target.py": "c681fab3fb0bcac395c5b42470033eca9291bfdddaa978fc78a1d2999eaabf3b",
+      "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\npu\\contention.py": "a00ac19ca6ca4b8a515628d6e8e534e71a4e5283930908bf7e5d7aad1af9a642",
+      "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\npu\\gemma4\\runtime.py": "d997f1297677f4a1b69599d3d7861b67bc7be674aa3d392838e347164813f30a",
+      "C:\\Users\\<user>\\gemma4-assistant\\npu\\public-context-20261018\\public-511.i32": "c80b23b2ee39b2ed2745cac5d6ddff1c5e776e5ebb79ccb7e2a0cc91717de135",
+      "C:\\Users\\<user>\\gemma4-assistant\\models\\gemma-4-E2B-it-Q5_K_M-pleQ4-imatrix.gguf": "ac36a228eb6cd1b93eedc86153016612b0a60ba73c9a50e0b4e95a6a143f65e1",
+      "C:\\Users\\<user>\\gemma4-assistant\\bin\\ggml_gpu_target.exe": "d2d3b60a32d7b8a8ee4ce534ade2515de43f046f30bbb09f58f14d532264dfba",
+      "C:\\Users\\<user>\\tools\\llamacpp-b1343-rocm\\llama.dll": "04aeca339e96514cd2eeed4810ddc813e7cc91b088137d741d5bfb53829464e8",
+      "C:\\Users\\<user>\\tools\\llamacpp-b1343-rocm\\ggml.dll": "d62c9fd3ea800ebf81b104f0b276c44105930557337c3e97ca7bf3e5a51bd889",
+      "C:\\Users\\<user>\\tools\\llamacpp-b1343-rocm\\ggml-base.dll": "b0f6bcf152bbea75fe55c3d185b512ca4b3df167ec8159357da53be435db9539",
+      "C:\\Users\\<user>\\tools\\llamacpp-b1343-rocm\\ggml-hip.dll": "ea8866ab163caad203a2fa2f8afbce51584bb55eb566e1e863bb14e1b1d3f370"
+    },
+    "context_tokens": 2560,
+    "base_length": 511,
+    "cases": [
+      {
+        "name": "repeat",
+        "prompt_length": 511,
+        "common_length": 511,
+        "prefix_bitwise_equal": true,
+        "comparisons": {
+          "Kcur_pos-13": {
+            "bitwise_equal": true,
+            "changed_rows": [],
+            "changed_elements": 0,
+            "max_abs": 0.0,
+            "bf16_different": 0,
+            "actual_sha256": "3036448f8d56d5e73203a9e39ad60cc994e440d7f6e64c13bed6c1b10378a341",
+            "control_sha256": "3036448f8d56d5e73203a9e39ad60cc994e440d7f6e64c13bed6c1b10378a341"
+          },
+          "Vcur_normed-13": {
+            "bitwise_equal": true,
+            "changed_rows": [],
+            "changed_elements": 0,
+            "max_abs": 0.0,
+            "bf16_different": 0,
+            "actual_sha256": "3680b941675bea5b6c02f57801973b599e2acbb25f98de9e3d79c60baac75407",
+            "control_sha256": "3680b941675bea5b6c02f57801973b599e2acbb25f98de9e3d79c60baac75407"
+          },
+          "Kcur_pos-14": {
+            "bitwise_equal": true,
+            "changed_rows": [],
+            "changed_elements": 0,
+            "max_abs": 0.0,
+            "bf16_different": 0,
+            "actual_sha256": "bc410fa88d743dd8a6ad7b68514907bf71c0d97af277f54468ac13c5edc1c9d9",
+            "control_sha256": "bc410fa88d743dd8a6ad7b68514907bf71c0d97af277f54468ac13c5edc1c9d9"
+          },
+          "Vcur_normed-14": {
+            "bitwise_equal": true,
+            "changed_rows": [],
+            "changed_elements": 0,
+            "max_abs": 0.0,
+            "bf16_different": 0,
+            "actual_sha256": "b808ab8fbba7698c113e826fbcbc054e4c2f68d0234ac3b272310508760776f7",
+            "control_sha256": "b808ab8fbba7698c113e826fbcbc054e4c2f68d0234ac3b272310508760776f7"
+          }
+        },
+        "snapshot": {
+          "position": 511,
+          "predictions": [
+            818
+          ],
+          "tensors": {
+            "Kcur_pos-13": {
+              "shape": [
+                256,
+                1,
+                511,
+                1
+              ],
+              "sha256": "3f2c295be6a33fa6bd942e88708caaad68673c5679a07dd6c9aae3390708132b"
+            },
+            "Kcur_pos-14": {
+              "shape": [
+                512,
+                1,
+                511,
+                1
+              ],
+              "sha256": "97b2a7f7d25df2a44676302681b801873763fb112d5b9537d51b5c945a429be0"
+            },
+            "Vcur_normed-13": {
+              "shape": [
+                256,
+                1,
+                511,
+                1
+              ],
+              "sha256": "3a27df829e7078f36d32ed72305beab1108ee256d36ebd2a11a9e8a6d8f708d6"
+            },
+            "Vcur_normed-14": {
+              "shape": [
+                512,
+                1,
+                511,
+                1
+              ],
+              "sha256": "67168f80d08c9e82d8f0d4d15e57861bb3de897f0257a06de363a3548185cf7a"
+            },
+            "result_norm": {
+              "shape": [
+                1536,
+                1,
+                1,
+                1
+              ],
+              "sha256": "fa33d964edeec0262797208be5fde6cf377403ba540ef520c71056f9d8531506"
+            }
+          }
+        },
+        "whole_response_equal": true
+      },
+      {
+        "name": "plus_one",
+        "prompt_length": 512,
+        "common_length": 511,
+        "prefix_bitwise_equal": true,
+        "comparisons": {
+          "Kcur_pos-13": {
+            "bitwise_equal": true,
+            "changed_rows": [],
+            "changed_elements": 0,
+            "max_abs": 0.0,
+            "bf16_different": 0,
+            "actual_sha256": "3036448f8d56d5e73203a9e39ad60cc994e440d7f6e64c13bed6c1b10378a341",
+            "control_sha256": "3036448f8d56d5e73203a9e39ad60cc994e440d7f6e64c13bed6c1b10378a341"
+          },
+          "Vcur_normed-13": {
+            "bitwise_equal": true,
+            "changed_rows": [],
+            "changed_elements": 0,
+            "max_abs": 0.0,
+            "bf16_different": 0,
+            "actual_sha256": "3680b941675bea5b6c02f57801973b599e2acbb25f98de9e3d79c60baac75407",
+            "control_sha256": "3680b941675bea5b6c02f57801973b599e2acbb25f98de9e3d79c60baac75407"
+          },
+          "Kcur_pos-14": {
+            "bitwise_equal": true,
+            "changed_rows": [],
+            "changed_elements": 0,
+            "max_abs": 0.0,
+            "bf16_different": 0,
+            "actual_sha256": "bc410fa88d743dd8a6ad7b68514907bf71c0d97af277f54468ac13c5edc1c9d9",
+            "control_sha256": "bc410fa88d743dd8a6ad7b68514907bf71c0d97af277f54468ac13c5edc1c9d9"
+          },
+          "Vcur_normed-14": {
+            "bitwise_equal": true,
+            "changed_rows": [],
+            "changed_elements": 0,
+            "max_abs": 0.0,
+            "bf16_different": 0,
+            "actual_sha256": "b808ab8fbba7698c113e826fbcbc054e4c2f68d0234ac3b272310508760776f7",
+            "control_sha256": "b808ab8fbba7698c113e826fbcbc054e4c2f68d0234ac3b272310508760776f7"
+          }
+        },
+        "snapshot": {
+          "position": 512,
+          "predictions": [
+            7217
+          ],
+          "tensors": {
+            "Kcur_pos-13": {
+              "shape": [
+                256,
+                1,
+                512,
+                1
+              ],
+              "sha256": "d3b618a37265960366f53dd60a765c9b3771ee44347ff8657391584a0f0695bc"
+            },
+            "Kcur_pos-14": {
+              "shape": [
+                512,
+                1,
+                512,
+                1
+              ],
+              "sha256": "0cb5810c37f05ca305919b6bbb86f0b2265c55061262ba969f39e3c32f5d88b5"
+            },
+            "Vcur_normed-13": {
+              "shape": [
+                256,
+                1,
+                512,
+                1
+              ],
+              "sha256": "4fdf20e36f906f85560e2d0bf162e1f5a39851fce0acc34b8873c912120dee35"
+            },
+            "Vcur_normed-14": {
+              "shape": [
+                512,
+                1,
+                512,
+                1
+              ],
+              "sha256": "4d65f660dbd5d8fe00dfdfc33e52b1d364c1d7116280b0189a088c1a0706a134"
+            },
+            "result_norm": {
+              "shape": [
+                1536,
+                1,
+                1,
+                1
+              ],
+              "sha256": "2f45befad10afef019e8f6104db66c4422c3e78db0baad197969ec5cbf07003c"
+            }
+          }
+        }
+      },
+      {
+        "name": "plus_three",
+        "prompt_length": 514,
+        "common_length": 511,
+        "prefix_bitwise_equal": false,
+        "comparisons": {
+          "Kcur_pos-13": {
+            "bitwise_equal": false,
+            "changed_rows": [
+              505,
+              506,
+              507,
+              508,
+              509,
+              510
+            ],
+            "changed_elements": 1536,
+            "max_abs": 0.026273459196090698,
+            "bf16_different": 1475,
+            "actual_sha256": "4b8f1c4c36ad80725a0f8c0eb5d89618eedcaaa0a65a162b527d2ab219dad9e6",
+            "control_sha256": "3036448f8d56d5e73203a9e39ad60cc994e440d7f6e64c13bed6c1b10378a341"
+          },
+          "Vcur_normed-13": {
+            "bitwise_equal": false,
+            "changed_rows": [
+              505,
+              506,
+              507,
+              508,
+              509,
+              510
+            ],
+            "changed_elements": 1536,
+            "max_abs": 1.399367094039917,
+            "bf16_different": 1500,
+            "actual_sha256": "0f7871f4d72edda15cad7102249e1fd4cbcdb3adbc7458ec3a6a84a48f2b774e",
+            "control_sha256": "3680b941675bea5b6c02f57801973b599e2acbb25f98de9e3d79c60baac75407"
+          },
+          "Kcur_pos-14": {
+            "bitwise_equal": false,
+            "changed_rows": [
+              505,
+              506,
+              507,
+              508,
+              509,
+              510
+            ],
+            "changed_elements": 3072,
+            "max_abs": 0.013308869674801826,
+            "bf16_different": 2972,
+            "actual_sha256": "7d1c73737790666fb14ff29b95b2b302ecc5b40e9f4ab372020261dd2d888f48",
+            "control_sha256": "bc410fa88d743dd8a6ad7b68514907bf71c0d97af277f54468ac13c5edc1c9d9"
+          },
+          "Vcur_normed-14": {
+            "bitwise_equal": false,
+            "changed_rows": [
+              505,
+              506,
+              507,
+              508,
+              509,
+              510
+            ],
+            "changed_elements": 3072,
+            "max_abs": 0.609097957611084,
+            "bf16_different": 2996,
+            "actual_sha256": "b186fa493b7e4f77b853bc88ad943f8b6b75f01461a1123a7714fdd5f487f416",
+            "control_sha256": "b808ab8fbba7698c113e826fbcbc054e4c2f68d0234ac3b272310508760776f7"
+          }
+        },
+        "snapshot": {
+          "position": 514,
+          "predictions": [
+            614
+          ],
+          "tensors": {
+            "Kcur_pos-13": {
+              "shape": [
+                256,
+                1,
+                514,
+                1
+              ],
+              "sha256": "159fff6c93f841a0d039064e5c6eecd2649b3f599beedb58fb15d76b63d6d054"
+            },
+            "Kcur_pos-14": {
+              "shape": [
+                512,
+                1,
+                514,
+                1
+              ],
+              "sha256": "0555079a72150bfb80b2d314cd700419e006cd126bb038d53a4abbc43d2ab849"
+            },
+            "Vcur_normed-13": {
+              "shape": [
+                256,
+                1,
+                514,
+                1
+              ],
+              "sha256": "aece325412b9eb35c9d2d1b17407a6e671fb4323b2ce93ce4f0cce50ec5a1bd0"
+            },
+            "Vcur_normed-14": {
+              "shape": [
+                512,
+                1,
+                514,
+                1
+              ],
+              "sha256": "05e5cce9000fba27d6fc80152d4a6f5ef6216b1581ead691b8e5e22eae40f855"
+            },
+            "result_norm": {
+              "shape": [
+                1536,
+                1,
+                1,
+                1
+              ],
+              "sha256": "bdb44d0d52e4a34e521b7c743887318f5b09c9eeda2710f65ce8c80668dbe8a6"
+            }
+          }
+        }
+      },
+      {
+        "name": "plus_eight",
+        "prompt_length": 519,
+        "common_length": 511,
+        "prefix_bitwise_equal": false,
+        "comparisons": {
+          "Kcur_pos-13": {
+            "bitwise_equal": false,
+            "changed_rows": [
+              505,
+              506,
+              507,
+              508,
+              509,
+              510
+            ],
+            "changed_elements": 1536,
+            "max_abs": 0.026273459196090698,
+            "bf16_different": 1475,
+            "actual_sha256": "4b8f1c4c36ad80725a0f8c0eb5d89618eedcaaa0a65a162b527d2ab219dad9e6",
+            "control_sha256": "3036448f8d56d5e73203a9e39ad60cc994e440d7f6e64c13bed6c1b10378a341"
+          },
+          "Vcur_normed-13": {
+            "bitwise_equal": false,
+            "changed_rows": [
+              505,
+              506,
+              507,
+              508,
+              509,
+              510
+            ],
+            "changed_elements": 1536,
+            "max_abs": 1.399367094039917,
+            "bf16_different": 1500,
+            "actual_sha256": "0f7871f4d72edda15cad7102249e1fd4cbcdb3adbc7458ec3a6a84a48f2b774e",
+            "control_sha256": "3680b941675bea5b6c02f57801973b599e2acbb25f98de9e3d79c60baac75407"
+          },
+          "Kcur_pos-14": {
+            "bitwise_equal": false,
+            "changed_rows": [
+              505,
+              506,
+              507,
+              508,
+              509,
+              510
+            ],
+            "changed_elements": 3072,
+            "max_abs": 0.013308869674801826,
+            "bf16_different": 2972,
+            "actual_sha256": "7d1c73737790666fb14ff29b95b2b302ecc5b40e9f4ab372020261dd2d888f48",
+            "control_sha256": "bc410fa88d743dd8a6ad7b68514907bf71c0d97af277f54468ac13c5edc1c9d9"
+          },
+          "Vcur_normed-14": {
+            "bitwise_equal": false,
+            "changed_rows": [
+              505,
+              506,
+              507,
+              508,
+              509,
+              510
+            ],
+            "changed_elements": 3072,
+            "max_abs": 0.609097957611084,
+            "bf16_different": 2996,
+            "actual_sha256": "b186fa493b7e4f77b853bc88ad943f8b6b75f01461a1123a7714fdd5f487f416",
+            "control_sha256": "b808ab8fbba7698c113e826fbcbc054e4c2f68d0234ac3b272310508760776f7"
+          }
+        },
+        "snapshot": {
+          "position": 519,
+          "predictions": [
+            236764
+          ],
+          "tensors": {
+            "Kcur_pos-13": {
+              "shape": [
+                256,
+                1,
+                519,
+                1
+              ],
+              "sha256": "ec908b578c7beaeccbd5c192a0071cc28c7885098026eb3d5699a37fbea6b861"
+            },
+            "Kcur_pos-14": {
+              "shape": [
+                512,
+                1,
+                519,
+                1
+              ],
+              "sha256": "794e1fed81d07ab726bbe252933570fbebda6a99e173276c37048a33f3ebc12b"
+            },
+            "Vcur_normed-13": {
+              "shape": [
+                256,
+                1,
+                519,
+                1
+              ],
+              "sha256": "ce7fa2311fc9d5422ed80fd8928703c8ae3e50c0372a9c5fad2ee2d13f8a66a0"
+            },
+            "Vcur_normed-14": {
+              "shape": [
+                512,
+                1,
+                519,
+                1
+              ],
+              "sha256": "4dfda8773207d3fbebfba50137dbfcd35ffac7bc030fec9ea03d7c55ac1bab71"
+            },
+            "result_norm": {
+              "shape": [
+                1536,
+                1,
+                1,
+                1
+              ],
+              "sha256": "444ef94cebb6609321af5a0df59da51a17c5ad50402f757282dec0d5702dcf4a"
+            }
+          }
+        }
+      },
+      {
+        "name": "minus_one",
+        "prompt_length": 510,
+        "common_length": 510,
+        "prefix_bitwise_equal": true,
+        "comparisons": {
+          "Kcur_pos-13": {
+            "bitwise_equal": true,
+            "changed_rows": [],
+            "changed_elements": 0,
+            "max_abs": 0.0,
+            "bf16_different": 0,
+            "actual_sha256": "56e52988ae3e501a1935f36ff710c9a117782c0d8ba3d9ec4a8db8917e89c0bd",
+            "control_sha256": "56e52988ae3e501a1935f36ff710c9a117782c0d8ba3d9ec4a8db8917e89c0bd"
+          },
+          "Vcur_normed-13": {
+            "bitwise_equal": true,
+            "changed_rows": [],
+            "changed_elements": 0,
+            "max_abs": 0.0,
+            "bf16_different": 0,
+            "actual_sha256": "6338ba1aff31d0c5f2524b29f89f6f771d6a5fce5b8e62ad7d89abf53a35fd5c",
+            "control_sha256": "6338ba1aff31d0c5f2524b29f89f6f771d6a5fce5b8e62ad7d89abf53a35fd5c"
+          },
+          "Kcur_pos-14": {
+            "bitwise_equal": true,
+            "changed_rows": [],
+            "changed_elements": 0,
+            "max_abs": 0.0,
+            "bf16_different": 0,
+            "actual_sha256": "7c6a51ee88f1c6acd988b52839ee431c9cc14248bca90af8b5028d456a04b2c0",
+            "control_sha256": "7c6a51ee88f1c6acd988b52839ee431c9cc14248bca90af8b5028d456a04b2c0"
+          },
+          "Vcur_normed-14": {
+            "bitwise_equal": true,
+            "changed_rows": [],
+            "changed_elements": 0,
+            "max_abs": 0.0,
+            "bf16_different": 0,
+            "actual_sha256": "8fb79764ffe2f039ada4ab39eadc2411413796e2f2a04e2dab298131729f2916",
+            "control_sha256": "8fb79764ffe2f039ada4ab39eadc2411413796e2f2a04e2dab298131729f2916"
+          }
+        },
+        "snapshot": {
+          "position": 510,
+          "predictions": [
+            669
+          ],
+          "tensors": {
+            "Kcur_pos-13": {
+              "shape": [
+                256,
+                1,
+                510,
+                1
+              ],
+              "sha256": "cef59e9b4d923e3bcf91a79be29e04c0b398023bf549173b291165144c360d12"
+            },
+            "Kcur_pos-14": {
+              "shape": [
+                512,
+                1,
+                510,
+                1
+              ],
+              "sha256": "a9984317a0733e8348b1c60b521eff4843a0c35463ea3e5212756fec520e5899"
+            },
+            "Vcur_normed-13": {
+              "shape": [
+                256,
+                1,
+                510,
+                1
+              ],
+              "sha256": "45a8eb4b2eaf22a239ed531526142e10a931b1463b8abb46b95f9b5fef6d2b6c"
+            },
+            "Vcur_normed-14": {
+              "shape": [
+                512,
+                1,
+                510,
+                1
+              ],
+              "sha256": "7893dc5e92491c211609650ce07cd8ca81f1980c08ad73d4069d4a27f4caf443"
+            },
+            "result_norm": {
+              "shape": [
+                1536,
+                1,
+                1,
+                1
+              ],
+              "sha256": "46308eb2ff039864132afb5b663fa20caceebcae27f6abc632b1384e7bb4bd3d"
+            }
+          }
+        }
+      },
+      {
+        "name": "minus_three",
+        "prompt_length": 508,
+        "common_length": 508,
+        "prefix_bitwise_equal": true,
+        "comparisons": {
+          "Kcur_pos-13": {
+            "bitwise_equal": true,
+            "changed_rows": [],
+            "changed_elements": 0,
+            "max_abs": 0.0,
+            "bf16_different": 0,
+            "actual_sha256": "d67d3c83351671a59ade6bc2e00ecf89703e100fd176c73c50176f022ebf9959",
+            "control_sha256": "d67d3c83351671a59ade6bc2e00ecf89703e100fd176c73c50176f022ebf9959"
+          },
+          "Vcur_normed-13": {
+            "bitwise_equal": true,
+            "changed_rows": [],
+            "changed_elements": 0,
+            "max_abs": 0.0,
+            "bf16_different": 0,
+            "actual_sha256": "13dbb3cf652997a40489dab7b52cef941f34d5271fa5c824b769765caa66d9a5",
+            "control_sha256": "13dbb3cf652997a40489dab7b52cef941f34d5271fa5c824b769765caa66d9a5"
+          },
+          "Kcur_pos-14": {
+            "bitwise_equal": true,
+            "changed_rows": [],
+            "changed_elements": 0,
+            "max_abs": 0.0,
+            "bf16_different": 0,
+            "actual_sha256": "87b8980d96f85897118371654ff12be8d532b96cb71a22883ce81f5dbc10943f",
+            "control_sha256": "87b8980d96f85897118371654ff12be8d532b96cb71a22883ce81f5dbc10943f"
+          },
+          "Vcur_normed-14": {
+            "bitwise_equal": true,
+            "changed_rows": [],
+            "changed_elements": 0,
+            "max_abs": 0.0,
+            "bf16_different": 0,
+            "actual_sha256": "fcd6caba93363343576839fb5acebc56563d3309741fbd59ba760bc16860eea6",
+            "control_sha256": "fcd6caba93363343576839fb5acebc56563d3309741fbd59ba760bc16860eea6"
+          }
+        },
+        "snapshot": {
+          "position": 508,
+          "predictions": [
+            100
+          ],
+          "tensors": {
+            "Kcur_pos-13": {
+              "shape": [
+                256,
+                1,
+                508,
+                1
+              ],
+              "sha256": "7b44fd767c47aeb0afc2f707895edd83211c29ba72fa965a9d6e02fd553176df"
+            },
+            "Kcur_pos-14": {
+              "shape": [
+                512,
+                1,
+                508,
+                1
+              ],
+              "sha256": "035c3d4649cea15dfc6f4c8fec217d9ace50c8e9493da420dea302dcf8de1ad7"
+            },
+            "Vcur_normed-13": {
+              "shape": [
+                256,
+                1,
+                508,
+                1
+              ],
+              "sha256": "face4eb48d9dba83675a73b114b9dcc1dc68509eba852b2b8eacb034f321cf1d"
+            },
+            "Vcur_normed-14": {
+              "shape": [
+                512,
+                1,
+                508,
+                1
+              ],
+              "sha256": "da38ac90dd6ea4e34b682ec7a4ecebaad40beb0eb3fce9832fbdb9184d7fd191"
+            },
+            "result_norm": {
+              "shape": [
+                1536,
+                1,
+                1,
+                1
+              ],
+              "sha256": "ff3def846628bc861c247d3b26e57008ac1a900b3e06467b2c3074ac15c37451"
+            }
+          }
+        }
+      },
+      {
+        "name": "repeat_after",
+        "prompt_length": 511,
+        "common_length": 511,
+        "prefix_bitwise_equal": true,
+        "comparisons": {
+          "Kcur_pos-13": {
+            "bitwise_equal": true,
+            "changed_rows": [],
+            "changed_elements": 0,
+            "max_abs": 0.0,
+            "bf16_different": 0,
+            "actual_sha256": "3036448f8d56d5e73203a9e39ad60cc994e440d7f6e64c13bed6c1b10378a341",
+            "control_sha256": "3036448f8d56d5e73203a9e39ad60cc994e440d7f6e64c13bed6c1b10378a341"
+          },
+          "Vcur_normed-13": {
+            "bitwise_equal": true,
+            "changed_rows": [],
+            "changed_elements": 0,
+            "max_abs": 0.0,
+            "bf16_different": 0,
+            "actual_sha256": "3680b941675bea5b6c02f57801973b599e2acbb25f98de9e3d79c60baac75407",
+            "control_sha256": "3680b941675bea5b6c02f57801973b599e2acbb25f98de9e3d79c60baac75407"
+          },
+          "Kcur_pos-14": {
+            "bitwise_equal": true,
+            "changed_rows": [],
+            "changed_elements": 0,
+            "max_abs": 0.0,
+            "bf16_different": 0,
+            "actual_sha256": "bc410fa88d743dd8a6ad7b68514907bf71c0d97af277f54468ac13c5edc1c9d9",
+            "control_sha256": "bc410fa88d743dd8a6ad7b68514907bf71c0d97af277f54468ac13c5edc1c9d9"
+          },
+          "Vcur_normed-14": {
+            "bitwise_equal": true,
+            "changed_rows": [],
+            "changed_elements": 0,
+            "max_abs": 0.0,
+            "bf16_different": 0,
+            "actual_sha256": "b808ab8fbba7698c113e826fbcbc054e4c2f68d0234ac3b272310508760776f7",
+            "control_sha256": "b808ab8fbba7698c113e826fbcbc054e4c2f68d0234ac3b272310508760776f7"
+          }
+        },
+        "snapshot": {
+          "position": 511,
+          "predictions": [
+            818
+          ],
+          "tensors": {
+            "Kcur_pos-13": {
+              "shape": [
+                256,
+                1,
+                511,
+                1
+              ],
+              "sha256": "3f2c295be6a33fa6bd942e88708caaad68673c5679a07dd6c9aae3390708132b"
+            },
+            "Kcur_pos-14": {
+              "shape": [
+                512,
+                1,
+                511,
+                1
+              ],
+              "sha256": "97b2a7f7d25df2a44676302681b801873763fb112d5b9537d51b5c945a429be0"
+            },
+            "Vcur_normed-13": {
+              "shape": [
+                256,
+                1,
+                511,
+                1
+              ],
+              "sha256": "3a27df829e7078f36d32ed72305beab1108ee256d36ebd2a11a9e8a6d8f708d6"
+            },
+            "Vcur_normed-14": {
+              "shape": [
+                512,
+                1,
+                511,
+                1
+              ],
+              "sha256": "67168f80d08c9e82d8f0d4d15e57861bb3de897f0257a06de363a3548185cf7a"
+            },
+            "result_norm": {
+              "shape": [
+                1536,
+                1,
+                1,
+                1
+              ],
+              "sha256": "fa33d964edeec0262797208be5fde6cf377403ba540ef520c71056f9d8531506"
+            }
+          }
+        },
+        "whole_response_equal": true
+      }
+    ],
+    "rejections": [
+      {
+        "utc": "2026-10-18T23:45:28.020204+00:00",
+        "sample_seconds": 0.5014782999933232,
+        "snapshot_seconds": 0.7864517999987584,
+        "inference_processes": [
+          {
+            "pid": 11908,
+            "name": "python.exe",
+            "active_cpu_cores": 0
+          },
+          {
+            "pid": 12748,
+            "name": "python.exe",
+            "active_cpu_cores": 0
+          },
+          {
+            "pid": 26776,
+            "name": "python.exe",
+            "active_cpu_cores": 0
+          },
+          {
+            "pid": 64488,
+            "name": "python.exe",
+            "active_cpu_cores": 0
+          },
+          {
+            "pid": 78048,
+            "name": "python.exe",
+            "active_cpu_cores": 0
+          },
+          {
+            "pid": 78904,
+            "name": "python.exe",
+            "active_cpu_cores": 0.156
+          }
+        ],
+        "cpu_telemetry_known": true,
+        "gpu_telemetry_known": true,
+        "busy_gpu_engines": [
+          {
+            "pid": 11024,
+            "engine": "pid_11024_luid_0x00000000_0x0000CE7A_phys_0_eng_0_engtype_3D",
+            "utilization_percent": 2.1134468644691444
+          }
+        ],
+        "gpu_details": {
+          "instances": 307,
+          "invalid_instances": 0
+        },
+        "gpu_error": null,
+        "npu_telemetry_known": true,
+        "npu_idle": true,
+        "idle_verified": false,
+        "blockers": [
+          "CPU inference work: PID 78904",
+          "GPU engine activity observed"
+        ],
+        "scope": "Read-only preflight snapshot; no process is stopped",
+        "owned_pids": [
+          78048,
+          78904
+        ]
+      }
+    ],
+    "timing_eligible": false,
+    "energy_eligible": false,
+    "extension": [
+      818,
+      7217,
+      563,
+      614,
+      3785,
+      236772,
+      32655,
+      12002
+    ],
+    "worker_closed": true
+  },
+  "builds": {}
+}

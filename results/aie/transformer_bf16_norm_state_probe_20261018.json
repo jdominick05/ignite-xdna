@@ -1,0 +1,71 @@
+{
+  "scope": "Read actual NPU RMSNorm variance and inverse bits on a saved native input.\n\nCorrectness diagnostic only, not model qualification or a timing experiment.\nCPU diagnostic values are compared after execution; never used as NPU operands.\n",
+  "contract": {
+    "scope": "Read actual NPU RMSNorm variance and inverse bits on a saved native input.\n\nCorrectness diagnostic only, not model qualification or a timing experiment.\nCPU diagnostic values are compared after execution; never used as NPU operands.\n",
+    "trace_sha256": "f103067f22918bce49a51554c5d8a745a533c36192f9aabbc30e521197413825",
+    "weights_sha256": "bda11a1dd40c42a3f84632cb66250f8afe1111657f0d37188e3c0234da6376fc",
+    "layer": 1
+  },
+  "source_sha256": "b38fae7bb38a30668c9fa99bb240b32c4d5a9b9bc86fe3aff0850aa3d5990a8d",
+  "build_sha256": "fa3b0036b95a42e5184f3a63891e489637bb2b7665f2104ef3785db8b0f6e39e",
+  "diagnostic_sha256": "0dc0c4eae2ce1b91ce9c6fc157290abe40bce9d657cbf255d5bfddc83e256246",
+  "rows": [
+    {
+      "head": 0,
+      "variance_bits": 1117577410,
+      "initial_inverse_bits": 1038564756,
+      "refined_inverse_bits": 1038564756,
+      "residual_bits": 859163544,
+      "torch_variance_bits": 1117577411,
+      "torch_inverse_bits": 1038564756
+    },
+    {
+      "head": 1,
+      "variance_bits": 1122038503,
+      "initial_inverse_bits": 1036065783,
+      "refined_inverse_bits": 1036065784,
+      "residual_bits": 871428976,
+      "torch_variance_bits": 1122038503,
+      "torch_inverse_bits": 1036065784
+    },
+    {
+      "head": 2,
+      "variance_bits": 1110374649,
+      "initial_inverse_bits": 1041945486,
+      "refined_inverse_bits": 1041945486,
+      "residual_bits": 850275611,
+      "torch_variance_bits": 1110374649,
+      "torch_inverse_bits": 1041945486
+    },
+    {
+      "head": 3,
+      "variance_bits": 1119209562,
+      "initial_inverse_bits": 1037488427,
+      "refined_inverse_bits": 1037488427,
+      "residual_bits": 3002882450,
+      "torch_variance_bits": 1119209563,
+      "torch_inverse_bits": 1037488426
+    }
+  ],
+  "normalized_matches_saved_native": true,
+  "suffix_guard": true,
+  "contexts_released": true,
+  "dispatch": {
+    "dispatch_ms": 0.32970000756904483,
+    "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+    "input_unchanged": true,
+    "transfer_phases_ms": {
+      "input_write_sync": 0.007499998901039362,
+      "output_poison_sync": 0.02579999272711575,
+      "output_sync_read": 0.1613999775145203,
+      "input_sync_verify": 0.05299999611452222
+    },
+    "persistent_transport": true,
+    "image_cache_hit": false,
+    "contexts_created": 1,
+    "context_cache_hit": false,
+    "exact_program_sharing": false,
+    "context_cache_size": 1,
+    "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+  }
+}

@@ -1,0 +1,3827 @@
+{
+  "scope": "Captured target-state checks; provenance distinguishes synthetic and real ROCm inputs. No serving integration, target acceptance or performance claim",
+  "export_source_sha256": "fd2e401c0d8fad24d056a3bda8473bf2f5e24d234a8982f75d33f1aead69240a",
+  "reports": [
+    {
+      "result_sha256": "a463c6e52a767c2497f2e31ba63fce4aaabaf198fa7cf3463dc3b66855cc5aeb",
+      "registration": {
+        "gates": {
+          "relative_l2": 0.01,
+          "max_abs_over_reference_rms": 0.05,
+          "scope": "Full NPU greedy draft step, synthetic target states; proposal agreement diagnostic; no serving or speed claim"
+        },
+        "source_sha256": "c20dca6bc8c90390c3b6f1b93912b9ed99e62ee34168d024f2e186d2a825fd25",
+        "native_runtime_sha256": "9e1b09d0ed1d7d5af3bc046cb40cf87e4ea2aff42cf9c8bc606aaa6335bfd1f2",
+        "shared_sources": {
+          "kernels/transformer_bf16/common.py": "e9ea9aefc2167093490bc2716ec2895f38cb13fc3852703ebd42211526c4854e",
+          "kernels/transformer_bf16/dispatch.cc": "2f3de210acfad2fcc8f8d9f3a8415052aa402f058734a459d714c897ad986b05",
+          "kernels/transformer_bf16/geglu.cc": "e7ed0233130e8f63bc2134502c318c87563ac48cf2308aeb7c308641666d4b34",
+          "kernels/transformer_bf16/gemv.cc": "66a1da00c319f565af9554ea516254588273f0396c3d2a1b29299a8e3039690f",
+          "kernels/transformer_bf16/gemv_precise.cc": "6600e21079a574c4d1d3b93f497d11d75656fc062cc123fb12013ece3436087a",
+          "kernels/transformer_bf16/ops.py": "aabac8f0016d553e5a44db5b2857e09972eaa59799a59f221bc33587aaf49cf7",
+          "kernels/transformer_bf16/persistent.py": "2ebf85286ff9462ba5cc9bf1509e18260094fc057372e319306db7e5b50c8f2d",
+          "kernels/transformer_bf16/probe.py": "8233278ed12504807faa60ce48c08e5bb5b3bd9f95502428247f9050e4a41c5d",
+          "kernels/transformer_bf16/residual.cc": "56d6d909c9830b799263b970443f1f7b57dd4d99557db25afef036d761e8f4a2",
+          "kernels/transformer_bf16/rmsnorm.cc": "9efc3bec80f7c25e88a48ce30f851bc437e05000e7d79014cc2997399b15463f",
+          "kernels/transformer_bf16/rope.cc": "9cda05b108160f2152261eb79b61c8830aca34d0c4d4158d5c281897f1b7ce2a",
+          "kernels/transformer_bf16/session_probe.py": "5bdccf07ea2c4afce21960af75a83c35a73dbe88250ed1b45cb173f2381856a8",
+          "kernels/transformer_bf16/softmax.cc": "32ed139ad46f7c3ee8f3edd5716eafed3306386cb81be384ede30fdf00ff397a",
+          "kernels/transformer_bf16/stream.py": "6e7da07da912a65f6cdfafbc76df2dd22e135e371cc0a560eeddd0bf4c19c97d",
+          "kernels/transformer_bf16/topk.cc": "1f680ca67d8c97a82bb41db53a6f2aad15802f16be287b9bfddbac31ca6e1868",
+          "kernels/transformer_bf16/__init__.py": "66e8ee8dbd8e1bbc4788e12fa85a161db92c666969493f6a38b5f623cb309bf4"
+        },
+        "rotations_sha256": "cf635256ce57709aa949244852ca8e251661d4cc812a3e636c11305184f3f78e",
+        "lut_sha256": "2a3578db96f57b7b5c2768acbfa2bffefbf5247453fbab911793728b5451465e",
+        "fixtures": {
+          "<user-home>\\gemma4-assistant\\npu\\e2b-bf16-fixtures-1792341384780030000\\manifest.json": "c2d45eb1a4a75405ec992e59d1ce947d310b022c10164d7bb662e5e18b419f14",
+          "<user-home>\\gemma4-assistant\\npu\\e4b-bf16-fixtures-1792341423046336500\\manifest.json": "eb30c673f5104747b69c7dfb2f138d557ab069d4101ed247d96100efcf0116f9"
+        },
+        "limit": 0,
+        "case_indices": null,
+        "precise_projection": true,
+        "keep_going": true,
+        "persistent_transport": true,
+        "single_image": true
+      },
+      "passed": false,
+      "complete": true,
+      "cases": 2,
+      "passing_cases": 0,
+      "matching_tokens": 2,
+      "results": [
+        {
+          "model": "gemma-4-E2B-it-assistant",
+          "fixture": "seed-0-kv-31-pos-31.npz",
+          "passed": false,
+          "metrics": {
+            "pre_projection": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_0": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_1": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_2": {
+              "passed": true,
+              "relative_l2": 0.00045443433368526776,
+              "max_abs_over_reference_rms": 0.0048546799000523345
+            },
+            "layer_3": {
+              "passed": true,
+              "relative_l2": 0.0057339642693995324,
+              "max_abs_over_reference_rms": 0.022438367018746498
+            },
+            "hidden": {
+              "passed": true,
+              "relative_l2": 0.005988739240480788,
+              "max_abs_over_reference_rms": 0.03743790961412699
+            },
+            "projected": {
+              "passed": false,
+              "relative_l2": 0.005734835377377428,
+              "max_abs_over_reference_rms": 0.05698806389926729
+            },
+            "centroids": {
+              "passed": true,
+              "relative_l2": 0.003561938606974614,
+              "max_abs_over_reference_rms": 0.012731491579198184
+            },
+            "shared_head_logits": {
+              "passed": true,
+              "relative_l2": 0.0037684005205178383,
+              "max_abs_over_reference_rms": 0.01285260278535065
+            }
+          },
+          "token_id": 6719,
+          "reference_token_id": 6719,
+          "token_equal": true,
+          "selected_row_overlap": 3968,
+          "selected_rows": 4096,
+          "wall_seconds": 8.208717099973,
+          "dispatches": 99,
+          "transport": {
+            "contexts_created": 2,
+            "cache_hits": 88,
+            "evictions": 0,
+            "all_contexts_released": true
+          },
+          "failure_trace": {
+            "file": "gemma-4-E2B-it-assistant-seed-0-kv-31-pos-31.npz",
+            "sha256": "76176b2becdeca420e6924a6eb1c235a06fc8c3a6b3ae49664640d98f034bdd1"
+          }
+        },
+        {
+          "model": "gemma-4-E4B-it-assistant",
+          "fixture": "seed-0-kv-31-pos-31.npz",
+          "passed": false,
+          "metrics": {
+            "pre_projection": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_0": {
+              "passed": true,
+              "relative_l2": 0.00205178449768168,
+              "max_abs_over_reference_rms": 0.0138029206171779
+            },
+            "layer_1": {
+              "passed": true,
+              "relative_l2": 0.005796517999676619,
+              "max_abs_over_reference_rms": 0.01581271618941502
+            },
+            "layer_2": {
+              "passed": true,
+              "relative_l2": 0.0069417618992758485,
+              "max_abs_over_reference_rms": 0.02027545563624673
+            },
+            "layer_3": {
+              "passed": false,
+              "relative_l2": 0.011685147942184457,
+              "max_abs_over_reference_rms": 0.07768442531475014
+            },
+            "hidden": {
+              "passed": false,
+              "relative_l2": 0.017141498849379263,
+              "max_abs_over_reference_rms": 0.06524783706281705
+            },
+            "projected": {
+              "passed": false,
+              "relative_l2": 0.01218446841937326,
+              "max_abs_over_reference_rms": 0.23139821055855353
+            },
+            "centroids": {
+              "passed": true,
+              "relative_l2": 0.005892456955489682,
+              "max_abs_over_reference_rms": 0.01599409641231107
+            },
+            "shared_head_logits": {
+              "passed": true,
+              "relative_l2": 0.00491403272979257,
+              "max_abs_over_reference_rms": 0.014016111612201057
+            }
+          },
+          "token_id": 563,
+          "reference_token_id": 563,
+          "token_equal": true,
+          "selected_row_overlap": 4096,
+          "selected_rows": 4096,
+          "wall_seconds": 0.989463900012197,
+          "dispatches": 99,
+          "transport": {
+            "contexts_created": 3,
+            "cache_hits": 88,
+            "evictions": 1,
+            "all_contexts_released": true
+          },
+          "failure_trace": {
+            "file": "gemma-4-E4B-it-assistant-seed-0-kv-31-pos-31.npz",
+            "sha256": "9b45f352be6ecc9ce619b5ae7eeeb2be65928e586ec74a6a2910a01d99cda8a3"
+          }
+        }
+      ],
+      "dispatch_count": 198,
+      "all_completed_inputs_unchanged": true,
+      "operations": {
+        "draft_projection_precise": 112,
+        "draft_norm": 42,
+        "draft_rope": 8,
+        "draft_softmax": 8,
+        "draft_residual": 16,
+        "draft_geglu": 8,
+        "draft_topk": 4
+      },
+      "runtime_driver_sha256": [
+        "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+      ],
+      "fixture_provenance": [
+        {
+          "fixture_manifest_sha256": "c2d45eb1a4a75405ec992e59d1ce947d310b022c10164d7bb662e5e18b419f14",
+          "kind": "captured_rocm",
+          "target_capture": {
+            "manifest": "<user-home>\\gemma4-assistant\\npu\\target-e2b-1792341305165684600\\manifest.json",
+            "sha256": "f669326c4b60822d347ede6345817ed0c702e98717b8b33d226a13995e05f3b1",
+            "main_config_sha256": "1b28f3d2c3100f6c594754b81107428bd7b822a7f48272ca681dae9d2ec38330",
+            "shared_layers": {
+              "sliding_attention": 13,
+              "full_attention": 14
+            },
+            "prompt_tokens": 31,
+            "next_token": 2717,
+            "position": 31,
+            "scope": "Real quantized GPU target states converted once to BF16 for the independent CPU/NPU assistant interface"
+          },
+          "target_registration": {
+            "model": "google/gemma-4-E2B-it",
+            "revision": "3e22461f65e89153144f8adb70e3b8c2cc9845a7",
+            "source_sha256": "c575d790dc4d2ea74743566e38fda6764e1615d93719f9a4e5c4552533bc90dc",
+            "files": {
+              "<user-home>\\gemma4-assistant\\models\\gemma-4-E2B-it-Q5_K_M-pleQ4-imatrix.gguf": "ac36a228eb6cd1b93eedc86153016612b0a60ba73c9a50e0b4e95a6a143f65e1",
+              "<user-home>\\gemma4-assistant\\bin\\capture_target.exe": "182a345e174ef6ecb2d68c99d60e706667a603996124faebcc5d7df9fa64832e",
+              "<user-home>\\gemma4-assistant\\scripts\\capture_target.cpp": "1df98776cbe7804dbef8586755808e982d053c8e26326778b91019de0bbc2755",
+              "<user-home>\\gemma4-assistant\\scripts\\build_capture_target.cmd": "babfeca1725cbf87ff4c5c19cbd943e037d7ac03aa7f2d9ad4041342e24d70b4",
+              "<user-home>\\tools\\llamacpp-b1343-rocm\\llama.dll": "04aeca339e96514cd2eeed4810ddc813e7cc91b088137d741d5bfb53829464e8",
+              "<user-home>\\tools\\llamacpp-b1343-rocm\\ggml.dll": "d62c9fd3ea800ebf81b104f0b276c44105930557337c3e97ca7bf3e5a51bd889",
+              "<user-home>\\tools\\llamacpp-b1343-rocm\\ggml-base.dll": "b0f6bcf152bbea75fe55c3d185b512ca4b3df167ec8159357da53be435db9539",
+              "<user-home>\\tools\\llamacpp-b1343-rocm\\ggml-hip.dll": "ea8866ab163caad203a2fa2f8afbce51584bb55eb566e1e863bb14e1b1d3f370",
+              "L:\\llm-work\\src\\llama.cpp\\include\\llama.h": "4345145db81726981147a8bd0fcfe440f3efbe337ad5e522ba38287ee931b4a7",
+              "L:\\llm-work\\src\\llama.cpp\\ggml\\include\\ggml.h": "62e4d28730f96924bfc3ec46771b38c30a8d4397584769fd636d6327354d5430"
+            },
+            "tokens_sha256": "d19d85d589328dc75d9301cac479c67dfbf583f13f9ee5867b024f65a97962cc",
+            "prompt_tokens": 31,
+            "messages": [
+              {
+                "role": "user",
+                "content": "Write a Python function that returns the unique items in a list while preserving their order. Include a short example."
+              }
+            ],
+            "cache_precision": "FP32",
+            "target_backend": "ROCm0",
+            "semantics": "Capture real ROCm target states for independent BF16 drafter qualification.\n\nUses a fixed public engineering prompt and the pinned model's own chat template.\nPhase 0 provides prompt KV and the final target hidden state. Phase 1 provides\nthe next target token's scaled embedding; its advanced KV must not be mixed in.\nCapturing tensors changes execution scheduling: no latency/acceptance claim.\n",
+            "complete": false
+          },
+          "target_metadata": {
+            "prompt_tokens": 31,
+            "next_token": 2717,
+            "tensors": 64,
+            "complete": true,
+            "tokens": [
+              2,
+              105,
+              2364,
+              107,
+              6974,
+              496,
+              17856,
+              1292,
+              600,
+              7623,
+              506,
+              4709,
+              4852,
+              528,
+              496,
+              1694,
+              1651,
+              39983,
+              910,
+              1900,
+              236761,
+              12213,
+              496,
+              2822,
+              2591,
+              236761,
+              106,
+              107,
+              105,
+              4368,
+              107
+            ]
+          },
+          "tensor_checksums": [
+            {
+              "name": "inp_scaled",
+              "file": "0-phase-0-inp_scaled.bin",
+              "phase": 0,
+              "type": 0,
+              "bytes": 190464,
+              "host_buffer": false,
+              "ne": [
+                1536,
+                31,
+                1,
+                1
+              ],
+              "nb": [
+                4,
+                6144,
+                190464,
+                190464
+              ],
+              "sha256": "498b9bb0797b2fabd19df8feec66c4d6a2d9c4454fe46e90e59d18c6a96125f4"
+            },
+            {
+              "name": "Kcur_pos-0",
+              "file": "1-phase-0-Kcur_pos-0.bin",
+              "phase": 0,
+              "type": 0,
+              "bytes": 31744,
+              "host_buffer": false,
+              "ne": [
+                256,
+                1,
+                31,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                1024,
+                31744
+              ],
+              "sha256": "e1c4cc026546c726b41300a40debf224e6f1cf7da5f9d0c0a4409f1783215d95"
+            },
+            {
+              "name": "Vcur_normed-0",
+              "file": "2-phase-0-Vcur_normed-0.bin",
+              "phase": 0,
+              "type": 0,
+              "bytes": 31744,
+              "host_buffer": false,
+              "ne": [
+                256,
+                1,
+                31,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                1024,
+                31744
+              ],
+              "sha256": "7b83901f6281e91858bcb0c2304b041ebe05599924ffd27aac9c6dfe891a5778"
+            },
+            {
+              "name": "Kcur_pos-1",
+              "file": "3-phase-0-Kcur_pos-1.bin",
+              "phase": 0,
+              "type": 0,
+              "bytes": 31744,
+              "host_buffer": false,
+              "ne": [
+                256,
+                1,
+                31,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                1024,
+                31744
+              ],
+              "sha256": "47a3116f796dfc03fdddc8f931d6564098ec837209d93bac3e7d7ead9da8001f"
+            },
+            {
+              "name": "Vcur_normed-1",
+              "file": "4-phase-0-Vcur_normed-1.bin",
+              "phase": 0,
+              "type": 0,
+              "bytes": 31744,
+              "host_buffer": false,
+              "ne": [
+                256,
+                1,
+                31,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                1024,
+                31744
+              ],
+              "sha256": "4f41d61052d7024b0ec535fdc8d847d105c855af43fe6c86b61ac6af47b4472c"
+            },
+            {
+              "name": "Kcur_pos-2",
+              "file": "5-phase-0-Kcur_pos-2.bin",
+              "phase": 0,
+              "type": 0,
+              "bytes": 31744,
+              "host_buffer": false,
+              "ne": [
+                256,
+                1,
+                31,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                1024,
+                31744
+              ],
+              "sha256": "6707335620199cc652a21fbf5b76dc9b2384eae2484b5f3b06e39745556e5e17"
+            },
+            {
+              "name": "Vcur_normed-2",
+              "file": "6-phase-0-Vcur_normed-2.bin",
+              "phase": 0,
+              "type": 0,
+              "bytes": 31744,
+              "host_buffer": false,
+              "ne": [
+                256,
+                1,
+                31,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                1024,
+                31744
+              ],
+              "sha256": "fd06f4d299d0f5bc9495b5025bb93bf9ce402724421d876c5e11a28dcd550258"
+            },
+            {
+              "name": "Kcur_pos-3",
+              "file": "7-phase-0-Kcur_pos-3.bin",
+              "phase": 0,
+              "type": 0,
+              "bytes": 31744,
+              "host_buffer": false,
+              "ne": [
+                256,
+                1,
+                31,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                1024,
+                31744
+              ],
+              "sha256": "92a0aeae6f7ab0cd41b061b5f580ca0bc95e7b112af98dec8e8a9741c5af62d9"
+            },
+            {
+              "name": "Vcur_normed-3",
+              "file": "8-phase-0-Vcur_normed-3.bin",
+              "phase": 0,
+              "type": 0,
+              "bytes": 31744,
+              "host_buffer": false,
+              "ne": [
+                256,
+                1,
+                31,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                1024,
+                31744
+              ],
+              "sha256": "3048043b9109d76bc7068277a356da2f3573d3df26d086a304fe125c73fb7cd1"
+            },
+            {
+              "name": "Kcur_pos-4",
+              "file": "9-phase-0-Kcur_pos-4.bin",
+              "phase": 0,
+              "type": 0,
+              "bytes": 63488,
+              "host_buffer": false,
+              "ne": [
+                512,
+                1,
+                31,
+                1
+              ],
+              "nb": [
+                4,
+                2048,
+                2048,
+                63488
+              ],
+              "sha256": "1dcfd5abcb3c6fa5d89f93d1b3e0889b50caaefccbca300a5131d9e663adffbf"
+            },
+            {
+              "name": "Vcur_normed-4",
+              "file": "10-phase-0-Vcur_normed-4.bin",
+              "phase": 0,
+              "type": 0,
+              "bytes": 63488,
+              "host_buffer": false,
+              "ne": [
+                512,
+                1,
+                31,
+                1
+              ],
+              "nb": [
+                4,
+                2048,
+                2048,
+                63488
+              ],
+              "sha256": "51bb3a30468233dd2e8369f870739717059bbb800864d545c1c257165ee08df3"
+            },
+            {
+              "name": "Kcur_pos-5",
+              "file": "11-phase-0-Kcur_pos-5.bin",
+              "phase": 0,
+              "type": 0,
+              "bytes": 31744,
+              "host_buffer": false,
+              "ne": [
+                256,
+                1,
+                31,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                1024,
+                31744
+              ],
+              "sha256": "b5b4c2cd861af3bcbd6537ef4488c10cf9ab6a0c86048bf7a41de8d88110a894"
+            },
+            {
+              "name": "Vcur_normed-5",
+              "file": "12-phase-0-Vcur_normed-5.bin",
+              "phase": 0,
+              "type": 0,
+              "bytes": 31744,
+              "host_buffer": false,
+              "ne": [
+                256,
+                1,
+                31,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                1024,
+                31744
+              ],
+              "sha256": "10027b7f4d4fc23e213b083178da2d604f7cbed457e388bd78fe468522d87149"
+            },
+            {
+              "name": "Kcur_pos-6",
+              "file": "13-phase-0-Kcur_pos-6.bin",
+              "phase": 0,
+              "type": 0,
+              "bytes": 31744,
+              "host_buffer": false,
+              "ne": [
+                256,
+                1,
+                31,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                1024,
+                31744
+              ],
+              "sha256": "1dba482fd928e2dbecafa6015ce5130a523c7bee31b1c8514420106832866098"
+            },
+            {
+              "name": "Vcur_normed-6",
+              "file": "14-phase-0-Vcur_normed-6.bin",
+              "phase": 0,
+              "type": 0,
+              "bytes": 31744,
+              "host_buffer": false,
+              "ne": [
+                256,
+                1,
+                31,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                1024,
+                31744
+              ],
+              "sha256": "612e4bc4288fbe647e122f8f319d362a698b31bcace53be52dc4af11a5f29e7d"
+            },
+            {
+              "name": "Kcur_pos-7",
+              "file": "15-phase-0-Kcur_pos-7.bin",
+              "phase": 0,
+              "type": 0,
+              "bytes": 31744,
+              "host_buffer": false,
+              "ne": [
+                256,
+                1,
+                31,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                1024,
+                31744
+              ],
+              "sha256": "0cd24dcab195b403d5ac4b3908a029abe8beca99e6cc5a076a0b068ec977c0b9"
+            },
+            {
+              "name": "Vcur_normed-7",
+              "file": "16-phase-0-Vcur_normed-7.bin",
+              "phase": 0,
+              "type": 0,
+              "bytes": 31744,
+              "host_buffer": false,
+              "ne": [
+                256,
+                1,
+                31,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                1024,
+                31744
+              ],
+              "sha256": "926150b945604ef2f9fb196617a3fca68b913983040478823d9a325d9854fa27"
+            },
+            {
+              "name": "Kcur_pos-8",
+              "file": "17-phase-0-Kcur_pos-8.bin",
+              "phase": 0,
+              "type": 0,
+              "bytes": 31744,
+              "host_buffer": false,
+              "ne": [
+                256,
+                1,
+                31,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                1024,
+                31744
+              ],
+              "sha256": "34f79d5d907a74f92f773da034ab6a572c47c9e69aa0f5c48cb878730809cfb7"
+            },
+            {
+              "name": "Vcur_normed-8",
+              "file": "18-phase-0-Vcur_normed-8.bin",
+              "phase": 0,
+              "type": 0,
+              "bytes": 31744,
+              "host_buffer": false,
+              "ne": [
+                256,
+                1,
+                31,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                1024,
+                31744
+              ],
+              "sha256": "5b52ff8310df52edef702405de082915bbf4752f9864a8a2d38df62bbd652ca9"
+            },
+            {
+              "name": "Kcur_pos-9",
+              "file": "19-phase-0-Kcur_pos-9.bin",
+              "phase": 0,
+              "type": 0,
+              "bytes": 63488,
+              "host_buffer": false,
+              "ne": [
+                512,
+                1,
+                31,
+                1
+              ],
+              "nb": [
+                4,
+                2048,
+                2048,
+                63488
+              ],
+              "sha256": "a3890d3e5624d681b56d80ee3bfeebf97662bda38ef3162185a7e06a12cb477d"
+            },
+            {
+              "name": "Vcur_normed-9",
+              "file": "20-phase-0-Vcur_normed-9.bin",
+              "phase": 0,
+              "type": 0,
+              "bytes": 63488,
+              "host_buffer": false,
+              "ne": [
+                512,
+                1,
+                31,
+                1
+              ],
+              "nb": [
+                4,
+                2048,
+                2048,
+                63488
+              ],
+              "sha256": "135a9a213138fa607ee3fdfa295689ab1c342ed01c350d7ddf2acefd135ef6f6"
+            },
+            {
+              "name": "Kcur_pos-10",
+              "file": "21-phase-0-Kcur_pos-10.bin",
+              "phase": 0,
+              "type": 0,
+              "bytes": 31744,
+              "host_buffer": false,
+              "ne": [
+                256,
+                1,
+                31,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                1024,
+                31744
+              ],
+              "sha256": "7edf38055bc557ce80a4ca6121574c47a812525d56b5a7c1bd80e1f1f3e9afe5"
+            },
+            {
+              "name": "Vcur_normed-10",
+              "file": "22-phase-0-Vcur_normed-10.bin",
+              "phase": 0,
+              "type": 0,
+              "bytes": 31744,
+              "host_buffer": false,
+              "ne": [
+                256,
+                1,
+                31,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                1024,
+                31744
+              ],
+              "sha256": "e4393349ce9b84ba15f7f8ea81998abed60c9fa3584adff8644955365306b1bc"
+            },
+            {
+              "name": "Kcur_pos-11",
+              "file": "23-phase-0-Kcur_pos-11.bin",
+              "phase": 0,
+              "type": 0,
+              "bytes": 31744,
+              "host_buffer": false,
+              "ne": [
+                256,
+                1,
+                31,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                1024,
+                31744
+              ],
+              "sha256": "e439a521d50021ffcbf53dd855fd3e042f856ecac0a443a00baf9cae42c780d6"
+            },
+            {
+              "name": "Vcur_normed-11",
+              "file": "24-phase-0-Vcur_normed-11.bin",
+              "phase": 0,
+              "type": 0,
+              "bytes": 31744,
+              "host_buffer": false,
+              "ne": [
+                256,
+                1,
+                31,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                1024,
+                31744
+              ],
+              "sha256": "89cff101c7796bc4c9533f75592e7cc33d7d316e6c617059325be423023873ab"
+            },
+            {
+              "name": "Kcur_pos-12",
+              "file": "25-phase-0-Kcur_pos-12.bin",
+              "phase": 0,
+              "type": 0,
+              "bytes": 31744,
+              "host_buffer": false,
+              "ne": [
+                256,
+                1,
+                31,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                1024,
+                31744
+              ],
+              "sha256": "a84af6d0f4b9e34ed58f631c09425593d4e9535a983cf6f60e4abbd20baa0b83"
+            },
+            {
+              "name": "Vcur_normed-12",
+              "file": "26-phase-0-Vcur_normed-12.bin",
+              "phase": 0,
+              "type": 0,
+              "bytes": 31744,
+              "host_buffer": false,
+              "ne": [
+                256,
+                1,
+                31,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                1024,
+                31744
+              ],
+              "sha256": "f8928ee7bd5de97e76a35fcfc88b1300c6ae958b2b5436e6ff7da1ac2cf404e1"
+            },
+            {
+              "name": "Kcur_pos-13",
+              "file": "27-phase-0-Kcur_pos-13.bin",
+              "phase": 0,
+              "type": 0,
+              "bytes": 31744,
+              "host_buffer": false,
+              "ne": [
+                256,
+                1,
+                31,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                1024,
+                31744
+              ],
+              "sha256": "ccea8f6f1adfcb248d3c26b38aaadb82ddabf9ff516d6914acc7bd684d7b66a7"
+            },
+            {
+              "name": "Vcur_normed-13",
+              "file": "28-phase-0-Vcur_normed-13.bin",
+              "phase": 0,
+              "type": 0,
+              "bytes": 31744,
+              "host_buffer": false,
+              "ne": [
+                256,
+                1,
+                31,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                1024,
+                31744
+              ],
+              "sha256": "2fb98acec06c91149ea01ebad217dee8768de6f3c37f1f69e7c0b379e3108d0f"
+            },
+            {
+              "name": "Kcur_pos-14",
+              "file": "29-phase-0-Kcur_pos-14.bin",
+              "phase": 0,
+              "type": 0,
+              "bytes": 63488,
+              "host_buffer": false,
+              "ne": [
+                512,
+                1,
+                31,
+                1
+              ],
+              "nb": [
+                4,
+                2048,
+                2048,
+                63488
+              ],
+              "sha256": "b0b297d697a1e4e3d55a666b6cee2ca5087f48a312a67e5d85d1d4c596f85574"
+            },
+            {
+              "name": "Vcur_normed-14",
+              "file": "30-phase-0-Vcur_normed-14.bin",
+              "phase": 0,
+              "type": 0,
+              "bytes": 63488,
+              "host_buffer": false,
+              "ne": [
+                512,
+                1,
+                31,
+                1
+              ],
+              "nb": [
+                4,
+                2048,
+                2048,
+                63488
+              ],
+              "sha256": "9b4f59083ce4a7cc5c8874f34936c00dd02936161d59b611b9da8f1145fb5fe5"
+            },
+            {
+              "name": "result_norm",
+              "file": "31-phase-0-result_norm.bin",
+              "phase": 0,
+              "type": 0,
+              "bytes": 6144,
+              "host_buffer": false,
+              "ne": [
+                1536,
+                1,
+                1,
+                1
+              ],
+              "nb": [
+                4,
+                6144,
+                6144,
+                6144
+              ],
+              "sha256": "ba7b67d0f3bcfd023f89a8761075641dca3e1f09d1f784c287a94cc0f336ada6"
+            },
+            {
+              "name": "inp_scaled",
+              "file": "32-phase-1-inp_scaled.bin",
+              "phase": 1,
+              "type": 0,
+              "bytes": 6144,
+              "host_buffer": false,
+              "ne": [
+                1536,
+                1,
+                1,
+                1
+              ],
+              "nb": [
+                4,
+                6144,
+                6144,
+                6144
+              ],
+              "sha256": "e00ec8913f175ee02bdb06b045f20e6e64891ebe9e91f28e0f9a6a649aa56aed"
+            },
+            {
+              "name": "Kcur_pos-0",
+              "file": "33-phase-1-Kcur_pos-0.bin",
+              "phase": 1,
+              "type": 0,
+              "bytes": 1024,
+              "host_buffer": false,
+              "ne": [
+                256,
+                1,
+                1,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                1024,
+                1024
+              ],
+              "sha256": "e8048d6cd9ab36ab26cb8754404af62193d458de607aaf79ce547f237272968c"
+            },
+            {
+              "name": "Vcur_normed-0",
+              "file": "34-phase-1-Vcur_normed-0.bin",
+              "phase": 1,
+              "type": 0,
+              "bytes": 1024,
+              "host_buffer": false,
+              "ne": [
+                256,
+                1,
+                1,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                1024,
+                1024
+              ],
+              "sha256": "e516a265055fb3418733c11960bbaeffb569aac6164e62eebd19f4afde79039a"
+            },
+            {
+              "name": "Kcur_pos-1",
+              "file": "35-phase-1-Kcur_pos-1.bin",
+              "phase": 1,
+              "type": 0,
+              "bytes": 1024,
+              "host_buffer": false,
+              "ne": [
+                256,
+                1,
+                1,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                1024,
+                1024
+              ],
+              "sha256": "585231c81dc20991aa11b5e64c572dc67360099fe3e5e8f0bce451ad381040b9"
+            },
+            {
+              "name": "Vcur_normed-1",
+              "file": "36-phase-1-Vcur_normed-1.bin",
+              "phase": 1,
+              "type": 0,
+              "bytes": 1024,
+              "host_buffer": false,
+              "ne": [
+                256,
+                1,
+                1,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                1024,
+                1024
+              ],
+              "sha256": "f0b3626273b38fde7b12219b7510c5abd97c5ce958ff6852d18f4bf63fb7b5d1"
+            },
+            {
+              "name": "Kcur_pos-2",
+              "file": "37-phase-1-Kcur_pos-2.bin",
+              "phase": 1,
+              "type": 0,
+              "bytes": 1024,
+              "host_buffer": false,
+              "ne": [
+                256,
+                1,
+                1,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                1024,
+                1024
+              ],
+              "sha256": "74184c9f3c3951981312a6c082e6fe66a5c07d30eb0982509277fc46567898e2"
+            },
+            {
+              "name": "Vcur_normed-2",
+              "file": "38-phase-1-Vcur_normed-2.bin",
+              "phase": 1,
+              "type": 0,
+              "bytes": 1024,
+              "host_buffer": false,
+              "ne": [
+                256,
+                1,
+                1,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                1024,
+                1024
+              ],
+              "sha256": "374149983664fddfc4fe74a56deb8d54ab1f6161c39d5baffcc28a21a441ea5a"
+            },
+            {
+              "name": "Kcur_pos-3",
+              "file": "39-phase-1-Kcur_pos-3.bin",
+              "phase": 1,
+              "type": 0,
+              "bytes": 1024,
+              "host_buffer": false,
+              "ne": [
+                256,
+                1,
+                1,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                1024,
+                1024
+              ],
+              "sha256": "e397bc37fdc05b288b7b432670221092990f5fb15f6766caaad338f64805c77b"
+            },
+            {
+              "name": "Vcur_normed-3",
+              "file": "40-phase-1-Vcur_normed-3.bin",
+              "phase": 1,
+              "type": 0,
+              "bytes": 1024,
+              "host_buffer": false,
+              "ne": [
+                256,
+                1,
+                1,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                1024,
+                1024
+              ],
+              "sha256": "9cb451aa1639408dff8b3604bcb72f5de8ba255ae1987702e9329d1b6e431834"
+            },
+            {
+              "name": "Kcur_pos-4",
+              "file": "41-phase-1-Kcur_pos-4.bin",
+              "phase": 1,
+              "type": 0,
+              "bytes": 2048,
+              "host_buffer": false,
+              "ne": [
+                512,
+                1,
+                1,
+                1
+              ],
+              "nb": [
+                4,
+                2048,
+                2048,
+                2048
+              ],
+              "sha256": "7d111872b2bb5de382d12184e379bcffca52f4cd250e90f606db7bc275b7e328"
+            },
+            {
+              "name": "Vcur_normed-4",
+              "file": "42-phase-1-Vcur_normed-4.bin",
+              "phase": 1,
+              "type": 0,
+              "bytes": 2048,
+              "host_buffer": false,
+              "ne": [
+                512,
+                1,
+                1,
+                1
+              ],
+              "nb": [
+                4,
+                2048,
+                2048,
+                2048
+              ],
+              "sha256": "93c319838b283368cae30c26c3573827573729be6cb7a7fd00194379bbb93dc4"
+            },
+            {
+              "name": "Kcur_pos-5",
+              "file": "43-phase-1-Kcur_pos-5.bin",
+              "phase": 1,
+              "type": 0,
+              "bytes": 1024,
+              "host_buffer": false,
+              "ne": [
+                256,
+                1,
+                1,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                1024,
+                1024
+              ],
+              "sha256": "b13a3093990920a172cf9bc1c085ed09da3d205e8800f0c68118076a6f38933f"
+            },
+            {
+              "name": "Vcur_normed-5",
+              "file": "44-phase-1-Vcur_normed-5.bin",
+              "phase": 1,
+              "type": 0,
+              "bytes": 1024,
+              "host_buffer": false,
+              "ne": [
+                256,
+                1,
+                1,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                1024,
+                1024
+              ],
+              "sha256": "26ef26c76c695af80909cdfde5e214475a2b2b71f6a71501f3ecca2477fae6b1"
+            },
+            {
+              "name": "Kcur_pos-6",
+              "file": "45-phase-1-Kcur_pos-6.bin",
+              "phase": 1,
+              "type": 0,
+              "bytes": 1024,
+              "host_buffer": false,
+              "ne": [
+                256,
+                1,
+                1,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                1024,
+                1024
+              ],
+              "sha256": "b0f69bf74da80f4beeb2fbe4fe831ebc72e59ceb9887fbeeb69ea146b8785cc9"
+            },
+            {
+              "name": "Vcur_normed-6",
+              "file": "46-phase-1-Vcur_normed-6.bin",
+              "phase": 1,
+              "type": 0,
+              "bytes": 1024,
+              "host_buffer": false,
+              "ne": [
+                256,
+                1,
+                1,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                1024,
+                1024
+              ],
+              "sha256": "198385cc91322e03d3d8d9b9560614be5279f97e01d91bfd8c614b962e4724a7"
+            },
+            {
+              "name": "Kcur_pos-7",
+              "file": "47-phase-1-Kcur_pos-7.bin",
+              "phase": 1,
+              "type": 0,
+              "bytes": 1024,
+              "host_buffer": false,
+              "ne": [
+                256,
+                1,
+                1,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                1024,
+                1024
+              ],
+              "sha256": "6b5210dd08bda5915024b9112f9de7bc3a0296c205598201eae2134ef57e4cca"
+            },
+            {
+              "name": "Vcur_normed-7",
+              "file": "48-phase-1-Vcur_normed-7.bin",
+              "phase": 1,
+              "type": 0,
+              "bytes": 1024,
+              "host_buffer": false,
+              "ne": [
+                256,
+                1,
+                1,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                1024,
+                1024
+              ],
+              "sha256": "64e185af21fd00148136fc9d3edcae7c952a53565bad7e6f821f2ec1e0999751"
+            },
+            {
+              "name": "Kcur_pos-8",
+              "file": "49-phase-1-Kcur_pos-8.bin",
+              "phase": 1,
+              "type": 0,
+              "bytes": 1024,
+              "host_buffer": false,
+              "ne": [
+                256,
+                1,
+                1,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                1024,
+                1024
+              ],
+              "sha256": "f065c56c1f79baf817577542981a0cd0ef54099d4866c0d2383a6b2afffc6c97"
+            },
+            {
+              "name": "Vcur_normed-8",
+              "file": "50-phase-1-Vcur_normed-8.bin",
+              "phase": 1,
+              "type": 0,
+              "bytes": 1024,
+              "host_buffer": false,
+              "ne": [
+                256,
+                1,
+                1,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                1024,
+                1024
+              ],
+              "sha256": "5adac94ee48c7a409b08b454023fc2d8d652359069346e741801693a53947ca0"
+            },
+            {
+              "name": "Kcur_pos-9",
+              "file": "51-phase-1-Kcur_pos-9.bin",
+              "phase": 1,
+              "type": 0,
+              "bytes": 2048,
+              "host_buffer": false,
+              "ne": [
+                512,
+                1,
+                1,
+                1
+              ],
+              "nb": [
+                4,
+                2048,
+                2048,
+                2048
+              ],
+              "sha256": "d1fdfc788f48259977fec7b995d83dfd988f80f41944534fb6d2a1fde9787389"
+            },
+            {
+              "name": "Vcur_normed-9",
+              "file": "52-phase-1-Vcur_normed-9.bin",
+              "phase": 1,
+              "type": 0,
+              "bytes": 2048,
+              "host_buffer": false,
+              "ne": [
+                512,
+                1,
+                1,
+                1
+              ],
+              "nb": [
+                4,
+                2048,
+                2048,
+                2048
+              ],
+              "sha256": "d3b0aaa929ef0728e786be0e0691cdf5f9d8c445514ea132dd4286e38c42df2d"
+            },
+            {
+              "name": "Kcur_pos-10",
+              "file": "53-phase-1-Kcur_pos-10.bin",
+              "phase": 1,
+              "type": 0,
+              "bytes": 1024,
+              "host_buffer": false,
+              "ne": [
+                256,
+                1,
+                1,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                1024,
+                1024
+              ],
+              "sha256": "0eb2c21aaa7cb96f1c05dda9df34f391bc4816d2f9fea328ac70ff7e9e6dba85"
+            },
+            {
+              "name": "Vcur_normed-10",
+              "file": "54-phase-1-Vcur_normed-10.bin",
+              "phase": 1,
+              "type": 0,
+              "bytes": 1024,
+              "host_buffer": false,
+              "ne": [
+                256,
+                1,
+                1,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                1024,
+                1024
+              ],
+              "sha256": "f7afc6b1b48265f873bf1ff1130c8282b802d67bd6c354ee146aa4a4b631434a"
+            },
+            {
+              "name": "Kcur_pos-11",
+              "file": "55-phase-1-Kcur_pos-11.bin",
+              "phase": 1,
+              "type": 0,
+              "bytes": 1024,
+              "host_buffer": false,
+              "ne": [
+                256,
+                1,
+                1,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                1024,
+                1024
+              ],
+              "sha256": "7c559f3e51128c14b2d9fa4dd1712a874fad2134cc4dd90da1ade5c6a2488e27"
+            },
+            {
+              "name": "Vcur_normed-11",
+              "file": "56-phase-1-Vcur_normed-11.bin",
+              "phase": 1,
+              "type": 0,
+              "bytes": 1024,
+              "host_buffer": false,
+              "ne": [
+                256,
+                1,
+                1,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                1024,
+                1024
+              ],
+              "sha256": "277ea5dd63fdf629eeeb42176ea1f58e89da950e2b5e1e6b5d9940ac848d935f"
+            },
+            {
+              "name": "Kcur_pos-12",
+              "file": "57-phase-1-Kcur_pos-12.bin",
+              "phase": 1,
+              "type": 0,
+              "bytes": 1024,
+              "host_buffer": false,
+              "ne": [
+                256,
+                1,
+                1,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                1024,
+                1024
+              ],
+              "sha256": "7c77773147649d990f98dc9e5d8b407e0cf4989e472a7023f8b0c01855bdf842"
+            },
+            {
+              "name": "Vcur_normed-12",
+              "file": "58-phase-1-Vcur_normed-12.bin",
+              "phase": 1,
+              "type": 0,
+              "bytes": 1024,
+              "host_buffer": false,
+              "ne": [
+                256,
+                1,
+                1,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                1024,
+                1024
+              ],
+              "sha256": "50d08e5f4df5a40a54a166a55b05b218cbf777322a84aeb49579fad0adc2b48f"
+            },
+            {
+              "name": "Kcur_pos-13",
+              "file": "59-phase-1-Kcur_pos-13.bin",
+              "phase": 1,
+              "type": 0,
+              "bytes": 1024,
+              "host_buffer": false,
+              "ne": [
+                256,
+                1,
+                1,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                1024,
+                1024
+              ],
+              "sha256": "989e64f3549c3ce6970ab8e187b1a788487240115398e1165279018df4f83868"
+            },
+            {
+              "name": "Vcur_normed-13",
+              "file": "60-phase-1-Vcur_normed-13.bin",
+              "phase": 1,
+              "type": 0,
+              "bytes": 1024,
+              "host_buffer": false,
+              "ne": [
+                256,
+                1,
+                1,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                1024,
+                1024
+              ],
+              "sha256": "ddba9c55cad1e6cb886d70b9cf165d80ec575b5903031e0cd89020fec1f5bfa0"
+            },
+            {
+              "name": "Kcur_pos-14",
+              "file": "61-phase-1-Kcur_pos-14.bin",
+              "phase": 1,
+              "type": 0,
+              "bytes": 2048,
+              "host_buffer": false,
+              "ne": [
+                512,
+                1,
+                1,
+                1
+              ],
+              "nb": [
+                4,
+                2048,
+                2048,
+                2048
+              ],
+              "sha256": "a9ee2e0646adb93271ba0624094a6fc79fa30c31a59f47ce5697e0d456e53cc0"
+            },
+            {
+              "name": "Vcur_normed-14",
+              "file": "62-phase-1-Vcur_normed-14.bin",
+              "phase": 1,
+              "type": 0,
+              "bytes": 2048,
+              "host_buffer": false,
+              "ne": [
+                512,
+                1,
+                1,
+                1
+              ],
+              "nb": [
+                4,
+                2048,
+                2048,
+                2048
+              ],
+              "sha256": "f33a88106d30ec8d2d97408a642bcf28e9aab4093db6b128175fe196e66a3167"
+            },
+            {
+              "name": "result_norm",
+              "file": "63-phase-1-result_norm.bin",
+              "phase": 1,
+              "type": 0,
+              "bytes": 6144,
+              "host_buffer": false,
+              "ne": [
+                1536,
+                1,
+                1,
+                1
+              ],
+              "nb": [
+                4,
+                6144,
+                6144,
+                6144
+              ],
+              "sha256": "302fc5896ea0fd2a5a1123041de0225042de12f4e48938fbbed18ed6423ba0ad"
+            }
+          ]
+        },
+        {
+          "fixture_manifest_sha256": "eb30c673f5104747b69c7dfb2f138d557ab069d4101ed247d96100efcf0116f9",
+          "kind": "captured_rocm",
+          "target_capture": {
+            "manifest": "<user-home>\\gemma4-assistant\\npu\\target-e4b-1792341385691339700\\manifest.json",
+            "sha256": "7feef6af0bfdb431fab44840c9ccad9205c4ffccfcda66d25c41b1abf39b8951",
+            "main_config_sha256": "33b10c02df3c2e8536cf323d29d53262aaa2f4d11dbe19bc729373fbe90295d4",
+            "shared_layers": {
+              "sliding_attention": 22,
+              "full_attention": 23
+            },
+            "prompt_tokens": 31,
+            "next_token": 8291,
+            "position": 31,
+            "scope": "Real quantized GPU target states converted once to BF16 for the independent CPU/NPU assistant interface"
+          },
+          "target_registration": {
+            "model": "google/gemma-4-E4B-it",
+            "revision": "ee0ef6023621cff504d758262d4e04895a5af4a2",
+            "source_sha256": "c575d790dc4d2ea74743566e38fda6764e1615d93719f9a4e5c4552533bc90dc",
+            "files": {
+              "<user-home>\\gemma4-assistant\\models\\gemma-4-E4B-it-Q5_K_M-pleQ4-imatrix.gguf": "e32757afb8bc746657c68f0a1c642596f2e0969a75176cb1eba29593d837294e",
+              "<user-home>\\gemma4-assistant\\bin\\capture_target.exe": "182a345e174ef6ecb2d68c99d60e706667a603996124faebcc5d7df9fa64832e",
+              "<user-home>\\gemma4-assistant\\scripts\\capture_target.cpp": "1df98776cbe7804dbef8586755808e982d053c8e26326778b91019de0bbc2755",
+              "<user-home>\\gemma4-assistant\\scripts\\build_capture_target.cmd": "babfeca1725cbf87ff4c5c19cbd943e037d7ac03aa7f2d9ad4041342e24d70b4",
+              "<user-home>\\tools\\llamacpp-b1343-rocm\\llama.dll": "04aeca339e96514cd2eeed4810ddc813e7cc91b088137d741d5bfb53829464e8",
+              "<user-home>\\tools\\llamacpp-b1343-rocm\\ggml.dll": "d62c9fd3ea800ebf81b104f0b276c44105930557337c3e97ca7bf3e5a51bd889",
+              "<user-home>\\tools\\llamacpp-b1343-rocm\\ggml-base.dll": "b0f6bcf152bbea75fe55c3d185b512ca4b3df167ec8159357da53be435db9539",
+              "<user-home>\\tools\\llamacpp-b1343-rocm\\ggml-hip.dll": "ea8866ab163caad203a2fa2f8afbce51584bb55eb566e1e863bb14e1b1d3f370",
+              "L:\\llm-work\\src\\llama.cpp\\include\\llama.h": "4345145db81726981147a8bd0fcfe440f3efbe337ad5e522ba38287ee931b4a7",
+              "L:\\llm-work\\src\\llama.cpp\\ggml\\include\\ggml.h": "62e4d28730f96924bfc3ec46771b38c30a8d4397584769fd636d6327354d5430"
+            },
+            "tokens_sha256": "d19d85d589328dc75d9301cac479c67dfbf583f13f9ee5867b024f65a97962cc",
+            "prompt_tokens": 31,
+            "messages": [
+              {
+                "role": "user",
+                "content": "Write a Python function that returns the unique items in a list while preserving their order. Include a short example."
+              }
+            ],
+            "cache_precision": "FP32",
+            "target_backend": "ROCm0",
+            "semantics": "Capture real ROCm target states for independent BF16 drafter qualification.\n\nUses a fixed public engineering prompt and the pinned model's own chat template.\nPhase 0 provides prompt KV and the final target hidden state. Phase 1 provides\nthe next target token's scaled embedding; its advanced KV must not be mixed in.\nCapturing tensors changes execution scheduling: no latency/acceptance claim.\n",
+            "complete": false
+          },
+          "target_metadata": {
+            "prompt_tokens": 31,
+            "next_token": 8291,
+            "tensors": 100,
+            "complete": true,
+            "tokens": [
+              2,
+              105,
+              2364,
+              107,
+              6974,
+              496,
+              17856,
+              1292,
+              600,
+              7623,
+              506,
+              4709,
+              4852,
+              528,
+              496,
+              1694,
+              1651,
+              39983,
+              910,
+              1900,
+              236761,
+              12213,
+              496,
+              2822,
+              2591,
+              236761,
+              106,
+              107,
+              105,
+              4368,
+              107
+            ]
+          },
+          "tensor_checksums": [
+            {
+              "name": "inp_scaled",
+              "file": "0-phase-0-inp_scaled.bin",
+              "phase": 0,
+              "type": 0,
+              "bytes": 317440,
+              "host_buffer": false,
+              "ne": [
+                2560,
+                31,
+                1,
+                1
+              ],
+              "nb": [
+                4,
+                10240,
+                317440,
+                317440
+              ],
+              "sha256": "b830939851f6117d1cbca530b9c1454e88807b0063c3750a563ac2621b028fa7"
+            },
+            {
+              "name": "Kcur_pos-0",
+              "file": "1-phase-0-Kcur_pos-0.bin",
+              "phase": 0,
+              "type": 0,
+              "bytes": 63488,
+              "host_buffer": false,
+              "ne": [
+                256,
+                2,
+                31,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                2048,
+                63488
+              ],
+              "sha256": "428aaf7e1a5ec80d5c010e695719261b9129e10443d963da5794268ada2abc27"
+            },
+            {
+              "name": "Vcur_normed-0",
+              "file": "2-phase-0-Vcur_normed-0.bin",
+              "phase": 0,
+              "type": 0,
+              "bytes": 63488,
+              "host_buffer": false,
+              "ne": [
+                256,
+                2,
+                31,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                2048,
+                63488
+              ],
+              "sha256": "c1f1eee25622c7054f256026a252ef7bb1df3c9a909f2c6128a68d2aa8d834c1"
+            },
+            {
+              "name": "Kcur_pos-1",
+              "file": "3-phase-0-Kcur_pos-1.bin",
+              "phase": 0,
+              "type": 0,
+              "bytes": 63488,
+              "host_buffer": false,
+              "ne": [
+                256,
+                2,
+                31,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                2048,
+                63488
+              ],
+              "sha256": "3c2815dfc9ed9bdec5d54292d6cc21081d307737761871df55165cfb64b2bf15"
+            },
+            {
+              "name": "Vcur_normed-1",
+              "file": "4-phase-0-Vcur_normed-1.bin",
+              "phase": 0,
+              "type": 0,
+              "bytes": 63488,
+              "host_buffer": false,
+              "ne": [
+                256,
+                2,
+                31,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                2048,
+                63488
+              ],
+              "sha256": "d9d881908c8c25724c9159e6c3d489bb26ebb4b76447e975866acab3594e203c"
+            },
+            {
+              "name": "Kcur_pos-2",
+              "file": "5-phase-0-Kcur_pos-2.bin",
+              "phase": 0,
+              "type": 0,
+              "bytes": 63488,
+              "host_buffer": false,
+              "ne": [
+                256,
+                2,
+                31,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                2048,
+                63488
+              ],
+              "sha256": "6424c74464d9fc3883eeee12b3777021fd67359f2afe49fb559fd828a7b1b17f"
+            },
+            {
+              "name": "Vcur_normed-2",
+              "file": "6-phase-0-Vcur_normed-2.bin",
+              "phase": 0,
+              "type": 0,
+              "bytes": 63488,
+              "host_buffer": false,
+              "ne": [
+                256,
+                2,
+                31,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                2048,
+                63488
+              ],
+              "sha256": "8b11e66c5bf42d152370005a2a65673fda9e8b5e00b26b705f3c21f135610afe"
+            },
+            {
+              "name": "Kcur_pos-3",
+              "file": "7-phase-0-Kcur_pos-3.bin",
+              "phase": 0,
+              "type": 0,
+              "bytes": 63488,
+              "host_buffer": false,
+              "ne": [
+                256,
+                2,
+                31,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                2048,
+                63488
+              ],
+              "sha256": "490efc3a25b73e4eee3e0a034185d5ac47f4d271525ca9646bd0df5db6ac94fe"
+            },
+            {
+              "name": "Vcur_normed-3",
+              "file": "8-phase-0-Vcur_normed-3.bin",
+              "phase": 0,
+              "type": 0,
+              "bytes": 63488,
+              "host_buffer": false,
+              "ne": [
+                256,
+                2,
+                31,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                2048,
+                63488
+              ],
+              "sha256": "1c58163e3457331088b77838c93675fac7922b91e1f9f11de9bb6529bebe36f9"
+            },
+            {
+              "name": "Kcur_pos-4",
+              "file": "9-phase-0-Kcur_pos-4.bin",
+              "phase": 0,
+              "type": 0,
+              "bytes": 63488,
+              "host_buffer": false,
+              "ne": [
+                256,
+                2,
+                31,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                2048,
+                63488
+              ],
+              "sha256": "824bf5c93c7e5c365614f020b97da661467d2a8a9cad88b13ce7e6b86a7c6933"
+            },
+            {
+              "name": "Vcur_normed-4",
+              "file": "10-phase-0-Vcur_normed-4.bin",
+              "phase": 0,
+              "type": 0,
+              "bytes": 63488,
+              "host_buffer": false,
+              "ne": [
+                256,
+                2,
+                31,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                2048,
+                63488
+              ],
+              "sha256": "5515eb3b109c15ca1ca43ed3a36ba4e796967ef2b1f71d6d6e2049f098a3c3bc"
+            },
+            {
+              "name": "Kcur_pos-5",
+              "file": "11-phase-0-Kcur_pos-5.bin",
+              "phase": 0,
+              "type": 0,
+              "bytes": 126976,
+              "host_buffer": false,
+              "ne": [
+                512,
+                2,
+                31,
+                1
+              ],
+              "nb": [
+                4,
+                2048,
+                4096,
+                126976
+              ],
+              "sha256": "493ddbc64c5258788308b76c155a936e8e2b8e45924c4a73f105bf3b10ae0091"
+            },
+            {
+              "name": "Vcur_normed-5",
+              "file": "12-phase-0-Vcur_normed-5.bin",
+              "phase": 0,
+              "type": 0,
+              "bytes": 126976,
+              "host_buffer": false,
+              "ne": [
+                512,
+                2,
+                31,
+                1
+              ],
+              "nb": [
+                4,
+                2048,
+                4096,
+                126976
+              ],
+              "sha256": "3e44aff985815f5c8488354910953748cb3a9d5dd5da549232ae4e1888b9ef0a"
+            },
+            {
+              "name": "Kcur_pos-6",
+              "file": "13-phase-0-Kcur_pos-6.bin",
+              "phase": 0,
+              "type": 0,
+              "bytes": 63488,
+              "host_buffer": false,
+              "ne": [
+                256,
+                2,
+                31,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                2048,
+                63488
+              ],
+              "sha256": "6a71d63e3dc2e0d1c207568302bb2d210b2d90519decca90629f68e7203ca4e5"
+            },
+            {
+              "name": "Vcur_normed-6",
+              "file": "14-phase-0-Vcur_normed-6.bin",
+              "phase": 0,
+              "type": 0,
+              "bytes": 63488,
+              "host_buffer": false,
+              "ne": [
+                256,
+                2,
+                31,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                2048,
+                63488
+              ],
+              "sha256": "88f6aa6c9abbc43864312a06851425137989732e832e991bacdef8e5054d6cb0"
+            },
+            {
+              "name": "Kcur_pos-7",
+              "file": "15-phase-0-Kcur_pos-7.bin",
+              "phase": 0,
+              "type": 0,
+              "bytes": 63488,
+              "host_buffer": false,
+              "ne": [
+                256,
+                2,
+                31,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                2048,
+                63488
+              ],
+              "sha256": "411a224aec366807ebeeee721bf514c096f19e9e092b57747f7fb91a88dae72d"
+            },
+            {
+              "name": "Vcur_normed-7",
+              "file": "16-phase-0-Vcur_normed-7.bin",
+              "phase": 0,
+              "type": 0,
+              "bytes": 63488,
+              "host_buffer": false,
+              "ne": [
+                256,
+                2,
+                31,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                2048,
+                63488
+              ],
+              "sha256": "f672d27a4e75ceca679d3177467ed9dc72085ed533e9ab6cc29d84cde82d09aa"
+            },
+            {
+              "name": "Kcur_pos-8",
+              "file": "17-phase-0-Kcur_pos-8.bin",
+              "phase": 0,
+              "type": 0,
+              "bytes": 63488,
+              "host_buffer": false,
+              "ne": [
+                256,
+                2,
+                31,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                2048,
+                63488
+              ],
+              "sha256": "0d8929bd1ca3b6dd5bda8078e91afcbf852f1625983174c55488254370f068f3"
+            },
+            {
+              "name": "Vcur_normed-8",
+              "file": "18-phase-0-Vcur_normed-8.bin",
+              "phase": 0,
+              "type": 0,
+              "bytes": 63488,
+              "host_buffer": false,
+              "ne": [
+                256,
+                2,
+                31,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                2048,
+                63488
+              ],
+              "sha256": "50e3928b03d535fc5729087e61b864b2dcf5941d10927932119d6b5c14efab0c"
+            },
+            {
+              "name": "Kcur_pos-9",
+              "file": "19-phase-0-Kcur_pos-9.bin",
+              "phase": 0,
+              "type": 0,
+              "bytes": 63488,
+              "host_buffer": false,
+              "ne": [
+                256,
+                2,
+                31,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                2048,
+                63488
+              ],
+              "sha256": "7d807848dac093a23b8c5fe3674712c7aeecd8c7cc735553ed95bec2943fec6a"
+            },
+            {
+              "name": "Vcur_normed-9",
+              "file": "20-phase-0-Vcur_normed-9.bin",
+              "phase": 0,
+              "type": 0,
+              "bytes": 63488,
+              "host_buffer": false,
+              "ne": [
+                256,
+                2,
+                31,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                2048,
+                63488
+              ],
+              "sha256": "bb1eb7e6577d1eae2943604fc20ffdf055569f324136c94b70fae7a71539c012"
+            },
+            {
+              "name": "Kcur_pos-10",
+              "file": "21-phase-0-Kcur_pos-10.bin",
+              "phase": 0,
+              "type": 0,
+              "bytes": 63488,
+              "host_buffer": false,
+              "ne": [
+                256,
+                2,
+                31,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                2048,
+                63488
+              ],
+              "sha256": "871ac323c4e35d8f6d6bde0e2b4de1bc4bcebb816c5c1b74d1a0bb497dacc287"
+            },
+            {
+              "name": "Vcur_normed-10",
+              "file": "22-phase-0-Vcur_normed-10.bin",
+              "phase": 0,
+              "type": 0,
+              "bytes": 63488,
+              "host_buffer": false,
+              "ne": [
+                256,
+                2,
+                31,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                2048,
+                63488
+              ],
+              "sha256": "13521193b05d9d9c14920452b3c0e8e255f96926d8a859eb78b8d03806bd978b"
+            },
+            {
+              "name": "Kcur_pos-11",
+              "file": "23-phase-0-Kcur_pos-11.bin",
+              "phase": 0,
+              "type": 0,
+              "bytes": 126976,
+              "host_buffer": false,
+              "ne": [
+                512,
+                2,
+                31,
+                1
+              ],
+              "nb": [
+                4,
+                2048,
+                4096,
+                126976
+              ],
+              "sha256": "2e3dddc39138aca2dc9182b4c6e68b4a9f8db36fda258a05842a33324f8a18d4"
+            },
+            {
+              "name": "Vcur_normed-11",
+              "file": "24-phase-0-Vcur_normed-11.bin",
+              "phase": 0,
+              "type": 0,
+              "bytes": 126976,
+              "host_buffer": false,
+              "ne": [
+                512,
+                2,
+                31,
+                1
+              ],
+              "nb": [
+                4,
+                2048,
+                4096,
+                126976
+              ],
+              "sha256": "9bdaa8b5756369710bbf944897eb301f69b34438c5a905dc991008e94f725131"
+            },
+            {
+              "name": "Kcur_pos-12",
+              "file": "25-phase-0-Kcur_pos-12.bin",
+              "phase": 0,
+              "type": 0,
+              "bytes": 63488,
+              "host_buffer": false,
+              "ne": [
+                256,
+                2,
+                31,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                2048,
+                63488
+              ],
+              "sha256": "e47c14851f2fe5a602c6b6c2035400a87e251cf51714663cca651abd5125c723"
+            },
+            {
+              "name": "Vcur_normed-12",
+              "file": "26-phase-0-Vcur_normed-12.bin",
+              "phase": 0,
+              "type": 0,
+              "bytes": 63488,
+              "host_buffer": false,
+              "ne": [
+                256,
+                2,
+                31,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                2048,
+                63488
+              ],
+              "sha256": "a8d3c83949ec2f43a7ccc1e49073585d8eae4d2189a506400b1ad4113280afda"
+            },
+            {
+              "name": "Kcur_pos-13",
+              "file": "27-phase-0-Kcur_pos-13.bin",
+              "phase": 0,
+              "type": 0,
+              "bytes": 63488,
+              "host_buffer": false,
+              "ne": [
+                256,
+                2,
+                31,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                2048,
+                63488
+              ],
+              "sha256": "2a6a79479152dcc2c363b77f9877eed86948170118a8923fe9aebc08b4840020"
+            },
+            {
+              "name": "Vcur_normed-13",
+              "file": "28-phase-0-Vcur_normed-13.bin",
+              "phase": 0,
+              "type": 0,
+              "bytes": 63488,
+              "host_buffer": false,
+              "ne": [
+                256,
+                2,
+                31,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                2048,
+                63488
+              ],
+              "sha256": "9dd65786806d89958d437bf6d4721edfc4421f47599e4648f3a5f65a495e15ad"
+            },
+            {
+              "name": "Kcur_pos-14",
+              "file": "29-phase-0-Kcur_pos-14.bin",
+              "phase": 0,
+              "type": 0,
+              "bytes": 63488,
+              "host_buffer": false,
+              "ne": [
+                256,
+                2,
+                31,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                2048,
+                63488
+              ],
+              "sha256": "702dd97125c0ab608db3d72aad6947dc719f9116bc458635e9f700c4262e8874"
+            },
+            {
+              "name": "Vcur_normed-14",
+              "file": "30-phase-0-Vcur_normed-14.bin",
+              "phase": 0,
+              "type": 0,
+              "bytes": 63488,
+              "host_buffer": false,
+              "ne": [
+                256,
+                2,
+                31,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                2048,
+                63488
+              ],
+              "sha256": "6a7ce6c1419c13d9ee56af968050571178dba21a9fa47320c81386c0bafc0900"
+            },
+            {
+              "name": "Kcur_pos-15",
+              "file": "31-phase-0-Kcur_pos-15.bin",
+              "phase": 0,
+              "type": 0,
+              "bytes": 63488,
+              "host_buffer": false,
+              "ne": [
+                256,
+                2,
+                31,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                2048,
+                63488
+              ],
+              "sha256": "67c0d2a709f02a0d38bb738dbe23df094d18dac114730c35525fec3bcd63582c"
+            },
+            {
+              "name": "Vcur_normed-15",
+              "file": "32-phase-0-Vcur_normed-15.bin",
+              "phase": 0,
+              "type": 0,
+              "bytes": 63488,
+              "host_buffer": false,
+              "ne": [
+                256,
+                2,
+                31,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                2048,
+                63488
+              ],
+              "sha256": "e149f5a4ccbd95ec5c88efb02cbbdbfd8f168d72f25c771548cc279bab6575e2"
+            },
+            {
+              "name": "Kcur_pos-16",
+              "file": "33-phase-0-Kcur_pos-16.bin",
+              "phase": 0,
+              "type": 0,
+              "bytes": 63488,
+              "host_buffer": false,
+              "ne": [
+                256,
+                2,
+                31,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                2048,
+                63488
+              ],
+              "sha256": "9ae7940cf039bd1a1e627cfc446acf5a18f289443d847ddf1f3e3af5cf38373d"
+            },
+            {
+              "name": "Vcur_normed-16",
+              "file": "34-phase-0-Vcur_normed-16.bin",
+              "phase": 0,
+              "type": 0,
+              "bytes": 63488,
+              "host_buffer": false,
+              "ne": [
+                256,
+                2,
+                31,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                2048,
+                63488
+              ],
+              "sha256": "1296c38ae1eb6530ddde8f0391cf5c9972dee112e490792a1e4f08bdf40ef80e"
+            },
+            {
+              "name": "Kcur_pos-17",
+              "file": "35-phase-0-Kcur_pos-17.bin",
+              "phase": 0,
+              "type": 0,
+              "bytes": 126976,
+              "host_buffer": false,
+              "ne": [
+                512,
+                2,
+                31,
+                1
+              ],
+              "nb": [
+                4,
+                2048,
+                4096,
+                126976
+              ],
+              "sha256": "d320d6efd13def1cdc3ba6c2e91c9ce7feeb803d7e4bbd7a17079e14e8cd8160"
+            },
+            {
+              "name": "Vcur_normed-17",
+              "file": "36-phase-0-Vcur_normed-17.bin",
+              "phase": 0,
+              "type": 0,
+              "bytes": 126976,
+              "host_buffer": false,
+              "ne": [
+                512,
+                2,
+                31,
+                1
+              ],
+              "nb": [
+                4,
+                2048,
+                4096,
+                126976
+              ],
+              "sha256": "a1f4047619692e42b534ef4417729670cd5976a22c644b121fe1ceb3d52d4907"
+            },
+            {
+              "name": "Kcur_pos-18",
+              "file": "37-phase-0-Kcur_pos-18.bin",
+              "phase": 0,
+              "type": 0,
+              "bytes": 63488,
+              "host_buffer": false,
+              "ne": [
+                256,
+                2,
+                31,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                2048,
+                63488
+              ],
+              "sha256": "6e9979f67b90f89ed8162ba2d288fbcfa19ccb3e5607d66632e033c3edab4856"
+            },
+            {
+              "name": "Vcur_normed-18",
+              "file": "38-phase-0-Vcur_normed-18.bin",
+              "phase": 0,
+              "type": 0,
+              "bytes": 63488,
+              "host_buffer": false,
+              "ne": [
+                256,
+                2,
+                31,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                2048,
+                63488
+              ],
+              "sha256": "9efffe6e981c56f15fea574ba7e30ae2fc70ac80c397203bc1ef6031be134be1"
+            },
+            {
+              "name": "Kcur_pos-19",
+              "file": "39-phase-0-Kcur_pos-19.bin",
+              "phase": 0,
+              "type": 0,
+              "bytes": 63488,
+              "host_buffer": false,
+              "ne": [
+                256,
+                2,
+                31,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                2048,
+                63488
+              ],
+              "sha256": "cbf4a85f7aca29dcf09eaba3f17e731f80a50bfe7af330d26325f6c78997301b"
+            },
+            {
+              "name": "Vcur_normed-19",
+              "file": "40-phase-0-Vcur_normed-19.bin",
+              "phase": 0,
+              "type": 0,
+              "bytes": 63488,
+              "host_buffer": false,
+              "ne": [
+                256,
+                2,
+                31,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                2048,
+                63488
+              ],
+              "sha256": "3f0528786f83144c4bd782e65af3e90871a660f4688a6a98d989775e0a064c94"
+            },
+            {
+              "name": "Kcur_pos-20",
+              "file": "41-phase-0-Kcur_pos-20.bin",
+              "phase": 0,
+              "type": 0,
+              "bytes": 63488,
+              "host_buffer": false,
+              "ne": [
+                256,
+                2,
+                31,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                2048,
+                63488
+              ],
+              "sha256": "ab25c940d08799389f2fd3a33035397193b2f2d75717d46b0eb11d2859ee1b61"
+            },
+            {
+              "name": "Vcur_normed-20",
+              "file": "42-phase-0-Vcur_normed-20.bin",
+              "phase": 0,
+              "type": 0,
+              "bytes": 63488,
+              "host_buffer": false,
+              "ne": [
+                256,
+                2,
+                31,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                2048,
+                63488
+              ],
+              "sha256": "28035a8b05a8975e9c54d9eb22cf643569abd3c3927fd7b7d66147b32e250881"
+            },
+            {
+              "name": "Kcur_pos-21",
+              "file": "43-phase-0-Kcur_pos-21.bin",
+              "phase": 0,
+              "type": 0,
+              "bytes": 63488,
+              "host_buffer": false,
+              "ne": [
+                256,
+                2,
+                31,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                2048,
+                63488
+              ],
+              "sha256": "8a78688cca54b793ea21e54e3f3d2a33ed272e90c652b4a3b01c9e01e06fbc30"
+            },
+            {
+              "name": "Vcur_normed-21",
+              "file": "44-phase-0-Vcur_normed-21.bin",
+              "phase": 0,
+              "type": 0,
+              "bytes": 63488,
+              "host_buffer": false,
+              "ne": [
+                256,
+                2,
+                31,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                2048,
+                63488
+              ],
+              "sha256": "e6c179910cfa773f5f081a3682ca6e565e76c4620a3d70659ce4e7ff81fd1dd6"
+            },
+            {
+              "name": "Kcur_pos-22",
+              "file": "45-phase-0-Kcur_pos-22.bin",
+              "phase": 0,
+              "type": 0,
+              "bytes": 63488,
+              "host_buffer": false,
+              "ne": [
+                256,
+                2,
+                31,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                2048,
+                63488
+              ],
+              "sha256": "bccaec49d88682c73cc4b2d06f49199fdc361a9b272bba114c5696993c56f12a"
+            },
+            {
+              "name": "Vcur_normed-22",
+              "file": "46-phase-0-Vcur_normed-22.bin",
+              "phase": 0,
+              "type": 0,
+              "bytes": 63488,
+              "host_buffer": false,
+              "ne": [
+                256,
+                2,
+                31,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                2048,
+                63488
+              ],
+              "sha256": "20dcf44675578d4d425ca4312e43d0b0ab0c6e7ba05e7696ff91828d18b15220"
+            },
+            {
+              "name": "Kcur_pos-23",
+              "file": "47-phase-0-Kcur_pos-23.bin",
+              "phase": 0,
+              "type": 0,
+              "bytes": 126976,
+              "host_buffer": false,
+              "ne": [
+                512,
+                2,
+                31,
+                1
+              ],
+              "nb": [
+                4,
+                2048,
+                4096,
+                126976
+              ],
+              "sha256": "3b78af76699481b4849f216dfdd836e460f8bba780b5b9122be654e853ae1d83"
+            },
+            {
+              "name": "Vcur_normed-23",
+              "file": "48-phase-0-Vcur_normed-23.bin",
+              "phase": 0,
+              "type": 0,
+              "bytes": 126976,
+              "host_buffer": false,
+              "ne": [
+                512,
+                2,
+                31,
+                1
+              ],
+              "nb": [
+                4,
+                2048,
+                4096,
+                126976
+              ],
+              "sha256": "63ab7f4170fad06c17fd6fb2c598f33f8f3ff089fbb35ac61101abe2cd8b0912"
+            },
+            {
+              "name": "result_norm",
+              "file": "49-phase-0-result_norm.bin",
+              "phase": 0,
+              "type": 0,
+              "bytes": 10240,
+              "host_buffer": false,
+              "ne": [
+                2560,
+                1,
+                1,
+                1
+              ],
+              "nb": [
+                4,
+                10240,
+                10240,
+                10240
+              ],
+              "sha256": "5f010214ce0f19d03073ae1295c0342a154697528efd512745f1f1ef16a73123"
+            },
+            {
+              "name": "inp_scaled",
+              "file": "50-phase-1-inp_scaled.bin",
+              "phase": 1,
+              "type": 0,
+              "bytes": 10240,
+              "host_buffer": false,
+              "ne": [
+                2560,
+                1,
+                1,
+                1
+              ],
+              "nb": [
+                4,
+                10240,
+                10240,
+                10240
+              ],
+              "sha256": "d43c07a582f9425d39a3452c402f67fb142d737e570b4543751f908cab3561d4"
+            },
+            {
+              "name": "Kcur_pos-0",
+              "file": "51-phase-1-Kcur_pos-0.bin",
+              "phase": 1,
+              "type": 0,
+              "bytes": 2048,
+              "host_buffer": false,
+              "ne": [
+                256,
+                2,
+                1,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                2048,
+                2048
+              ],
+              "sha256": "263e9af86aaf8f99f29a462352b1d2347fb2270e32d3bcd5381790e0adca3d4a"
+            },
+            {
+              "name": "Vcur_normed-0",
+              "file": "52-phase-1-Vcur_normed-0.bin",
+              "phase": 1,
+              "type": 0,
+              "bytes": 2048,
+              "host_buffer": false,
+              "ne": [
+                256,
+                2,
+                1,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                2048,
+                2048
+              ],
+              "sha256": "65fa1a60e0886123c077a2b11118194024d943614e898eeaba3bd6d142cd8481"
+            },
+            {
+              "name": "Kcur_pos-1",
+              "file": "53-phase-1-Kcur_pos-1.bin",
+              "phase": 1,
+              "type": 0,
+              "bytes": 2048,
+              "host_buffer": false,
+              "ne": [
+                256,
+                2,
+                1,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                2048,
+                2048
+              ],
+              "sha256": "0897a33c9c3aa25bb796b2437c6d790ea7fcabd152c547d1e351fb7d1c2edb85"
+            },
+            {
+              "name": "Vcur_normed-1",
+              "file": "54-phase-1-Vcur_normed-1.bin",
+              "phase": 1,
+              "type": 0,
+              "bytes": 2048,
+              "host_buffer": false,
+              "ne": [
+                256,
+                2,
+                1,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                2048,
+                2048
+              ],
+              "sha256": "05f79f23ae17af6287ba09f768c5c68fc9cf7cdd1f270dd314e2af4ca6436b36"
+            },
+            {
+              "name": "Kcur_pos-2",
+              "file": "55-phase-1-Kcur_pos-2.bin",
+              "phase": 1,
+              "type": 0,
+              "bytes": 2048,
+              "host_buffer": false,
+              "ne": [
+                256,
+                2,
+                1,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                2048,
+                2048
+              ],
+              "sha256": "a1233a64c514dc71289e9826b67b06fed19f1e4a318a225c15bad5c20cfb75f3"
+            },
+            {
+              "name": "Vcur_normed-2",
+              "file": "56-phase-1-Vcur_normed-2.bin",
+              "phase": 1,
+              "type": 0,
+              "bytes": 2048,
+              "host_buffer": false,
+              "ne": [
+                256,
+                2,
+                1,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                2048,
+                2048
+              ],
+              "sha256": "a230596aacb05c046a2d6b7987b2ca977ea7d87de74346eb442fb07c3c539143"
+            },
+            {
+              "name": "Kcur_pos-3",
+              "file": "57-phase-1-Kcur_pos-3.bin",
+              "phase": 1,
+              "type": 0,
+              "bytes": 2048,
+              "host_buffer": false,
+              "ne": [
+                256,
+                2,
+                1,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                2048,
+                2048
+              ],
+              "sha256": "43ca092da84d29333978d1127ae97dcd4943d0dedbd521ab8e7a907f94b38731"
+            },
+            {
+              "name": "Vcur_normed-3",
+              "file": "58-phase-1-Vcur_normed-3.bin",
+              "phase": 1,
+              "type": 0,
+              "bytes": 2048,
+              "host_buffer": false,
+              "ne": [
+                256,
+                2,
+                1,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                2048,
+                2048
+              ],
+              "sha256": "2df7a3f9ae66aa577bea955cee258e6f012cb07cd0adb2854d1e09eec3246008"
+            },
+            {
+              "name": "Kcur_pos-4",
+              "file": "59-phase-1-Kcur_pos-4.bin",
+              "phase": 1,
+              "type": 0,
+              "bytes": 2048,
+              "host_buffer": false,
+              "ne": [
+                256,
+                2,
+                1,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                2048,
+                2048
+              ],
+              "sha256": "7a425630225a04f4f0332165756f5fdc00bb819e5031e98188028d78d0d75412"
+            },
+            {
+              "name": "Vcur_normed-4",
+              "file": "60-phase-1-Vcur_normed-4.bin",
+              "phase": 1,
+              "type": 0,
+              "bytes": 2048,
+              "host_buffer": false,
+              "ne": [
+                256,
+                2,
+                1,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                2048,
+                2048
+              ],
+              "sha256": "577b7018bccc9a9d199f900b7044d284099b76e3e1d61875e8abd540082d89ca"
+            },
+            {
+              "name": "Kcur_pos-5",
+              "file": "61-phase-1-Kcur_pos-5.bin",
+              "phase": 1,
+              "type": 0,
+              "bytes": 4096,
+              "host_buffer": false,
+              "ne": [
+                512,
+                2,
+                1,
+                1
+              ],
+              "nb": [
+                4,
+                2048,
+                4096,
+                4096
+              ],
+              "sha256": "1b9419b1a5e2dcc1e86f647df90ea3c44e5653f1a284485171c325723f4f027a"
+            },
+            {
+              "name": "Vcur_normed-5",
+              "file": "62-phase-1-Vcur_normed-5.bin",
+              "phase": 1,
+              "type": 0,
+              "bytes": 4096,
+              "host_buffer": false,
+              "ne": [
+                512,
+                2,
+                1,
+                1
+              ],
+              "nb": [
+                4,
+                2048,
+                4096,
+                4096
+              ],
+              "sha256": "4a94575820a1e25a9f1139d5a8ff5a3ff0acb2638de31fb15046df6098cadc8f"
+            },
+            {
+              "name": "Kcur_pos-6",
+              "file": "63-phase-1-Kcur_pos-6.bin",
+              "phase": 1,
+              "type": 0,
+              "bytes": 2048,
+              "host_buffer": false,
+              "ne": [
+                256,
+                2,
+                1,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                2048,
+                2048
+              ],
+              "sha256": "e1c5dbea1099e9fc843fe9a554d0819ae695962e7788e66aea141f3d456806de"
+            },
+            {
+              "name": "Vcur_normed-6",
+              "file": "64-phase-1-Vcur_normed-6.bin",
+              "phase": 1,
+              "type": 0,
+              "bytes": 2048,
+              "host_buffer": false,
+              "ne": [
+                256,
+                2,
+                1,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                2048,
+                2048
+              ],
+              "sha256": "8794131b420064beb68bd12481f83203a1a35fa73a8bcd1955d70461d4b5c28f"
+            },
+            {
+              "name": "Kcur_pos-7",
+              "file": "65-phase-1-Kcur_pos-7.bin",
+              "phase": 1,
+              "type": 0,
+              "bytes": 2048,
+              "host_buffer": false,
+              "ne": [
+                256,
+                2,
+                1,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                2048,
+                2048
+              ],
+              "sha256": "52b646863e143d0b3fa5d472a6522a480a094eee3f3f350b215c483bca46fb33"
+            },
+            {
+              "name": "Vcur_normed-7",
+              "file": "66-phase-1-Vcur_normed-7.bin",
+              "phase": 1,
+              "type": 0,
+              "bytes": 2048,
+              "host_buffer": false,
+              "ne": [
+                256,
+                2,
+                1,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                2048,
+                2048
+              ],
+              "sha256": "e42241c04759d2573ed416c425bb74fe51e89bedcd7c184a6703429c341c76e7"
+            },
+            {
+              "name": "Kcur_pos-8",
+              "file": "67-phase-1-Kcur_pos-8.bin",
+              "phase": 1,
+              "type": 0,
+              "bytes": 2048,
+              "host_buffer": false,
+              "ne": [
+                256,
+                2,
+                1,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                2048,
+                2048
+              ],
+              "sha256": "d2cb64d497b447da56dcbda74c946162901e0c0f979bbbdeca8dac2f96d2814f"
+            },
+            {
+              "name": "Vcur_normed-8",
+              "file": "68-phase-1-Vcur_normed-8.bin",
+              "phase": 1,
+              "type": 0,
+              "bytes": 2048,
+              "host_buffer": false,
+              "ne": [
+                256,
+                2,
+                1,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                2048,
+                2048
+              ],
+              "sha256": "1638cac543b116219875600b803b4b7225bbd94f77128ca14edbce6fc2c236ff"
+            },
+            {
+              "name": "Kcur_pos-9",
+              "file": "69-phase-1-Kcur_pos-9.bin",
+              "phase": 1,
+              "type": 0,
+              "bytes": 2048,
+              "host_buffer": false,
+              "ne": [
+                256,
+                2,
+                1,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                2048,
+                2048
+              ],
+              "sha256": "273cfbce61616e01ca95bcb722d5d9bd124f798ddb1ff9807c33dfa5d3ba6dc4"
+            },
+            {
+              "name": "Vcur_normed-9",
+              "file": "70-phase-1-Vcur_normed-9.bin",
+              "phase": 1,
+              "type": 0,
+              "bytes": 2048,
+              "host_buffer": false,
+              "ne": [
+                256,
+                2,
+                1,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                2048,
+                2048
+              ],
+              "sha256": "2e7a6eb9e2782f610668ee17daa363048442aa8361dfdb4c199a95a4d85a9df8"
+            },
+            {
+              "name": "Kcur_pos-10",
+              "file": "71-phase-1-Kcur_pos-10.bin",
+              "phase": 1,
+              "type": 0,
+              "bytes": 2048,
+              "host_buffer": false,
+              "ne": [
+                256,
+                2,
+                1,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                2048,
+                2048
+              ],
+              "sha256": "c2e5b953a135ef3c338e28475c024a2012205d3241df0be3267971b7a0364c0c"
+            },
+            {
+              "name": "Vcur_normed-10",
+              "file": "72-phase-1-Vcur_normed-10.bin",
+              "phase": 1,
+              "type": 0,
+              "bytes": 2048,
+              "host_buffer": false,
+              "ne": [
+                256,
+                2,
+                1,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                2048,
+                2048
+              ],
+              "sha256": "40e6faa7e86c391de5aa0df5ae0a29c0a3eb1f2e2ae19b57aa342d8ff8590536"
+            },
+            {
+              "name": "Kcur_pos-11",
+              "file": "73-phase-1-Kcur_pos-11.bin",
+              "phase": 1,
+              "type": 0,
+              "bytes": 4096,
+              "host_buffer": false,
+              "ne": [
+                512,
+                2,
+                1,
+                1
+              ],
+              "nb": [
+                4,
+                2048,
+                4096,
+                4096
+              ],
+              "sha256": "c30ab58bc07a0bb01dea900732dde037b0143c52b947aeb483b53182633a9d43"
+            },
+            {
+              "name": "Vcur_normed-11",
+              "file": "74-phase-1-Vcur_normed-11.bin",
+              "phase": 1,
+              "type": 0,
+              "bytes": 4096,
+              "host_buffer": false,
+              "ne": [
+                512,
+                2,
+                1,
+                1
+              ],
+              "nb": [
+                4,
+                2048,
+                4096,
+                4096
+              ],
+              "sha256": "0acc0b45b3c1ab5aadd222b90f6afd2a932f62b4b8a4ce2f737a0f33b4b0f722"
+            },
+            {
+              "name": "Kcur_pos-12",
+              "file": "75-phase-1-Kcur_pos-12.bin",
+              "phase": 1,
+              "type": 0,
+              "bytes": 2048,
+              "host_buffer": false,
+              "ne": [
+                256,
+                2,
+                1,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                2048,
+                2048
+              ],
+              "sha256": "c87dba8698c5782f8768d32abf0ad5aa42330b30b2289a41ed810a2e3ebde302"
+            },
+            {
+              "name": "Vcur_normed-12",
+              "file": "76-phase-1-Vcur_normed-12.bin",
+              "phase": 1,
+              "type": 0,
+              "bytes": 2048,
+              "host_buffer": false,
+              "ne": [
+                256,
+                2,
+                1,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                2048,
+                2048
+              ],
+              "sha256": "682f698c12fa07a9dcd52aaaa7a01a2571692d20de9c162d5563c8b58f9ee157"
+            },
+            {
+              "name": "Kcur_pos-13",
+              "file": "77-phase-1-Kcur_pos-13.bin",
+              "phase": 1,
+              "type": 0,
+              "bytes": 2048,
+              "host_buffer": false,
+              "ne": [
+                256,
+                2,
+                1,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                2048,
+                2048
+              ],
+              "sha256": "eae8719e360ade5f6d840b38f5c335ab4d6067d97d62cd9ffeacb9c692737496"
+            },
+            {
+              "name": "Vcur_normed-13",
+              "file": "78-phase-1-Vcur_normed-13.bin",
+              "phase": 1,
+              "type": 0,
+              "bytes": 2048,
+              "host_buffer": false,
+              "ne": [
+                256,
+                2,
+                1,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                2048,
+                2048
+              ],
+              "sha256": "d3da9f6d7487c77a0765a3dac9e8f134a3055267ab33d24f70e99a93566c1b05"
+            },
+            {
+              "name": "Kcur_pos-14",
+              "file": "79-phase-1-Kcur_pos-14.bin",
+              "phase": 1,
+              "type": 0,
+              "bytes": 2048,
+              "host_buffer": false,
+              "ne": [
+                256,
+                2,
+                1,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                2048,
+                2048
+              ],
+              "sha256": "d4a2943393b18b8a4f594a898302d5376f7246133f769d7c5e0d01f4c1dd133e"
+            },
+            {
+              "name": "Vcur_normed-14",
+              "file": "80-phase-1-Vcur_normed-14.bin",
+              "phase": 1,
+              "type": 0,
+              "bytes": 2048,
+              "host_buffer": false,
+              "ne": [
+                256,
+                2,
+                1,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                2048,
+                2048
+              ],
+              "sha256": "cb56eb8d549560269b0be917c567e76b6f0fb88939d71ff825d4a24b0041e9a5"
+            },
+            {
+              "name": "Kcur_pos-15",
+              "file": "81-phase-1-Kcur_pos-15.bin",
+              "phase": 1,
+              "type": 0,
+              "bytes": 2048,
+              "host_buffer": false,
+              "ne": [
+                256,
+                2,
+                1,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                2048,
+                2048
+              ],
+              "sha256": "8f6e8a06edea92125e5fd3ec031178dd6bc6951b2584914380c906bd0ff05d9c"
+            },
+            {
+              "name": "Vcur_normed-15",
+              "file": "82-phase-1-Vcur_normed-15.bin",
+              "phase": 1,
+              "type": 0,
+              "bytes": 2048,
+              "host_buffer": false,
+              "ne": [
+                256,
+                2,
+                1,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                2048,
+                2048
+              ],
+              "sha256": "810c6e4f8daf3f1ab3d03199764f67525e20818e31b28db5587f07c8dcafa80d"
+            },
+            {
+              "name": "Kcur_pos-16",
+              "file": "83-phase-1-Kcur_pos-16.bin",
+              "phase": 1,
+              "type": 0,
+              "bytes": 2048,
+              "host_buffer": false,
+              "ne": [
+                256,
+                2,
+                1,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                2048,
+                2048
+              ],
+              "sha256": "577333287d9a2cb7fb9c7bc88ef89fcee7b9e535c58ed0dc787824b863354c34"
+            },
+            {
+              "name": "Vcur_normed-16",
+              "file": "84-phase-1-Vcur_normed-16.bin",
+              "phase": 1,
+              "type": 0,
+              "bytes": 2048,
+              "host_buffer": false,
+              "ne": [
+                256,
+                2,
+                1,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                2048,
+                2048
+              ],
+              "sha256": "01c1b52075860ece90e269805f96e3a8b0ea67f1377b25b63fed12bba0141194"
+            },
+            {
+              "name": "Kcur_pos-17",
+              "file": "85-phase-1-Kcur_pos-17.bin",
+              "phase": 1,
+              "type": 0,
+              "bytes": 4096,
+              "host_buffer": false,
+              "ne": [
+                512,
+                2,
+                1,
+                1
+              ],
+              "nb": [
+                4,
+                2048,
+                4096,
+                4096
+              ],
+              "sha256": "2d3e25d21b9f2a66215d223142e464b91add1bf4e38009d47e68aa597fd88438"
+            },
+            {
+              "name": "Vcur_normed-17",
+              "file": "86-phase-1-Vcur_normed-17.bin",
+              "phase": 1,
+              "type": 0,
+              "bytes": 4096,
+              "host_buffer": false,
+              "ne": [
+                512,
+                2,
+                1,
+                1
+              ],
+              "nb": [
+                4,
+                2048,
+                4096,
+                4096
+              ],
+              "sha256": "3eb4eaabd2fdc69afa13fb3761f7e7a093e20ffc4bfbea72a686d046adb8b5bf"
+            },
+            {
+              "name": "Kcur_pos-18",
+              "file": "87-phase-1-Kcur_pos-18.bin",
+              "phase": 1,
+              "type": 0,
+              "bytes": 2048,
+              "host_buffer": false,
+              "ne": [
+                256,
+                2,
+                1,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                2048,
+                2048
+              ],
+              "sha256": "8737082cade45355be6c404c68085a122eaf9085d15f57721e0f0b8e3cfd0c72"
+            },
+            {
+              "name": "Vcur_normed-18",
+              "file": "88-phase-1-Vcur_normed-18.bin",
+              "phase": 1,
+              "type": 0,
+              "bytes": 2048,
+              "host_buffer": false,
+              "ne": [
+                256,
+                2,
+                1,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                2048,
+                2048
+              ],
+              "sha256": "d41f00385b189e23fbc815144def31c00ef99842231f3825ddd03bfbe0822caa"
+            },
+            {
+              "name": "Kcur_pos-19",
+              "file": "89-phase-1-Kcur_pos-19.bin",
+              "phase": 1,
+              "type": 0,
+              "bytes": 2048,
+              "host_buffer": false,
+              "ne": [
+                256,
+                2,
+                1,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                2048,
+                2048
+              ],
+              "sha256": "6b4d46926df1ac50a8ec3418c5ca11e6a362527f4e2c51878270514972ad9957"
+            },
+            {
+              "name": "Vcur_normed-19",
+              "file": "90-phase-1-Vcur_normed-19.bin",
+              "phase": 1,
+              "type": 0,
+              "bytes": 2048,
+              "host_buffer": false,
+              "ne": [
+                256,
+                2,
+                1,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                2048,
+                2048
+              ],
+              "sha256": "94a75118d06dc495a4d345fb8e7193c09cf4da30f424fde2c0f5ccdec1a4e834"
+            },
+            {
+              "name": "Kcur_pos-20",
+              "file": "91-phase-1-Kcur_pos-20.bin",
+              "phase": 1,
+              "type": 0,
+              "bytes": 2048,
+              "host_buffer": false,
+              "ne": [
+                256,
+                2,
+                1,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                2048,
+                2048
+              ],
+              "sha256": "1781d113e7b224cdaadebaba7e3e9b1f5dee88dcf90efa6cc7a8d71708ebd318"
+            },
+            {
+              "name": "Vcur_normed-20",
+              "file": "92-phase-1-Vcur_normed-20.bin",
+              "phase": 1,
+              "type": 0,
+              "bytes": 2048,
+              "host_buffer": false,
+              "ne": [
+                256,
+                2,
+                1,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                2048,
+                2048
+              ],
+              "sha256": "b1c8a589026042f1bf6a2f87321567ad04821a5a2f3c3ccf4cbb972de2d76f4d"
+            },
+            {
+              "name": "Kcur_pos-21",
+              "file": "93-phase-1-Kcur_pos-21.bin",
+              "phase": 1,
+              "type": 0,
+              "bytes": 2048,
+              "host_buffer": false,
+              "ne": [
+                256,
+                2,
+                1,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                2048,
+                2048
+              ],
+              "sha256": "890833c1902cf21f6c249ed6ad4bde7d3a38b56d6e12649dc25923565a613756"
+            },
+            {
+              "name": "Vcur_normed-21",
+              "file": "94-phase-1-Vcur_normed-21.bin",
+              "phase": 1,
+              "type": 0,
+              "bytes": 2048,
+              "host_buffer": false,
+              "ne": [
+                256,
+                2,
+                1,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                2048,
+                2048
+              ],
+              "sha256": "877a863bf18c5142621c8ebb13f75fae2514e7eb155c1a586410c2a163189a9f"
+            },
+            {
+              "name": "Kcur_pos-22",
+              "file": "95-phase-1-Kcur_pos-22.bin",
+              "phase": 1,
+              "type": 0,
+              "bytes": 2048,
+              "host_buffer": false,
+              "ne": [
+                256,
+                2,
+                1,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                2048,
+                2048
+              ],
+              "sha256": "272c2eaab5bf3817d38f5c353ecdec629a0bb9712d188bc2c821b4f9097a63ee"
+            },
+            {
+              "name": "Vcur_normed-22",
+              "file": "96-phase-1-Vcur_normed-22.bin",
+              "phase": 1,
+              "type": 0,
+              "bytes": 2048,
+              "host_buffer": false,
+              "ne": [
+                256,
+                2,
+                1,
+                1
+              ],
+              "nb": [
+                4,
+                1024,
+                2048,
+                2048
+              ],
+              "sha256": "919c372c7612ac93d52be0ad4be5db6649ae370ce0d872b1c6d62a466bebf9a8"
+            },
+            {
+              "name": "Kcur_pos-23",
+              "file": "97-phase-1-Kcur_pos-23.bin",
+              "phase": 1,
+              "type": 0,
+              "bytes": 4096,
+              "host_buffer": false,
+              "ne": [
+                512,
+                2,
+                1,
+                1
+              ],
+              "nb": [
+                4,
+                2048,
+                4096,
+                4096
+              ],
+              "sha256": "650ad4cd601be5744c3204a5d7cebf696e86e7371cc90e7648b185e6dedc01d4"
+            },
+            {
+              "name": "Vcur_normed-23",
+              "file": "98-phase-1-Vcur_normed-23.bin",
+              "phase": 1,
+              "type": 0,
+              "bytes": 4096,
+              "host_buffer": false,
+              "ne": [
+                512,
+                2,
+                1,
+                1
+              ],
+              "nb": [
+                4,
+                2048,
+                4096,
+                4096
+              ],
+              "sha256": "4ec8f3400e4214ea994dcc9f2f2bbc91c815dfc266111bd87feea2b136a9ce28"
+            },
+            {
+              "name": "result_norm",
+              "file": "99-phase-1-result_norm.bin",
+              "phase": 1,
+              "type": 0,
+              "bytes": 10240,
+              "host_buffer": false,
+              "ne": [
+                2560,
+                1,
+                1,
+                1
+              ],
+              "nb": [
+                4,
+                10240,
+                10240,
+                10240
+              ],
+              "sha256": "56082f51dc6ed26e5708bf01c184d7354c4ea119b8a16ab225efb9dc6e2a2877"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

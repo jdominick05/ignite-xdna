@@ -1,0 +1,61 @@
+{
+  "scope": "Archive qualification reports with verified source/build provenance.\n\nRefuses replacement, verifies referenced source/program artifacts and scrubs the\ncurrent local account prefix. Does not turn a negative report into a pass.\n",
+  "source_sha256": "d1a776782eb356b2fe7971521bbc4ccf28df90f92a2ebeda446deb46c62d7369",
+  "result_sha256": "b2235ce7fdbb5b43401761adb1c571d122d2cc9a02c3399d3a6a25ecc7629f4d",
+  "report": {
+    "protocol": {
+      "order": [
+        "gpu",
+        "hybrid",
+        "hybrid_activity",
+        "hybrid_activity",
+        "hybrid",
+        "gpu"
+      ],
+      "idle_seconds": 60,
+      "active_min_seconds": 70,
+      "settle_seconds": 10,
+      "counter_lead_seconds": 2.5,
+      "sample_seconds": 1,
+      "trim_seconds": 1,
+      "min_rows": 50,
+      "min_sample_coverage": 0.9,
+      "max_sample_gap_seconds": 2.5,
+      "idle_max_cpu_percent": 12,
+      "idle_max_stdev_w": 2.5,
+      "idle_max_shift_w": 2,
+      "repeat_max_relative_difference": 0.1,
+      "tokens": 32,
+      "depth": 2,
+      "input_depth": 2,
+      "vector_copy": true,
+      "context_tokens": 512,
+      "workload": "Complete repeated requests: admission, full prefill, decode, rendering and request cleanup",
+      "baseline": "Same arm/model resident and idle; warm-up and constructor excluded",
+      "alignment": "Discard edge requests; count only complete interior requests, and full one-second power intervals inside their span",
+      "failure": "Stop on observed foreign inference CPU >=0.1 core, GPU >2%, foreign NPU context, unknown telemetry or a failed gate; retain partial evidence",
+      "scope": "Matched package-energy diagnostics for GPU and hybrid E2B requests.\n\nRetains raw typeperf CSVs and freezes the protocol before hardware admission.\nThis measures package energy for one public prompt, not wall energy, an NPU\npower domain, general task quality, or unattended operation.\n"
+    },
+    "source_sha256": {
+      "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\tools\\profile_gemma4_energy.py": "76d79a1ff36cda98b9963b7d14b0dd8182fdf54f0524a24a6ace422bede5f6b8",
+      "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\tools\\llm_energy.py": "2ca629a067bad34da67297904109de65c3e93671181023f2d8fdbb00e5f3c4f3",
+      "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\tools\\power_probe.py": "471d9563777cecf5fe19c590b1bc399ae32b35b72ada47a9c1bb2ecd9e7a9278",
+      "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\npu\\contention.py": "a00ac19ca6ca4b8a515628d6e8e534e71a4e5283930908bf7e5d7aad1af9a642",
+      "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\tools\\research_process.py": "ffeb1857f190b482eed101b5f5a928f455de26bfa61d23f78a2eacec08e2663e",
+      "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\Ignition\\src\\ignition\\experimental\\hybrid.py": "2e82d6c5f8be5c0bf20f2a7e64466985264cf629de601b6098c0582e658365f2",
+      "C:\\Users\\<user>\\gemma4-assistant\\npu\\live-public-dictionary-20261018.i32": "363ba2a5b456b8ebe237b7c7e665263c042ebbb82ffbedb89d45a49dfa603575",
+      "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\npu\\gemma4\\agent.py": "b811810a89e2f1b2fe15aee9d91a4fc40f5f886851efc59c805cdf3374a2f909",
+      "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\npu\\gemma4\\arena.py": "881008fd0f0741b797c19ac090e545b2e33e6efbe34c312941e7d43d5bf83c29",
+      "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\npu\\gemma4\\draft.py": "b45aa232db7cf9d0aace8b3b67c42f5c88f79c2d53442868ab7ec5bdaca5bd75",
+      "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\npu\\gemma4\\runtime.py": "d997f1297677f4a1b69599d3d7861b67bc7be674aa3d392838e347164813f30a",
+      "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\npu\\gemma4\\tokenizer.py": "d193beddc2f6e4de56bc900854db2b3904e0c1879a73c851b9241f002ba3c43d",
+      "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\npu\\gemma4\\tooling.py": "e6d0e121f6448a6a2ef63fefe1d8380890b1bebbb0372218e9939702a7de9c7b",
+      "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\npu\\gemma4\\__init__.py": "2f271e44fb2a1df7ceaeedd5916f97d5c635b91a4467f84a20ff3069797b6404",
+      "C:\\Users\\<user>\\gemma4-assistant\\models\\gemma-4-E2B-it-Q5_K_M-pleQ4-imatrix.gguf": "ac36a228eb6cd1b93eedc86153016612b0a60ba73c9a50e0b4e95a6a143f65e1",
+      "C:\\Users\\<user>\\gemma4-assistant\\npu\\gemma-4-E2B-it-assistant.weights.npz": "bda11a1dd40c42a3f84632cb66250f8afe1111657f0d37188e3c0234da6376fc",
+      "C:\\Users\\<user>\\gemma4-assistant\\bin\\ggml_gpu_target.exe": "d2d3b60a32d7b8a8ee4ce534ade2515de43f046f30bbb09f58f14d532264dfba",
+      "C:\\Users\\<user>\\gemma4-assistant\\bin\\gpu_activity.exe": "aef21dd0190495efb12a613cd81bdb69283f4681ebbb75ca2e0a97903e4bffce"
+    }
+  },
+  "builds": {}
+}

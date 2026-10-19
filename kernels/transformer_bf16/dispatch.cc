@@ -4,11 +4,22 @@
 // operations still receive their inputs and return outputs through host BOs.
 #include <aie_api/aie.hpp>
 #include <stdint.h>
+#ifndef BF16_MATRIX_ONLY
 namespace projection {
 #include "gemv_precise.cc"
 }
+#endif
+namespace matrix_projection {
+#include "gemv.cc"
+}
 namespace norm {
+#ifdef BF16_EXACT_NORM_DISPATCH
+#include "rmsnorm_exact.cc"
+#undef draft_norm_refined
+#undef BF16_EXACT_PRODUCT
+#else
 #include "rmsnorm.cc"
+#endif
 }
 namespace rotary {
 #include "rope.cc"
@@ -19,7 +30,11 @@ namespace softmax {
 #undef BF16_EXP_ATTRIBUTES
 }
 namespace activation {
+#ifdef BF16_SMALL_PACKETS
+#define BF16_EXTERNAL_GELU_TABLE
+#endif
 #include "geglu.cc"
+#undef BF16_EXTERNAL_GELU_TABLE
 }
 namespace residual {
 #include "residual.cc"
@@ -31,13 +46,22 @@ extern "C" void draft_transformer(const int32_t *packet,int32_t *output,float *s
     for(int i=0;i<1056;i+=16)
         aie::store_v(output+i,aie::broadcast<int32,16>(packet[0]));
     switch(packet[15]) {
+#ifndef BF16_MATRIX_ONLY
         case 1:projection::draft_projection_precise(packet,output,state);break;
+#endif
+#ifdef BF16_EXACT_NORM_DISPATCH
+        case 2:norm::draft_norm_exact(packet,output);break;
+#else
         case 2:norm::draft_norm(packet,output);break;
+#endif
         case 3:rotary::draft_rope(packet,output);break;
         case 4:softmax::draft_softmax(packet,output,state);break;
+#ifndef BF16_SMALL_PACKETS
         case 5:activation::draft_geglu(packet,output);break;
+#endif
         case 6:residual::draft_residual(packet,output);break;
         case 7:selection::draft_topk(packet,output);break;
+        case 8:matrix_projection::draft_projection(packet,output,state);break;
         default:output[0]=0;break; // Host guard rejects unsupported opcodes.
     }
 }

@@ -1,0 +1,35 @@
+{
+  "passed": false,
+  "scope": "Check BF16-aware RN-even FP32 products across normal finite operands/results.\n\nSweeps every normal finite BF16 encoding at three fixed FP32 scales and adds\nseeded random pairs. Subnormal, zero, infinity, NaN and overflow fallback paths\nare outside this qualification. Not a model-quality or performance experiment.\n",
+  "cases": 243581,
+  "different": 2,
+  "guards": true,
+  "source_sha256": "9a5f8d0f61d55486fa3ccd289ea802921f6ce954d7f35cfa6bb22bc73bf99d42",
+  "build_sha256": "2cbcf79e39a2445b2ebe482d046fa1950af4da6a05b2ab982a8bb60626bb510b",
+  "contexts_released": true,
+  "dispatch": {
+    "dispatch_ms": 2.129200001945719,
+    "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+    "input_unchanged": true,
+    "transfer_phases_ms": {
+      "input_write_sync": 0.6356999801937491,
+      "output_poison_sync": 0.8076999802142382,
+      "output_sync_read": 1.0866000084206462,
+      "input_sync_verify": 1.4398000203073025
+    },
+    "persistent_transport": true,
+    "image_cache_hit": false,
+    "contexts_created": 1,
+    "context_cache_hit": false,
+    "exact_program_sharing": false,
+    "context_cache_size": 1,
+    "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+  },
+  "first_mismatch": {
+    "index": 113533,
+    "a_bits": 8388608,
+    "b_bits": 1065353215,
+    "expected": 8388608,
+    "actual": 0
+  }
+}

@@ -1,0 +1,4167 @@
+{
+  "scope": "Archive qualification reports with verified source/build provenance.\n\nRefuses replacement, verifies referenced source/program artifacts and scrubs the\ncurrent local account prefix. Does not turn a negative report into a pass.\n",
+  "source_sha256": "d1a776782eb356b2fe7971521bbc4ccf28df90f92a2ebeda446deb46c62d7369",
+  "result_sha256": "03d9f2dc903988130679f72b6d06d44fb3755ee85b7c3620ae5fc89b90c6cbe6",
+  "report": {
+    "passed": true,
+    "scope": "Check a native agent CLI report against previously GPU-qualified turn tokens.\n\nReuses the registered reference; does not perform a new GPU control replay.\n",
+    "source_sha256": {
+      "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\tools\\qualify_gemma4_agent_report.py": "369ad1a64dfde5862422dc1201470d4964becea7b95db533f7d90d0dd180fdb9",
+      "C:\\Users\\<user>\\gemma4-assistant\\npu\\native-agent-cli-activity-20261018.json": "4116a3f09c93e7da50be5fe84c66980ff071fdad904757606013574666672fda",
+      "C:\\Users\\<user>\\gemma4-assistant\\npu\\native-agent-task-20261018-v3.json": "118ebd61bfc71eff6d15cdc769dfd068c1cf92e499621c241e3761eb42c86b0e"
+    },
+    "answer": "959",
+    "prior_control_turns_equal": true,
+    "timing_eligible": false,
+    "result": {
+      "completed": true,
+      "rounds": [
+        {
+          "index": 0,
+          "model": {
+            "scope": "Experimental persistent Gemma4 E2B GPU target and BF16 NPU assistant.\n\nWeights stay loaded between requests. Each request prefills its complete prompt\nand owns a bounded NPU session; no GPU-only reference generation runs here.\n",
+            "prompt_tokens": 303,
+            "prompt_sha256": "7766cbf89e5e0ef61176c10bbe06ac7d4217bc164aa791a6f53bddb2be77f84f",
+            "completed": true,
+            "cancelled": false,
+            "input_depth": 2,
+            "vector_copy": true,
+            "context_tokens": 2560,
+            "source_sha256": {
+              "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\npu\\gemma4\\runtime.py": "ae94256a5e7944b9ec50d585bda0ef913e5ede0f446bdd8f45cbb07aacf50f6e",
+              "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\npu\\gemma4\\arena.py": "881008fd0f0741b797c19ac090e545b2e33e6efbe34c312941e7d43d5bf83c29",
+              "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\npu\\gemma4\\draft.py": "b45aa232db7cf9d0aace8b3b67c42f5c88f79c2d53442868ab7ec5bdaca5bd75",
+              "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\tools\\ggml_gpu_target\\client.py": "18b75f386a346688e508fc6062335019c5c756e3e3965a52fc3140d462721dbf",
+              "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\tools\\ggml_gpu_target\\worker.cpp": "5c4bdeb4cc30528dd73cb73fa9cdb4c447c1aebea7ef5d3db632ca7d4b72943a",
+              "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\tools\\ggml_gpu_embedding\\embedding.cpp": "82daefc983ffb2778d2a7213b7b49a5dc653dc1f4268bbc74afc5c1f9b7dccd3",
+              "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\tools\\check-inference-contention.ps1": "c7e54aa33f4fc43e9a6bcd4a83195e010eaa0b41057a325720227ec480dd8021",
+              "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\tools\\research_process.py": "ffeb1857f190b482eed101b5f5a928f455de26bfa61d23f78a2eacec08e2663e",
+              "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\npu\\contention.py": "a00ac19ca6ca4b8a515628d6e8e534e71a4e5283930908bf7e5d7aad1af9a642",
+              "C:\\Users\\<user>\\gemma4-assistant\\npu\\gemma-4-E2B-it-assistant.weights.npz": "bda11a1dd40c42a3f84632cb66250f8afe1111657f0d37188e3c0234da6376fc",
+              "C:\\Users\\<user>\\gemma4-assistant\\npu\\gemma-4-E2B-it-assistant.weights.json": "2346469a976daa60d0a47c8d24790a3043951e4f968ea3d3542706375d3d19d7",
+              "C:\\Users\\<user>\\gemma4-assistant\\npu\\rope-e2b-live-2560-20261018.npz": "8c149126884aca45f6232328f2bde969feb30243783f8690b50b0973cc1d2dda",
+              "C:\\Users\\<user>\\gemma4-assistant\\npu\\gelu-bf16-tanh-v1.npz": "2a3578db96f57b7b5c2768acbfa2bffefbf5247453fbab911793728b5451465e",
+              "C:\\Users\\<user>\\gemma4-assistant\\npu\\rope-e2b-live-2560-20261018.json": "31a19e725f751e183313f4cfac0481f210ef4032f14b005302b805dc1d8444c9",
+              "C:\\Users\\<user>\\gemma4-assistant\\npu\\gelu-bf16-tanh-v1.json": "43e4b24331e5e00892bcf1bf82944646a1e57583792dd75b50de25c39bc91362",
+              "C:\\Users\\<user>\\gemma4-assistant\\npu\\local-checkpoints\\gemma-4-E2B-it-assistant\\config.json": "d2d732c3e0dbdef15fba14be606aa4bb5625226f2cf0e40a5a59c161d764c260",
+              "C:\\Users\\<user>\\gemma4-assistant\\models\\gemma-4-E2B-it-Q5_K_M-pleQ4-imatrix.gguf": "ac36a228eb6cd1b93eedc86153016612b0a60ba73c9a50e0b4e95a6a143f65e1",
+              "C:\\Users\\<user>\\gemma4-assistant\\bin\\ggml_gpu_target.exe": "d2d3b60a32d7b8a8ee4ce534ade2515de43f046f30bbb09f58f14d532264dfba",
+              "C:\\Users\\<user>\\tools\\llamacpp-b1343-rocm\\llama.dll": "04aeca339e96514cd2eeed4810ddc813e7cc91b088137d741d5bfb53829464e8",
+              "C:\\Users\\<user>\\tools\\llamacpp-b1343-rocm\\ggml.dll": "d62c9fd3ea800ebf81b104f0b276c44105930557337c3e97ca7bf3e5a51bd889",
+              "C:\\Users\\<user>\\tools\\llamacpp-b1343-rocm\\ggml-base.dll": "b0f6bcf152bbea75fe55c3d185b512ca4b3df167ec8159357da53be435db9539",
+              "C:\\Users\\<user>\\tools\\llamacpp-b1343-rocm\\ggml-hip.dll": "ea8866ab163caad203a2fa2f8afbce51584bb55eb566e1e863bb14e1b1d3f370",
+              "C:\\Users\\<user>\\gemma4-assistant\\bin\\gpu_activity.exe": "aef21dd0190495efb12a613cd81bdb69283f4681ebbb75ca2e0a97903e4bffce",
+              "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\tools\\ggml_gpu_target\\activity.py": "bb3011ee3326c33d79a5b2b5cf4e5065a20bc67cba4af96c81a99baa1fc7d8c9",
+              "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\tools\\ggml_gpu_target\\gpu_activity.cpp": "6d103be81cd8882c5614d7f0767623cb01b3ff89720db236b214c192272d83c5",
+              "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\tools\\ggml_gpu_target\\build_activity.cmd": "08d89f9d350a137eba8f37d78916d5044fb4e6714bc3c1e82af25f114ba5e843",
+              "C:\\Users\\<user>\\tools\\llamacpp-b1343-rocm\\amdhip64_7.dll": "3872b4aa82bbc91fcd53836bdbc2b4261c98c845eadfba31cce6ef4709a4697e",
+              "C:\\WINDOWS\\System32\\d3dcompiler_47.dll": "2e3526354dbcd9cf013f7b741c549df2170fe6af607628442216a21e7d584883"
+            },
+            "operation_ms": {
+              "admission": 748.9132000191603,
+              "target_prepare": 3081.041900004493,
+              "target_state": 2.7292999729979783,
+              "render": 2.807200071401894,
+              "activity_setup": 96.35810001054779,
+              "activity_start": 1.449999981559813,
+              "draft": 4750.305599998683,
+              "target_verify": 391.56800002092496,
+              "activity_join": 1.549500011606142,
+              "target_rollback": 0.1875000016298145
+            },
+            "gpu_activity": {
+              "enabled": true,
+              "windows": [
+                {
+                  "completed": true,
+                  "gpu_validated": true,
+                  "dispatches": 69,
+                  "elapsed_ms": 102.9892
+                },
+                {
+                  "completed": true,
+                  "gpu_validated": true,
+                  "dispatches": 141,
+                  "elapsed_ms": 101.8231
+                },
+                {
+                  "completed": true,
+                  "gpu_validated": true,
+                  "dispatches": 172,
+                  "elapsed_ms": 102.451
+                },
+                {
+                  "completed": true,
+                  "gpu_validated": true,
+                  "dispatches": 175,
+                  "elapsed_ms": 101.9404
+                },
+                {
+                  "completed": true,
+                  "gpu_validated": true,
+                  "dispatches": 170,
+                  "elapsed_ms": 101.9826
+                },
+                {
+                  "completed": true,
+                  "gpu_validated": true,
+                  "dispatches": 172,
+                  "elapsed_ms": 102.2426
+                }
+              ],
+              "identity": {
+                "ready": true,
+                "vendor": 4098,
+                "device": 5567,
+                "luid_low": 52858,
+                "luid_high": 0,
+                "hip_luid_matched": true,
+                "node_mask": 1,
+                "hardware": true,
+                "threads": 32,
+                "iterations": 32768
+              },
+              "pid": 80836,
+              "idle": true
+            },
+            "preflight": {
+              "utc": "2026-10-18T21:59:31.889990+00:00",
+              "sample_seconds": 0.5019807999779005,
+              "snapshot_seconds": 0.6789604999939911,
+              "inference_processes": [
+                {
+                  "pid": 11908,
+                  "name": "python.exe",
+                  "active_cpu_cores": 0
+                },
+                {
+                  "pid": 12748,
+                  "name": "python.exe",
+                  "active_cpu_cores": 0
+                },
+                {
+                  "pid": 26776,
+                  "name": "python.exe",
+                  "active_cpu_cores": 0
+                },
+                {
+                  "pid": 64488,
+                  "name": "python.exe",
+                  "active_cpu_cores": 0
+                },
+                {
+                  "pid": 78992,
+                  "name": "python.exe",
+                  "active_cpu_cores": 0
+                },
+                {
+                  "pid": 79132,
+                  "name": "python.exe",
+                  "active_cpu_cores": 0
+                },
+                {
+                  "pid": 81128,
+                  "name": "python.exe",
+                  "active_cpu_cores": 0
+                },
+                {
+                  "pid": 81232,
+                  "name": "python.exe",
+                  "active_cpu_cores": 0.311
+                }
+              ],
+              "cpu_telemetry_known": true,
+              "gpu_telemetry_known": true,
+              "busy_gpu_engines": [
+                {
+                  "pid": 11024,
+                  "engine": "pid_11024_luid_0x00000000_0x0000CE7A_phys_0_eng_0_engtype_3D",
+                  "utilization_percent": 1.7658546552635355
+                }
+              ],
+              "gpu_details": {
+                "instances": 307,
+                "invalid_instances": 0
+              },
+              "gpu_error": null,
+              "npu_telemetry_known": true,
+              "npu_idle": true,
+              "idle_verified": false,
+              "blockers": [
+                "CPU inference work: PID 81232",
+                "GPU engine activity observed"
+              ],
+              "scope": "Read-only preflight snapshot; no process is stopped",
+              "owned_pids": [
+                79132,
+                81232
+              ]
+            },
+            "worker_pid": 81024,
+            "generated_text": "<|tool_call>call:read_text{path:<|\"|>brief.txt<|\"|>}<tool_call|>",
+            "finish_reason": "eos",
+            "tokens": [
+              48,
+              6639,
+              236787,
+              1399,
+              236779,
+              1005,
+              236782,
+              2337,
+              236787,
+              52,
+              37767,
+              236761,
+              7090,
+              52,
+              236783,
+              49,
+              50
+            ],
+            "accepted": 10,
+            "proposed": 12,
+            "model_loads": 1,
+            "npu_released": true,
+            "compiler_log_tail": "{\"build\": \"C:\\\\Users\\\\<user>\\\\gemma4-assistant\\\\npu\\\\arena-images\\\\draft_state_transformer-a4040f9c852a7e92\", \"code_bytes\": 13360, \"stack_frames\": [0, 1216, 352, 160, 32, 896, 0, 256, 32, 0, 128, 32, 64, 0, 0], \"blocks\": 3952}\n",
+            "contexts_created": 2,
+            "evictions": 0,
+            "npu_idle": true,
+            "rounds": [
+              {
+                "proposals": [
+                  6639,
+                  236787
+                ],
+                "accepted": 2,
+                "dispatches": [
+                  {
+                    "body": {
+                      "build": "C:\\Users\\<user>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-a4040f9c852a7e92\\build.json",
+                      "commands": 3952,
+                      "prepared": true,
+                      "host_phases_ms": {
+                        "build_lookup": 0.0,
+                        "packet_stack": 0.000600004568696022
+                      },
+                      "dispatch_ms": 14.37289998284541,
+                      "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+                      "input_unchanged": true,
+                      "output_frames": 10,
+                      "output_bytes": 42240,
+                      "input_update_mode": "full",
+                      "input_write_bytes": 34651136,
+                      "input_total_bytes": 34651136,
+                      "input_sync_ranges": 1,
+                      "input_fully_verified": true,
+                      "transport_sources_sha256": {
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\persistent.py": "1c89cc860244a8b77475d6ed137d01aaa79678b87999dd517ce409e8d06839f1",
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\input_residency.py": "48b988a2e354be6efff94f1b608d09fe926f8cd70dee31df16ce594f9a4235ba"
+                      },
+                      "transfer_phases_ms": {
+                        "input_write_sync": 7.282899983692914,
+                        "output_poison_sync": 0.0467000063508749,
+                        "output_sync_read": 0.22170000011101365,
+                        "input_sync_verify": 14.112100005149841
+                      },
+                      "persistent_transport": true,
+                      "image_cache_hit": false,
+                      "contexts_created": 1,
+                      "context_cache_hit": false,
+                      "exact_program_sharing": true,
+                      "context_cache_size": 1,
+                      "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d",
+                      "step_wall_ms": 4117.672699998366,
+                      "step_phases_ms": {
+                        "gpu_embedding": 13.79679999081418,
+                        "body": 4019.5275000005495,
+                        "head": 84.34689999558032
+                      }
+                    },
+                    "head": {
+                      "build": "C:\\Users\\<user>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-45784270ef7396da\\build.json",
+                      "commands": 258,
+                      "prepared": true,
+                      "host_phases_ms": {
+                        "build_lookup": 0.0,
+                        "packet_stack": 0.000600004568696022
+                      },
+                      "dispatch_ms": 1.173900003777817,
+                      "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+                      "input_unchanged": true,
+                      "output_frames": 2,
+                      "output_bytes": 8448,
+                      "input_update_mode": "full",
+                      "input_write_bytes": 2262144,
+                      "input_total_bytes": 2262144,
+                      "input_sync_ranges": 1,
+                      "input_fully_verified": true,
+                      "transport_sources_sha256": {
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\persistent.py": "1c89cc860244a8b77475d6ed137d01aaa79678b87999dd517ce409e8d06839f1",
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\input_residency.py": "48b988a2e354be6efff94f1b608d09fe926f8cd70dee31df16ce594f9a4235ba"
+                      },
+                      "transfer_phases_ms": {
+                        "input_write_sync": 0.4820000031031668,
+                        "output_poison_sync": 0.025299988919869065,
+                        "output_sync_read": 0.014899997040629387,
+                        "input_sync_verify": 0.9438999986741692
+                      },
+                      "persistent_transport": true,
+                      "image_cache_hit": false,
+                      "contexts_created": 2,
+                      "context_cache_hit": false,
+                      "exact_program_sharing": true,
+                      "context_cache_size": 2,
+                      "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+                    }
+                  },
+                  {
+                    "body": {
+                      "build": "C:\\Users\\<user>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-a4040f9c852a7e92\\build.json",
+                      "commands": 3952,
+                      "prepared": true,
+                      "host_phases_ms": {
+                        "build_lookup": 0.0,
+                        "packet_stack": 5.062800017185509
+                      },
+                      "dispatch_ms": 13.837000005878508,
+                      "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+                      "input_unchanged": true,
+                      "output_frames": 10,
+                      "output_bytes": 42240,
+                      "input_update_mode": "partial",
+                      "input_write_bytes": 8192,
+                      "input_total_bytes": 34651136,
+                      "input_sync_ranges": 1,
+                      "input_fully_verified": true,
+                      "transport_sources_sha256": {
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\persistent.py": "1c89cc860244a8b77475d6ed137d01aaa79678b87999dd517ce409e8d06839f1",
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\input_residency.py": "48b988a2e354be6efff94f1b608d09fe926f8cd70dee31df16ce594f9a4235ba"
+                      },
+                      "transfer_phases_ms": {
+                        "input_write_sync": 3.486100002191961,
+                        "output_poison_sync": 0.03129997639916837,
+                        "output_sync_read": 0.026699999580159783,
+                        "input_sync_verify": 14.753600000403821
+                      },
+                      "persistent_transport": true,
+                      "image_cache_hit": true,
+                      "contexts_created": 2,
+                      "context_cache_hit": true,
+                      "exact_program_sharing": true,
+                      "context_cache_size": 2,
+                      "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d",
+                      "step_wall_ms": 52.02390000340529,
+                      "step_phases_ms": {
+                        "gpu_embedding": 2.235899999504909,
+                        "body": 42.36089999903925,
+                        "head": 7.426399999530986
+                      }
+                    },
+                    "head": {
+                      "build": "C:\\Users\\<user>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-45784270ef7396da\\build.json",
+                      "commands": 258,
+                      "prepared": true,
+                      "host_phases_ms": {
+                        "build_lookup": 0.0,
+                        "packet_stack": 2.4921000003814697
+                      },
+                      "dispatch_ms": 1.2382999993860722,
+                      "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+                      "input_unchanged": true,
+                      "output_frames": 2,
+                      "output_bytes": 8448,
+                      "input_update_mode": "partial",
+                      "input_write_bytes": 2248704,
+                      "input_total_bytes": 2262144,
+                      "input_sync_ranges": 3,
+                      "input_fully_verified": true,
+                      "transport_sources_sha256": {
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\persistent.py": "1c89cc860244a8b77475d6ed137d01aaa79678b87999dd517ce409e8d06839f1",
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\input_residency.py": "48b988a2e354be6efff94f1b608d09fe926f8cd70dee31df16ce594f9a4235ba"
+                      },
+                      "transfer_phases_ms": {
+                        "input_write_sync": 0.9274999902117997,
+                        "output_poison_sync": 0.014600023860111833,
+                        "output_sync_read": 0.020000006770715117,
+                        "input_sync_verify": 0.7940999930724502
+                      },
+                      "persistent_transport": true,
+                      "image_cache_hit": true,
+                      "contexts_created": 2,
+                      "context_cache_hit": true,
+                      "exact_program_sharing": true,
+                      "context_cache_size": 2,
+                      "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+                    }
+                  }
+                ]
+              },
+              {
+                "proposals": [
+                  236779,
+                  1005
+                ],
+                "accepted": 2,
+                "dispatches": [
+                  {
+                    "body": {
+                      "build": "C:\\Users\\<user>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-a4040f9c852a7e92\\build.json",
+                      "commands": 3952,
+                      "prepared": true,
+                      "host_phases_ms": {
+                        "build_lookup": 0.0,
+                        "packet_stack": 10.461999976541847
+                      },
+                      "dispatch_ms": 13.6824999935925,
+                      "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+                      "input_unchanged": true,
+                      "output_frames": 10,
+                      "output_bytes": 42240,
+                      "input_update_mode": "partial",
+                      "input_write_bytes": 2007040,
+                      "input_total_bytes": 34651136,
+                      "input_sync_ranges": 373,
+                      "input_fully_verified": true,
+                      "transport_sources_sha256": {
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\persistent.py": "1c89cc860244a8b77475d6ed137d01aaa79678b87999dd517ce409e8d06839f1",
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\input_residency.py": "48b988a2e354be6efff94f1b608d09fe926f8cd70dee31df16ce594f9a4235ba"
+                      },
+                      "transfer_phases_ms": {
+                        "input_write_sync": 4.365900007542223,
+                        "output_poison_sync": 0.031200004741549492,
+                        "output_sync_read": 0.030399998649954796,
+                        "input_sync_verify": 12.735500000417233
+                      },
+                      "persistent_transport": true,
+                      "image_cache_hit": true,
+                      "contexts_created": 2,
+                      "context_cache_hit": true,
+                      "exact_program_sharing": true,
+                      "context_cache_size": 2,
+                      "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d",
+                      "step_wall_ms": 55.6005000253208,
+                      "step_phases_ms": {
+                        "gpu_embedding": 0.8768000116106123,
+                        "body": 48.06749999988824,
+                        "head": 6.6556999809108675
+                      }
+                    },
+                    "head": {
+                      "build": "C:\\Users\\<user>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-45784270ef7396da\\build.json",
+                      "commands": 258,
+                      "prepared": true,
+                      "host_phases_ms": {
+                        "build_lookup": 0.0,
+                        "packet_stack": 2.199000009568408
+                      },
+                      "dispatch_ms": 1.204100000904873,
+                      "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+                      "input_unchanged": true,
+                      "output_frames": 2,
+                      "output_bytes": 8448,
+                      "input_update_mode": "partial",
+                      "input_write_bytes": 2252800,
+                      "input_total_bytes": 2262144,
+                      "input_sync_ranges": 2,
+                      "input_fully_verified": true,
+                      "transport_sources_sha256": {
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\persistent.py": "1c89cc860244a8b77475d6ed137d01aaa79678b87999dd517ce409e8d06839f1",
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\input_residency.py": "48b988a2e354be6efff94f1b608d09fe926f8cd70dee31df16ce594f9a4235ba"
+                      },
+                      "transfer_phases_ms": {
+                        "input_write_sync": 0.8376000041607767,
+                        "output_poison_sync": 0.016200006939470768,
+                        "output_sync_read": 0.01409999094903469,
+                        "input_sync_verify": 0.7541000086348504
+                      },
+                      "persistent_transport": true,
+                      "image_cache_hit": true,
+                      "contexts_created": 2,
+                      "context_cache_hit": true,
+                      "exact_program_sharing": true,
+                      "context_cache_size": 2,
+                      "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+                    }
+                  },
+                  {
+                    "body": {
+                      "build": "C:\\Users\\<user>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-a4040f9c852a7e92\\build.json",
+                      "commands": 3952,
+                      "prepared": true,
+                      "host_phases_ms": {
+                        "build_lookup": 0.0,
+                        "packet_stack": 12.53579999320209
+                      },
+                      "dispatch_ms": 13.699999981326982,
+                      "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+                      "input_unchanged": true,
+                      "output_frames": 10,
+                      "output_bytes": 42240,
+                      "input_update_mode": "partial",
+                      "input_write_bytes": 8192,
+                      "input_total_bytes": 34651136,
+                      "input_sync_ranges": 1,
+                      "input_fully_verified": true,
+                      "transport_sources_sha256": {
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\persistent.py": "1c89cc860244a8b77475d6ed137d01aaa79678b87999dd517ce409e8d06839f1",
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\input_residency.py": "48b988a2e354be6efff94f1b608d09fe926f8cd70dee31df16ce594f9a4235ba"
+                      },
+                      "transfer_phases_ms": {
+                        "input_write_sync": 3.620000003138557,
+                        "output_poison_sync": 0.03170000854879618,
+                        "output_sync_read": 0.027699978090822697,
+                        "input_sync_verify": 14.659600012237206
+                      },
+                      "persistent_transport": true,
+                      "image_cache_hit": true,
+                      "contexts_created": 2,
+                      "context_cache_hit": true,
+                      "exact_program_sharing": true,
+                      "context_cache_size": 2,
+                      "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d",
+                      "step_wall_ms": 57.002299989107996,
+                      "step_phases_ms": {
+                        "gpu_embedding": 0.7182999979704618,
+                        "body": 49.73289999179542,
+                        "head": 6.550699996296316
+                      }
+                    },
+                    "head": {
+                      "build": "C:\\Users\\<user>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-45784270ef7396da\\build.json",
+                      "commands": 258,
+                      "prepared": true,
+                      "host_phases_ms": {
+                        "build_lookup": 0.0,
+                        "packet_stack": 2.003699977649376
+                      },
+                      "dispatch_ms": 1.2390000047162175,
+                      "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+                      "input_unchanged": true,
+                      "output_frames": 2,
+                      "output_bytes": 8448,
+                      "input_update_mode": "partial",
+                      "input_write_bytes": 2252800,
+                      "input_total_bytes": 2262144,
+                      "input_sync_ranges": 2,
+                      "input_fully_verified": true,
+                      "transport_sources_sha256": {
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\persistent.py": "1c89cc860244a8b77475d6ed137d01aaa79678b87999dd517ce409e8d06839f1",
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\input_residency.py": "48b988a2e354be6efff94f1b608d09fe926f8cd70dee31df16ce594f9a4235ba"
+                      },
+                      "transfer_phases_ms": {
+                        "input_write_sync": 0.7332999957725406,
+                        "output_poison_sync": 0.013899989426136017,
+                        "output_sync_read": 0.020899984519928694,
+                        "input_sync_verify": 1.0507999977562577
+                      },
+                      "persistent_transport": true,
+                      "image_cache_hit": true,
+                      "contexts_created": 2,
+                      "context_cache_hit": true,
+                      "exact_program_sharing": true,
+                      "context_cache_size": 2,
+                      "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+                    }
+                  }
+                ]
+              },
+              {
+                "proposals": [
+                  2337,
+                  236787
+                ],
+                "accepted": 2,
+                "dispatches": [
+                  {
+                    "body": {
+                      "build": "C:\\Users\\<user>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-a4040f9c852a7e92\\build.json",
+                      "commands": 3952,
+                      "prepared": true,
+                      "host_phases_ms": {
+                        "build_lookup": 0.0,
+                        "packet_stack": 12.21290000830777
+                      },
+                      "dispatch_ms": 13.682300021173432,
+                      "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+                      "input_unchanged": true,
+                      "output_frames": 10,
+                      "output_bytes": 42240,
+                      "input_update_mode": "partial",
+                      "input_write_bytes": 1744896,
+                      "input_total_bytes": 34651136,
+                      "input_sync_ranges": 373,
+                      "input_fully_verified": true,
+                      "transport_sources_sha256": {
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\persistent.py": "1c89cc860244a8b77475d6ed137d01aaa79678b87999dd517ce409e8d06839f1",
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\input_residency.py": "48b988a2e354be6efff94f1b608d09fe926f8cd70dee31df16ce594f9a4235ba"
+                      },
+                      "transfer_phases_ms": {
+                        "input_write_sync": 4.6255000052042305,
+                        "output_poison_sync": 0.04249997437000275,
+                        "output_sync_read": 0.028000009479001164,
+                        "input_sync_verify": 15.204499999526888
+                      },
+                      "persistent_transport": true,
+                      "image_cache_hit": true,
+                      "contexts_created": 2,
+                      "context_cache_hit": true,
+                      "exact_program_sharing": true,
+                      "context_cache_size": 2,
+                      "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d",
+                      "step_wall_ms": 59.39129999023862,
+                      "step_phases_ms": {
+                        "gpu_embedding": 0.6853000086266547,
+                        "body": 51.92869997699745,
+                        "head": 6.77680000080727
+                      }
+                    },
+                    "head": {
+                      "build": "C:\\Users\\<user>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-45784270ef7396da\\build.json",
+                      "commands": 258,
+                      "prepared": true,
+                      "host_phases_ms": {
+                        "build_lookup": 0.0,
+                        "packet_stack": 2.109300025040284
+                      },
+                      "dispatch_ms": 1.2123000051360577,
+                      "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+                      "input_unchanged": true,
+                      "output_frames": 2,
+                      "output_bytes": 8448,
+                      "input_update_mode": "partial",
+                      "input_write_bytes": 2252800,
+                      "input_total_bytes": 2262144,
+                      "input_sync_ranges": 2,
+                      "input_fully_verified": true,
+                      "transport_sources_sha256": {
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\persistent.py": "1c89cc860244a8b77475d6ed137d01aaa79678b87999dd517ce409e8d06839f1",
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\input_residency.py": "48b988a2e354be6efff94f1b608d09fe926f8cd70dee31df16ce594f9a4235ba"
+                      },
+                      "transfer_phases_ms": {
+                        "input_write_sync": 0.9139000030700117,
+                        "output_poison_sync": 0.015099998563528061,
+                        "output_sync_read": 0.016200006939470768,
+                        "input_sync_verify": 0.8351999858859926
+                      },
+                      "persistent_transport": true,
+                      "image_cache_hit": true,
+                      "contexts_created": 2,
+                      "context_cache_hit": true,
+                      "exact_program_sharing": true,
+                      "context_cache_size": 2,
+                      "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+                    }
+                  },
+                  {
+                    "body": {
+                      "build": "C:\\Users\\<user>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-a4040f9c852a7e92\\build.json",
+                      "commands": 3952,
+                      "prepared": true,
+                      "host_phases_ms": {
+                        "build_lookup": 0.0,
+                        "packet_stack": 11.925800004974008
+                      },
+                      "dispatch_ms": 13.685199985047802,
+                      "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+                      "input_unchanged": true,
+                      "output_frames": 10,
+                      "output_bytes": 42240,
+                      "input_update_mode": "partial",
+                      "input_write_bytes": 8192,
+                      "input_total_bytes": 34651136,
+                      "input_sync_ranges": 1,
+                      "input_fully_verified": true,
+                      "transport_sources_sha256": {
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\persistent.py": "1c89cc860244a8b77475d6ed137d01aaa79678b87999dd517ce409e8d06839f1",
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\input_residency.py": "48b988a2e354be6efff94f1b608d09fe926f8cd70dee31df16ce594f9a4235ba"
+                      },
+                      "transfer_phases_ms": {
+                        "input_write_sync": 3.404500021133572,
+                        "output_poison_sync": 0.018300022929906845,
+                        "output_sync_read": 0.029900023946538568,
+                        "input_sync_verify": 14.62060000631027
+                      },
+                      "persistent_transport": true,
+                      "image_cache_hit": true,
+                      "contexts_created": 2,
+                      "context_cache_hit": true,
+                      "exact_program_sharing": true,
+                      "context_cache_size": 2,
+                      "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d",
+                      "step_wall_ms": 56.76959999254905,
+                      "step_phases_ms": {
+                        "gpu_embedding": 0.7027999963611364,
+                        "body": 48.94969999440946,
+                        "head": 7.1171999734360725
+                      }
+                    },
+                    "head": {
+                      "build": "C:\\Users\\<user>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-45784270ef7396da\\build.json",
+                      "commands": 258,
+                      "prepared": true,
+                      "host_phases_ms": {
+                        "build_lookup": 0.0,
+                        "packet_stack": 2.135099988663569
+                      },
+                      "dispatch_ms": 1.2086000060662627,
+                      "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+                      "input_unchanged": true,
+                      "output_frames": 2,
+                      "output_bytes": 8448,
+                      "input_update_mode": "partial",
+                      "input_write_bytes": 2252800,
+                      "input_total_bytes": 2262144,
+                      "input_sync_ranges": 2,
+                      "input_fully_verified": true,
+                      "transport_sources_sha256": {
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\persistent.py": "1c89cc860244a8b77475d6ed137d01aaa79678b87999dd517ce409e8d06839f1",
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\input_residency.py": "48b988a2e354be6efff94f1b608d09fe926f8cd70dee31df16ce594f9a4235ba"
+                      },
+                      "transfer_phases_ms": {
+                        "input_write_sync": 0.8762000070419163,
+                        "output_poison_sync": 0.014599994756281376,
+                        "output_sync_read": 0.02139998832717538,
+                        "input_sync_verify": 1.116700004786253
+                      },
+                      "persistent_transport": true,
+                      "image_cache_hit": true,
+                      "contexts_created": 2,
+                      "context_cache_hit": true,
+                      "exact_program_sharing": true,
+                      "context_cache_size": 2,
+                      "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+                    }
+                  }
+                ]
+              },
+              {
+                "proposals": [
+                  34710,
+                  236761
+                ],
+                "accepted": 0,
+                "dispatches": [
+                  {
+                    "body": {
+                      "build": "C:\\Users\\<user>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-a4040f9c852a7e92\\build.json",
+                      "commands": 3952,
+                      "prepared": true,
+                      "host_phases_ms": {
+                        "build_lookup": 0.0,
+                        "packet_stack": 12.588100013090298
+                      },
+                      "dispatch_ms": 13.683900004252791,
+                      "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+                      "input_unchanged": true,
+                      "output_frames": 10,
+                      "output_bytes": 42240,
+                      "input_update_mode": "partial",
+                      "input_write_bytes": 1744896,
+                      "input_total_bytes": 34651136,
+                      "input_sync_ranges": 373,
+                      "input_fully_verified": true,
+                      "transport_sources_sha256": {
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\persistent.py": "1c89cc860244a8b77475d6ed137d01aaa79678b87999dd517ce409e8d06839f1",
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\input_residency.py": "48b988a2e354be6efff94f1b608d09fe926f8cd70dee31df16ce594f9a4235ba"
+                      },
+                      "transfer_phases_ms": {
+                        "input_write_sync": 4.562900023302063,
+                        "output_poison_sync": 0.05120001151226461,
+                        "output_sync_read": 0.03239998477511108,
+                        "input_sync_verify": 14.964100002544
+                      },
+                      "persistent_transport": true,
+                      "image_cache_hit": true,
+                      "contexts_created": 2,
+                      "context_cache_hit": true,
+                      "exact_program_sharing": true,
+                      "context_cache_size": 2,
+                      "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d",
+                      "step_wall_ms": 59.11580001702532,
+                      "step_phases_ms": {
+                        "gpu_embedding": 0.9155000152532011,
+                        "body": 51.566499983891845,
+                        "head": 6.633000011788681
+                      }
+                    },
+                    "head": {
+                      "build": "C:\\Users\\<user>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-45784270ef7396da\\build.json",
+                      "commands": 258,
+                      "prepared": true,
+                      "host_phases_ms": {
+                        "build_lookup": 0.0,
+                        "packet_stack": 1.9471000123303384
+                      },
+                      "dispatch_ms": 1.2140999897383153,
+                      "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+                      "input_unchanged": true,
+                      "output_frames": 2,
+                      "output_bytes": 8448,
+                      "input_update_mode": "partial",
+                      "input_write_bytes": 2252800,
+                      "input_total_bytes": 2262144,
+                      "input_sync_ranges": 2,
+                      "input_fully_verified": true,
+                      "transport_sources_sha256": {
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\persistent.py": "1c89cc860244a8b77475d6ed137d01aaa79678b87999dd517ce409e8d06839f1",
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\input_residency.py": "48b988a2e354be6efff94f1b608d09fe926f8cd70dee31df16ce594f9a4235ba"
+                      },
+                      "transfer_phases_ms": {
+                        "input_write_sync": 0.7178000232670456,
+                        "output_poison_sync": 0.01300001167692244,
+                        "output_sync_read": 0.020599982235580683,
+                        "input_sync_verify": 1.1288000096101314
+                      },
+                      "persistent_transport": true,
+                      "image_cache_hit": true,
+                      "contexts_created": 2,
+                      "context_cache_hit": true,
+                      "exact_program_sharing": true,
+                      "context_cache_size": 2,
+                      "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+                    }
+                  },
+                  {
+                    "body": {
+                      "build": "C:\\Users\\<user>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-a4040f9c852a7e92\\build.json",
+                      "commands": 3952,
+                      "prepared": true,
+                      "host_phases_ms": {
+                        "build_lookup": 0.0,
+                        "packet_stack": 10.934799996903166
+                      },
+                      "dispatch_ms": 13.685400015674531,
+                      "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+                      "input_unchanged": true,
+                      "output_frames": 10,
+                      "output_bytes": 42240,
+                      "input_update_mode": "partial",
+                      "input_write_bytes": 8192,
+                      "input_total_bytes": 34651136,
+                      "input_sync_ranges": 1,
+                      "input_fully_verified": true,
+                      "transport_sources_sha256": {
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\persistent.py": "1c89cc860244a8b77475d6ed137d01aaa79678b87999dd517ce409e8d06839f1",
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\input_residency.py": "48b988a2e354be6efff94f1b608d09fe926f8cd70dee31df16ce594f9a4235ba"
+                      },
+                      "transfer_phases_ms": {
+                        "input_write_sync": 3.156699996907264,
+                        "output_poison_sync": 0.01889999839477241,
+                        "output_sync_read": 0.031100003980100155,
+                        "input_sync_verify": 11.964499979512766
+                      },
+                      "persistent_transport": true,
+                      "image_cache_hit": true,
+                      "contexts_created": 2,
+                      "context_cache_hit": true,
+                      "exact_program_sharing": true,
+                      "context_cache_size": 2,
+                      "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d",
+                      "step_wall_ms": 52.304500015452504,
+                      "step_phases_ms": {
+                        "gpu_embedding": 0.5608999927062541,
+                        "body": 44.96120000840165,
+                        "head": 6.781899981433526
+                      }
+                    },
+                    "head": {
+                      "build": "C:\\Users\\<user>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-45784270ef7396da\\build.json",
+                      "commands": 258,
+                      "prepared": true,
+                      "host_phases_ms": {
+                        "build_lookup": 0.0,
+                        "packet_stack": 2.003300003707409
+                      },
+                      "dispatch_ms": 1.2691000010818243,
+                      "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+                      "input_unchanged": true,
+                      "output_frames": 2,
+                      "output_bytes": 8448,
+                      "input_update_mode": "partial",
+                      "input_write_bytes": 2252800,
+                      "input_total_bytes": 2262144,
+                      "input_sync_ranges": 2,
+                      "input_fully_verified": true,
+                      "transport_sources_sha256": {
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\persistent.py": "1c89cc860244a8b77475d6ed137d01aaa79678b87999dd517ce409e8d06839f1",
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\input_residency.py": "48b988a2e354be6efff94f1b608d09fe926f8cd70dee31df16ce594f9a4235ba"
+                      },
+                      "transfer_phases_ms": {
+                        "input_write_sync": 0.7258999976329505,
+                        "output_poison_sync": 0.012800010154023767,
+                        "output_sync_read": 0.02069998299703002,
+                        "input_sync_verify": 1.0535000183153898
+                      },
+                      "persistent_transport": true,
+                      "image_cache_hit": true,
+                      "contexts_created": 2,
+                      "context_cache_hit": true,
+                      "exact_program_sharing": true,
+                      "context_cache_size": 2,
+                      "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+                    }
+                  }
+                ]
+              },
+              {
+                "proposals": [
+                  236761,
+                  7090
+                ],
+                "accepted": 2,
+                "dispatches": [
+                  {
+                    "body": {
+                      "build": "C:\\Users\\<user>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-a4040f9c852a7e92\\build.json",
+                      "commands": 3952,
+                      "prepared": true,
+                      "host_phases_ms": {
+                        "build_lookup": 0.0,
+                        "packet_stack": 12.658399995416403
+                      },
+                      "dispatch_ms": 13.666799990460277,
+                      "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+                      "input_unchanged": true,
+                      "output_frames": 10,
+                      "output_bytes": 42240,
+                      "input_update_mode": "partial",
+                      "input_write_bytes": 1753088,
+                      "input_total_bytes": 34651136,
+                      "input_sync_ranges": 373,
+                      "input_fully_verified": true,
+                      "transport_sources_sha256": {
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\persistent.py": "1c89cc860244a8b77475d6ed137d01aaa79678b87999dd517ce409e8d06839f1",
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\input_residency.py": "48b988a2e354be6efff94f1b608d09fe926f8cd70dee31df16ce594f9a4235ba"
+                      },
+                      "transfer_phases_ms": {
+                        "input_write_sync": 4.50999999884516,
+                        "output_poison_sync": 0.0425000034738332,
+                        "output_sync_read": 0.027900008717551827,
+                        "input_sync_verify": 14.62639999226667
+                      },
+                      "persistent_transport": true,
+                      "image_cache_hit": true,
+                      "contexts_created": 2,
+                      "context_cache_hit": true,
+                      "exact_program_sharing": true,
+                      "context_cache_size": 2,
+                      "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d",
+                      "step_wall_ms": 61.97730000712909,
+                      "step_phases_ms": {
+                        "gpu_embedding": 0.6454999966081232,
+                        "body": 52.760799997486174,
+                        "head": 8.570200006943196
+                      }
+                    },
+                    "head": {
+                      "build": "C:\\Users\\<user>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-45784270ef7396da\\build.json",
+                      "commands": 258,
+                      "prepared": true,
+                      "host_phases_ms": {
+                        "build_lookup": 0.0,
+                        "packet_stack": 2.9089000017847866
+                      },
+                      "dispatch_ms": 1.2415999954100698,
+                      "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+                      "input_unchanged": true,
+                      "output_frames": 2,
+                      "output_bytes": 8448,
+                      "input_update_mode": "partial",
+                      "input_write_bytes": 2252800,
+                      "input_total_bytes": 2262144,
+                      "input_sync_ranges": 2,
+                      "input_fully_verified": true,
+                      "transport_sources_sha256": {
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\persistent.py": "1c89cc860244a8b77475d6ed137d01aaa79678b87999dd517ce409e8d06839f1",
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\input_residency.py": "48b988a2e354be6efff94f1b608d09fe926f8cd70dee31df16ce594f9a4235ba"
+                      },
+                      "transfer_phases_ms": {
+                        "input_write_sync": 1.0514000023249537,
+                        "output_poison_sync": 0.0171000137925148,
+                        "output_sync_read": 0.022299995180219412,
+                        "input_sync_verify": 1.2912999955005944
+                      },
+                      "persistent_transport": true,
+                      "image_cache_hit": true,
+                      "contexts_created": 2,
+                      "context_cache_hit": true,
+                      "exact_program_sharing": true,
+                      "context_cache_size": 2,
+                      "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+                    }
+                  },
+                  {
+                    "body": {
+                      "build": "C:\\Users\\<user>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-a4040f9c852a7e92\\build.json",
+                      "commands": 3952,
+                      "prepared": true,
+                      "host_phases_ms": {
+                        "build_lookup": 0.0,
+                        "packet_stack": 12.175700016086921
+                      },
+                      "dispatch_ms": 13.831199990818277,
+                      "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+                      "input_unchanged": true,
+                      "output_frames": 10,
+                      "output_bytes": 42240,
+                      "input_update_mode": "partial",
+                      "input_write_bytes": 8192,
+                      "input_total_bytes": 34651136,
+                      "input_sync_ranges": 1,
+                      "input_fully_verified": true,
+                      "transport_sources_sha256": {
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\persistent.py": "1c89cc860244a8b77475d6ed137d01aaa79678b87999dd517ce409e8d06839f1",
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\input_residency.py": "48b988a2e354be6efff94f1b608d09fe926f8cd70dee31df16ce594f9a4235ba"
+                      },
+                      "transfer_phases_ms": {
+                        "input_write_sync": 3.6971000081393868,
+                        "output_poison_sync": 0.02120001590810716,
+                        "output_sync_read": 0.03950000973418355,
+                        "input_sync_verify": 15.01889998326078
+                      },
+                      "persistent_transport": true,
+                      "image_cache_hit": true,
+                      "contexts_created": 2,
+                      "context_cache_hit": true,
+                      "exact_program_sharing": true,
+                      "context_cache_size": 2,
+                      "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d",
+                      "step_wall_ms": 57.58140000398271,
+                      "step_phases_ms": {
+                        "gpu_embedding": 0.5378999921958894,
+                        "body": 50.07789999945089,
+                        "head": 6.964800006244332
+                      }
+                    },
+                    "head": {
+                      "build": "C:\\Users\\<user>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-45784270ef7396da\\build.json",
+                      "commands": 258,
+                      "prepared": true,
+                      "host_phases_ms": {
+                        "build_lookup": 0.0,
+                        "packet_stack": 2.153899986296892
+                      },
+                      "dispatch_ms": 1.2454000243451446,
+                      "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+                      "input_unchanged": true,
+                      "output_frames": 2,
+                      "output_bytes": 8448,
+                      "input_update_mode": "partial",
+                      "input_write_bytes": 2252800,
+                      "input_total_bytes": 2262144,
+                      "input_sync_ranges": 2,
+                      "input_fully_verified": true,
+                      "transport_sources_sha256": {
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\persistent.py": "1c89cc860244a8b77475d6ed137d01aaa79678b87999dd517ce409e8d06839f1",
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\input_residency.py": "48b988a2e354be6efff94f1b608d09fe926f8cd70dee31df16ce594f9a4235ba"
+                      },
+                      "transfer_phases_ms": {
+                        "input_write_sync": 0.7823999912943691,
+                        "output_poison_sync": 0.014400022337213159,
+                        "output_sync_read": 0.02269999822601676,
+                        "input_sync_verify": 1.0797000140883029
+                      },
+                      "persistent_transport": true,
+                      "image_cache_hit": true,
+                      "contexts_created": 2,
+                      "context_cache_hit": true,
+                      "exact_program_sharing": true,
+                      "context_cache_size": 2,
+                      "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+                    }
+                  }
+                ]
+              },
+              {
+                "proposals": [
+                  236783,
+                  49
+                ],
+                "accepted": 2,
+                "dispatches": [
+                  {
+                    "body": {
+                      "build": "C:\\Users\\<user>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-a4040f9c852a7e92\\build.json",
+                      "commands": 3952,
+                      "prepared": true,
+                      "host_phases_ms": {
+                        "build_lookup": 0.0,
+                        "packet_stack": 12.38180001382716
+                      },
+                      "dispatch_ms": 13.729300000704825,
+                      "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+                      "input_unchanged": true,
+                      "output_frames": 10,
+                      "output_bytes": 42240,
+                      "input_update_mode": "partial",
+                      "input_write_bytes": 1753088,
+                      "input_total_bytes": 34651136,
+                      "input_sync_ranges": 373,
+                      "input_fully_verified": true,
+                      "transport_sources_sha256": {
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\persistent.py": "1c89cc860244a8b77475d6ed137d01aaa79678b87999dd517ce409e8d06839f1",
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\input_residency.py": "48b988a2e354be6efff94f1b608d09fe926f8cd70dee31df16ce594f9a4235ba"
+                      },
+                      "transfer_phases_ms": {
+                        "input_write_sync": 4.667500004870817,
+                        "output_poison_sync": 0.05299999611452222,
+                        "output_sync_read": 0.035200006095692515,
+                        "input_sync_verify": 14.703799999551848
+                      },
+                      "persistent_transport": true,
+                      "image_cache_hit": true,
+                      "contexts_created": 2,
+                      "context_cache_hit": true,
+                      "exact_program_sharing": true,
+                      "context_cache_size": 2,
+                      "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d",
+                      "step_wall_ms": 59.83300000661984,
+                      "step_phases_ms": {
+                        "gpu_embedding": 0.7505000103265047,
+                        "body": 51.80230000405572,
+                        "head": 7.279700017534196
+                      }
+                    },
+                    "head": {
+                      "build": "C:\\Users\\<user>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-45784270ef7396da\\build.json",
+                      "commands": 258,
+                      "prepared": true,
+                      "host_phases_ms": {
+                        "build_lookup": 0.0,
+                        "packet_stack": 2.135200018528849
+                      },
+                      "dispatch_ms": 1.2283000105526298,
+                      "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+                      "input_unchanged": true,
+                      "output_frames": 2,
+                      "output_bytes": 8448,
+                      "input_update_mode": "partial",
+                      "input_write_bytes": 2252800,
+                      "input_total_bytes": 2262144,
+                      "input_sync_ranges": 2,
+                      "input_fully_verified": true,
+                      "transport_sources_sha256": {
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\persistent.py": "1c89cc860244a8b77475d6ed137d01aaa79678b87999dd517ce409e8d06839f1",
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\input_residency.py": "48b988a2e354be6efff94f1b608d09fe926f8cd70dee31df16ce594f9a4235ba"
+                      },
+                      "transfer_phases_ms": {
+                        "input_write_sync": 0.9022000012919307,
+                        "output_poison_sync": 0.0295999925583601,
+                        "output_sync_read": 0.02239999594166875,
+                        "input_sync_verify": 1.1138000118080527
+                      },
+                      "persistent_transport": true,
+                      "image_cache_hit": true,
+                      "contexts_created": 2,
+                      "context_cache_hit": true,
+                      "exact_program_sharing": true,
+                      "context_cache_size": 2,
+                      "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+                    }
+                  },
+                  {
+                    "body": {
+                      "build": "C:\\Users\\<user>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-a4040f9c852a7e92\\build.json",
+                      "commands": 3952,
+                      "prepared": true,
+                      "host_phases_ms": {
+                        "build_lookup": 0.0,
+                        "packet_stack": 11.628500011283904
+                      },
+                      "dispatch_ms": 13.7420000100974,
+                      "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+                      "input_unchanged": true,
+                      "output_frames": 10,
+                      "output_bytes": 42240,
+                      "input_update_mode": "partial",
+                      "input_write_bytes": 8192,
+                      "input_total_bytes": 34651136,
+                      "input_sync_ranges": 1,
+                      "input_fully_verified": true,
+                      "transport_sources_sha256": {
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\persistent.py": "1c89cc860244a8b77475d6ed137d01aaa79678b87999dd517ce409e8d06839f1",
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\input_residency.py": "48b988a2e354be6efff94f1b608d09fe926f8cd70dee31df16ce594f9a4235ba"
+                      },
+                      "transfer_phases_ms": {
+                        "input_write_sync": 3.7115000013727695,
+                        "output_poison_sync": 0.021599989850074053,
+                        "output_sync_read": 0.04159999662078917,
+                        "input_sync_verify": 15.280299994628876
+                      },
+                      "persistent_transport": true,
+                      "image_cache_hit": true,
+                      "contexts_created": 2,
+                      "context_cache_hit": true,
+                      "exact_program_sharing": true,
+                      "context_cache_size": 2,
+                      "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d",
+                      "step_wall_ms": 57.095999974990264,
+                      "step_phases_ms": {
+                        "gpu_embedding": 0.6542999763041735,
+                        "body": 49.66960000456311,
+                        "head": 6.771699991077185
+                      }
+                    },
+                    "head": {
+                      "build": "C:\\Users\\<user>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-45784270ef7396da\\build.json",
+                      "commands": 258,
+                      "prepared": true,
+                      "host_phases_ms": {
+                        "build_lookup": 0.0,
+                        "packet_stack": 2.1010999917052686
+                      },
+                      "dispatch_ms": 1.2125000066589564,
+                      "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+                      "input_unchanged": true,
+                      "output_frames": 2,
+                      "output_bytes": 8448,
+                      "input_update_mode": "partial",
+                      "input_write_bytes": 2166784,
+                      "input_total_bytes": 2262144,
+                      "input_sync_ranges": 2,
+                      "input_fully_verified": true,
+                      "transport_sources_sha256": {
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\persistent.py": "1c89cc860244a8b77475d6ed137d01aaa79678b87999dd517ce409e8d06839f1",
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\input_residency.py": "48b988a2e354be6efff94f1b608d09fe926f8cd70dee31df16ce594f9a4235ba"
+                      },
+                      "transfer_phases_ms": {
+                        "input_write_sync": 0.7918000046629459,
+                        "output_poison_sync": 0.014599994756281376,
+                        "output_sync_read": 0.016999983927235007,
+                        "input_sync_verify": 0.8106000022962689
+                      },
+                      "persistent_transport": true,
+                      "image_cache_hit": true,
+                      "contexts_created": 2,
+                      "context_cache_hit": true,
+                      "exact_program_sharing": true,
+                      "context_cache_size": 2,
+                      "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "prompt_ids": [
+            2,
+            105,
+            9731,
+            107,
+            3048,
+            659,
+            496,
+            2263,
+            43355,
+            16326,
+            236761,
+            6890,
+            506,
+            2487,
+            6436,
+            1056,
+            4354,
+            236761,
+            13474,
+            16412,
+            659,
+            6658,
+            531,
+            506,
+            5540,
+            43355,
+            236761,
+            15428,
+            10149,
+            2129,
+            13269,
+            653,
+            5904,
+            2536,
+            236761,
+            17079,
+            2129,
+            13269,
+            618,
+            1262,
+            236761,
+            23097,
+            496,
+            63510,
+            1626,
+            3890,
+            236761,
+            46,
+            163688,
+            236787,
+            30718,
+            236782,
+            7777,
+            236787,
+            52,
+            99009,
+            18378,
+            40442,
+            236793,
+            7623,
+            496,
+            20632,
+            1354,
+            236761,
+            52,
+            236764,
+            19031,
+            29616,
+            15921,
+            29616,
+            25733,
+            29616,
+            7777,
+            236787,
+            52,
+            37091,
+            236764,
+            77673,
+            46241,
+            46186,
+            965,
+            532,
+            62334,
+            236761,
+            52,
+            236764,
+            2084,
+            236787,
+            52,
+            35410,
+            52,
+            5237,
+            15979,
+            24845,
+            52,
+            25733,
+            52,
+            1604,
+            2084,
+            236787,
+            52,
+            60688,
+            52,
+            1807,
+            47,
+            46,
+            163688,
+            236787,
+            1399,
+            236779,
+            1005,
+            236782,
+            7777,
+            236787,
+            52,
+            6190,
+            496,
+            236743,
+            236770,
+            236771,
+            236778,
+            236812,
+            236772,
+            18857,
+            3104,
+            529,
+            496,
+            92916,
+            236772,
+            236828,
+            43355,
+            2129,
+            236761,
+            52,
+            236764,
+            19031,
+            29616,
+            15921,
+            29616,
+            10617,
+            29616,
+            7777,
+            236787,
+            52,
+            14106,
+            9815,
+            236764,
+            3678,
+            5743,
+            236793,
+            1161,
+            2148,
+            236779,
+            10617,
+            573,
+            2264,
+            3104,
+            236761,
+            52,
+            236764,
+            2084,
+            236787,
+            52,
+            86752,
+            52,
+            1263,
+            2337,
+            29616,
+            7777,
+            236787,
+            52,
+            55751,
+            2129,
+            2479,
+            4888,
+            506,
+            43355,
+            236761,
+            52,
+            236764,
+            2084,
+            236787,
+            52,
+            35410,
+            52,
+            5237,
+            15979,
+            24845,
+            52,
+            2337,
+            52,
+            1604,
+            2084,
+            236787,
+            52,
+            60688,
+            52,
+            1807,
+            47,
+            46,
+            163688,
+            236787,
+            2234,
+            236779,
+            9207,
+            236782,
+            7777,
+            236787,
+            52,
+            1613,
+            872,
+            531,
+            236743,
+            236770,
+            236771,
+            236771,
+            16227,
+            4888,
+            496,
+            43355,
+            12229,
+            236761,
+            52,
+            236764,
+            19031,
+            29616,
+            15921,
+            29616,
+            2337,
+            29616,
+            7777,
+            236787,
+            52,
+            55751,
+            12229,
+            2479,
+            236793,
+            1161,
+            783,
+            573,
+            506,
+            43355,
+            5989,
+            236761,
+            52,
+            236764,
+            2084,
+            236787,
+            52,
+            35410,
+            52,
+            5237,
+            15979,
+            24845,
+            52,
+            2337,
+            52,
+            1604,
+            2084,
+            236787,
+            52,
+            60688,
+            52,
+            1807,
+            47,
+            106,
+            107,
+            105,
+            2364,
+            107,
+            6190,
+            8652,
+            236761,
+            7090,
+            607,
+            1676,
+            236779,
+            1005,
+            236764,
+            1299,
+            1161,
+            9279,
+            531,
+            24261,
+            506,
+            5498,
+            1527,
+            684,
+            506,
+            27215,
+            5415,
+            236761,
+            24181,
+            1186,
+            607,
+            506,
+            1354,
+            236761,
+            106,
+            107,
+            105,
+            4368,
+            107
+          ],
+          "raw": "<|tool_call>call:read_text{path:<|\"|>brief.txt<|\"|>}<tool_call|><|tool_response>"
+        },
+        {
+          "index": 1,
+          "model": {
+            "scope": "Experimental persistent Gemma4 E2B GPU target and BF16 NPU assistant.\n\nWeights stay loaded between requests. Each request prefills its complete prompt\nand owns a bounded NPU session; no GPU-only reference generation runs here.\n",
+            "prompt_tokens": 373,
+            "prompt_sha256": "60a89a1872e2481d8b0d12fe9ab7a73dc9ee540f6b5202a4f2509da536e1e8c3",
+            "completed": true,
+            "cancelled": false,
+            "input_depth": 2,
+            "vector_copy": true,
+            "context_tokens": 2560,
+            "source_sha256": {
+              "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\npu\\gemma4\\runtime.py": "ae94256a5e7944b9ec50d585bda0ef913e5ede0f446bdd8f45cbb07aacf50f6e",
+              "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\npu\\gemma4\\arena.py": "881008fd0f0741b797c19ac090e545b2e33e6efbe34c312941e7d43d5bf83c29",
+              "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\npu\\gemma4\\draft.py": "b45aa232db7cf9d0aace8b3b67c42f5c88f79c2d53442868ab7ec5bdaca5bd75",
+              "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\tools\\ggml_gpu_target\\client.py": "18b75f386a346688e508fc6062335019c5c756e3e3965a52fc3140d462721dbf",
+              "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\tools\\ggml_gpu_target\\worker.cpp": "5c4bdeb4cc30528dd73cb73fa9cdb4c447c1aebea7ef5d3db632ca7d4b72943a",
+              "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\tools\\ggml_gpu_embedding\\embedding.cpp": "82daefc983ffb2778d2a7213b7b49a5dc653dc1f4268bbc74afc5c1f9b7dccd3",
+              "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\tools\\check-inference-contention.ps1": "c7e54aa33f4fc43e9a6bcd4a83195e010eaa0b41057a325720227ec480dd8021",
+              "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\tools\\research_process.py": "ffeb1857f190b482eed101b5f5a928f455de26bfa61d23f78a2eacec08e2663e",
+              "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\npu\\contention.py": "a00ac19ca6ca4b8a515628d6e8e534e71a4e5283930908bf7e5d7aad1af9a642",
+              "C:\\Users\\<user>\\gemma4-assistant\\npu\\gemma-4-E2B-it-assistant.weights.npz": "bda11a1dd40c42a3f84632cb66250f8afe1111657f0d37188e3c0234da6376fc",
+              "C:\\Users\\<user>\\gemma4-assistant\\npu\\gemma-4-E2B-it-assistant.weights.json": "2346469a976daa60d0a47c8d24790a3043951e4f968ea3d3542706375d3d19d7",
+              "C:\\Users\\<user>\\gemma4-assistant\\npu\\rope-e2b-live-2560-20261018.npz": "8c149126884aca45f6232328f2bde969feb30243783f8690b50b0973cc1d2dda",
+              "C:\\Users\\<user>\\gemma4-assistant\\npu\\gelu-bf16-tanh-v1.npz": "2a3578db96f57b7b5c2768acbfa2bffefbf5247453fbab911793728b5451465e",
+              "C:\\Users\\<user>\\gemma4-assistant\\npu\\rope-e2b-live-2560-20261018.json": "31a19e725f751e183313f4cfac0481f210ef4032f14b005302b805dc1d8444c9",
+              "C:\\Users\\<user>\\gemma4-assistant\\npu\\gelu-bf16-tanh-v1.json": "43e4b24331e5e00892bcf1bf82944646a1e57583792dd75b50de25c39bc91362",
+              "C:\\Users\\<user>\\gemma4-assistant\\npu\\local-checkpoints\\gemma-4-E2B-it-assistant\\config.json": "d2d732c3e0dbdef15fba14be606aa4bb5625226f2cf0e40a5a59c161d764c260",
+              "C:\\Users\\<user>\\gemma4-assistant\\models\\gemma-4-E2B-it-Q5_K_M-pleQ4-imatrix.gguf": "ac36a228eb6cd1b93eedc86153016612b0a60ba73c9a50e0b4e95a6a143f65e1",
+              "C:\\Users\\<user>\\gemma4-assistant\\bin\\ggml_gpu_target.exe": "d2d3b60a32d7b8a8ee4ce534ade2515de43f046f30bbb09f58f14d532264dfba",
+              "C:\\Users\\<user>\\tools\\llamacpp-b1343-rocm\\llama.dll": "04aeca339e96514cd2eeed4810ddc813e7cc91b088137d741d5bfb53829464e8",
+              "C:\\Users\\<user>\\tools\\llamacpp-b1343-rocm\\ggml.dll": "d62c9fd3ea800ebf81b104f0b276c44105930557337c3e97ca7bf3e5a51bd889",
+              "C:\\Users\\<user>\\tools\\llamacpp-b1343-rocm\\ggml-base.dll": "b0f6bcf152bbea75fe55c3d185b512ca4b3df167ec8159357da53be435db9539",
+              "C:\\Users\\<user>\\tools\\llamacpp-b1343-rocm\\ggml-hip.dll": "ea8866ab163caad203a2fa2f8afbce51584bb55eb566e1e863bb14e1b1d3f370",
+              "C:\\Users\\<user>\\gemma4-assistant\\bin\\gpu_activity.exe": "aef21dd0190495efb12a613cd81bdb69283f4681ebbb75ca2e0a97903e4bffce",
+              "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\tools\\ggml_gpu_target\\activity.py": "bb3011ee3326c33d79a5b2b5cf4e5065a20bc67cba4af96c81a99baa1fc7d8c9",
+              "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\tools\\ggml_gpu_target\\gpu_activity.cpp": "6d103be81cd8882c5614d7f0767623cb01b3ff89720db236b214c192272d83c5",
+              "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\tools\\ggml_gpu_target\\build_activity.cmd": "08d89f9d350a137eba8f37d78916d5044fb4e6714bc3c1e82af25f114ba5e843",
+              "C:\\Users\\<user>\\tools\\llamacpp-b1343-rocm\\amdhip64_7.dll": "3872b4aa82bbc91fcd53836bdbc2b4261c98c845eadfba31cce6ef4709a4697e",
+              "C:\\WINDOWS\\System32\\d3dcompiler_47.dll": "2e3526354dbcd9cf013f7b741c549df2170fe6af607628442216a21e7d584883"
+            },
+            "operation_ms": {
+              "admission": 693.9592999988236,
+              "target_prepare": 488.3724999963306,
+              "target_state": 3.1209998996928334,
+              "render": 2.876900020055473,
+              "activity_start": 1.417299994500354,
+              "draft": 796.1603000585455,
+              "target_verify": 369.17350004659966,
+              "activity_join": 1.3839000021107495,
+              "target_rollback": 0.0032999960239976645
+            },
+            "gpu_activity": {
+              "enabled": true,
+              "windows": [
+                {
+                  "completed": true,
+                  "gpu_validated": true,
+                  "dispatches": 67,
+                  "elapsed_ms": 101.7071
+                },
+                {
+                  "completed": true,
+                  "gpu_validated": true,
+                  "dispatches": 133,
+                  "elapsed_ms": 101.6185
+                },
+                {
+                  "completed": true,
+                  "gpu_validated": true,
+                  "dispatches": 170,
+                  "elapsed_ms": 101.781
+                },
+                {
+                  "completed": true,
+                  "gpu_validated": true,
+                  "dispatches": 172,
+                  "elapsed_ms": 102.5363
+                },
+                {
+                  "completed": true,
+                  "gpu_validated": true,
+                  "dispatches": 171,
+                  "elapsed_ms": 102.5225
+                },
+                {
+                  "completed": true,
+                  "gpu_validated": true,
+                  "dispatches": 171,
+                  "elapsed_ms": 102.3879
+                }
+              ],
+              "identity": {
+                "ready": true,
+                "vendor": 4098,
+                "device": 5567,
+                "luid_low": 52858,
+                "luid_high": 0,
+                "hip_luid_matched": true,
+                "node_mask": 1,
+                "hardware": true,
+                "threads": 32,
+                "iterations": 32768
+              },
+              "pid": 80836,
+              "idle": true
+            },
+            "preflight": {
+              "utc": "2026-10-18T21:59:41.221344+00:00",
+              "sample_seconds": 0.5023561000125483,
+              "snapshot_seconds": 0.6181542999984231,
+              "inference_processes": [
+                {
+                  "pid": 11908,
+                  "name": "python.exe",
+                  "active_cpu_cores": 0
+                },
+                {
+                  "pid": 12748,
+                  "name": "python.exe",
+                  "active_cpu_cores": 0
+                },
+                {
+                  "pid": 26776,
+                  "name": "python.exe",
+                  "active_cpu_cores": 0
+                },
+                {
+                  "pid": 64488,
+                  "name": "python.exe",
+                  "active_cpu_cores": 0
+                },
+                {
+                  "pid": 78992,
+                  "name": "python.exe",
+                  "active_cpu_cores": 0
+                },
+                {
+                  "pid": 79132,
+                  "name": "python.exe",
+                  "active_cpu_cores": 0
+                },
+                {
+                  "pid": 81128,
+                  "name": "python.exe",
+                  "active_cpu_cores": 0
+                },
+                {
+                  "pid": 81232,
+                  "name": "python.exe",
+                  "active_cpu_cores": 0.995
+                }
+              ],
+              "cpu_telemetry_known": true,
+              "gpu_telemetry_known": true,
+              "busy_gpu_engines": [
+                {
+                  "pid": 11024,
+                  "engine": "pid_11024_luid_0x00000000_0x0000CE7A_phys_0_eng_0_engtype_3D",
+                  "utilization_percent": 1.3961768581134555
+                }
+              ],
+              "gpu_details": {
+                "instances": 327,
+                "invalid_instances": 0
+              },
+              "gpu_error": null,
+              "npu_telemetry_known": true,
+              "npu_idle": true,
+              "idle_verified": false,
+              "blockers": [
+                "CPU inference work: PID 81232",
+                "GPU engine activity observed"
+              ],
+              "scope": "Read-only preflight snapshot; no process is stopped",
+              "owned_pids": [
+                79132,
+                80836,
+                81024,
+                81232
+              ]
+            },
+            "worker_pid": 81024,
+            "generated_text": "<|tool_call>call:calculate{expression:<|\"|>137 * 7<|\"|>}<tool_call|>",
+            "finish_reason": "eos",
+            "tokens": [
+              48,
+              6639,
+              236787,
+              30718,
+              236782,
+              25733,
+              236787,
+              52,
+              236770,
+              236800,
+              236832,
+              808,
+              236743,
+              236832,
+              52,
+              236783,
+              49,
+              50
+            ],
+            "accepted": 12,
+            "proposed": 12,
+            "model_loads": 1,
+            "npu_released": true,
+            "compiler_log_tail": "",
+            "contexts_created": 2,
+            "evictions": 0,
+            "npu_idle": true,
+            "rounds": [
+              {
+                "proposals": [
+                  6639,
+                  236787
+                ],
+                "accepted": 2,
+                "dispatches": [
+                  {
+                    "body": {
+                      "build": "C:\\Users\\<user>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-a4040f9c852a7e92\\build.json",
+                      "commands": 3952,
+                      "prepared": true,
+                      "host_phases_ms": {
+                        "build_lookup": 0.0,
+                        "packet_stack": 9.869500005152076
+                      },
+                      "dispatch_ms": 13.845100009348243,
+                      "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+                      "input_unchanged": true,
+                      "output_frames": 10,
+                      "output_bytes": 42240,
+                      "input_update_mode": "full",
+                      "input_write_bytes": 34651136,
+                      "input_total_bytes": 34651136,
+                      "input_sync_ranges": 1,
+                      "input_fully_verified": true,
+                      "transport_sources_sha256": {
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\persistent.py": "1c89cc860244a8b77475d6ed137d01aaa79678b87999dd517ce409e8d06839f1",
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\input_residency.py": "48b988a2e354be6efff94f1b608d09fe926f8cd70dee31df16ce594f9a4235ba"
+                      },
+                      "transfer_phases_ms": {
+                        "input_write_sync": 7.399299996905029,
+                        "output_poison_sync": 0.07429998368024826,
+                        "output_sync_read": 0.041099992813542485,
+                        "input_sync_verify": 12.975299992831424
+                      },
+                      "persistent_transport": true,
+                      "image_cache_hit": false,
+                      "contexts_created": 1,
+                      "context_cache_hit": false,
+                      "exact_program_sharing": true,
+                      "context_cache_size": 1,
+                      "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d",
+                      "step_wall_ms": 282.12419999181293,
+                      "step_phases_ms": {
+                        "gpu_embedding": 1.1118999973405153,
+                        "body": 221.94269997999072,
+                        "head": 59.069400012958795
+                      }
+                    },
+                    "head": {
+                      "build": "C:\\Users\\<user>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-45784270ef7396da\\build.json",
+                      "commands": 258,
+                      "prepared": true,
+                      "host_phases_ms": {
+                        "build_lookup": 0.0,
+                        "packet_stack": 2.0739000174216926
+                      },
+                      "dispatch_ms": 1.1710000107996166,
+                      "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+                      "input_unchanged": true,
+                      "output_frames": 2,
+                      "output_bytes": 8448,
+                      "input_update_mode": "full",
+                      "input_write_bytes": 2262144,
+                      "input_total_bytes": 2262144,
+                      "input_sync_ranges": 1,
+                      "input_fully_verified": true,
+                      "transport_sources_sha256": {
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\persistent.py": "1c89cc860244a8b77475d6ed137d01aaa79678b87999dd517ce409e8d06839f1",
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\input_residency.py": "48b988a2e354be6efff94f1b608d09fe926f8cd70dee31df16ce594f9a4235ba"
+                      },
+                      "transfer_phases_ms": {
+                        "input_write_sync": 0.44299999717622995,
+                        "output_poison_sync": 0.025699991965666413,
+                        "output_sync_read": 0.016799982404336333,
+                        "input_sync_verify": 0.6921000021975487
+                      },
+                      "persistent_transport": true,
+                      "image_cache_hit": false,
+                      "contexts_created": 2,
+                      "context_cache_hit": false,
+                      "exact_program_sharing": true,
+                      "context_cache_size": 2,
+                      "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+                    }
+                  },
+                  {
+                    "body": {
+                      "build": "C:\\Users\\<user>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-a4040f9c852a7e92\\build.json",
+                      "commands": 3952,
+                      "prepared": true,
+                      "host_phases_ms": {
+                        "build_lookup": 0.0,
+                        "packet_stack": 10.8497999899555
+                      },
+                      "dispatch_ms": 13.794300000881776,
+                      "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+                      "input_unchanged": true,
+                      "output_frames": 10,
+                      "output_bytes": 42240,
+                      "input_update_mode": "partial",
+                      "input_write_bytes": 8192,
+                      "input_total_bytes": 34651136,
+                      "input_sync_ranges": 1,
+                      "input_fully_verified": true,
+                      "transport_sources_sha256": {
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\persistent.py": "1c89cc860244a8b77475d6ed137d01aaa79678b87999dd517ce409e8d06839f1",
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\input_residency.py": "48b988a2e354be6efff94f1b608d09fe926f8cd70dee31df16ce594f9a4235ba"
+                      },
+                      "transfer_phases_ms": {
+                        "input_write_sync": 3.215400007320568,
+                        "output_poison_sync": 0.028000009479001164,
+                        "output_sync_read": 0.0337999954354018,
+                        "input_sync_verify": 12.701500003458932
+                      },
+                      "persistent_transport": true,
+                      "image_cache_hit": true,
+                      "contexts_created": 2,
+                      "context_cache_hit": true,
+                      "exact_program_sharing": true,
+                      "context_cache_size": 2,
+                      "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d",
+                      "step_wall_ms": 53.52489999495447,
+                      "step_phases_ms": {
+                        "gpu_embedding": 0.971500005107373,
+                        "body": 45.98189998068847,
+                        "head": 6.569999997736886
+                      }
+                    },
+                    "head": {
+                      "build": "C:\\Users\\<user>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-45784270ef7396da\\build.json",
+                      "commands": 258,
+                      "prepared": true,
+                      "host_phases_ms": {
+                        "build_lookup": 0.0,
+                        "packet_stack": 1.9492999999783933
+                      },
+                      "dispatch_ms": 1.2417999969329685,
+                      "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+                      "input_unchanged": true,
+                      "output_frames": 2,
+                      "output_bytes": 8448,
+                      "input_update_mode": "partial",
+                      "input_write_bytes": 2252800,
+                      "input_total_bytes": 2262144,
+                      "input_sync_ranges": 2,
+                      "input_fully_verified": true,
+                      "transport_sources_sha256": {
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\persistent.py": "1c89cc860244a8b77475d6ed137d01aaa79678b87999dd517ce409e8d06839f1",
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\input_residency.py": "48b988a2e354be6efff94f1b608d09fe926f8cd70dee31df16ce594f9a4235ba"
+                      },
+                      "transfer_phases_ms": {
+                        "input_write_sync": 0.7292999944183975,
+                        "output_poison_sync": 0.01729998621158302,
+                        "output_sync_read": 0.023100001271814108,
+                        "input_sync_verify": 0.9218000050168484
+                      },
+                      "persistent_transport": true,
+                      "image_cache_hit": true,
+                      "contexts_created": 2,
+                      "context_cache_hit": true,
+                      "exact_program_sharing": true,
+                      "context_cache_size": 2,
+                      "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+                    }
+                  }
+                ]
+              },
+              {
+                "proposals": [
+                  236782,
+                  25733
+                ],
+                "accepted": 2,
+                "dispatches": [
+                  {
+                    "body": {
+                      "build": "C:\\Users\\<user>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-a4040f9c852a7e92\\build.json",
+                      "commands": 3952,
+                      "prepared": true,
+                      "host_phases_ms": {
+                        "build_lookup": 0.0,
+                        "packet_stack": 9.98000000254251
+                      },
+                      "dispatch_ms": 13.795700011542067,
+                      "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+                      "input_unchanged": true,
+                      "output_frames": 10,
+                      "output_bytes": 42240,
+                      "input_update_mode": "partial",
+                      "input_write_bytes": 1744896,
+                      "input_total_bytes": 34651136,
+                      "input_sync_ranges": 373,
+                      "input_fully_verified": true,
+                      "transport_sources_sha256": {
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\persistent.py": "1c89cc860244a8b77475d6ed137d01aaa79678b87999dd517ce409e8d06839f1",
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\input_residency.py": "48b988a2e354be6efff94f1b608d09fe926f8cd70dee31df16ce594f9a4235ba"
+                      },
+                      "transfer_phases_ms": {
+                        "input_write_sync": 3.9653000130783767,
+                        "output_poison_sync": 0.05429997690953314,
+                        "output_sync_read": 0.04189999890513718,
+                        "input_sync_verify": 10.417799989227206
+                      },
+                      "persistent_transport": true,
+                      "image_cache_hit": true,
+                      "contexts_created": 2,
+                      "context_cache_hit": true,
+                      "exact_program_sharing": true,
+                      "context_cache_size": 2,
+                      "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d",
+                      "step_wall_ms": 49.46769998059608,
+                      "step_phases_ms": {
+                        "gpu_embedding": 0.5950999911874533,
+                        "body": 42.540599999483675,
+                        "head": 6.331499986117706
+                      }
+                    },
+                    "head": {
+                      "build": "C:\\Users\\<user>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-45784270ef7396da\\build.json",
+                      "commands": 258,
+                      "prepared": true,
+                      "host_phases_ms": {
+                        "build_lookup": 0.0,
+                        "packet_stack": 1.9397000141907483
+                      },
+                      "dispatch_ms": 1.2014999811071903,
+                      "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+                      "input_unchanged": true,
+                      "output_frames": 2,
+                      "output_bytes": 8448,
+                      "input_update_mode": "partial",
+                      "input_write_bytes": 2252800,
+                      "input_total_bytes": 2262144,
+                      "input_sync_ranges": 2,
+                      "input_fully_verified": true,
+                      "transport_sources_sha256": {
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\persistent.py": "1c89cc860244a8b77475d6ed137d01aaa79678b87999dd517ce409e8d06839f1",
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\input_residency.py": "48b988a2e354be6efff94f1b608d09fe926f8cd70dee31df16ce594f9a4235ba"
+                      },
+                      "transfer_phases_ms": {
+                        "input_write_sync": 0.6859999848529696,
+                        "output_poison_sync": 0.01400001929141581,
+                        "output_sync_read": 0.022199994418770075,
+                        "input_sync_verify": 0.7434000144712627
+                      },
+                      "persistent_transport": true,
+                      "image_cache_hit": true,
+                      "contexts_created": 2,
+                      "context_cache_hit": true,
+                      "exact_program_sharing": true,
+                      "context_cache_size": 2,
+                      "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+                    }
+                  },
+                  {
+                    "body": {
+                      "build": "C:\\Users\\<user>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-a4040f9c852a7e92\\build.json",
+                      "commands": 3952,
+                      "prepared": true,
+                      "host_phases_ms": {
+                        "build_lookup": 0.0,
+                        "packet_stack": 9.142000024439767
+                      },
+                      "dispatch_ms": 13.763800001470372,
+                      "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+                      "input_unchanged": true,
+                      "output_frames": 10,
+                      "output_bytes": 42240,
+                      "input_update_mode": "partial",
+                      "input_write_bytes": 8192,
+                      "input_total_bytes": 34651136,
+                      "input_sync_ranges": 1,
+                      "input_fully_verified": true,
+                      "transport_sources_sha256": {
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\persistent.py": "1c89cc860244a8b77475d6ed137d01aaa79678b87999dd517ce409e8d06839f1",
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\input_residency.py": "48b988a2e354be6efff94f1b608d09fe926f8cd70dee31df16ce594f9a4235ba"
+                      },
+                      "transfer_phases_ms": {
+                        "input_write_sync": 2.7649999829009175,
+                        "output_poison_sync": 0.030499999411404133,
+                        "output_sync_read": 0.03580001066438854,
+                        "input_sync_verify": 9.599699988029897
+                      },
+                      "persistent_transport": true,
+                      "image_cache_hit": true,
+                      "contexts_created": 2,
+                      "context_cache_hit": true,
+                      "exact_program_sharing": true,
+                      "context_cache_size": 2,
+                      "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d",
+                      "step_wall_ms": 44.7596000158228,
+                      "step_phases_ms": {
+                        "gpu_embedding": 0.6759999960195273,
+                        "body": 38.025899993954226,
+                        "head": 6.057300022803247
+                      }
+                    },
+                    "head": {
+                      "build": "C:\\Users\\<user>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-45784270ef7396da\\build.json",
+                      "commands": 258,
+                      "prepared": true,
+                      "host_phases_ms": {
+                        "build_lookup": 0.0,
+                        "packet_stack": 1.644900010433048
+                      },
+                      "dispatch_ms": 1.2620000052265823,
+                      "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+                      "input_unchanged": true,
+                      "output_frames": 2,
+                      "output_bytes": 8448,
+                      "input_update_mode": "partial",
+                      "input_write_bytes": 2252800,
+                      "input_total_bytes": 2262144,
+                      "input_sync_ranges": 2,
+                      "input_fully_verified": true,
+                      "transport_sources_sha256": {
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\persistent.py": "1c89cc860244a8b77475d6ed137d01aaa79678b87999dd517ce409e8d06839f1",
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\input_residency.py": "48b988a2e354be6efff94f1b608d09fe926f8cd70dee31df16ce594f9a4235ba"
+                      },
+                      "transfer_phases_ms": {
+                        "input_write_sync": 0.6529999955091625,
+                        "output_poison_sync": 0.014599994756281376,
+                        "output_sync_read": 0.02370000584051013,
+                        "input_sync_verify": 0.8097999962046742
+                      },
+                      "persistent_transport": true,
+                      "image_cache_hit": true,
+                      "contexts_created": 2,
+                      "context_cache_hit": true,
+                      "exact_program_sharing": true,
+                      "context_cache_size": 2,
+                      "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+                    }
+                  }
+                ]
+              },
+              {
+                "proposals": [
+                  52,
+                  236770
+                ],
+                "accepted": 2,
+                "dispatches": [
+                  {
+                    "body": {
+                      "build": "C:\\Users\\<user>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-a4040f9c852a7e92\\build.json",
+                      "commands": 3952,
+                      "prepared": true,
+                      "host_phases_ms": {
+                        "build_lookup": 0.0,
+                        "packet_stack": 9.91480000084266
+                      },
+                      "dispatch_ms": 13.797699997667223,
+                      "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+                      "input_unchanged": true,
+                      "output_frames": 10,
+                      "output_bytes": 42240,
+                      "input_update_mode": "partial",
+                      "input_write_bytes": 1748992,
+                      "input_total_bytes": 34651136,
+                      "input_sync_ranges": 373,
+                      "input_fully_verified": true,
+                      "transport_sources_sha256": {
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\persistent.py": "1c89cc860244a8b77475d6ed137d01aaa79678b87999dd517ce409e8d06839f1",
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\input_residency.py": "48b988a2e354be6efff94f1b608d09fe926f8cd70dee31df16ce594f9a4235ba"
+                      },
+                      "transfer_phases_ms": {
+                        "input_write_sync": 3.839300014078617,
+                        "output_poison_sync": 0.03759999526664615,
+                        "output_sync_read": 0.03999998443759978,
+                        "input_sync_verify": 9.286900021834299
+                      },
+                      "persistent_transport": true,
+                      "image_cache_hit": true,
+                      "contexts_created": 2,
+                      "context_cache_hit": true,
+                      "exact_program_sharing": true,
+                      "context_cache_size": 2,
+                      "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d",
+                      "step_wall_ms": 48.399000021163374,
+                      "step_phases_ms": {
+                        "gpu_embedding": 0.6307000003289431,
+                        "body": 40.87880000588484,
+                        "head": 6.8888999812770635
+                      }
+                    },
+                    "head": {
+                      "build": "C:\\Users\\<user>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-45784270ef7396da\\build.json",
+                      "commands": 258,
+                      "prepared": true,
+                      "host_phases_ms": {
+                        "build_lookup": 0.0,
+                        "packet_stack": 2.048299997113645
+                      },
+                      "dispatch_ms": 1.232199982041493,
+                      "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+                      "input_unchanged": true,
+                      "output_frames": 2,
+                      "output_bytes": 8448,
+                      "input_update_mode": "partial",
+                      "input_write_bytes": 2252800,
+                      "input_total_bytes": 2262144,
+                      "input_sync_ranges": 2,
+                      "input_fully_verified": true,
+                      "transport_sources_sha256": {
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\persistent.py": "1c89cc860244a8b77475d6ed137d01aaa79678b87999dd517ce409e8d06839f1",
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\input_residency.py": "48b988a2e354be6efff94f1b608d09fe926f8cd70dee31df16ce594f9a4235ba"
+                      },
+                      "transfer_phases_ms": {
+                        "input_write_sync": 0.6641999934799969,
+                        "output_poison_sync": 0.015500001609325409,
+                        "output_sync_read": 0.023699976736679673,
+                        "input_sync_verify": 0.7850000110920519
+                      },
+                      "persistent_transport": true,
+                      "image_cache_hit": true,
+                      "contexts_created": 2,
+                      "context_cache_hit": true,
+                      "exact_program_sharing": true,
+                      "context_cache_size": 2,
+                      "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+                    }
+                  },
+                  {
+                    "body": {
+                      "build": "C:\\Users\\<user>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-a4040f9c852a7e92\\build.json",
+                      "commands": 3952,
+                      "prepared": true,
+                      "host_phases_ms": {
+                        "build_lookup": 0.0,
+                        "packet_stack": 9.817799989832565
+                      },
+                      "dispatch_ms": 13.767199998255819,
+                      "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+                      "input_unchanged": true,
+                      "output_frames": 10,
+                      "output_bytes": 42240,
+                      "input_update_mode": "partial",
+                      "input_write_bytes": 8192,
+                      "input_total_bytes": 34651136,
+                      "input_sync_ranges": 1,
+                      "input_fully_verified": true,
+                      "transport_sources_sha256": {
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\persistent.py": "1c89cc860244a8b77475d6ed137d01aaa79678b87999dd517ce409e8d06839f1",
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\input_residency.py": "48b988a2e354be6efff94f1b608d09fe926f8cd70dee31df16ce594f9a4235ba"
+                      },
+                      "transfer_phases_ms": {
+                        "input_write_sync": 3.0732999730389565,
+                        "output_poison_sync": 0.03369999467395246,
+                        "output_sync_read": 0.04119999357499182,
+                        "input_sync_verify": 9.03500002459623
+                      },
+                      "persistent_transport": true,
+                      "image_cache_hit": true,
+                      "contexts_created": 2,
+                      "context_cache_hit": true,
+                      "exact_program_sharing": true,
+                      "context_cache_size": 2,
+                      "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d",
+                      "step_wall_ms": 45.37219999474473,
+                      "step_phases_ms": {
+                        "gpu_embedding": 0.7605999999213964,
+                        "body": 38.51559999748133,
+                        "head": 6.0950000188313425
+                      }
+                    },
+                    "head": {
+                      "build": "C:\\Users\\<user>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-45784270ef7396da\\build.json",
+                      "commands": 258,
+                      "prepared": true,
+                      "host_phases_ms": {
+                        "build_lookup": 0.0,
+                        "packet_stack": 1.7056000069715083
+                      },
+                      "dispatch_ms": 1.2284000113140792,
+                      "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+                      "input_unchanged": true,
+                      "output_frames": 2,
+                      "output_bytes": 8448,
+                      "input_update_mode": "partial",
+                      "input_write_bytes": 2252800,
+                      "input_total_bytes": 2262144,
+                      "input_sync_ranges": 2,
+                      "input_fully_verified": true,
+                      "transport_sources_sha256": {
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\persistent.py": "1c89cc860244a8b77475d6ed137d01aaa79678b87999dd517ce409e8d06839f1",
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\input_residency.py": "48b988a2e354be6efff94f1b608d09fe926f8cd70dee31df16ce594f9a4235ba"
+                      },
+                      "transfer_phases_ms": {
+                        "input_write_sync": 0.6618000043090433,
+                        "output_poison_sync": 0.014599994756281376,
+                        "output_sync_read": 0.023199972929432988,
+                        "input_sync_verify": 0.752799998736009
+                      },
+                      "persistent_transport": true,
+                      "image_cache_hit": true,
+                      "contexts_created": 2,
+                      "context_cache_hit": true,
+                      "exact_program_sharing": true,
+                      "context_cache_size": 2,
+                      "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+                    }
+                  }
+                ]
+              },
+              {
+                "proposals": [
+                  236832,
+                  808
+                ],
+                "accepted": 2,
+                "dispatches": [
+                  {
+                    "body": {
+                      "build": "C:\\Users\\<user>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-a4040f9c852a7e92\\build.json",
+                      "commands": 3952,
+                      "prepared": true,
+                      "host_phases_ms": {
+                        "build_lookup": 0.0,
+                        "packet_stack": 9.284100000513718
+                      },
+                      "dispatch_ms": 13.711799983866513,
+                      "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+                      "input_unchanged": true,
+                      "output_frames": 10,
+                      "output_bytes": 42240,
+                      "input_update_mode": "partial",
+                      "input_write_bytes": 1748992,
+                      "input_total_bytes": 34651136,
+                      "input_sync_ranges": 373,
+                      "input_fully_verified": true,
+                      "transport_sources_sha256": {
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\persistent.py": "1c89cc860244a8b77475d6ed137d01aaa79678b87999dd517ce409e8d06839f1",
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\input_residency.py": "48b988a2e354be6efff94f1b608d09fe926f8cd70dee31df16ce594f9a4235ba"
+                      },
+                      "transfer_phases_ms": {
+                        "input_write_sync": 3.6137999850325286,
+                        "output_poison_sync": 0.03060000017285347,
+                        "output_sync_read": 0.02859998494386673,
+                        "input_sync_verify": 9.13410002249293
+                      },
+                      "persistent_transport": true,
+                      "image_cache_hit": true,
+                      "contexts_created": 2,
+                      "context_cache_hit": true,
+                      "exact_program_sharing": true,
+                      "context_cache_size": 2,
+                      "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d",
+                      "step_wall_ms": 45.92499998398125,
+                      "step_phases_ms": {
+                        "gpu_embedding": 0.692299974616617,
+                        "body": 39.275100018130615,
+                        "head": 5.957299988949671
+                      }
+                    },
+                    "head": {
+                      "build": "C:\\Users\\<user>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-45784270ef7396da\\build.json",
+                      "commands": 258,
+                      "prepared": true,
+                      "host_phases_ms": {
+                        "build_lookup": 0.0,
+                        "packet_stack": 1.7125999729614705
+                      },
+                      "dispatch_ms": 1.215199998114258,
+                      "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+                      "input_unchanged": true,
+                      "output_frames": 2,
+                      "output_bytes": 8448,
+                      "input_update_mode": "partial",
+                      "input_write_bytes": 2252800,
+                      "input_total_bytes": 2262144,
+                      "input_sync_ranges": 2,
+                      "input_fully_verified": true,
+                      "transport_sources_sha256": {
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\persistent.py": "1c89cc860244a8b77475d6ed137d01aaa79678b87999dd517ce409e8d06839f1",
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\input_residency.py": "48b988a2e354be6efff94f1b608d09fe926f8cd70dee31df16ce594f9a4235ba"
+                      },
+                      "transfer_phases_ms": {
+                        "input_write_sync": 0.5775000026915222,
+                        "output_poison_sync": 0.013699987903237343,
+                        "output_sync_read": 0.021299987565726042,
+                        "input_sync_verify": 0.7882000063546002
+                      },
+                      "persistent_transport": true,
+                      "image_cache_hit": true,
+                      "contexts_created": 2,
+                      "context_cache_hit": true,
+                      "exact_program_sharing": true,
+                      "context_cache_size": 2,
+                      "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+                    }
+                  },
+                  {
+                    "body": {
+                      "build": "C:\\Users\\<user>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-a4040f9c852a7e92\\build.json",
+                      "commands": 3952,
+                      "prepared": true,
+                      "host_phases_ms": {
+                        "build_lookup": 0.0,
+                        "packet_stack": 9.190200013108552
+                      },
+                      "dispatch_ms": 13.791000004857779,
+                      "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+                      "input_unchanged": true,
+                      "output_frames": 10,
+                      "output_bytes": 42240,
+                      "input_update_mode": "partial",
+                      "input_write_bytes": 8192,
+                      "input_total_bytes": 34651136,
+                      "input_sync_ranges": 1,
+                      "input_fully_verified": true,
+                      "transport_sources_sha256": {
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\persistent.py": "1c89cc860244a8b77475d6ed137d01aaa79678b87999dd517ce409e8d06839f1",
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\input_residency.py": "48b988a2e354be6efff94f1b608d09fe926f8cd70dee31df16ce594f9a4235ba"
+                      },
+                      "transfer_phases_ms": {
+                        "input_write_sync": 2.586099988548085,
+                        "output_poison_sync": 0.025299988919869065,
+                        "output_sync_read": 0.02950002090074122,
+                        "input_sync_verify": 9.277100005419925
+                      },
+                      "persistent_transport": true,
+                      "image_cache_hit": true,
+                      "contexts_created": 2,
+                      "context_cache_hit": true,
+                      "exact_program_sharing": true,
+                      "context_cache_size": 2,
+                      "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d",
+                      "step_wall_ms": 44.29739998886362,
+                      "step_phases_ms": {
+                        "gpu_embedding": 0.6695000047329813,
+                        "body": 37.78539999620989,
+                        "head": 5.8416999818291515
+                      }
+                    },
+                    "head": {
+                      "build": "C:\\Users\\<user>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-45784270ef7396da\\build.json",
+                      "commands": 258,
+                      "prepared": true,
+                      "host_phases_ms": {
+                        "build_lookup": 0.0,
+                        "packet_stack": 1.7043999978341162
+                      },
+                      "dispatch_ms": 1.2064999900758266,
+                      "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+                      "input_unchanged": true,
+                      "output_frames": 2,
+                      "output_bytes": 8448,
+                      "input_update_mode": "partial",
+                      "input_write_bytes": 2252800,
+                      "input_total_bytes": 2262144,
+                      "input_sync_ranges": 2,
+                      "input_fully_verified": true,
+                      "transport_sources_sha256": {
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\persistent.py": "1c89cc860244a8b77475d6ed137d01aaa79678b87999dd517ce409e8d06839f1",
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\input_residency.py": "48b988a2e354be6efff94f1b608d09fe926f8cd70dee31df16ce594f9a4235ba"
+                      },
+                      "transfer_phases_ms": {
+                        "input_write_sync": 0.6130999827291816,
+                        "output_poison_sync": 0.013600016245618463,
+                        "output_sync_read": 0.020500010577961802,
+                        "input_sync_verify": 0.7816000143066049
+                      },
+                      "persistent_transport": true,
+                      "image_cache_hit": true,
+                      "contexts_created": 2,
+                      "context_cache_hit": true,
+                      "exact_program_sharing": true,
+                      "context_cache_size": 2,
+                      "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+                    }
+                  }
+                ]
+              },
+              {
+                "proposals": [
+                  236832,
+                  52
+                ],
+                "accepted": 2,
+                "dispatches": [
+                  {
+                    "body": {
+                      "build": "C:\\Users\\<user>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-a4040f9c852a7e92\\build.json",
+                      "commands": 3952,
+                      "prepared": true,
+                      "host_phases_ms": {
+                        "build_lookup": 0.0,
+                        "packet_stack": 9.115199994994327
+                      },
+                      "dispatch_ms": 13.821100001223385,
+                      "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+                      "input_unchanged": true,
+                      "output_frames": 10,
+                      "output_bytes": 42240,
+                      "input_update_mode": "partial",
+                      "input_write_bytes": 1998848,
+                      "input_total_bytes": 34651136,
+                      "input_sync_ranges": 373,
+                      "input_fully_verified": true,
+                      "transport_sources_sha256": {
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\persistent.py": "1c89cc860244a8b77475d6ed137d01aaa79678b87999dd517ce409e8d06839f1",
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\input_residency.py": "48b988a2e354be6efff94f1b608d09fe926f8cd70dee31df16ce594f9a4235ba"
+                      },
+                      "transfer_phases_ms": {
+                        "input_write_sync": 3.7810999783687294,
+                        "output_poison_sync": 0.019500002963468432,
+                        "output_sync_read": 0.031100003980100155,
+                        "input_sync_verify": 9.052699984749779
+                      },
+                      "persistent_transport": true,
+                      "image_cache_hit": true,
+                      "contexts_created": 2,
+                      "context_cache_hit": true,
+                      "exact_program_sharing": true,
+                      "context_cache_size": 2,
+                      "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d",
+                      "step_wall_ms": 46.4526999858208,
+                      "step_phases_ms": {
+                        "gpu_embedding": 0.670300010824576,
+                        "body": 39.53920002095401,
+                        "head": 6.242699979338795
+                      }
+                    },
+                    "head": {
+                      "build": "C:\\Users\\<user>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-45784270ef7396da\\build.json",
+                      "commands": 258,
+                      "prepared": true,
+                      "host_phases_ms": {
+                        "build_lookup": 0.0,
+                        "packet_stack": 1.7432000022381544
+                      },
+                      "dispatch_ms": 1.2675999896600842,
+                      "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+                      "input_unchanged": true,
+                      "output_frames": 2,
+                      "output_bytes": 8448,
+                      "input_update_mode": "partial",
+                      "input_write_bytes": 2252800,
+                      "input_total_bytes": 2262144,
+                      "input_sync_ranges": 2,
+                      "input_fully_verified": true,
+                      "transport_sources_sha256": {
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\persistent.py": "1c89cc860244a8b77475d6ed137d01aaa79678b87999dd517ce409e8d06839f1",
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\input_residency.py": "48b988a2e354be6efff94f1b608d09fe926f8cd70dee31df16ce594f9a4235ba"
+                      },
+                      "transfer_phases_ms": {
+                        "input_write_sync": 0.6702000100631267,
+                        "output_poison_sync": 0.013800017768517137,
+                        "output_sync_read": 0.0219999928958714,
+                        "input_sync_verify": 0.7369999948423356
+                      },
+                      "persistent_transport": true,
+                      "image_cache_hit": true,
+                      "contexts_created": 2,
+                      "context_cache_hit": true,
+                      "exact_program_sharing": true,
+                      "context_cache_size": 2,
+                      "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+                    }
+                  },
+                  {
+                    "body": {
+                      "build": "C:\\Users\\<user>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-a4040f9c852a7e92\\build.json",
+                      "commands": 3952,
+                      "prepared": true,
+                      "host_phases_ms": {
+                        "build_lookup": 0.0,
+                        "packet_stack": 9.253299998817965
+                      },
+                      "dispatch_ms": 13.719500013394281,
+                      "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+                      "input_unchanged": true,
+                      "output_frames": 10,
+                      "output_bytes": 42240,
+                      "input_update_mode": "partial",
+                      "input_write_bytes": 8192,
+                      "input_total_bytes": 34651136,
+                      "input_sync_ranges": 1,
+                      "input_fully_verified": true,
+                      "transport_sources_sha256": {
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\persistent.py": "1c89cc860244a8b77475d6ed137d01aaa79678b87999dd517ce409e8d06839f1",
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\input_residency.py": "48b988a2e354be6efff94f1b608d09fe926f8cd70dee31df16ce594f9a4235ba"
+                      },
+                      "transfer_phases_ms": {
+                        "input_write_sync": 2.6310000102967024,
+                        "output_poison_sync": 0.027600006433203816,
+                        "output_sync_read": 0.03500000457279384,
+                        "input_sync_verify": 9.546799992676824
+                      },
+                      "persistent_transport": true,
+                      "image_cache_hit": true,
+                      "contexts_created": 2,
+                      "context_cache_hit": true,
+                      "exact_program_sharing": true,
+                      "context_cache_size": 2,
+                      "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d",
+                      "step_wall_ms": 44.79540002648719,
+                      "step_phases_ms": {
+                        "gpu_embedding": 0.5817000055685639,
+                        "body": 38.208400015719235,
+                        "head": 6.004599999869242
+                      }
+                    },
+                    "head": {
+                      "build": "C:\\Users\\<user>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-45784270ef7396da\\build.json",
+                      "commands": 258,
+                      "prepared": true,
+                      "host_phases_ms": {
+                        "build_lookup": 0.0,
+                        "packet_stack": 1.6321000002790242
+                      },
+                      "dispatch_ms": 1.2523999903351068,
+                      "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+                      "input_unchanged": true,
+                      "output_frames": 2,
+                      "output_bytes": 8448,
+                      "input_update_mode": "partial",
+                      "input_write_bytes": 2252800,
+                      "input_total_bytes": 2262144,
+                      "input_sync_ranges": 2,
+                      "input_fully_verified": true,
+                      "transport_sources_sha256": {
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\persistent.py": "1c89cc860244a8b77475d6ed137d01aaa79678b87999dd517ce409e8d06839f1",
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\input_residency.py": "48b988a2e354be6efff94f1b608d09fe926f8cd70dee31df16ce594f9a4235ba"
+                      },
+                      "transfer_phases_ms": {
+                        "input_write_sync": 0.6541000038851053,
+                        "output_poison_sync": 0.015500001609325409,
+                        "output_sync_read": 0.02269999822601676,
+                        "input_sync_verify": 0.8170999935828149
+                      },
+                      "persistent_transport": true,
+                      "image_cache_hit": true,
+                      "contexts_created": 2,
+                      "context_cache_hit": true,
+                      "exact_program_sharing": true,
+                      "context_cache_size": 2,
+                      "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+                    }
+                  }
+                ]
+              },
+              {
+                "proposals": [
+                  49,
+                  50
+                ],
+                "accepted": 2,
+                "dispatches": [
+                  {
+                    "body": {
+                      "build": "C:\\Users\\<user>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-a4040f9c852a7e92\\build.json",
+                      "commands": 3952,
+                      "prepared": true,
+                      "host_phases_ms": {
+                        "build_lookup": 0.0,
+                        "packet_stack": 9.168599994154647
+                      },
+                      "dispatch_ms": 13.688800012459978,
+                      "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+                      "input_unchanged": true,
+                      "output_frames": 10,
+                      "output_bytes": 42240,
+                      "input_update_mode": "partial",
+                      "input_write_bytes": 1753088,
+                      "input_total_bytes": 34651136,
+                      "input_sync_ranges": 373,
+                      "input_fully_verified": true,
+                      "transport_sources_sha256": {
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\persistent.py": "1c89cc860244a8b77475d6ed137d01aaa79678b87999dd517ce409e8d06839f1",
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\input_residency.py": "48b988a2e354be6efff94f1b608d09fe926f8cd70dee31df16ce594f9a4235ba"
+                      },
+                      "transfer_phases_ms": {
+                        "input_write_sync": 3.683399991132319,
+                        "output_poison_sync": 0.01829999382607639,
+                        "output_sync_read": 0.029199989512562752,
+                        "input_sync_verify": 9.292800008552149
+                      },
+                      "persistent_transport": true,
+                      "image_cache_hit": true,
+                      "contexts_created": 2,
+                      "context_cache_hit": true,
+                      "exact_program_sharing": true,
+                      "context_cache_size": 2,
+                      "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d",
+                      "step_wall_ms": 45.88389999116771,
+                      "step_phases_ms": {
+                        "gpu_embedding": 0.6867999909445643,
+                        "body": 39.269400003831834,
+                        "head": 5.927099991822615
+                      }
+                    },
+                    "head": {
+                      "build": "C:\\Users\\<user>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-45784270ef7396da\\build.json",
+                      "commands": 258,
+                      "prepared": true,
+                      "host_phases_ms": {
+                        "build_lookup": 0.0,
+                        "packet_stack": 1.8570999964140356
+                      },
+                      "dispatch_ms": 1.206599990837276,
+                      "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+                      "input_unchanged": true,
+                      "output_frames": 2,
+                      "output_bytes": 8448,
+                      "input_update_mode": "partial",
+                      "input_write_bytes": 2207744,
+                      "input_total_bytes": 2262144,
+                      "input_sync_ranges": 2,
+                      "input_fully_verified": true,
+                      "transport_sources_sha256": {
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\persistent.py": "1c89cc860244a8b77475d6ed137d01aaa79678b87999dd517ce409e8d06839f1",
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\input_residency.py": "48b988a2e354be6efff94f1b608d09fe926f8cd70dee31df16ce594f9a4235ba"
+                      },
+                      "transfer_phases_ms": {
+                        "input_write_sync": 0.6071999960113317,
+                        "output_poison_sync": 0.013500015484169126,
+                        "output_sync_read": 0.020700012100860476,
+                        "input_sync_verify": 0.7290999928954989
+                      },
+                      "persistent_transport": true,
+                      "image_cache_hit": true,
+                      "contexts_created": 2,
+                      "context_cache_hit": true,
+                      "exact_program_sharing": true,
+                      "context_cache_size": 2,
+                      "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+                    }
+                  },
+                  {
+                    "body": {
+                      "build": "C:\\Users\\<user>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-a4040f9c852a7e92\\build.json",
+                      "commands": 3952,
+                      "prepared": true,
+                      "host_phases_ms": {
+                        "build_lookup": 0.0,
+                        "packet_stack": 9.073599998373538
+                      },
+                      "dispatch_ms": 13.78200002363883,
+                      "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+                      "input_unchanged": true,
+                      "output_frames": 10,
+                      "output_bytes": 42240,
+                      "input_update_mode": "partial",
+                      "input_write_bytes": 8192,
+                      "input_total_bytes": 34651136,
+                      "input_sync_ranges": 1,
+                      "input_fully_verified": true,
+                      "transport_sources_sha256": {
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\persistent.py": "1c89cc860244a8b77475d6ed137d01aaa79678b87999dd517ce409e8d06839f1",
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\input_residency.py": "48b988a2e354be6efff94f1b608d09fe926f8cd70dee31df16ce594f9a4235ba"
+                      },
+                      "transfer_phases_ms": {
+                        "input_write_sync": 3.1602999952156097,
+                        "output_poison_sync": 0.026699999580159783,
+                        "output_sync_read": 0.036999990697950125,
+                        "input_sync_verify": 8.966199995484203
+                      },
+                      "persistent_transport": true,
+                      "image_cache_hit": true,
+                      "contexts_created": 2,
+                      "context_cache_hit": true,
+                      "exact_program_sharing": true,
+                      "context_cache_size": 2,
+                      "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d",
+                      "step_wall_ms": 44.23069997574203,
+                      "step_phases_ms": {
+                        "gpu_embedding": 0.7440999906975776,
+                        "body": 37.97810000833124,
+                        "head": 5.508300004294142
+                      }
+                    },
+                    "head": {
+                      "build": "C:\\Users\\<user>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-45784270ef7396da\\build.json",
+                      "commands": 258,
+                      "prepared": true,
+                      "host_phases_ms": {
+                        "build_lookup": 0.0,
+                        "packet_stack": 1.6439000028185546
+                      },
+                      "dispatch_ms": 1.3180999958422035,
+                      "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+                      "input_unchanged": true,
+                      "output_frames": 2,
+                      "output_bytes": 8448,
+                      "input_update_mode": "partial",
+                      "input_write_bytes": 2207744,
+                      "input_total_bytes": 2262144,
+                      "input_sync_ranges": 2,
+                      "input_fully_verified": true,
+                      "transport_sources_sha256": {
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\persistent.py": "1c89cc860244a8b77475d6ed137d01aaa79678b87999dd517ce409e8d06839f1",
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\input_residency.py": "48b988a2e354be6efff94f1b608d09fe926f8cd70dee31df16ce594f9a4235ba"
+                      },
+                      "transfer_phases_ms": {
+                        "input_write_sync": 0.5982999864500016,
+                        "output_poison_sync": 0.014100020052865148,
+                        "output_sync_read": 0.01379998866468668,
+                        "input_sync_verify": 0.5544000014197081
+                      },
+                      "persistent_transport": true,
+                      "image_cache_hit": true,
+                      "contexts_created": 2,
+                      "context_cache_hit": true,
+                      "exact_program_sharing": true,
+                      "context_cache_size": 2,
+                      "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "prompt_ids": [
+            2,
+            105,
+            9731,
+            107,
+            3048,
+            659,
+            496,
+            2263,
+            43355,
+            16326,
+            236761,
+            6890,
+            506,
+            2487,
+            6436,
+            1056,
+            4354,
+            236761,
+            13474,
+            16412,
+            659,
+            6658,
+            531,
+            506,
+            5540,
+            43355,
+            236761,
+            15428,
+            10149,
+            2129,
+            13269,
+            653,
+            5904,
+            2536,
+            236761,
+            17079,
+            2129,
+            13269,
+            618,
+            1262,
+            236761,
+            23097,
+            496,
+            63510,
+            1626,
+            3890,
+            236761,
+            46,
+            163688,
+            236787,
+            30718,
+            236782,
+            7777,
+            236787,
+            52,
+            99009,
+            18378,
+            40442,
+            236793,
+            7623,
+            496,
+            20632,
+            1354,
+            236761,
+            52,
+            236764,
+            19031,
+            29616,
+            15921,
+            29616,
+            25733,
+            29616,
+            7777,
+            236787,
+            52,
+            37091,
+            236764,
+            77673,
+            46241,
+            46186,
+            965,
+            532,
+            62334,
+            236761,
+            52,
+            236764,
+            2084,
+            236787,
+            52,
+            35410,
+            52,
+            5237,
+            15979,
+            24845,
+            52,
+            25733,
+            52,
+            1604,
+            2084,
+            236787,
+            52,
+            60688,
+            52,
+            1807,
+            47,
+            46,
+            163688,
+            236787,
+            1399,
+            236779,
+            1005,
+            236782,
+            7777,
+            236787,
+            52,
+            6190,
+            496,
+            236743,
+            236770,
+            236771,
+            236778,
+            236812,
+            236772,
+            18857,
+            3104,
+            529,
+            496,
+            92916,
+            236772,
+            236828,
+            43355,
+            2129,
+            236761,
+            52,
+            236764,
+            19031,
+            29616,
+            15921,
+            29616,
+            10617,
+            29616,
+            7777,
+            236787,
+            52,
+            14106,
+            9815,
+            236764,
+            3678,
+            5743,
+            236793,
+            1161,
+            2148,
+            236779,
+            10617,
+            573,
+            2264,
+            3104,
+            236761,
+            52,
+            236764,
+            2084,
+            236787,
+            52,
+            86752,
+            52,
+            1263,
+            2337,
+            29616,
+            7777,
+            236787,
+            52,
+            55751,
+            2129,
+            2479,
+            4888,
+            506,
+            43355,
+            236761,
+            52,
+            236764,
+            2084,
+            236787,
+            52,
+            35410,
+            52,
+            5237,
+            15979,
+            24845,
+            52,
+            2337,
+            52,
+            1604,
+            2084,
+            236787,
+            52,
+            60688,
+            52,
+            1807,
+            47,
+            46,
+            163688,
+            236787,
+            2234,
+            236779,
+            9207,
+            236782,
+            7777,
+            236787,
+            52,
+            1613,
+            872,
+            531,
+            236743,
+            236770,
+            236771,
+            236771,
+            16227,
+            4888,
+            496,
+            43355,
+            12229,
+            236761,
+            52,
+            236764,
+            19031,
+            29616,
+            15921,
+            29616,
+            2337,
+            29616,
+            7777,
+            236787,
+            52,
+            55751,
+            12229,
+            2479,
+            236793,
+            1161,
+            783,
+            573,
+            506,
+            43355,
+            5989,
+            236761,
+            52,
+            236764,
+            2084,
+            236787,
+            52,
+            35410,
+            52,
+            5237,
+            15979,
+            24845,
+            52,
+            2337,
+            52,
+            1604,
+            2084,
+            236787,
+            52,
+            60688,
+            52,
+            1807,
+            47,
+            106,
+            107,
+            105,
+            2364,
+            107,
+            6190,
+            8652,
+            236761,
+            7090,
+            607,
+            1676,
+            236779,
+            1005,
+            236764,
+            1299,
+            1161,
+            9279,
+            531,
+            24261,
+            506,
+            5498,
+            1527,
+            684,
+            506,
+            27215,
+            5415,
+            236761,
+            24181,
+            1186,
+            607,
+            506,
+            1354,
+            236761,
+            106,
+            107,
+            105,
+            4368,
+            107,
+            48,
+            6639,
+            236787,
+            1399,
+            236779,
+            1005,
+            236782,
+            2337,
+            236787,
+            52,
+            37767,
+            236761,
+            7090,
+            52,
+            236783,
+            49,
+            50,
+            6275,
+            236787,
+            1399,
+            236779,
+            1005,
+            236782,
+            2394,
+            236787,
+            52,
+            14937,
+            1005,
+            1083,
+            623,
+            818,
+            29283,
+            12539,
+            6097,
+            236743,
+            236770,
+            236800,
+            236832,
+            7365,
+            236761,
+            669,
+            27215,
+            5415,
+            563,
+            236743,
+            236832,
+            6810,
+            236750,
+            236785,
+            236749,
+            827,
+            623,
+            4874,
+            236779,
+            10617,
+            1083,
+            2303,
+            236764,
+            623,
+            6725,
+            236779,
+            71271,
+            1083,
+            236743,
+            236832,
+            236778,
+            236783,
+            52,
+            236783,
+            51
+          ],
+          "raw": "<|tool_call>call:calculate{expression:<|\"|>137 * 7<|\"|>}<tool_call|><|tool_response>"
+        },
+        {
+          "index": 2,
+          "model": {
+            "scope": "Experimental persistent Gemma4 E2B GPU target and BF16 NPU assistant.\n\nWeights stay loaded between requests. Each request prefills its complete prompt\nand owns a bounded NPU session; no GPU-only reference generation runs here.\n",
+            "prompt_tokens": 409,
+            "prompt_sha256": "245d3798999fdff8736642bbb5b74598b4b22b7ec4389feb96e178074287b9d3",
+            "completed": true,
+            "cancelled": false,
+            "input_depth": 2,
+            "vector_copy": true,
+            "context_tokens": 2560,
+            "source_sha256": {
+              "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\npu\\gemma4\\runtime.py": "ae94256a5e7944b9ec50d585bda0ef913e5ede0f446bdd8f45cbb07aacf50f6e",
+              "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\npu\\gemma4\\arena.py": "881008fd0f0741b797c19ac090e545b2e33e6efbe34c312941e7d43d5bf83c29",
+              "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\npu\\gemma4\\draft.py": "b45aa232db7cf9d0aace8b3b67c42f5c88f79c2d53442868ab7ec5bdaca5bd75",
+              "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\tools\\ggml_gpu_target\\client.py": "18b75f386a346688e508fc6062335019c5c756e3e3965a52fc3140d462721dbf",
+              "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\tools\\ggml_gpu_target\\worker.cpp": "5c4bdeb4cc30528dd73cb73fa9cdb4c447c1aebea7ef5d3db632ca7d4b72943a",
+              "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\tools\\ggml_gpu_embedding\\embedding.cpp": "82daefc983ffb2778d2a7213b7b49a5dc653dc1f4268bbc74afc5c1f9b7dccd3",
+              "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\tools\\check-inference-contention.ps1": "c7e54aa33f4fc43e9a6bcd4a83195e010eaa0b41057a325720227ec480dd8021",
+              "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\tools\\research_process.py": "ffeb1857f190b482eed101b5f5a928f455de26bfa61d23f78a2eacec08e2663e",
+              "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\npu\\contention.py": "a00ac19ca6ca4b8a515628d6e8e534e71a4e5283930908bf7e5d7aad1af9a642",
+              "C:\\Users\\<user>\\gemma4-assistant\\npu\\gemma-4-E2B-it-assistant.weights.npz": "bda11a1dd40c42a3f84632cb66250f8afe1111657f0d37188e3c0234da6376fc",
+              "C:\\Users\\<user>\\gemma4-assistant\\npu\\gemma-4-E2B-it-assistant.weights.json": "2346469a976daa60d0a47c8d24790a3043951e4f968ea3d3542706375d3d19d7",
+              "C:\\Users\\<user>\\gemma4-assistant\\npu\\rope-e2b-live-2560-20261018.npz": "8c149126884aca45f6232328f2bde969feb30243783f8690b50b0973cc1d2dda",
+              "C:\\Users\\<user>\\gemma4-assistant\\npu\\gelu-bf16-tanh-v1.npz": "2a3578db96f57b7b5c2768acbfa2bffefbf5247453fbab911793728b5451465e",
+              "C:\\Users\\<user>\\gemma4-assistant\\npu\\rope-e2b-live-2560-20261018.json": "31a19e725f751e183313f4cfac0481f210ef4032f14b005302b805dc1d8444c9",
+              "C:\\Users\\<user>\\gemma4-assistant\\npu\\gelu-bf16-tanh-v1.json": "43e4b24331e5e00892bcf1bf82944646a1e57583792dd75b50de25c39bc91362",
+              "C:\\Users\\<user>\\gemma4-assistant\\npu\\local-checkpoints\\gemma-4-E2B-it-assistant\\config.json": "d2d732c3e0dbdef15fba14be606aa4bb5625226f2cf0e40a5a59c161d764c260",
+              "C:\\Users\\<user>\\gemma4-assistant\\models\\gemma-4-E2B-it-Q5_K_M-pleQ4-imatrix.gguf": "ac36a228eb6cd1b93eedc86153016612b0a60ba73c9a50e0b4e95a6a143f65e1",
+              "C:\\Users\\<user>\\gemma4-assistant\\bin\\ggml_gpu_target.exe": "d2d3b60a32d7b8a8ee4ce534ade2515de43f046f30bbb09f58f14d532264dfba",
+              "C:\\Users\\<user>\\tools\\llamacpp-b1343-rocm\\llama.dll": "04aeca339e96514cd2eeed4810ddc813e7cc91b088137d741d5bfb53829464e8",
+              "C:\\Users\\<user>\\tools\\llamacpp-b1343-rocm\\ggml.dll": "d62c9fd3ea800ebf81b104f0b276c44105930557337c3e97ca7bf3e5a51bd889",
+              "C:\\Users\\<user>\\tools\\llamacpp-b1343-rocm\\ggml-base.dll": "b0f6bcf152bbea75fe55c3d185b512ca4b3df167ec8159357da53be435db9539",
+              "C:\\Users\\<user>\\tools\\llamacpp-b1343-rocm\\ggml-hip.dll": "ea8866ab163caad203a2fa2f8afbce51584bb55eb566e1e863bb14e1b1d3f370",
+              "C:\\Users\\<user>\\gemma4-assistant\\bin\\gpu_activity.exe": "aef21dd0190495efb12a613cd81bdb69283f4681ebbb75ca2e0a97903e4bffce",
+              "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\tools\\ggml_gpu_target\\activity.py": "bb3011ee3326c33d79a5b2b5cf4e5065a20bc67cba4af96c81a99baa1fc7d8c9",
+              "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\tools\\ggml_gpu_target\\gpu_activity.cpp": "6d103be81cd8882c5614d7f0767623cb01b3ff89720db236b214c192272d83c5",
+              "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\tools\\ggml_gpu_target\\build_activity.cmd": "08d89f9d350a137eba8f37d78916d5044fb4e6714bc3c1e82af25f114ba5e843",
+              "C:\\Users\\<user>\\tools\\llamacpp-b1343-rocm\\amdhip64_7.dll": "3872b4aa82bbc91fcd53836bdbc2b4261c98c845eadfba31cce6ef4709a4697e",
+              "C:\\WINDOWS\\System32\\d3dcompiler_47.dll": "2e3526354dbcd9cf013f7b741c549df2170fe6af607628442216a21e7d584883"
+            },
+            "operation_ms": {
+              "admission": 699.484200013103,
+              "target_prepare": 573.3202999981586,
+              "target_state": 1.9745999888982624,
+              "render": 0.822900008643046,
+              "activity_start": 0.2015999925788492,
+              "draft": 214.0025999979116,
+              "target_verify": 99.4403000222519,
+              "activity_join": 0.24320001830346882,
+              "target_rollback": 0.0004999747034162283
+            },
+            "gpu_activity": {
+              "enabled": true,
+              "windows": [
+                {
+                  "completed": true,
+                  "gpu_validated": true,
+                  "dispatches": 67,
+                  "elapsed_ms": 101.615
+                }
+              ],
+              "identity": {
+                "ready": true,
+                "vendor": 4098,
+                "device": 5567,
+                "luid_low": 52858,
+                "luid_high": 0,
+                "hip_luid_matched": true,
+                "node_mask": 1,
+                "hardware": true,
+                "threads": 32,
+                "iterations": 32768
+              },
+              "pid": 80836,
+              "idle": true
+            },
+            "preflight": {
+              "utc": "2026-10-18T21:59:43.813818+00:00",
+              "sample_seconds": 0.5021559000015259,
+              "snapshot_seconds": 0.6194602000177838,
+              "inference_processes": [
+                {
+                  "pid": 11908,
+                  "name": "python.exe",
+                  "active_cpu_cores": 0
+                },
+                {
+                  "pid": 12748,
+                  "name": "python.exe",
+                  "active_cpu_cores": 0
+                },
+                {
+                  "pid": 26776,
+                  "name": "python.exe",
+                  "active_cpu_cores": 0
+                },
+                {
+                  "pid": 64488,
+                  "name": "python.exe",
+                  "active_cpu_cores": 0
+                },
+                {
+                  "pid": 78992,
+                  "name": "python.exe",
+                  "active_cpu_cores": 0
+                },
+                {
+                  "pid": 79132,
+                  "name": "python.exe",
+                  "active_cpu_cores": 0
+                },
+                {
+                  "pid": 81128,
+                  "name": "python.exe",
+                  "active_cpu_cores": 0
+                },
+                {
+                  "pid": 81232,
+                  "name": "python.exe",
+                  "active_cpu_cores": 0.093
+                }
+              ],
+              "cpu_telemetry_known": true,
+              "gpu_telemetry_known": true,
+              "busy_gpu_engines": [
+                {
+                  "pid": 11024,
+                  "engine": "pid_11024_luid_0x00000000_0x0000CE7A_phys_0_eng_0_engtype_3D",
+                  "utilization_percent": 1.7680036541388395
+                }
+              ],
+              "gpu_details": {
+                "instances": 327,
+                "invalid_instances": 0
+              },
+              "gpu_error": null,
+              "npu_telemetry_known": true,
+              "npu_idle": true,
+              "idle_verified": false,
+              "blockers": [
+                "GPU engine activity observed"
+              ],
+              "scope": "Read-only preflight snapshot; no process is stopped",
+              "owned_pids": [
+                79132,
+                80836,
+                81024,
+                81232
+              ]
+            },
+            "worker_pid": 81024,
+            "generated_text": "959",
+            "finish_reason": "eos",
+            "tokens": [
+              236819,
+              236810,
+              236819,
+              106
+            ],
+            "accepted": 2,
+            "proposed": 2,
+            "model_loads": 1,
+            "npu_released": true,
+            "compiler_log_tail": "",
+            "contexts_created": 2,
+            "evictions": 0,
+            "npu_idle": true,
+            "rounds": [
+              {
+                "proposals": [
+                  236810,
+                  236819
+                ],
+                "accepted": 2,
+                "dispatches": [
+                  {
+                    "body": {
+                      "build": "C:\\Users\\<user>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-a4040f9c852a7e92\\build.json",
+                      "commands": 3952,
+                      "prepared": true,
+                      "host_phases_ms": {
+                        "build_lookup": 0.0,
+                        "packet_stack": 9.608900028979406
+                      },
+                      "dispatch_ms": 13.947100000223145,
+                      "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+                      "input_unchanged": true,
+                      "output_frames": 10,
+                      "output_bytes": 42240,
+                      "input_update_mode": "full",
+                      "input_write_bytes": 34651136,
+                      "input_total_bytes": 34651136,
+                      "input_sync_ranges": 1,
+                      "input_fully_verified": true,
+                      "transport_sources_sha256": {
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\persistent.py": "1c89cc860244a8b77475d6ed137d01aaa79678b87999dd517ce409e8d06839f1",
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\input_residency.py": "48b988a2e354be6efff94f1b608d09fe926f8cd70dee31df16ce594f9a4235ba"
+                      },
+                      "transfer_phases_ms": {
+                        "input_write_sync": 4.7805999929551035,
+                        "output_poison_sync": 0.09700001101009548,
+                        "output_sync_read": 0.03519997699186206,
+                        "input_sync_verify": 8.859800000209361
+                      },
+                      "persistent_transport": true,
+                      "image_cache_hit": false,
+                      "contexts_created": 1,
+                      "context_cache_hit": false,
+                      "exact_program_sharing": true,
+                      "context_cache_size": 1,
+                      "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d",
+                      "step_wall_ms": 164.58529999363236,
+                      "step_phases_ms": {
+                        "gpu_embedding": 0.6853000086266547,
+                        "body": 108.4658999752719,
+                        "head": 55.43390000821091
+                      }
+                    },
+                    "head": {
+                      "build": "C:\\Users\\<user>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-45784270ef7396da\\build.json",
+                      "commands": 258,
+                      "prepared": true,
+                      "host_phases_ms": {
+                        "build_lookup": 0.0,
+                        "packet_stack": 1.5582000196445733
+                      },
+                      "dispatch_ms": 1.1550000053830445,
+                      "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+                      "input_unchanged": true,
+                      "output_frames": 2,
+                      "output_bytes": 8448,
+                      "input_update_mode": "full",
+                      "input_write_bytes": 2262144,
+                      "input_total_bytes": 2262144,
+                      "input_sync_ranges": 1,
+                      "input_fully_verified": true,
+                      "transport_sources_sha256": {
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\persistent.py": "1c89cc860244a8b77475d6ed137d01aaa79678b87999dd517ce409e8d06839f1",
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\input_residency.py": "48b988a2e354be6efff94f1b608d09fe926f8cd70dee31df16ce594f9a4235ba"
+                      },
+                      "transfer_phases_ms": {
+                        "input_write_sync": 0.36780000664293766,
+                        "output_poison_sync": 0.02570002106949687,
+                        "output_sync_read": 0.014199991710484028,
+                        "input_sync_verify": 0.5360000068321824
+                      },
+                      "persistent_transport": true,
+                      "image_cache_hit": false,
+                      "contexts_created": 2,
+                      "context_cache_hit": false,
+                      "exact_program_sharing": true,
+                      "context_cache_size": 2,
+                      "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+                    }
+                  },
+                  {
+                    "body": {
+                      "build": "C:\\Users\\<user>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-a4040f9c852a7e92\\build.json",
+                      "commands": 3952,
+                      "prepared": true,
+                      "host_phases_ms": {
+                        "build_lookup": 0.0,
+                        "packet_stack": 9.705600008601323
+                      },
+                      "dispatch_ms": 14.548399980412796,
+                      "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+                      "input_unchanged": true,
+                      "output_frames": 10,
+                      "output_bytes": 42240,
+                      "input_update_mode": "partial",
+                      "input_write_bytes": 8192,
+                      "input_total_bytes": 34651136,
+                      "input_sync_ranges": 1,
+                      "input_fully_verified": true,
+                      "transport_sources_sha256": {
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\persistent.py": "1c89cc860244a8b77475d6ed137d01aaa79678b87999dd517ce409e8d06839f1",
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\input_residency.py": "48b988a2e354be6efff94f1b608d09fe926f8cd70dee31df16ce594f9a4235ba"
+                      },
+                      "transfer_phases_ms": {
+                        "input_write_sync": 3.1522999925073236,
+                        "output_poison_sync": 0.019700004486367106,
+                        "output_sync_read": 0.035999983083456755,
+                        "input_sync_verify": 10.574899992207065
+                      },
+                      "persistent_transport": true,
+                      "image_cache_hit": true,
+                      "contexts_created": 2,
+                      "context_cache_hit": true,
+                      "exact_program_sharing": true,
+                      "context_cache_size": 2,
+                      "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d",
+                      "step_wall_ms": 49.2511999909766,
+                      "step_phases_ms": {
+                        "gpu_embedding": 0.9080999880097806,
+                        "body": 42.06770000746474,
+                        "head": 6.275299994740635
+                      }
+                    },
+                    "head": {
+                      "build": "C:\\Users\\<user>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-45784270ef7396da\\build.json",
+                      "commands": 258,
+                      "prepared": true,
+                      "host_phases_ms": {
+                        "build_lookup": 0.0,
+                        "packet_stack": 1.8832999921869487
+                      },
+                      "dispatch_ms": 1.2993999989703298,
+                      "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+                      "input_unchanged": true,
+                      "output_frames": 2,
+                      "output_bytes": 8448,
+                      "input_update_mode": "partial",
+                      "input_write_bytes": 2252800,
+                      "input_total_bytes": 2262144,
+                      "input_sync_ranges": 2,
+                      "input_fully_verified": true,
+                      "transport_sources_sha256": {
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\persistent.py": "1c89cc860244a8b77475d6ed137d01aaa79678b87999dd517ce409e8d06839f1",
+                        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\input_residency.py": "48b988a2e354be6efff94f1b608d09fe926f8cd70dee31df16ce594f9a4235ba"
+                      },
+                      "transfer_phases_ms": {
+                        "input_write_sync": 0.6767000013496727,
+                        "output_poison_sync": 0.01610000617802143,
+                        "output_sync_read": 0.023200002033263445,
+                        "input_sync_verify": 0.7733999809715897
+                      },
+                      "persistent_transport": true,
+                      "image_cache_hit": true,
+                      "contexts_created": 2,
+                      "context_cache_hit": true,
+                      "exact_program_sharing": true,
+                      "context_cache_size": 2,
+                      "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "prompt_ids": [
+            2,
+            105,
+            9731,
+            107,
+            3048,
+            659,
+            496,
+            2263,
+            43355,
+            16326,
+            236761,
+            6890,
+            506,
+            2487,
+            6436,
+            1056,
+            4354,
+            236761,
+            13474,
+            16412,
+            659,
+            6658,
+            531,
+            506,
+            5540,
+            43355,
+            236761,
+            15428,
+            10149,
+            2129,
+            13269,
+            653,
+            5904,
+            2536,
+            236761,
+            17079,
+            2129,
+            13269,
+            618,
+            1262,
+            236761,
+            23097,
+            496,
+            63510,
+            1626,
+            3890,
+            236761,
+            46,
+            163688,
+            236787,
+            30718,
+            236782,
+            7777,
+            236787,
+            52,
+            99009,
+            18378,
+            40442,
+            236793,
+            7623,
+            496,
+            20632,
+            1354,
+            236761,
+            52,
+            236764,
+            19031,
+            29616,
+            15921,
+            29616,
+            25733,
+            29616,
+            7777,
+            236787,
+            52,
+            37091,
+            236764,
+            77673,
+            46241,
+            46186,
+            965,
+            532,
+            62334,
+            236761,
+            52,
+            236764,
+            2084,
+            236787,
+            52,
+            35410,
+            52,
+            5237,
+            15979,
+            24845,
+            52,
+            25733,
+            52,
+            1604,
+            2084,
+            236787,
+            52,
+            60688,
+            52,
+            1807,
+            47,
+            46,
+            163688,
+            236787,
+            1399,
+            236779,
+            1005,
+            236782,
+            7777,
+            236787,
+            52,
+            6190,
+            496,
+            236743,
+            236770,
+            236771,
+            236778,
+            236812,
+            236772,
+            18857,
+            3104,
+            529,
+            496,
+            92916,
+            236772,
+            236828,
+            43355,
+            2129,
+            236761,
+            52,
+            236764,
+            19031,
+            29616,
+            15921,
+            29616,
+            10617,
+            29616,
+            7777,
+            236787,
+            52,
+            14106,
+            9815,
+            236764,
+            3678,
+            5743,
+            236793,
+            1161,
+            2148,
+            236779,
+            10617,
+            573,
+            2264,
+            3104,
+            236761,
+            52,
+            236764,
+            2084,
+            236787,
+            52,
+            86752,
+            52,
+            1263,
+            2337,
+            29616,
+            7777,
+            236787,
+            52,
+            55751,
+            2129,
+            2479,
+            4888,
+            506,
+            43355,
+            236761,
+            52,
+            236764,
+            2084,
+            236787,
+            52,
+            35410,
+            52,
+            5237,
+            15979,
+            24845,
+            52,
+            2337,
+            52,
+            1604,
+            2084,
+            236787,
+            52,
+            60688,
+            52,
+            1807,
+            47,
+            46,
+            163688,
+            236787,
+            2234,
+            236779,
+            9207,
+            236782,
+            7777,
+            236787,
+            52,
+            1613,
+            872,
+            531,
+            236743,
+            236770,
+            236771,
+            236771,
+            16227,
+            4888,
+            496,
+            43355,
+            12229,
+            236761,
+            52,
+            236764,
+            19031,
+            29616,
+            15921,
+            29616,
+            2337,
+            29616,
+            7777,
+            236787,
+            52,
+            55751,
+            12229,
+            2479,
+            236793,
+            1161,
+            783,
+            573,
+            506,
+            43355,
+            5989,
+            236761,
+            52,
+            236764,
+            2084,
+            236787,
+            52,
+            35410,
+            52,
+            5237,
+            15979,
+            24845,
+            52,
+            2337,
+            52,
+            1604,
+            2084,
+            236787,
+            52,
+            60688,
+            52,
+            1807,
+            47,
+            106,
+            107,
+            105,
+            2364,
+            107,
+            6190,
+            8652,
+            236761,
+            7090,
+            607,
+            1676,
+            236779,
+            1005,
+            236764,
+            1299,
+            1161,
+            9279,
+            531,
+            24261,
+            506,
+            5498,
+            1527,
+            684,
+            506,
+            27215,
+            5415,
+            236761,
+            24181,
+            1186,
+            607,
+            506,
+            1354,
+            236761,
+            106,
+            107,
+            105,
+            4368,
+            107,
+            48,
+            6639,
+            236787,
+            1399,
+            236779,
+            1005,
+            236782,
+            2337,
+            236787,
+            52,
+            37767,
+            236761,
+            7090,
+            52,
+            236783,
+            49,
+            50,
+            6275,
+            236787,
+            1399,
+            236779,
+            1005,
+            236782,
+            2394,
+            236787,
+            52,
+            14937,
+            1005,
+            1083,
+            623,
+            818,
+            29283,
+            12539,
+            6097,
+            236743,
+            236770,
+            236800,
+            236832,
+            7365,
+            236761,
+            669,
+            27215,
+            5415,
+            563,
+            236743,
+            236832,
+            6810,
+            236750,
+            236785,
+            236749,
+            827,
+            623,
+            4874,
+            236779,
+            10617,
+            1083,
+            2303,
+            236764,
+            623,
+            6725,
+            236779,
+            71271,
+            1083,
+            236743,
+            236832,
+            236778,
+            236783,
+            52,
+            236783,
+            51,
+            48,
+            6639,
+            236787,
+            30718,
+            236782,
+            25733,
+            236787,
+            52,
+            236770,
+            236800,
+            236832,
+            808,
+            236743,
+            236832,
+            52,
+            236783,
+            49,
+            50,
+            6275,
+            236787,
+            30718,
+            236782,
+            2394,
+            236787,
+            52,
+            14937,
+            3709,
+            1083,
+            623,
+            236819,
+            236810,
+            236819,
+            25938,
+            52,
+            236783,
+            51
+          ],
+          "raw": "959<turn|>"
+        }
+      ],
+      "tool_calls": [
+        {
+          "name": "read_text",
+          "arguments": {
+            "path": "brief.txt"
+          },
+          "response": {
+            "text": "The calibration batch contains 137 samples. The retention factor is 7.\r\n",
+            "next_offset": null,
+            "total_characters": 72
+          }
+        },
+        {
+          "name": "calculate",
+          "arguments": {
+            "expression": "137 * 7"
+          },
+          "response": {
+            "result": "959"
+          }
+        }
+      ],
+      "admission_rejections": [],
+      "source_sha256": {
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\npu\\gemma4\\agent.py": "b811810a89e2f1b2fe15aee9d91a4fc40f5f886851efc59c805cdf3374a2f909",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\npu\\gemma4\\tooling.py": "e6d0e121f6448a6a2ef63fefe1d8380890b1bebbb0372218e9939702a7de9c7b",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\npu\\gemma4\\tokenizer.py": "d193beddc2f6e4de56bc900854db2b3904e0c1879a73c851b9241f002ba3c43d",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\tools\\gemma4_agent.py": "bec7c23d19be706fc592a5b9f7d07a5cf3057f9b488e0b391dc4f3081bf2e468",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\Ignition\\src\\ignition\\experimental\\agent.py": "9ec2d4e7eefa2218d738dab1a2295104ca58da042e2c7c77dc9f0f6b0c4cd5b6",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\Ignition\\src\\ignition\\experimental\\hybrid.py": "2e82d6c5f8be5c0bf20f2a7e64466985264cf629de601b6098c0582e658365f2"
+      },
+      "answer": "959"
+    }
+  },
+  "builds": {
+    "C:\\Users\\<user>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-45784270ef7396da\\build.json": {
+      "manifest_sha256": "830b7fbd8d10b8c9aed094ac78b982ade376fa3d0496901c516e9608502c3125",
+      "sources": {
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\bf16_product.hpp": "a1c951a7b18fbe3c1a9d17df005e229afa0006c694a04ab53df9748fa81cc3ab",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\dispatch.cc": "3da7967ae0bc203c70ed4049bffaff6aa1daeee954473f9f011e17e576042ffb",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\geglu.cc": "f7fcad5d303eafd49b0edac7a72f5e21e432926b4dff712197be7ed765fef3b9",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\gemv.cc": "66a1da00c319f565af9554ea516254588273f0396c3d2a1b29299a8e3039690f",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\gemv_precise.cc": "6600e21079a574c4d1d3b93f497d11d75656fc062cc123fb12013ece3436087a",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\norm_exact_probe.cc": "4edc1a066fe24ba2bed71b37f422deeb076dd82cce82dc4f41d8897635753176",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\norm_state_probe.cc": "8d08f70dc3de29d8d2330aee3d3f425a70fb15c002de92415077bd54b073535d",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\residual.cc": "2bc8f445e3f86e6384260daaff200d2b456aca4b30a9aed4c5a6e14b13f468d6",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\rmsnorm.cc": "9efc3bec80f7c25e88a48ce30f851bc437e05000e7d79014cc2997399b15463f",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\rmsnorm_exact.cc": "3b3a606641b7225ac80239bf5d7d8f09313f454b80dba1ce255f73fad04c49a5",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\rmsnorm_refined.cc": "765a0591c2010b13c0ef42b8066ae9ef029214e09ff54392ea42b60d717fbc05",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\rope.cc": "3a2636d45109255e6f3a08f879b937fe59c48ca5a97a9bb04d3cf8f02b7f5421",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\softmax.cc": "32ed139ad46f7c3ee8f3edd5716eafed3306386cb81be384ede30fdf00ff397a",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\state_dispatch.cc": "ba9ac42abead26f6a0a378c12495d47ceb1548ed0dab51ef670a26dee5f9a24f",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\state_dispatch_exact.cc": "b3ffe5754a3de37358772fd4dfb50e9e54c3c870d7f16ca400f379d79c140045",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\state_dispatch_small.cc": "949bdef280d362960e14848075d1a151ea4bd8c65cb1a8ded0e807d833469405",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\state_dispatch_vector.cc": "bd3a903c6b842ce2219fae8b5baee2f70558ba885f8afb3d19470d6c64ebfbb8",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\topk.cc": "1f680ca67d8c97a82bb41db53a6f2aad15802f16be287b9bfddbac31ca6e1868",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\state.py": "749c9ec2297bed349249d49cd5753f0b20df7e7470978ffb542e3bb970d2a7f8",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\stream.py": "22ae1c96fb9c158236f15b47f29bdb7a30faa777a47466db55b3b79f05030629",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\common.py": "e9ea9aefc2167093490bc2716ec2895f38cb13fc3852703ebd42211526c4854e",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\compact.py": "d6e55afd307caa2ec445dd9cb6a533dad77e197b4fdda2b9628e961e06b4afc4"
+      },
+      "contract": {
+        "scope": "Compile packet commands whose BF16 intermediate values stay on the NPU.\n\nHost code packs weights and metadata only. A static initialization map rejects\nreads of unwritten arena locations before compilation or device execution.\nThis is a research command stream, outside the ONNX graph compiler.\n",
+        "spec_sha256": "45784270ef7396da"
+      },
+      "function": "draft_state_transformer",
+      "packet_words": 2192,
+      "output_words": 1056,
+      "blocks": 258,
+      "state_words": 8256,
+      "code_bytes": 13360,
+      "stack_frames": [
+        0,
+        1216,
+        352,
+        160,
+        32,
+        896,
+        0,
+        256,
+        32,
+        0,
+        128,
+        32,
+        64,
+        0,
+        0
+      ],
+      "sram_spans": [
+        [
+          458752,
+          462848,
+          "_sp_start_value_DM_stack"
+        ],
+        [
+          462848,
+          495872,
+          "carry_state"
+        ],
+        [
+          495872,
+          504640,
+          "inF_cons_buff_0"
+        ],
+        [
+          504640,
+          513408,
+          "inF_cons_buff_1"
+        ],
+        [
+          513408,
+          517632,
+          "outF_buff_0"
+        ],
+        [
+          517632,
+          521856,
+          "result_scratch"
+        ]
+      ],
+      "artifacts": {
+        "kernel.o": "b6669a697b87c1507175c83315397a0a07612fe06b376243c7408429e8eb7034",
+        "harness.mlir": "b470aab74efa4db8872e1949e6c97bf450389daee5d5959164f55d4cac081b74",
+        "insts.bin": "8ea5a6d47ac8aa9aa25435a2014bf73a68112a472a7bc7b9b30b6679bf7c1a92",
+        "final.xclbin": "903a70746e2fd39b2a92c7a09e3660c8083ae47b22c397e1516c5558b41b9e17"
+      },
+      "program_artifacts": {
+        "prj/main.pdi": "ff2b27ace873855c24ee44ef29b1853c519242a4ab342fc60f77374f553fa5e7",
+        "prj/kernels_main.json": "464fc9fe6d66ee78736b4ea3248a0910cba83adaf4cefc6e67ee49c3b0edab86",
+        "prj/memTopology_main.json": "638d0d287b2e7427ce3dc86a4926216e8370d3e7783256498a67768b89d2bbc6"
+      },
+      "compiler_sha256": "b7a35e8cfe2dc2c6f489e5c9aaaeefb26bacb66cb54e29332b70cf787340aec3",
+      "optimization": "-Oz",
+      "output_packets": [
+        257
+      ],
+      "output_blocks": 2,
+      "input_depth": 2
+    },
+    "C:\\Users\\<user>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-a4040f9c852a7e92\\build.json": {
+      "manifest_sha256": "6d338edf3cfa9954f815619e5f07e44051024a534d322dcbe4d9ffd282d3643d",
+      "sources": {
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\bf16_product.hpp": "a1c951a7b18fbe3c1a9d17df005e229afa0006c694a04ab53df9748fa81cc3ab",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\dispatch.cc": "3da7967ae0bc203c70ed4049bffaff6aa1daeee954473f9f011e17e576042ffb",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\geglu.cc": "f7fcad5d303eafd49b0edac7a72f5e21e432926b4dff712197be7ed765fef3b9",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\gemv.cc": "66a1da00c319f565af9554ea516254588273f0396c3d2a1b29299a8e3039690f",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\gemv_precise.cc": "6600e21079a574c4d1d3b93f497d11d75656fc062cc123fb12013ece3436087a",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\norm_exact_probe.cc": "4edc1a066fe24ba2bed71b37f422deeb076dd82cce82dc4f41d8897635753176",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\norm_state_probe.cc": "8d08f70dc3de29d8d2330aee3d3f425a70fb15c002de92415077bd54b073535d",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\residual.cc": "2bc8f445e3f86e6384260daaff200d2b456aca4b30a9aed4c5a6e14b13f468d6",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\rmsnorm.cc": "9efc3bec80f7c25e88a48ce30f851bc437e05000e7d79014cc2997399b15463f",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\rmsnorm_exact.cc": "3b3a606641b7225ac80239bf5d7d8f09313f454b80dba1ce255f73fad04c49a5",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\rmsnorm_refined.cc": "765a0591c2010b13c0ef42b8066ae9ef029214e09ff54392ea42b60d717fbc05",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\rope.cc": "3a2636d45109255e6f3a08f879b937fe59c48ca5a97a9bb04d3cf8f02b7f5421",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\softmax.cc": "32ed139ad46f7c3ee8f3edd5716eafed3306386cb81be384ede30fdf00ff397a",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\state_dispatch.cc": "ba9ac42abead26f6a0a378c12495d47ceb1548ed0dab51ef670a26dee5f9a24f",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\state_dispatch_exact.cc": "b3ffe5754a3de37358772fd4dfb50e9e54c3c870d7f16ca400f379d79c140045",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\state_dispatch_small.cc": "949bdef280d362960e14848075d1a151ea4bd8c65cb1a8ded0e807d833469405",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\state_dispatch_vector.cc": "bd3a903c6b842ce2219fae8b5baee2f70558ba885f8afb3d19470d6c64ebfbb8",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\topk.cc": "1f680ca67d8c97a82bb41db53a6f2aad15802f16be287b9bfddbac31ca6e1868",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\state.py": "749c9ec2297bed349249d49cd5753f0b20df7e7470978ffb542e3bb970d2a7f8",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\stream.py": "22ae1c96fb9c158236f15b47f29bdb7a30faa777a47466db55b3b79f05030629",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\common.py": "e9ea9aefc2167093490bc2716ec2895f38cb13fc3852703ebd42211526c4854e",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\compact.py": "d6e55afd307caa2ec445dd9cb6a533dad77e197b4fdda2b9628e961e06b4afc4"
+      },
+      "contract": {
+        "scope": "Compile packet commands whose BF16 intermediate values stay on the NPU.\n\nHost code packs weights and metadata only. A static initialization map rejects\nreads of unwritten arena locations before compilation or device execution.\nThis is a research command stream, outside the ONNX graph compiler.\n",
+        "spec_sha256": "a4040f9c852a7e92"
+      },
+      "function": "draft_state_transformer",
+      "packet_words": 2192,
+      "output_words": 1056,
+      "blocks": 3952,
+      "state_words": 8256,
+      "code_bytes": 13360,
+      "stack_frames": [
+        0,
+        1216,
+        352,
+        160,
+        32,
+        896,
+        0,
+        256,
+        32,
+        0,
+        128,
+        32,
+        64,
+        0,
+        0
+      ],
+      "sram_spans": [
+        [
+          458752,
+          462848,
+          "_sp_start_value_DM_stack"
+        ],
+        [
+          462848,
+          495872,
+          "carry_state"
+        ],
+        [
+          495872,
+          504640,
+          "inF_cons_buff_0"
+        ],
+        [
+          504640,
+          513408,
+          "inF_cons_buff_1"
+        ],
+        [
+          513408,
+          517632,
+          "outF_buff_0"
+        ],
+        [
+          517632,
+          521856,
+          "result_scratch"
+        ]
+      ],
+      "artifacts": {
+        "kernel.o": "b6669a697b87c1507175c83315397a0a07612fe06b376243c7408429e8eb7034",
+        "harness.mlir": "15c436b0cde5a20c97c45dac0f8f49f8c4585e90860df15642a4b3a50d2c50e1",
+        "insts.bin": "3b74911602ad45cc62fead968eb23f823adeb29e7cd2c9bed9c23f0aab60b698",
+        "final.xclbin": "5857f02e2653dc971de9a953183b7d8fb95f4f4f2df04bb4e62b136900f04bb1"
+      },
+      "program_artifacts": {
+        "prj/main.pdi": "a5d23a97192adde07f3f45d11baeb392d580aaa0dd6a5bd7be005f0ef400a9dd",
+        "prj/kernels_main.json": "464fc9fe6d66ee78736b4ea3248a0910cba83adaf4cefc6e67ee49c3b0edab86",
+        "prj/memTopology_main.json": "638d0d287b2e7427ce3dc86a4926216e8370d3e7783256498a67768b89d2bbc6"
+      },
+      "compiler_sha256": "b7a35e8cfe2dc2c6f489e5c9aaaeefb26bacb66cb54e29332b70cf787340aec3",
+      "optimization": "-Oz",
+      "output_packets": [
+        193,
+        980,
+        1766,
+        2552,
+        3722,
+        3724,
+        3821,
+        3950,
+        3951
+      ],
+      "output_blocks": 10,
+      "input_depth": 2
+    }
+  }
+}

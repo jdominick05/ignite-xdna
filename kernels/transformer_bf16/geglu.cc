@@ -17,10 +17,14 @@ static inline void store_bf16(bfloat16 *p, aie::vector<float,16> x) {
         aie::bit_and(aie::downshift(bits,16),aie::broadcast<uint32,16>(1))));
     aie::store_v(p,aie::filter_even(aie::downshift(rounded,16).cast_to<uint16>()).cast_to<bfloat16>());
 }
+#ifdef BF16_EXTERNAL_GELU_TABLE
+extern "C" void draft_geglu_resident(const int32_t *packet, int32_t *output,const uint16_t *table) {
+#else
 extern "C" void draft_geglu(const int32_t *packet, int32_t *output) {
+    const auto *table = reinterpret_cast<const uint16_t *>(packet + 2064);
+#endif
     const auto *gate = reinterpret_cast<const uint16_t *>(packet + 16);
     const auto *up = reinterpret_cast<const bfloat16 *>(packet + 1040);
-    const auto *table = reinterpret_cast<const uint16_t *>(packet + 2064);
     auto *out = reinterpret_cast<bfloat16 *>(output + 16);
     for (int i = 0; i < 1056; i += 16)
         aie::store_v(output+i,aie::broadcast<int32,16>(packet[0]));

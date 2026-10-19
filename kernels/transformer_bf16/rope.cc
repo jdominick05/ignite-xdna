@@ -4,10 +4,13 @@
 #include <stdint.h>
 using B = aie::vector<bfloat16,16>;
 using F = aie::vector<float,16>;
-static inline F widen(B x) {
+#ifndef BF16_HELPER_INLINE
+#define BF16_HELPER_INLINE inline
+#endif
+static BF16_HELPER_INLINE F widen(B x) {
     return aie::upshift(x.cast_to<uint16>().unpack(),16).cast_to<float>();
 }
-static inline B rounded(F x) {
+static BF16_HELPER_INLINE B rounded(F x) {
     auto u=x.cast_to<uint32>();
     auto r=aie::add(u,aie::add(aie::broadcast<uint32,16>(0x7fff),
         aie::bit_and(aie::downshift(u,16),aie::broadcast<uint32,16>(1))));

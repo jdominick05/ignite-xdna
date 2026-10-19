@@ -1,0 +1,316 @@
+RESEARCH_PLATFORM {"machine": "Desktop 2", "cpu": "AMD Ryzen 7 8700G w/ Radeon 780M Graphics", "os": "Windows-11-10.0.26200-SP0", "ram_bytes": 33381138432, "source_sha256": {"tools/research_process.py": "ffeb1857f190b482eed101b5f5a928f455de26bfa61d23f78a2eacec08e2663e", "tools/quant_calib_alphabet.py": "2dc0b2878c564853f340880209a425dfcf63b8536b2b8e9fd32344daade58d37", "tools/xint8_arithmetic_probe.py": "6aa3df08b9870c3c2264b868459d7ffbac3070dddc1349d7c6f3f480075f7041", "scripts/research-lowlevel.sh": "3455ad7933697936487712665505c216891865c6deada647302785f6e37020bd", "scripts/research-iron.sh": "4c863a262646ddab39b5005006ba8e03809895e6386c6310e2fd9d0a9e9609ee", "kernels/memory_placement/probe.py": "e8d990169ad6091fa1b53852e9f61eff495b5def72d35165a5c5cf1759e38898", "kernels/memory_placement/memory_kernels.cc": "182e7af7071a1e851afb4a7ca266069c489aea1fbaaa85eca129708daeba5ba6", "scripts/research-matrix.sh": "739254171629deae822b0ad7dabc875aee19ace56dde77d3e8aab61663f97516", "kernels/memory_placement/gemm.py": "17c905ad66110d3346bbf0db898dfc6b780df59fae1dfb0c1747057ce1e5844e", "kernels/memory_placement/gemm_placement.cc": "f21acf7250b12914ea30cc1f77613239dfa18421a85a1b9a5199017dd916278a", "tools/research_summary.py": "0c00dcceef07053d06731b41a1f1ed58d3ba4ea09f82497de354ce9cef17da20", "tools/research_toolchain.py": "f0a126a24ae213acfaa43460cfd9def0c86d9cb70cfee0228aa271688467b314"}, "commit": "f3fa8210d4ad5cb854f1f2cc53ef595303edeefc", "command": ["C:/Users/<user>/miniforge3/envs/mlir-aie-iron/python.exe", "tools/qualify_gemma4_block_distribution.py", "--artifacts", "C:/Users/<user>/gemma4-assistant", "--runtime", "C:/Users/<user>/tools/llamacpp-b1343-rocm", "--blocks", "C:/Users/<user>/gemma4-assistant/bin/ggml_gpu_target_blocks-flex-20261018.exe", "--serving-export", "C:/Users/<user>/gemma4-assistant/bin/ggml_gpu_target_logits-v2-20261018.exe", "--block-export", "C:/Users/<user>/gemma4-assistant/bin/ggml_gpu_target_blocks_logits-v2-20261018.exe", "--prereg", "C:/Users/<user>/gemma4-assistant/quality/block-distribution-20261018-v2.prereg.json", "--out", "C:/Users/<user>/gemma4-assistant/quality/block-distribution-20261018-v2.json"], "seconds_limit": 600.0, "rss_gib_limit": 8.0, "checks_only": true, "free_ram_bytes": 22682427392}
+PRE_NPU_CONTEXT_WITNESS "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [76996, 83624], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 4.547, "tree_rss_bytes": 263872512, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [67704, 76996, 80436, 80644, 83624], "foreign_pids": []}
+DISTRIBUTION {'arm': 'serving_base', 'case': 'window0-prefix256', 'metrics': None}
+HOST_TIMELINE {"elapsed_seconds": 9.125, "tree_rss_bytes": 6496976896, "foreign_peers": []}
+DISTRIBUTION {'arm': 'serving_base', 'case': 'window0-prefix511', 'metrics': None}
+DISTRIBUTION {'arm': 'serving_base', 'case': 'window0-prefix512', 'metrics': None}
+DISTRIBUTION {'arm': 'serving_base', 'case': 'window0-prefix513', 'metrics': None}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [67704, 76996, 78884, 80436, 80644, 81124, 83624], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 13.578, "tree_rss_bytes": 6500478976, "foreign_peers": []}
+DISTRIBUTION {'arm': 'serving_base', 'case': 'window0-prefix768', 'metrics': None}
+DISTRIBUTION {'arm': 'serving_base', 'case': 'window0-prefix1023', 'metrics': None}
+DISTRIBUTION {'arm': 'serving_base', 'case': 'window1-prefix256', 'metrics': None}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [67704, 76996, 78032, 78884, 80436, 80644, 81124, 82808, 83624], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 18.156, "tree_rss_bytes": 6523908096, "foreign_peers": []}
+DISTRIBUTION {'arm': 'serving_base', 'case': 'window1-prefix511', 'metrics': None}
+DISTRIBUTION {'arm': 'serving_base', 'case': 'window1-prefix512', 'metrics': None}
+DISTRIBUTION {'arm': 'serving_base', 'case': 'window1-prefix513', 'metrics': None}
+HOST_TIMELINE {"elapsed_seconds": 22.578, "tree_rss_bytes": 6527963136, "foreign_peers": []}
+DISTRIBUTION {'arm': 'serving_base', 'case': 'window1-prefix768', 'metrics': None}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [67704, 76996, 78032, 78884, 80436, 80484, 80644, 81124, 82808, 83624], "foreign_pids": []}
+DISTRIBUTION {'arm': 'serving_base', 'case': 'window1-prefix1023', 'metrics': None}
+HOST_TIMELINE {"elapsed_seconds": 27.266, "tree_rss_bytes": 6533861376, "foreign_peers": []}
+DISTRIBUTION {'arm': 'serving_base', 'case': 'window2-prefix256', 'metrics': None}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [67704, 72836, 76996, 78032, 78884, 80436, 80484, 80644, 81124, 82808, 83624], "foreign_pids": []}
+DISTRIBUTION {'arm': 'serving_base', 'case': 'window2-prefix511', 'metrics': None}
+DISTRIBUTION {'arm': 'serving_base', 'case': 'window2-prefix512', 'metrics': None}
+HOST_TIMELINE {"elapsed_seconds": 32.062, "tree_rss_bytes": 6527406080, "foreign_peers": []}
+DISTRIBUTION {'arm': 'serving_base', 'case': 'window2-prefix513', 'metrics': None}
+DISTRIBUTION {'arm': 'serving_base', 'case': 'window2-prefix768', 'metrics': None}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [67704, 69884, 72836, 76996, 78032, 78884, 80436, 80484, 80644, 81124, 82808, 83624], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 36.422, "tree_rss_bytes": 6530535424, "foreign_peers": []}
+DISTRIBUTION {'arm': 'serving_base', 'case': 'window2-prefix1023', 'metrics': None}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [67704, 69884, 72836, 76996, 78032, 78252, 78884, 80436, 80484, 80644, 81124, 82808, 83624, 83724], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 40.906, "tree_rss_bytes": 6535405568, "foreign_peers": []}
+DISTRIBUTION {'arm': 'serving_base', 'case': 'window3-prefix256', 'metrics': None}
+DISTRIBUTION {'arm': 'serving_base', 'case': 'window3-prefix511', 'metrics': None}
+HOST_TIMELINE {"elapsed_seconds": 45.312, "tree_rss_bytes": 6529097728, "foreign_peers": []}
+DISTRIBUTION {'arm': 'serving_base', 'case': 'window3-prefix512', 'metrics': None}
+DISTRIBUTION {'arm': 'serving_base', 'case': 'window3-prefix513', 'metrics': None}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [67704, 69884, 70216, 72836, 76996, 78032, 78252, 78884, 80436, 80484, 80644, 81124, 82040, 82808, 83624, 83724], "foreign_pids": []}
+DISTRIBUTION {'arm': 'serving_base', 'case': 'window3-prefix768', 'metrics': None}
+HOST_TIMELINE {"elapsed_seconds": 50.437, "tree_rss_bytes": 6531588096, "foreign_peers": []}
+DISTRIBUTION {'arm': 'serving_base', 'case': 'window3-prefix1023', 'metrics': None}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [67704, 69884, 70216, 72836, 76996, 78032, 78252, 78884, 80436, 80484, 80644, 81124, 82040, 82808, 83624, 83668, 83724], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 54.875, "tree_rss_bytes": 255115264, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [67704, 69884, 69932, 70216, 72836, 76996, 78032, 78252, 78884, 80436, 80484, 80644, 81124, 81440, 82040, 82444, 82808, 83624, 83668, 83724], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 59.172, "tree_rss_bytes": 6497452032, "foreign_peers": []}
+DISTRIBUTION {'arm': 'serving_export', 'case': 'window0-prefix256', 'metrics': None}
+DISTRIBUTION {'arm': 'serving_export', 'case': 'window0-prefix511', 'metrics': None}
+DISTRIBUTION {'arm': 'serving_export', 'case': 'window0-prefix512', 'metrics': None}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [36192, 67704, 69884, 69932, 70216, 72836, 76996, 78032, 78252, 78884, 79540, 80436, 80484, 80644, 81124, 81440, 82040, 82444, 82808, 83624, 83668, 83724], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 63.719, "tree_rss_bytes": 6500614144, "foreign_peers": []}
+DISTRIBUTION {'arm': 'serving_export', 'case': 'window0-prefix513', 'metrics': None}
+DISTRIBUTION {'arm': 'serving_export', 'case': 'window0-prefix768', 'metrics': None}
+DISTRIBUTION {'arm': 'serving_export', 'case': 'window0-prefix1023', 'metrics': None}
+HOST_TIMELINE {"elapsed_seconds": 68.281, "tree_rss_bytes": 6533885952, "foreign_peers": []}
+DISTRIBUTION {'arm': 'serving_export', 'case': 'window1-prefix256', 'metrics': None}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [36192, 67704, 69884, 69932, 70216, 72836, 76996, 78032, 78252, 78884, 79540, 80436, 80484, 80644, 80832, 81124, 81440, 82040, 82444, 82808, 83624, 83668, 83724], "foreign_pids": []}
+DISTRIBUTION {'arm': 'serving_export', 'case': 'window1-prefix511', 'metrics': None}
+DISTRIBUTION {'arm': 'serving_export', 'case': 'window1-prefix512', 'metrics': None}
+HOST_TIMELINE {"elapsed_seconds": 72.578, "tree_rss_bytes": 6538715136, "foreign_peers": []}
+DISTRIBUTION {'arm': 'serving_export', 'case': 'window1-prefix513', 'metrics': None}
+DISTRIBUTION {'arm': 'serving_export', 'case': 'window1-prefix768', 'metrics': None}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [36192, 67704, 69884, 69932, 70216, 72836, 76996, 78032, 78252, 78884, 79540, 80436, 80484, 80644, 80832, 81124, 81440, 82040, 82444, 82808, 82816, 83624, 83668, 83724], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 77.0, "tree_rss_bytes": 6533398528, "foreign_peers": []}
+DISTRIBUTION {'arm': 'serving_export', 'case': 'window1-prefix1023', 'metrics': None}
+DISTRIBUTION {'arm': 'serving_export', 'case': 'window2-prefix256', 'metrics': None}
+DISTRIBUTION {'arm': 'serving_export', 'case': 'window2-prefix511', 'metrics': None}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [36192, 40128, 67704, 69884, 69932, 70216, 72836, 76996, 78032, 78252, 78884, 79008, 79540, 80436, 80484, 80644, 80832, 81124, 81440, 82040, 82444, 82808, 82816, 83624, 83668, 83724], "foreign_pids": []}
+DISTRIBUTION {'arm': 'serving_export', 'case': 'window2-prefix512', 'metrics': None}
+HOST_TIMELINE {"elapsed_seconds": 81.391, "tree_rss_bytes": 6527709184, "foreign_peers": []}
+DISTRIBUTION {'arm': 'serving_export', 'case': 'window2-prefix513', 'metrics': None}
+DISTRIBUTION {'arm': 'serving_export', 'case': 'window2-prefix768', 'metrics': None}
+HOST_TIMELINE {"elapsed_seconds": 85.781, "tree_rss_bytes": 6534488064, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [36192, 40128, 67704, 69884, 69932, 70216, 72836, 76996, 78032, 78252, 78884, 79008, 79540, 80384, 80436, 80484, 80644, 80832, 81124, 81440, 82040, 82444, 82808, 82816, 83624, 83668, 83724], "foreign_pids": []}
+DISTRIBUTION {'arm': 'serving_export', 'case': 'window2-prefix1023', 'metrics': None}
+DISTRIBUTION {'arm': 'serving_export', 'case': 'window3-prefix256', 'metrics': None}
+DISTRIBUTION {'arm': 'serving_export', 'case': 'window3-prefix511', 'metrics': None}
+HOST_TIMELINE {"elapsed_seconds": 90.281, "tree_rss_bytes": 6527913984, "foreign_peers": []}
+DISTRIBUTION {'arm': 'serving_export', 'case': 'window3-prefix512', 'metrics': None}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [36192, 40128, 67704, 69884, 69932, 70216, 72836, 76996, 78032, 78252, 78884, 79008, 79540, 80384, 80436, 80484, 80644, 80832, 81124, 81440, 82040, 82444, 82808, 82816, 83212, 83624, 83668, 83724], "foreign_pids": []}
+DISTRIBUTION {'arm': 'serving_export', 'case': 'window3-prefix513', 'metrics': None}
+HOST_TIMELINE {"elapsed_seconds": 94.797, "tree_rss_bytes": 6528684032, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [36192, 40128, 67704, 69884, 69932, 70216, 72836, 76996, 78032, 78252, 78884, 79008, 79540, 80384, 80436, 80484, 80644, 80832, 81124, 81440, 82040, 82444, 82808, 82816, 83212, 83624, 83668, 83724], "foreign_pids": []}
+DISTRIBUTION {'arm': 'serving_export', 'case': 'window3-prefix768', 'metrics': None}
+HOST_TIMELINE {"elapsed_seconds": 99.844, "tree_rss_bytes": 6534803456, "foreign_peers": []}
+DISTRIBUTION {'arm': 'serving_export', 'case': 'window3-prefix1023', 'metrics': None}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [36192, 40128, 67704, 69884, 69932, 70216, 72836, 76996, 77184, 78032, 78252, 78884, 79008, 79540, 80384, 80436, 80484, 80644, 80832, 81124, 81440, 82040, 82444, 82808, 82816, 83212, 83272, 83624, 83668, 83724], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 104.672, "tree_rss_bytes": 6436065280, "foreign_peers": []}
+DISTRIBUTION {'arm': 'blocks128_base', 'case': 'window0-prefix256', 'metrics': None}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [36192, 40128, 67704, 69884, 69932, 70216, 72836, 76996, 77184, 78032, 78252, 78884, 79008, 79540, 80384, 80436, 80484, 80644, 80832, 81124, 81440, 82040, 82444, 82808, 82816, 83212, 83272, 83624, 83668, 83724], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 109.484, "tree_rss_bytes": 6437449728, "foreign_peers": []}
+DISTRIBUTION {'arm': 'blocks128_base', 'case': 'window0-prefix511', 'metrics': None}
+DISTRIBUTION {'arm': 'blocks128_base', 'case': 'window0-prefix512', 'metrics': None}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [7240, 36192, 40128, 67704, 69884, 69932, 70216, 72836, 76996, 77184, 78032, 78252, 78884, 79008, 79540, 80384, 80436, 80484, 80644, 80832, 81124, 81440, 82040, 82444, 82808, 82816, 83212, 83272, 83624, 83668, 83724], "foreign_pids": []}
+DISTRIBUTION {'arm': 'blocks128_base', 'case': 'window0-prefix513', 'metrics': None}
+HOST_TIMELINE {"elapsed_seconds": 113.906, "tree_rss_bytes": 6448467968, "foreign_peers": []}
+DISTRIBUTION {'arm': 'blocks128_base', 'case': 'window0-prefix768', 'metrics': None}
+DISTRIBUTION {'arm': 'blocks128_base', 'case': 'window0-prefix1023', 'metrics': None}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [7240, 36192, 40128, 67704, 69884, 69932, 70216, 72836, 76996, 77184, 78032, 78252, 78884, 79008, 79540, 80384, 80436, 80484, 80644, 80832, 81124, 81440, 82040, 82444, 82808, 82816, 83212, 83236, 83272, 83624, 83668, 83724], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 118.281, "tree_rss_bytes": 6449659904, "foreign_peers": []}
+DISTRIBUTION {'arm': 'blocks128_base', 'case': 'window1-prefix256', 'metrics': None}
+DISTRIBUTION {'arm': 'blocks128_base', 'case': 'window1-prefix511', 'metrics': None}
+DISTRIBUTION {'arm': 'blocks128_base', 'case': 'window1-prefix512', 'metrics': None}
+HOST_TIMELINE {"elapsed_seconds": 122.594, "tree_rss_bytes": 6445867008, "foreign_peers": []}
+DISTRIBUTION {'arm': 'blocks128_base', 'case': 'window1-prefix513', 'metrics': None}
+DISTRIBUTION {'arm': 'blocks128_base', 'case': 'window1-prefix768', 'metrics': None}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [7240, 27576, 36192, 40128, 67704, 69884, 69932, 70216, 72836, 76996, 77184, 78032, 78252, 78884, 79008, 79540, 80384, 80436, 80484, 80644, 80832, 81124, 81440, 82040, 82444, 82808, 82816, 82912, 83212, 83236, 83272, 83624, 83668, 83724], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 127.0, "tree_rss_bytes": 6447054848, "foreign_peers": []}
+DISTRIBUTION {'arm': 'blocks128_base', 'case': 'window1-prefix1023', 'metrics': None}
+DISTRIBUTION {'arm': 'blocks128_base', 'case': 'window2-prefix256', 'metrics': None}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [7240, 27576, 36192, 40128, 67704, 69884, 69932, 70216, 72836, 76160, 76996, 77184, 78032, 78252, 78884, 79008, 79480, 79540, 80384, 80436, 80484, 80644, 80832, 81124, 81440, 82040, 82444, 82808, 82816, 82912, 83212, 83236, 83272, 83624, 83668, 83724], "foreign_pids": []}
+DISTRIBUTION {'arm': 'blocks128_base', 'case': 'window2-prefix511', 'metrics': None}
+HOST_TIMELINE {"elapsed_seconds": 131.266, "tree_rss_bytes": 6461050880, "foreign_peers": []}
+DISTRIBUTION {'arm': 'blocks128_base', 'case': 'window2-prefix512', 'metrics': None}
+DISTRIBUTION {'arm': 'blocks128_base', 'case': 'window2-prefix513', 'metrics': None}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [7240, 27576, 36192, 40128, 67704, 69884, 69932, 70216, 72836, 76160, 76996, 77184, 78032, 78252, 78828, 78884, 79008, 79480, 79540, 80384, 80436, 80484, 80644, 80832, 81124, 81440, 82040, 82444, 82808, 82816, 82912, 82992, 83212, 83236, 83272, 83624, 83668, 83724], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 135.562, "tree_rss_bytes": 6449500160, "foreign_peers": []}
+DISTRIBUTION {'arm': 'blocks128_base', 'case': 'window2-prefix768', 'metrics': None}
+DISTRIBUTION {'arm': 'blocks128_base', 'case': 'window2-prefix1023', 'metrics': None}
+HOST_TIMELINE {"elapsed_seconds": 140.094, "tree_rss_bytes": 6452006912, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [7240, 27576, 36192, 40128, 67704, 69884, 69932, 70216, 72836, 76160, 76996, 77184, 78032, 78252, 78828, 78884, 79008, 79480, 79540, 80384, 80436, 80484, 80644, 80832, 81124, 81440, 82040, 82444, 82808, 82816, 82912, 82992, 83212, 83236, 83272, 83392, 83624, 83668, 83724], "foreign_pids": []}
+DISTRIBUTION {'arm': 'blocks128_base', 'case': 'window3-prefix256', 'metrics': None}
+DISTRIBUTION {'arm': 'blocks128_base', 'case': 'window3-prefix511', 'metrics': None}
+DISTRIBUTION {'arm': 'blocks128_base', 'case': 'window3-prefix512', 'metrics': None}
+HOST_TIMELINE {"elapsed_seconds": 144.375, "tree_rss_bytes": 6447538176, "foreign_peers": []}
+DISTRIBUTION {'arm': 'blocks128_base', 'case': 'window3-prefix513', 'metrics': None}
+DISTRIBUTION {'arm': 'blocks128_base', 'case': 'window3-prefix768', 'metrics': None}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [7240, 27576, 36192, 40128, 67704, 69884, 69932, 70216, 72836, 76160, 76996, 77184, 77912, 78032, 78252, 78828, 78884, 79008, 79480, 79540, 80384, 80436, 80484, 80644, 80832, 81124, 81440, 82040, 82444, 82808, 82816, 82912, 82992, 83212, 83236, 83272, 83392, 83624, 83668, 83724], "foreign_pids": []}
+DISTRIBUTION {'arm': 'blocks128_base', 'case': 'window3-prefix1023', 'metrics': None}
+HOST_TIMELINE {"elapsed_seconds": 148.734, "tree_rss_bytes": 53301248, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [7240, 25860, 27576, 36192, 40128, 64836, 67704, 69884, 69932, 70216, 72836, 76160, 76996, 77184, 77912, 78032, 78252, 78828, 78884, 79008, 79480, 79540, 80384, 80436, 80484, 80644, 80832, 81124, 81440, 82040, 82444, 82808, 82816, 82912, 82992, 83212, 83236, 83272, 83392, 83624, 83668, 83724], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 153.578, "tree_rss_bytes": 6441340928, "foreign_peers": []}
+DISTRIBUTION {'arm': 'blocks128_export', 'case': 'window0-prefix256', 'metrics': {'kl': 3.8324535838788295e-07, 'delta_nll': -2.422339234134029e-06, 'control_nll': 1.1829425968431021e-05, 'actual_nll': 9.407086734296992e-06, 'control_top1': 107, 'actual_top1': 107, 'top1_equal': True, 'max_logit_abs': 1.3913202285766602}}
+DISTRIBUTION {'arm': 'blocks128_export', 'case': 'window0-prefix511', 'metrics': {'kl': 0.00883770797052638, 'delta_nll': 0.04223199945716975, 'control_nll': 0.10434660943497763, 'actual_nll': 0.14657860889214738, 'control_top1': 6458, 'actual_top1': 6458, 'top1_equal': True, 'max_logit_abs': 2.788878917694092}}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [7240, 25860, 27576, 36192, 40128, 64836, 67704, 69884, 69932, 70216, 72836, 75480, 76160, 76996, 77184, 77912, 78032, 78252, 78828, 78884, 79008, 79480, 79540, 80384, 80436, 80484, 80644, 80832, 81124, 81440, 82040, 82444, 82808, 82816, 82912, 82992, 83212, 83236, 83272, 83392, 83624, 83668, 83724], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 158.969, "tree_rss_bytes": 6447312896, "foreign_peers": []}
+DISTRIBUTION {'arm': 'blocks128_export', 'case': 'window0-prefix512', 'metrics': {'kl': 0.015685027321051967, 'delta_nll': -0.7437076145562109, 'control_nll': 9.213710734906039, 'actual_nll': 8.470003120349828, 'control_top1': 108, 'actual_top1': 108, 'top1_equal': True, 'max_logit_abs': 1.6425259113311768}}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [7240, 25860, 27576, 36192, 40128, 64836, 67704, 69884, 69932, 70216, 72836, 75480, 76160, 76996, 77184, 77912, 78032, 78136, 78252, 78828, 78884, 79008, 79480, 79540, 80384, 80436, 80484, 80644, 80832, 81124, 81440, 82040, 82444, 82808, 82816, 82860, 82912, 82992, 83212, 83236, 83272, 83392, 83624, 83668, 83724], "foreign_pids": []}
+DISTRIBUTION {'arm': 'blocks128_export', 'case': 'window0-prefix513', 'metrics': {'kl': 0.03986854968178093, 'delta_nll': 0.02367888973311061, 'control_nll': 8.722731493044373, 'actual_nll': 8.746410382777484, 'control_top1': 15308, 'actual_top1': 15308, 'top1_equal': True, 'max_logit_abs': 2.9179471731185913}}
+HOST_TIMELINE {"elapsed_seconds": 163.187, "tree_rss_bytes": 6449684480, "foreign_peers": []}
+DISTRIBUTION {'arm': 'blocks128_export', 'case': 'window0-prefix768', 'metrics': {'kl': 0.030268608195469802, 'delta_nll': 0.2715570273719772, 'control_nll': 7.295230952718789, 'actual_nll': 7.5667879800907665, 'control_top1': 3996, 'actual_top1': 3996, 'top1_equal': True, 'max_logit_abs': 1.642160177230835}}
+DISTRIBUTION {'arm': 'blocks128_export', 'case': 'window0-prefix1023', 'metrics': {'kl': 0.0038601827612863306, 'delta_nll': 0.2666350724091746, 'control_nll': 11.550146729644748, 'actual_nll': 11.816781802053923, 'control_top1': 1012, 'actual_top1': 1012, 'top1_equal': True, 'max_logit_abs': 1.690012514591217}}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [7240, 25860, 27576, 36192, 40128, 64836, 67704, 69884, 69932, 70216, 72836, 75480, 76160, 76996, 77184, 77912, 78032, 78136, 78252, 78828, 78884, 79008, 79480, 79540, 80384, 80436, 80484, 80644, 80832, 81104, 81124, 81440, 82040, 82444, 82808, 82816, 82860, 82912, 82992, 83212, 83236, 83272, 83392, 83624, 83668, 83724], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 167.562, "tree_rss_bytes": 6464720896, "foreign_peers": []}
+DISTRIBUTION {'arm': 'blocks128_export', 'case': 'window1-prefix256', 'metrics': {'kl': 1.6879207857927382e-05, 'delta_nll': -0.0002697162659663116, 'control_nll': 0.002463173310391343, 'actual_nll': 0.0021934570444250316, 'control_top1': 107, 'actual_top1': 107, 'top1_equal': True, 'max_logit_abs': 1.5159502029418945}}
+DISTRIBUTION {'arm': 'blocks128_export', 'case': 'window1-prefix511', 'metrics': {'kl': 0.0002028442307700538, 'delta_nll': -0.5159131428683779, 'control_nll': 7.971449542430544, 'actual_nll': 7.455536399562166, 'control_top1': 107, 'actual_top1': 107, 'top1_equal': True, 'max_logit_abs': 1.5345067977905273}}
+DISTRIBUTION {'arm': 'blocks128_export', 'case': 'window1-prefix512', 'metrics': {'kl': 1.4759124594363265e-06, 'delta_nll': 5.102739804104411e-06, 'control_nll': 8.766919050430456e-06, 'actual_nll': 1.3869658854534866e-05, 'control_top1': 107, 'actual_top1': 107, 'top1_equal': True, 'max_logit_abs': 1.883655071258545}}
+HOST_TIMELINE {"elapsed_seconds": 172.0, "tree_rss_bytes": 6445146112, "foreign_peers": []}
+DISTRIBUTION {'arm': 'blocks128_export', 'case': 'window1-prefix513', 'metrics': {'kl': 0.010011983834756835, 'delta_nll': 0.11860504998780907, 'control_nll': 3.899233905884488, 'actual_nll': 4.017838955872297, 'control_top1': 1390, 'actual_top1': 1390, 'top1_equal': True, 'max_logit_abs': 1.6676411628723145}}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [7240, 25860, 27576, 36192, 40128, 64836, 67704, 69884, 69932, 70216, 72836, 75480, 76160, 76996, 77184, 77912, 78032, 78136, 78252, 78828, 78884, 79008, 79480, 79540, 80384, 80436, 80484, 80540, 80644, 80832, 81104, 81124, 81440, 81548, 82040, 82444, 82808, 82816, 82860, 82912, 82992, 83212, 83236, 83272, 83392, 83624, 83668, 83724], "foreign_pids": []}
+DISTRIBUTION {'arm': 'blocks128_export', 'case': 'window1-prefix768', 'metrics': {'kl': 0.002451393566054081, 'delta_nll': 0.006507628914740598, 'control_nll': 0.00461012179219696, 'actual_nll': 0.011117750706937558, 'control_top1': 233309, 'actual_top1': 233309, 'top1_equal': True, 'max_logit_abs': 1.88720703125}}
+HOST_TIMELINE {"elapsed_seconds": 176.328, "tree_rss_bytes": 6453649408, "foreign_peers": []}
+DISTRIBUTION {'arm': 'blocks128_export', 'case': 'window1-prefix1023', 'metrics': {'kl': 0.00373420887001168, 'delta_nll': -0.03503796397765169, 'control_nll': 0.5305299281695175, 'actual_nll': 0.4954919641918658, 'control_top1': 140, 'actual_top1': 140, 'top1_equal': True, 'max_logit_abs': 1.3606739044189453}}
+DISTRIBUTION {'arm': 'blocks128_export', 'case': 'window2-prefix256', 'metrics': {'kl': 0.04084721691697254, 'delta_nll': 0.8137941548088152, 'control_nll': 4.545931990410468, 'actual_nll': 5.359726145219283, 'control_top1': 21439, 'actual_top1': 21439, 'top1_equal': True, 'max_logit_abs': 1.2740182876586914}}
+DISTRIBUTION {'arm': 'blocks128_export', 'case': 'window2-prefix511', 'metrics': {'kl': 1.9927300512061816e-06, 'delta_nll': 1.7366508374872143e-05, 'control_nll': 8.927050626860842e-05, 'actual_nll': 0.00010663701464348056, 'control_top1': 107, 'actual_top1': 107, 'top1_equal': True, 'max_logit_abs': 1.7434377074241638}}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [7240, 25860, 27576, 36192, 40128, 64836, 67704, 69884, 69932, 70216, 72836, 75480, 76160, 76996, 77184, 77892, 77912, 78032, 78136, 78252, 78828, 78884, 79008, 79480, 79540, 80384, 80436, 80484, 80540, 80644, 80832, 81104, 81124, 81440, 81548, 81656, 82040, 82444, 82808, 82816, 82860, 82912, 82992, 83212, 83236, 83272, 83392, 83624, 83668, 83724], "foreign_pids": []}
+DISTRIBUTION {'arm': 'blocks128_export', 'case': 'window2-prefix512', 'metrics': {'kl': 3.9311424237234504e-05, 'delta_nll': 4.3815353889340575e-06, 'control_nll': 0.009157546911813804, 'actual_nll': 0.009161928447202738, 'control_top1': 144, 'actual_top1': 144, 'top1_equal': True, 'max_logit_abs': 1.03800630569458}}
+HOST_TIMELINE {"elapsed_seconds": 180.703, "tree_rss_bytes": 6449766400, "foreign_peers": []}
+DISTRIBUTION {'arm': 'blocks128_export', 'case': 'window2-prefix513', 'metrics': {'kl': 1.8923179969384538e-08, 'delta_nll': -4.557091747773305e-08, 'control_nll': 1.2037372418211997e-07, 'actual_nll': 7.480280670438692e-08, 'control_top1': 236783, 'actual_top1': 236783, 'top1_equal': True, 'max_logit_abs': 2.232752799987793}}
+DISTRIBUTION {'arm': 'blocks128_export', 'case': 'window2-prefix768', 'metrics': {'kl': 4.027395048177698e-05, 'delta_nll': -7.62243306774677e-05, 'control_nll': 0.00012933831018088223, 'actual_nll': 5.3113979503414526e-05, 'control_top1': 12234, 'actual_top1': 12234, 'top1_equal': True, 'max_logit_abs': 1.8207836151123047}}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [7240, 24864, 25860, 27576, 36192, 40128, 64836, 67704, 69884, 69932, 70216, 72836, 75480, 76160, 76996, 77184, 77892, 77912, 78032, 78136, 78252, 78828, 78884, 79008, 79480, 79540, 80384, 80436, 80484, 80540, 80644, 80832, 81104, 81124, 81440, 81548, 81656, 82040, 82444, 82808, 82816, 82860, 82912, 82992, 83212, 83236, 83272, 83392, 83624, 83668, 83724], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 185.187, "tree_rss_bytes": 6451396608, "foreign_peers": []}
+DISTRIBUTION {'arm': 'blocks128_export', 'case': 'window2-prefix1023', 'metrics': {'kl': 3.005893099060149e-06, 'delta_nll': 2.565750972667637e-07, 'control_nll': 4.491789671110255e-05, 'actual_nll': 4.5174471808369315e-05, 'control_top1': 236775, 'actual_top1': 236775, 'top1_equal': True, 'max_logit_abs': 2.3540611267089844}}
+DISTRIBUTION {'arm': 'blocks128_export', 'case': 'window3-prefix256', 'metrics': {'kl': 1.6313142508148662e-07, 'delta_nll': 1.18400094547426e-06, 'control_nll': 1.6792230917804343e-05, 'actual_nll': 1.7976231863278603e-05, 'control_top1': 107, 'actual_top1': 107, 'top1_equal': True, 'max_logit_abs': 1.6513209342956543}}
+DISTRIBUTION {'arm': 'blocks128_export', 'case': 'window3-prefix511', 'metrics': {'kl': 0.047974404902179885, 'delta_nll': 0.3536395155312556, 'control_nll': 0.8132346683158987, 'actual_nll': 1.1668741838471544, 'control_top1': 236779, 'actual_top1': 236779, 'top1_equal': True, 'max_logit_abs': 1.72023606300354}}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [7240, 24864, 25860, 27576, 36192, 40128, 64836, 67704, 69884, 69932, 70216, 72836, 75480, 76160, 76996, 77184, 77892, 77912, 78032, 78136, 78252, 78828, 78884, 79008, 79480, 79540, 80384, 80436, 80484, 80540, 80644, 80832, 81104, 81124, 81440, 81548, 81656, 82040, 82444, 82808, 82816, 82860, 82912, 82992, 83212, 83236, 83272, 83392, 83448, 83624, 83668, 83724], "foreign_pids": []}
+DISTRIBUTION {'arm': 'blocks128_export', 'case': 'window3-prefix512', 'metrics': {'kl': 4.161845126060947e-07, 'delta_nll': -2.854024612073376e-06, 'control_nll': 2.4841626553672082e-05, 'actual_nll': 2.1987601941598706e-05, 'control_top1': 140, 'actual_top1': 140, 'top1_equal': True, 'max_logit_abs': 1.0190722346305847}}
+HOST_TIMELINE {"elapsed_seconds": 189.547, "tree_rss_bytes": 6449958912, "foreign_peers": []}
+DISTRIBUTION {'arm': 'blocks128_export', 'case': 'window3-prefix513', 'metrics': {'kl': 0.0018504806723189295, 'delta_nll': -0.006003609204416168, 'control_nll': 0.016642104800555516, 'actual_nll': 0.010638495596139348, 'control_top1': 7629, 'actual_top1': 7629, 'top1_equal': True, 'max_logit_abs': 1.6663479804992676}}
+DISTRIBUTION {'arm': 'blocks128_export', 'case': 'window3-prefix768', 'metrics': {'kl': 0.0050501213351879124, 'delta_nll': 0.24794274072146338, 'control_nll': 2.6533510713035624, 'actual_nll': 2.901293812025026, 'control_top1': 3904, 'actual_top1': 3904, 'top1_equal': True, 'max_logit_abs': 1.9130492210388184}}
+HOST_TIMELINE {"elapsed_seconds": 193.828, "tree_rss_bytes": 6449455104, "foreign_peers": []}
+DISTRIBUTION {'arm': 'blocks128_export', 'case': 'window3-prefix1023', 'metrics': {'kl': 0.030579973425428966, 'delta_nll': -1.0591828340283245, 'control_nll': 5.517400281849517, 'actual_nll': 4.458217447821193, 'control_top1': 1109, 'actual_top1': 1109, 'top1_equal': True, 'max_logit_abs': 3.2405202388763428}}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [7240, 24864, 25860, 27576, 36192, 40128, 64836, 67704, 69884, 69932, 70216, 72836, 75480, 76160, 76996, 77184, 77892, 77912, 78032, 78036, 78136, 78252, 78828, 78884, 79008, 79480, 79540, 80384, 80436, 80484, 80540, 80644, 80832, 81104, 81124, 81440, 81548, 81656, 82040, 82444, 82808, 82816, 82860, 82912, 82992, 83212, 83236, 83272, 83392, 83448, 83624, 83668, 83724], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 198.406, "tree_rss_bytes": 6228086784, "foreign_peers": []}
+DISTRIBUTION {'arm': 'blocks256_base', 'case': 'window0-prefix256', 'metrics': None}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [7240, 24864, 25860, 27576, 36192, 40128, 64836, 67704, 69884, 69932, 70216, 72836, 75480, 76160, 76996, 77184, 77892, 77912, 78032, 78036, 78136, 78252, 78828, 78884, 79008, 79480, 79540, 80384, 80436, 80484, 80540, 80644, 80832, 81104, 81124, 81440, 81548, 81656, 82040, 82444, 82808, 82816, 82860, 82912, 82992, 83212, 83236, 83272, 83392, 83448, 83624, 83668, 83724], "foreign_pids": []}
+DISTRIBUTION {'arm': 'blocks256_base', 'case': 'window0-prefix511', 'metrics': None}
+DISTRIBUTION {'arm': 'blocks256_base', 'case': 'window0-prefix512', 'metrics': None}
+HOST_TIMELINE {"elapsed_seconds": 202.875, "tree_rss_bytes": 6510850048, "foreign_peers": []}
+DISTRIBUTION {'arm': 'blocks256_base', 'case': 'window0-prefix513', 'metrics': None}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [7240, 24864, 25860, 27576, 36192, 40128, 64836, 67704, 69884, 69932, 70216, 72836, 75480, 76160, 76996, 77184, 77892, 77912, 78032, 78036, 78136, 78252, 78828, 78884, 79008, 79480, 79540, 80384, 80436, 80484, 80540, 80644, 80832, 81104, 81124, 81440, 81548, 81656, 82040, 82444, 82808, 82816, 82860, 82912, 82992, 83212, 83236, 83272, 83392, 83448, 83624, 83668, 83724], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 207.172, "tree_rss_bytes": 6504660992, "foreign_peers": []}
+DISTRIBUTION {'arm': 'blocks256_base', 'case': 'window0-prefix768', 'metrics': None}
+DISTRIBUTION {'arm': 'blocks256_base', 'case': 'window0-prefix1023', 'metrics': None}
+DISTRIBUTION {'arm': 'blocks256_base', 'case': 'window1-prefix256', 'metrics': None}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [7240, 24864, 25860, 27576, 36192, 40128, 64836, 64916, 67704, 69884, 69932, 70216, 71208, 72836, 75480, 76160, 76996, 77184, 77892, 77912, 78032, 78036, 78136, 78160, 78252, 78828, 78884, 79008, 79480, 79540, 80384, 80436, 80484, 80540, 80644, 80832, 81104, 81124, 81440, 81548, 81656, 82040, 82444, 82808, 82816, 82860, 82912, 82992, 83212, 83236, 83272, 83392, 83448, 83624, 83668, 83724], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 211.781, "tree_rss_bytes": 6504042496, "foreign_peers": []}
+DISTRIBUTION {'arm': 'blocks256_base', 'case': 'window1-prefix511', 'metrics': None}
+DISTRIBUTION {'arm': 'blocks256_base', 'case': 'window1-prefix512', 'metrics': None}
+DISTRIBUTION {'arm': 'blocks256_base', 'case': 'window1-prefix513', 'metrics': None}
+HOST_TIMELINE {"elapsed_seconds": 216.281, "tree_rss_bytes": 6510350336, "foreign_peers": []}
+DISTRIBUTION {'arm': 'blocks256_base', 'case': 'window1-prefix768', 'metrics': None}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [7240, 24864, 25860, 27576, 36192, 40128, 64836, 64916, 67704, 69884, 69932, 70216, 71208, 72836, 75480, 76160, 76996, 77184, 77892, 77912, 78032, 78036, 78136, 78160, 78252, 78828, 78884, 79008, 79480, 79540, 80384, 80436, 80484, 80540, 80644, 80832, 81104, 81124, 81440, 81548, 81656, 82040, 82444, 82808, 82816, 82860, 82912, 82992, 83212, 83236, 83272, 83392, 83448, 83624, 83668, 83724], "foreign_pids": []}
+DISTRIBUTION {'arm': 'blocks256_base', 'case': 'window1-prefix1023', 'metrics': None}
+HOST_TIMELINE {"elapsed_seconds": 220.859, "tree_rss_bytes": 6527754240, "foreign_peers": []}
+DISTRIBUTION {'arm': 'blocks256_base', 'case': 'window2-prefix256', 'metrics': None}
+DISTRIBUTION {'arm': 'blocks256_base', 'case': 'window2-prefix511', 'metrics': None}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [7240, 24864, 25860, 27576, 36192, 40128, 64836, 64916, 67704, 69884, 69932, 70216, 71208, 72836, 75480, 76160, 76996, 77184, 77712, 77892, 77912, 78032, 78036, 78136, 78160, 78252, 78828, 78884, 79008, 79480, 79540, 80384, 80436, 80484, 80540, 80644, 80832, 81104, 81124, 81440, 81548, 81656, 82040, 82444, 82808, 82816, 82860, 82912, 82992, 83212, 83236, 83272, 83392, 83448, 83624, 83668, 83724], "foreign_pids": []}
+DISTRIBUTION {'arm': 'blocks256_base', 'case': 'window2-prefix512', 'metrics': None}
+HOST_TIMELINE {"elapsed_seconds": 225.187, "tree_rss_bytes": 6509125632, "foreign_peers": []}
+DISTRIBUTION {'arm': 'blocks256_base', 'case': 'window2-prefix513', 'metrics': None}
+DISTRIBUTION {'arm': 'blocks256_base', 'case': 'window2-prefix768', 'metrics': None}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [7240, 24864, 25860, 27576, 36192, 40128, 64836, 64916, 67704, 69884, 69932, 70216, 71208, 72836, 75480, 76160, 76996, 77184, 77712, 77892, 77912, 78032, 78036, 78136, 78160, 78252, 78828, 78884, 79008, 79480, 79540, 80384, 80436, 80484, 80540, 80644, 80832, 81104, 81124, 81440, 81548, 81656, 82040, 82256, 82444, 82736, 82808, 82816, 82860, 82912, 82992, 83212, 83236, 83272, 83392, 83448, 83624, 83668, 83724], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 229.703, "tree_rss_bytes": 6535839744, "foreign_peers": []}
+DISTRIBUTION {'arm': 'blocks256_base', 'case': 'window2-prefix1023', 'metrics': None}
+DISTRIBUTION {'arm': 'blocks256_base', 'case': 'window3-prefix256', 'metrics': None}
+DISTRIBUTION {'arm': 'blocks256_base', 'case': 'window3-prefix511', 'metrics': None}
+DISTRIBUTION {'arm': 'blocks256_base', 'case': 'window3-prefix512', 'metrics': None}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [7240, 24864, 25860, 27576, 36192, 40128, 64836, 64916, 67704, 69884, 69932, 70216, 71208, 72836, 75480, 76160, 76996, 77184, 77712, 77892, 77912, 78032, 78036, 78136, 78160, 78252, 78828, 78884, 79008, 79480, 79540, 80384, 80436, 80484, 80540, 80644, 80832, 81104, 81124, 81440, 81548, 81656, 82016, 82040, 82256, 82444, 82736, 82808, 82816, 82860, 82912, 82992, 83212, 83220, 83236, 83272, 83392, 83448, 83624, 83668, 83724], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 234.187, "tree_rss_bytes": 6514565120, "foreign_peers": []}
+DISTRIBUTION {'arm': 'blocks256_base', 'case': 'window3-prefix513', 'metrics': None}
+DISTRIBUTION {'arm': 'blocks256_base', 'case': 'window3-prefix768', 'metrics': None}
+HOST_TIMELINE {"elapsed_seconds": 238.516, "tree_rss_bytes": 6523580416, "foreign_peers": []}
+DISTRIBUTION {'arm': 'blocks256_base', 'case': 'window3-prefix1023', 'metrics': None}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [7240, 24864, 25860, 27576, 36192, 40128, 64836, 64916, 67704, 69884, 69932, 70216, 71208, 72836, 75480, 76160, 76996, 77184, 77712, 77892, 77912, 78032, 78036, 78136, 78160, 78252, 78828, 78884, 79008, 79480, 79540, 80384, 80436, 80484, 80540, 80644, 80832, 81104, 81124, 81440, 81548, 81656, 82016, 82040, 82256, 82444, 82736, 82808, 82816, 82860, 82912, 82936, 82992, 83212, 83220, 83236, 83272, 83392, 83448, 83624, 83668, 83724], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 243.109, "tree_rss_bytes": 55398400, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [7240, 24864, 25860, 27576, 36192, 40128, 64836, 64916, 67704, 69884, 69932, 70216, 71208, 72836, 75480, 76160, 76996, 77184, 77712, 77892, 77912, 78032, 78036, 78136, 78160, 78252, 78828, 78884, 79008, 79480, 79540, 80180, 80384, 80436, 80484, 80540, 80644, 80832, 81104, 81124, 81440, 81548, 81656, 82016, 82040, 82256, 82444, 82736, 82808, 82816, 82860, 82912, 82936, 82992, 83212, 83220, 83236, 83272, 83392, 83448, 83624, 83668, 83724], "foreign_pids": []}
+DISTRIBUTION {'arm': 'blocks256_export', 'case': 'window0-prefix256', 'metrics': {'kl': 0.0, 'delta_nll': 0.0, 'control_nll': 1.1829425968431021e-05, 'actual_nll': 1.1829425968431021e-05, 'control_top1': 107, 'actual_top1': 107, 'top1_equal': True, 'max_logit_abs': 0.0}}
+HOST_TIMELINE {"elapsed_seconds": 247.484, "tree_rss_bytes": 6503497728, "foreign_peers": []}
+DISTRIBUTION {'arm': 'blocks256_export', 'case': 'window0-prefix511', 'metrics': {'kl': 0.013690718972423797, 'delta_nll': -0.032307276693089415, 'control_nll': 0.10434660943497763, 'actual_nll': 0.07203933274188822, 'control_top1': 6458, 'actual_top1': 6458, 'top1_equal': True, 'max_logit_abs': 1.6450819969177246}}
+DISTRIBUTION {'arm': 'blocks256_export', 'case': 'window0-prefix512', 'metrics': {'kl': 0.0788076918285324, 'delta_nll': -0.27245763328954453, 'control_nll': 9.213710734906039, 'actual_nll': 8.941253101616494, 'control_top1': 108, 'actual_top1': 108, 'top1_equal': True, 'max_logit_abs': 1.8073625564575195}}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [7240, 24864, 25860, 27576, 36192, 40128, 64836, 64916, 67704, 69884, 69932, 70216, 71208, 72836, 75480, 76160, 76996, 77184, 77712, 77892, 77912, 78032, 78036, 78136, 78160, 78252, 78828, 78884, 79008, 79480, 79540, 80180, 80384, 80436, 80484, 80540, 80644, 80832, 81104, 81124, 81440, 81548, 81656, 82016, 82040, 82176, 82256, 82444, 82736, 82808, 82816, 82860, 82912, 82936, 82992, 83212, 83220, 83236, 83272, 83392, 83448, 83612, 83624, 83668, 83724], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 251.875, "tree_rss_bytes": 6510006272, "foreign_peers": []}
+DISTRIBUTION {'arm': 'blocks256_export', 'case': 'window0-prefix513', 'metrics': {'kl': 0.02967317017315151, 'delta_nll': 0.2166528965490091, 'control_nll': 8.722731493044373, 'actual_nll': 8.939384389593382, 'control_top1': 15308, 'actual_top1': 15308, 'top1_equal': True, 'max_logit_abs': 1.10097336769104}}
+DISTRIBUTION {'arm': 'blocks256_export', 'case': 'window0-prefix768', 'metrics': {'kl': 0.05667842119716781, 'delta_nll': 0.30312986487196625, 'control_nll': 7.295230952718789, 'actual_nll': 7.5983608175907555, 'control_top1': 3996, 'actual_top1': 3996, 'top1_equal': True, 'max_logit_abs': 2.4085960388183594}}
+DISTRIBUTION {'arm': 'blocks256_export', 'case': 'window0-prefix1023', 'metrics': {'kl': 0.003190056423931008, 'delta_nll': 0.2231790646926406, 'control_nll': 11.550146729644748, 'actual_nll': 11.773325794337389, 'control_top1': 1012, 'actual_top1': 1012, 'top1_equal': True, 'max_logit_abs': 2.0717878341674805}}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [7240, 24864, 25860, 27576, 36192, 40128, 64836, 64916, 67704, 69884, 69932, 70216, 71208, 72836, 75480, 76160, 76504, 76996, 77184, 77712, 77892, 77912, 78032, 78036, 78136, 78160, 78252, 78828, 78884, 79008, 79480, 79540, 80180, 80384, 80436, 80484, 80540, 80644, 80832, 81104, 81124, 81440, 81548, 81656, 82016, 82040, 82176, 82256, 82444, 82736, 82808, 82816, 82860, 82912, 82936, 82992, 83212, 83220, 83236, 83272, 83392, 83448, 83612, 83624, 83668, 83724], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 256.484, "tree_rss_bytes": 6516011008, "foreign_peers": []}
+DISTRIBUTION {'arm': 'blocks256_export', 'case': 'window1-prefix256', 'metrics': {'kl': 0.0, 'delta_nll': 0.0, 'control_nll': 0.002463173310391343, 'actual_nll': 0.002463173310391343, 'control_top1': 107, 'actual_top1': 107, 'top1_equal': True, 'max_logit_abs': 0.0}}
+DISTRIBUTION {'arm': 'blocks256_export', 'case': 'window1-prefix511', 'metrics': {'kl': 0.00042871800127717603, 'delta_nll': 0.5389048637389875, 'control_nll': 7.971449542430544, 'actual_nll': 8.510354406169531, 'control_top1': 107, 'actual_top1': 107, 'top1_equal': True, 'max_logit_abs': 1.6924452781677246}}
+DISTRIBUTION {'arm': 'blocks256_export', 'case': 'window1-prefix512', 'metrics': {'kl': 4.3828075404871844e-07, 'delta_nll': 1.4963662324992515e-06, 'control_nll': 8.766919050430456e-06, 'actual_nll': 1.0263285282929707e-05, 'control_top1': 107, 'actual_top1': 107, 'top1_equal': True, 'max_logit_abs': 1.2506980895996094}}
+HOST_TIMELINE {"elapsed_seconds": 260.953, "tree_rss_bytes": 6513324032, "foreign_peers": []}
+DISTRIBUTION {'arm': 'blocks256_export', 'case': 'window1-prefix513', 'metrics': {'kl': 0.018396765780861427, 'delta_nll': 0.17785235700979207, 'control_nll': 3.899233905884488, 'actual_nll': 4.07708626289428, 'control_top1': 1390, 'actual_top1': 1390, 'top1_equal': True, 'max_logit_abs': 1.197035789489746}}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [7240, 24864, 25860, 27576, 36192, 40128, 63168, 64836, 64916, 67704, 69884, 69932, 70216, 71208, 72836, 75480, 76160, 76504, 76996, 77184, 77712, 77892, 77912, 78032, 78036, 78136, 78160, 78252, 78828, 78884, 79008, 79480, 79540, 80180, 80384, 80436, 80484, 80540, 80644, 80832, 81104, 81124, 81440, 81548, 81656, 82016, 82040, 82176, 82256, 82444, 82736, 82808, 82816, 82860, 82912, 82936, 82992, 83212, 83220, 83236, 83272, 83392, 83448, 83612, 83624, 83668, 83724], "foreign_pids": []}
+DISTRIBUTION {'arm': 'blocks256_export', 'case': 'window1-prefix768', 'metrics': {'kl': 0.003020755648670973, 'delta_nll': 0.007425205721731605, 'control_nll': 0.00461012179219696, 'actual_nll': 0.012035327513928565, 'control_top1': 233309, 'actual_top1': 233309, 'top1_equal': True, 'max_logit_abs': 1.9459476470947266}}
+HOST_TIMELINE {"elapsed_seconds": 265.344, "tree_rss_bytes": 6514024448, "foreign_peers": []}
+DISTRIBUTION {'arm': 'blocks256_export', 'case': 'window1-prefix1023', 'metrics': {'kl': 0.017925063459232286, 'delta_nll': -0.10597092845698708, 'control_nll': 0.5305299281695175, 'actual_nll': 0.4245589997125304, 'control_top1': 140, 'actual_top1': 140, 'top1_equal': True, 'max_logit_abs': 1.6804596185684204}}
+DISTRIBUTION {'arm': 'blocks256_export', 'case': 'window2-prefix256', 'metrics': {'kl': 0.0, 'delta_nll': 0.0, 'control_nll': 4.545931990410468, 'actual_nll': 4.545931990410468, 'control_top1': 21439, 'actual_top1': 21439, 'top1_equal': True, 'max_logit_abs': 0.0}}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [7240, 24864, 25860, 27576, 36192, 40128, 63168, 64836, 64916, 67704, 69884, 69932, 70216, 71208, 72836, 75480, 76160, 76504, 76996, 77184, 77712, 77892, 77912, 78032, 78036, 78136, 78160, 78252, 78828, 78884, 79008, 79480, 79540, 80180, 80384, 80436, 80484, 80540, 80644, 80832, 81104, 81124, 81440, 81484, 81548, 81656, 82016, 82040, 82176, 82256, 82444, 82736, 82808, 82816, 82860, 82912, 82936, 82992, 83212, 83220, 83236, 83272, 83392, 83448, 83612, 83624, 83668, 83724], "foreign_pids": []}
+DISTRIBUTION {'arm': 'blocks256_export', 'case': 'window2-prefix511', 'metrics': {'kl': 5.092062874435154e-07, 'delta_nll': -5.792664652351387e-06, 'control_nll': 8.927050626860842e-05, 'actual_nll': 8.347784161625703e-05, 'control_top1': 107, 'actual_top1': 107, 'top1_equal': True, 'max_logit_abs': 1.6609229445457458}}
+HOST_TIMELINE {"elapsed_seconds": 270.0, "tree_rss_bytes": 6512381952, "foreign_peers": []}
+DISTRIBUTION {'arm': 'blocks256_export', 'case': 'window2-prefix512', 'metrics': {'kl': 1.524031327075177e-05, 'delta_nll': 0.0001442113309887555, 'control_nll': 0.009157546911813804, 'actual_nll': 0.00930175824280256, 'control_top1': 144, 'actual_top1': 144, 'top1_equal': True, 'max_logit_abs': 1.4411762356758118}}
+DISTRIBUTION {'arm': 'blocks256_export', 'case': 'window2-prefix513', 'metrics': {'kl': 7.640013318704786e-09, 'delta_nll': -4.865907092244104e-10, 'control_nll': 1.2037372418211997e-07, 'actual_nll': 1.1988713347289556e-07, 'control_top1': 236783, 'actual_top1': 236783, 'top1_equal': True, 'max_logit_abs': 1.3297700881958008}}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [7240, 24864, 25860, 27576, 36192, 40128, 63168, 64836, 64916, 67704, 69884, 69932, 70216, 71208, 72836, 75480, 76160, 76504, 76996, 77184, 77712, 77892, 77912, 78032, 78036, 78136, 78160, 78252, 78828, 78884, 79008, 79480, 79540, 80180, 80384, 80436, 80484, 80540, 80644, 80832, 81104, 81124, 81440, 81484, 81548, 81656, 82016, 82040, 82112, 82176, 82256, 82444, 82736, 82808, 82816, 82860, 82912, 82936, 82992, 83212, 83220, 83236, 83272, 83392, 83448, 83612, 83624, 83668, 83724], "foreign_pids": []}
+DISTRIBUTION {'arm': 'blocks256_export', 'case': 'window2-prefix768', 'metrics': {'kl': 2.7305398839169607e-05, 'delta_nll': -6.5278811337788e-05, 'control_nll': 0.00012933831018088223, 'actual_nll': 6.405949884309422e-05, 'control_top1': 12234, 'actual_top1': 12234, 'top1_equal': True, 'max_logit_abs': 2.2114219665527344}}
+HOST_TIMELINE {"elapsed_seconds": 274.484, "tree_rss_bytes": 6523547648, "foreign_peers": []}
+DISTRIBUTION {'arm': 'blocks256_export', 'case': 'window2-prefix1023', 'metrics': {'kl': 1.29728242658156e-06, 'delta_nll': -4.845358870241194e-06, 'control_nll': 4.491789671110255e-05, 'actual_nll': 4.007253784086136e-05, 'control_top1': 236775, 'actual_top1': 236775, 'top1_equal': True, 'max_logit_abs': 1.8697504997253418}}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [7240, 24864, 25860, 27576, 36192, 40128, 63168, 64836, 64916, 67704, 69884, 69932, 70216, 71208, 72836, 75480, 76160, 76504, 76996, 77184, 77712, 77892, 77912, 78024, 78032, 78036, 78136, 78160, 78252, 78828, 78884, 79008, 79480, 79540, 80180, 80384, 80436, 80484, 80540, 80644, 80832, 81104, 81124, 81440, 81484, 81548, 81656, 82016, 82040, 82112, 82176, 82256, 82288, 82444, 82736, 82808, 82816, 82860, 82912, 82936, 82992, 83212, 83220, 83236, 83272, 83392, 83448, 83612, 83624, 83668, 83724], "foreign_pids": []}
+DISTRIBUTION {'arm': 'blocks256_export', 'case': 'window3-prefix256', 'metrics': {'kl': 0.0, 'delta_nll': 0.0, 'control_nll': 1.6792230917804343e-05, 'actual_nll': 1.6792230917804343e-05, 'control_top1': 107, 'actual_top1': 107, 'top1_equal': True, 'max_logit_abs': 0.0}}
+HOST_TIMELINE {"elapsed_seconds": 279.047, "tree_rss_bytes": 6518542336, "foreign_peers": []}
+DISTRIBUTION {'arm': 'blocks256_export', 'case': 'window3-prefix511', 'metrics': {'kl': 0.13332116659430152, 'delta_nll': 0.7258241003845366, 'control_nll': 0.8132346683158987, 'actual_nll': 1.5390587687004353, 'control_top1': 236779, 'actual_top1': 236779, 'top1_equal': True, 'max_logit_abs': 1.181187629699707}}
+DISTRIBUTION {'arm': 'blocks256_export', 'case': 'window3-prefix512', 'metrics': {'kl': 8.576865046815939e-07, 'delta_nll': -5.381047284062934e-06, 'control_nll': 2.4841626553672082e-05, 'actual_nll': 1.9460579269609148e-05, 'control_top1': 140, 'actual_top1': 140, 'top1_equal': True, 'max_logit_abs': 0.9128164649009705}}
+DISTRIBUTION {'arm': 'blocks256_export', 'case': 'window3-prefix513', 'metrics': {'kl': 0.0011984659278304797, 'delta_nll': -0.005477561385910606, 'control_nll': 0.016642104800555516, 'actual_nll': 0.01116454341464491, 'control_top1': 7629, 'actual_top1': 7629, 'top1_equal': True, 'max_logit_abs': 1.433251440525055}}
+HOST_TIMELINE {"elapsed_seconds": 283.5, "tree_rss_bytes": 6528569344, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [7240, 24864, 25860, 27576, 36192, 40128, 63168, 64836, 64916, 67704, 69884, 69932, 70216, 71208, 72836, 75480, 76160, 76504, 76996, 77108, 77184, 77712, 77892, 77912, 78024, 78032, 78036, 78136, 78160, 78252, 78444, 78828, 78884, 79008, 79480, 79540, 80180, 80384, 80436, 80484, 80540, 80644, 80832, 81104, 81124, 81440, 81484, 81548, 81656, 82016, 82040, 82112, 82176, 82256, 82288, 82444, 82736, 82808, 82816, 82860, 82912, 82936, 82992, 83212, 83220, 83236, 83272, 83392, 83448, 83612, 83624, 83668, 83724], "foreign_pids": []}
+DISTRIBUTION {'arm': 'blocks256_export', 'case': 'window3-prefix768', 'metrics': {'kl': 0.01934606302769284, 'delta_nll': -0.5058790139449032, 'control_nll': 2.6533510713035624, 'actual_nll': 2.147472057358659, 'control_top1': 3904, 'actual_top1': 3904, 'top1_equal': True, 'max_logit_abs': 2.0105292797088623}}
+DISTRIBUTION {'arm': 'blocks256_export', 'case': 'window3-prefix1023', 'metrics': {'kl': 0.0197104651151563, 'delta_nll': -0.35034740048110624, 'control_nll': 5.517400281849517, 'actual_nll': 5.167052881368411, 'control_top1': 1109, 'actual_top1': 1109, 'top1_equal': True, 'max_logit_abs': 2.491086006164551}}
+HOST_TIMELINE {"elapsed_seconds": 288.016, "tree_rss_bytes": 64204800, "foreign_peers": []}
+POST_NPU_CONTEXT_WITNESS "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+RESEARCH_PROCESS_RESULT {"exit_code": 2, "stop": null, "peak_tree_rss_bytes": 6546300928, "rss_measurement": "maximum observed across sampled descendant working sets; zero observations reported as null", "elapsed_seconds": 290.64100000000326, "foreign_contention_observed": false, "timing_eligible": false}

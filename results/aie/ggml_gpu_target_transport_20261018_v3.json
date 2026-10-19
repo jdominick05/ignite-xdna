@@ -1,0 +1,129 @@
+{
+  "scope": "Archive live target/hybrid checks with source and NPU artifact verification.",
+  "source_sha256": "4dc1c7daecb971a8937ccc6c9a410393fbb46507e81660d432934a694f116197",
+  "result_sha256": "8502feba7280876c3a2ef2d8c31e982cc47d6f16a5f35e80a3474ada55750c6f",
+  "report": {
+    "registration": {
+      "files": {
+        "<user-home>\\gemma4-assistant\\scripts\\probe_gpu_target.py": "d23975ba6a3017659f5970e7dfc68401b24959658b754130a8a029ae2aea64eb",
+        "<user-home>\\PycharmProjects\\ignite-xdna\\tools\\ggml_gpu_target\\worker.cpp": "e39bdfd7d453a881b256ed48a7c7bc66cfe07249e0685ee84d5f9487f4b1bf67",
+        "<user-home>\\PycharmProjects\\ignite-xdna\\tools\\ggml_gpu_target\\client.py": "14ecdaf5798e86468300301b917683154ce723ee19365c5e1b790a7301f1c9f3",
+        "<user-home>\\PycharmProjects\\ignite-xdna\\tools\\ggml_gpu_embedding\\embedding.cpp": "82daefc983ffb2778d2a7213b7b49a5dc653dc1f4268bbc74afc5c1f9b7dccd3",
+        "<user-home>\\gemma4-assistant\\bin\\ggml_gpu_target.exe": "aba4b88e1d4f26bd4f05bc00b7b70c87708df66c1a8a6fb44012c47214d6e7e6",
+        "<user-home>\\gemma4-assistant\\models\\gemma-4-E2B-it-Q5_K_M-pleQ4-imatrix.gguf": "ac36a228eb6cd1b93eedc86153016612b0a60ba73c9a50e0b4e95a6a143f65e1",
+        "<user-home>\\gemma4-assistant\\npu\\target-e2b-1792343858710373300\\prompt.i32": "d19d85d589328dc75d9301cac479c67dfbf583f13f9ee5867b024f65a97962cc",
+        "<user-home>\\gemma4-assistant\\npu\\target-e2b-1792343858710373300\\manifest.json": "2edcf058e0efa35c5df14c05f19a12f081107f1416abb15af71f2bf267a27268",
+        "<user-home>\\tools\\llamacpp-b1343-rocm\\llama.dll": "04aeca339e96514cd2eeed4810ddc813e7cc91b088137d741d5bfb53829464e8",
+        "<user-home>\\tools\\llamacpp-b1343-rocm\\ggml.dll": "d62c9fd3ea800ebf81b104f0b276c44105930557337c3e97ca7bf3e5a51bd889",
+        "<user-home>\\tools\\llamacpp-b1343-rocm\\ggml-base.dll": "b0f6bcf152bbea75fe55c3d185b512ca4b3df167ec8159357da53be435db9539",
+        "<user-home>\\tools\\llamacpp-b1343-rocm\\ggml-hip.dll": "ea8866ab163caad203a2fa2f8afbce51584bb55eb566e1e863bb14e1b1d3f370"
+      },
+      "scope": "Check persistent GPU target state, embedding transport and rejected-token rollback.\n\nUses a frozen public tokenized prompt; GPU-only arithmetic throughout. No timing claim.\n"
+    },
+    "initial_bitwise_equal": {
+      "Kcur_pos-13": true,
+      "Kcur_pos-14": true,
+      "Vcur_normed-13": true,
+      "Vcur_normed-14": true,
+      "result_norm": true
+    },
+    "trajectory": [
+      {
+        "token": 2717,
+        "embedding_equal": true,
+        "token_equal": true,
+        "tensors_equal": {
+          "Kcur_pos-13": true,
+          "Kcur_pos-14": true,
+          "Vcur_normed-13": true,
+          "Vcur_normed-14": true,
+          "result_norm": true
+        }
+      },
+      {
+        "token": 6719,
+        "embedding_equal": true,
+        "token_equal": true,
+        "tensors_equal": {
+          "Kcur_pos-13": true,
+          "Kcur_pos-14": true,
+          "Vcur_normed-13": true,
+          "Vcur_normed-14": true,
+          "result_norm": true
+        }
+      },
+      {
+        "token": 107,
+        "embedding_equal": true,
+        "token_equal": true,
+        "tensors_equal": {
+          "Kcur_pos-13": true,
+          "Kcur_pos-14": true,
+          "Vcur_normed-13": true,
+          "Vcur_normed-14": true,
+          "result_norm": true
+        }
+      },
+      {
+        "token": 2543,
+        "embedding_equal": true,
+        "token_equal": true,
+        "tensors_equal": {
+          "Kcur_pos-13": true,
+          "Kcur_pos-14": true,
+          "Vcur_normed-13": true,
+          "Vcur_normed-14": true,
+          "result_norm": true
+        }
+      },
+      {
+        "token": 28751,
+        "embedding_equal": true,
+        "token_equal": true,
+        "tensors_equal": {
+          "Kcur_pos-13": true,
+          "Kcur_pos-14": true,
+          "Vcur_normed-13": true,
+          "Vcur_normed-14": true,
+          "result_norm": true
+        }
+      }
+    ],
+    "baseline_tokens": [
+      2717,
+      6719,
+      107,
+      2543,
+      28751,
+      1419,
+      4361,
+      236764,
+      9250,
+      10655
+    ],
+    "resumed_tokens": [
+      2717,
+      6719,
+      107,
+      2543,
+      28751,
+      1419,
+      4361,
+      236764,
+      9250,
+      10655
+    ],
+    "forced_rejected_tokens": [
+      6736,
+      136
+    ],
+    "rollback_equal": true,
+    "prompt_tokens": 31,
+    "gpu_only": true,
+    "timing_eligible": false,
+    "process_released": true,
+    "sources_unchanged": true,
+    "passed": true
+  },
+  "builds": {}
+}

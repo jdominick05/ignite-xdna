@@ -1,0 +1,83 @@
+RESEARCH_PLATFORM {"machine": "Desktop 2", "cpu": "AMD Ryzen 7 8700G w/ Radeon 780M Graphics", "os": "Windows-11-10.0.26200-SP0", "ram_bytes": 33381138432, "source_sha256": {"tools/research_process.py": "ffeb1857f190b482eed101b5f5a928f455de26bfa61d23f78a2eacec08e2663e", "tools/quant_calib_alphabet.py": "2dc0b2878c564853f340880209a425dfcf63b8536b2b8e9fd32344daade58d37", "tools/xint8_arithmetic_probe.py": "6aa3df08b9870c3c2264b868459d7ffbac3070dddc1349d7c6f3f480075f7041", "scripts/research-lowlevel.sh": "3455ad7933697936487712665505c216891865c6deada647302785f6e37020bd", "scripts/research-iron.sh": "4c863a262646ddab39b5005006ba8e03809895e6386c6310e2fd9d0a9e9609ee", "kernels/memory_placement/probe.py": "e8d990169ad6091fa1b53852e9f61eff495b5def72d35165a5c5cf1759e38898", "kernels/memory_placement/memory_kernels.cc": "182e7af7071a1e851afb4a7ca266069c489aea1fbaaa85eca129708daeba5ba6", "scripts/research-matrix.sh": "739254171629deae822b0ad7dabc875aee19ace56dde77d3e8aab61663f97516", "kernels/memory_placement/gemm.py": "17c905ad66110d3346bbf0db898dfc6b780df59fae1dfb0c1747057ce1e5844e", "kernels/memory_placement/gemm_placement.cc": "f21acf7250b12914ea30cc1f77613239dfa18421a85a1b9a5199017dd916278a", "tools/research_summary.py": "0c00dcceef07053d06731b41a1f1ed58d3ba4ea09f82497de354ce9cef17da20", "tools/research_toolchain.py": "f0a126a24ae213acfaa43460cfd9def0c86d9cb70cfee0228aa271688467b314"}, "commit": "f3fa8210d4ad5cb854f1f2cc53ef595303edeefc", "command": ["C:/Users/<user>/miniforge3/envs/mlir-aie-iron/python.exe", "C:/Users/<user>/gemma4-assistant/scripts/qualify_draft.py", "--fixtures", "C:/Users/<user>/gemma4-assistant/npu/e2b-bf16-fixtures-1792343920461556500", "--rope", "C:/Users/<user>/gemma4-assistant/npu/rope-e2b-trajectory-20261018.npz", "--lut", "C:/Users/<user>/gemma4-assistant/npu/gelu-bf16-tanh-v1.npz", "--persistent", "--single-image", "--refined-norm"], "seconds_limit": 180.0, "rss_gib_limit": 6.0, "checks_only": true, "free_ram_bytes": 19760435200}
+PRE_NPU_CONTEXT_WITNESS "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [16412, 27196, 61576], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 3.875, "tree_rss_bytes": 273911808, "foreign_peers": [{"pid": 28272, "name": "llama-server.exe", "cores": 8.049, "command": "C:\\Users\\<user>\\tools\\llamacpp-b1343-rocm\\llama-server.exe -m C:\\Users\\<user>\\gemma4-assistant\\models\\embeddinggemma-2-BF16.gguf --host 127.0.0.1 --port 51307 -c 2048 -np 1 -b 2048 -ub 2048 -t 8 --poll 0 -fa off --embedding --pooling mean --e"}]}
+{"build": "C:\\Users\\<user>\\gemma4-assistant\\npu\\runtime-images\\draft_transformer-8d1be2cb658357ad", "code_bytes": 13632, "stack_frames": [0, 0, 160, 32, 896, 0, 32, 0, 128, 32], "blocks": 192}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 67 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |16412               |241        |1           |0           |0    |Normal   |\n      |python.exe          |Active     |1           |0           |     |N/A      |\n      |67 MB               |64 KB      |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [16412], "owned_pids": [16412, 27196, 61576, 62652], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 7.75, "tree_rss_bytes": 426483712, "foreign_peers": [{"pid": 28272, "name": "llama-server.exe", "cores": 7.949, "command": "C:\\Users\\<user>\\tools\\llamacpp-b1343-rocm\\llama-server.exe -m C:\\Users\\<user>\\gemma4-assistant\\models\\embeddinggemma-2-BF16.gguf --host 127.0.0.1 --port 51307 -c 2048 -np 1 -b 2048 -ub 2048 -t 8 --poll 0 -fa off --embedding --pooling mean --e"}]}
+Traceback (most recent call last):
+  File "C:\Users\<user>\gemma4-assistant\scripts\qualify_draft.py", line 136, in <module>
+    run(args.fixtures,args.rope,args.lut,args.artifacts,args.limit,args.case_indices,args.precise_projection,args.keep_going,args.persistent,args.single_image,args.refined_norm)
+    ~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\<user>\gemma4-assistant\scripts\qualify_draft.py", line 73, in run
+    actual=ops.forward(reference["inputs_embeds"].copy(),weights,config,factors,shared,table)
+  File "C:\Users\<user>\gemma4-assistant\scripts\native_draft.py", line 56, in forward
+    attention,attention_stages=self.attention(x,weights,layer,cosine,sine,key,value,kind)
+                               ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\<user>\gemma4-assistant\scripts\native_draft.py", line 20, in attention
+    normalized=self.norm(x,weights[prefix+".input_layernorm.weight"])
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\kernels\transformer_bf16\ops.py", line 111, in norm
+    out=self.dispatch("draft_norm",packet,1056)
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\kernels\transformer_bf16\ops.py", line 62, in dispatch
+    npu_stream.build(folder,source,entry,packets.shape[1],output_words,packets.shape[0],sources,contract,state_words=state_words,optimization=optimization)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\kernels\transformer_bf16\stream.py", line 61, in build
+    command([clang, optimization, "-std=c++20", "--target=aie2-none-unknown-elf", "-DNDEBUG",
+    ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+             "-fstack-size-section", "-D__AIE_API_AIE_ADF_HPP__", f"-I{INSTALL/'include'}",
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+             "-Wno-attributes", "-c", source, "-o", folder / "kernel.o"], folder)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\kernels\transformer_bf16\common.py", line 39, in command
+    raise RuntimeError(result.stdout[-4000:]+result.stderr[-6000:])
+RuntimeError: fatal error: error in backend: unable to legalize instruction: %560:_(<8 x s64>) = G_AND %191:_, %73:_ (in function: draft_norm_refined)
+PLEASE submit a bug report to https://github.com/llvm/llvm-project/issues/ and include the crash backtrace, preprocessed source, and associated run script.
+Stack dump:
+0.	Program arguments: C:\\Users\\<user>\\mlir-aie\\ironenv\\Lib\\site-packages\\llvm-aie\\bin\\clang++.exe -O3 -std=c++20 --target=aie2-none-unknown-elf -DNDEBUG -fstack-size-section -D__AIE_API_AIE_ADF_HPP__ -IC:\\Users\\<user>\\mlir-aie\\ironenv\\Lib\\site-packages\\mlir_aie\\include -Wno-attributes -c C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\rmsnorm_refined.cc -o C:\\Users\\<user>\\gemma4-assistant\\npu\\runtime-images\\draft_norm_refined-3093e8d706c9a260\\kernel.o
+1.	<eof> parser at end of file
+2.	Code generation
+3.	Running pass 'Function Pass Manager' on module 'C:\Users\<user>\PycharmProjects\ignite-xdna\kernels\transformer_bf16\rmsnorm_refined.cc'.
+4.	Running pass 'Legalizer' on function '@draft_norm_refined'
+Exception Code: 0xE0000001
+ #0 0x00007ffa0c1941ca (C:\WINDOWS\System32\KERNELBASE.dll+0xc41ca)
+ #1 0x00007ff67141af5a (C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\llvm-aie\bin\clang++.exe+0x147af5a)
+ #2 0x00007ff67141b243 (C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\llvm-aie\bin\clang++.exe+0x147b243)
+ #3 0x00007ff670061185 (C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\llvm-aie\bin\clang++.exe+0xc1185)
+ #4 0x00007ff6714221f4 (C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\llvm-aie\bin\clang++.exe+0x14821f4)
+ #5 0x00007ff67142204b (C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\llvm-aie\bin\clang++.exe+0x148204b)
+ #6 0x00007ff67259106a (C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\llvm-aie\bin\clang++.exe+0x25f106a)
+ #7 0x00007ff67259136a (C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\llvm-aie\bin\clang++.exe+0x25f136a)
+ #8 0x00007ff6725759dc (C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\llvm-aie\bin\clang++.exe+0x25d59dc)
+ #9 0x00007ff670a4e2a2 (C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\llvm-aie\bin\clang++.exe+0xaae2a2)
+#10 0x00007ff670eda677 (C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\llvm-aie\bin\clang++.exe+0xf3a677)
+#11 0x00007ff670eda8bc (C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\llvm-aie\bin\clang++.exe+0xf3a8bc)
+#12 0x00007ff670edab88 (C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\llvm-aie\bin\clang++.exe+0xf3ab88)
+#13 0x00007ff670eda376 (C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\llvm-aie\bin\clang++.exe+0xf3a376)
+#14 0x00007ff671745612 (C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\llvm-aie\bin\clang++.exe+0x17a5612)
+#15 0x00007ff671749269 (C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\llvm-aie\bin\clang++.exe+0x17a9269)
+#16 0x00007ff6717499cd (C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\llvm-aie\bin\clang++.exe+0x17a99cd)
+#17 0x00007ff671f519ff (C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\llvm-aie\bin\clang++.exe+0x1fb19ff)
+#18 0x00007ff672df1805 (C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\llvm-aie\bin\clang++.exe+0x2e51805)
+#19 0x00007ff6721e05d6 (C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\llvm-aie\bin\clang++.exe+0x22405d6)
+#20 0x00007ff671f505d6 (C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\llvm-aie\bin\clang++.exe+0x1fb05d6)
+#21 0x00007ff6721e03d5 (C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\llvm-aie\bin\clang++.exe+0x22403d5)
+#22 0x00007ff6721c8599 (C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\llvm-aie\bin\clang++.exe+0x2228599)
+#23 0x00007ff67228d61c (C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\llvm-aie\bin\clang++.exe+0x22ed61c)
+#24 0x00007ff670062f8b (C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\llvm-aie\bin\clang++.exe+0xc2f8b)
+#25 0x00007ff67005c9ec (C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\llvm-aie\bin\clang++.exe+0xbc9ec)
+#26 0x00007ff672089491 (C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\llvm-aie\bin\clang++.exe+0x20e9491)
+#27 0x00007ff67141b029 (C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\llvm-aie\bin\clang++.exe+0x147b029)
+#28 0x00007ff672089c67 (C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\llvm-aie\bin\clang++.exe+0x20e9c67)
+#29 0x00007ff671fc5911 (C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\llvm-aie\bin\clang++.exe+0x2025911)
+#30 0x00007ff671fc5ad0 (C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\llvm-aie\bin\clang++.exe+0x2025ad0)
+#31 0x00007ff671fa74e6 (C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\llvm-aie\bin\clang++.exe+0x20074e6)
+#32 0x00007ff67005ecb6 (C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\llvm-aie\bin\clang++.exe+0xbecb6)
+#33 0x00007ff67006d644 (C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\llvm-aie\bin\clang++.exe+0xcd644)
+#34 0x00007ff6742ed744 (C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\llvm-aie\bin\clang++.exe+0x434d744)
+#35 0x00007ffa0e02cd87 (C:\WINDOWS\System32\KERNEL32.DLL+0x2cd87)
+#36 0x00007ffa0ebecaec (C:\WINDOWS\SYSTEM32\ntdll.dll+0xacaec)
+
+POST_NPU_CONTEXT_WITNESS "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+RESEARCH_PROCESS_RESULT {"exit_code": 1, "stop": null, "peak_tree_rss_bytes": 426483712, "rss_measurement": "maximum observed across sampled descendant working sets; zero observations reported as null", "elapsed_seconds": 9.60899999999674, "foreign_contention_observed": true, "timing_eligible": false}

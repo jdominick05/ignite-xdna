@@ -1,0 +1,122 @@
+{
+  "scope": "Archive qualification reports with verified source/build provenance.\n\nRefuses replacement, verifies referenced source/program artifacts and scrubs the\ncurrent local account prefix. Does not turn a negative report into a pass.\n",
+  "source_sha256": "d1a776782eb356b2fe7971521bbc4ccf28df90f92a2ebeda446deb46c62d7369",
+  "result_sha256": "ebeac18869b0caf3f5509b1d417ebcf071cc1a2b7d110d6963dd7595b87e7f1f",
+  "report": {
+    "passed": true,
+    "scope": "Check existing package-power counters; this is not an energy or idle result.\n\nReuse the study's measured milliwatt Power scale. Do not use the unresolved\nEnergy counter or infer whole-system power completeness from availability.\n",
+    "source_sha256": {
+      "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\tools\\qualify_gemma4_energy_counters.py": "c592c307070a91e4e5b8cbaa6f1120e276f2517099932b4e76023bf2cc45f33e",
+      "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\tools\\power_probe.py": "471d9563777cecf5fe19c590b1bc399ae32b35b72ada47a9c1bb2ecd9e7a9278",
+      "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\npu\\contention.py": "a00ac19ca6ca4b8a515628d6e8e534e71a4e5283930908bf7e5d7aad1af9a642"
+    },
+    "timing_eligible": false,
+    "energy_eligible": false,
+    "unit": "milliwatts, from the prior registered power-counter study",
+    "completeness": "Not shown; package counters exclude DRAM and are not wall power",
+    "contention": {
+      "utc": "2026-10-18T22:13:54.163405+00:00",
+      "sample_seconds": 0.5023942999832798,
+      "snapshot_seconds": 0.6834418999787886,
+      "inference_processes": [
+        {
+          "pid": 11908,
+          "name": "python.exe",
+          "active_cpu_cores": 0
+        },
+        {
+          "pid": 12748,
+          "name": "python.exe",
+          "active_cpu_cores": 0
+        },
+        {
+          "pid": 26776,
+          "name": "python.exe",
+          "active_cpu_cores": 0
+        },
+        {
+          "pid": 63520,
+          "name": "python.exe",
+          "active_cpu_cores": 0
+        },
+        {
+          "pid": 64488,
+          "name": "python.exe",
+          "active_cpu_cores": 0
+        },
+        {
+          "pid": 81348,
+          "name": "python.exe",
+          "active_cpu_cores": 0.995
+        }
+      ],
+      "cpu_telemetry_known": true,
+      "gpu_telemetry_known": true,
+      "busy_gpu_engines": [],
+      "gpu_details": {
+        "instances": 307,
+        "invalid_instances": 0
+      },
+      "gpu_error": null,
+      "npu_telemetry_known": true,
+      "npu_idle": true,
+      "idle_verified": false,
+      "blockers": [
+        "CPU inference work: PID 81348"
+      ],
+      "scope": "Read-only preflight snapshot; no process is stopped"
+    },
+    "counters_mw": {
+      "\\Energy Meter(RAPL_Package0_PKG)\\Power": [
+        20539.958247484723,
+        18031.60285230929
+      ],
+      "\\Energy Meter(RAPL_Package0_Core0_CORE)\\Power": [
+        363.2487697982823,
+        339.86546184029754
+      ],
+      "\\Energy Meter(RAPL_Package0_Core1_CORE)\\Power": [
+        371.40191944830906,
+        628.10143571088
+      ],
+      "\\Energy Meter(RAPL_Package0_Core2_CORE)\\Power": [
+        431.59150695892623,
+        295.0469791309814
+      ],
+      "\\Energy Meter(RAPL_Package0_Core3_CORE)\\Power": [
+        1878.7630406921994,
+        1240.442176270109
+      ],
+      "\\Energy Meter(RAPL_Package0_Core4_CORE)\\Power": [
+        327.0779358246364,
+        61.79325410140039
+      ],
+      "\\Energy Meter(RAPL_Package0_Core5_CORE)\\Power": [
+        1557.842095946185,
+        1388.6436278232002
+      ],
+      "\\Energy Meter(RAPL_Package0_Core6_CORE)\\Power": [
+        154.39747370507914,
+        144.59764358519755
+      ],
+      "\\Energy Meter(RAPL_Package0_Core7_CORE)\\Power": [
+        235.4616482049866,
+        108.75297915474651
+      ]
+    },
+    "counter_count": 9,
+    "requested_samples": 3,
+    "valid_sample_counts": {
+      "\\Energy Meter(RAPL_Package0_PKG)\\Power": 2,
+      "\\Energy Meter(RAPL_Package0_Core0_CORE)\\Power": 2,
+      "\\Energy Meter(RAPL_Package0_Core1_CORE)\\Power": 2,
+      "\\Energy Meter(RAPL_Package0_Core2_CORE)\\Power": 2,
+      "\\Energy Meter(RAPL_Package0_Core3_CORE)\\Power": 2,
+      "\\Energy Meter(RAPL_Package0_Core4_CORE)\\Power": 2,
+      "\\Energy Meter(RAPL_Package0_Core5_CORE)\\Power": 2,
+      "\\Energy Meter(RAPL_Package0_Core6_CORE)\\Power": 2,
+      "\\Energy Meter(RAPL_Package0_Core7_CORE)\\Power": 2
+    }
+  },
+  "builds": {}
+}

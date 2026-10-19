@@ -1,0 +1,2627 @@
+{
+  "scope": "Archive qualification reports with verified source/build provenance.\n\nRefuses replacement, verifies referenced source/program artifacts and scrubs the\ncurrent local account prefix. Does not turn a negative report into a pass.\n",
+  "source_sha256": "d1a776782eb356b2fe7971521bbc4ccf28df90f92a2ebeda446deb46c62d7369",
+  "result_sha256": "05a65bd9cc706940f7cfe219bc6aa08081962c7581a24e3655f5bac9a14348e3",
+  "report": {
+    "passed": false,
+    "diagnostic_completed": true,
+    "scope": "Compare fixed-block cached prepares with cold blocks and unchanged serving.\n\nCache consistency is an experiment, not permission to replace serving precision\nor its numerical baseline. The overall pass still requires exact serving state.\n",
+    "cases": [
+      {
+        "name": "identical",
+        "prompt_length": 511,
+        "serving_ms": 597.0224000047892,
+        "serving_snapshot": {
+          "position": 511,
+          "predictions": [
+            818
+          ],
+          "tensors": {
+            "Kcur_pos-13": {
+              "shape": [
+                256,
+                1,
+                511,
+                1
+              ],
+              "sha256": "3f2c295be6a33fa6bd942e88708caaad68673c5679a07dd6c9aae3390708132b"
+            },
+            "Kcur_pos-14": {
+              "shape": [
+                512,
+                1,
+                511,
+                1
+              ],
+              "sha256": "97b2a7f7d25df2a44676302681b801873763fb112d5b9537d51b5c945a429be0"
+            },
+            "Vcur_normed-13": {
+              "shape": [
+                256,
+                1,
+                511,
+                1
+              ],
+              "sha256": "3a27df829e7078f36d32ed72305beab1108ee256d36ebd2a11a9e8a6d8f708d6"
+            },
+            "Vcur_normed-14": {
+              "shape": [
+                512,
+                1,
+                511,
+                1
+              ],
+              "sha256": "67168f80d08c9e82d8f0d4d15e57861bb3de897f0257a06de363a3548185cf7a"
+            },
+            "result_norm": {
+              "shape": [
+                1536,
+                1,
+                1,
+                1
+              ],
+              "sha256": "fa33d964edeec0262797208be5fde6cf377403ba540ef520c71056f9d8531506"
+            }
+          }
+        },
+        "cold_blocks_ms": 636.6084000037517,
+        "cold_blocks_vs_serving": {
+          "prepare": {
+            "position_equal": true,
+            "predictions_equal": true,
+            "tensors": {
+              "Kcur_pos-13": {
+                "shape_equal": true,
+                "different_elements": 130816,
+                "max_abs": 0.9474481344223022,
+                "bf16_different": 127451
+              },
+              "Kcur_pos-14": {
+                "shape_equal": true,
+                "different_elements": 261632,
+                "max_abs": 0.23738223314285278,
+                "bf16_different": 258177
+              },
+              "Vcur_normed-13": {
+                "shape_equal": true,
+                "different_elements": 130816,
+                "max_abs": 10.509557723999023,
+                "bf16_different": 129713
+              },
+              "Vcur_normed-14": {
+                "shape_equal": true,
+                "different_elements": 261632,
+                "max_abs": 13.067131042480469,
+                "bf16_different": 258703
+              },
+              "result_norm": {
+                "shape_equal": true,
+                "different_elements": 1536,
+                "max_abs": 9.929954528808594,
+                "bf16_different": 1529
+              }
+            },
+            "tensor_names_equal": true,
+            "passed": false
+          },
+          "continuations": [
+            {
+              "position_equal": true,
+              "predictions_equal": true,
+              "tensors": {
+                "Kcur_pos-13": {
+                  "shape_equal": true,
+                  "different_elements": 256,
+                  "max_abs": 0.01020524650812149,
+                  "bf16_different": 240
+                },
+                "Kcur_pos-14": {
+                  "shape_equal": true,
+                  "different_elements": 512,
+                  "max_abs": 0.023774337023496628,
+                  "bf16_different": 492
+                },
+                "Vcur_normed-13": {
+                  "shape_equal": true,
+                  "different_elements": 256,
+                  "max_abs": 0.13119661808013916,
+                  "bf16_different": 246
+                },
+                "Vcur_normed-14": {
+                  "shape_equal": true,
+                  "different_elements": 512,
+                  "max_abs": 0.40457677841186523,
+                  "bf16_different": 501
+                },
+                "result_norm": {
+                  "shape_equal": true,
+                  "different_elements": 1536,
+                  "max_abs": 12.653717041015625,
+                  "bf16_different": 1526
+                }
+              },
+              "tensor_names_equal": true,
+              "passed": false
+            },
+            {
+              "position_equal": true,
+              "predictions_equal": true,
+              "tensors": {
+                "Kcur_pos-13": {
+                  "shape_equal": true,
+                  "different_elements": 256,
+                  "max_abs": 0.019853122532367706,
+                  "bf16_different": 245
+                },
+                "Kcur_pos-14": {
+                  "shape_equal": true,
+                  "different_elements": 512,
+                  "max_abs": 0.047229260206222534,
+                  "bf16_different": 501
+                },
+                "Vcur_normed-13": {
+                  "shape_equal": true,
+                  "different_elements": 256,
+                  "max_abs": 0.4161229133605957,
+                  "bf16_different": 251
+                },
+                "Vcur_normed-14": {
+                  "shape_equal": true,
+                  "different_elements": 512,
+                  "max_abs": 0.6573262214660645,
+                  "bf16_different": 496
+                },
+                "result_norm": {
+                  "shape_equal": true,
+                  "different_elements": 1536,
+                  "max_abs": 10.036251068115234,
+                  "bf16_different": 1530
+                }
+              },
+              "tensor_names_equal": true,
+              "passed": false
+            }
+          ]
+        },
+        "cached_ms": 4.099699988728389,
+        "evaluated_rows": 0,
+        "cold_block_rows": 512,
+        "cached_vs_cold_blocks": {
+          "prepare": {
+            "position_equal": true,
+            "predictions_equal": true,
+            "tensors": {
+              "Kcur_pos-13": {
+                "shape_equal": true,
+                "different_elements": 0,
+                "max_abs": 0.0,
+                "bf16_different": 0
+              },
+              "Kcur_pos-14": {
+                "shape_equal": true,
+                "different_elements": 0,
+                "max_abs": 0.0,
+                "bf16_different": 0
+              },
+              "Vcur_normed-13": {
+                "shape_equal": true,
+                "different_elements": 0,
+                "max_abs": 0.0,
+                "bf16_different": 0
+              },
+              "Vcur_normed-14": {
+                "shape_equal": true,
+                "different_elements": 0,
+                "max_abs": 0.0,
+                "bf16_different": 0
+              },
+              "result_norm": {
+                "shape_equal": true,
+                "different_elements": 0,
+                "max_abs": 0.0,
+                "bf16_different": 0
+              }
+            },
+            "tensor_names_equal": true,
+            "passed": true
+          },
+          "continuations": [
+            {
+              "position_equal": true,
+              "predictions_equal": true,
+              "tensors": {
+                "Kcur_pos-13": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                },
+                "Kcur_pos-14": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                },
+                "Vcur_normed-13": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                },
+                "Vcur_normed-14": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                },
+                "result_norm": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                }
+              },
+              "tensor_names_equal": true,
+              "passed": true
+            },
+            {
+              "position_equal": true,
+              "predictions_equal": true,
+              "tensors": {
+                "Kcur_pos-13": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                },
+                "Kcur_pos-14": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                },
+                "Vcur_normed-13": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                },
+                "Vcur_normed-14": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                },
+                "result_norm": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                }
+              },
+              "tensor_names_equal": true,
+              "passed": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "extended",
+        "prompt_length": 514,
+        "serving_ms": 731.9863000011537,
+        "serving_snapshot": {
+          "position": 514,
+          "predictions": [
+            614
+          ],
+          "tensors": {
+            "Kcur_pos-13": {
+              "shape": [
+                256,
+                1,
+                514,
+                1
+              ],
+              "sha256": "159fff6c93f841a0d039064e5c6eecd2649b3f599beedb58fb15d76b63d6d054"
+            },
+            "Kcur_pos-14": {
+              "shape": [
+                512,
+                1,
+                514,
+                1
+              ],
+              "sha256": "0555079a72150bfb80b2d314cd700419e006cd126bb038d53a4abbc43d2ab849"
+            },
+            "Vcur_normed-13": {
+              "shape": [
+                256,
+                1,
+                514,
+                1
+              ],
+              "sha256": "aece325412b9eb35c9d2d1b17407a6e671fb4323b2ce93ce4f0cce50ec5a1bd0"
+            },
+            "Vcur_normed-14": {
+              "shape": [
+                512,
+                1,
+                514,
+                1
+              ],
+              "sha256": "05e5cce9000fba27d6fc80152d4a6f5ef6216b1581ead691b8e5e22eae40f855"
+            },
+            "result_norm": {
+              "shape": [
+                1536,
+                1,
+                1,
+                1
+              ],
+              "sha256": "bdb44d0d52e4a34e521b7c743887318f5b09c9eeda2710f65ce8c80668dbe8a6"
+            }
+          }
+        },
+        "cold_blocks_ms": 809.5443999918643,
+        "cold_blocks_vs_serving": {
+          "prepare": {
+            "position_equal": true,
+            "predictions_equal": true,
+            "tensors": {
+              "Kcur_pos-13": {
+                "shape_equal": true,
+                "different_elements": 131584,
+                "max_abs": 0.9474481344223022,
+                "bf16_different": 128201
+              },
+              "Kcur_pos-14": {
+                "shape_equal": true,
+                "different_elements": 263168,
+                "max_abs": 0.23738223314285278,
+                "bf16_different": 259653
+              },
+              "Vcur_normed-13": {
+                "shape_equal": true,
+                "different_elements": 131584,
+                "max_abs": 10.509557723999023,
+                "bf16_different": 130479
+              },
+              "Vcur_normed-14": {
+                "shape_equal": true,
+                "different_elements": 263168,
+                "max_abs": 13.067131042480469,
+                "bf16_different": 260210
+              },
+              "result_norm": {
+                "shape_equal": true,
+                "different_elements": 1536,
+                "max_abs": 8.273292541503906,
+                "bf16_different": 1528
+              }
+            },
+            "tensor_names_equal": true,
+            "passed": false
+          },
+          "continuations": [
+            {
+              "position_equal": true,
+              "predictions_equal": true,
+              "tensors": {
+                "Kcur_pos-13": {
+                  "shape_equal": true,
+                  "different_elements": 256,
+                  "max_abs": 0.041611701250076294,
+                  "bf16_different": 249
+                },
+                "Kcur_pos-14": {
+                  "shape_equal": true,
+                  "different_elements": 512,
+                  "max_abs": 0.012605071067810059,
+                  "bf16_different": 508
+                },
+                "Vcur_normed-13": {
+                  "shape_equal": true,
+                  "different_elements": 256,
+                  "max_abs": 0.024480069056153297,
+                  "bf16_different": 252
+                },
+                "Vcur_normed-14": {
+                  "shape_equal": true,
+                  "different_elements": 512,
+                  "max_abs": 0.0775601863861084,
+                  "bf16_different": 501
+                },
+                "result_norm": {
+                  "shape_equal": true,
+                  "different_elements": 1536,
+                  "max_abs": 3.1637344360351562,
+                  "bf16_different": 1508
+                }
+              },
+              "tensor_names_equal": true,
+              "passed": false
+            },
+            {
+              "position_equal": true,
+              "predictions_equal": true,
+              "tensors": {
+                "Kcur_pos-13": {
+                  "shape_equal": true,
+                  "different_elements": 256,
+                  "max_abs": 0.008068263530731201,
+                  "bf16_different": 234
+                },
+                "Kcur_pos-14": {
+                  "shape_equal": true,
+                  "different_elements": 512,
+                  "max_abs": 0.009219929575920105,
+                  "bf16_different": 489
+                },
+                "Vcur_normed-13": {
+                  "shape_equal": true,
+                  "different_elements": 256,
+                  "max_abs": 0.08110915869474411,
+                  "bf16_different": 242
+                },
+                "Vcur_normed-14": {
+                  "shape_equal": true,
+                  "different_elements": 512,
+                  "max_abs": 0.15883636474609375,
+                  "bf16_different": 494
+                },
+                "result_norm": {
+                  "shape_equal": true,
+                  "different_elements": 1536,
+                  "max_abs": 2.8671188354492188,
+                  "bf16_different": 1497
+                }
+              },
+              "tensor_names_equal": true,
+              "passed": false
+            }
+          ]
+        },
+        "cached_ms": 362.21479999949224,
+        "evaluated_rows": 256,
+        "cold_block_rows": 640,
+        "cached_vs_cold_blocks": {
+          "prepare": {
+            "position_equal": true,
+            "predictions_equal": true,
+            "tensors": {
+              "Kcur_pos-13": {
+                "shape_equal": true,
+                "different_elements": 0,
+                "max_abs": 0.0,
+                "bf16_different": 0
+              },
+              "Kcur_pos-14": {
+                "shape_equal": true,
+                "different_elements": 0,
+                "max_abs": 0.0,
+                "bf16_different": 0
+              },
+              "Vcur_normed-13": {
+                "shape_equal": true,
+                "different_elements": 0,
+                "max_abs": 0.0,
+                "bf16_different": 0
+              },
+              "Vcur_normed-14": {
+                "shape_equal": true,
+                "different_elements": 0,
+                "max_abs": 0.0,
+                "bf16_different": 0
+              },
+              "result_norm": {
+                "shape_equal": true,
+                "different_elements": 0,
+                "max_abs": 0.0,
+                "bf16_different": 0
+              }
+            },
+            "tensor_names_equal": true,
+            "passed": true
+          },
+          "continuations": [
+            {
+              "position_equal": true,
+              "predictions_equal": true,
+              "tensors": {
+                "Kcur_pos-13": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                },
+                "Kcur_pos-14": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                },
+                "Vcur_normed-13": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                },
+                "Vcur_normed-14": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                },
+                "result_norm": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                }
+              },
+              "tensor_names_equal": true,
+              "passed": true
+            },
+            {
+              "position_equal": true,
+              "predictions_equal": true,
+              "tensors": {
+                "Kcur_pos-13": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                },
+                "Kcur_pos-14": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                },
+                "Vcur_normed-13": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                },
+                "Vcur_normed-14": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                },
+                "result_norm": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                }
+              },
+              "tensor_names_equal": true,
+              "passed": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "diverged_tail",
+        "prompt_length": 514,
+        "serving_ms": 720.564999995986,
+        "serving_snapshot": {
+          "position": 514,
+          "predictions": [
+            1460
+          ],
+          "tensors": {
+            "Kcur_pos-13": {
+              "shape": [
+                256,
+                1,
+                514,
+                1
+              ],
+              "sha256": "0372babbb718f4d55c3d89f5cb79f2979883379b13aec7e545a7ce8278d5651f"
+            },
+            "Kcur_pos-14": {
+              "shape": [
+                512,
+                1,
+                514,
+                1
+              ],
+              "sha256": "4d1406ae71148b41278e75d4baa05a146e60386a1c840bb1bdcc4452ee69cff1"
+            },
+            "Vcur_normed-13": {
+              "shape": [
+                256,
+                1,
+                514,
+                1
+              ],
+              "sha256": "e797415faa1c755e3a58ef1e4838b25ee032652fdf3d932b12a617a434df98c4"
+            },
+            "Vcur_normed-14": {
+              "shape": [
+                512,
+                1,
+                514,
+                1
+              ],
+              "sha256": "d3faa484f8a7ade402bf44f9e4a12a963fe8910aaa51c347070f4aa5eed56506"
+            },
+            "result_norm": {
+              "shape": [
+                1536,
+                1,
+                1,
+                1
+              ],
+              "sha256": "7f211c3c491a98cd202b39c0cc074f0843abc78e2ea7a33c336a2ab74cff2efa"
+            }
+          }
+        },
+        "cold_blocks_ms": 832.867899996927,
+        "cold_blocks_vs_serving": {
+          "prepare": {
+            "position_equal": true,
+            "predictions_equal": true,
+            "tensors": {
+              "Kcur_pos-13": {
+                "shape_equal": true,
+                "different_elements": 131584,
+                "max_abs": 0.9474481344223022,
+                "bf16_different": 128208
+              },
+              "Kcur_pos-14": {
+                "shape_equal": true,
+                "different_elements": 263168,
+                "max_abs": 0.23738223314285278,
+                "bf16_different": 259653
+              },
+              "Vcur_normed-13": {
+                "shape_equal": true,
+                "different_elements": 131584,
+                "max_abs": 10.509557723999023,
+                "bf16_different": 130479
+              },
+              "Vcur_normed-14": {
+                "shape_equal": true,
+                "different_elements": 263168,
+                "max_abs": 13.067131042480469,
+                "bf16_different": 260211
+              },
+              "result_norm": {
+                "shape_equal": true,
+                "different_elements": 1536,
+                "max_abs": 8.497001647949219,
+                "bf16_different": 1532
+              }
+            },
+            "tensor_names_equal": true,
+            "passed": false
+          },
+          "continuations": [
+            {
+              "position_equal": true,
+              "predictions_equal": true,
+              "tensors": {
+                "Kcur_pos-13": {
+                  "shape_equal": true,
+                  "different_elements": 256,
+                  "max_abs": 0.012767881155014038,
+                  "bf16_different": 235
+                },
+                "Kcur_pos-14": {
+                  "shape_equal": true,
+                  "different_elements": 512,
+                  "max_abs": 0.0312575101852417,
+                  "bf16_different": 496
+                },
+                "Vcur_normed-13": {
+                  "shape_equal": true,
+                  "different_elements": 256,
+                  "max_abs": 0.22712993621826172,
+                  "bf16_different": 250
+                },
+                "Vcur_normed-14": {
+                  "shape_equal": true,
+                  "different_elements": 512,
+                  "max_abs": 0.2312335968017578,
+                  "bf16_different": 502
+                },
+                "result_norm": {
+                  "shape_equal": true,
+                  "different_elements": 1536,
+                  "max_abs": 6.895650863647461,
+                  "bf16_different": 1528
+                }
+              },
+              "tensor_names_equal": true,
+              "passed": false
+            },
+            {
+              "position_equal": true,
+              "predictions_equal": false,
+              "tensors": {
+                "Kcur_pos-13": {
+                  "shape_equal": true,
+                  "different_elements": 256,
+                  "max_abs": 0.013716846704483032,
+                  "bf16_different": 237
+                },
+                "Kcur_pos-14": {
+                  "shape_equal": true,
+                  "different_elements": 512,
+                  "max_abs": 0.026461243629455566,
+                  "bf16_different": 498
+                },
+                "Vcur_normed-13": {
+                  "shape_equal": true,
+                  "different_elements": 256,
+                  "max_abs": 0.19654321670532227,
+                  "bf16_different": 247
+                },
+                "Vcur_normed-14": {
+                  "shape_equal": true,
+                  "different_elements": 512,
+                  "max_abs": 0.3169848918914795,
+                  "bf16_different": 504
+                },
+                "result_norm": {
+                  "shape_equal": true,
+                  "different_elements": 1536,
+                  "max_abs": 8.00168228149414,
+                  "bf16_different": 1528
+                }
+              },
+              "tensor_names_equal": true,
+              "passed": false
+            }
+          ]
+        },
+        "cached_ms": 216.1591999756638,
+        "evaluated_rows": 128,
+        "cold_block_rows": 640,
+        "cached_vs_cold_blocks": {
+          "prepare": {
+            "position_equal": true,
+            "predictions_equal": true,
+            "tensors": {
+              "Kcur_pos-13": {
+                "shape_equal": true,
+                "different_elements": 0,
+                "max_abs": 0.0,
+                "bf16_different": 0
+              },
+              "Kcur_pos-14": {
+                "shape_equal": true,
+                "different_elements": 0,
+                "max_abs": 0.0,
+                "bf16_different": 0
+              },
+              "Vcur_normed-13": {
+                "shape_equal": true,
+                "different_elements": 0,
+                "max_abs": 0.0,
+                "bf16_different": 0
+              },
+              "Vcur_normed-14": {
+                "shape_equal": true,
+                "different_elements": 0,
+                "max_abs": 0.0,
+                "bf16_different": 0
+              },
+              "result_norm": {
+                "shape_equal": true,
+                "different_elements": 0,
+                "max_abs": 0.0,
+                "bf16_different": 0
+              }
+            },
+            "tensor_names_equal": true,
+            "passed": true
+          },
+          "continuations": [
+            {
+              "position_equal": true,
+              "predictions_equal": true,
+              "tensors": {
+                "Kcur_pos-13": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                },
+                "Kcur_pos-14": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                },
+                "Vcur_normed-13": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                },
+                "Vcur_normed-14": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                },
+                "result_norm": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                }
+              },
+              "tensor_names_equal": true,
+              "passed": true
+            },
+            {
+              "position_equal": true,
+              "predictions_equal": true,
+              "tensors": {
+                "Kcur_pos-13": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                },
+                "Kcur_pos-14": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                },
+                "Vcur_normed-13": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                },
+                "Vcur_normed-14": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                },
+                "result_norm": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                }
+              },
+              "tensor_names_equal": true,
+              "passed": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "shorter",
+        "prompt_length": 510,
+        "serving_ms": 608.155900001293,
+        "serving_snapshot": {
+          "position": 510,
+          "predictions": [
+            669
+          ],
+          "tensors": {
+            "Kcur_pos-13": {
+              "shape": [
+                256,
+                1,
+                510,
+                1
+              ],
+              "sha256": "cef59e9b4d923e3bcf91a79be29e04c0b398023bf549173b291165144c360d12"
+            },
+            "Kcur_pos-14": {
+              "shape": [
+                512,
+                1,
+                510,
+                1
+              ],
+              "sha256": "a9984317a0733e8348b1c60b521eff4843a0c35463ea3e5212756fec520e5899"
+            },
+            "Vcur_normed-13": {
+              "shape": [
+                256,
+                1,
+                510,
+                1
+              ],
+              "sha256": "45a8eb4b2eaf22a239ed531526142e10a931b1463b8abb46b95f9b5fef6d2b6c"
+            },
+            "Vcur_normed-14": {
+              "shape": [
+                512,
+                1,
+                510,
+                1
+              ],
+              "sha256": "7893dc5e92491c211609650ce07cd8ca81f1980c08ad73d4069d4a27f4caf443"
+            },
+            "result_norm": {
+              "shape": [
+                1536,
+                1,
+                1,
+                1
+              ],
+              "sha256": "46308eb2ff039864132afb5b663fa20caceebcae27f6abc632b1384e7bb4bd3d"
+            }
+          }
+        },
+        "cold_blocks_ms": 639.0591000090353,
+        "cold_blocks_vs_serving": {
+          "prepare": {
+            "position_equal": true,
+            "predictions_equal": true,
+            "tensors": {
+              "Kcur_pos-13": {
+                "shape_equal": true,
+                "different_elements": 130560,
+                "max_abs": 0.9474481344223022,
+                "bf16_different": 127213
+              },
+              "Kcur_pos-14": {
+                "shape_equal": true,
+                "different_elements": 261120,
+                "max_abs": 0.23738223314285278,
+                "bf16_different": 257674
+              },
+              "Vcur_normed-13": {
+                "shape_equal": true,
+                "different_elements": 130560,
+                "max_abs": 10.509557723999023,
+                "bf16_different": 129461
+              },
+              "Vcur_normed-14": {
+                "shape_equal": true,
+                "different_elements": 261120,
+                "max_abs": 13.067131042480469,
+                "bf16_different": 258198
+              },
+              "result_norm": {
+                "shape_equal": true,
+                "different_elements": 1536,
+                "max_abs": 8.350183486938477,
+                "bf16_different": 1532
+              }
+            },
+            "tensor_names_equal": true,
+            "passed": false
+          },
+          "continuations": [
+            {
+              "position_equal": true,
+              "predictions_equal": true,
+              "tensors": {
+                "Kcur_pos-13": {
+                  "shape_equal": true,
+                  "different_elements": 256,
+                  "max_abs": 0.010641604661941528,
+                  "bf16_different": 248
+                },
+                "Kcur_pos-14": {
+                  "shape_equal": true,
+                  "different_elements": 512,
+                  "max_abs": 0.020348146557807922,
+                  "bf16_different": 498
+                },
+                "Vcur_normed-13": {
+                  "shape_equal": true,
+                  "different_elements": 256,
+                  "max_abs": 0.14049243927001953,
+                  "bf16_different": 250
+                },
+                "Vcur_normed-14": {
+                  "shape_equal": true,
+                  "different_elements": 512,
+                  "max_abs": 0.33500075340270996,
+                  "bf16_different": 505
+                },
+                "result_norm": {
+                  "shape_equal": true,
+                  "different_elements": 1536,
+                  "max_abs": 10.831512451171875,
+                  "bf16_different": 1526
+                }
+              },
+              "tensor_names_equal": true,
+              "passed": false
+            },
+            {
+              "position_equal": true,
+              "predictions_equal": true,
+              "tensors": {
+                "Kcur_pos-13": {
+                  "shape_equal": true,
+                  "different_elements": 256,
+                  "max_abs": 0.01788794808089733,
+                  "bf16_different": 246
+                },
+                "Kcur_pos-14": {
+                  "shape_equal": true,
+                  "different_elements": 512,
+                  "max_abs": 0.04524841904640198,
+                  "bf16_different": 501
+                },
+                "Vcur_normed-13": {
+                  "shape_equal": true,
+                  "different_elements": 256,
+                  "max_abs": 0.3037714958190918,
+                  "bf16_different": 246
+                },
+                "Vcur_normed-14": {
+                  "shape_equal": true,
+                  "different_elements": 512,
+                  "max_abs": 0.6319773197174072,
+                  "bf16_different": 502
+                },
+                "result_norm": {
+                  "shape_equal": true,
+                  "different_elements": 1536,
+                  "max_abs": 8.27890396118164,
+                  "bf16_different": 1530
+                }
+              },
+              "tensor_names_equal": true,
+              "passed": false
+            }
+          ]
+        },
+        "cached_ms": 206.47920001647435,
+        "evaluated_rows": 128,
+        "cold_block_rows": 512,
+        "cached_vs_cold_blocks": {
+          "prepare": {
+            "position_equal": true,
+            "predictions_equal": true,
+            "tensors": {
+              "Kcur_pos-13": {
+                "shape_equal": true,
+                "different_elements": 0,
+                "max_abs": 0.0,
+                "bf16_different": 0
+              },
+              "Kcur_pos-14": {
+                "shape_equal": true,
+                "different_elements": 0,
+                "max_abs": 0.0,
+                "bf16_different": 0
+              },
+              "Vcur_normed-13": {
+                "shape_equal": true,
+                "different_elements": 0,
+                "max_abs": 0.0,
+                "bf16_different": 0
+              },
+              "Vcur_normed-14": {
+                "shape_equal": true,
+                "different_elements": 0,
+                "max_abs": 0.0,
+                "bf16_different": 0
+              },
+              "result_norm": {
+                "shape_equal": true,
+                "different_elements": 0,
+                "max_abs": 0.0,
+                "bf16_different": 0
+              }
+            },
+            "tensor_names_equal": true,
+            "passed": true
+          },
+          "continuations": [
+            {
+              "position_equal": true,
+              "predictions_equal": true,
+              "tensors": {
+                "Kcur_pos-13": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                },
+                "Kcur_pos-14": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                },
+                "Vcur_normed-13": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                },
+                "Vcur_normed-14": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                },
+                "result_norm": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                }
+              },
+              "tensor_names_equal": true,
+              "passed": true
+            },
+            {
+              "position_equal": true,
+              "predictions_equal": true,
+              "tensors": {
+                "Kcur_pos-13": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                },
+                "Kcur_pos-14": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                },
+                "Vcur_normed-13": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                },
+                "Vcur_normed-14": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                },
+                "result_norm": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                }
+              },
+              "tensor_names_equal": true,
+              "passed": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "restored",
+        "prompt_length": 511,
+        "serving_ms": 619.1456999804359,
+        "serving_snapshot": {
+          "position": 511,
+          "predictions": [
+            818
+          ],
+          "tensors": {
+            "Kcur_pos-13": {
+              "shape": [
+                256,
+                1,
+                511,
+                1
+              ],
+              "sha256": "3f2c295be6a33fa6bd942e88708caaad68673c5679a07dd6c9aae3390708132b"
+            },
+            "Kcur_pos-14": {
+              "shape": [
+                512,
+                1,
+                511,
+                1
+              ],
+              "sha256": "97b2a7f7d25df2a44676302681b801873763fb112d5b9537d51b5c945a429be0"
+            },
+            "Vcur_normed-13": {
+              "shape": [
+                256,
+                1,
+                511,
+                1
+              ],
+              "sha256": "3a27df829e7078f36d32ed72305beab1108ee256d36ebd2a11a9e8a6d8f708d6"
+            },
+            "Vcur_normed-14": {
+              "shape": [
+                512,
+                1,
+                511,
+                1
+              ],
+              "sha256": "67168f80d08c9e82d8f0d4d15e57861bb3de897f0257a06de363a3548185cf7a"
+            },
+            "result_norm": {
+              "shape": [
+                1536,
+                1,
+                1,
+                1
+              ],
+              "sha256": "fa33d964edeec0262797208be5fde6cf377403ba540ef520c71056f9d8531506"
+            }
+          }
+        },
+        "cold_blocks_ms": 644.2379000072833,
+        "cold_blocks_vs_serving": {
+          "prepare": {
+            "position_equal": true,
+            "predictions_equal": true,
+            "tensors": {
+              "Kcur_pos-13": {
+                "shape_equal": true,
+                "different_elements": 130816,
+                "max_abs": 0.9474481344223022,
+                "bf16_different": 127451
+              },
+              "Kcur_pos-14": {
+                "shape_equal": true,
+                "different_elements": 261632,
+                "max_abs": 0.23738223314285278,
+                "bf16_different": 258177
+              },
+              "Vcur_normed-13": {
+                "shape_equal": true,
+                "different_elements": 130816,
+                "max_abs": 10.509557723999023,
+                "bf16_different": 129713
+              },
+              "Vcur_normed-14": {
+                "shape_equal": true,
+                "different_elements": 261632,
+                "max_abs": 13.067131042480469,
+                "bf16_different": 258703
+              },
+              "result_norm": {
+                "shape_equal": true,
+                "different_elements": 1536,
+                "max_abs": 9.929954528808594,
+                "bf16_different": 1529
+              }
+            },
+            "tensor_names_equal": true,
+            "passed": false
+          },
+          "continuations": [
+            {
+              "position_equal": true,
+              "predictions_equal": true,
+              "tensors": {
+                "Kcur_pos-13": {
+                  "shape_equal": true,
+                  "different_elements": 256,
+                  "max_abs": 0.01020524650812149,
+                  "bf16_different": 240
+                },
+                "Kcur_pos-14": {
+                  "shape_equal": true,
+                  "different_elements": 512,
+                  "max_abs": 0.023774337023496628,
+                  "bf16_different": 492
+                },
+                "Vcur_normed-13": {
+                  "shape_equal": true,
+                  "different_elements": 256,
+                  "max_abs": 0.13119661808013916,
+                  "bf16_different": 246
+                },
+                "Vcur_normed-14": {
+                  "shape_equal": true,
+                  "different_elements": 512,
+                  "max_abs": 0.40457677841186523,
+                  "bf16_different": 501
+                },
+                "result_norm": {
+                  "shape_equal": true,
+                  "different_elements": 1536,
+                  "max_abs": 12.653717041015625,
+                  "bf16_different": 1526
+                }
+              },
+              "tensor_names_equal": true,
+              "passed": false
+            },
+            {
+              "position_equal": true,
+              "predictions_equal": true,
+              "tensors": {
+                "Kcur_pos-13": {
+                  "shape_equal": true,
+                  "different_elements": 256,
+                  "max_abs": 0.019853122532367706,
+                  "bf16_different": 245
+                },
+                "Kcur_pos-14": {
+                  "shape_equal": true,
+                  "different_elements": 512,
+                  "max_abs": 0.047229260206222534,
+                  "bf16_different": 501
+                },
+                "Vcur_normed-13": {
+                  "shape_equal": true,
+                  "different_elements": 256,
+                  "max_abs": 0.4161229133605957,
+                  "bf16_different": 251
+                },
+                "Vcur_normed-14": {
+                  "shape_equal": true,
+                  "different_elements": 512,
+                  "max_abs": 0.6573262214660645,
+                  "bf16_different": 496
+                },
+                "result_norm": {
+                  "shape_equal": true,
+                  "different_elements": 1536,
+                  "max_abs": 10.036251068115234,
+                  "bf16_different": 1530
+                }
+              },
+              "tensor_names_equal": true,
+              "passed": false
+            }
+          ]
+        },
+        "cached_ms": 209.83360000536777,
+        "evaluated_rows": 128,
+        "cold_block_rows": 512,
+        "cached_vs_cold_blocks": {
+          "prepare": {
+            "position_equal": true,
+            "predictions_equal": true,
+            "tensors": {
+              "Kcur_pos-13": {
+                "shape_equal": true,
+                "different_elements": 0,
+                "max_abs": 0.0,
+                "bf16_different": 0
+              },
+              "Kcur_pos-14": {
+                "shape_equal": true,
+                "different_elements": 0,
+                "max_abs": 0.0,
+                "bf16_different": 0
+              },
+              "Vcur_normed-13": {
+                "shape_equal": true,
+                "different_elements": 0,
+                "max_abs": 0.0,
+                "bf16_different": 0
+              },
+              "Vcur_normed-14": {
+                "shape_equal": true,
+                "different_elements": 0,
+                "max_abs": 0.0,
+                "bf16_different": 0
+              },
+              "result_norm": {
+                "shape_equal": true,
+                "different_elements": 0,
+                "max_abs": 0.0,
+                "bf16_different": 0
+              }
+            },
+            "tensor_names_equal": true,
+            "passed": true
+          },
+          "continuations": [
+            {
+              "position_equal": true,
+              "predictions_equal": true,
+              "tensors": {
+                "Kcur_pos-13": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                },
+                "Kcur_pos-14": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                },
+                "Vcur_normed-13": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                },
+                "Vcur_normed-14": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                },
+                "result_norm": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                }
+              },
+              "tensor_names_equal": true,
+              "passed": true
+            },
+            {
+              "position_equal": true,
+              "predictions_equal": true,
+              "tensors": {
+                "Kcur_pos-13": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                },
+                "Kcur_pos-14": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                },
+                "Vcur_normed-13": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                },
+                "Vcur_normed-14": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                },
+                "result_norm": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                }
+              },
+              "tensor_names_equal": true,
+              "passed": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "unrelated",
+        "prompt_length": 19,
+        "serving_ms": 110.29760001110844,
+        "serving_snapshot": {
+          "position": 19,
+          "predictions": [
+            7676
+          ],
+          "tensors": {
+            "Kcur_pos-13": {
+              "shape": [
+                256,
+                1,
+                19,
+                1
+              ],
+              "sha256": "bdbe74e084d56b590711bae279a0768bbad7885550592ed5d97d74f25d861746"
+            },
+            "Kcur_pos-14": {
+              "shape": [
+                512,
+                1,
+                19,
+                1
+              ],
+              "sha256": "339f34a204667227594df37380b540a0aa33b6e732144ecbd84bb6454f244c82"
+            },
+            "Vcur_normed-13": {
+              "shape": [
+                256,
+                1,
+                19,
+                1
+              ],
+              "sha256": "1810361d649b2ea6021dda7d5ff1c2429a645093d7577c30d1f664e5ba71de69"
+            },
+            "Vcur_normed-14": {
+              "shape": [
+                512,
+                1,
+                19,
+                1
+              ],
+              "sha256": "c80afd061d13762b030eb769efb11a69e9d5d052752c22516a2c3aff98608757"
+            },
+            "result_norm": {
+              "shape": [
+                1536,
+                1,
+                1,
+                1
+              ],
+              "sha256": "f55727150b7766951bf6911f680ea9ce637716959795e4bd815ab9f444a6a25f"
+            }
+          }
+        },
+        "cold_blocks_ms": 190.8574000117369,
+        "cold_blocks_vs_serving": {
+          "prepare": {
+            "position_equal": true,
+            "predictions_equal": true,
+            "tensors": {
+              "Kcur_pos-13": {
+                "shape_equal": true,
+                "different_elements": 0,
+                "max_abs": 0.0,
+                "bf16_different": 0
+              },
+              "Kcur_pos-14": {
+                "shape_equal": true,
+                "different_elements": 0,
+                "max_abs": 0.0,
+                "bf16_different": 0
+              },
+              "Vcur_normed-13": {
+                "shape_equal": true,
+                "different_elements": 0,
+                "max_abs": 0.0,
+                "bf16_different": 0
+              },
+              "Vcur_normed-14": {
+                "shape_equal": true,
+                "different_elements": 0,
+                "max_abs": 0.0,
+                "bf16_different": 0
+              },
+              "result_norm": {
+                "shape_equal": true,
+                "different_elements": 0,
+                "max_abs": 0.0,
+                "bf16_different": 0
+              }
+            },
+            "tensor_names_equal": true,
+            "passed": true
+          },
+          "continuations": [
+            {
+              "position_equal": true,
+              "predictions_equal": true,
+              "tensors": {
+                "Kcur_pos-13": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                },
+                "Kcur_pos-14": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                },
+                "Vcur_normed-13": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                },
+                "Vcur_normed-14": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                },
+                "result_norm": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                }
+              },
+              "tensor_names_equal": true,
+              "passed": true
+            },
+            {
+              "position_equal": true,
+              "predictions_equal": true,
+              "tensors": {
+                "Kcur_pos-13": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                },
+                "Kcur_pos-14": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                },
+                "Vcur_normed-13": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                },
+                "Vcur_normed-14": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                },
+                "result_norm": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                }
+              },
+              "tensor_names_equal": true,
+              "passed": true
+            }
+          ]
+        },
+        "cached_ms": 199.2962000076659,
+        "evaluated_rows": 128,
+        "cold_block_rows": 128,
+        "cached_vs_cold_blocks": {
+          "prepare": {
+            "position_equal": true,
+            "predictions_equal": true,
+            "tensors": {
+              "Kcur_pos-13": {
+                "shape_equal": true,
+                "different_elements": 0,
+                "max_abs": 0.0,
+                "bf16_different": 0
+              },
+              "Kcur_pos-14": {
+                "shape_equal": true,
+                "different_elements": 0,
+                "max_abs": 0.0,
+                "bf16_different": 0
+              },
+              "Vcur_normed-13": {
+                "shape_equal": true,
+                "different_elements": 0,
+                "max_abs": 0.0,
+                "bf16_different": 0
+              },
+              "Vcur_normed-14": {
+                "shape_equal": true,
+                "different_elements": 0,
+                "max_abs": 0.0,
+                "bf16_different": 0
+              },
+              "result_norm": {
+                "shape_equal": true,
+                "different_elements": 0,
+                "max_abs": 0.0,
+                "bf16_different": 0
+              }
+            },
+            "tensor_names_equal": true,
+            "passed": true
+          },
+          "continuations": [
+            {
+              "position_equal": true,
+              "predictions_equal": true,
+              "tensors": {
+                "Kcur_pos-13": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                },
+                "Kcur_pos-14": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                },
+                "Vcur_normed-13": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                },
+                "Vcur_normed-14": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                },
+                "result_norm": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                }
+              },
+              "tensor_names_equal": true,
+              "passed": true
+            },
+            {
+              "position_equal": true,
+              "predictions_equal": true,
+              "tensors": {
+                "Kcur_pos-13": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                },
+                "Kcur_pos-14": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                },
+                "Vcur_normed-13": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                },
+                "Vcur_normed-14": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                },
+                "result_norm": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                }
+              },
+              "tensor_names_equal": true,
+              "passed": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "restored_again",
+        "prompt_length": 511,
+        "serving_ms": 600.9630000044126,
+        "serving_snapshot": {
+          "position": 511,
+          "predictions": [
+            818
+          ],
+          "tensors": {
+            "Kcur_pos-13": {
+              "shape": [
+                256,
+                1,
+                511,
+                1
+              ],
+              "sha256": "3f2c295be6a33fa6bd942e88708caaad68673c5679a07dd6c9aae3390708132b"
+            },
+            "Kcur_pos-14": {
+              "shape": [
+                512,
+                1,
+                511,
+                1
+              ],
+              "sha256": "97b2a7f7d25df2a44676302681b801873763fb112d5b9537d51b5c945a429be0"
+            },
+            "Vcur_normed-13": {
+              "shape": [
+                256,
+                1,
+                511,
+                1
+              ],
+              "sha256": "3a27df829e7078f36d32ed72305beab1108ee256d36ebd2a11a9e8a6d8f708d6"
+            },
+            "Vcur_normed-14": {
+              "shape": [
+                512,
+                1,
+                511,
+                1
+              ],
+              "sha256": "67168f80d08c9e82d8f0d4d15e57861bb3de897f0257a06de363a3548185cf7a"
+            },
+            "result_norm": {
+              "shape": [
+                1536,
+                1,
+                1,
+                1
+              ],
+              "sha256": "fa33d964edeec0262797208be5fde6cf377403ba540ef520c71056f9d8531506"
+            }
+          }
+        },
+        "cold_blocks_ms": 633.8781999947969,
+        "cold_blocks_vs_serving": {
+          "prepare": {
+            "position_equal": true,
+            "predictions_equal": true,
+            "tensors": {
+              "Kcur_pos-13": {
+                "shape_equal": true,
+                "different_elements": 130816,
+                "max_abs": 0.9474481344223022,
+                "bf16_different": 127451
+              },
+              "Kcur_pos-14": {
+                "shape_equal": true,
+                "different_elements": 261632,
+                "max_abs": 0.23738223314285278,
+                "bf16_different": 258177
+              },
+              "Vcur_normed-13": {
+                "shape_equal": true,
+                "different_elements": 130816,
+                "max_abs": 10.509557723999023,
+                "bf16_different": 129713
+              },
+              "Vcur_normed-14": {
+                "shape_equal": true,
+                "different_elements": 261632,
+                "max_abs": 13.067131042480469,
+                "bf16_different": 258703
+              },
+              "result_norm": {
+                "shape_equal": true,
+                "different_elements": 1536,
+                "max_abs": 9.929954528808594,
+                "bf16_different": 1529
+              }
+            },
+            "tensor_names_equal": true,
+            "passed": false
+          },
+          "continuations": [
+            {
+              "position_equal": true,
+              "predictions_equal": true,
+              "tensors": {
+                "Kcur_pos-13": {
+                  "shape_equal": true,
+                  "different_elements": 256,
+                  "max_abs": 0.01020524650812149,
+                  "bf16_different": 240
+                },
+                "Kcur_pos-14": {
+                  "shape_equal": true,
+                  "different_elements": 512,
+                  "max_abs": 0.023774337023496628,
+                  "bf16_different": 492
+                },
+                "Vcur_normed-13": {
+                  "shape_equal": true,
+                  "different_elements": 256,
+                  "max_abs": 0.13119661808013916,
+                  "bf16_different": 246
+                },
+                "Vcur_normed-14": {
+                  "shape_equal": true,
+                  "different_elements": 512,
+                  "max_abs": 0.40457677841186523,
+                  "bf16_different": 501
+                },
+                "result_norm": {
+                  "shape_equal": true,
+                  "different_elements": 1536,
+                  "max_abs": 12.653717041015625,
+                  "bf16_different": 1526
+                }
+              },
+              "tensor_names_equal": true,
+              "passed": false
+            },
+            {
+              "position_equal": true,
+              "predictions_equal": true,
+              "tensors": {
+                "Kcur_pos-13": {
+                  "shape_equal": true,
+                  "different_elements": 256,
+                  "max_abs": 0.019853122532367706,
+                  "bf16_different": 245
+                },
+                "Kcur_pos-14": {
+                  "shape_equal": true,
+                  "different_elements": 512,
+                  "max_abs": 0.047229260206222534,
+                  "bf16_different": 501
+                },
+                "Vcur_normed-13": {
+                  "shape_equal": true,
+                  "different_elements": 256,
+                  "max_abs": 0.4161229133605957,
+                  "bf16_different": 251
+                },
+                "Vcur_normed-14": {
+                  "shape_equal": true,
+                  "different_elements": 512,
+                  "max_abs": 0.6573262214660645,
+                  "bf16_different": 496
+                },
+                "result_norm": {
+                  "shape_equal": true,
+                  "different_elements": 1536,
+                  "max_abs": 10.036251068115234,
+                  "bf16_different": 1530
+                }
+              },
+              "tensor_names_equal": true,
+              "passed": false
+            }
+          ]
+        },
+        "cached_ms": 649.768800009042,
+        "evaluated_rows": 512,
+        "cold_block_rows": 512,
+        "cached_vs_cold_blocks": {
+          "prepare": {
+            "position_equal": true,
+            "predictions_equal": true,
+            "tensors": {
+              "Kcur_pos-13": {
+                "shape_equal": true,
+                "different_elements": 0,
+                "max_abs": 0.0,
+                "bf16_different": 0
+              },
+              "Kcur_pos-14": {
+                "shape_equal": true,
+                "different_elements": 0,
+                "max_abs": 0.0,
+                "bf16_different": 0
+              },
+              "Vcur_normed-13": {
+                "shape_equal": true,
+                "different_elements": 0,
+                "max_abs": 0.0,
+                "bf16_different": 0
+              },
+              "Vcur_normed-14": {
+                "shape_equal": true,
+                "different_elements": 0,
+                "max_abs": 0.0,
+                "bf16_different": 0
+              },
+              "result_norm": {
+                "shape_equal": true,
+                "different_elements": 0,
+                "max_abs": 0.0,
+                "bf16_different": 0
+              }
+            },
+            "tensor_names_equal": true,
+            "passed": true
+          },
+          "continuations": [
+            {
+              "position_equal": true,
+              "predictions_equal": true,
+              "tensors": {
+                "Kcur_pos-13": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                },
+                "Kcur_pos-14": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                },
+                "Vcur_normed-13": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                },
+                "Vcur_normed-14": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                },
+                "result_norm": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                }
+              },
+              "tensor_names_equal": true,
+              "passed": true
+            },
+            {
+              "position_equal": true,
+              "predictions_equal": true,
+              "tensors": {
+                "Kcur_pos-13": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                },
+                "Kcur_pos-14": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                },
+                "Vcur_normed-13": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                },
+                "Vcur_normed-14": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                },
+                "result_norm": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                }
+              },
+              "tensor_names_equal": true,
+              "passed": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "identical_again",
+        "prompt_length": 511,
+        "serving_ms": 611.4536999957636,
+        "serving_snapshot": {
+          "position": 511,
+          "predictions": [
+            818
+          ],
+          "tensors": {
+            "Kcur_pos-13": {
+              "shape": [
+                256,
+                1,
+                511,
+                1
+              ],
+              "sha256": "3f2c295be6a33fa6bd942e88708caaad68673c5679a07dd6c9aae3390708132b"
+            },
+            "Kcur_pos-14": {
+              "shape": [
+                512,
+                1,
+                511,
+                1
+              ],
+              "sha256": "97b2a7f7d25df2a44676302681b801873763fb112d5b9537d51b5c945a429be0"
+            },
+            "Vcur_normed-13": {
+              "shape": [
+                256,
+                1,
+                511,
+                1
+              ],
+              "sha256": "3a27df829e7078f36d32ed72305beab1108ee256d36ebd2a11a9e8a6d8f708d6"
+            },
+            "Vcur_normed-14": {
+              "shape": [
+                512,
+                1,
+                511,
+                1
+              ],
+              "sha256": "67168f80d08c9e82d8f0d4d15e57861bb3de897f0257a06de363a3548185cf7a"
+            },
+            "result_norm": {
+              "shape": [
+                1536,
+                1,
+                1,
+                1
+              ],
+              "sha256": "fa33d964edeec0262797208be5fde6cf377403ba540ef520c71056f9d8531506"
+            }
+          }
+        },
+        "cold_blocks_ms": 645.2627000107896,
+        "cold_blocks_vs_serving": {
+          "prepare": {
+            "position_equal": true,
+            "predictions_equal": true,
+            "tensors": {
+              "Kcur_pos-13": {
+                "shape_equal": true,
+                "different_elements": 130816,
+                "max_abs": 0.9474481344223022,
+                "bf16_different": 127451
+              },
+              "Kcur_pos-14": {
+                "shape_equal": true,
+                "different_elements": 261632,
+                "max_abs": 0.23738223314285278,
+                "bf16_different": 258177
+              },
+              "Vcur_normed-13": {
+                "shape_equal": true,
+                "different_elements": 130816,
+                "max_abs": 10.509557723999023,
+                "bf16_different": 129713
+              },
+              "Vcur_normed-14": {
+                "shape_equal": true,
+                "different_elements": 261632,
+                "max_abs": 13.067131042480469,
+                "bf16_different": 258703
+              },
+              "result_norm": {
+                "shape_equal": true,
+                "different_elements": 1536,
+                "max_abs": 9.929954528808594,
+                "bf16_different": 1529
+              }
+            },
+            "tensor_names_equal": true,
+            "passed": false
+          },
+          "continuations": [
+            {
+              "position_equal": true,
+              "predictions_equal": true,
+              "tensors": {
+                "Kcur_pos-13": {
+                  "shape_equal": true,
+                  "different_elements": 256,
+                  "max_abs": 0.01020524650812149,
+                  "bf16_different": 240
+                },
+                "Kcur_pos-14": {
+                  "shape_equal": true,
+                  "different_elements": 512,
+                  "max_abs": 0.023774337023496628,
+                  "bf16_different": 492
+                },
+                "Vcur_normed-13": {
+                  "shape_equal": true,
+                  "different_elements": 256,
+                  "max_abs": 0.13119661808013916,
+                  "bf16_different": 246
+                },
+                "Vcur_normed-14": {
+                  "shape_equal": true,
+                  "different_elements": 512,
+                  "max_abs": 0.40457677841186523,
+                  "bf16_different": 501
+                },
+                "result_norm": {
+                  "shape_equal": true,
+                  "different_elements": 1536,
+                  "max_abs": 12.653717041015625,
+                  "bf16_different": 1526
+                }
+              },
+              "tensor_names_equal": true,
+              "passed": false
+            },
+            {
+              "position_equal": true,
+              "predictions_equal": true,
+              "tensors": {
+                "Kcur_pos-13": {
+                  "shape_equal": true,
+                  "different_elements": 256,
+                  "max_abs": 0.019853122532367706,
+                  "bf16_different": 245
+                },
+                "Kcur_pos-14": {
+                  "shape_equal": true,
+                  "different_elements": 512,
+                  "max_abs": 0.047229260206222534,
+                  "bf16_different": 501
+                },
+                "Vcur_normed-13": {
+                  "shape_equal": true,
+                  "different_elements": 256,
+                  "max_abs": 0.4161229133605957,
+                  "bf16_different": 251
+                },
+                "Vcur_normed-14": {
+                  "shape_equal": true,
+                  "different_elements": 512,
+                  "max_abs": 0.6573262214660645,
+                  "bf16_different": 496
+                },
+                "result_norm": {
+                  "shape_equal": true,
+                  "different_elements": 1536,
+                  "max_abs": 10.036251068115234,
+                  "bf16_different": 1530
+                }
+              },
+              "tensor_names_equal": true,
+              "passed": false
+            }
+          ]
+        },
+        "cached_ms": 3.7637000204995275,
+        "evaluated_rows": 0,
+        "cold_block_rows": 512,
+        "cached_vs_cold_blocks": {
+          "prepare": {
+            "position_equal": true,
+            "predictions_equal": true,
+            "tensors": {
+              "Kcur_pos-13": {
+                "shape_equal": true,
+                "different_elements": 0,
+                "max_abs": 0.0,
+                "bf16_different": 0
+              },
+              "Kcur_pos-14": {
+                "shape_equal": true,
+                "different_elements": 0,
+                "max_abs": 0.0,
+                "bf16_different": 0
+              },
+              "Vcur_normed-13": {
+                "shape_equal": true,
+                "different_elements": 0,
+                "max_abs": 0.0,
+                "bf16_different": 0
+              },
+              "Vcur_normed-14": {
+                "shape_equal": true,
+                "different_elements": 0,
+                "max_abs": 0.0,
+                "bf16_different": 0
+              },
+              "result_norm": {
+                "shape_equal": true,
+                "different_elements": 0,
+                "max_abs": 0.0,
+                "bf16_different": 0
+              }
+            },
+            "tensor_names_equal": true,
+            "passed": true
+          },
+          "continuations": [
+            {
+              "position_equal": true,
+              "predictions_equal": true,
+              "tensors": {
+                "Kcur_pos-13": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                },
+                "Kcur_pos-14": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                },
+                "Vcur_normed-13": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                },
+                "Vcur_normed-14": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                },
+                "result_norm": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                }
+              },
+              "tensor_names_equal": true,
+              "passed": true
+            },
+            {
+              "position_equal": true,
+              "predictions_equal": true,
+              "tensors": {
+                "Kcur_pos-13": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                },
+                "Kcur_pos-14": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                },
+                "Vcur_normed-13": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                },
+                "Vcur_normed-14": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                },
+                "result_norm": {
+                  "shape_equal": true,
+                  "different_elements": 0,
+                  "max_abs": 0.0,
+                  "bf16_different": 0
+                }
+              },
+              "tensor_names_equal": true,
+              "passed": true
+            }
+          ]
+        }
+      }
+    ],
+    "rejections": [
+      {
+        "utc": "2026-10-19T00:03:55.251598+00:00",
+        "sample_seconds": 0.5024167999799829,
+        "snapshot_seconds": 0.6154841000097804,
+        "inference_processes": [
+          {
+            "pid": 11908,
+            "name": "python.exe",
+            "active_cpu_cores": 0
+          },
+          {
+            "pid": 12748,
+            "name": "python.exe",
+            "active_cpu_cores": 0
+          },
+          {
+            "pid": 26776,
+            "name": "python.exe",
+            "active_cpu_cores": 0
+          },
+          {
+            "pid": 64488,
+            "name": "python.exe",
+            "active_cpu_cores": 0
+          },
+          {
+            "pid": 82732,
+            "name": "python.exe",
+            "active_cpu_cores": 0.342
+          },
+          {
+            "pid": 83276,
+            "name": "python.exe",
+            "active_cpu_cores": 0.031
+          }
+        ],
+        "cpu_telemetry_known": true,
+        "gpu_telemetry_known": true,
+        "busy_gpu_engines": [
+          {
+            "pid": 11024,
+            "engine": "pid_11024_luid_0x00000000_0x0000CE7A_phys_0_eng_0_engtype_3D",
+            "utilization_percent": 2.3235087887915875
+          }
+        ],
+        "gpu_details": {
+          "instances": 317,
+          "invalid_instances": 0
+        },
+        "gpu_error": null,
+        "npu_telemetry_known": true,
+        "npu_idle": true,
+        "idle_verified": false,
+        "blockers": [
+          "CPU inference work: PID 82732",
+          "GPU engine activity observed"
+        ],
+        "scope": "Read-only preflight snapshot; no process is stopped",
+        "owned_pids": [
+          81940,
+          82732,
+          83276
+        ]
+      },
+      {
+        "utc": "2026-10-19T00:04:24.534655+00:00",
+        "sample_seconds": 0.5025135999894701,
+        "snapshot_seconds": 0.6135409000271466,
+        "inference_processes": [
+          {
+            "pid": 11908,
+            "name": "python.exe",
+            "active_cpu_cores": 0.031
+          },
+          {
+            "pid": 12748,
+            "name": "python.exe",
+            "active_cpu_cores": 0
+          },
+          {
+            "pid": 26776,
+            "name": "python.exe",
+            "active_cpu_cores": 0
+          },
+          {
+            "pid": 64488,
+            "name": "python.exe",
+            "active_cpu_cores": 0
+          },
+          {
+            "pid": 82732,
+            "name": "python.exe",
+            "active_cpu_cores": 0.995
+          },
+          {
+            "pid": 83276,
+            "name": "python.exe",
+            "active_cpu_cores": 0
+          }
+        ],
+        "cpu_telemetry_known": true,
+        "gpu_telemetry_known": true,
+        "busy_gpu_engines": [
+          {
+            "pid": 11024,
+            "engine": "pid_11024_luid_0x00000000_0x0000CE7A_phys_0_eng_0_engtype_3D",
+            "utilization_percent": 2.2377548470252333
+          }
+        ],
+        "gpu_details": {
+          "instances": 317,
+          "invalid_instances": 0
+        },
+        "gpu_error": null,
+        "npu_telemetry_known": true,
+        "npu_idle": true,
+        "idle_verified": false,
+        "blockers": [
+          "CPU inference work: PID 82732",
+          "GPU engine activity observed"
+        ],
+        "scope": "Read-only preflight snapshot; no process is stopped",
+        "owned_pids": [
+          82732,
+          83180,
+          83276
+        ]
+      },
+      {
+        "utc": "2026-10-19T00:04:31.536746+00:00",
+        "sample_seconds": 0.5017306999943685,
+        "snapshot_seconds": 0.6101968000002671,
+        "inference_processes": [
+          {
+            "pid": 11908,
+            "name": "python.exe",
+            "active_cpu_cores": 0
+          },
+          {
+            "pid": 12748,
+            "name": "python.exe",
+            "active_cpu_cores": 0
+          },
+          {
+            "pid": 26776,
+            "name": "python.exe",
+            "active_cpu_cores": 0
+          },
+          {
+            "pid": 64488,
+            "name": "python.exe",
+            "active_cpu_cores": 0
+          },
+          {
+            "pid": 82732,
+            "name": "python.exe",
+            "active_cpu_cores": 0.187
+          },
+          {
+            "pid": 83276,
+            "name": "python.exe",
+            "active_cpu_cores": 0
+          }
+        ],
+        "cpu_telemetry_known": true,
+        "gpu_telemetry_known": true,
+        "busy_gpu_engines": [
+          {
+            "pid": 11024,
+            "engine": "pid_11024_luid_0x00000000_0x0000CE7A_phys_0_eng_0_engtype_3D",
+            "utilization_percent": 2.016984948521775
+          }
+        ],
+        "gpu_details": {
+          "instances": 317,
+          "invalid_instances": 0
+        },
+        "gpu_error": null,
+        "npu_telemetry_known": true,
+        "npu_idle": true,
+        "idle_verified": false,
+        "blockers": [
+          "CPU inference work: PID 82732",
+          "GPU engine activity observed"
+        ],
+        "scope": "Read-only preflight snapshot; no process is stopped",
+        "owned_pids": [
+          82732,
+          83180,
+          83276
+        ]
+      }
+    ],
+    "source_sha256": {
+      "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\tools\\qualify_gemma4_block_prefill.py": "0a67bb735a124f6800e1b6cb4cee20eb2369fca509d5e3e7b22b8a7183fec7b9",
+      "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\tools\\qualify_gemma4_prefix_worker.py": "3e68ef57b2061adfb06501d9afe4b4056510df7016b63e6a8d07d66ffc0ce141",
+      "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\tools\\profile_gemma4_target.py": "c681fab3fb0bcac395c5b42470033eca9291bfdddaa978fc78a1d2999eaabf3b",
+      "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\tools\\ggml_gpu_target\\worker.cpp": "5c4bdeb4cc30528dd73cb73fa9cdb4c447c1aebea7ef5d3db632ca7d4b72943a",
+      "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\tools\\ggml_gpu_target\\worker_blocks.cpp": "9da07bc1720fa61076736d315fda6e0bcc03fd36e56232aaa60a0234985efdb6",
+      "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\tools\\ggml_gpu_target\\build_blocks.cmd": "78144e49391a8fc84b50a316e357d209ab929ba6d3362b2091bf31a824288c3f",
+      "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\tools\\ggml_gpu_target\\prefix_history.hpp": "d582eac21a2f43a53fdce3fa261f7f97dba711794d04565de995dbd51eba4291",
+      "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\tools\\ggml_gpu_target\\client.py": "18b75f386a346688e508fc6062335019c5c756e3e3965a52fc3140d462721dbf",
+      "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\tools\\ggml_gpu_target\\prefix_client.py": "4f40067fd1a8afcc9af306bf1d2d5feb265a251ad076792b558d094d0ebcd673",
+      "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\tools\\ggml_gpu_embedding\\embedding.cpp": "82daefc983ffb2778d2a7213b7b49a5dc653dc1f4268bbc74afc5c1f9b7dccd3",
+      "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\npu\\gemma4\\runtime.py": "d997f1297677f4a1b69599d3d7861b67bc7be674aa3d392838e347164813f30a",
+      "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\npu\\contention.py": "a00ac19ca6ca4b8a515628d6e8e534e71a4e5283930908bf7e5d7aad1af9a642",
+      "C:\\Users\\<user>\\gemma4-assistant\\npu\\public-context-20261018\\public-511.i32": "c80b23b2ee39b2ed2745cac5d6ddff1c5e776e5ebb79ccb7e2a0cc91717de135",
+      "C:\\Users\\<user>\\gemma4-assistant\\npu\\live-public-ok-20261018.i32": "20c70b7c38f8a4510276864748fda9b7ca8f38019ec3dd01dc23f03e0e22a870",
+      "C:\\Users\\<user>\\gemma4-assistant\\models\\gemma-4-E2B-it-Q5_K_M-pleQ4-imatrix.gguf": "ac36a228eb6cd1b93eedc86153016612b0a60ba73c9a50e0b4e95a6a143f65e1",
+      "C:\\Users\\<user>\\gemma4-assistant\\bin\\ggml_gpu_target.exe": "d2d3b60a32d7b8a8ee4ce534ade2515de43f046f30bbb09f58f14d532264dfba",
+      "C:\\Users\\<user>\\gemma4-assistant\\bin\\ggml_gpu_target_blocks-20261018.exe": "a8f986ebbb2ecceecf40a08d29b9a06417108876835c9d321dfb7f38bdbc9491",
+      "C:\\Users\\<user>\\tools\\llamacpp-b1343-rocm\\llama.dll": "04aeca339e96514cd2eeed4810ddc813e7cc91b088137d741d5bfb53829464e8",
+      "C:\\Users\\<user>\\tools\\llamacpp-b1343-rocm\\ggml.dll": "d62c9fd3ea800ebf81b104f0b276c44105930557337c3e97ca7bf3e5a51bd889",
+      "C:\\Users\\<user>\\tools\\llamacpp-b1343-rocm\\ggml-base.dll": "b0f6bcf152bbea75fe55c3d185b512ca4b3df167ec8159357da53be435db9539",
+      "C:\\Users\\<user>\\tools\\llamacpp-b1343-rocm\\ggml-hip.dll": "ea8866ab163caad203a2fa2f8afbce51584bb55eb566e1e863bb14e1b1d3f370",
+      "\\\\192.168.0.99\\D\\llm-work\\src\\llama.cpp\\include\\llama.h": "40e575013eb8c05980916b2fad2dc3da3677891c5a231163b706cfa4dca9efee",
+      "\\\\192.168.0.99\\D\\llm-work\\src\\llama.cpp\\ggml\\include\\ggml.h": "5e61b8054a615a1ef69e5d9ffbb1b4c3830e3134ea67eab126bc16d8c0b76e8d",
+      "\\\\192.168.0.99\\D\\llm-work\\src\\llama.cpp\\ggml\\include\\ggml-backend.h": "2477d6cdd0bd936f8cc1004e69b87017aab72dde3de2acc49b40a22148aee4b0",
+      "\\\\192.168.0.99\\D\\llm-work\\src\\llama.cpp\\ggml\\include\\ggml-alloc.h": "4c2dc83a6bc3e8df4c8a613c56ec0a9a96a09a5b96de85cf9e1fbe2873c86608",
+      "\\\\192.168.0.99\\D\\llm-work\\src\\llama.cpp\\ggml\\include\\gguf.h": "4ae33e92cfe908a6068f2c5c9efe714d3290391aab0472d5d43edd6a8b00db2d"
+    },
+    "block_rows": 128,
+    "timing_eligible": false,
+    "energy_eligible": false,
+    "criteria": "Exact cached/cold block state plus exact unchanged serving state and changed-prompt work avoidance",
+    "worker_closed": true,
+    "cache_consistency_passed": true,
+    "original_state_exact": false,
+    "changed_prompt_work_avoided": true
+  },
+  "builds": {}
+}

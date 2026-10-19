@@ -1,0 +1,861 @@
+{
+  "passed": true,
+  "cases": 28,
+  "gates": {
+    "atol": 0.002,
+    "rtol": 0.008,
+    "relative_l2": 0.004,
+    "scope": "Synthetic individual operations; no whole-model accuracy, graph compiler support, or speedup"
+  },
+  "sources": {
+    "kernels/transformer_bf16/common.py": "e9ea9aefc2167093490bc2716ec2895f38cb13fc3852703ebd42211526c4854e",
+    "kernels/transformer_bf16/dispatch.cc": "bb59aae2cddd77be2e4114eb1d9324fb25389c8fe9f19a21469102d01d8f7505",
+    "kernels/transformer_bf16/geglu.cc": "e7ed0233130e8f63bc2134502c318c87563ac48cf2308aeb7c308641666d4b34",
+    "kernels/transformer_bf16/gemv.cc": "66a1da00c319f565af9554ea516254588273f0396c3d2a1b29299a8e3039690f",
+    "kernels/transformer_bf16/gemv_precise.cc": "6600e21079a574c4d1d3b93f497d11d75656fc062cc123fb12013ece3436087a",
+    "kernels/transformer_bf16/ops.py": "5480fc2e2f1a1e1ed3e32486001dc06fede35337182605b84b41a022e4774c06",
+    "kernels/transformer_bf16/persistent.py": "6ade4b2ab7d903f3e201784a60ee805ccec96e7edfb0b6121db29d52c1257f65",
+    "kernels/transformer_bf16/probe.py": "8233278ed12504807faa60ce48c08e5bb5b3bd9f95502428247f9050e4a41c5d",
+    "kernels/transformer_bf16/residual.cc": "56d6d909c9830b799263b970443f1f7b57dd4d99557db25afef036d761e8f4a2",
+    "kernels/transformer_bf16/rmsnorm.cc": "9efc3bec80f7c25e88a48ce30f851bc437e05000e7d79014cc2997399b15463f",
+    "kernels/transformer_bf16/rope.cc": "9cda05b108160f2152261eb79b61c8830aca34d0c4d4158d5c281897f1b7ce2a",
+    "kernels/transformer_bf16/session_probe.py": "5bdccf07ea2c4afce21960af75a83c35a73dbe88250ed1b45cb173f2381856a8",
+    "kernels/transformer_bf16/softmax.cc": "32ed139ad46f7c3ee8f3edd5716eafed3306386cb81be384ede30fdf00ff397a",
+    "kernels/transformer_bf16/state.py": "adbbadc3ccca043d81c154030717b30e4ceffbf1c9e596454b74cca36c46a108",
+    "kernels/transformer_bf16/state_dispatch.cc": "18b3c641a944088772eb6235a24abddc7e762f5933449723837e582d15dd89a7",
+    "kernels/transformer_bf16/state_probe.py": "9ce7c605414756f7b31500087c9617cc3d5b0aaadce26aa34fce74aed9ed1962",
+    "kernels/transformer_bf16/stream.py": "6e7da07da912a65f6cdfafbc76df2dd22e135e371cc0a560eeddd0bf4c19c97d",
+    "kernels/transformer_bf16/topk.cc": "1f680ca67d8c97a82bb41db53a6f2aad15802f16be287b9bfddbac31ca6e1868",
+    "kernels/transformer_bf16/__init__.py": "66e8ee8dbd8e1bbc4788e12fa85a161db92c666969493f6a38b5f623cb309bf4"
+  },
+  "fixture_manifest_sha256": "5eff2d544d0f48aedcae5b78662ae268ed403e14c6cd0900f7a8563fc263395b",
+  "precise_projection": false,
+  "single_image": true,
+  "cache_ok": true,
+  "closed_rejected": true,
+  "drift": {
+    "detected": true,
+    "contexts_released": true,
+    "restored": true
+  },
+  "cache_hits": 25,
+  "contexts_created": 2,
+  "evictions": 0,
+  "pre_witness": "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n",
+  "post_witness": "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n",
+  "results": [
+    {
+      "operation": "projection",
+      "seed": 11,
+      "replay": false,
+      "passed": true,
+      "relative_l2": 0.0,
+      "max_abs": 0.0
+    },
+    {
+      "operation": "projection",
+      "seed": 29,
+      "replay": false,
+      "passed": true,
+      "relative_l2": 0.0,
+      "max_abs": 0.0
+    },
+    {
+      "operation": "projection",
+      "seed": 83,
+      "replay": false,
+      "passed": true,
+      "relative_l2": 0.0,
+      "max_abs": 0.0
+    },
+    {
+      "operation": "projection",
+      "seed": 11,
+      "replay": true,
+      "passed": true,
+      "relative_l2": 0.0,
+      "max_abs": 0.0,
+      "replay_bitwise_equal": true
+    },
+    {
+      "operation": "norm",
+      "seed": 11,
+      "replay": false,
+      "passed": true,
+      "relative_l2": 0.0,
+      "max_abs": 0.0
+    },
+    {
+      "operation": "norm",
+      "seed": 29,
+      "replay": false,
+      "passed": true,
+      "relative_l2": 0.0,
+      "max_abs": 0.0
+    },
+    {
+      "operation": "norm",
+      "seed": 83,
+      "replay": false,
+      "passed": true,
+      "relative_l2": 0.0,
+      "max_abs": 0.0
+    },
+    {
+      "operation": "norm",
+      "seed": 11,
+      "replay": true,
+      "passed": true,
+      "relative_l2": 0.0,
+      "max_abs": 0.0,
+      "replay_bitwise_equal": true
+    },
+    {
+      "operation": "rope",
+      "seed": 11,
+      "replay": false,
+      "passed": true,
+      "relative_l2": 0.0,
+      "max_abs": 0.0
+    },
+    {
+      "operation": "rope",
+      "seed": 29,
+      "replay": false,
+      "passed": true,
+      "relative_l2": 0.0,
+      "max_abs": 0.0
+    },
+    {
+      "operation": "rope",
+      "seed": 83,
+      "replay": false,
+      "passed": true,
+      "relative_l2": 0.0,
+      "max_abs": 0.0
+    },
+    {
+      "operation": "rope",
+      "seed": 11,
+      "replay": true,
+      "passed": true,
+      "relative_l2": 0.0,
+      "max_abs": 0.0,
+      "replay_bitwise_equal": true
+    },
+    {
+      "operation": "softmax",
+      "seed": 11,
+      "replay": false,
+      "passed": true,
+      "relative_l2": 1.0688608702782702e-35,
+      "max_abs": 1.5892683623117327e-35
+    },
+    {
+      "operation": "softmax",
+      "seed": 29,
+      "replay": false,
+      "passed": true,
+      "relative_l2": 1.9328041730482015e-13,
+      "max_abs": 2.2737367544323206e-13
+    },
+    {
+      "operation": "softmax",
+      "seed": 83,
+      "replay": false,
+      "passed": true,
+      "relative_l2": 1.600208499122117e-36,
+      "max_abs": 2.445028249710358e-36
+    },
+    {
+      "operation": "softmax",
+      "seed": 11,
+      "replay": true,
+      "passed": true,
+      "relative_l2": 1.0688608702782702e-35,
+      "max_abs": 1.5892683623117327e-35,
+      "replay_bitwise_equal": true
+    },
+    {
+      "operation": "geglu",
+      "seed": 11,
+      "replay": false,
+      "passed": true,
+      "relative_l2": 0.0,
+      "max_abs": 0.0
+    },
+    {
+      "operation": "geglu",
+      "seed": 29,
+      "replay": false,
+      "passed": true,
+      "relative_l2": 0.0,
+      "max_abs": 0.0
+    },
+    {
+      "operation": "geglu",
+      "seed": 83,
+      "replay": false,
+      "passed": true,
+      "relative_l2": 0.0,
+      "max_abs": 0.0
+    },
+    {
+      "operation": "geglu",
+      "seed": 11,
+      "replay": true,
+      "passed": true,
+      "relative_l2": 0.0,
+      "max_abs": 0.0,
+      "replay_bitwise_equal": true
+    },
+    {
+      "operation": "residual",
+      "seed": 11,
+      "replay": false,
+      "passed": true,
+      "relative_l2": 0.0,
+      "max_abs": 0.0
+    },
+    {
+      "operation": "residual",
+      "seed": 29,
+      "replay": false,
+      "passed": true,
+      "relative_l2": 0.0,
+      "max_abs": 0.0
+    },
+    {
+      "operation": "residual",
+      "seed": 83,
+      "replay": false,
+      "passed": true,
+      "relative_l2": 0.0,
+      "max_abs": 0.0
+    },
+    {
+      "operation": "residual",
+      "seed": 11,
+      "replay": true,
+      "passed": true,
+      "relative_l2": 0.0,
+      "max_abs": 0.0,
+      "replay_bitwise_equal": true
+    },
+    {
+      "operation": "topk",
+      "seed": 11,
+      "replay": false,
+      "passed": true
+    },
+    {
+      "operation": "topk",
+      "seed": 29,
+      "replay": false,
+      "passed": true
+    },
+    {
+      "operation": "topk",
+      "seed": 83,
+      "replay": false,
+      "passed": true
+    },
+    {
+      "operation": "topk",
+      "seed": 11,
+      "replay": true,
+      "passed": true,
+      "replay_bitwise_equal": true
+    }
+  ],
+  "dispatches": [
+    {
+      "function": "draft_projection",
+      "build": "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\scratch\\bf16-state-probe-20261018\\baseline\\draft_transformer-352fd2a740ef9b73\\build.json",
+      "wall_ms": 339.1512999951374,
+      "dispatch_ms": 0.5505000008270144,
+      "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+      "input_unchanged": true,
+      "transfer_phases_ms": {
+        "input_write_sync": 0.3637999761849642,
+        "output_poison_sync": 0.1545000122860074,
+        "output_sync_read": 0.18199998885393143,
+        "input_sync_verify": 0.3265000123064965
+      },
+      "persistent_transport": true,
+      "image_cache_hit": false,
+      "contexts_created": 1,
+      "context_cache_hit": false,
+      "exact_program_sharing": true,
+      "context_cache_size": 1,
+      "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+    },
+    {
+      "function": "draft_projection",
+      "build": "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\scratch\\bf16-state-probe-20261018\\baseline\\draft_transformer-352fd2a740ef9b73\\build.json",
+      "wall_ms": 1.4682000037282705,
+      "dispatch_ms": 0.4215999797452241,
+      "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+      "input_unchanged": true,
+      "transfer_phases_ms": {
+        "input_write_sync": 0.35340001340955496,
+        "output_poison_sync": 0.09129999671131372,
+        "output_sync_read": 0.03270001616328955,
+        "input_sync_verify": 0.3071999817620963
+      },
+      "persistent_transport": true,
+      "image_cache_hit": true,
+      "contexts_created": 1,
+      "context_cache_hit": true,
+      "exact_program_sharing": true,
+      "context_cache_size": 1,
+      "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+    },
+    {
+      "function": "draft_projection",
+      "build": "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\scratch\\bf16-state-probe-20261018\\baseline\\draft_transformer-352fd2a740ef9b73\\build.json",
+      "wall_ms": 1.272099994821474,
+      "dispatch_ms": 0.4138000076636672,
+      "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+      "input_unchanged": true,
+      "transfer_phases_ms": {
+        "input_write_sync": 0.30429998878389597,
+        "output_poison_sync": 0.08300002082251012,
+        "output_sync_read": 0.0337999954354018,
+        "input_sync_verify": 0.24090000079013407
+      },
+      "persistent_transport": true,
+      "image_cache_hit": true,
+      "contexts_created": 1,
+      "context_cache_hit": true,
+      "exact_program_sharing": true,
+      "context_cache_size": 1,
+      "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+    },
+    {
+      "function": "draft_projection",
+      "build": "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\scratch\\bf16-state-probe-20261018\\baseline\\draft_transformer-352fd2a740ef9b73\\build.json",
+      "wall_ms": 1.3426999794319272,
+      "dispatch_ms": 0.4026000096928328,
+      "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+      "input_unchanged": true,
+      "transfer_phases_ms": {
+        "input_write_sync": 0.28910001856274903,
+        "output_poison_sync": 0.11139997513964772,
+        "output_sync_read": 0.032499985536560416,
+        "input_sync_verify": 0.26780000189319253
+      },
+      "persistent_transport": true,
+      "image_cache_hit": true,
+      "contexts_created": 1,
+      "context_cache_hit": true,
+      "exact_program_sharing": true,
+      "context_cache_size": 1,
+      "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+    },
+    {
+      "function": "draft_norm",
+      "build": "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\scratch\\bf16-state-probe-20261018\\baseline\\draft_transformer-2e67520cd55b23d3\\build.json",
+      "wall_ms": 40.8459999889601,
+      "dispatch_ms": 0.24470000062137842,
+      "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+      "input_unchanged": true,
+      "transfer_phases_ms": {
+        "input_write_sync": 0.016400008462369442,
+        "output_poison_sync": 0.023599975975230336,
+        "output_sync_read": 0.01789999078027904,
+        "input_sync_verify": 0.031200004741549492
+      },
+      "persistent_transport": true,
+      "image_cache_hit": false,
+      "contexts_created": 1,
+      "context_cache_hit": true,
+      "exact_program_sharing": true,
+      "context_cache_size": 1,
+      "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+    },
+    {
+      "function": "draft_norm",
+      "build": "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\scratch\\bf16-state-probe-20261018\\baseline\\draft_transformer-2e67520cd55b23d3\\build.json",
+      "wall_ms": 0.48359998618252575,
+      "dispatch_ms": 0.21399999968707561,
+      "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+      "input_unchanged": true,
+      "transfer_phases_ms": {
+        "input_write_sync": 0.014399993233382702,
+        "output_poison_sync": 0.011099997209385037,
+        "output_sync_read": 0.01200000406242907,
+        "input_sync_verify": 0.015400000847876072
+      },
+      "persistent_transport": true,
+      "image_cache_hit": true,
+      "contexts_created": 1,
+      "context_cache_hit": true,
+      "exact_program_sharing": true,
+      "context_cache_size": 1,
+      "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+    },
+    {
+      "function": "draft_norm",
+      "build": "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\scratch\\bf16-state-probe-20261018\\baseline\\draft_transformer-2e67520cd55b23d3\\build.json",
+      "wall_ms": 0.4434000002220273,
+      "dispatch_ms": 0.20889998995698988,
+      "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+      "input_unchanged": true,
+      "transfer_phases_ms": {
+        "input_write_sync": 0.008299975888803601,
+        "output_poison_sync": 0.010000017937272787,
+        "output_sync_read": 0.01279998105019331,
+        "input_sync_verify": 0.016600009985268116
+      },
+      "persistent_transport": true,
+      "image_cache_hit": true,
+      "contexts_created": 1,
+      "context_cache_hit": true,
+      "exact_program_sharing": true,
+      "context_cache_size": 1,
+      "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+    },
+    {
+      "function": "draft_norm",
+      "build": "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\scratch\\bf16-state-probe-20261018\\baseline\\draft_transformer-2e67520cd55b23d3\\build.json",
+      "wall_ms": 0.454699998954311,
+      "dispatch_ms": 0.20979999681003392,
+      "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+      "input_unchanged": true,
+      "transfer_phases_ms": {
+        "input_write_sync": 0.009100011084228754,
+        "output_poison_sync": 0.011299998732283711,
+        "output_sync_read": 0.010500021744519472,
+        "input_sync_verify": 0.015600002370774746
+      },
+      "persistent_transport": true,
+      "image_cache_hit": true,
+      "contexts_created": 1,
+      "context_cache_hit": true,
+      "exact_program_sharing": true,
+      "context_cache_size": 1,
+      "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+    },
+    {
+      "function": "draft_rope",
+      "build": "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\scratch\\bf16-state-probe-20261018\\baseline\\draft_transformer-2e67520cd55b23d3\\build.json",
+      "wall_ms": 0.44529998558573425,
+      "dispatch_ms": 0.20310000400058925,
+      "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+      "input_unchanged": true,
+      "transfer_phases_ms": {
+        "input_write_sync": 0.009199982741847634,
+        "output_poison_sync": 0.011600001016631722,
+        "output_sync_read": 0.00990001717582345,
+        "input_sync_verify": 0.015600002370774746
+      },
+      "persistent_transport": true,
+      "image_cache_hit": true,
+      "contexts_created": 1,
+      "context_cache_hit": true,
+      "exact_program_sharing": true,
+      "context_cache_size": 1,
+      "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+    },
+    {
+      "function": "draft_rope",
+      "build": "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\scratch\\bf16-state-probe-20261018\\baseline\\draft_transformer-2e67520cd55b23d3\\build.json",
+      "wall_ms": 0.40419999277219176,
+      "dispatch_ms": 0.1917000045068562,
+      "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+      "input_unchanged": true,
+      "transfer_phases_ms": {
+        "input_write_sync": 0.00790000194683671,
+        "output_poison_sync": 0.009799987310543656,
+        "output_sync_read": 0.009300012607127428,
+        "input_sync_verify": 0.013699987903237343
+      },
+      "persistent_transport": true,
+      "image_cache_hit": true,
+      "contexts_created": 1,
+      "context_cache_hit": true,
+      "exact_program_sharing": true,
+      "context_cache_size": 1,
+      "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+    },
+    {
+      "function": "draft_rope",
+      "build": "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\scratch\\bf16-state-probe-20261018\\baseline\\draft_transformer-2e67520cd55b23d3\\build.json",
+      "wall_ms": 0.40259998058900237,
+      "dispatch_ms": 0.18649999401532114,
+      "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+      "input_unchanged": true,
+      "transfer_phases_ms": {
+        "input_write_sync": 0.008100003469735384,
+        "output_poison_sync": 0.010000017937272787,
+        "output_sync_read": 0.01069999416358769,
+        "input_sync_verify": 0.015400000847876072
+      },
+      "persistent_transport": true,
+      "image_cache_hit": true,
+      "contexts_created": 1,
+      "context_cache_hit": true,
+      "exact_program_sharing": true,
+      "context_cache_size": 1,
+      "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+    },
+    {
+      "function": "draft_rope",
+      "build": "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\scratch\\bf16-state-probe-20261018\\baseline\\draft_transformer-2e67520cd55b23d3\\build.json",
+      "wall_ms": 0.4422999918460846,
+      "dispatch_ms": 0.1984999980777502,
+      "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+      "input_unchanged": true,
+      "transfer_phases_ms": {
+        "input_write_sync": 0.009199982741847634,
+        "output_poison_sync": 0.011299998732283711,
+        "output_sync_read": 0.010499992640689015,
+        "input_sync_verify": 0.015700003132224083
+      },
+      "persistent_transport": true,
+      "image_cache_hit": true,
+      "contexts_created": 1,
+      "context_cache_hit": true,
+      "exact_program_sharing": true,
+      "context_cache_size": 1,
+      "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+    },
+    {
+      "function": "draft_softmax",
+      "build": "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\scratch\\bf16-state-probe-20261018\\baseline\\draft_transformer-61ea2e9bd9bff91d\\build.json",
+      "wall_ms": 46.29600001499057,
+      "dispatch_ms": 0.6640000210609287,
+      "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+      "input_unchanged": true,
+      "transfer_phases_ms": {
+        "input_write_sync": 0.03429999924264848,
+        "output_poison_sync": 0.02989999484270811,
+        "output_sync_read": 0.020299979951232672,
+        "input_sync_verify": 0.04400001489557326
+      },
+      "persistent_transport": true,
+      "image_cache_hit": false,
+      "contexts_created": 2,
+      "context_cache_hit": false,
+      "exact_program_sharing": true,
+      "context_cache_size": 2,
+      "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+    },
+    {
+      "function": "draft_softmax",
+      "build": "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\scratch\\bf16-state-probe-20261018\\baseline\\draft_transformer-61ea2e9bd9bff91d\\build.json",
+      "wall_ms": 0.8683000050950795,
+      "dispatch_ms": 0.5519000114873052,
+      "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+      "input_unchanged": true,
+      "transfer_phases_ms": {
+        "input_write_sync": 0.029600021662190557,
+        "output_poison_sync": 0.016700010746717453,
+        "output_sync_read": 0.016699981642886996,
+        "input_sync_verify": 0.04600000102072954
+      },
+      "persistent_transport": true,
+      "image_cache_hit": true,
+      "contexts_created": 2,
+      "context_cache_hit": true,
+      "exact_program_sharing": true,
+      "context_cache_size": 2,
+      "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+    },
+    {
+      "function": "draft_softmax",
+      "build": "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\scratch\\bf16-state-probe-20261018\\baseline\\draft_transformer-61ea2e9bd9bff91d\\build.json",
+      "wall_ms": 0.836499995784834,
+      "dispatch_ms": 0.5379999929573387,
+      "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+      "input_unchanged": true,
+      "transfer_phases_ms": {
+        "input_write_sync": 0.029000017093494534,
+        "output_poison_sync": 0.016300007700920105,
+        "output_sync_read": 0.01689998316578567,
+        "input_sync_verify": 0.05160001455806196
+      },
+      "persistent_transport": true,
+      "image_cache_hit": true,
+      "contexts_created": 2,
+      "context_cache_hit": true,
+      "exact_program_sharing": true,
+      "context_cache_size": 2,
+      "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+    },
+    {
+      "function": "draft_softmax",
+      "build": "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\scratch\\bf16-state-probe-20261018\\baseline\\draft_transformer-61ea2e9bd9bff91d\\build.json",
+      "wall_ms": 0.9582999919075519,
+      "dispatch_ms": 0.578600011067465,
+      "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+      "input_unchanged": true,
+      "transfer_phases_ms": {
+        "input_write_sync": 0.0405999890062958,
+        "output_poison_sync": 0.024999986635521054,
+        "output_sync_read": 0.017300015315413475,
+        "input_sync_verify": 0.03689998993650079
+      },
+      "persistent_transport": true,
+      "image_cache_hit": true,
+      "contexts_created": 2,
+      "context_cache_hit": true,
+      "exact_program_sharing": true,
+      "context_cache_size": 2,
+      "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+    },
+    {
+      "function": "draft_geglu",
+      "build": "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\scratch\\bf16-state-probe-20261018\\baseline\\draft_transformer-2e67520cd55b23d3\\build.json",
+      "wall_ms": 0.6830999918747693,
+      "dispatch_ms": 0.3744999994523823,
+      "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+      "input_unchanged": true,
+      "transfer_phases_ms": {
+        "input_write_sync": 0.013299984857439995,
+        "output_poison_sync": 0.01680001150816679,
+        "output_sync_read": 0.00990001717582345,
+        "input_sync_verify": 0.014199991710484028
+      },
+      "persistent_transport": true,
+      "image_cache_hit": true,
+      "contexts_created": 2,
+      "context_cache_hit": true,
+      "exact_program_sharing": true,
+      "context_cache_size": 2,
+      "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+    },
+    {
+      "function": "draft_geglu",
+      "build": "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\scratch\\bf16-state-probe-20261018\\baseline\\draft_transformer-2e67520cd55b23d3\\build.json",
+      "wall_ms": 0.5840000230818987,
+      "dispatch_ms": 0.2762000076472759,
+      "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+      "input_unchanged": true,
+      "transfer_phases_ms": {
+        "input_write_sync": 0.012800010154023767,
+        "output_poison_sync": 0.01610000617802143,
+        "output_sync_read": 0.012500007869675756,
+        "input_sync_verify": 0.015099998563528061
+      },
+      "persistent_transport": true,
+      "image_cache_hit": true,
+      "contexts_created": 2,
+      "context_cache_hit": true,
+      "exact_program_sharing": true,
+      "context_cache_size": 2,
+      "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+    },
+    {
+      "function": "draft_geglu",
+      "build": "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\scratch\\bf16-state-probe-20261018\\baseline\\draft_transformer-2e67520cd55b23d3\\build.json",
+      "wall_ms": 0.601400010054931,
+      "dispatch_ms": 0.27749998844228685,
+      "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+      "input_unchanged": true,
+      "transfer_phases_ms": {
+        "input_write_sync": 0.01309998333454132,
+        "output_poison_sync": 0.016300007700920105,
+        "output_sync_read": 0.014199991710484028,
+        "input_sync_verify": 0.01759998849593103
+      },
+      "persistent_transport": true,
+      "image_cache_hit": true,
+      "contexts_created": 2,
+      "context_cache_hit": true,
+      "exact_program_sharing": true,
+      "context_cache_size": 2,
+      "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+    },
+    {
+      "function": "draft_geglu",
+      "build": "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\scratch\\bf16-state-probe-20261018\\baseline\\draft_transformer-2e67520cd55b23d3\\build.json",
+      "wall_ms": 0.5286000086925924,
+      "dispatch_ms": 0.25519999326206744,
+      "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+      "input_unchanged": true,
+      "transfer_phases_ms": {
+        "input_write_sync": 0.010099989594891667,
+        "output_poison_sync": 0.012400007108226418,
+        "output_sync_read": 0.013399985618889332,
+        "input_sync_verify": 0.01819999306462705
+      },
+      "persistent_transport": true,
+      "image_cache_hit": true,
+      "contexts_created": 2,
+      "context_cache_hit": true,
+      "exact_program_sharing": true,
+      "context_cache_size": 2,
+      "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+    },
+    {
+      "function": "draft_residual",
+      "build": "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\scratch\\bf16-state-probe-20261018\\baseline\\draft_transformer-2e67520cd55b23d3\\build.json",
+      "wall_ms": 0.45009999303147197,
+      "dispatch_ms": 0.1967000134754926,
+      "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+      "input_unchanged": true,
+      "transfer_phases_ms": {
+        "input_write_sync": 0.009599985787644982,
+        "output_poison_sync": 0.012200005585327744,
+        "output_sync_read": 0.010499992640689015,
+        "input_sync_verify": 0.015900004655122757
+      },
+      "persistent_transport": true,
+      "image_cache_hit": true,
+      "contexts_created": 2,
+      "context_cache_hit": true,
+      "exact_program_sharing": true,
+      "context_cache_size": 2,
+      "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+    },
+    {
+      "function": "draft_residual",
+      "build": "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\scratch\\bf16-state-probe-20261018\\baseline\\draft_transformer-2e67520cd55b23d3\\build.json",
+      "wall_ms": 0.45689998660236597,
+      "dispatch_ms": 0.19459999748505652,
+      "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+      "input_unchanged": true,
+      "transfer_phases_ms": {
+        "input_write_sync": 0.009300012607127428,
+        "output_poison_sync": 0.011199997970834374,
+        "output_sync_read": 0.013500015484169126,
+        "input_sync_verify": 0.0185999961104244
+      },
+      "persistent_transport": true,
+      "image_cache_hit": true,
+      "contexts_created": 2,
+      "context_cache_hit": true,
+      "exact_program_sharing": true,
+      "context_cache_size": 2,
+      "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+    },
+    {
+      "function": "draft_residual",
+      "build": "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\scratch\\bf16-state-probe-20261018\\baseline\\draft_transformer-2e67520cd55b23d3\\build.json",
+      "wall_ms": 0.46079998719505966,
+      "dispatch_ms": 0.2004000125452876,
+      "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+      "input_unchanged": true,
+      "transfer_phases_ms": {
+        "input_write_sync": 0.009099981980398297,
+        "output_poison_sync": 0.011199997970834374,
+        "output_sync_read": 0.0137000170070678,
+        "input_sync_verify": 0.016999983927235007
+      },
+      "persistent_transport": true,
+      "image_cache_hit": true,
+      "contexts_created": 2,
+      "context_cache_hit": true,
+      "exact_program_sharing": true,
+      "context_cache_size": 2,
+      "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+    },
+    {
+      "function": "draft_residual",
+      "build": "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\scratch\\bf16-state-probe-20261018\\baseline\\draft_transformer-2e67520cd55b23d3\\build.json",
+      "wall_ms": 0.4430999979376793,
+      "dispatch_ms": 0.19630001042969525,
+      "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+      "input_unchanged": true,
+      "transfer_phases_ms": {
+        "input_write_sync": 0.009199982741847634,
+        "output_poison_sync": 0.011800002539530396,
+        "output_sync_read": 0.010499992640689015,
+        "input_sync_verify": 0.015700003132224083
+      },
+      "persistent_transport": true,
+      "image_cache_hit": true,
+      "contexts_created": 2,
+      "context_cache_hit": true,
+      "exact_program_sharing": true,
+      "context_cache_size": 2,
+      "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+    },
+    {
+      "function": "draft_topk",
+      "build": "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\scratch\\bf16-state-probe-20261018\\baseline\\draft_transformer-2e67520cd55b23d3\\build.json",
+      "wall_ms": 2.6123999850824475,
+      "dispatch_ms": 2.0979999972041696,
+      "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+      "input_unchanged": true,
+      "transfer_phases_ms": {
+        "input_write_sync": 0.009299983503296971,
+        "output_poison_sync": 0.011500000255182385,
+        "output_sync_read": 0.016600009985268116,
+        "input_sync_verify": 0.02139998832717538
+      },
+      "persistent_transport": true,
+      "image_cache_hit": true,
+      "contexts_created": 2,
+      "context_cache_hit": true,
+      "exact_program_sharing": true,
+      "context_cache_size": 2,
+      "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+    },
+    {
+      "function": "draft_topk",
+      "build": "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\scratch\\bf16-state-probe-20261018\\baseline\\draft_transformer-2e67520cd55b23d3\\build.json",
+      "wall_ms": 2.374100004089996,
+      "dispatch_ms": 2.0858999923802912,
+      "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+      "input_unchanged": true,
+      "transfer_phases_ms": {
+        "input_write_sync": 0.010100018698722124,
+        "output_poison_sync": 0.015300000086426735,
+        "output_sync_read": 0.0171000137925148,
+        "input_sync_verify": 0.021199986804276705
+      },
+      "persistent_transport": true,
+      "image_cache_hit": true,
+      "contexts_created": 2,
+      "context_cache_hit": true,
+      "exact_program_sharing": true,
+      "context_cache_size": 2,
+      "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+    },
+    {
+      "function": "draft_topk",
+      "build": "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\scratch\\bf16-state-probe-20261018\\baseline\\draft_transformer-2e67520cd55b23d3\\build.json",
+      "wall_ms": 2.44320000638254,
+      "dispatch_ms": 2.1173999994061887,
+      "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+      "input_unchanged": true,
+      "transfer_phases_ms": {
+        "input_write_sync": 0.012999982573091984,
+        "output_poison_sync": 0.01270000939257443,
+        "output_sync_read": 0.023500004317611456,
+        "input_sync_verify": 0.02820001100189984
+      },
+      "persistent_transport": true,
+      "image_cache_hit": true,
+      "contexts_created": 2,
+      "context_cache_hit": true,
+      "exact_program_sharing": true,
+      "context_cache_size": 2,
+      "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+    },
+    {
+      "function": "draft_topk",
+      "build": "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\scratch\\bf16-state-probe-20261018\\baseline\\draft_transformer-2e67520cd55b23d3\\build.json",
+      "wall_ms": 2.4228999973274767,
+      "dispatch_ms": 2.1032000076957047,
+      "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+      "input_unchanged": true,
+      "transfer_phases_ms": {
+        "input_write_sync": 0.00990001717582345,
+        "output_poison_sync": 0.01270000939257443,
+        "output_sync_read": 0.017000013031065464,
+        "input_sync_verify": 0.021799991372972727
+      },
+      "persistent_transport": true,
+      "image_cache_hit": true,
+      "contexts_created": 2,
+      "context_cache_hit": true,
+      "exact_program_sharing": true,
+      "context_cache_size": 2,
+      "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+    }
+  ]
+}

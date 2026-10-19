@@ -1,0 +1,114 @@
+{
+  "scope": "Archive qualification reports with verified source/build provenance.\n\nRefuses replacement, verifies referenced source/program artifacts and scrubs the\ncurrent local account prefix. Does not turn a negative report into a pass.\n",
+  "source_sha256": "d1a776782eb356b2fe7971521bbc4ccf28df90f92a2ebeda446deb46c62d7369",
+  "result_sha256": "63d1129822c797f119dd303b24c862026da1802c271ec1ddb49d3e1d91f9e425",
+  "report": {
+    "passed": false,
+    "scope": "Check existing package-power counters; this is not an energy or idle result.\n\nReuse the study's measured milliwatt Power scale. Do not use the unresolved\nEnergy counter or infer whole-system power completeness from availability.\n",
+    "source_sha256": {
+      "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\tools\\qualify_gemma4_energy_counters.py": "7c851dad2e29b074073749125eeb7001830876b19b1e5253338efde6d1183fa6",
+      "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\tools\\power_probe.py": "471d9563777cecf5fe19c590b1bc399ae32b35b72ada47a9c1bb2ecd9e7a9278",
+      "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\npu\\contention.py": "a00ac19ca6ca4b8a515628d6e8e534e71a4e5283930908bf7e5d7aad1af9a642"
+    },
+    "timing_eligible": false,
+    "energy_eligible": false,
+    "unit": "milliwatts, from the prior registered power-counter study",
+    "completeness": "Not shown; package counters exclude DRAM and are not wall power",
+    "contention": {
+      "utc": "2026-10-18T22:13:17.117412+00:00",
+      "sample_seconds": 0.5016086999967229,
+      "snapshot_seconds": 0.7540806999895722,
+      "inference_processes": [
+        {
+          "pid": 11908,
+          "name": "python.exe",
+          "active_cpu_cores": 0.031
+        },
+        {
+          "pid": 12748,
+          "name": "python.exe",
+          "active_cpu_cores": 0
+        },
+        {
+          "pid": 26776,
+          "name": "python.exe",
+          "active_cpu_cores": 0
+        },
+        {
+          "pid": 64488,
+          "name": "python.exe",
+          "active_cpu_cores": 0
+        },
+        {
+          "pid": 76340,
+          "name": "python.exe",
+          "active_cpu_cores": 0.997
+        },
+        {
+          "pid": 80480,
+          "name": "python.exe",
+          "active_cpu_cores": 1.651
+        },
+        {
+          "pid": 80764,
+          "name": "python.exe",
+          "active_cpu_cores": 0
+        }
+      ],
+      "cpu_telemetry_known": true,
+      "gpu_telemetry_known": true,
+      "busy_gpu_engines": [
+        {
+          "pid": 11024,
+          "engine": "pid_11024_luid_0x00000000_0x0000CE7A_phys_0_eng_0_engtype_3D",
+          "utilization_percent": 1.643710335373447
+        }
+      ],
+      "gpu_details": {
+        "instances": 307,
+        "invalid_instances": 0
+      },
+      "gpu_error": null,
+      "npu_telemetry_known": true,
+      "npu_idle": true,
+      "idle_verified": false,
+      "blockers": [
+        "CPU inference work: PID 76340",
+        "CPU inference work: PID 80480",
+        "GPU engine activity observed"
+      ],
+      "scope": "Read-only preflight snapshot; no process is stopped"
+    },
+    "counters_mw": {
+      "\\Energy Meter(RAPL_Package0_PKG)\\Power": [
+        45014.61771815581
+      ],
+      "\\Energy Meter(RAPL_Package0_Core0_CORE)\\Power": [
+        2569.802694264733
+      ],
+      "\\Energy Meter(RAPL_Package0_Core1_CORE)\\Power": [
+        1704.4640337709748
+      ],
+      "\\Energy Meter(RAPL_Package0_Core2_CORE)\\Power": [
+        2538.3364516936044
+      ],
+      "\\Energy Meter(RAPL_Package0_Core3_CORE)\\Power": [
+        7066.78071968202
+      ],
+      "\\Energy Meter(RAPL_Package0_Core4_CORE)\\Power": [
+        743.4687160838372
+      ],
+      "\\Energy Meter(RAPL_Package0_Core5_CORE)\\Power": [
+        3866.1983883413727
+      ],
+      "\\Energy Meter(RAPL_Package0_Core6_CORE)\\Power": [
+        1153.5631292042383
+      ],
+      "\\Energy Meter(RAPL_Package0_Core7_CORE)\\Power": [
+        820.9620103739411
+      ]
+    },
+    "counter_count": 9
+  },
+  "builds": {}
+}

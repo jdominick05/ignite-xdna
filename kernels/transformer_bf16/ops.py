@@ -20,29 +20,36 @@ HERE=Path(__file__).resolve().parent
 
 
 class Bf16Ops:
-    def __init__(self,cache_dir,poison=0x7fc12345,precise_projection=False,transport=None,single_image=False):
+    def __init__(self,cache_dir,poison=0x7fc12345,precise_projection=False,transport=None,single_image=False,refined_norm=False,exact_norm=False):
         self.cache_dir=Path(cache_dir).resolve()
         self.poison=poison
         self.precise_projection=precise_projection
         self.transport=transport
-        if single_image and not precise_projection:
-            raise ValueError("Single-image dispatch requires compensated projections")
         self.single_image=single_image
+        self.refined_norm=refined_norm
+        self.exact_norm=exact_norm
+        if refined_norm and exact_norm:raise ValueError('Select one experimental norm variant')
         self.dispatches=[]
         # Bind this instance to source bytes once. Loaded packet images retain
         # their own identity; PacketSession verifies admitted files at exit.
-        paths=list(HERE.glob("*.cc"))+[HERE/"stream.py",HERE/"common.py",HERE/"ops.py"]
+        paths=list(HERE.glob("*.cc"))+list(HERE.glob('*.hpp'))+[HERE/"stream.py",HERE/"common.py",HERE/"ops.py"]
         self._source_hashes={str(path):sha(path) for path in paths}
         self._build_meta={}
 
     def dispatch(self,function,packets,output_words,state_words=0):
+        if function=='draft_norm':
+            if self.exact_norm:function='draft_norm_exact'
+            elif self.refined_norm:function='draft_norm_refined'
         filenames={"draft_projection":"gemv.cc","draft_projection_precise":"gemv_precise.cc","draft_norm":"rmsnorm.cc","draft_rope":"rope.cc",
                    "draft_softmax":"softmax.cc","draft_geglu":"geglu.cc","draft_residual":"residual.cc","draft_topk":"topk.cc"}
+        filenames['draft_norm_refined']='rmsnorm_refined.cc'
+        filenames['draft_norm_exact']='rmsnorm_exact.cc'
         source=HERE/filenames[function]
         paths=[source,HERE/"stream.py",HERE/"common.py",HERE/"ops.py"]
+        if function=='draft_norm_exact':paths.extend([HERE/'rmsnorm_refined.cc',HERE/'bf16_product.hpp'])
         entry=function;optimization="-O3"
-        if self.single_image:
-            opcodes={"draft_projection_precise":1,"draft_norm":2,"draft_rope":3,"draft_softmax":4,
+        if self.single_image and function not in ('draft_norm_refined','draft_norm_exact'):
+            opcodes={"draft_projection":8,"draft_projection_precise":1,"draft_norm":2,"draft_rope":3,"draft_softmax":4,
                      "draft_geglu":5,"draft_residual":6,"draft_topk":7}
             if function not in opcodes:raise ValueError("Operation absent from single image")
             padded=np.zeros((packets.shape[0],4112),np.uint32)

@@ -1,0 +1,84 @@
+{
+  "scope": "Archive qualification reports with verified source/build provenance.\n\nRefuses replacement, verifies referenced source/program artifacts and scrubs the\ncurrent local account prefix. Does not turn a negative report into a pass.\n",
+  "source_sha256": "d1a776782eb356b2fe7971521bbc4ccf28df90f92a2ebeda446deb46c62d7369",
+  "result_sha256": "23e93542c44de5ba473a45d24ce2b3dc54aeb1bdc8cc29f7db1aa2a881fada96",
+  "report": {
+    "passed": false,
+    "scope": "Check existing package-power counters; this is not an energy or idle result.\n\nReuse the study's measured milliwatt Power scale. Do not use the unresolved\nEnergy counter or infer whole-system power completeness from availability.\n",
+    "source_sha256": {
+      "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\tools\\qualify_gemma4_energy_counters.py": "5c47003cd26843049a2d15f630266dd8fc0447e7a96d0fa481320a85c847028a",
+      "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\tools\\power_probe.py": "471d9563777cecf5fe19c590b1bc399ae32b35b72ada47a9c1bb2ecd9e7a9278",
+      "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\npu\\contention.py": "a00ac19ca6ca4b8a515628d6e8e534e71a4e5283930908bf7e5d7aad1af9a642"
+    },
+    "timing_eligible": false,
+    "energy_eligible": false,
+    "unit": "milliwatts, from the prior registered power-counter study",
+    "completeness": "Not shown; package counters exclude DRAM and are not wall power",
+    "contention": {
+      "utc": "2026-10-18T22:12:04.903742+00:00",
+      "sample_seconds": 0.5162195999873802,
+      "snapshot_seconds": 0.7254542000009678,
+      "inference_processes": [
+        {
+          "pid": 11908,
+          "name": "python.exe",
+          "active_cpu_cores": 0
+        },
+        {
+          "pid": 12748,
+          "name": "python.exe",
+          "active_cpu_cores": 0
+        },
+        {
+          "pid": 26776,
+          "name": "python.exe",
+          "active_cpu_cores": 0
+        },
+        {
+          "pid": 64488,
+          "name": "python.exe",
+          "active_cpu_cores": 0
+        },
+        {
+          "pid": 69900,
+          "name": "python.exe",
+          "active_cpu_cores": 0.999
+        },
+        {
+          "pid": 71484,
+          "name": "python.exe",
+          "active_cpu_cores": 0
+        },
+        {
+          "pid": 80480,
+          "name": "python.exe",
+          "active_cpu_cores": 2.482
+        }
+      ],
+      "cpu_telemetry_known": true,
+      "gpu_telemetry_known": true,
+      "busy_gpu_engines": [
+        {
+          "pid": 11024,
+          "engine": "pid_11024_luid_0x00000000_0x0000CE7A_phys_0_eng_0_engtype_3D",
+          "utilization_percent": 1.4979204340991954
+        }
+      ],
+      "gpu_details": {
+        "instances": 307,
+        "invalid_instances": 0
+      },
+      "gpu_error": null,
+      "npu_telemetry_known": true,
+      "npu_idle": true,
+      "idle_verified": false,
+      "blockers": [
+        "CPU inference work: PID 69900",
+        "CPU inference work: PID 80480",
+        "GPU engine activity observed"
+      ],
+      "scope": "Read-only preflight snapshot; no process is stopped"
+    }
+  },
+  "builds": {}
+}

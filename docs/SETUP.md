@@ -66,6 +66,29 @@ $env:RYZEN_AI_INSTALLATION_PATH = 'C:\Program Files\RyzenAI\1.7.1'
 The 1.8.0 installer sets that variable machine-wide and already-open shells keep the
 stale value, so set it per session or pass `--xclbin` explicitly.
 
+### Read-only inference contention check
+
+From the checkout, in a Windows Python environment with `psutil`:
+
+```powershell
+python -m npu.contention
+python -m npu.contention --require-idle
+```
+
+The reusable `npu/contention.py` samples inference-process CPU time and native
+GPU Engine rate counters over the same 500 ms interval, then obtains a fresh
+`xrt-smi` NPU context witness. It reports missing or invalid telemetry rather
+than treating it as idle. `--require-idle` exits 2 when strict idle is unverified.
+It never stops another process. This is a preflight snapshot; bounded research
+runs still need continued contention monitoring.
+
+The GPU query follows Microsoft's [PDH wildcard counter API](https://learn.microsoft.com/en-us/windows/win32/api/pdh/nf-pdh-pdhgetformattedcounterarrayw),
+including two samples before formatting rate values and per-instance status
+checks. The existing `tools/check-inference-contention.ps1` remains available.
+The experimental Gemma runtime uses the native sampler per request and filters
+only its own process, GPU worker and exact local research-supervisor ancestor;
+small desktop activity is recorded but does not qualify a performance result.
+
 ### NPU monitor: `tools/hwinfo_npu_bridge.exe`
 
 A live dashboard for the NPU, and a bridge that publishes the same numbers to HWiNFO64's

@@ -1,0 +1,571 @@
+{
+  "scope": "Archive live target/hybrid checks with source and NPU artifact verification.",
+  "source_sha256": "12cb17255eced8632ec91c2b74240c9ceb3e91ca75ff4b2cdfb3da730ab87f3c",
+  "result_sha256": "e7eeceb6f056e98e82101e0f7c72d378e8085d4219d6e90f654682a0a376e5e1",
+  "report": {
+    "registration": {
+      "scope": "Isolate target batch-shape differences without NPU drafts or KV rollback.\n\nTeacher-force the same GPU-only greedy token sequence one row versus batches.\n",
+      "files": {
+        "<user-home>\\gemma4-assistant\\scripts\\probe_gpu_batch.py": "5bef9769f0fb199959f9047f13339c28716689755dcc1f14691e28aecc1208c0",
+        "<user-home>\\PycharmProjects\\ignite-xdna\\tools\\ggml_gpu_target\\client.py": "095fba2eb666f7468ac6ef751909f8d33552c03879b5ad07ccd0c2ffb6cdb923",
+        "<user-home>\\PycharmProjects\\ignite-xdna\\tools\\ggml_gpu_target\\worker.cpp": "e39bdfd7d453a881b256ed48a7c7bc66cfe07249e0685ee84d5f9487f4b1bf67",
+        "<user-home>\\PycharmProjects\\ignite-xdna\\tools\\ggml_gpu_embedding\\embedding.cpp": "82daefc983ffb2778d2a7213b7b49a5dc653dc1f4268bbc74afc5c1f9b7dccd3",
+        "<user-home>\\gemma4-assistant\\bin\\ggml_gpu_target.exe": "aba4b88e1d4f26bd4f05bc00b7b70c87708df66c1a8a6fb44012c47214d6e7e6",
+        "<user-home>\\gemma4-assistant\\models\\gemma-4-E2B-it-Q5_K_M-pleQ4-imatrix.gguf": "ac36a228eb6cd1b93eedc86153016612b0a60ba73c9a50e0b4e95a6a143f65e1",
+        "<user-home>\\gemma4-assistant\\npu\\live-public-dictionary-20261018.i32": "363ba2a5b456b8ebe237b7c7e665263c042ebbb82ffbedb89d45a49dfa603575",
+        "<user-home>\\tools\\llamacpp-b1343-rocm\\llama.dll": "04aeca339e96514cd2eeed4810ddc813e7cc91b088137d741d5bfb53829464e8",
+        "<user-home>\\tools\\llamacpp-b1343-rocm\\ggml.dll": "d62c9fd3ea800ebf81b104f0b276c44105930557337c3e97ca7bf3e5a51bd889",
+        "<user-home>\\tools\\llamacpp-b1343-rocm\\ggml-base.dll": "b0f6bcf152bbea75fe55c3d185b512ca4b3df167ec8159357da53be435db9539",
+        "<user-home>\\tools\\llamacpp-b1343-rocm\\ggml-hip.dll": "ea8866ab163caad203a2fa2f8afbce51584bb55eb566e1e863bb14e1b1d3f370"
+      },
+      "count": 32,
+      "batch_size": 3,
+      "disable_fusion": false,
+      "timing_eligible": false
+    },
+    "control_tokens": [
+      1408,
+      8922,
+      496,
+      17856,
+      26634,
+      4296,
+      21165,
+      185878,
+      12045,
+      108,
+      32651,
+      114114,
+      236764,
+      2338,
+      5213,
+      32651,
+      236743,
+      236800,
+      236761,
+      236832,
+      1018,
+      568,
+      624,
+      618,
+      614,
+      8688,
+      8052,
+      528,
+      565,
+      32651,
+      236743,
+      236800
+    ],
+    "batches": [
+      {
+        "offset": 0,
+        "tokens": [
+          1408,
+          8922,
+          496
+        ],
+        "predictions": [
+          8922,
+          496,
+          17856
+        ],
+        "expected": [
+          8922,
+          496,
+          17856
+        ],
+        "token_equal": true,
+        "metrics": {
+          "Kcur_pos-13": {
+            "bitwise_equal": false,
+            "max_abs": 0.008036941289901733,
+            "relative_l2": 0.01229835312926978
+          },
+          "Kcur_pos-14": {
+            "bitwise_equal": false,
+            "max_abs": 0.004160141106694937,
+            "relative_l2": 0.01827527955059617
+          },
+          "Vcur_normed-13": {
+            "bitwise_equal": false,
+            "max_abs": 0.07179731130599976,
+            "relative_l2": 0.01769215757529247
+          },
+          "Vcur_normed-14": {
+            "bitwise_equal": false,
+            "max_abs": 0.23187637329101562,
+            "relative_l2": 0.024996459554148028
+          },
+          "result_norm": {
+            "bitwise_equal": false,
+            "max_abs": 1.2583885192871094,
+            "relative_l2": 0.02231242830053016
+          }
+        }
+      },
+      {
+        "offset": 3,
+        "tokens": [
+          17856,
+          26634,
+          4296
+        ],
+        "predictions": [
+          26634,
+          4296,
+          21165
+        ],
+        "expected": [
+          26634,
+          4296,
+          21165
+        ],
+        "token_equal": true,
+        "metrics": {
+          "Kcur_pos-13": {
+            "bitwise_equal": false,
+            "max_abs": 0.006762519478797913,
+            "relative_l2": 0.013004422638280534
+          },
+          "Kcur_pos-14": {
+            "bitwise_equal": false,
+            "max_abs": 0.004930160939693451,
+            "relative_l2": 0.0183219857698825
+          },
+          "Vcur_normed-13": {
+            "bitwise_equal": false,
+            "max_abs": 0.05655193328857422,
+            "relative_l2": 0.017380209494461337
+          },
+          "Vcur_normed-14": {
+            "bitwise_equal": false,
+            "max_abs": 0.1138467788696289,
+            "relative_l2": 0.021263216137953067
+          },
+          "result_norm": {
+            "bitwise_equal": false,
+            "max_abs": 1.0711822509765625,
+            "relative_l2": 0.01497394717345918
+          }
+        }
+      },
+      {
+        "offset": 6,
+        "tokens": [
+          21165,
+          185878,
+          12045
+        ],
+        "predictions": [
+          185878,
+          12045,
+          108
+        ],
+        "expected": [
+          185878,
+          12045,
+          108
+        ],
+        "token_equal": true,
+        "metrics": {
+          "Kcur_pos-13": {
+            "bitwise_equal": false,
+            "max_abs": 0.005592897534370422,
+            "relative_l2": 0.013971653904929599
+          },
+          "Kcur_pos-14": {
+            "bitwise_equal": false,
+            "max_abs": 0.005238797515630722,
+            "relative_l2": 0.02022939833859777
+          },
+          "Vcur_normed-13": {
+            "bitwise_equal": false,
+            "max_abs": 0.10791569948196411,
+            "relative_l2": 0.021069124769704812
+          },
+          "Vcur_normed-14": {
+            "bitwise_equal": false,
+            "max_abs": 0.10727548599243164,
+            "relative_l2": 0.022668772258116227
+          },
+          "result_norm": {
+            "bitwise_equal": false,
+            "max_abs": 0.9560432434082031,
+            "relative_l2": 0.024640171022338387
+          }
+        }
+      },
+      {
+        "offset": 9,
+        "tokens": [
+          108,
+          32651,
+          114114
+        ],
+        "predictions": [
+          32651,
+          114114,
+          236764
+        ],
+        "expected": [
+          32651,
+          114114,
+          236764
+        ],
+        "token_equal": true,
+        "metrics": {
+          "Kcur_pos-13": {
+            "bitwise_equal": false,
+            "max_abs": 0.005918323993682861,
+            "relative_l2": 0.011533821404956679
+          },
+          "Kcur_pos-14": {
+            "bitwise_equal": false,
+            "max_abs": 0.006009742617607117,
+            "relative_l2": 0.017577575842899047
+          },
+          "Vcur_normed-13": {
+            "bitwise_equal": false,
+            "max_abs": 0.0619165301322937,
+            "relative_l2": 0.016392345083851352
+          },
+          "Vcur_normed-14": {
+            "bitwise_equal": false,
+            "max_abs": 0.07795816659927368,
+            "relative_l2": 0.020521209762723702
+          },
+          "result_norm": {
+            "bitwise_equal": false,
+            "max_abs": 2.8241920471191406,
+            "relative_l2": 0.028707582398895603
+          }
+        }
+      },
+      {
+        "offset": 12,
+        "tokens": [
+          236764,
+          2338,
+          5213
+        ],
+        "predictions": [
+          5213,
+          5213,
+          32651
+        ],
+        "expected": [
+          2338,
+          5213,
+          32651
+        ],
+        "token_equal": false,
+        "metrics": {
+          "Kcur_pos-13": {
+            "bitwise_equal": false,
+            "max_abs": 0.006942408159375191,
+            "relative_l2": 0.013990829744666436
+          },
+          "Kcur_pos-14": {
+            "bitwise_equal": false,
+            "max_abs": 0.004807880148291588,
+            "relative_l2": 0.01966054189777415
+          },
+          "Vcur_normed-13": {
+            "bitwise_equal": false,
+            "max_abs": 0.07105827331542969,
+            "relative_l2": 0.019549623073725344
+          },
+          "Vcur_normed-14": {
+            "bitwise_equal": false,
+            "max_abs": 0.19108110666275024,
+            "relative_l2": 0.024105947553943644
+          },
+          "result_norm": {
+            "bitwise_equal": false,
+            "max_abs": 2.318389892578125,
+            "relative_l2": 0.03452174012259875
+          }
+        }
+      },
+      {
+        "offset": 15,
+        "tokens": [
+          32651,
+          236743,
+          236800
+        ],
+        "predictions": [
+          236743,
+          236800,
+          236761
+        ],
+        "expected": [
+          236743,
+          236800,
+          236761
+        ],
+        "token_equal": true,
+        "metrics": {
+          "Kcur_pos-13": {
+            "bitwise_equal": false,
+            "max_abs": 0.010079282277729362,
+            "relative_l2": 0.016779298579064135
+          },
+          "Kcur_pos-14": {
+            "bitwise_equal": false,
+            "max_abs": 0.005198327824473381,
+            "relative_l2": 0.02130619189205832
+          },
+          "Vcur_normed-13": {
+            "bitwise_equal": false,
+            "max_abs": 0.11179947853088379,
+            "relative_l2": 0.023742189753999436
+          },
+          "Vcur_normed-14": {
+            "bitwise_equal": false,
+            "max_abs": 0.2141127586364746,
+            "relative_l2": 0.026380219068077065
+          },
+          "result_norm": {
+            "bitwise_equal": false,
+            "max_abs": 1.4330215454101562,
+            "relative_l2": 0.03543122178525862
+          }
+        }
+      },
+      {
+        "offset": 18,
+        "tokens": [
+          236761,
+          236832,
+          1018
+        ],
+        "predictions": [
+          236832,
+          1018,
+          568
+        ],
+        "expected": [
+          236832,
+          1018,
+          568
+        ],
+        "token_equal": true,
+        "metrics": {
+          "Kcur_pos-13": {
+            "bitwise_equal": false,
+            "max_abs": 0.011777445673942566,
+            "relative_l2": 0.01938540550777887
+          },
+          "Kcur_pos-14": {
+            "bitwise_equal": false,
+            "max_abs": 0.006887555122375488,
+            "relative_l2": 0.022907233637533844
+          },
+          "Vcur_normed-13": {
+            "bitwise_equal": false,
+            "max_abs": 0.15669402480125427,
+            "relative_l2": 0.02583025502423938
+          },
+          "Vcur_normed-14": {
+            "bitwise_equal": false,
+            "max_abs": 0.11126387119293213,
+            "relative_l2": 0.027502696187242118
+          },
+          "result_norm": {
+            "bitwise_equal": false,
+            "max_abs": 2.0855674743652344,
+            "relative_l2": 0.05029645909196287
+          }
+        }
+      },
+      {
+        "offset": 21,
+        "tokens": [
+          568,
+          624,
+          618
+        ],
+        "predictions": [
+          624,
+          618,
+          614
+        ],
+        "expected": [
+          624,
+          618,
+          614
+        ],
+        "token_equal": true,
+        "metrics": {
+          "Kcur_pos-13": {
+            "bitwise_equal": false,
+            "max_abs": 0.013503437861800194,
+            "relative_l2": 0.01897798815344011
+          },
+          "Kcur_pos-14": {
+            "bitwise_equal": false,
+            "max_abs": 0.007104810327291489,
+            "relative_l2": 0.02074359472115567
+          },
+          "Vcur_normed-13": {
+            "bitwise_equal": false,
+            "max_abs": 0.12005937099456787,
+            "relative_l2": 0.02197461588620898
+          },
+          "Vcur_normed-14": {
+            "bitwise_equal": false,
+            "max_abs": 0.1436847448348999,
+            "relative_l2": 0.025958151288859126
+          },
+          "result_norm": {
+            "bitwise_equal": false,
+            "max_abs": 1.694061279296875,
+            "relative_l2": 0.033540848084550025
+          }
+        }
+      },
+      {
+        "offset": 24,
+        "tokens": [
+          614,
+          8688,
+          8052
+        ],
+        "predictions": [
+          8688,
+          8052,
+          528
+        ],
+        "expected": [
+          8688,
+          8052,
+          528
+        ],
+        "token_equal": true,
+        "metrics": {
+          "Kcur_pos-13": {
+            "bitwise_equal": false,
+            "max_abs": 0.009910717606544495,
+            "relative_l2": 0.017268957402706505
+          },
+          "Kcur_pos-14": {
+            "bitwise_equal": false,
+            "max_abs": 0.0061973631381988525,
+            "relative_l2": 0.021181345407171343
+          },
+          "Vcur_normed-13": {
+            "bitwise_equal": false,
+            "max_abs": 0.12140142917633057,
+            "relative_l2": 0.02394166755437505
+          },
+          "Vcur_normed-14": {
+            "bitwise_equal": false,
+            "max_abs": 0.11719489097595215,
+            "relative_l2": 0.027573120902665085
+          },
+          "result_norm": {
+            "bitwise_equal": false,
+            "max_abs": 1.0416221618652344,
+            "relative_l2": 0.03466627801151685
+          }
+        }
+      },
+      {
+        "offset": 27,
+        "tokens": [
+          528,
+          565,
+          32651
+        ],
+        "predictions": [
+          565,
+          32651,
+          236743
+        ],
+        "expected": [
+          565,
+          32651,
+          236743
+        ],
+        "token_equal": true,
+        "metrics": {
+          "Kcur_pos-13": {
+            "bitwise_equal": false,
+            "max_abs": 0.010461414232850075,
+            "relative_l2": 0.021138842015252637
+          },
+          "Kcur_pos-14": {
+            "bitwise_equal": false,
+            "max_abs": 0.009599700570106506,
+            "relative_l2": 0.025529886902907722
+          },
+          "Vcur_normed-13": {
+            "bitwise_equal": false,
+            "max_abs": 0.08921444416046143,
+            "relative_l2": 0.026474926346246846
+          },
+          "Vcur_normed-14": {
+            "bitwise_equal": false,
+            "max_abs": 0.1415114402770996,
+            "relative_l2": 0.03198724049047474
+          },
+          "result_norm": {
+            "bitwise_equal": false,
+            "max_abs": 1.5824775695800781,
+            "relative_l2": 0.03500916436907596
+          }
+        }
+      },
+      {
+        "offset": 30,
+        "tokens": [
+          236743,
+          236800
+        ],
+        "predictions": [
+          236800,
+          236761
+        ],
+        "expected": [
+          236800,
+          236761
+        ],
+        "token_equal": true,
+        "metrics": {
+          "Kcur_pos-13": {
+            "bitwise_equal": false,
+            "max_abs": 0.011443160474300385,
+            "relative_l2": 0.021875699019073595
+          },
+          "Kcur_pos-14": {
+            "bitwise_equal": false,
+            "max_abs": 0.006562175694853067,
+            "relative_l2": 0.027942310779274806
+          },
+          "Vcur_normed-13": {
+            "bitwise_equal": false,
+            "max_abs": 0.1413724422454834,
+            "relative_l2": 0.028832431152416963
+          },
+          "Vcur_normed-14": {
+            "bitwise_equal": false,
+            "max_abs": 0.16482948511838913,
+            "relative_l2": 0.03444008193264255
+          },
+          "result_norm": {
+            "bitwise_equal": false,
+            "max_abs": 1.4146671295166016,
+            "relative_l2": 0.03802956181129309
+          }
+        }
+      }
+    ],
+    "greedy_equal": false,
+    "process_released": true,
+    "sources_unchanged": true,
+    "passed": false
+  },
+  "builds": {}
+}

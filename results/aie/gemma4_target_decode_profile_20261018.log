@@ -1,0 +1,45 @@
+RESEARCH_PLATFORM {"machine": "Desktop 2", "cpu": "AMD Ryzen 7 8700G w/ Radeon 780M Graphics", "os": "Windows-11-10.0.26200-SP0", "ram_bytes": 33381138432, "source_sha256": {"tools/research_process.py": "ffeb1857f190b482eed101b5f5a928f455de26bfa61d23f78a2eacec08e2663e", "tools/quant_calib_alphabet.py": "2dc0b2878c564853f340880209a425dfcf63b8536b2b8e9fd32344daade58d37", "tools/xint8_arithmetic_probe.py": "6aa3df08b9870c3c2264b868459d7ffbac3070dddc1349d7c6f3f480075f7041", "scripts/research-lowlevel.sh": "3455ad7933697936487712665505c216891865c6deada647302785f6e37020bd", "scripts/research-iron.sh": "4c863a262646ddab39b5005006ba8e03809895e6386c6310e2fd9d0a9e9609ee", "kernels/memory_placement/probe.py": "e8d990169ad6091fa1b53852e9f61eff495b5def72d35165a5c5cf1759e38898", "kernels/memory_placement/memory_kernels.cc": "182e7af7071a1e851afb4a7ca266069c489aea1fbaaa85eca129708daeba5ba6", "scripts/research-matrix.sh": "739254171629deae822b0ad7dabc875aee19ace56dde77d3e8aab61663f97516", "kernels/memory_placement/gemm.py": "17c905ad66110d3346bbf0db898dfc6b780df59fae1dfb0c1747057ce1e5844e", "kernels/memory_placement/gemm_placement.cc": "f21acf7250b12914ea30cc1f77613239dfa18421a85a1b9a5199017dd916278a", "tools/research_summary.py": "0c00dcceef07053d06731b41a1f1ed58d3ba4ea09f82497de354ce9cef17da20", "tools/research_toolchain.py": "f0a126a24ae213acfaa43460cfd9def0c86d9cb70cfee0228aa271688467b314"}, "commit": "f3fa8210d4ad5cb854f1f2cc53ef595303edeefc", "command": ["C:\\Users\\<user>\\miniforge3\\envs\\mlir-aie-iron\\python.exe", "tools/profile_gemma4_target.py", "--control", "C:\\Users\\<user>\\gemma4-assistant\\bin\\target-control-20261018T2116\\ggml_gpu_target.exe", "--candidate", "C:\\Users\\<user>\\gemma4-assistant\\bin\\ggml_gpu_target_timed.exe", "--artifacts", "C:\\Users\\<user>\\gemma4-assistant", "--runtime", "C:\\Users\\<user>\\tools\\llamacpp-b1343-rocm", "--out", "C:\\Users\\<user>\\gemma4-assistant\\npu\\target-decode-profile-20261018.json"], "seconds_limit": 180.0, "rss_gib_limit": 10.0, "checks_only": true, "free_ram_bytes": 22925041664}
+PRE_NPU_CONTEXT_WITNESS "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [78072, 79464], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 4.444, "tree_rss_bytes": 3786219520, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [77156, 78072, 78788, 79464, 81308], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 8.926, "tree_rss_bytes": 4213415936, "foreign_peers": []}
+{"binary": "control", "repeat": 0, "batch": 1, "loop_ms": 1486.462400003802, "worker_decode": null, "gpu_greedy_equal": true}
+{"binary": "control", "repeat": 0, "batch": 2, "loop_ms": 730.6052999920212, "worker_decode": null, "gpu_greedy_equal": true}
+{"binary": "control", "repeat": 0, "batch": 3, "loop_ms": 579.4115000171587, "worker_decode": null, "gpu_greedy_equal": true}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [76828, 77156, 78072, 78788, 79464, 81164, 81308], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 13.311, "tree_rss_bytes": 4158996480, "foreign_peers": []}
+{"binary": "control", "repeat": 0, "batch": 5, "loop_ms": 542.5038000103086, "worker_decode": null, "gpu_greedy_equal": true}
+{"binary": "control", "repeat": 1, "batch": 1, "loop_ms": 1511.0145999933593, "worker_decode": null, "gpu_greedy_equal": true}
+{"binary": "control", "repeat": 1, "batch": 2, "loop_ms": 706.408800004283, "worker_decode": null, "gpu_greedy_equal": true}
+HOST_TIMELINE {"elapsed_seconds": 17.619, "tree_rss_bytes": 4159811584, "foreign_peers": []}
+{"binary": "control", "repeat": 1, "batch": 3, "loop_ms": 570.3489000152331, "worker_decode": null, "gpu_greedy_equal": true}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [76828, 77156, 77860, 78072, 78788, 79464, 81164, 81308], "foreign_pids": []}
+{"binary": "control", "repeat": 1, "batch": 5, "loop_ms": 516.6441999899689, "worker_decode": null, "gpu_greedy_equal": true}
+HOST_TIMELINE {"elapsed_seconds": 21.735, "tree_rss_bytes": 264585216, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [50068, 76828, 77156, 77676, 77860, 78072, 78788, 79464, 81164, 81308], "foreign_pids": []}
+{"binary": "candidate", "repeat": 0, "batch": 1, "loop_ms": 1504.4051999866497, "worker_decode": {"calls": 32, "tokens": 32, "capture_calls": 160, "captured_bytes": 393216, "response_bytes": 403104, "process_ms": 1479.0117, "capture_ms": 14.964599999999995, "logits_ms": 12.590499999999997, "tensors_pack_ms": 0.20829999999999999, "send_ms": 2.5555999999999996}, "gpu_greedy_equal": true, "control_state_bitwise_equal": true}
+HOST_TIMELINE {"elapsed_seconds": 25.955, "tree_rss_bytes": 4215451648, "foreign_peers": []}
+{"binary": "candidate", "repeat": 0, "batch": 2, "loop_ms": 727.9750000161584, "worker_decode": {"calls": 16, "tokens": 32, "capture_calls": 80, "captured_bytes": 393216, "response_bytes": 398224, "process_ms": 707.7593999999999, "capture_ms": 10.507599999999998, "logits_ms": 14.007499999999999, "tensors_pack_ms": 0.17970000000000003, "send_ms": 1.1907}, "gpu_greedy_equal": true, "control_state_bitwise_equal": true}
+{"binary": "candidate", "repeat": 0, "batch": 3, "loop_ms": 586.6280999907758, "worker_decode": {"calls": 11, "tokens": 32, "capture_calls": 55, "captured_bytes": 393216, "response_bytes": 396699, "process_ms": 567.0014000000001, "capture_ms": 8.094599999999993, "logits_ms": 15.101099999999999, "tensors_pack_ms": 0.1482, "send_ms": 0.9440000000000008}, "gpu_greedy_equal": true, "control_state_bitwise_equal": true}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [50068, 76828, 77156, 77676, 77860, 78072, 78788, 79464, 81164, 81308], "foreign_pids": []}
+{"binary": "candidate", "repeat": 0, "batch": 5, "loop_ms": 526.369800005341, "worker_decode": {"calls": 7, "tokens": 32, "capture_calls": 35, "captured_bytes": 393216, "response_bytes": 395479, "process_ms": 510.54309999999987, "capture_ms": 5.390799999999992, "logits_ms": 12.85410000000001, "tensors_pack_ms": 0.09379999999999988, "send_ms": 0.6794999999999991}, "gpu_greedy_equal": true, "control_state_bitwise_equal": true}
+HOST_TIMELINE {"elapsed_seconds": 30.957, "tree_rss_bytes": 618188800, "foreign_peers": []}
+Traceback (most recent call last):
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\tools\profile_gemma4_target.py", line 100, in <module>
+    if __name__=='__main__':main()
+                            ~~~~^^
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\tools\profile_gemma4_target.py", line 64, in main
+    preflights.append(admit_hardware(gpu))
+                      ~~~~~~~~~~~~~~^^^^^
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\npu\gemma4\runtime.py", line 63, in admit_hardware
+    raise HardwareBusy('Inference hardware is busy or telemetry is unavailable',report)
+npu.gemma4.runtime.HardwareBusy: Inference hardware is busy or telemetry is unavailable
+POST_NPU_CONTEXT_WITNESS "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+RESEARCH_PROCESS_RESULT {"exit_code": 1, "stop": null, "peak_tree_rss_bytes": 4224577536, "rss_measurement": "maximum observed across sampled descendant working sets; zero observations reported as null", "elapsed_seconds": 33.19329320001998, "foreign_contention_observed": false, "timing_eligible": false}

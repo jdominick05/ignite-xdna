@@ -1,0 +1,80 @@
+{
+  "scope": "Archive qualification reports with verified source/build provenance.\n\nRefuses replacement, verifies referenced source/program artifacts and scrubs the\ncurrent local account prefix. Does not turn a negative report into a pass.\n",
+  "source_sha256": "d1a776782eb356b2fe7971521bbc4ccf28df90f92a2ebeda446deb46c62d7369",
+  "result_sha256": "c1615ebae5989ec87a12e6e72432b7486cb9f79736cd79c85bd03160f23a49a2",
+  "report": {
+    "passed": true,
+    "scope": "Check research logits export rows, repeatability and rollback invalidation.",
+    "source_sha256": {
+      "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\tools\\qualify_gemma4_logits_protocol.py": "6a4e356f15a37d9cdda2103583d7e34818876ff82da5015f529fdb2834503d70",
+      "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\tools\\ggml_gpu_target\\logits_client.py": "415a14eac09204415901a602e6161fc2a1befeb5b8ead4048b2186ea7ea441b4",
+      "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\tools\\ggml_gpu_target\\client.py": "18b75f386a346688e508fc6062335019c5c756e3e3965a52fc3140d462721dbf",
+      "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\tools\\ggml_gpu_target\\worker_logits.cpp": "bce82c7f5796d4f62e605e6662276b4f6ff544d264fe85d91bfb620694dab8a9",
+      "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\tools\\ggml_gpu_target\\worker_blocks_logits.cpp": "e077e9eda9a6b1905a6eb7600e0be31497d7a2fc0574d8a6029f4b62a5b7c9af",
+      "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\tools\\ggml_gpu_target\\prefix_history.hpp": "d582eac21a2f43a53fdce3fa261f7f97dba711794d04565de995dbd51eba4291",
+      "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\tools\\ggml_gpu_embedding\\embedding.cpp": "82daefc983ffb2778d2a7213b7b49a5dc653dc1f4268bbc74afc5c1f9b7dccd3",
+      "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\npu\\gemma4\\runtime.py": "d997f1297677f4a1b69599d3d7861b67bc7be674aa3d392838e347164813f30a",
+      "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\npu\\contention.py": "a00ac19ca6ca4b8a515628d6e8e534e71a4e5283930908bf7e5d7aad1af9a642",
+      "C:\\Users\\<user>\\gemma4-assistant\\bin\\ggml_gpu_target_logits-v2-20261018.exe": "4ee64e805dd91a9dae441b79e74cb70e183f1169b28cb962f1da4f91495cac5c",
+      "C:\\Users\\<user>\\gemma4-assistant\\bin\\ggml_gpu_target_blocks_logits-v2-20261018.exe": "5e091798dfe801a1f931b0f89a3ee039e0cf2bad3f905473078c9a1f2a76217a",
+      "C:\\Users\\<user>\\gemma4-assistant\\npu\\live-public-dictionary-20261018.i32": "363ba2a5b456b8ebe237b7c7e665263c042ebbb82ffbedb89d45a49dfa603575",
+      "C:\\Users\\<user>\\gemma4-assistant\\models\\gemma-4-E2B-it-Q5_K_M-pleQ4-imatrix.gguf": "ac36a228eb6cd1b93eedc86153016612b0a60ba73c9a50e0b4e95a6a143f65e1",
+      "C:\\Users\\<user>\\tools\\llamacpp-b1343-rocm\\llama.dll": "04aeca339e96514cd2eeed4810ddc813e7cc91b088137d741d5bfb53829464e8",
+      "C:\\Users\\<user>\\tools\\llamacpp-b1343-rocm\\ggml.dll": "d62c9fd3ea800ebf81b104f0b276c44105930557337c3e97ca7bf3e5a51bd889",
+      "C:\\Users\\<user>\\tools\\llamacpp-b1343-rocm\\ggml-base.dll": "b0f6bcf152bbea75fe55c3d185b512ca4b3df167ec8159357da53be435db9539",
+      "C:\\Users\\<user>\\tools\\llamacpp-b1343-rocm\\ggml-hip.dll": "ea8866ab163caad203a2fa2f8afbce51584bb55eb566e1e863bb14e1b1d3f370"
+    },
+    "arms": [
+      {
+        "executable": "C:\\Users\\<user>\\gemma4-assistant\\bin\\ggml_gpu_target_logits-v2-20261018.exe",
+        "exports": [
+          {
+            "rows": 1,
+            "shape": [
+              1,
+              262144
+            ],
+            "all_greedy_rows_exact": true
+          },
+          {
+            "rows": 16,
+            "shape": [
+              16,
+              262144
+            ],
+            "all_greedy_rows_exact": true
+          }
+        ],
+        "initial_repeat_exact_without_evaluation": true,
+        "rollback_export_rejected": true
+      },
+      {
+        "executable": "C:\\Users\\<user>\\gemma4-assistant\\bin\\ggml_gpu_target_blocks_logits-v2-20261018.exe",
+        "exports": [
+          {
+            "rows": 1,
+            "shape": [
+              1,
+              262144
+            ],
+            "all_greedy_rows_exact": true
+          },
+          {
+            "rows": 16,
+            "shape": [
+              16,
+              262144
+            ],
+            "all_greedy_rows_exact": true
+          }
+        ],
+        "initial_repeat_exact_without_evaluation": true,
+        "rollback_export_rejected": true
+      }
+    ],
+    "timing_eligible": false,
+    "energy_eligible": false,
+    "worker_closed": true
+  },
+  "builds": {}
+}

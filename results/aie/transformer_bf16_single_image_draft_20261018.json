@@ -1,0 +1,658 @@
+{
+  "scope": "Synthetic target-state checks only; no serving integration, target acceptance or performance claim",
+  "export_source_sha256": "064ac94af42ec51469b213515c8753eb52cf130c492a3bca2395e5b2f72208f9",
+  "reports": [
+    {
+      "result_sha256": "19f1feea5ff044d3d1e22a805e8b3b1bc0025bf68bd5d0ab0aff0e9dd8d23aca",
+      "registration": {
+        "gates": {
+          "relative_l2": 0.01,
+          "max_abs_over_reference_rms": 0.05,
+          "scope": "Full NPU greedy draft step, synthetic target states; proposal agreement diagnostic; no serving or speed claim"
+        },
+        "source_sha256": "c20dca6bc8c90390c3b6f1b93912b9ed99e62ee34168d024f2e186d2a825fd25",
+        "native_runtime_sha256": "9e1b09d0ed1d7d5af3bc046cb40cf87e4ea2aff42cf9c8bc606aaa6335bfd1f2",
+        "shared_sources": {
+          "kernels/transformer_bf16/common.py": "e9ea9aefc2167093490bc2716ec2895f38cb13fc3852703ebd42211526c4854e",
+          "kernels/transformer_bf16/dispatch.cc": "2f3de210acfad2fcc8f8d9f3a8415052aa402f058734a459d714c897ad986b05",
+          "kernels/transformer_bf16/geglu.cc": "e7ed0233130e8f63bc2134502c318c87563ac48cf2308aeb7c308641666d4b34",
+          "kernels/transformer_bf16/gemv.cc": "66a1da00c319f565af9554ea516254588273f0396c3d2a1b29299a8e3039690f",
+          "kernels/transformer_bf16/gemv_precise.cc": "6600e21079a574c4d1d3b93f497d11d75656fc062cc123fb12013ece3436087a",
+          "kernels/transformer_bf16/ops.py": "46db034d0ea07b450032dcd10e3872e613611a4f4d04b14d49360ec829d09c97",
+          "kernels/transformer_bf16/persistent.py": "2d0a57489b4aad87f256744e70d3219fc4d27d324cb067de4959ccce5feda3cb",
+          "kernels/transformer_bf16/probe.py": "8233278ed12504807faa60ce48c08e5bb5b3bd9f95502428247f9050e4a41c5d",
+          "kernels/transformer_bf16/residual.cc": "56d6d909c9830b799263b970443f1f7b57dd4d99557db25afef036d761e8f4a2",
+          "kernels/transformer_bf16/rmsnorm.cc": "9efc3bec80f7c25e88a48ce30f851bc437e05000e7d79014cc2997399b15463f",
+          "kernels/transformer_bf16/rope.cc": "9cda05b108160f2152261eb79b61c8830aca34d0c4d4158d5c281897f1b7ce2a",
+          "kernels/transformer_bf16/session_probe.py": "4c3f1f3abe2c19619f9790cff0b07432503c2e442d371f244a9da6d6fd4e7272",
+          "kernels/transformer_bf16/softmax.cc": "32ed139ad46f7c3ee8f3edd5716eafed3306386cb81be384ede30fdf00ff397a",
+          "kernels/transformer_bf16/stream.py": "6e7da07da912a65f6cdfafbc76df2dd22e135e371cc0a560eeddd0bf4c19c97d",
+          "kernels/transformer_bf16/topk.cc": "1f680ca67d8c97a82bb41db53a6f2aad15802f16be287b9bfddbac31ca6e1868",
+          "kernels/transformer_bf16/__init__.py": "66e8ee8dbd8e1bbc4788e12fa85a161db92c666969493f6a38b5f623cb309bf4"
+        },
+        "rotations_sha256": "14d4460fe64c754ccb3c97c00c8db3365f07abbfc5a735e383a8f107c99a2c32",
+        "lut_sha256": "2a3578db96f57b7b5c2768acbfa2bffefbf5247453fbab911793728b5451465e",
+        "fixtures": {
+          "<user-home>\\gemma4-assistant\\npu\\e2b-bf16-fixtures-1792336544350126400\\manifest.json": "027df84277782e943ec972cb8264facbb2605bd8a4ec114046cdd4310300a073",
+          "<user-home>\\gemma4-assistant\\npu\\e4b-bf16-fixtures-1792336549563028300\\manifest.json": "3cd61be620adce03617667367c1faa52eacc3f8a22c1c3fd5defe0b207ee643b"
+        },
+        "limit": 0,
+        "case_indices": [
+          1,
+          2
+        ],
+        "precise_projection": true,
+        "keep_going": true,
+        "persistent_transport": true,
+        "single_image": true
+      },
+      "passed": true,
+      "complete": false,
+      "cases": 4,
+      "passing_cases": 4,
+      "matching_tokens": 4,
+      "results": [
+        {
+          "model": "gemma-4-E2B-it-assistant",
+          "fixture": "seed-11-kv-37-pos-36.npz",
+          "passed": true,
+          "metrics": {
+            "pre_projection": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_0": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_1": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_2": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_3": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "hidden": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "projected": {
+              "passed": true,
+              "relative_l2": 3.2344238292072814e-10,
+              "max_abs_over_reference_rms": 1.2676300789530761e-08
+            },
+            "centroids": {
+              "passed": true,
+              "relative_l2": 0.00012461440218277078,
+              "max_abs_over_reference_rms": 0.005639404084284476
+            },
+            "shared_head_logits": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            }
+          },
+          "token_id": 227288,
+          "reference_token_id": 227288,
+          "token_equal": true,
+          "selected_row_overlap": 4096,
+          "selected_rows": 4096,
+          "wall_seconds": 42.887702199979685,
+          "dispatches": 99,
+          "transport": {
+            "contexts_created": 5,
+            "cache_hits": 88,
+            "evictions": 3,
+            "all_contexts_released": true
+          }
+        },
+        {
+          "model": "gemma-4-E2B-it-assistant",
+          "fixture": "seed-11-kv-513-pos-8191.npz",
+          "passed": true,
+          "metrics": {
+            "pre_projection": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_0": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_1": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_2": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_3": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "hidden": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "projected": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "centroids": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "shared_head_logits": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            }
+          },
+          "token_id": 9189,
+          "reference_token_id": 9189,
+          "token_equal": true,
+          "selected_row_overlap": 3968,
+          "selected_rows": 4096,
+          "wall_seconds": 15.321649299992714,
+          "dispatches": 99,
+          "transport": {
+            "contexts_created": 4,
+            "cache_hits": 89,
+            "evictions": 2,
+            "all_contexts_released": true
+          }
+        },
+        {
+          "model": "gemma-4-E4B-it-assistant",
+          "fixture": "seed-11-kv-37-pos-36.npz",
+          "passed": true,
+          "metrics": {
+            "pre_projection": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_0": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_1": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_2": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_3": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "hidden": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "projected": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "centroids": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "shared_head_logits": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            }
+          },
+          "token_id": 236786,
+          "reference_token_id": 236786,
+          "token_equal": true,
+          "selected_row_overlap": 4096,
+          "selected_rows": 4096,
+          "wall_seconds": 11.985192499996629,
+          "dispatches": 99,
+          "transport": {
+            "contexts_created": 4,
+            "cache_hits": 88,
+            "evictions": 2,
+            "all_contexts_released": true
+          }
+        },
+        {
+          "model": "gemma-4-E4B-it-assistant",
+          "fixture": "seed-11-kv-513-pos-8191.npz",
+          "passed": true,
+          "metrics": {
+            "pre_projection": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_0": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_1": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_2": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_3": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "hidden": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "projected": {
+              "passed": true,
+              "relative_l2": 0.00021304943913331403,
+              "max_abs_over_reference_rms": 0.010779461469672244
+            },
+            "centroids": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "shared_head_logits": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            }
+          },
+          "token_id": 825,
+          "reference_token_id": 825,
+          "token_equal": true,
+          "selected_row_overlap": 4096,
+          "selected_rows": 4096,
+          "wall_seconds": 5.003658800007543,
+          "dispatches": 99,
+          "transport": {
+            "contexts_created": 4,
+            "cache_hits": 88,
+            "evictions": 2,
+            "all_contexts_released": true
+          }
+        }
+      ],
+      "dispatch_count": 396,
+      "all_completed_inputs_unchanged": true,
+      "operations": {
+        "draft_projection_precise": 224,
+        "draft_norm": 84,
+        "draft_rope": 16,
+        "draft_softmax": 16,
+        "draft_residual": 32,
+        "draft_geglu": 16,
+        "draft_topk": 8
+      },
+      "runtime_driver_sha256": [
+        "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+      ]
+    },
+    {
+      "result_sha256": "1ab7db0efa844c102038c9c63391fba59f8e370bbd357784e7dce294fb59f15a",
+      "registration": {
+        "gates": {
+          "relative_l2": 0.01,
+          "max_abs_over_reference_rms": 0.05,
+          "scope": "Full NPU greedy draft step, synthetic target states; proposal agreement diagnostic; no serving or speed claim"
+        },
+        "source_sha256": "c20dca6bc8c90390c3b6f1b93912b9ed99e62ee34168d024f2e186d2a825fd25",
+        "native_runtime_sha256": "9e1b09d0ed1d7d5af3bc046cb40cf87e4ea2aff42cf9c8bc606aaa6335bfd1f2",
+        "shared_sources": {
+          "kernels/transformer_bf16/common.py": "e9ea9aefc2167093490bc2716ec2895f38cb13fc3852703ebd42211526c4854e",
+          "kernels/transformer_bf16/dispatch.cc": "2f3de210acfad2fcc8f8d9f3a8415052aa402f058734a459d714c897ad986b05",
+          "kernels/transformer_bf16/geglu.cc": "e7ed0233130e8f63bc2134502c318c87563ac48cf2308aeb7c308641666d4b34",
+          "kernels/transformer_bf16/gemv.cc": "66a1da00c319f565af9554ea516254588273f0396c3d2a1b29299a8e3039690f",
+          "kernels/transformer_bf16/gemv_precise.cc": "6600e21079a574c4d1d3b93f497d11d75656fc062cc123fb12013ece3436087a",
+          "kernels/transformer_bf16/ops.py": "aabac8f0016d553e5a44db5b2857e09972eaa59799a59f221bc33587aaf49cf7",
+          "kernels/transformer_bf16/persistent.py": "2ebf85286ff9462ba5cc9bf1509e18260094fc057372e319306db7e5b50c8f2d",
+          "kernels/transformer_bf16/probe.py": "8233278ed12504807faa60ce48c08e5bb5b3bd9f95502428247f9050e4a41c5d",
+          "kernels/transformer_bf16/residual.cc": "56d6d909c9830b799263b970443f1f7b57dd4d99557db25afef036d761e8f4a2",
+          "kernels/transformer_bf16/rmsnorm.cc": "9efc3bec80f7c25e88a48ce30f851bc437e05000e7d79014cc2997399b15463f",
+          "kernels/transformer_bf16/rope.cc": "9cda05b108160f2152261eb79b61c8830aca34d0c4d4158d5c281897f1b7ce2a",
+          "kernels/transformer_bf16/session_probe.py": "5bdccf07ea2c4afce21960af75a83c35a73dbe88250ed1b45cb173f2381856a8",
+          "kernels/transformer_bf16/softmax.cc": "32ed139ad46f7c3ee8f3edd5716eafed3306386cb81be384ede30fdf00ff397a",
+          "kernels/transformer_bf16/stream.py": "6e7da07da912a65f6cdfafbc76df2dd22e135e371cc0a560eeddd0bf4c19c97d",
+          "kernels/transformer_bf16/topk.cc": "1f680ca67d8c97a82bb41db53a6f2aad15802f16be287b9bfddbac31ca6e1868",
+          "kernels/transformer_bf16/__init__.py": "66e8ee8dbd8e1bbc4788e12fa85a161db92c666969493f6a38b5f623cb309bf4"
+        },
+        "rotations_sha256": "14d4460fe64c754ccb3c97c00c8db3365f07abbfc5a735e383a8f107c99a2c32",
+        "lut_sha256": "2a3578db96f57b7b5c2768acbfa2bffefbf5247453fbab911793728b5451465e",
+        "fixtures": {
+          "<user-home>\\gemma4-assistant\\npu\\e2b-bf16-fixtures-1792336544350126400\\manifest.json": "027df84277782e943ec972cb8264facbb2605bd8a4ec114046cdd4310300a073",
+          "<user-home>\\gemma4-assistant\\npu\\e4b-bf16-fixtures-1792336549563028300\\manifest.json": "3cd61be620adce03617667367c1faa52eacc3f8a22c1c3fd5defe0b207ee643b"
+        },
+        "limit": 0,
+        "case_indices": [
+          1,
+          2
+        ],
+        "precise_projection": true,
+        "keep_going": true,
+        "persistent_transport": true,
+        "single_image": true
+      },
+      "passed": true,
+      "complete": false,
+      "cases": 4,
+      "passing_cases": 4,
+      "matching_tokens": 4,
+      "results": [
+        {
+          "model": "gemma-4-E2B-it-assistant",
+          "fixture": "seed-11-kv-37-pos-36.npz",
+          "passed": true,
+          "metrics": {
+            "pre_projection": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_0": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_1": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_2": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_3": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "hidden": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "projected": {
+              "passed": true,
+              "relative_l2": 3.2344238292072814e-10,
+              "max_abs_over_reference_rms": 1.2676300789530761e-08
+            },
+            "centroids": {
+              "passed": true,
+              "relative_l2": 0.00012461440218277078,
+              "max_abs_over_reference_rms": 0.005639404084284476
+            },
+            "shared_head_logits": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            }
+          },
+          "token_id": 227288,
+          "reference_token_id": 227288,
+          "token_equal": true,
+          "selected_row_overlap": 4096,
+          "selected_rows": 4096,
+          "wall_seconds": 38.63384450000012,
+          "dispatches": 99,
+          "transport": {
+            "contexts_created": 2,
+            "cache_hits": 88,
+            "evictions": 0,
+            "all_contexts_released": true
+          }
+        },
+        {
+          "model": "gemma-4-E2B-it-assistant",
+          "fixture": "seed-11-kv-513-pos-8191.npz",
+          "passed": true,
+          "metrics": {
+            "pre_projection": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_0": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_1": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_2": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_3": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "hidden": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "projected": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "centroids": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "shared_head_logits": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            }
+          },
+          "token_id": 9189,
+          "reference_token_id": 9189,
+          "token_equal": true,
+          "selected_row_overlap": 3968,
+          "selected_rows": 4096,
+          "wall_seconds": 11.054471100011142,
+          "dispatches": 99,
+          "transport": {
+            "contexts_created": 2,
+            "cache_hits": 89,
+            "evictions": 0,
+            "all_contexts_released": true
+          }
+        },
+        {
+          "model": "gemma-4-E4B-it-assistant",
+          "fixture": "seed-11-kv-37-pos-36.npz",
+          "passed": true,
+          "metrics": {
+            "pre_projection": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_0": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_1": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_2": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_3": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "hidden": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "projected": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "centroids": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "shared_head_logits": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            }
+          },
+          "token_id": 236786,
+          "reference_token_id": 236786,
+          "token_equal": true,
+          "selected_row_overlap": 4096,
+          "selected_rows": 4096,
+          "wall_seconds": 7.736744200024987,
+          "dispatches": 99,
+          "transport": {
+            "contexts_created": 3,
+            "cache_hits": 88,
+            "evictions": 1,
+            "all_contexts_released": true
+          }
+        },
+        {
+          "model": "gemma-4-E4B-it-assistant",
+          "fixture": "seed-11-kv-513-pos-8191.npz",
+          "passed": true,
+          "metrics": {
+            "pre_projection": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_0": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_1": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_2": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "layer_3": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "hidden": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "projected": {
+              "passed": true,
+              "relative_l2": 0.00021304943913331403,
+              "max_abs_over_reference_rms": 0.010779461469672244
+            },
+            "centroids": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            },
+            "shared_head_logits": {
+              "passed": true,
+              "relative_l2": 0.0,
+              "max_abs_over_reference_rms": 0.0
+            }
+          },
+          "token_id": 825,
+          "reference_token_id": 825,
+          "token_equal": true,
+          "selected_row_overlap": 4096,
+          "selected_rows": 4096,
+          "wall_seconds": 0.9154098999861162,
+          "dispatches": 99,
+          "transport": {
+            "contexts_created": 3,
+            "cache_hits": 88,
+            "evictions": 1,
+            "all_contexts_released": true
+          }
+        }
+      ],
+      "dispatch_count": 396,
+      "all_completed_inputs_unchanged": true,
+      "operations": {
+        "draft_projection_precise": 224,
+        "draft_norm": 84,
+        "draft_rope": 16,
+        "draft_softmax": 16,
+        "draft_residual": 32,
+        "draft_geglu": 16,
+        "draft_topk": 8
+      },
+      "runtime_driver_sha256": [
+        "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+      ]
+    }
+  ]
+}

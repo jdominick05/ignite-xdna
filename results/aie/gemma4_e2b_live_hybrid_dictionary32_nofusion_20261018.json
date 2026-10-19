@@ -1,0 +1,2718 @@
+{
+  "scope": "Archive live target/hybrid checks with source and NPU artifact verification.",
+  "source_sha256": "12cb17255eced8632ec91c2b74240c9ceb3e91ca75ff4b2cdfb3da730ab87f3c",
+  "result_sha256": "5095295fc6d7b713d7d0c1ec734aeed2c6213fedc4d3ceb786647109794b4b42",
+  "report": {
+    "registration": {
+      "scope": "Bounded live E2B GPU target plus BF16 Phoenix NPU speculative drafting.\n\nGreedy correctness experiment, not a serving or speed qualification. Fresh target\nhidden/KV and GPU embeddings supply every draft. No captured inference tensors.\n",
+      "files": {
+        "<user-home>\\gemma4-assistant\\scripts\\live_hybrid.py": "4f213a9a6c84ed40449cb9ba772307d145bf71b08ae8579dad8c2e65e0de2b34",
+        "<user-home>\\gemma4-assistant\\scripts\\arena_draft.py": "b0aceaac4628089d194aa5d0a413ad9a8d2dd8b2dca56c4e5da25ae8f0cfd239",
+        "<user-home>\\gemma4-assistant\\npu\\live-public-dictionary-20261018.i32": "363ba2a5b456b8ebe237b7c7e665263c042ebbb82ffbedb89d45a49dfa603575",
+        "<user-home>\\gemma4-assistant\\bin\\ggml_gpu_target.exe": "aba4b88e1d4f26bd4f05bc00b7b70c87708df66c1a8a6fb44012c47214d6e7e6",
+        "<user-home>\\gemma4-assistant\\models\\gemma-4-E2B-it-Q5_K_M-pleQ4-imatrix.gguf": "ac36a228eb6cd1b93eedc86153016612b0a60ba73c9a50e0b4e95a6a143f65e1",
+        "<user-home>\\PycharmProjects\\ignite-xdna\\tools\\ggml_gpu_target\\worker.cpp": "e39bdfd7d453a881b256ed48a7c7bc66cfe07249e0685ee84d5f9487f4b1bf67",
+        "<user-home>\\PycharmProjects\\ignite-xdna\\tools\\ggml_gpu_target\\client.py": "095fba2eb666f7468ac6ef751909f8d33552c03879b5ad07ccd0c2ffb6cdb923",
+        "<user-home>\\PycharmProjects\\ignite-xdna\\tools\\ggml_gpu_embedding\\embedding.cpp": "82daefc983ffb2778d2a7213b7b49a5dc653dc1f4268bbc74afc5c1f9b7dccd3",
+        "<user-home>\\gemma4-assistant\\npu\\gemma-4-E2B-it-assistant.weights.npz": "bda11a1dd40c42a3f84632cb66250f8afe1111657f0d37188e3c0234da6376fc",
+        "<user-home>\\gemma4-assistant\\npu\\gemma-4-E2B-it-assistant.weights.json": "2346469a976daa60d0a47c8d24790a3043951e4f968ea3d3542706375d3d19d7",
+        "<user-home>\\gemma4-assistant\\npu\\rope-e2b-live-512-20261018.npz": "b8a1e78435fd910725cbbd73ebe3cbac5745fa87a3d93c7af453eb54e05a4e04",
+        "<user-home>\\gemma4-assistant\\npu\\gelu-bf16-tanh-v1.npz": "2a3578db96f57b7b5c2768acbfa2bffefbf5247453fbab911793728b5451465e",
+        "<user-home>\\gemma4-assistant\\npu\\rope-e2b-live-512-20261018.json": "ad0a60faf8e4cd62a9849a9e7782089f6ad7b89280c3e290a68c1810cd6a625e",
+        "<user-home>\\gemma4-assistant\\npu\\gelu-bf16-tanh-v1.json": "43e4b24331e5e00892bcf1bf82944646a1e57583792dd75b50de25c39bc91362",
+        "<user-home>\\gemma4-assistant\\npu\\local-checkpoints\\gemma-4-E2B-it-assistant\\config.json": "d2d732c3e0dbdef15fba14be606aa4bb5625226f2cf0e40a5a59c161d764c260",
+        "<user-home>\\tools\\llamacpp-b1343-rocm\\llama.dll": "04aeca339e96514cd2eeed4810ddc813e7cc91b088137d741d5bfb53829464e8",
+        "<user-home>\\tools\\llamacpp-b1343-rocm\\ggml.dll": "d62c9fd3ea800ebf81b104f0b276c44105930557337c3e97ca7bf3e5a51bd889",
+        "<user-home>\\tools\\llamacpp-b1343-rocm\\ggml-base.dll": "b0f6bcf152bbea75fe55c3d185b512ca4b3df167ec8159357da53be435db9539",
+        "<user-home>\\tools\\llamacpp-b1343-rocm\\ggml-hip.dll": "ea8866ab163caad203a2fa2f8afbce51584bb55eb566e1e863bb14e1b1d3f370"
+      },
+      "output_tokens": 32,
+      "depth": 2,
+      "exact_norm": true,
+      "timing_eligible": false,
+      "main_backend": "ROCm0",
+      "drafter_backend": "Phoenix XDNA1",
+      "greedy": true,
+      "disable_fusion": true
+    },
+    "control_tokens": [
+      1408,
+      8922,
+      496,
+      17856,
+      26634,
+      4296,
+      21165,
+      185878,
+      12045,
+      108,
+      32651,
+      114114,
+      236764,
+      5213,
+      25142,
+      17856,
+      236743,
+      236800,
+      236761,
+      236832,
+      568,
+      624,
+      618,
+      614,
+      8688,
+      8052,
+      528,
+      565,
+      32651,
+      236743,
+      236800,
+      236761
+    ],
+    "hybrid_tokens": [
+      1408,
+      8922,
+      496,
+      17856,
+      26634,
+      4296,
+      21165,
+      185878,
+      12045,
+      108,
+      32651,
+      114114,
+      236764,
+      5213,
+      25142,
+      17856,
+      236743,
+      236800,
+      236761,
+      236832,
+      568,
+      624,
+      618,
+      614,
+      8688,
+      8052,
+      528,
+      565,
+      32651,
+      236743,
+      236800,
+      236761
+    ],
+    "greedy_equal": true,
+    "rounds": [
+      {
+        "start": 25,
+        "bonus": 1408,
+        "proposals": [
+          8922,
+          496
+        ],
+        "accepted": 2,
+        "predictions": [
+          8922,
+          496,
+          17856
+        ],
+        "next_bonus": 17856,
+        "rollback": false,
+        "dispatches": [
+          {
+            "body": {
+              "build": "<user-home>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-4f359a675ff2b4c7\\build.json",
+              "commands": 3031,
+              "host_phases_ms": {
+                "build_lookup": 0.4585999995470047,
+                "packet_stack": 8.242500014603138
+              },
+              "dispatch_ms": 50.38609998882748,
+              "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+              "input_unchanged": true,
+              "transfer_phases_ms": {
+                "input_write_sync": 6.688499997835606,
+                "output_poison_sync": 4.3283999839331955,
+                "output_sync_read": 2.678399992873892,
+                "input_sync_verify": 8.564099989598617
+              },
+              "persistent_transport": true,
+              "image_cache_hit": false,
+              "contexts_created": 1,
+              "context_cache_hit": false,
+              "exact_program_sharing": true,
+              "context_cache_size": 1,
+              "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+            },
+            "head": {
+              "build": "<user-home>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-9544722e26ed3cbe\\build.json",
+              "commands": 258,
+              "host_phases_ms": {
+                "build_lookup": 0.43280000681988895,
+                "packet_stack": 0.6184999947436154
+              },
+              "dispatch_ms": 4.496500012464821,
+              "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+              "input_unchanged": true,
+              "transfer_phases_ms": {
+                "input_write_sync": 0.6161999772302806,
+                "output_poison_sync": 0.3968999953940511,
+                "output_sync_read": 0.43710001045838,
+                "input_sync_verify": 1.0414999851491302
+              },
+              "persistent_transport": true,
+              "image_cache_hit": false,
+              "contexts_created": 2,
+              "context_cache_hit": false,
+              "exact_program_sharing": true,
+              "context_cache_size": 2,
+              "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+            }
+          },
+          {
+            "body": {
+              "build": "<user-home>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-4f359a675ff2b4c7\\build.json",
+              "commands": 3031,
+              "host_phases_ms": {
+                "build_lookup": 0.2170999941881746,
+                "packet_stack": 7.644700002856553
+              },
+              "dispatch_ms": 40.47790000913665,
+              "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+              "input_unchanged": true,
+              "transfer_phases_ms": {
+                "input_write_sync": 6.891700002597645,
+                "output_poison_sync": 3.8327999936882406,
+                "output_sync_read": 3.2054000184871256,
+                "input_sync_verify": 9.125299984589219
+              },
+              "persistent_transport": true,
+              "image_cache_hit": true,
+              "contexts_created": 2,
+              "context_cache_hit": true,
+              "exact_program_sharing": true,
+              "context_cache_size": 2,
+              "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+            },
+            "head": {
+              "build": "<user-home>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-9544722e26ed3cbe\\build.json",
+              "commands": 258,
+              "host_phases_ms": {
+                "build_lookup": 0.1965999836102128,
+                "packet_stack": 0.6579000037163496
+              },
+              "dispatch_ms": 3.8071000017225742,
+              "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+              "input_unchanged": true,
+              "transfer_phases_ms": {
+                "input_write_sync": 0.6610999989788979,
+                "output_poison_sync": 0.43280000681988895,
+                "output_sync_read": 0.43750001350417733,
+                "input_sync_verify": 1.0841000184882432
+              },
+              "persistent_transport": true,
+              "image_cache_hit": true,
+              "contexts_created": 2,
+              "context_cache_hit": true,
+              "exact_program_sharing": true,
+              "context_cache_size": 2,
+              "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+            }
+          }
+        ]
+      },
+      {
+        "start": 28,
+        "bonus": 17856,
+        "proposals": [
+          26634,
+          4296
+        ],
+        "accepted": 2,
+        "predictions": [
+          26634,
+          4296,
+          21165
+        ],
+        "next_bonus": 21165,
+        "rollback": false,
+        "dispatches": [
+          {
+            "body": {
+              "build": "<user-home>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-4f359a675ff2b4c7\\build.json",
+              "commands": 3031,
+              "host_phases_ms": {
+                "build_lookup": 0.23579999106004834,
+                "packet_stack": 7.6246999960858375
+              },
+              "dispatch_ms": 40.94599999370985,
+              "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+              "input_unchanged": true,
+              "transfer_phases_ms": {
+                "input_write_sync": 7.084000011673197,
+                "output_poison_sync": 3.505000000586733,
+                "output_sync_read": 2.686299994820729,
+                "input_sync_verify": 8.952800009865314
+              },
+              "persistent_transport": true,
+              "image_cache_hit": true,
+              "contexts_created": 2,
+              "context_cache_hit": true,
+              "exact_program_sharing": true,
+              "context_cache_size": 2,
+              "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+            },
+            "head": {
+              "build": "<user-home>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-9544722e26ed3cbe\\build.json",
+              "commands": 258,
+              "host_phases_ms": {
+                "build_lookup": 0.2198000147473067,
+                "packet_stack": 0.6341000262182206
+              },
+              "dispatch_ms": 3.8933000178076327,
+              "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+              "input_unchanged": true,
+              "transfer_phases_ms": {
+                "input_write_sync": 0.6549000099767,
+                "output_poison_sync": 0.4354999982751906,
+                "output_sync_read": 0.440200004959479,
+                "input_sync_verify": 0.90230000205338
+              },
+              "persistent_transport": true,
+              "image_cache_hit": true,
+              "contexts_created": 2,
+              "context_cache_hit": true,
+              "exact_program_sharing": true,
+              "context_cache_size": 2,
+              "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+            }
+          },
+          {
+            "body": {
+              "build": "<user-home>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-4f359a675ff2b4c7\\build.json",
+              "commands": 3031,
+              "host_phases_ms": {
+                "build_lookup": 0.25339997955597937,
+                "packet_stack": 7.106100005330518
+              },
+              "dispatch_ms": 40.39859998738393,
+              "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+              "input_unchanged": true,
+              "transfer_phases_ms": {
+                "input_write_sync": 7.0875000092200935,
+                "output_poison_sync": 3.264700004365295,
+                "output_sync_read": 3.0684000230394304,
+                "input_sync_verify": 8.641299995360896
+              },
+              "persistent_transport": true,
+              "image_cache_hit": true,
+              "contexts_created": 2,
+              "context_cache_hit": true,
+              "exact_program_sharing": true,
+              "context_cache_size": 2,
+              "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+            },
+            "head": {
+              "build": "<user-home>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-9544722e26ed3cbe\\build.json",
+              "commands": 258,
+              "host_phases_ms": {
+                "build_lookup": 0.18909998470917344,
+                "packet_stack": 0.7612000044900924
+              },
+              "dispatch_ms": 3.898700000718236,
+              "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+              "input_unchanged": true,
+              "transfer_phases_ms": {
+                "input_write_sync": 0.7455000013578683,
+                "output_poison_sync": 0.44949998846277595,
+                "output_sync_read": 0.4616999940481037,
+                "input_sync_verify": 1.000799995381385
+              },
+              "persistent_transport": true,
+              "image_cache_hit": true,
+              "contexts_created": 2,
+              "context_cache_hit": true,
+              "exact_program_sharing": true,
+              "context_cache_size": 2,
+              "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+            }
+          }
+        ]
+      },
+      {
+        "start": 31,
+        "bonus": 21165,
+        "proposals": [
+          185878,
+          12045
+        ],
+        "accepted": 2,
+        "predictions": [
+          185878,
+          12045,
+          108
+        ],
+        "next_bonus": 108,
+        "rollback": false,
+        "dispatches": [
+          {
+            "body": {
+              "build": "<user-home>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-4f359a675ff2b4c7\\build.json",
+              "commands": 3031,
+              "host_phases_ms": {
+                "build_lookup": 0.18450000789016485,
+                "packet_stack": 7.329599990043789
+              },
+              "dispatch_ms": 40.977500000735745,
+              "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+              "input_unchanged": true,
+              "transfer_phases_ms": {
+                "input_write_sync": 6.749599997419864,
+                "output_poison_sync": 3.311100008431822,
+                "output_sync_read": 2.756100002443418,
+                "input_sync_verify": 8.564199990360066
+              },
+              "persistent_transport": true,
+              "image_cache_hit": true,
+              "contexts_created": 2,
+              "context_cache_hit": true,
+              "exact_program_sharing": true,
+              "context_cache_size": 2,
+              "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+            },
+            "head": {
+              "build": "<user-home>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-9544722e26ed3cbe\\build.json",
+              "commands": 258,
+              "host_phases_ms": {
+                "build_lookup": 0.18840000848285854,
+                "packet_stack": 0.5225999921094626
+              },
+              "dispatch_ms": 4.25670002005063,
+              "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+              "input_unchanged": true,
+              "transfer_phases_ms": {
+                "input_write_sync": 0.6098999874666333,
+                "output_poison_sync": 0.4081999941263348,
+                "output_sync_read": 0.48379998770542443,
+                "input_sync_verify": 0.7856000156607479
+              },
+              "persistent_transport": true,
+              "image_cache_hit": true,
+              "contexts_created": 2,
+              "context_cache_hit": true,
+              "exact_program_sharing": true,
+              "context_cache_size": 2,
+              "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+            }
+          },
+          {
+            "body": {
+              "build": "<user-home>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-4f359a675ff2b4c7\\build.json",
+              "commands": 3031,
+              "host_phases_ms": {
+                "build_lookup": 0.25599999935366213,
+                "packet_stack": 7.090799976140261
+              },
+              "dispatch_ms": 41.138800006592646,
+              "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+              "input_unchanged": true,
+              "transfer_phases_ms": {
+                "input_write_sync": 6.652999989455566,
+                "output_poison_sync": 3.4416000125929713,
+                "output_sync_read": 2.9119999962858856,
+                "input_sync_verify": 8.57999999425374
+              },
+              "persistent_transport": true,
+              "image_cache_hit": true,
+              "contexts_created": 2,
+              "context_cache_hit": true,
+              "exact_program_sharing": true,
+              "context_cache_size": 2,
+              "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+            },
+            "head": {
+              "build": "<user-home>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-9544722e26ed3cbe\\build.json",
+              "commands": 258,
+              "host_phases_ms": {
+                "build_lookup": 0.19080002675764263,
+                "packet_stack": 0.5591000081039965
+              },
+              "dispatch_ms": 4.290400014724582,
+              "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+              "input_unchanged": true,
+              "transfer_phases_ms": {
+                "input_write_sync": 0.6041000015102327,
+                "output_poison_sync": 0.4322000022511929,
+                "output_sync_read": 0.4839999892283231,
+                "input_sync_verify": 1.0020000045187771
+              },
+              "persistent_transport": true,
+              "image_cache_hit": true,
+              "contexts_created": 2,
+              "context_cache_hit": true,
+              "exact_program_sharing": true,
+              "context_cache_size": 2,
+              "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+            }
+          }
+        ]
+      },
+      {
+        "start": 34,
+        "bonus": 108,
+        "proposals": [
+          236776,
+          17856
+        ],
+        "accepted": 0,
+        "predictions": [
+          32651,
+          17856,
+          19086
+        ],
+        "next_bonus": 32651,
+        "rollback": true,
+        "dispatches": [
+          {
+            "body": {
+              "build": "<user-home>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-a812c219f62e348e\\build.json",
+              "commands": 3051,
+              "host_phases_ms": {
+                "build_lookup": 0.454099994385615,
+                "packet_stack": 7.0946000050753355
+              },
+              "dispatch_ms": 51.37060000561178,
+              "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+              "input_unchanged": true,
+              "transfer_phases_ms": {
+                "input_write_sync": 7.013299997197464,
+                "output_poison_sync": 3.3724000095389783,
+                "output_sync_read": 3.1374999962281436,
+                "input_sync_verify": 9.23930000863038
+              },
+              "persistent_transport": true,
+              "image_cache_hit": false,
+              "contexts_created": 2,
+              "context_cache_hit": true,
+              "exact_program_sharing": true,
+              "context_cache_size": 2,
+              "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+            },
+            "head": {
+              "build": "<user-home>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-9544722e26ed3cbe\\build.json",
+              "commands": 258,
+              "host_phases_ms": {
+                "build_lookup": 0.16460000188089907,
+                "packet_stack": 0.6287999858614057
+              },
+              "dispatch_ms": 3.8687000051140785,
+              "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+              "input_unchanged": true,
+              "transfer_phases_ms": {
+                "input_write_sync": 0.7186000002548099,
+                "output_poison_sync": 0.3952999832108617,
+                "output_sync_read": 0.4684000159613788,
+                "input_sync_verify": 0.9885999897960573
+              },
+              "persistent_transport": true,
+              "image_cache_hit": true,
+              "contexts_created": 2,
+              "context_cache_hit": true,
+              "exact_program_sharing": true,
+              "context_cache_size": 2,
+              "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+            }
+          },
+          {
+            "body": {
+              "build": "<user-home>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-a812c219f62e348e\\build.json",
+              "commands": 3051,
+              "host_phases_ms": {
+                "build_lookup": 0.18770000315271318,
+                "packet_stack": 7.298300013644621
+              },
+              "dispatch_ms": 41.2662000162527,
+              "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+              "input_unchanged": true,
+              "transfer_phases_ms": {
+                "input_write_sync": 6.762500008335337,
+                "output_poison_sync": 3.2238000130746514,
+                "output_sync_read": 2.7686999819707125,
+                "input_sync_verify": 8.895000006305054
+              },
+              "persistent_transport": true,
+              "image_cache_hit": true,
+              "contexts_created": 2,
+              "context_cache_hit": true,
+              "exact_program_sharing": true,
+              "context_cache_size": 2,
+              "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+            },
+            "head": {
+              "build": "<user-home>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-9544722e26ed3cbe\\build.json",
+              "commands": 258,
+              "host_phases_ms": {
+                "build_lookup": 0.18640002235770226,
+                "packet_stack": 0.5833000177517533
+              },
+              "dispatch_ms": 4.0354999946430326,
+              "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+              "input_unchanged": true,
+              "transfer_phases_ms": {
+                "input_write_sync": 0.6156000017654151,
+                "output_poison_sync": 0.4656999954022467,
+                "output_sync_read": 0.4484999808482826,
+                "input_sync_verify": 0.9674000029917806
+              },
+              "persistent_transport": true,
+              "image_cache_hit": true,
+              "contexts_created": 2,
+              "context_cache_hit": true,
+              "exact_program_sharing": true,
+              "context_cache_size": 2,
+              "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+            }
+          }
+        ]
+      },
+      {
+        "start": 35,
+        "bonus": 32651,
+        "proposals": [
+          114114,
+          659
+        ],
+        "accepted": 1,
+        "predictions": [
+          114114,
+          236764,
+          5213
+        ],
+        "next_bonus": 236764,
+        "rollback": true,
+        "dispatches": [
+          {
+            "body": {
+              "build": "<user-home>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-a812c219f62e348e\\build.json",
+              "commands": 3051,
+              "host_phases_ms": {
+                "build_lookup": 0.4746999766211957,
+                "packet_stack": 7.429799996316433
+              },
+              "dispatch_ms": 41.321400000015274,
+              "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+              "input_unchanged": true,
+              "transfer_phases_ms": {
+                "input_write_sync": 7.001599995419383,
+                "output_poison_sync": 3.4124999947380275,
+                "output_sync_read": 3.1368999916594476,
+                "input_sync_verify": 8.896699990145862
+              },
+              "persistent_transport": true,
+              "image_cache_hit": true,
+              "contexts_created": 2,
+              "context_cache_hit": true,
+              "exact_program_sharing": true,
+              "context_cache_size": 2,
+              "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+            },
+            "head": {
+              "build": "<user-home>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-9544722e26ed3cbe\\build.json",
+              "commands": 258,
+              "host_phases_ms": {
+                "build_lookup": 0.22120002540759742,
+                "packet_stack": 0.6173000147100538
+              },
+              "dispatch_ms": 3.9256999734789133,
+              "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+              "input_unchanged": true,
+              "transfer_phases_ms": {
+                "input_write_sync": 0.6396000098902732,
+                "output_poison_sync": 0.41360000614076853,
+                "output_sync_read": 0.443600001744926,
+                "input_sync_verify": 1.049900020007044
+              },
+              "persistent_transport": true,
+              "image_cache_hit": true,
+              "contexts_created": 2,
+              "context_cache_hit": true,
+              "exact_program_sharing": true,
+              "context_cache_size": 2,
+              "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+            }
+          },
+          {
+            "body": {
+              "build": "<user-home>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-a812c219f62e348e\\build.json",
+              "commands": 3051,
+              "host_phases_ms": {
+                "build_lookup": 0.2781999937724322,
+                "packet_stack": 7.28059999528341
+              },
+              "dispatch_ms": 41.87759998603724,
+              "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+              "input_unchanged": true,
+              "transfer_phases_ms": {
+                "input_write_sync": 7.019100012257695,
+                "output_poison_sync": 3.40620000497438,
+                "output_sync_read": 3.400200017495081,
+                "input_sync_verify": 9.018799988552928
+              },
+              "persistent_transport": true,
+              "image_cache_hit": true,
+              "contexts_created": 2,
+              "context_cache_hit": true,
+              "exact_program_sharing": true,
+              "context_cache_size": 2,
+              "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+            },
+            "head": {
+              "build": "<user-home>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-9544722e26ed3cbe\\build.json",
+              "commands": 258,
+              "host_phases_ms": {
+                "build_lookup": 0.2023999986704439,
+                "packet_stack": 0.7226000016089529
+              },
+              "dispatch_ms": 3.961299982620403,
+              "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+              "input_unchanged": true,
+              "transfer_phases_ms": {
+                "input_write_sync": 0.6911999953445047,
+                "output_poison_sync": 0.430300016887486,
+                "output_sync_read": 0.47870000707916915,
+                "input_sync_verify": 1.0017000022344291
+              },
+              "persistent_transport": true,
+              "image_cache_hit": true,
+              "contexts_created": 2,
+              "context_cache_hit": true,
+              "exact_program_sharing": true,
+              "context_cache_size": 2,
+              "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+            }
+          }
+        ]
+      },
+      {
+        "start": 37,
+        "bonus": 236764,
+        "proposals": [
+          1056,
+          1456
+        ],
+        "accepted": 0,
+        "predictions": [
+          5213,
+          4464,
+          528
+        ],
+        "next_bonus": 5213,
+        "rollback": true,
+        "dispatches": [
+          {
+            "body": {
+              "build": "<user-home>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-a812c219f62e348e\\build.json",
+              "commands": 3051,
+              "host_phases_ms": {
+                "build_lookup": 0.20390001009218395,
+                "packet_stack": 7.463799993274733
+              },
+              "dispatch_ms": 41.61800001747906,
+              "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+              "input_unchanged": true,
+              "transfer_phases_ms": {
+                "input_write_sync": 6.835200008936226,
+                "output_poison_sync": 3.517500008456409,
+                "output_sync_read": 3.2627999898977578,
+                "input_sync_verify": 8.934299985412508
+              },
+              "persistent_transport": true,
+              "image_cache_hit": true,
+              "contexts_created": 2,
+              "context_cache_hit": true,
+              "exact_program_sharing": true,
+              "context_cache_size": 2,
+              "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+            },
+            "head": {
+              "build": "<user-home>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-9544722e26ed3cbe\\build.json",
+              "commands": 258,
+              "host_phases_ms": {
+                "build_lookup": 0.232299993513152,
+                "packet_stack": 0.6405999884009361
+              },
+              "dispatch_ms": 4.0880000160541385,
+              "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+              "input_unchanged": true,
+              "transfer_phases_ms": {
+                "input_write_sync": 0.6575000006705523,
+                "output_poison_sync": 0.4437000025063753,
+                "output_sync_read": 0.6062000175006688,
+                "input_sync_verify": 1.1679000162985176
+              },
+              "persistent_transport": true,
+              "image_cache_hit": true,
+              "contexts_created": 2,
+              "context_cache_hit": true,
+              "exact_program_sharing": true,
+              "context_cache_size": 2,
+              "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+            }
+          },
+          {
+            "body": {
+              "build": "<user-home>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-a812c219f62e348e\\build.json",
+              "commands": 3051,
+              "host_phases_ms": {
+                "build_lookup": 0.2196999848820269,
+                "packet_stack": 7.420000009005889
+              },
+              "dispatch_ms": 41.328399995109066,
+              "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+              "input_unchanged": true,
+              "transfer_phases_ms": {
+                "input_write_sync": 6.807099998695776,
+                "output_poison_sync": 4.519300011452287,
+                "output_sync_read": 2.9508000006899238,
+                "input_sync_verify": 9.676799993030727
+              },
+              "persistent_transport": true,
+              "image_cache_hit": true,
+              "contexts_created": 2,
+              "context_cache_hit": true,
+              "exact_program_sharing": true,
+              "context_cache_size": 2,
+              "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+            },
+            "head": {
+              "build": "<user-home>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-9544722e26ed3cbe\\build.json",
+              "commands": 258,
+              "host_phases_ms": {
+                "build_lookup": 0.1770000089891255,
+                "packet_stack": 0.6546999793499708
+              },
+              "dispatch_ms": 3.853899979731068,
+              "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+              "input_unchanged": true,
+              "transfer_phases_ms": {
+                "input_write_sync": 0.6864999886602163,
+                "output_poison_sync": 0.4667000030167401,
+                "output_sync_read": 0.4827000084333122,
+                "input_sync_verify": 1.143500005127862
+              },
+              "persistent_transport": true,
+              "image_cache_hit": true,
+              "contexts_created": 2,
+              "context_cache_hit": true,
+              "exact_program_sharing": true,
+              "context_cache_size": 2,
+              "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+            }
+          }
+        ]
+      },
+      {
+        "start": 38,
+        "bonus": 5213,
+        "proposals": [
+          4060,
+          36410
+        ],
+        "accepted": 0,
+        "predictions": [
+          25142,
+          506,
+          1900
+        ],
+        "next_bonus": 25142,
+        "rollback": true,
+        "dispatches": [
+          {
+            "body": {
+              "build": "<user-home>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-a812c219f62e348e\\build.json",
+              "commands": 3051,
+              "host_phases_ms": {
+                "build_lookup": 0.21970001398585737,
+                "packet_stack": 7.650500017916784
+              },
+              "dispatch_ms": 41.215899982489645,
+              "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+              "input_unchanged": true,
+              "transfer_phases_ms": {
+                "input_write_sync": 7.222899992484599,
+                "output_poison_sync": 3.530199988745153,
+                "output_sync_read": 2.9845999961253256,
+                "input_sync_verify": 9.234700002707541
+              },
+              "persistent_transport": true,
+              "image_cache_hit": true,
+              "contexts_created": 2,
+              "context_cache_hit": true,
+              "exact_program_sharing": true,
+              "context_cache_size": 2,
+              "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+            },
+            "head": {
+              "build": "<user-home>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-9544722e26ed3cbe\\build.json",
+              "commands": 258,
+              "host_phases_ms": {
+                "build_lookup": 0.19940000493079424,
+                "packet_stack": 0.6685999978799373
+              },
+              "dispatch_ms": 3.852400026516989,
+              "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+              "input_unchanged": true,
+              "transfer_phases_ms": {
+                "input_write_sync": 0.683599995682016,
+                "output_poison_sync": 0.4424000217113644,
+                "output_sync_read": 0.45709998812526464,
+                "input_sync_verify": 1.0543999960646033
+              },
+              "persistent_transport": true,
+              "image_cache_hit": true,
+              "contexts_created": 2,
+              "context_cache_hit": true,
+              "exact_program_sharing": true,
+              "context_cache_size": 2,
+              "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+            }
+          },
+          {
+            "body": {
+              "build": "<user-home>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-a812c219f62e348e\\build.json",
+              "commands": 3051,
+              "host_phases_ms": {
+                "build_lookup": 0.20849998691119254,
+                "packet_stack": 7.694400002947077
+              },
+              "dispatch_ms": 41.35020001558587,
+              "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+              "input_unchanged": true,
+              "transfer_phases_ms": {
+                "input_write_sync": 7.868499989854172,
+                "output_poison_sync": 3.434700018260628,
+                "output_sync_read": 3.4137000038754195,
+                "input_sync_verify": 9.134499996434897
+              },
+              "persistent_transport": true,
+              "image_cache_hit": true,
+              "contexts_created": 2,
+              "context_cache_hit": true,
+              "exact_program_sharing": true,
+              "context_cache_size": 2,
+              "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+            },
+            "head": {
+              "build": "<user-home>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-9544722e26ed3cbe\\build.json",
+              "commands": 258,
+              "host_phases_ms": {
+                "build_lookup": 0.20280000171624124,
+                "packet_stack": 0.6630000134464353
+              },
+              "dispatch_ms": 3.948199999285862,
+              "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+              "input_unchanged": true,
+              "transfer_phases_ms": {
+                "input_write_sync": 0.6754999922122806,
+                "output_poison_sync": 0.40099999750964344,
+                "output_sync_read": 0.510000012582168,
+                "input_sync_verify": 0.996499991742894
+              },
+              "persistent_transport": true,
+              "image_cache_hit": true,
+              "contexts_created": 2,
+              "context_cache_hit": true,
+              "exact_program_sharing": true,
+              "context_cache_size": 2,
+              "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+            }
+          }
+        ]
+      },
+      {
+        "start": 39,
+        "bonus": 25142,
+        "proposals": [
+          506,
+          236743
+        ],
+        "accepted": 0,
+        "predictions": [
+          17856,
+          3567,
+          236800
+        ],
+        "next_bonus": 17856,
+        "rollback": true,
+        "dispatches": [
+          {
+            "body": {
+              "build": "<user-home>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-a812c219f62e348e\\build.json",
+              "commands": 3051,
+              "host_phases_ms": {
+                "build_lookup": 0.21150000975467265,
+                "packet_stack": 7.577699987450615
+              },
+              "dispatch_ms": 41.16769999382086,
+              "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+              "input_unchanged": true,
+              "transfer_phases_ms": {
+                "input_write_sync": 6.8688000028487295,
+                "output_poison_sync": 3.654200001619756,
+                "output_sync_read": 2.8648999868892133,
+                "input_sync_verify": 9.101000003283843
+              },
+              "persistent_transport": true,
+              "image_cache_hit": true,
+              "contexts_created": 2,
+              "context_cache_hit": true,
+              "exact_program_sharing": true,
+              "context_cache_size": 2,
+              "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+            },
+            "head": {
+              "build": "<user-home>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-9544722e26ed3cbe\\build.json",
+              "commands": 258,
+              "host_phases_ms": {
+                "build_lookup": 0.3039000148419291,
+                "packet_stack": 0.6671000155620277
+              },
+              "dispatch_ms": 3.8146000006236136,
+              "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+              "input_unchanged": true,
+              "transfer_phases_ms": {
+                "input_write_sync": 0.6457999988924712,
+                "output_poison_sync": 0.4158999945502728,
+                "output_sync_read": 0.4341999883763492,
+                "input_sync_verify": 1.0198999952990562
+              },
+              "persistent_transport": true,
+              "image_cache_hit": true,
+              "contexts_created": 2,
+              "context_cache_hit": true,
+              "exact_program_sharing": true,
+              "context_cache_size": 2,
+              "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+            }
+          },
+          {
+            "body": {
+              "build": "<user-home>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-a812c219f62e348e\\build.json",
+              "commands": 3051,
+              "host_phases_ms": {
+                "build_lookup": 0.25140002253465354,
+                "packet_stack": 7.681900024181232
+              },
+              "dispatch_ms": 41.26410000026226,
+              "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+              "input_unchanged": true,
+              "transfer_phases_ms": {
+                "input_write_sync": 7.220899977255613,
+                "output_poison_sync": 3.4709000028669834,
+                "output_sync_read": 3.338200011057779,
+                "input_sync_verify": 9.438000008231029
+              },
+              "persistent_transport": true,
+              "image_cache_hit": true,
+              "contexts_created": 2,
+              "context_cache_hit": true,
+              "exact_program_sharing": true,
+              "context_cache_size": 2,
+              "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+            },
+            "head": {
+              "build": "<user-home>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-9544722e26ed3cbe\\build.json",
+              "commands": 258,
+              "host_phases_ms": {
+                "build_lookup": 0.218700006371364,
+                "packet_stack": 0.6824000156484544
+              },
+              "dispatch_ms": 3.929500002413988,
+              "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+              "input_unchanged": true,
+              "transfer_phases_ms": {
+                "input_write_sync": 0.6858000124339014,
+                "output_poison_sync": 0.4149000160396099,
+                "output_sync_read": 0.5289999826345593,
+                "input_sync_verify": 1.031499996315688
+              },
+              "persistent_transport": true,
+              "image_cache_hit": true,
+              "contexts_created": 2,
+              "context_cache_hit": true,
+              "exact_program_sharing": true,
+              "context_cache_size": 2,
+              "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+            }
+          }
+        ]
+      },
+      {
+        "start": 40,
+        "bonus": 17856,
+        "proposals": [
+          236743,
+          236800
+        ],
+        "accepted": 2,
+        "predictions": [
+          236743,
+          236800,
+          236761
+        ],
+        "next_bonus": 236761,
+        "rollback": false,
+        "dispatches": [
+          {
+            "body": {
+              "build": "<user-home>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-a812c219f62e348e\\build.json",
+              "commands": 3051,
+              "host_phases_ms": {
+                "build_lookup": 0.17640000442042947,
+                "packet_stack": 7.838699995772913
+              },
+              "dispatch_ms": 41.46899998886511,
+              "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+              "input_unchanged": true,
+              "transfer_phases_ms": {
+                "input_write_sync": 7.250499998917803,
+                "output_poison_sync": 3.5140000109095126,
+                "output_sync_read": 3.4069000103045255,
+                "input_sync_verify": 9.25860001007095
+              },
+              "persistent_transport": true,
+              "image_cache_hit": true,
+              "contexts_created": 2,
+              "context_cache_hit": true,
+              "exact_program_sharing": true,
+              "context_cache_size": 2,
+              "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+            },
+            "head": {
+              "build": "<user-home>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-9544722e26ed3cbe\\build.json",
+              "commands": 258,
+              "host_phases_ms": {
+                "build_lookup": 0.22799998987466097,
+                "packet_stack": 0.674300012178719
+              },
+              "dispatch_ms": 4.3812000076286495,
+              "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+              "input_unchanged": true,
+              "transfer_phases_ms": {
+                "input_write_sync": 0.6683999963570386,
+                "output_poison_sync": 0.44049997813999653,
+                "output_sync_read": 0.47790000098757446,
+                "input_sync_verify": 0.8864999981597066
+              },
+              "persistent_transport": true,
+              "image_cache_hit": true,
+              "contexts_created": 2,
+              "context_cache_hit": true,
+              "exact_program_sharing": true,
+              "context_cache_size": 2,
+              "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+            }
+          },
+          {
+            "body": {
+              "build": "<user-home>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-a812c219f62e348e\\build.json",
+              "commands": 3051,
+              "host_phases_ms": {
+                "build_lookup": 0.21159998141229153,
+                "packet_stack": 7.655800000065938
+              },
+              "dispatch_ms": 41.34569998132065,
+              "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+              "input_unchanged": true,
+              "transfer_phases_ms": {
+                "input_write_sync": 7.109600002877414,
+                "output_poison_sync": 3.482100000837818,
+                "output_sync_read": 3.2324999920092523,
+                "input_sync_verify": 9.291800000937656
+              },
+              "persistent_transport": true,
+              "image_cache_hit": true,
+              "contexts_created": 2,
+              "context_cache_hit": true,
+              "exact_program_sharing": true,
+              "context_cache_size": 2,
+              "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+            },
+            "head": {
+              "build": "<user-home>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-9544722e26ed3cbe\\build.json",
+              "commands": 258,
+              "host_phases_ms": {
+                "build_lookup": 0.30399998649954796,
+                "packet_stack": 0.6590999837499112
+              },
+              "dispatch_ms": 3.919500013580546,
+              "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+              "input_unchanged": true,
+              "transfer_phases_ms": {
+                "input_write_sync": 0.6428999768104404,
+                "output_poison_sync": 0.43849999201484025,
+                "output_sync_read": 0.6531999970320612,
+                "input_sync_verify": 1.262800011318177
+              },
+              "persistent_transport": true,
+              "image_cache_hit": true,
+              "contexts_created": 2,
+              "context_cache_hit": true,
+              "exact_program_sharing": true,
+              "context_cache_size": 2,
+              "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+            }
+          }
+        ]
+      },
+      {
+        "start": 43,
+        "bonus": 236761,
+        "proposals": [
+          236771,
+          125546
+        ],
+        "accepted": 0,
+        "predictions": [
+          236832,
+          568,
+          659
+        ],
+        "next_bonus": 236832,
+        "rollback": true,
+        "dispatches": [
+          {
+            "body": {
+              "build": "<user-home>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-a812c219f62e348e\\build.json",
+              "commands": 3051,
+              "host_phases_ms": {
+                "build_lookup": 0.22680000984109938,
+                "packet_stack": 7.718100008787587
+              },
+              "dispatch_ms": 41.192400007275864,
+              "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+              "input_unchanged": true,
+              "transfer_phases_ms": {
+                "input_write_sync": 7.487299997592345,
+                "output_poison_sync": 3.5880999930668622,
+                "output_sync_read": 3.3215000003110617,
+                "input_sync_verify": 9.37860002159141
+              },
+              "persistent_transport": true,
+              "image_cache_hit": true,
+              "contexts_created": 2,
+              "context_cache_hit": true,
+              "exact_program_sharing": true,
+              "context_cache_size": 2,
+              "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+            },
+            "head": {
+              "build": "<user-home>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-9544722e26ed3cbe\\build.json",
+              "commands": 258,
+              "host_phases_ms": {
+                "build_lookup": 0.19530000281520188,
+                "packet_stack": 0.6532999977935106
+              },
+              "dispatch_ms": 3.891300002578646,
+              "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+              "input_unchanged": true,
+              "transfer_phases_ms": {
+                "input_write_sync": 0.6690000009257346,
+                "output_poison_sync": 0.45560000580735505,
+                "output_sync_read": 0.4566999850794673,
+                "input_sync_verify": 1.1720999900717288
+              },
+              "persistent_transport": true,
+              "image_cache_hit": true,
+              "contexts_created": 2,
+              "context_cache_hit": true,
+              "exact_program_sharing": true,
+              "context_cache_size": 2,
+              "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+            }
+          },
+          {
+            "body": {
+              "build": "<user-home>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-a812c219f62e348e\\build.json",
+              "commands": 3051,
+              "host_phases_ms": {
+                "build_lookup": 0.19489999976940453,
+                "packet_stack": 7.488900009775534
+              },
+              "dispatch_ms": 41.392500017536804,
+              "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+              "input_unchanged": true,
+              "transfer_phases_ms": {
+                "input_write_sync": 7.770600001094863,
+                "output_poison_sync": 3.361500013852492,
+                "output_sync_read": 3.250800014939159,
+                "input_sync_verify": 19.027500005904585
+              },
+              "persistent_transport": true,
+              "image_cache_hit": true,
+              "contexts_created": 2,
+              "context_cache_hit": true,
+              "exact_program_sharing": true,
+              "context_cache_size": 2,
+              "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+            },
+            "head": {
+              "build": "<user-home>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-9544722e26ed3cbe\\build.json",
+              "commands": 258,
+              "host_phases_ms": {
+                "build_lookup": 0.1829999964684248,
+                "packet_stack": 0.6530999962706119
+              },
+              "dispatch_ms": 3.792600007727742,
+              "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+              "input_unchanged": true,
+              "transfer_phases_ms": {
+                "input_write_sync": 0.6910999945830554,
+                "output_poison_sync": 0.4243000003043562,
+                "output_sync_read": 0.3249000001233071,
+                "input_sync_verify": 0.9181999776046723
+              },
+              "persistent_transport": true,
+              "image_cache_hit": true,
+              "contexts_created": 2,
+              "context_cache_hit": true,
+              "exact_program_sharing": true,
+              "context_cache_size": 2,
+              "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+            }
+          }
+        ]
+      },
+      {
+        "start": 44,
+        "bonus": 236832,
+        "proposals": [
+          125546,
+          659
+        ],
+        "accepted": 0,
+        "predictions": [
+          568,
+          21209,
+          23535
+        ],
+        "next_bonus": 568,
+        "rollback": true,
+        "dispatches": [
+          {
+            "body": {
+              "build": "<user-home>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-a812c219f62e348e\\build.json",
+              "commands": 3051,
+              "host_phases_ms": {
+                "build_lookup": 0.17949999892152846,
+                "packet_stack": 7.6293000020086765
+              },
+              "dispatch_ms": 40.53649998968467,
+              "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+              "input_unchanged": true,
+              "transfer_phases_ms": {
+                "input_write_sync": 7.170500000938773,
+                "output_poison_sync": 3.3965999900829047,
+                "output_sync_read": 3.341699979500845,
+                "input_sync_verify": 9.226399997714907
+              },
+              "persistent_transport": true,
+              "image_cache_hit": true,
+              "contexts_created": 2,
+              "context_cache_hit": true,
+              "exact_program_sharing": true,
+              "context_cache_size": 2,
+              "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+            },
+            "head": {
+              "build": "<user-home>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-9544722e26ed3cbe\\build.json",
+              "commands": 258,
+              "host_phases_ms": {
+                "build_lookup": 0.21229998674243689,
+                "packet_stack": 0.5780000064987689
+              },
+              "dispatch_ms": 4.2406000138726085,
+              "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+              "input_unchanged": true,
+              "transfer_phases_ms": {
+                "input_write_sync": 0.6212999869603664,
+                "output_poison_sync": 0.43509999522939324,
+                "output_sync_read": 0.6426000036299229,
+                "input_sync_verify": 1.047199999447912
+              },
+              "persistent_transport": true,
+              "image_cache_hit": true,
+              "contexts_created": 2,
+              "context_cache_hit": true,
+              "exact_program_sharing": true,
+              "context_cache_size": 2,
+              "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+            }
+          },
+          {
+            "body": {
+              "build": "<user-home>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-a812c219f62e348e\\build.json",
+              "commands": 3051,
+              "host_phases_ms": {
+                "build_lookup": 0.1959000073838979,
+                "packet_stack": 7.277900003828108
+              },
+              "dispatch_ms": 41.435300023294985,
+              "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+              "input_unchanged": true,
+              "transfer_phases_ms": {
+                "input_write_sync": 6.8743999872822315,
+                "output_poison_sync": 3.3401000255253166,
+                "output_sync_read": 3.935699991416186,
+                "input_sync_verify": 8.75489998725243
+              },
+              "persistent_transport": true,
+              "image_cache_hit": true,
+              "contexts_created": 2,
+              "context_cache_hit": true,
+              "exact_program_sharing": true,
+              "context_cache_size": 2,
+              "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+            },
+            "head": {
+              "build": "<user-home>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-9544722e26ed3cbe\\build.json",
+              "commands": 258,
+              "host_phases_ms": {
+                "build_lookup": 0.19950000569224358,
+                "packet_stack": 0.6243000098038465
+              },
+              "dispatch_ms": 3.9126000192482024,
+              "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+              "input_unchanged": true,
+              "transfer_phases_ms": {
+                "input_write_sync": 0.6579999753739685,
+                "output_poison_sync": 0.4236999957356602,
+                "output_sync_read": 0.4434000002220273,
+                "input_sync_verify": 0.9417000110261142
+              },
+              "persistent_transport": true,
+              "image_cache_hit": true,
+              "contexts_created": 2,
+              "context_cache_hit": true,
+              "exact_program_sharing": true,
+              "context_cache_size": 2,
+              "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+            }
+          }
+        ]
+      },
+      {
+        "start": 45,
+        "bonus": 568,
+        "proposals": [
+          527,
+          529
+        ],
+        "accepted": 0,
+        "predictions": [
+          624,
+          614,
+          3567
+        ],
+        "next_bonus": 624,
+        "rollback": true,
+        "dispatches": [
+          {
+            "body": {
+              "build": "<user-home>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-a812c219f62e348e\\build.json",
+              "commands": 3051,
+              "host_phases_ms": {
+                "build_lookup": 0.20520001999102533,
+                "packet_stack": 7.165399991208687
+              },
+              "dispatch_ms": 41.72010000911541,
+              "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+              "input_unchanged": true,
+              "transfer_phases_ms": {
+                "input_write_sync": 7.528899994213134,
+                "output_poison_sync": 3.2328999950550497,
+                "output_sync_read": 3.245600004447624,
+                "input_sync_verify": 8.611999975983053
+              },
+              "persistent_transport": true,
+              "image_cache_hit": true,
+              "contexts_created": 2,
+              "context_cache_hit": true,
+              "exact_program_sharing": true,
+              "context_cache_size": 2,
+              "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+            },
+            "head": {
+              "build": "<user-home>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-9544722e26ed3cbe\\build.json",
+              "commands": 258,
+              "host_phases_ms": {
+                "build_lookup": 0.1939999929163605,
+                "packet_stack": 0.5969000048935413
+              },
+              "dispatch_ms": 3.918100002920255,
+              "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+              "input_unchanged": true,
+              "transfer_phases_ms": {
+                "input_write_sync": 0.6435000104829669,
+                "output_poison_sync": 0.4102000093553215,
+                "output_sync_read": 0.45759999193251133,
+                "input_sync_verify": 1.0822000040207058
+              },
+              "persistent_transport": true,
+              "image_cache_hit": true,
+              "contexts_created": 2,
+              "context_cache_hit": true,
+              "exact_program_sharing": true,
+              "context_cache_size": 2,
+              "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+            }
+          },
+          {
+            "body": {
+              "build": "<user-home>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-a812c219f62e348e\\build.json",
+              "commands": 3051,
+              "host_phases_ms": {
+                "build_lookup": 0.2069000038318336,
+                "packet_stack": 7.339200004935265
+              },
+              "dispatch_ms": 41.29369999282062,
+              "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+              "input_unchanged": true,
+              "transfer_phases_ms": {
+                "input_write_sync": 6.649200018728152,
+                "output_poison_sync": 3.407300013350323,
+                "output_sync_read": 3.108300006715581,
+                "input_sync_verify": 8.441200014203787
+              },
+              "persistent_transport": true,
+              "image_cache_hit": true,
+              "contexts_created": 2,
+              "context_cache_hit": true,
+              "exact_program_sharing": true,
+              "context_cache_size": 2,
+              "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+            },
+            "head": {
+              "build": "<user-home>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-9544722e26ed3cbe\\build.json",
+              "commands": 258,
+              "host_phases_ms": {
+                "build_lookup": 0.1841000048443675,
+                "packet_stack": 0.5942999850958586
+              },
+              "dispatch_ms": 4.2535999964457005,
+              "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+              "input_unchanged": true,
+              "transfer_phases_ms": {
+                "input_write_sync": 0.6475000118371099,
+                "output_poison_sync": 0.43059999006800354,
+                "output_sync_read": 0.463999982457608,
+                "input_sync_verify": 1.0639000101946294
+              },
+              "persistent_transport": true,
+              "image_cache_hit": true,
+              "contexts_created": 2,
+              "context_cache_hit": true,
+              "exact_program_sharing": true,
+              "context_cache_size": 2,
+              "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+            }
+          }
+        ]
+      },
+      {
+        "start": 46,
+        "bonus": 624,
+        "proposals": [
+          3209,
+          10448
+        ],
+        "accepted": 0,
+        "predictions": [
+          618,
+          618,
+          528
+        ],
+        "next_bonus": 618,
+        "rollback": true,
+        "dispatches": [
+          {
+            "body": {
+              "build": "<user-home>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-a812c219f62e348e\\build.json",
+              "commands": 3051,
+              "host_phases_ms": {
+                "build_lookup": 0.19950000569224358,
+                "packet_stack": 7.303399994270876
+              },
+              "dispatch_ms": 41.69260000344366,
+              "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+              "input_unchanged": true,
+              "transfer_phases_ms": {
+                "input_write_sync": 6.718000018736348,
+                "output_poison_sync": 3.2700999872758985,
+                "output_sync_read": 3.0453000217676163,
+                "input_sync_verify": 8.325600007083267
+              },
+              "persistent_transport": true,
+              "image_cache_hit": true,
+              "contexts_created": 2,
+              "context_cache_hit": true,
+              "exact_program_sharing": true,
+              "context_cache_size": 2,
+              "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+            },
+            "head": {
+              "build": "<user-home>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-9544722e26ed3cbe\\build.json",
+              "commands": 258,
+              "host_phases_ms": {
+                "build_lookup": 0.17059998936019838,
+                "packet_stack": 0.593400007346645
+              },
+              "dispatch_ms": 4.409600020153448,
+              "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+              "input_unchanged": true,
+              "transfer_phases_ms": {
+                "input_write_sync": 0.5990999925415963,
+                "output_poison_sync": 0.43299997923895717,
+                "output_sync_read": 0.45530000352300704,
+                "input_sync_verify": 0.8908000017981976
+              },
+              "persistent_transport": true,
+              "image_cache_hit": true,
+              "contexts_created": 2,
+              "context_cache_hit": true,
+              "exact_program_sharing": true,
+              "context_cache_size": 2,
+              "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+            }
+          },
+          {
+            "body": {
+              "build": "<user-home>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-a812c219f62e348e\\build.json",
+              "commands": 3051,
+              "host_phases_ms": {
+                "build_lookup": 0.2164000179618597,
+                "packet_stack": 7.157400017604232
+              },
+              "dispatch_ms": 41.544699983205646,
+              "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+              "input_unchanged": true,
+              "transfer_phases_ms": {
+                "input_write_sync": 6.801700015785173,
+                "output_poison_sync": 3.3112000091932714,
+                "output_sync_read": 3.0749000143259764,
+                "input_sync_verify": 8.472600020468235
+              },
+              "persistent_transport": true,
+              "image_cache_hit": true,
+              "contexts_created": 2,
+              "context_cache_hit": true,
+              "exact_program_sharing": true,
+              "context_cache_size": 2,
+              "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+            },
+            "head": {
+              "build": "<user-home>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-9544722e26ed3cbe\\build.json",
+              "commands": 258,
+              "host_phases_ms": {
+                "build_lookup": 0.2613999822642654,
+                "packet_stack": 0.7211000192910433
+              },
+              "dispatch_ms": 3.983000002335757,
+              "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+              "input_unchanged": true,
+              "transfer_phases_ms": {
+                "input_write_sync": 0.67559999297373,
+                "output_poison_sync": 0.3995999868493527,
+                "output_sync_read": 0.48430002061650157,
+                "input_sync_verify": 0.9417999826837331
+              },
+              "persistent_transport": true,
+              "image_cache_hit": true,
+              "contexts_created": 2,
+              "context_cache_hit": true,
+              "exact_program_sharing": true,
+              "context_cache_size": 2,
+              "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+            }
+          }
+        ]
+      },
+      {
+        "start": 47,
+        "bonus": 618,
+        "proposals": [
+          496,
+          3567
+        ],
+        "accepted": 0,
+        "predictions": [
+          614,
+          565,
+          8688
+        ],
+        "next_bonus": 614,
+        "rollback": true,
+        "dispatches": [
+          {
+            "body": {
+              "build": "<user-home>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-a812c219f62e348e\\build.json",
+              "commands": 3051,
+              "host_phases_ms": {
+                "build_lookup": 0.21040000137872994,
+                "packet_stack": 7.295999996131286
+              },
+              "dispatch_ms": 41.789600014453754,
+              "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+              "input_unchanged": true,
+              "transfer_phases_ms": {
+                "input_write_sync": 6.798000016715378,
+                "output_poison_sync": 3.3952000085264444,
+                "output_sync_read": 3.1612000020686537,
+                "input_sync_verify": 8.62589999451302
+              },
+              "persistent_transport": true,
+              "image_cache_hit": true,
+              "contexts_created": 2,
+              "context_cache_hit": true,
+              "exact_program_sharing": true,
+              "context_cache_size": 2,
+              "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+            },
+            "head": {
+              "build": "<user-home>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-9544722e26ed3cbe\\build.json",
+              "commands": 258,
+              "host_phases_ms": {
+                "build_lookup": 0.1959000073838979,
+                "packet_stack": 0.5314000009093434
+              },
+              "dispatch_ms": 3.89069999800995,
+              "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+              "input_unchanged": true,
+              "transfer_phases_ms": {
+                "input_write_sync": 0.6634999881498516,
+                "output_poison_sync": 0.4033000150229782,
+                "output_sync_read": 0.4841999907512218,
+                "input_sync_verify": 0.9772999910637736
+              },
+              "persistent_transport": true,
+              "image_cache_hit": true,
+              "contexts_created": 2,
+              "context_cache_hit": true,
+              "exact_program_sharing": true,
+              "context_cache_size": 2,
+              "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+            }
+          },
+          {
+            "body": {
+              "build": "<user-home>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-a812c219f62e348e\\build.json",
+              "commands": 3051,
+              "host_phases_ms": {
+                "build_lookup": 0.222100003156811,
+                "packet_stack": 7.202499982668087
+              },
+              "dispatch_ms": 41.41199999139644,
+              "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+              "input_unchanged": true,
+              "transfer_phases_ms": {
+                "input_write_sync": 6.720899982610717,
+                "output_poison_sync": 3.296000009868294,
+                "output_sync_read": 3.0294999887701124,
+                "input_sync_verify": 8.526299992809072
+              },
+              "persistent_transport": true,
+              "image_cache_hit": true,
+              "contexts_created": 2,
+              "context_cache_hit": true,
+              "exact_program_sharing": true,
+              "context_cache_size": 2,
+              "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+            },
+            "head": {
+              "build": "<user-home>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-9544722e26ed3cbe\\build.json",
+              "commands": 258,
+              "host_phases_ms": {
+                "build_lookup": 0.2683000057004392,
+                "packet_stack": 0.5838999932166189
+              },
+              "dispatch_ms": 3.9689000113867223,
+              "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+              "input_unchanged": true,
+              "transfer_phases_ms": {
+                "input_write_sync": 0.6426000036299229,
+                "output_poison_sync": 0.44669999624602497,
+                "output_sync_read": 0.6674999895039946,
+                "input_sync_verify": 0.9370000043418258
+              },
+              "persistent_transport": true,
+              "image_cache_hit": true,
+              "contexts_created": 2,
+              "context_cache_hit": true,
+              "exact_program_sharing": true,
+              "context_cache_size": 2,
+              "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+            }
+          }
+        ]
+      },
+      {
+        "start": 48,
+        "bonus": 614,
+        "proposals": [
+          8688,
+          528
+        ],
+        "accepted": 1,
+        "predictions": [
+          8688,
+          8052,
+          565
+        ],
+        "next_bonus": 8052,
+        "rollback": true,
+        "dispatches": [
+          {
+            "body": {
+              "build": "<user-home>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-a812c219f62e348e\\build.json",
+              "commands": 3051,
+              "host_phases_ms": {
+                "build_lookup": 0.21070000366307795,
+                "packet_stack": 7.150699995690957
+              },
+              "dispatch_ms": 41.36209998978302,
+              "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+              "input_unchanged": true,
+              "transfer_phases_ms": {
+                "input_write_sync": 6.872600002679974,
+                "output_poison_sync": 3.51440001395531,
+                "output_sync_read": 3.1482999911531806,
+                "input_sync_verify": 8.78429997828789
+              },
+              "persistent_transport": true,
+              "image_cache_hit": true,
+              "contexts_created": 2,
+              "context_cache_hit": true,
+              "exact_program_sharing": true,
+              "context_cache_size": 2,
+              "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+            },
+            "head": {
+              "build": "<user-home>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-9544722e26ed3cbe\\build.json",
+              "commands": 258,
+              "host_phases_ms": {
+                "build_lookup": 0.2582999877631664,
+                "packet_stack": 0.6533999985549599
+              },
+              "dispatch_ms": 4.532499995548278,
+              "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+              "input_unchanged": true,
+              "transfer_phases_ms": {
+                "input_write_sync": 0.5941999843344092,
+                "output_poison_sync": 0.46109998947940767,
+                "output_sync_read": 0.4909999843221158,
+                "input_sync_verify": 1.1515000078361481
+              },
+              "persistent_transport": true,
+              "image_cache_hit": true,
+              "contexts_created": 2,
+              "context_cache_hit": true,
+              "exact_program_sharing": true,
+              "context_cache_size": 2,
+              "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+            }
+          },
+          {
+            "body": {
+              "build": "<user-home>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-a812c219f62e348e\\build.json",
+              "commands": 3051,
+              "host_phases_ms": {
+                "build_lookup": 0.19029999384656549,
+                "packet_stack": 7.20950000686571
+              },
+              "dispatch_ms": 41.59109998727217,
+              "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+              "input_unchanged": true,
+              "transfer_phases_ms": {
+                "input_write_sync": 7.960899994941428,
+                "output_poison_sync": 4.6968999959062785,
+                "output_sync_read": 3.083700023125857,
+                "input_sync_verify": 8.425500011071563
+              },
+              "persistent_transport": true,
+              "image_cache_hit": true,
+              "contexts_created": 2,
+              "context_cache_hit": true,
+              "exact_program_sharing": true,
+              "context_cache_size": 2,
+              "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+            },
+            "head": {
+              "build": "<user-home>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-9544722e26ed3cbe\\build.json",
+              "commands": 258,
+              "host_phases_ms": {
+                "build_lookup": 0.2548999909777194,
+                "packet_stack": 0.593700009630993
+              },
+              "dispatch_ms": 4.190499981632456,
+              "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+              "input_unchanged": true,
+              "transfer_phases_ms": {
+                "input_write_sync": 0.5857999785803258,
+                "output_poison_sync": 0.3918000147677958,
+                "output_sync_read": 0.4076999903190881,
+                "input_sync_verify": 0.9974999993573874
+              },
+              "persistent_transport": true,
+              "image_cache_hit": true,
+              "contexts_created": 2,
+              "context_cache_hit": true,
+              "exact_program_sharing": true,
+              "context_cache_size": 2,
+              "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+            }
+          }
+        ]
+      },
+      {
+        "start": 50,
+        "bonus": 8052,
+        "proposals": [
+          573,
+          4532
+        ],
+        "accepted": 0,
+        "predictions": [
+          528,
+          565,
+          565
+        ],
+        "next_bonus": 528,
+        "rollback": true,
+        "dispatches": [
+          {
+            "body": {
+              "build": "<user-home>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-b02a83552d9f4fa8\\build.json",
+              "commands": 3071,
+              "host_phases_ms": {
+                "build_lookup": 0.4769999941345304,
+                "packet_stack": 7.191999990027398
+              },
+              "dispatch_ms": 51.50810000486672,
+              "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+              "input_unchanged": true,
+              "transfer_phases_ms": {
+                "input_write_sync": 7.0836000086274,
+                "output_poison_sync": 3.344600001582876,
+                "output_sync_read": 2.8728999895974994,
+                "input_sync_verify": 8.872500009601936
+              },
+              "persistent_transport": true,
+              "image_cache_hit": false,
+              "contexts_created": 2,
+              "context_cache_hit": true,
+              "exact_program_sharing": true,
+              "context_cache_size": 2,
+              "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+            },
+            "head": {
+              "build": "<user-home>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-9544722e26ed3cbe\\build.json",
+              "commands": 258,
+              "host_phases_ms": {
+                "build_lookup": 0.22780001745559275,
+                "packet_stack": 0.6419999990612268
+              },
+              "dispatch_ms": 3.738499974133447,
+              "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+              "input_unchanged": true,
+              "transfer_phases_ms": {
+                "input_write_sync": 0.7411999977193773,
+                "output_poison_sync": 0.4576000210363418,
+                "output_sync_read": 0.4844999930355698,
+                "input_sync_verify": 0.9396999957971275
+              },
+              "persistent_transport": true,
+              "image_cache_hit": true,
+              "contexts_created": 2,
+              "context_cache_hit": true,
+              "exact_program_sharing": true,
+              "context_cache_size": 2,
+              "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+            }
+          },
+          {
+            "body": {
+              "build": "<user-home>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-b02a83552d9f4fa8\\build.json",
+              "commands": 3071,
+              "host_phases_ms": {
+                "build_lookup": 0.21219998598098755,
+                "packet_stack": 7.608299987623468
+              },
+              "dispatch_ms": 41.87060002004728,
+              "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+              "input_unchanged": true,
+              "transfer_phases_ms": {
+                "input_write_sync": 10.229900013655424,
+                "output_poison_sync": 4.078700003447011,
+                "output_sync_read": 3.2888999849092215,
+                "input_sync_verify": 10.087599977850914
+              },
+              "persistent_transport": true,
+              "image_cache_hit": true,
+              "contexts_created": 2,
+              "context_cache_hit": true,
+              "exact_program_sharing": true,
+              "context_cache_size": 2,
+              "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+            },
+            "head": {
+              "build": "<user-home>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-9544722e26ed3cbe\\build.json",
+              "commands": 258,
+              "host_phases_ms": {
+                "build_lookup": 0.22610000451095402,
+                "packet_stack": 0.7115999760571867
+              },
+              "dispatch_ms": 3.759399987757206,
+              "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+              "input_unchanged": true,
+              "transfer_phases_ms": {
+                "input_write_sync": 0.671599991619587,
+                "output_poison_sync": 0.41290000081062317,
+                "output_sync_read": 0.4613000201061368,
+                "input_sync_verify": 1.0335999832022935
+              },
+              "persistent_transport": true,
+              "image_cache_hit": true,
+              "contexts_created": 2,
+              "context_cache_hit": true,
+              "exact_program_sharing": true,
+              "context_cache_size": 2,
+              "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+            }
+          }
+        ]
+      },
+      {
+        "start": 51,
+        "bonus": 528,
+        "proposals": [
+          506,
+          29280
+        ],
+        "accepted": 0,
+        "predictions": [
+          565,
+          565,
+          573
+        ],
+        "next_bonus": 565,
+        "rollback": true,
+        "dispatches": [
+          {
+            "body": {
+              "build": "<user-home>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-b02a83552d9f4fa8\\build.json",
+              "commands": 3071,
+              "host_phases_ms": {
+                "build_lookup": 0.21719999494962394,
+                "packet_stack": 7.580800011055544
+              },
+              "dispatch_ms": 41.620300005888566,
+              "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+              "input_unchanged": true,
+              "transfer_phases_ms": {
+                "input_write_sync": 7.087599980877712,
+                "output_poison_sync": 3.506799985188991,
+                "output_sync_read": 3.1821999873500317,
+                "input_sync_verify": 9.359700023196638
+              },
+              "persistent_transport": true,
+              "image_cache_hit": true,
+              "contexts_created": 2,
+              "context_cache_hit": true,
+              "exact_program_sharing": true,
+              "context_cache_size": 2,
+              "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+            },
+            "head": {
+              "build": "<user-home>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-9544722e26ed3cbe\\build.json",
+              "commands": 258,
+              "host_phases_ms": {
+                "build_lookup": 0.20640000002458692,
+                "packet_stack": 0.6846000032965094
+              },
+              "dispatch_ms": 4.1658999980427325,
+              "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+              "input_unchanged": true,
+              "transfer_phases_ms": {
+                "input_write_sync": 0.6436000112444162,
+                "output_poison_sync": 0.43420001748017967,
+                "output_sync_read": 0.4408999811857939,
+                "input_sync_verify": 1.0960999934468418
+              },
+              "persistent_transport": true,
+              "image_cache_hit": true,
+              "contexts_created": 2,
+              "context_cache_hit": true,
+              "exact_program_sharing": true,
+              "context_cache_size": 2,
+              "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+            }
+          },
+          {
+            "body": {
+              "build": "<user-home>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-b02a83552d9f4fa8\\build.json",
+              "commands": 3071,
+              "host_phases_ms": {
+                "build_lookup": 0.20780001068487763,
+                "packet_stack": 7.4616000056266785
+              },
+              "dispatch_ms": 42.136000003665686,
+              "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+              "input_unchanged": true,
+              "transfer_phases_ms": {
+                "input_write_sync": 7.804299995768815,
+                "output_poison_sync": 3.6514000094030052,
+                "output_sync_read": 3.1550000130664557,
+                "input_sync_verify": 9.551499999361113
+              },
+              "persistent_transport": true,
+              "image_cache_hit": true,
+              "contexts_created": 2,
+              "context_cache_hit": true,
+              "exact_program_sharing": true,
+              "context_cache_size": 2,
+              "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+            },
+            "head": {
+              "build": "<user-home>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-9544722e26ed3cbe\\build.json",
+              "commands": 258,
+              "host_phases_ms": {
+                "build_lookup": 0.19660001271404326,
+                "packet_stack": 0.6599999906029552
+              },
+              "dispatch_ms": 3.9400999958161265,
+              "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+              "input_unchanged": true,
+              "transfer_phases_ms": {
+                "input_write_sync": 0.6653000018559396,
+                "output_poison_sync": 0.4911000141873956,
+                "output_sync_read": 0.5051000043749809,
+                "input_sync_verify": 1.124700007494539
+              },
+              "persistent_transport": true,
+              "image_cache_hit": true,
+              "contexts_created": 2,
+              "context_cache_hit": true,
+              "exact_program_sharing": true,
+              "context_cache_size": 2,
+              "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+            }
+          }
+        ]
+      },
+      {
+        "start": 52,
+        "bonus": 565,
+        "proposals": [
+          2124,
+          236743
+        ],
+        "accepted": 0,
+        "predictions": [
+          32651,
+          2338,
+          236800
+        ],
+        "next_bonus": 32651,
+        "rollback": true,
+        "dispatches": [
+          {
+            "body": {
+              "build": "<user-home>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-b02a83552d9f4fa8\\build.json",
+              "commands": 3071,
+              "host_phases_ms": {
+                "build_lookup": 0.22190000163391232,
+                "packet_stack": 7.49099999666214
+              },
+              "dispatch_ms": 41.928799997549504,
+              "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+              "input_unchanged": true,
+              "transfer_phases_ms": {
+                "input_write_sync": 6.857900007162243,
+                "output_poison_sync": 3.586700011510402,
+                "output_sync_read": 3.228699992178008,
+                "input_sync_verify": 9.833200019784272
+              },
+              "persistent_transport": true,
+              "image_cache_hit": true,
+              "contexts_created": 2,
+              "context_cache_hit": true,
+              "exact_program_sharing": true,
+              "context_cache_size": 2,
+              "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+            },
+            "head": {
+              "build": "<user-home>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-9544722e26ed3cbe\\build.json",
+              "commands": 258,
+              "host_phases_ms": {
+                "build_lookup": 0.20879998919554055,
+                "packet_stack": 0.6439000135287642
+              },
+              "dispatch_ms": 4.6104000066407025,
+              "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+              "input_unchanged": true,
+              "transfer_phases_ms": {
+                "input_write_sync": 0.6629999843426049,
+                "output_poison_sync": 0.45140000293031335,
+                "output_sync_read": 0.45640001189894974,
+                "input_sync_verify": 0.9318999946117401
+              },
+              "persistent_transport": true,
+              "image_cache_hit": true,
+              "contexts_created": 2,
+              "context_cache_hit": true,
+              "exact_program_sharing": true,
+              "context_cache_size": 2,
+              "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+            }
+          },
+          {
+            "body": {
+              "build": "<user-home>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-b02a83552d9f4fa8\\build.json",
+              "commands": 3071,
+              "host_phases_ms": {
+                "build_lookup": 0.21180001203902066,
+                "packet_stack": 7.453700003679842
+              },
+              "dispatch_ms": 41.59259999869391,
+              "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+              "input_unchanged": true,
+              "transfer_phases_ms": {
+                "input_write_sync": 6.951999996090308,
+                "output_poison_sync": 3.4174000029452145,
+                "output_sync_read": 3.27580000157468,
+                "input_sync_verify": 8.759500022279099
+              },
+              "persistent_transport": true,
+              "image_cache_hit": true,
+              "contexts_created": 2,
+              "context_cache_hit": true,
+              "exact_program_sharing": true,
+              "context_cache_size": 2,
+              "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+            },
+            "head": {
+              "build": "<user-home>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-9544722e26ed3cbe\\build.json",
+              "commands": 258,
+              "host_phases_ms": {
+                "build_lookup": 0.242199981585145,
+                "packet_stack": 0.7714999956078827
+              },
+              "dispatch_ms": 4.44190000416711,
+              "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+              "input_unchanged": true,
+              "transfer_phases_ms": {
+                "input_write_sync": 0.6645999965257943,
+                "output_poison_sync": 0.4138999793212861,
+                "output_sync_read": 0.45190000673756003,
+                "input_sync_verify": 0.9418999834451824
+              },
+              "persistent_transport": true,
+              "image_cache_hit": true,
+              "contexts_created": 2,
+              "context_cache_hit": true,
+              "exact_program_sharing": true,
+              "context_cache_size": 2,
+              "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+            }
+          }
+        ]
+      },
+      {
+        "start": 53,
+        "bonus": 32651,
+        "proposals": [
+          236743,
+          236800
+        ],
+        "accepted": 2,
+        "predictions": [
+          236743,
+          236800,
+          236761
+        ],
+        "next_bonus": 236761,
+        "rollback": false,
+        "dispatches": [
+          {
+            "body": {
+              "build": "<user-home>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-b02a83552d9f4fa8\\build.json",
+              "commands": 3071,
+              "host_phases_ms": {
+                "build_lookup": 0.2195000124629587,
+                "packet_stack": 7.556999975349754
+              },
+              "dispatch_ms": 41.679899994051084,
+              "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+              "input_unchanged": true,
+              "transfer_phases_ms": {
+                "input_write_sync": 7.1575999900233,
+                "output_poison_sync": 3.4585999965202063,
+                "output_sync_read": 3.3702999935485423,
+                "input_sync_verify": 9.036500006914139
+              },
+              "persistent_transport": true,
+              "image_cache_hit": true,
+              "contexts_created": 2,
+              "context_cache_hit": true,
+              "exact_program_sharing": true,
+              "context_cache_size": 2,
+              "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+            },
+            "head": {
+              "build": "<user-home>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-9544722e26ed3cbe\\build.json",
+              "commands": 258,
+              "host_phases_ms": {
+                "build_lookup": 0.22489999537356198,
+                "packet_stack": 0.6055999838281423
+              },
+              "dispatch_ms": 3.9619999879505485,
+              "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+              "input_unchanged": true,
+              "transfer_phases_ms": {
+                "input_write_sync": 0.6316000071819872,
+                "output_poison_sync": 0.4146999854128808,
+                "output_sync_read": 0.43719998211599886,
+                "input_sync_verify": 1.1110000195913017
+              },
+              "persistent_transport": true,
+              "image_cache_hit": true,
+              "contexts_created": 2,
+              "context_cache_hit": true,
+              "exact_program_sharing": true,
+              "context_cache_size": 2,
+              "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+            }
+          },
+          {
+            "body": {
+              "build": "<user-home>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-b02a83552d9f4fa8\\build.json",
+              "commands": 3071,
+              "host_phases_ms": {
+                "build_lookup": 0.2099000266753137,
+                "packet_stack": 7.407700002659112
+              },
+              "dispatch_ms": 41.61960000055842,
+              "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+              "input_unchanged": true,
+              "transfer_phases_ms": {
+                "input_write_sync": 7.226399990031496,
+                "output_poison_sync": 3.5561000113375485,
+                "output_sync_read": 3.33799998043105,
+                "input_sync_verify": 8.989299996756017
+              },
+              "persistent_transport": true,
+              "image_cache_hit": true,
+              "contexts_created": 2,
+              "context_cache_hit": true,
+              "exact_program_sharing": true,
+              "context_cache_size": 2,
+              "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+            },
+            "head": {
+              "build": "<user-home>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-9544722e26ed3cbe\\build.json",
+              "commands": 258,
+              "host_phases_ms": {
+                "build_lookup": 0.19500000053085387,
+                "packet_stack": 0.6167999817989767
+              },
+              "dispatch_ms": 3.9185999776236713,
+              "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+              "input_unchanged": true,
+              "transfer_phases_ms": {
+                "input_write_sync": 0.6536000000778586,
+                "output_poison_sync": 0.42890000622719526,
+                "output_sync_read": 0.4591000033542514,
+                "input_sync_verify": 1.0624999995343387
+              },
+              "persistent_transport": true,
+              "image_cache_hit": true,
+              "contexts_created": 2,
+              "context_cache_hit": true,
+              "exact_program_sharing": true,
+              "context_cache_size": 2,
+              "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+            }
+          }
+        ]
+      },
+      {
+        "start": 56,
+        "bonus": 236761,
+        "proposals": [],
+        "accepted": 0,
+        "predictions": [
+          236825
+        ],
+        "next_bonus": 236825,
+        "rollback": false,
+        "dispatches": []
+      }
+    ],
+    "contexts_created": 2,
+    "evictions": 0,
+    "npu_released": true,
+    "accepted": 12,
+    "proposed": 38,
+    "gpu_released": true,
+    "sources_unchanged": true,
+    "passed": true
+  },
+  "builds": {
+    "<user-home>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-4f359a675ff2b4c7\\build.json": {
+      "manifest_sha256": "75ece4d45bf4044d403a9ae3ded73234396f1e787b245013bed6ba0daecd51a5",
+      "sources": {
+        "<user-home>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\bf16_product.hpp": "a1c951a7b18fbe3c1a9d17df005e229afa0006c694a04ab53df9748fa81cc3ab",
+        "<user-home>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\dispatch.cc": "f6f3358e945de755dbe02fe5134782ab9bcea14562b8dfe4aa79418cee781484",
+        "<user-home>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\geglu.cc": "e7ed0233130e8f63bc2134502c318c87563ac48cf2308aeb7c308641666d4b34",
+        "<user-home>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\gemv.cc": "66a1da00c319f565af9554ea516254588273f0396c3d2a1b29299a8e3039690f",
+        "<user-home>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\gemv_precise.cc": "6600e21079a574c4d1d3b93f497d11d75656fc062cc123fb12013ece3436087a",
+        "<user-home>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\norm_exact_probe.cc": "4edc1a066fe24ba2bed71b37f422deeb076dd82cce82dc4f41d8897635753176",
+        "<user-home>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\norm_state_probe.cc": "8d08f70dc3de29d8d2330aee3d3f425a70fb15c002de92415077bd54b073535d",
+        "<user-home>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\residual.cc": "2bc8f445e3f86e6384260daaff200d2b456aca4b30a9aed4c5a6e14b13f468d6",
+        "<user-home>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\rmsnorm.cc": "9efc3bec80f7c25e88a48ce30f851bc437e05000e7d79014cc2997399b15463f",
+        "<user-home>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\rmsnorm_exact.cc": "3b3a606641b7225ac80239bf5d7d8f09313f454b80dba1ce255f73fad04c49a5",
+        "<user-home>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\rmsnorm_refined.cc": "765a0591c2010b13c0ef42b8066ae9ef029214e09ff54392ea42b60d717fbc05",
+        "<user-home>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\rope.cc": "3a2636d45109255e6f3a08f879b937fe59c48ca5a97a9bb04d3cf8f02b7f5421",
+        "<user-home>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\softmax.cc": "32ed139ad46f7c3ee8f3edd5716eafed3306386cb81be384ede30fdf00ff397a",
+        "<user-home>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\state_dispatch.cc": "18b3c641a944088772eb6235a24abddc7e762f5933449723837e582d15dd89a7",
+        "<user-home>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\state_dispatch_exact.cc": "b3ffe5754a3de37358772fd4dfb50e9e54c3c870d7f16ca400f379d79c140045",
+        "<user-home>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\topk.cc": "1f680ca67d8c97a82bb41db53a6f2aad15802f16be287b9bfddbac31ca6e1868",
+        "<user-home>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\state.py": "c85190f3ab97722b1b1738f9574e78354437573250d8c5503ee76046238f86c8",
+        "<user-home>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\stream.py": "6e7da07da912a65f6cdfafbc76df2dd22e135e371cc0a560eeddd0bf4c19c97d",
+        "<user-home>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\common.py": "e9ea9aefc2167093490bc2716ec2895f38cb13fc3852703ebd42211526c4854e"
+      },
+      "contract": {
+        "scope": "Compile packet commands whose BF16 intermediate values stay on the NPU.\n\nHost code packs weights and metadata only. A static initialization map rejects\nreads of unwritten arena locations before compilation or device execution.\nThis is a research command stream, outside the ONNX graph compiler.\n",
+        "spec_sha256": "4f359a675ff2b4c7"
+      },
+      "function": "draft_state_transformer",
+      "packet_words": 4112,
+      "output_words": 1056,
+      "blocks": 3031,
+      "state_words": 8256,
+      "code_bytes": 12144,
+      "stack_frames": [
+        0,
+        1216,
+        352,
+        160,
+        32,
+        896,
+        0,
+        256,
+        32,
+        0,
+        128,
+        32,
+        64,
+        0,
+        0
+      ],
+      "sram_spans": [
+        [
+          458752,
+          462848,
+          "_sp_start_value_DM_stack"
+        ],
+        [
+          462848,
+          495872,
+          "carry_state"
+        ],
+        [
+          495872,
+          512320,
+          "inF_cons_buff_0"
+        ],
+        [
+          512320,
+          516544,
+          "outF_buff_0"
+        ]
+      ],
+      "artifacts": {
+        "kernel.o": "6ea605cb17b972eae66349b664d19c28f31b947147ce652b6c1fad766c536664",
+        "harness.mlir": "c9b9bb80fca111b8c8f3a5b747f7af107bb3283921c4913b8330eb6ed7ca334b",
+        "insts.bin": "51e8b93b1110663f6a009562f5eb61dfee5ee587d8db2666b8af1122ad649cee",
+        "final.xclbin": "74fbcd6a0f012bf6e0315bbd770aba753c74ebd32791497ad09a19039ddb52a8"
+      },
+      "program_artifacts": {
+        "prj/main.pdi": "7f0a96373b80330089789075d429444724b302b0c232e8260e55b8afb4fe1d64",
+        "prj/kernels_main.json": "464fc9fe6d66ee78736b4ea3248a0910cba83adaf4cefc6e67ee49c3b0edab86",
+        "prj/memTopology_main.json": "638d0d287b2e7427ce3dc86a4926216e8370d3e7783256498a67768b89d2bbc6"
+      },
+      "compiler_sha256": "b7a35e8cfe2dc2c6f489e5c9aaaeefb26bacb66cb54e29332b70cf787340aec3",
+      "optimization": "-Oz"
+    },
+    "<user-home>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-9544722e26ed3cbe\\build.json": {
+      "manifest_sha256": "8f3daf21ec0ff309a62808f9c8e0cc73eea03a08577cd390c568e956252e801d",
+      "sources": {
+        "<user-home>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\bf16_product.hpp": "a1c951a7b18fbe3c1a9d17df005e229afa0006c694a04ab53df9748fa81cc3ab",
+        "<user-home>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\dispatch.cc": "f6f3358e945de755dbe02fe5134782ab9bcea14562b8dfe4aa79418cee781484",
+        "<user-home>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\geglu.cc": "e7ed0233130e8f63bc2134502c318c87563ac48cf2308aeb7c308641666d4b34",
+        "<user-home>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\gemv.cc": "66a1da00c319f565af9554ea516254588273f0396c3d2a1b29299a8e3039690f",
+        "<user-home>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\gemv_precise.cc": "6600e21079a574c4d1d3b93f497d11d75656fc062cc123fb12013ece3436087a",
+        "<user-home>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\norm_exact_probe.cc": "4edc1a066fe24ba2bed71b37f422deeb076dd82cce82dc4f41d8897635753176",
+        "<user-home>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\norm_state_probe.cc": "8d08f70dc3de29d8d2330aee3d3f425a70fb15c002de92415077bd54b073535d",
+        "<user-home>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\residual.cc": "2bc8f445e3f86e6384260daaff200d2b456aca4b30a9aed4c5a6e14b13f468d6",
+        "<user-home>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\rmsnorm.cc": "9efc3bec80f7c25e88a48ce30f851bc437e05000e7d79014cc2997399b15463f",
+        "<user-home>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\rmsnorm_exact.cc": "3b3a606641b7225ac80239bf5d7d8f09313f454b80dba1ce255f73fad04c49a5",
+        "<user-home>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\rmsnorm_refined.cc": "765a0591c2010b13c0ef42b8066ae9ef029214e09ff54392ea42b60d717fbc05",
+        "<user-home>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\rope.cc": "3a2636d45109255e6f3a08f879b937fe59c48ca5a97a9bb04d3cf8f02b7f5421",
+        "<user-home>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\softmax.cc": "32ed139ad46f7c3ee8f3edd5716eafed3306386cb81be384ede30fdf00ff397a",
+        "<user-home>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\state_dispatch.cc": "18b3c641a944088772eb6235a24abddc7e762f5933449723837e582d15dd89a7",
+        "<user-home>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\state_dispatch_exact.cc": "b3ffe5754a3de37358772fd4dfb50e9e54c3c870d7f16ca400f379d79c140045",
+        "<user-home>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\topk.cc": "1f680ca67d8c97a82bb41db53a6f2aad15802f16be287b9bfddbac31ca6e1868",
+        "<user-home>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\state.py": "c85190f3ab97722b1b1738f9574e78354437573250d8c5503ee76046238f86c8",
+        "<user-home>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\stream.py": "6e7da07da912a65f6cdfafbc76df2dd22e135e371cc0a560eeddd0bf4c19c97d",
+        "<user-home>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\common.py": "e9ea9aefc2167093490bc2716ec2895f38cb13fc3852703ebd42211526c4854e"
+      },
+      "contract": {
+        "scope": "Compile packet commands whose BF16 intermediate values stay on the NPU.\n\nHost code packs weights and metadata only. A static initialization map rejects\nreads of unwritten arena locations before compilation or device execution.\nThis is a research command stream, outside the ONNX graph compiler.\n",
+        "spec_sha256": "9544722e26ed3cbe"
+      },
+      "function": "draft_state_transformer",
+      "packet_words": 4112,
+      "output_words": 1056,
+      "blocks": 258,
+      "state_words": 8256,
+      "code_bytes": 12144,
+      "stack_frames": [
+        0,
+        1216,
+        352,
+        160,
+        32,
+        896,
+        0,
+        256,
+        32,
+        0,
+        128,
+        32,
+        64,
+        0,
+        0
+      ],
+      "sram_spans": [
+        [
+          458752,
+          462848,
+          "_sp_start_value_DM_stack"
+        ],
+        [
+          462848,
+          495872,
+          "carry_state"
+        ],
+        [
+          495872,
+          512320,
+          "inF_cons_buff_0"
+        ],
+        [
+          512320,
+          516544,
+          "outF_buff_0"
+        ]
+      ],
+      "artifacts": {
+        "kernel.o": "6ea605cb17b972eae66349b664d19c28f31b947147ce652b6c1fad766c536664",
+        "harness.mlir": "b9d16aaca5d7c40d4ea27ef250406e3ebefb11dd3d2bf3cd0a099c3196154f2b",
+        "insts.bin": "3234858db9301b14eeeedd32ea0f96d239ddd3be8e7f930d2b0b01b424fda71c",
+        "final.xclbin": "3b8a057ccf4eea71289928ac9b534818bad863eb79679199cbe49b2e438a7c8d"
+      },
+      "program_artifacts": {
+        "prj/main.pdi": "9c1ce949abcda208695db00a2c35f66515cb24325f9dd7be4786c4f3c1945eb6",
+        "prj/kernels_main.json": "464fc9fe6d66ee78736b4ea3248a0910cba83adaf4cefc6e67ee49c3b0edab86",
+        "prj/memTopology_main.json": "638d0d287b2e7427ce3dc86a4926216e8370d3e7783256498a67768b89d2bbc6"
+      },
+      "compiler_sha256": "b7a35e8cfe2dc2c6f489e5c9aaaeefb26bacb66cb54e29332b70cf787340aec3",
+      "optimization": "-Oz"
+    },
+    "<user-home>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-a812c219f62e348e\\build.json": {
+      "manifest_sha256": "44faa1716557a7ac904e3cb5e6ff329d2f43909d5d526d2040786859bd431e7f",
+      "sources": {
+        "<user-home>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\bf16_product.hpp": "a1c951a7b18fbe3c1a9d17df005e229afa0006c694a04ab53df9748fa81cc3ab",
+        "<user-home>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\dispatch.cc": "f6f3358e945de755dbe02fe5134782ab9bcea14562b8dfe4aa79418cee781484",
+        "<user-home>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\geglu.cc": "e7ed0233130e8f63bc2134502c318c87563ac48cf2308aeb7c308641666d4b34",
+        "<user-home>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\gemv.cc": "66a1da00c319f565af9554ea516254588273f0396c3d2a1b29299a8e3039690f",
+        "<user-home>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\gemv_precise.cc": "6600e21079a574c4d1d3b93f497d11d75656fc062cc123fb12013ece3436087a",
+        "<user-home>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\norm_exact_probe.cc": "4edc1a066fe24ba2bed71b37f422deeb076dd82cce82dc4f41d8897635753176",
+        "<user-home>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\norm_state_probe.cc": "8d08f70dc3de29d8d2330aee3d3f425a70fb15c002de92415077bd54b073535d",
+        "<user-home>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\residual.cc": "2bc8f445e3f86e6384260daaff200d2b456aca4b30a9aed4c5a6e14b13f468d6",
+        "<user-home>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\rmsnorm.cc": "9efc3bec80f7c25e88a48ce30f851bc437e05000e7d79014cc2997399b15463f",
+        "<user-home>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\rmsnorm_exact.cc": "3b3a606641b7225ac80239bf5d7d8f09313f454b80dba1ce255f73fad04c49a5",
+        "<user-home>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\rmsnorm_refined.cc": "765a0591c2010b13c0ef42b8066ae9ef029214e09ff54392ea42b60d717fbc05",
+        "<user-home>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\rope.cc": "3a2636d45109255e6f3a08f879b937fe59c48ca5a97a9bb04d3cf8f02b7f5421",
+        "<user-home>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\softmax.cc": "32ed139ad46f7c3ee8f3edd5716eafed3306386cb81be384ede30fdf00ff397a",
+        "<user-home>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\state_dispatch.cc": "18b3c641a944088772eb6235a24abddc7e762f5933449723837e582d15dd89a7",
+        "<user-home>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\state_dispatch_exact.cc": "b3ffe5754a3de37358772fd4dfb50e9e54c3c870d7f16ca400f379d79c140045",
+        "<user-home>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\topk.cc": "1f680ca67d8c97a82bb41db53a6f2aad15802f16be287b9bfddbac31ca6e1868",
+        "<user-home>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\state.py": "c85190f3ab97722b1b1738f9574e78354437573250d8c5503ee76046238f86c8",
+        "<user-home>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\stream.py": "6e7da07da912a65f6cdfafbc76df2dd22e135e371cc0a560eeddd0bf4c19c97d",
+        "<user-home>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\common.py": "e9ea9aefc2167093490bc2716ec2895f38cb13fc3852703ebd42211526c4854e"
+      },
+      "contract": {
+        "scope": "Compile packet commands whose BF16 intermediate values stay on the NPU.\n\nHost code packs weights and metadata only. A static initialization map rejects\nreads of unwritten arena locations before compilation or device execution.\nThis is a research command stream, outside the ONNX graph compiler.\n",
+        "spec_sha256": "a812c219f62e348e"
+      },
+      "function": "draft_state_transformer",
+      "packet_words": 4112,
+      "output_words": 1056,
+      "blocks": 3051,
+      "state_words": 8256,
+      "code_bytes": 12144,
+      "stack_frames": [
+        0,
+        1216,
+        352,
+        160,
+        32,
+        896,
+        0,
+        256,
+        32,
+        0,
+        128,
+        32,
+        64,
+        0,
+        0
+      ],
+      "sram_spans": [
+        [
+          458752,
+          462848,
+          "_sp_start_value_DM_stack"
+        ],
+        [
+          462848,
+          495872,
+          "carry_state"
+        ],
+        [
+          495872,
+          512320,
+          "inF_cons_buff_0"
+        ],
+        [
+          512320,
+          516544,
+          "outF_buff_0"
+        ]
+      ],
+      "artifacts": {
+        "kernel.o": "6ea605cb17b972eae66349b664d19c28f31b947147ce652b6c1fad766c536664",
+        "harness.mlir": "c93e5e02b370f43cf833a259e00d43fe3e3d180fc328967565780a41a75e894d",
+        "insts.bin": "d70d39deb22264d11c4e2e28d5a5a5ceb118a198700126a607876795f58c43eb",
+        "final.xclbin": "93b050ec6fd9f40db3a02e8ad43a0102a3cc57c0f053aec4fe57573a7fdec0f6"
+      },
+      "program_artifacts": {
+        "prj/main.pdi": "7f0a96373b80330089789075d429444724b302b0c232e8260e55b8afb4fe1d64",
+        "prj/kernels_main.json": "464fc9fe6d66ee78736b4ea3248a0910cba83adaf4cefc6e67ee49c3b0edab86",
+        "prj/memTopology_main.json": "638d0d287b2e7427ce3dc86a4926216e8370d3e7783256498a67768b89d2bbc6"
+      },
+      "compiler_sha256": "b7a35e8cfe2dc2c6f489e5c9aaaeefb26bacb66cb54e29332b70cf787340aec3",
+      "optimization": "-Oz"
+    },
+    "<user-home>\\gemma4-assistant\\npu\\arena-images\\draft_state_transformer-b02a83552d9f4fa8\\build.json": {
+      "manifest_sha256": "0d5d0600f4901fd925ff0e6629b14dcd4c3c38adcfcdcb855aa4b3a87043649e",
+      "sources": {
+        "<user-home>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\bf16_product.hpp": "a1c951a7b18fbe3c1a9d17df005e229afa0006c694a04ab53df9748fa81cc3ab",
+        "<user-home>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\dispatch.cc": "f6f3358e945de755dbe02fe5134782ab9bcea14562b8dfe4aa79418cee781484",
+        "<user-home>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\geglu.cc": "e7ed0233130e8f63bc2134502c318c87563ac48cf2308aeb7c308641666d4b34",
+        "<user-home>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\gemv.cc": "66a1da00c319f565af9554ea516254588273f0396c3d2a1b29299a8e3039690f",
+        "<user-home>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\gemv_precise.cc": "6600e21079a574c4d1d3b93f497d11d75656fc062cc123fb12013ece3436087a",
+        "<user-home>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\norm_exact_probe.cc": "4edc1a066fe24ba2bed71b37f422deeb076dd82cce82dc4f41d8897635753176",
+        "<user-home>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\norm_state_probe.cc": "8d08f70dc3de29d8d2330aee3d3f425a70fb15c002de92415077bd54b073535d",
+        "<user-home>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\residual.cc": "2bc8f445e3f86e6384260daaff200d2b456aca4b30a9aed4c5a6e14b13f468d6",
+        "<user-home>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\rmsnorm.cc": "9efc3bec80f7c25e88a48ce30f851bc437e05000e7d79014cc2997399b15463f",
+        "<user-home>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\rmsnorm_exact.cc": "3b3a606641b7225ac80239bf5d7d8f09313f454b80dba1ce255f73fad04c49a5",
+        "<user-home>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\rmsnorm_refined.cc": "765a0591c2010b13c0ef42b8066ae9ef029214e09ff54392ea42b60d717fbc05",
+        "<user-home>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\rope.cc": "3a2636d45109255e6f3a08f879b937fe59c48ca5a97a9bb04d3cf8f02b7f5421",
+        "<user-home>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\softmax.cc": "32ed139ad46f7c3ee8f3edd5716eafed3306386cb81be384ede30fdf00ff397a",
+        "<user-home>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\state_dispatch.cc": "18b3c641a944088772eb6235a24abddc7e762f5933449723837e582d15dd89a7",
+        "<user-home>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\state_dispatch_exact.cc": "b3ffe5754a3de37358772fd4dfb50e9e54c3c870d7f16ca400f379d79c140045",
+        "<user-home>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\topk.cc": "1f680ca67d8c97a82bb41db53a6f2aad15802f16be287b9bfddbac31ca6e1868",
+        "<user-home>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\state.py": "c85190f3ab97722b1b1738f9574e78354437573250d8c5503ee76046238f86c8",
+        "<user-home>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\stream.py": "6e7da07da912a65f6cdfafbc76df2dd22e135e371cc0a560eeddd0bf4c19c97d",
+        "<user-home>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\common.py": "e9ea9aefc2167093490bc2716ec2895f38cb13fc3852703ebd42211526c4854e"
+      },
+      "contract": {
+        "scope": "Compile packet commands whose BF16 intermediate values stay on the NPU.\n\nHost code packs weights and metadata only. A static initialization map rejects\nreads of unwritten arena locations before compilation or device execution.\nThis is a research command stream, outside the ONNX graph compiler.\n",
+        "spec_sha256": "b02a83552d9f4fa8"
+      },
+      "function": "draft_state_transformer",
+      "packet_words": 4112,
+      "output_words": 1056,
+      "blocks": 3071,
+      "state_words": 8256,
+      "code_bytes": 12144,
+      "stack_frames": [
+        0,
+        1216,
+        352,
+        160,
+        32,
+        896,
+        0,
+        256,
+        32,
+        0,
+        128,
+        32,
+        64,
+        0,
+        0
+      ],
+      "sram_spans": [
+        [
+          458752,
+          462848,
+          "_sp_start_value_DM_stack"
+        ],
+        [
+          462848,
+          495872,
+          "carry_state"
+        ],
+        [
+          495872,
+          512320,
+          "inF_cons_buff_0"
+        ],
+        [
+          512320,
+          516544,
+          "outF_buff_0"
+        ]
+      ],
+      "artifacts": {
+        "kernel.o": "6ea605cb17b972eae66349b664d19c28f31b947147ce652b6c1fad766c536664",
+        "harness.mlir": "352a48cd67637df24ec3e544f1c11e45836a514332405f80eac4d29c01c7f752",
+        "insts.bin": "0e82724e9dcb6acb0c7f828ab7c16ba0f81a04f6c5476d031c7e5667e1cb963b",
+        "final.xclbin": "9daeb3b8ecfb51cc5b57af2b0608a15a7813bf0e0046688528c1a13766643f67"
+      },
+      "program_artifacts": {
+        "prj/main.pdi": "7f0a96373b80330089789075d429444724b302b0c232e8260e55b8afb4fe1d64",
+        "prj/kernels_main.json": "464fc9fe6d66ee78736b4ea3248a0910cba83adaf4cefc6e67ee49c3b0edab86",
+        "prj/memTopology_main.json": "638d0d287b2e7427ce3dc86a4926216e8370d3e7783256498a67768b89d2bbc6"
+      },
+      "compiler_sha256": "b7a35e8cfe2dc2c6f489e5c9aaaeefb26bacb66cb54e29332b70cf787340aec3",
+      "optimization": "-Oz"
+    }
+  }
+}

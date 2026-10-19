@@ -24797,3 +24797,2172 @@ compiled identities; equal image components alone do not authorize hardware disp
 
 The [saved dispatch-cost summary tool](../tools/bf16_dispatch_costs.py) reports diagnostic
 checks-only wall observations; its output is not a controlled serving benchmark.
+
+## BF16 packet dispatcher and real target inputs (2026-10-18, Desktop 2)
+
+The standalone BF16 package now has a packet-opcode dispatcher containing all
+seven operations in one core program. This shares program code while retaining
+host round trips between operations; it is not a fused decoder graph. The
+[first -O3 build](../results/aie/transformer_bf16_dispatch_compile_20261018.log)
+fails program loading at 16,976 bytes, above the 16 KiB limit. The
+[size-optimized build](../results/aie/transformer_bf16_dispatch_compile_20261018_v2.log)
+fits at 12,768 bytes with recorded stack frames and nonoverlapping SRAM.
+Limits were not raised.
+
+Context sharing requires byte-identical PDI, kernel argument metadata and memory
+topology, all recorded and checked at image admission. Equal ELF files alone are
+insufficient. Each context owns its instruction/data BOs using its full XRT group
+IDs. Images are hashed at admission and again at successful session exit; replays
+use loaded BOs. A new ops/session instance is required to adopt edited source or
+artifacts. This avoids reopening and hashing all sources at every operation.
+The [28 passing opcode checks](../results/aie/transformer_bf16_single_image_checks_20261018_v3.log)
+include A/B/C/A bit-identical replay and an extra completed operation followed by
+deliberate modification of that probe's own cached manifest. Exit rejects the
+changed identity, releases contexts, and restores the probe manifest. The
+[structured report](../results/aie/transformer_bf16_single_image_checks_20261018_v3.json)
+retains those checks and their criteria.
+
+**MEASURED, checks-only observations:** the
+[four selected complete synthetic cases](../results/aie/transformer_bf16_single_image_draft_20261018_v2.log)
+pass unchanged numerical limits. The warm final E4B case uses 99 dispatches and
+three context creations, with about 0.915 seconds total diagnostic wall time.
+This includes image admission, validation, transport and host work. It is neither
+a serving benchmark nor proof of hybrid benefit. The
+[structured before/after record](../results/aie/transformer_bf16_single_image_draft_20261018.json)
+retains the preceding version too, whose last-case wall time was about 5 seconds
+despite only about 120 ms in dispatch waits. Avoiding repeated disk validation
+removes much of that overhead. The broader 24-case numerical qualification remains
+failed and is not superseded by these selected cases.
+
+**MEASURED, real-input numerical qualification fails:** an external llama.cpp
+evaluation-callback consumer captures the deployment Q5_K_M/PLE-Q4 targets on
+ROCm0 using their pinned chat templates and a fixed public engineering prompt.
+The prompt has 31 tokens. Its last normalized hidden state and prompt KV are
+paired with the next target token's scaled embedding. The extra decode used to
+obtain that embedding is kept separate; its advanced KV is not substituted.
+The assistant interface converts these captured FP32 values once to BF16.
+Original assistant BF16 weights then produce independent CPU reference fixtures.
+Their shared KV source layers are 13/14 for E2B and 22/23 for E4B, with draft
+position 31 and a 31-token shared cache.
+
+The [bounded native draft check](../results/aie/transformer_bf16_real_target_draft_20261018.log)
+matches the reference greedy token in both cases but fails numerical limits in
+both. E2B exceeds the maximum-error/reference-RMS bound after post-projection;
+E4B exceeds limits in the last layer, final normalized state and post-projection.
+Shared evaluated vocabulary logits remain within the recorded limits. No numerical
+gate was changed. The [structured evidence](../results/aie/transformer_bf16_real_target_draft_20261018.json)
+retains target GGUF/DLL/source hashes, captured-tensor checksums, source-layer
+mapping and per-stage errors. These are two offline draft steps on captured real
+states, not target verification, acceptance measurement, agent evaluation or a
+live hybrid chat assistant. Both device-cleanup witnesses pass; timing is ineligible.
+
+### Matrix-unit projection, resident replay and target verification
+
+The opcode dispatcher now supports the original matrix-unit BF16 projection as
+well as compensated accumulation. Its program is 13,632 bytes, below the unchanged
+16 KiB limit. The [bounded primitive check](../results/aie/transformer_bf16_matrix_dispatch_checks_20261018.log)
+passes all 28 reference/replay cases and the changed-manifest rejection; the
+[structured report](../results/aie/transformer_bf16_matrix_dispatch_checks_20261018.json)
+retains criteria and source identities. Stored operands/output remain BF16, with
+FP32 accumulation. Neither choice guarantees every CPU-library rounding decision.
+
+On the same real target states, [matrix-unit composition](../results/aie/transformer_bf16_matrix_real_draft_20261018.log)
+passes the E2B numerical case but fails E4B; both greedy proposals match the CPU
+reference. The [warm repeat](../results/aie/transformer_bf16_matrix_real_draft_warm_20261018.log)
+reproduces that outcome. Its E2B/E4B wall observations are about 1.168/0.936 seconds,
+including per-session admission and cleanup, with about 33.6/32.9 ms summed dispatch
+waits. These are checks-only costs, not controlled serving latency. The
+[structured record](../results/aie/transformer_bf16_matrix_real_draft_20261018.json)
+preserves both attempts and all numerical limits unchanged.
+
+A separate [resident-session check](../results/aie/transformer_bf16_resident_replay_20261018.log)
+alternates E2B/E4B/E2B/E4B under one session, with the same captured real states.
+After both models' transactions are admitted, complete steps take about 150/152 ms
+in the two diagnostic replays, including host packing and dispatch work but excluding
+the later CPU reference comparisons and session-exit validation. Both replay every
+saved native intermediate and output bit for bit, create no new contexts, and
+release the owned context at exit. E4B's numerical failure remains. This hot replay
+is not live chat throughput, a general context-length result, or hybrid speedup.
+[Structured replay evidence](../results/aie/transformer_bf16_resident_replay_20261018.json)
+records the distinction.
+
+**MEASURED, two offline one-step target checks:** the GPU capture consumer now
+saves actual target logits after the prompt's bonus token. Before comparing those
+logits to saved NPU proposals, every captured tensor must match the original input
+capture bit for bit: 64 tensors for E2B, 100 for E4B. The
+[verification record](../results/aie/transformer_bf16_target_verification_20261018.json)
+checks target-logit hashes and greedy argmax, and finds both proposals equal the
+target's next token (6719 and 563 respectively). Both correspond to the same fixed
+31-token prompt, one step per model. This proves those two proposal comparisons;
+it is not a general acceptance-rate estimate, a multi-token lossless verification
+implementation, or permission to discard E4B's failed numerical gate.
+
+The active assistant work now focuses on E2B at the user's request; E4B evidence
+is retained for reference. An [E2B-only matrix-unit follow-up](../results/aie/transformer_bf16_e2b_matrix_full_20261018.log)
+checks all twelve existing synthetic fixtures (three seeds, four cache lengths).
+It passes eight numerical cases and matches eleven reference greedy tokens.
+The [structured evidence](../results/aie/transformer_bf16_e2b_matrix_full_20261018.json)
+retains the four numerical failures and the token mismatch. The passing real-input
+E2B case is therefore not promoted to broad numerical qualification. Realtime
+serving, broader acceptance and agent evaluation remain open.
+
+### E2B activation arena: two submitted streams (2026-10-18)
+
+The generic BF16 command-stream builder now retains intermediate activations in
+a 32 KiB tile-local arena. Its size-optimized dispatcher occupies 15,648 bytes
+of the 16 KiB program limit; the existing stack/SRAM checks pass. The
+[A/B/A device probe](../results/aie/transformer_bf16_state_checks_20261018_v2.log)
+([JSON](../results/aie/transformer_bf16_state_checks_20261018_v2.json)) checks seven
+outputs against the native packet baseline, all bitwise equal. This includes
+odd-length softmax and chained GeGLU/residual activations. The host builder rejects
+unwritten reads, out-of-bounds writes and overlapping projection input/output.
+Inputs remain unchanged; device contexts are idle before and after.
+
+The application composes the E2B body into 3,031 packets submitted together,
+then gathers cluster-selected vocabulary rows on the host and submits a second
+260-packet head stream. Thus one step needs two host submissions rather than
+99 operation submissions. No activation arithmetic is substituted by CPU work.
+The [first body check](../results/aie/transformer_bf16_e2b_arena_real_20261018.log)
+retains the initial three-submission version and context churn. The
+[two-stream check](../results/aie/transformer_bf16_e2b_arena_real_20261018_v2.log)
+([registered inputs, builds and results](../results/aie/transformer_bf16_e2b_arena_real_20261018.json))
+passes three repeats of the existing 31-token real ROCm fixture under the
+unchanged full-step numerical gates. Preprojection, all four layer outputs,
+final hidden/projected states, centroids, clusters, selected logits and token
+match the existing matrix-unit NPU composition bit for bit. The token is 6719.
+All submitted input BOs remain unchanged and owned contexts are released.
+
+After compilation/admission, the last two diagnostic repeats take about 118 and
+111 ms including host construction/copies, submission and readback, but excluding
+later CPU reference comparisons and session-exit validation. Summed body/head
+dispatch waits are about 30.9 and 30.7 ms. Both repeat streams hit the cached
+program/BOs without creating contexts. The first repeat includes head compilation
+and is not a warm observation. These checks-only observations are not controlled
+serving timing, an independent acceptance sample or a demonstrated hybrid speedup.
+The previously recorded four synthetic numerical failures remain unresolved;
+this refactoring preserves the packet baseline's arithmetic and does not qualify
+broader E2B accuracy. Live target-state transport, context-length coverage and
+agent evaluation remain open. E4B stays outside the active implementation scope.
+
+### Prepared E2B command templates (2026-10-18)
+
+The [phase-instrumented E2B run](../results/aie/transformer_bf16_e2b_arena_profile_20261018.log)
+([registered evidence](../results/aie/transformer_bf16_e2b_arena_profile_20261018.json))
+identifies roughly 40-50 ms per warm step in source hashing/build lookups,
+plus body packet stacking and input/output transfers. The generic compiler
+now snapshots sources once, caches checked build metadata, and prepares an
+immutable body packet array before the replay loop. Session admission and exit
+still verify source/artifact identities; full input BO readback/verification
+still runs after every dispatch. No arithmetic or numerical criteria changed.
+
+The [prepared input check](../results/aie/transformer_bf16_prepared_checks_20261018.log)
+([JSON](../results/aie/transformer_bf16_prepared_checks_20261018.json)) passes
+seven native-operation outputs over A/B/A and three further prepared RMSNorm
+executions with A/B/A input replacements. Unknown upload labels and changed
+element counts are rejected before submission. The
+[transport replay/drift check](../results/aie/transformer_bf16_profile_transport_checks_20261018.log)
+([JSON](../results/aie/transformer_bf16_profile_transport_checks_20261018.json))
+passes all 28 existing cases, detects a changed admitted manifest, restores the
+probe-owned file and releases contexts.
+
+The [prepared E2B check](../results/aie/transformer_bf16_e2b_prepared_real_20261018.log)
+([registered evidence](../results/aie/transformer_bf16_e2b_prepared_real_20261018.json))
+passes the same fixed real-input numerical gates and reproduces every exported
+native stage, selected logits and token over three repeats. The last two
+diagnostic step observations are 62.46/62.21 ms. Body lookup/stacking has moved
+out of those repeats; head construction remains inside. Summed body/head
+dispatch waits are 30.39/30.27 ms. Each body input is about 49.9 MB, still fully
+written and verified after submission. A separate embedding-server process was
+active during the prepared and transport checks, recorded as foreign contention.
+These are checks-only results, not a controlled before/after timing comparison.
+
+This repeats one captured 31-token input and does not include changing target
+KV, rotary factors or packet lengths. Prepared named uploads allow input-state
+replacement with a template copy; general KV changes still require rebuilding
+the corresponding packets. No live GPU/NPU serving throughput, real prompt
+coverage, hybrid speedup or resolution of the four synthetic failures follows.
+
+### Changing E2B target states at fixed KV shape (2026-10-18)
+
+Prepared command streams now expose declared matrix and rotary-factor patches,
+in addition to activation uploads. Matrix replacements preserve both dimensions
+and BF16 storage and use the original matrix-unit or compensated packing.
+Only declared payload ranges change; headers and the owned template stay fixed.
+Unknown names, wrong dimensions and wrong dtypes are rejected before submission.
+Length changes still require rebuilding the schedule and its softmax metadata.
+
+The [generic attention update check](../results/aie/transformer_bf16_patch_checks_20261018.log)
+([JSON](../results/aie/transformer_bf16_patch_checks_20261018.json)) changes Q/K/V
+and rotary factors over A/B/A for both projection implementations. All six cases
+match the native packet baseline's rotary outputs, probabilities and contexts
+bitwise, including a return to A without patches. Ten invalid matrix/rotary
+updates are rejected. Inputs are unchanged and contexts are idle at exit.
+
+A second real ROCm capture changes the public prompt from returning unique list
+items to returning duplicate list items. Both prompts contain 31 tokens. The
+capture consumer now accepts an explicit prompt and records its messages/tokens
+in the registration. CPU BF16 references are regenerated from the captured
+states, independently of the NPU operations. The
+[full E2B state-update check](../results/aie/transformer_bf16_e2b_state_updates_20261018.log)
+([registered builds and both input provenances](../results/aie/transformer_bf16_e2b_state_updates_20261018.json))
+first confirms that concatenated inputs, shared keys and shared values really
+differ. It then patches one prepared four-layer body A/B/A, without patches on
+the last A. All three steps pass the frozen numerical criteria and match every
+exported native stage, clusters, selected logits and proposal bitwise against
+the existing NPU composition. Both stages reuse one exact program context,
+without eviction, and all owned handles are released.
+
+The B proposal is token 6719, equal to its captured GPU phase-1 logit argmax.
+The original A fixture's source capture predates logit recording, so this run
+records its direct GPU comparison as unavailable rather than borrowing B's
+logits or the separate historical A verification. There is one new direct GPU
+comparison, not three independent acceptance samples. The prompts are closely
+related and both next tokens coincide; broader acceptance remains unmeasured.
+An embedding-server job ran concurrently, so these checks carry no controlled
+timing claim. This is fixed-length captured-state transport, not a live bridge,
+incrementally growing conversation, broader numerical qualification or agent
+evaluation. The previously recorded synthetic failures remain unresolved.
+
+### E2B growing-cache trajectory and RMSNorm diagnosis (2026-10-18)
+
+The GPU capture consumer now supports 1-16 successive greedy decode steps under
+one loaded target model/context. A five-step E2B capture has 192 tensors over
+six phases and validated full-vocabulary logits for each phase. The independent
+BF16 reference producer reconstructs each cache from prompt KV plus the
+one-token deltas through phase p, pairs target hidden p with scaled embedding
+p+1, and excludes phase p+1's advanced KV. Five reference states have cache
+lengths/positions 31, 32, 33, 34 and 35. Each source delta, resulting length and
+artifact hash is checked. The existing two-phase behavior remains available.
+
+The [native trajectory check](../results/aie/transformer_bf16_e2b_trajectory_20261018.log)
+([registered evidence](../results/aie/transformer_bf16_e2b_trajectory_20261018.json))
+builds separate templates for changed KV dimensions so projection padding and
+softmax lengths agree, while reusing the compiler and exact program identities.
+All exported native stages, clusters, logits and proposals match the existing
+NPU packet composition bitwise at all five states and on return to the first
+unpatched template. Four of five distinct states pass frozen numerical gates;
+the 34-token state fails layer 3, hidden, postprojection and centroid criteria.
+The extra first-state replay passes and is not a sixth independent state.
+Inputs remain unchanged and all contexts are released. The five one-step
+proposals are 6719, 107, 2063, 18853, 1419; GPU greedy verification gives
+6719, 107, 2543, 28751, 1419. This is three matching teacher-forced proposals
+on one short public prompt, not multi-token chain acceptance or lossless serving.
+
+A [standalone reproduction](../results/aie/transformer_bf16_e2b_trajectory_failure_20261018.log)
+([JSON](../results/aie/transformer_bf16_e2b_trajectory_failure_20261018.json))
+retains the 34-token failure and complete native traces. CPU diagnostics
+recompute each operation from its actual NPU input. The first local mismatch is
+five values in layer 1 query RMSNorm; other checked local operations are exact
+on their actual inputs. The [rounding diagnostic](../results/aie/transformer_bf16_e2b_norm_rounding_20261018.json)
+reproduces these five values using four FP32 Newton iterations. On the first
+query row, that inverse square root is one FP32 ULP below torch's result.
+A compensated residual removes those differences in the CPU diagnostic.
+
+The first separate NPU correction, using `aie::msc`, produces a
+[bit-identical failed trace](../results/aie/transformer_bf16_e2b_refined_norm_failure_case_20261018.log)
+([JSON](../results/aie/transformer_bf16_e2b_refined_norm_failure_case_20261018.json)).
+It does not validate the CPU diagnostic's fused residual assumption. A second
+[product-split attempt](../results/aie/transformer_bf16_e2b_refined_norm_split_20261018.log)
+fails to compile with a vector G_AND legalization error. Replacing that mask
+with explicit shifts [compiles](../results/aie/transformer_bf16_refined_norm_split_build_20261018.log)
+to 6,432 bytes with a 1,408-byte stack frame. Its
+[isolated norm check](../results/aie/transformer_bf16_refined_norm_split_checks_20261018.log)
+passes all 546 cases: 21 norms, two poison values, twelve synthetic E2B states
+and the failing real state. The original norm kernel and arena path remain the
+control; isolated one-ULP correctness is not full-model adoption. These runs
+are checks-only; several observed concurrent embedding-server work.
+
+The [complete split-correction check](../results/aie/transformer_bf16_e2b_refined_norm_full_20261018.log)
+([JSON](../results/aie/transformer_bf16_e2b_refined_norm_full_20261018.json))
+retains all seventeen cases. It passes nine of twelve synthetic E2B states
+(previous matrix-unit control: eight) and four of five real trajectory states.
+All seventeen greedy tokens match the CPU assistant reference. The 34-token
+failure remains and its saved native trace is bit-identical to the control.
+The isolated pass therefore does not repair the identified real full-step
+failure. The variance and inverse bits in the CPU diagnosis are CPU values,
+not directly observed NPU variance registers; the exact source of the residual
+rounding discrepancy still needs device evidence. No change to the original
+kernel, frozen tolerances or serving default is justified by these results.
+
+At the user's request, subsequent hardware work starts with the read-only
+`tools/check-inference-contention.ps1` preflight: sampled CPU inference work,
+Windows GPU engine activity and XRT NPU context status. `-RequireIdle` refuses
+busy or unverified states before performance work. It reports no command lines
+or prompts and never stops other processes. The bounded wrapper continues
+monitoring after admission. The first check detects the existing CPU embedding
+server while the NPU is idle; contended correctness observations remain excluded
+from performance claims.
+
+### Device-observed normalization products and BF16-aware correction (2026-10-18)
+
+The [state probe](../results/aie/transformer_bf16_norm_state_probe_20261018.log)
+([JSON](../results/aie/transformer_bf16_norm_state_probe_20261018.json)) reads
+actual FP32 variance and inverse bits from the NPU norm kernel on the saved
+34-token layer-1 query input. Variance differs from torch in heads 0 and 3;
+head 0's inverse already matches torch. These observations supersede the
+earlier CPU-only inference that the inverse correction alone could fix the
+five BF16 differences. A changed inverse calculation is insufficient here.
+
+The [product probe](../results/aie/transformer_bf16_norm_products_probe_20261018.log)
+([JSON](../results/aie/transformer_bf16_norm_products_probe_20261018.json)) also
+exports element 129's FP32 products. In head 0 the first product matches an
+IEEE FP32 CPU multiplication using the actual NPU inverse. The last product's
+bits are 3188621312 on the device versus 3188621313 for the CPU product using
+the actual NPU intermediate. That one-ULP difference crosses a BF16 rounding
+boundary. The complete normalized output still matches the saved failing trace,
+so this is evidence from the actual discrepancy, not an unrelated input.
+
+A separate `exact_norm=True` candidate computes the two normalization products
+with integer significands, exploiting that one operand is exactly BF16. A
+[diagnostic check](../results/aie/transformer_bf16_norm_exact_cpu_check_20261018.log)
+([JSON](../results/aie/transformer_bf16_norm_exact_cpu_check_20261018.json))
+then finds zero BF16 differences from the CPU norm result on that input. The
+[standalone build](../results/aie/transformer_bf16_exact_norm_build_20261018.log)
+and [546 norm cases](../results/aie/transformer_bf16_exact_norm_checks_20261018.log)
+pass the original isolated one-ULP/relative-error limits.
+
+The [first wider product sweep](../results/aie/transformer_bf16_product_bitwise_checks_20261018.log)
+([JSON](../results/aie/transformer_bf16_product_bitwise_checks_20261018.json))
+retains two failures at signed smallest-normal values multiplied by the FP32
+value immediately below one: the correctly rounded result is normal, but the
+initial helper delegates the pre-rounding underflow case to the control, which
+returns zero. An integer boundary correction resolves them. The
+[updated sweep](../results/aie/transformer_bf16_product_bitwise_checks_20261018_v2.log)
+([JSON](../results/aie/transformer_bf16_product_bitwise_checks_20261018_v2.json))
+passes all 243,581 eligible products bitwise. It covers every normal finite
+BF16 encoding at three fixed FP32 scales plus seeded random pairs with normal
+finite operands and results. It does not qualify the remaining exceptional or
+subnormal fallback paths or exhaust every FP32 right operand.
+
+The [initial complete norm candidate](../results/aie/transformer_bf16_e2b_exact_norm_full_20261018.log)
+([JSON](../results/aie/transformer_bf16_e2b_exact_norm_full_20261018.json)) and
+[post-boundary-fix check](../results/aie/transformer_bf16_e2b_exact_norm_full_20261018_v2.log)
+([JSON](../results/aie/transformer_bf16_e2b_exact_norm_full_20261018_v2.json)) both
+pass fourteen of seventeen full-model numerical cases: nine of twelve synthetic
+states and all five real trajectory states, including the previous 34-token
+failure. All seventeen proposals match the CPU assistant's greedy reference.
+This does not change the earlier three-of-five comparison with GPU target
+tokens; CPU-assistant agreement is a different property. The three synthetic
+failures remain recorded and the original norm and arena dispatcher stay the
+default. The final standalone exact-product norm occupies 7,840 bytes with a
+1,920-byte stack frame; bounds pass. It runs through a separate image and is
+not an efficient serving integration.
+
+Every device run above follows the requested contention preflight. The full
+runs retain [first preflight](../results/aie/transformer_bf16_exact_norm_full_preflight_20261018.json)
+and [repeat preflight](../results/aie/transformer_bf16_exact_norm_full_preflight_20261018_v2.json)
+snapshots. Background CPU inference was active earlier; GPU engine activity
+remained visible later. All runs are checks-only, with immutable input BOs,
+owned context cleanup and no performance claims.
+
+### Corrected normalization inside the E2B arena (2026-10-18)
+
+`ArenaCompiler(exact_norm=True)` now selects a distinct matrix-only program
+with the BF16-aware normalization products. The original compiler remains the
+default and still supports both projection implementations. The experimental
+compiler rejects compensated projection requests before packet construction;
+it does not silently change opcode 1's arithmetic to matrix-unit arithmetic.
+Build identity includes the mode, optimization and all relevant headers.
+
+The [first combined build](../results/aie/transformer_bf16_exact_arena_build_20261018.log)
+has 18,288 bytes of code and is rejected by the 16 KiB program limit. Sharing
+the product helpers [reduces it](../results/aie/transformer_bf16_exact_arena_build_20261018_v2.log)
+to 17,360 bytes, still rejected. `-Oz`
+[fits code](../results/aie/transformer_bf16_exact_arena_build_20261018_v3.log)
+at 12,880 bytes but fails the conservative stack sum plus margin. Selectively
+inlining BF16 widening/rounding helpers while keeping larger arithmetic helpers
+shared produces the [passing build](../results/aie/transformer_bf16_exact_arena_build_20261018_v4.log):
+12,144 code bytes and 3,424 bytes of summed stack frames plus the existing
+256-byte margin, within the unchanged 4 KiB reserve. SRAM placement checks also
+pass. Failed builds are retained; none ran on hardware.
+
+The [five-state corrected arena check](../results/aie/transformer_bf16_e2b_exact_arena_20261018.log)
+([registered evidence](../results/aie/transformer_bf16_e2b_exact_arena_20261018.json))
+passes all five real cache lengths 31-35 and an unpatched return to the first
+state. Every checked preprojection, layer output, hidden/projected state,
+centroid vector, selected cluster/row logits and token matches the standalone
+corrected NPU composition bitwise. The frozen CPU numerical gates pass at all
+five distinct states. Body and clustered head need two submissions and share
+one exact PDI/interface context without eviction across the whole replay;
+inputs stay unchanged and all handles are released. The earlier three-of-five
+GPU-token comparison is unchanged; assistant-reference agreement does not
+establish lossless speculative verification.
+
+The [generic exact-arena checks](../results/aie/transformer_bf16_exact_arena_checks_20261018.log)
+([JSON](../results/aie/transformer_bf16_exact_arena_checks_20261018.json)) pass
+seven outputs across A/B/A plus three prepared-input norm updates, including
+unsupported compensated-projection rejection. A
+[default-path regression](../results/aie/transformer_bf16_control_arena_regression_20261018.log)
+([JSON](../results/aie/transformer_bf16_control_arena_regression_20261018.json))
+passes the same output/update checks with the original norm and both projection
+opcodes retained. Both programs stay within the original resource limits.
+
+The model run starts with an [idle preflight](../results/aie/transformer_bf16_exact_arena_preflight_20261018.json),
+and no foreign work is observed in the bounded model run. It remains checks-only,
+not a controlled timing result. The last first-state replay records roughly
+40.5 ms body and 4.1 ms head dispatch waits, excluding host packet work and
+transfers; these diagnostics are not serving latency or evidence of speedup.
+Three synthetic numerical failures from the separate seventeen-case check
+remain unresolved. The corrected arena is experimental; live GPU state exchange,
+sampled/greedy speculative verification, agent evaluation and 24/7 operation
+remain incomplete.
+
+### GPU token embedding lookup and NPU handoff (2026-10-18)
+
+The new [GGML GPU embedding component](../tools/ggml_gpu_embedding/embedding.cpp)
+uses public APIs from the pinned c83f3058 runtime to load only the GGUF token
+embedding tensor, allocate its own ROCm0 weight buffer, and compute token rows
+without evaluating the target transformer. Both graph nodes must be supported
+by ROCm0 and use device buffers; no CPU dequantization or arithmetic fallback
+is present. The caller supplies the FP32 row scale. The E2B lookup uses a
+1,536-by-262,144 table occupying 330,301,440 device bytes. It currently duplicates
+that table rather than sharing an already-loaded target model's tensor.
+
+The initial `GET_ROWS` plus `SCALE` comparison against the captured five-token
+trajectory [fails the bitwise gate](../results/aie/ggml_gpu_embedding_scale_20261018.json):
+108 of 7,680 values differ, all signed zeros, with zero maximum numerical error.
+The pinned target's `llm_graph_context::build_inp_embd` uses a broadcast `MUL`
+with per-row scale inputs; `SCALE` adds a zero bias. Matching that operation
+[passes unchanged bitwise criteria](../results/aie/ggml_gpu_embedding_mul_20261018.json).
+The mismatch was retained instead of normalizing zero signs in the comparison.
+
+The [persistent lookup check](../results/aie/ggml_gpu_embedding_reuse_20261018.json)
+then performs the five-token batch followed by first-token/last-token/first-token
+single lookups on the same backend and resident weights. All 7,680 batch values
+match their captured FP32 counterparts, including 108 negative zeros. All three
+single lookups match their corresponding batch rows bitwise. Each call allocates
+its small graph independently while retaining the table/backend. The final C++
+build passes MSVC `/W4` without warnings. Source, executable, model and runtime
+DLL hashes are registered and rechecked around the comparison.
+
+The [GPU-output-to-NPU check](../results/aie/ggml_gpu_embedding_npu_handoff_20261018.log)
+([registered evidence](../results/aie/ggml_gpu_embedding_npu_handoff_20261018.json))
+reads the actual lookup output, verifies target/token identity and raw-file
+hashes, converts once to BF16 transport bits and uses those bits as the first
+half of each assistant input. It does not replace them with saved reference
+embeddings after comparison. The existing captured hidden states and KV remain
+the other inputs. All five real states and first-state replay pass the frozen
+numerical gates and match the corrected NPU composition at every checked stage,
+cluster, selected head logits and token. Body/head share one NPU program context;
+input BOs remain unchanged and no contexts remain at exit.
+
+Preflights precede every device invocation: [initial](../results/aie/ggml_gpu_embedding_preflight_20261018.json),
+[MUL](../results/aie/ggml_gpu_embedding_preflight_20261018_v2.json),
+[reuse](../results/aie/ggml_gpu_embedding_preflight_20261018_v3.json),
+[NPU handoff](../results/aie/ggml_gpu_embedding_npu_handoff_preflight_20261018.json).
+Background GPU engine activity is visible, so no performance comparison follows.
+This is a component and captured-state handoff check. It does not implement
+live target hidden/KV exchange, multi-token draft-chain verification/rollback,
+sampled speculative distributions, agent evaluation or 24/7 serving. The three
+synthetic numerical failures remain unresolved, and the three-of-five earlier
+GPU greedy-token agreement is not upgraded to a general acceptance-rate claim.
+
+### Live E2B GPU target and NPU drafter (2026-10-18)
+
+The reusable [GPU worker](../tools/ggml_gpu_target/README.md) now retains a real
+ROCm E2B target and GPU embedding table behind binary pipes. It copies fresh
+normalized target hidden states and shared KV from real layers 13/14; the
+application converts these once to BF16 transport. The BF16 assistant body,
+cluster selection and vocabulary head execute on Phoenix. CPU work is token
+selection, packing and control; no CPU model inference supplies proposals.
+The controller holds target KV and position fixed during a draft chain, uses
+the assistant's projected hidden state for subsequent drafts, then verifies
+bonus plus proposals in one target batch. It removes rejected target suffixes
+through the public memory API and appends only accepted host KV/hidden rows.
+
+The [transport check](../results/aie/ggml_gpu_target_transport_20261018_v3.log)
+([JSON](../results/aie/ggml_gpu_target_transport_20261018_v3.json)) matches
+the frozen five-step trajectory's FP32 embeddings, hidden states and KV bitwise.
+A forced incorrect suffix is rolled back, and ten resumed greedy tokens match
+the independent one-token control. The
+[initial check](../results/aie/ggml_gpu_target_transport_20261018.log) retained
+matching KV/trajectory tokens but failed the initial hidden-state bitwise check:
+requesting all prefill output rows changed that computation. Prefill now requests
+only its final output row, matching the frozen control; verification requests
+every row. An [intermediate attempt](../results/aie/ggml_gpu_target_transport_20261018_v2.log)
+used output index 0 for last-row-only prefill and failed explicitly with missing
+logits; the corrected implementation uses index -1 for that case.
+
+The [first live hybrid run](../results/aie/gemma4_e2b_live_hybrid_20261018.log)
+([JSON](../results/aie/gemma4_e2b_live_hybrid_20261018.json)) emits ten tokens
+identical to its GPU-only greedy control, accepting four of nine proposed tokens
+and exercising three rejected-suffix rollbacks. Its inputs are fresh GPU tensors
+and lookups, not captured inference arrays. It reuses one NPU program context
+without eviction and releases both devices at exit.
+
+A second public prompt, asking about Python dictionary insertion order, exposes
+why that short result is insufficient. The
+[32-token default-fusion hybrid](../results/aie/gemma4_e2b_live_hybrid_dictionary32_20261018.log)
+([JSON](../results/aie/gemma4_e2b_live_hybrid_dictionary32_20261018.json))
+diverges from the one-token GPU control at output index 13: token 5213 versus
+2338. A [GPU-only teacher-forced comparison](../results/aie/ggml_gpu_target_batch_dictionary32_20261018.log)
+([JSON](../results/aie/ggml_gpu_target_batch_dictionary32_20261018.json))
+reproduces that differing prediction with identical input tokens and no NPU or
+rollback. This isolates a target batch-evaluation difference; it does not identify
+the exact faulty fusion or establish that all remaining differences are harmless.
+
+Setting `GGML_CUDA_DISABLE_FUSION=1` for both arms makes the
+[32-token GPU batch comparison](../results/aie/ggml_gpu_target_batch_dictionary32_nofusion_20261018.log)
+([JSON](../results/aie/ggml_gpu_target_batch_dictionary32_nofusion_20261018.json))
+pass every greedy prediction. The
+[live hybrid with the same setting](../results/aie/gemma4_e2b_live_hybrid_dictionary32_nofusion_20261018.log)
+([JSON](../results/aie/gemma4_e2b_live_hybrid_dictionary32_nofusion_20261018.json))
+then matches all 32 control tokens, accepting 12 of 38 proposals. Two NPU contexts
+cover the required packet-count variants, with zero evictions, immutable input
+BOs and no contexts left at exit. This is equivalence to the fusion-disabled
+control: that control itself differs from the default-fusion sequence. The flag
+is explicit in the runner and registration, not silently adopted as a default.
+
+Application scripts remain in the assistant workspace and are mirrored to
+`gemma-4-assistant/` in the LLM workspace: `build_gpu_target.cmd`,
+`prepare_live_prompt.py`, `prepare_live_rope.py`, `probe_gpu_target.py`,
+`probe_gpu_batch.py`, `live_hybrid.py` and `record_live_evidence.py`.
+Rotary constants are precomputed from the pinned Google configuration; no
+reference model predictions enter the live path. Model, runtime, bridge,
+application, constants and NPU program identities are registered and verified
+when exporting the evidence. The C++ bridge builds with MSVC `/W4` without warnings.
+
+CPU/GPU/NPU contention was inspected before every hardware invocation. These
+bounded checks-only jobs observed no foreign inference peers; preflights sometimes
+showed 1–2% desktop/system GPU activity. No throughput, net acceleration or power
+claim follows. The live prototype is bounded to a 512-token context and 64 output
+tokens, with at most four drafts. It repacks/transfers command streams, duplicates
+the target embedding table and synchronizes diagnostic tensor copies. It has no
+interactive multi-turn chat, sampled acceptance, agent evaluation, restart/watchdog
+integration or sustained 24/7 validation. The three earlier synthetic numerical
+failures remain open. Fusion-disabled quality/performance and broader greedy
+equivalence remain unqualified; the efficient realtime assistant goal is ongoing.
+
+#### Prepared commands and accepted-text streaming
+
+`live_hybrid.py --prepared` retains the current prefix's body template during
+its draft chain, patching only the next concatenated embedding/hidden input.
+Verification advances the prefix, so the next body template is rebuilt with
+its actual KV length/content and rotary position. Only one prefix template is
+retained. One fixed head template instead patches its hidden upload and the
+selected 4,096 vocabulary rows. Static model weights are no longer repacked
+for every draft within a chain; complete command BO uploads/readback checks
+remain, so this is not resident-weight DDR execution or zero-copy transport.
+
+The [initial live prepared comparison](../results/aie/gemma4_e2b_live_prepared_dictionary32_20261018.log)
+([JSON](../results/aie/gemma4_e2b_live_prepared_dictionary32_20261018.json))
+passes the same 32-token fusion-disabled greedy control and all rebuilt body
+outputs/head indices. Across 38 proposals it constructs 19 body templates,
+reuses them 19 times, constructs one head template and reuses it 37 times.
+These are construction counts, not measured latency reductions.
+
+The [strengthened streaming comparison](../results/aie/gemma4_e2b_live_prepared_stream_dictionary32_20261018.log)
+([JSON](../results/aie/gemma4_e2b_live_prepared_stream_dictionary32_20261018.json))
+additionally exports both halves of the candidate logits. All body exports,
+all 4,096 head logits and the selected index match rebuilt execution bitwise
+at each of 38 proposals; all 32 accepted output tokens match the control.
+The NPU uses one exact program context with zero evictions and idle exit.
+The evidence exporter verifies the candidate and comparison command streams'
+source/artifact identities and unchanged input BOs.
+
+`--stream` prints accepted text incrementally through the loaded llama
+vocabulary. Compiler diagnostics go to stderr and an incremental UTF-8 decoder
+handles token-piece byte chunks. `--stop-eog` stops at vocabulary-reported
+end-of-generation tokens in both control and hybrid; an accepted end token
+inside a verification batch also discards its speculative suffix. The
+[short-answer check](../results/aie/gemma4_e2b_live_prepared_eog_20261018.log)
+([JSON](../results/aie/gemma4_e2b_live_prepared_eog_20261018.json)) outputs `OK`
+then token 106, matching the control, accepting one of two proposals and
+rolling back the extra row. The
+[UTF-8 check](../results/aie/gemma4_e2b_live_prepared_unicode_20261018.log)
+([JSON](../results/aie/gemma4_e2b_live_prepared_unicode_20261018.json)) outputs
+`café 🙂` then token 106; four output tokens match the control, with two of
+four proposals accepted. Chunked rendering equals whole-output rendering in
+these checks. The [ordinary prepared streaming path](../results/aie/gemma4_e2b_live_prepared_stream_fastpath_20261018.log)
+([JSON](../results/aie/gemma4_e2b_live_prepared_stream_fastpath_20261018.json))
+also checks the UTF-8 prompt without the additional rebuilt NPU comparisons.
+
+All remain bounded checks-only runs with contention inspected first. Streaming
+accepted text is implemented, but there is no interactive multi-turn service,
+net throughput/power qualification or sustained 24/7 result. The fusion and
+synthetic numerical limitations above remain; preparation, streaming and
+stop handling are explicit options rather than silent default changes.
+
+#### Export-only NPU result transport
+
+The optional `--compact` arena transport keeps each command's result in a local
+scratch buffer and returns only declared exports plus a final aggregate status
+frame. It uses the same numerical kernel. After every command, the core compares
+all sixteen prefix guards with that command's poison value, accumulating failure
+even when that command exports nothing. Stream-end markers emit and reset the
+aggregate. The host still verifies selected-frame/status guards and the complete
+unchanged input BO. An admitted export/end-marker schedule is checked before
+dispatch to prevent a changed schedule from stalling output DMA.
+
+The [initial build](../results/aie/transformer_bf16_compact_build_20261018.log)
+compiled command counts/export positions into the core, making its program
+identity depend on the schedule. The
+[revised build](../results/aie/transformer_bf16_compact_build_20261018_v2.log)
+reads markers from reserved command-header word 11 instead. Its core code is
+12,848 bytes, the conservative stack-frame sum plus 256-byte margin is 3,424
+bytes within the 4,096-byte reserve, and five SRAM spans occupy 62,016 bytes
+within the checked 64 KiB region without overlap. The extra scratch is 4,224
+bytes. Program sharing still requires byte-identical PDI, kernel interface and
+memory topology; identical ELF alone remains insufficient.
+
+The [generic device check](../results/aie/transformer_bf16_compact_checks_20261018.log)
+([verified provenance](../results/aie/transformer_bf16_compact_checks_20261018.json))
+compares seven outputs against full-frame execution over A/B/A, then three
+prepared input updates. All match bitwise. A deliberately invalid non-exported
+upload is rejected through aggregate status, a following valid stream recovers,
+and changed export/end markers are rejected before submission. Input BOs remain
+unchanged and no NPU contexts remain at exit. The reusable
+`tools/archive_packet_evidence.py` verifies and archives the referenced source,
+build, PDI/interface/topology identities with the local account prefix scrubbed.
+
+The [32-token live comparison](../results/aie/gemma4_e2b_live_compact_dictionary32_20261018.log)
+([JSON](../results/aie/gemma4_e2b_live_compact_dictionary32_20261018.json))
+compares all compact body exports and all 4,096 candidate logits with rebuilt
+full-frame execution at each of 38 proposals. Everything matches bitwise and
+all 32 greedy output tokens match the fusion-disabled GPU control, with 12
+proposals accepted. Body result allocation/readback falls from 12,802,944 bytes
+at 3,031 commands to 42,240 bytes (nine exports plus status). Later 3,051/3,071
+command bodies return the same ten frames. The comparison head uses four frames
+(two logit exports, index and status) instead of 260 frames.
+
+That mixed comparison creates 18 contexts and 16 evictions: its full-frame
+controls include two different PDI identities, in addition to the compact PDI,
+while the cache allows two contexts. This churn is retained as a diagnostic
+limitation, not hidden by weakening program identity checks. Compact body/head
+images across the tested counts have identical PDI, interface and topology.
+The [ordinary 32-token compact run](../results/aie/gemma4_e2b_live_compact_dictionary32_run_20261018.log)
+([JSON](../results/aie/gemma4_e2b_live_compact_dictionary32_run_20261018.json))
+independently passes the GPU greedy control with one NPU context and zero
+evictions. Its head exports only index plus status: 8,448 bytes instead of
+1,089,792 bytes for 258 full frames. The
+[ordinary UTF-8/end-token check](../results/aie/gemma4_e2b_live_compact_unicode_20261018.log)
+([JSON](../results/aie/gemma4_e2b_live_compact_unicode_20261018.json)) also passes,
+outputting `café 🙂` then token 106, with one context, zero evictions and matching
+whole/chunked text. Both exit with the NPU idle.
+
+These are result-byte reductions, not measured throughput gains. Full command
+inputs (including weights) still upload and undergo immutability readback on
+every dispatch; host template packing, GPU tensor synchronization, the separate
+embedding table and control work remain. Contention was checked before each
+device invocation; all runs are bounded checks-only jobs. Realtime/net speed,
+quality under the explicit fusion-disabled setting, the remaining synthetic
+numerical failures and sustained serving remain unqualified.
+
+#### Resident packet inputs with changed-page updates
+
+`PacketSession(resident_inputs=True)` and the application's explicit
+`--resident-inputs --prepared` option retain each stream's last verified input
+contents. A uint32 comparison finds changed 4 KiB pages, merges adjacent pages
+and bounds the last range to the actual buffer size. Only those ranges are
+written and synchronized to the device. This uses the local XRT BO API's
+`sync(direction, size, offset)` overload. Fresh/recreated streams receive full
+uploads; an unchanged stream writes zero bytes. Rebuilt `ArenaProgram` execution
+still requests full uploads, so comparison controls do not seed the candidate
+BO with a newer input. Snapshot ownership is per stream, not merely per program
+image or caller array identity.
+
+After every dispatch, the complete input BO is synchronized/read back and
+compared with every requested uint32 word before its snapshot can be reused.
+Output poisoning, export guards, aggregate command status and source/artifact
+checks remain. Transport and changed-range helper sources are now hashed at
+session entry, checked at successful exit and registered with each dispatch;
+the evidence exporters verify those hashes. No fallback retries a failed partial
+sync or numerical gate under a different mode.
+
+The [generic resident-input check](../results/aie/transformer_bf16_resident_inputs_20261018.log)
+([provenance](../results/aie/transformer_bf16_resident_inputs_20261018.json))
+covers adjacent page boundaries, a final partial page, unchanged/restored data
+and invalid arrays offline. On Phoenix, A/A/B/A/A rotary, probability and context
+outputs match separate full-upload/full-frame execution bitwise. Repeated A
+inputs upload zero bytes; B and restored A use changed-page updates. A separate
+one-context session deliberately evicts the candidate, then verifies its full
+re-upload and correct output. Both sessions end with no live contexts.
+
+The [32-token live resident comparison](../results/aie/gemma4_e2b_live_resident_dictionary32_compare_20261018.log)
+([JSON](../results/aie/gemma4_e2b_live_resident_dictionary32_compare_20261018.json))
+matches every body export and all 4,096 candidate logits against full uploads
+through 38 proposals. The output matches the fusion-disabled GPU control,
+accepting 12 proposals. The first body input uploads 49,853,888 bytes; the second
+draft in that same prefix updates just 8,192 bytes. Its remaining static packet
+weights are reused in the input BO. This mixed comparison uses two contexts
+without eviction and exits idle.
+
+The [ordinary resident run](../results/aie/gemma4_e2b_live_resident_dictionary32_run_20261018.log)
+([JSON](../results/aie/gemma4_e2b_live_resident_dictionary32_run_20261018.json))
+also matches all 32 control tokens, with one NPU context, zero evictions and idle
+exit. Across 38 body dispatches, three newly sized streams use full uploads and
+35 use page updates. Body writes total 188,530,752 bytes versus 1,907,606,144
+bytes for uploading every complete body input. This total includes cold stream
+initialization and changed KV/rotary/input pages, not just within-chain updates.
+The evidence records full input size, actual write bytes, update mode and range
+count separately for every body and head dispatch.
+
+These byte counts cover host-to-device input updates. They exclude the still
+complete device-to-host immutability readback. Packet scanning, owned snapshot
+copies, template patch copies, model-weight reads by the NPU, GPU state copies
+and speculative verification remain. Weights are resident in device-accessible
+input BOs, not retained in compute-tile SRAM. All invocations were preceded by
+contention checks and remain bounded checks-only runs. No realtime throughput,
+energy saving, broad quality or 24/7 qualification follows; the existing fusion
+and synthetic numerical limitations remain.
+
+#### Diagnostic loop latency and padded KV schedules
+
+`live_hybrid.py --profile` records worker startup/prefill, target reset/prefill,
+NPU-session opening and the two generation loops separately. Each draft records
+GPU embedding lookup, body and head wall time; each round records drafting,
+GPU verification, accepted-state updates and checkpoint/output time. These are
+diagnostic wall times from the instrumented worker, not stock `llama-server`
+throughput or a serving qualification. Both loops extend the same accepted token
+prefix; the GPU control processes one target token per output, including the
+final accepted-state update. The hybrid loop includes checkpoint writes and
+streamed text, while the control does not emit text. Neither loop time includes
+worker startup, prefill/reset, source/model hashing, NPU-session opening or
+final source revalidation. Uncached NPU builds inside a draft do count.
+
+The [first profile](../results/aie/gemma4_e2b_live_profile_dictionary32_cold_20261018.log)
+([JSON](../results/aie/gemma4_e2b_live_profile_dictionary32_cold_20261018.json))
+includes four uncached NPU builds: 20.382 s for the hybrid loop versus 1.656 s
+for the GPU control on 32 tokens. The
+[warm-cache profile](../results/aie/gemma4_e2b_live_profile_dictionary32_warm_20261018.log)
+([JSON](../results/aie/gemma4_e2b_live_profile_dictionary32_warm_20261018.json))
+has no such builds: 6.040 s hybrid versus 1.676 s control (5.30 versus 19.10
+tokens/s for these instrumented loops). All 32 tokens match. Drafting accounts
+for 4.126 s and target verification for 1.799 s. Body wall time is 3.626 s:
+1.512 s in NPU dispatch, 0.642 s in recorded buffer-transfer phases and 1.472 s
+elsewhere in host construction/packing/preparation/control. These observations
+identify costs; they do not establish a controlled speed comparison.
+
+An optional `--kv-capacity 256` path attempts to reduce repeated static-weight
+packing further. It retains one zero-padded KV-capacity schedule across growing
+prefixes instead of rebuilding it for every exact length. Named softmax lengths
+patch only the two fixed passes' valid count and arena source/output spans,
+bounded by a declared capacity no greater than 512. Extra key/value rows are
+positive BF16 zero; softmax normalizes only the true prefix. The capacity API
+does not itself clear an inactive arena tail: a caller consuming the full padded
+span must establish zero logits there, as the padded key projection does here.
+No opcode, output-routing marker or command count changes through length patches.
+
+The [64-capacity device check](../results/aie/transformer_bf16_padded_lengths_20261018.log)
+([JSON](../results/aie/transformer_bf16_padded_lengths_20261018.json)) and
+[512-capacity check](../results/aie/transformer_bf16_padded_lengths512_20261018.log)
+([JSON](../results/aie/transformer_bf16_padded_lengths512_20261018.json)) compare
+fixed-capacity attention with exact-length execution bitwise, including growth,
+shrinkage/restoration and true lengths 1, 17, 257 and 512 in the latter. Zero,
+over-capacity, unknown and non-integer length patches are rejected before
+execution. Input immutability and idle-exit checks remain.
+
+The [initial full-model attempt](../results/aie/gemma4_e2b_live_capacity_dictionary32_compare_20261018.log)
+and [stage diagnostic](../results/aie/gemma4_e2b_live_capacity_dictionary32_compare_20261018_v2.log)
+fail after the first accepted prefix. Prepared templates are intentionally
+immutable; the next draft's query-only patch had restored the original template's
+KV/rotary/length data after a newer prefix had been patched in. The application
+now retains the current prefix's typed state patches and reapplies them to every
+draft in that prefix. Resident-input comparison still uploads only changed pages.
+The [corrected comparison](../results/aie/gemma4_e2b_live_capacity_dictionary32_compare_20261018_v3.log)
+([JSON](../results/aie/gemma4_e2b_live_capacity_dictionary32_compare_20261018_v3.json))
+matches every body export and all 4,096 candidate logits against the exact-length
+control at all 38 proposals. All 32 GPU greedy tokens match, with 12 proposals
+accepted, two contexts, zero evictions and idle exit. One body template is
+constructed and reused 37 times; the exact-length path constructed 19 templates.
+
+The [first ordinary capacity profile](../results/aie/gemma4_e2b_live_capacity_dictionary32_cold_20261018.log)
+([JSON](../results/aie/gemma4_e2b_live_capacity_dictionary32_cold_20261018.json))
+still includes an uncached ordinary-head build. The
+[warm ordinary profile](../results/aie/gemma4_e2b_live_capacity_dictionary32_warm_20261018.log)
+([JSON](../results/aie/gemma4_e2b_live_capacity_dictionary32_warm_20261018.json))
+matches all 32 tokens with one context, zero evictions and idle exit. Its hybrid
+loop is 5.799 s versus 1.718 s for its GPU control (5.52 versus 18.62 tokens/s).
+Body time is 3.418 s: dispatch 1.656 s, transfers 0.802 s and remaining host work
+0.960 s. Reduced host work is partly offset by extra padded projection and buffer
+work. These separate checks-only profiles are neither order-balanced nor a
+statistical before/after result; no general speedup or default adoption follows.
+
+The padded body uses 3,311 commands rather than 3,031–3,071 in this exact-length
+trace. GPU verification still consumes 1.800 s, already exceeding the recorded
+1.718 s control loop before adding any drafting cost. This particular proposal
+trace therefore shows no observed verification-time headroom for a drafter.
+Improving host packing alone is insufficient here; NPU execution/transport,
+target verification and proposal acceptance remain open performance work.
+These findings do not establish a limit for other prompts or implementations.
+Contention checks preceded every device invocation; preflights were idle or
+showed only recorded desktop/system GPU activity, and bounded monitoring found
+no foreign inference peers. All profiles retain `timing_eligible=false`, the
+explicit fusion-disabled target, the open synthetic numerical cases and the
+unmet realtime/24/7 objective.
+
+#### Smaller packets with an arena-resident GELU table
+
+`ArenaCompiler(exact_norm=True, small_packets=True)` and the application's
+explicit `--small-packets` option reduce command packets from 4,112 to 2,192
+uint32 words. Projections and the other existing payloads fit that size. The
+4,096-entry BF16 GELU table previously embedded in activation packets instead
+uploads once per command stream to protected arena slots 8,192–12,287. Resident
+GELU opcode 11 takes that table address while preserving the original lookup,
+BF16 multiplication and rounding calculation. It still runs on the NPU. The
+wide opcode-5 control keeps its embedded table and the existing matrix/normalizer
+mode remains the default.
+
+The host rejects a preoccupied table region, a later write into that region,
+a different table within the same program and uploads beyond the smaller
+4,352-BF16 payload. The device checks upload counts and table bounds before
+accessing memory and rejects a GELU destination overlapping its table. This
+mode requires the exact-norm matrix-only compiler; unsupported precision modes
+do not silently substitute another implementation. These are standalone arena
+commands, not new ONNX graph-engine operators.
+
+The [resource build](../results/aie/transformer_bf16_small_packets_build_20261018.log)
+passes unchanged code, stack, helper and SRAM gates. The compact small-packet
+image uses 13,120 code bytes, a conservative stack bound of 3,424 bytes including
+the 256-byte margin, and five non-overlapping SRAM spans totaling 54,336 bytes.
+The reduced FIFO input buffer accounts for the SRAM reduction; the table occupies
+already allocated arena memory. It is uploaded once per body invocation, not
+claimed persistent across independently submitted arena programs.
+
+The [initial generic device check](../results/aie/transformer_bf16_small_packets_checks_20261018.log)
+([JSON](../results/aie/transformer_bf16_small_packets_checks_20261018.json))
+matches seven outputs against the wide control over A/B/A and detects invalid
+table addresses/oversized uploads through aggregate guards. The
+[strengthened check](../results/aie/transformer_bf16_small_packets_checks_20261018_v2.log)
+([provenance](../results/aie/transformer_bf16_small_packets_checks_20261018_v2.json))
+also compares GELU outputs with the frozen Torch fixture under its original
+criteria; error is zero in all three checks. Input immutability, source identities
+and idle exits remain verified.
+
+The [full live comparison](../results/aie/gemma4_e2b_live_small_packets_compare_20261018.log)
+([JSON](../results/aie/gemma4_e2b_live_small_packets_compare_20261018.json))
+matches every body export and all 4,096 candidate logits against the wide,
+exact-length path at each of 38 proposals. It matches all 32 GPU greedy tokens,
+accepts 12 proposals and exits idle. The 256-capacity body has 3,312 commands,
+including one LUT upload, and 29,039,616 input bytes. The earlier wide padded
+body has 3,311 commands and 54,459,328 input bytes. Arithmetic is not quantized
+further and no numerical criterion is relaxed to obtain this reduction.
+
+The [first ordinary profile](../results/aie/gemma4_e2b_live_small_packets_cold_20261018.log)
+([JSON](../results/aie/gemma4_e2b_live_small_packets_cold_20261018.json))
+includes an uncached ordinary-head build. The
+[warm diagnostic profile](../results/aie/gemma4_e2b_live_small_packets_warm_20261018.log)
+([JSON](../results/aie/gemma4_e2b_live_small_packets_warm_20261018.json))
+has one NPU context, zero evictions, unchanged acceptance/control tokens and an
+idle exit. Its 32-token hybrid loop takes 4.611 s (6.94 tokens/s), while its
+instrumented GPU-only control takes 1.668 s (19.18 tokens/s). Body wall time is
+2.387 s and head time 0.346 s; body NPU dispatch totals 1.317 s and full input
+verification 0.290 s. The preceding wide padded profile recorded 5.799 s,
+3.418 s body time and 1.656 s body dispatch. These separate checks-only samples
+show where time moved; they are not an order-balanced, statistical or stock
+server benchmark, and retain `timing_eligible=false`.
+
+The smaller format reduces physical input traffic and retained host snapshots,
+but full readback checks, NPU weight reads, template/state patching and target
+verification remain. Acceptance is unchanged, and hybrid execution remains
+slower than its corresponding GPU control. The table reservation is explicit;
+larger arena layouts must fit around it or reject the mode. Contention was
+inspected before every hardware run. Fusion-disabled quality, the remaining
+synthetic numerical cases, net realtime acceleration and sustained 24/7 serving
+remain unresolved; no serving default is changed.
+
+### Persistent assistant and tokenizer integration (2026-10-18)
+
+The reusable E2B composition now lives in `npu/gemma4`, with an experimental
+Ignition wrapper and `tools/gemma4_chat.py` terminal frontend. The GPU worker
+has a complete-prompt prefill operation that retains model weights. The serving
+runtime emits already-verified bonus tokens before drafting and does not run
+the qualification runner's GPU-only reference replay. Repeated-request hardware
+correctness and cancellation qualification remain pending.
+
+Update: the [completed lifecycle check](../results/aie/gemma4_persistent_lifecycle_20261018_v5.log)
+([archived dispatch/build/source provenance](../results/aie/gemma4_persistent_lifecycle_20261018_v5.json))
+passes all four requests with one GPU worker/model load: cancelled dictionary
+prefix, complete OK response, complete Unicode response and a subsequent
+16-token dictionary prefix. Every emitted token matches the instrumented
+fusion-disabled GPU control. NPU contexts are released between requests while
+the GPU process remains alive, and the worker exits after assistant close.
+The wrapper observed no foreign contention in this completed check; it remains
+checks-only with `timing_eligible=false`. Completion here means reaching EOS
+or the requested output budget, not a guarantee of a semantically full answer.
+
+The [second attempt](../results/aie/gemma4_persistent_lifecycle_20261018_v2.log)
+passed its first three cases before admission rejected the fourth without a
+retained snapshot. The [third attempt](../results/aie/gemma4_persistent_lifecycle_20261018_v3.log)
+retained the snapshot and identified the bounded research supervisor's own CPU
+sampling as a false foreign-work classification. Admission now excludes only an
+ancestor running this checkout's exact `tools/research_process.py`; tests check
+that the same relative filename in another checkout remains foreign. The
+[fourth attempt](../results/aie/gemma4_persistent_lifecycle_20261018_v4.log)
+correctly rejected separate CPU work, and its final witness saw a foreign NPU
+context. All failed attempts are retained and none is counted as a full pass.
+
+The [terminal frontend check](../results/aie/gemma4_terminal_chat_20261018.log)
+passes text-to-tokenizer-to-Ignition-to-GPU/NPU streaming and prints the requested
+`café 🙂`, then exits with an idle NPU witness. A foreign NPU context was observed
+during tokenizer startup and gone before this request's NPU session. The wrapper
+therefore records foreign contention and disallows timing qualification. This
+is a functional end-to-end check only. `tools/gemma4-chat.ps1` provides a local
+launcher with explicit path overrides and a preflight snapshot.
+
+The [first bounded lifecycle attempt](../results/aie/gemma4_persistent_lifecycle_20261018.log)
+was rejected by runtime admission when a foreign CPU workload became active.
+Pre/post NPU witnesses were idle; this attempt establishes neither hardware
+correctness nor performance. Hardware-free lifecycle tests cover closing an
+unread stream, release after admission rejection and preservation of an already
+loaded worker when foreign work prevents a new request.
+
+The [tokenizer checks](../results/aie/gemma4_tokenizer_checks_20261018.json)
+match all frozen dictionary, OK and Unicode prompt IDs, reject an oversized
+conversation and recover for a later request in the same worker. They also
+check worker exit after close and record tokenizer/template/source hashes.
+An explicit UTF-8 pipe setting fixes Windows isolated-Python code-page
+corruption of accents and emoji. Tokenization uses the pinned local snapshot
+in the separate conversion environment. Its Transformers version imports
+Torch despite tokenizer-only environment flags; no model is instantiated or
+run there. No speed or CPU-model-inference claim follows from these checks.
+
+### Double-buffered BF16 arena input
+
+The compact, small-packet arena now offers `input_depth=2`, retaining the
+single-buffer default. Only the FIFO transport changes; packet arithmetic,
+input readback, output poisoning and aggregate command guards remain in force.
+The [resource build](../results/aie/transformer_bf16_double_buffer_build_20261018.log)
+passes with 13,200 code bytes, the same 3,424-byte conservative stack bound,
+and six non-overlapping SRAM allocations totaling 63,104 bytes within 64 KiB.
+The extra 8,768-byte input buffer leaves 2,432 bytes of that region unused.
+Depth two is rejected for other arena formats rather than risking an overflow.
+
+The [generic device check](../results/aie/transformer_bf16_double_buffer_checks_20261018.log)
+([provenance](../results/aie/transformer_bf16_double_buffer_checks_20261018.json))
+matches all seven exports against the single-buffer control over A/B/A,
+detects a bad non-export command through the aggregate guard, and recovers on
+the next invocation. The [live comparison](../results/aie/gemma4_e2b_live_double_buffer_compare_20261018.log)
+([provenance](../results/aie/gemma4_e2b_live_double_buffer_compare_20261018.json))
+compares all body exports and 4,096 candidate logits against the wide exact-length
+control at every one of 38 proposals. All are bitwise equal; all 32 emitted
+target tokens match the fusion-disabled GPU control, with 12 proposals accepted.
+
+Four subsequent diagnostic runs used the same 25-token dictionary prompt,
+32 output tokens, depth two and resident inputs, in double/single/single/double
+order. Every run retained the same acceptance and greedy output. The first
+two included different uncached builds and are not warm comparisons.
+
+| Diagnostic run | Hybrid loop | GPU-only control | Body dispatch total |
+| --- | ---: | ---: | ---: |
+| [Double, cold](../results/aie/gemma4_e2b_buffer_profile_double_cold_20261018.log) ([JSON](../results/aie/gemma4_e2b_buffer_profile_double_cold_20261018.json)) | 7.869 s | 1.671 s | 1.046 s |
+| [Single, cold](../results/aie/gemma4_e2b_buffer_profile_single_cold_20261018.log) ([JSON](../results/aie/gemma4_e2b_buffer_profile_single_cold_20261018.json)) | 11.651 s | 1.672 s | 1.331 s |
+| [Single, warm](../results/aie/gemma4_e2b_buffer_profile_single_warm_20261018.log) ([JSON](../results/aie/gemma4_e2b_buffer_profile_single_warm_20261018.json)) | 4.616 s | 1.662 s | 1.317 s |
+| [Double, warm](../results/aie/gemma4_e2b_buffer_profile_double_warm_20261018.log) ([JSON](../results/aie/gemma4_e2b_buffer_profile_double_warm_20261018.json)) | 4.343 s | 1.654 s | 1.047 s |
+
+The two warm samples show a 20.5% lower body dispatch total and a 5.9% shorter
+hybrid loop (derived from those samples). Drafting totals fall from 2.782 to
+2.507 s; verification is nearly unchanged at 1.800 and 1.796 s. These are
+checks-only samples with no foreign contention observed by the wrapper, not
+statistical repetitions or a serving qualification; `timing_eligible=false`.
+The hybrid remains slower than its corresponding GPU-only control. No default
+or quality gate changes, and net realtime acceleration remains unresolved.
+
+The [persistent Ignition check](../results/aie/gemma4_persistent_double_buffer_20261018.log)
+([provenance](../results/aie/gemma4_persistent_double_buffer_20261018.json))
+passes the same cancelled dictionary prefix, OK response, Unicode response and
+later 16-token dictionary prefix with depth-two input buffering. It keeps one
+GPU worker/model load, matches every emitted GPU control token, releases the
+NPU between requests and exits idle. `tools/gemma4-chat.ps1 -InputDepth 2` makes
+this transport available as an explicit experimental option. Larger context,
+agent tools and sustained unattended operation remain unverified.
+
+### Vector copies in the BF16 arena
+
+An opt-in `vector_copy=True` variant replaces scalar arena copying with complete
+32-element vector loads/stores when both pointers are 64-byte aligned. Unaligned
+spans and tails retain scalar copies, avoiding accesses outside their declared
+bounds. Input padding uses aligned vector zero stores. The numerical operation
+kernels, BF16 rounding and qualification tolerances are unchanged.
+
+The [first build attempt](../results/aie/transformer_bf16_vector_copy_build_20261018.log)
+stopped in the new host fixture: initializing a maximum upload plus adjacent
+guards exceeded the packet upload bound. The fixture now initializes that
+region in bounded chunks. The [corrected resource build](../results/aie/transformer_bf16_vector_copy_build_20261018_v2.log)
+passes with 13,360 code bytes, the unchanged 3,424-byte conservative stack bound
+and the same 63,104-byte double-buffered SRAM allocation. The
+[device check](../results/aie/transformer_bf16_vector_copy_checks_20261018.log)
+([provenance](../results/aie/transformer_bf16_vector_copy_checks_20261018.json))
+matches all operation exports over A/B/A, detects an invalid unexported command
+and recovers. Additional copy checks cover aligned and unaligned offsets,
+lengths around vector boundaries, maximum uploads and the final arena element.
+All copied bits and neighbouring guard values match the host expectation.
+
+The [live comparison](../results/aie/gemma4_e2b_live_vector_copy_compare_20261018.log)
+([provenance](../results/aie/gemma4_e2b_live_vector_copy_compare_20261018.json))
+matches every body export and all 4,096 candidate logits against the wide
+exact-length control across 38 proposals. All 32 emitted tokens match the
+fusion-disabled GPU control; acceptance remains 12 of 38 proposals.
+
+Four subsequent profiles use the same dictionary prompt and output budget,
+depth-two drafting, double-buffered input and resident input updates, in
+vector/scalar/scalar/vector order. The first two include different uncached
+builds and do not establish a warm comparison.
+
+| Diagnostic run | Hybrid loop | GPU-only control | Body dispatch total |
+| --- | ---: | ---: | ---: |
+| [Vector, cold](../results/aie/gemma4_e2b_copy_profile_vector_cold_20261018.log) ([JSON](../results/aie/gemma4_e2b_copy_profile_vector_cold_20261018.json)) | 7.170 s | 1.651 s | 0.468 s |
+| [Scalar, cold](../results/aie/gemma4_e2b_copy_profile_scalar_cold_20261018.log) ([JSON](../results/aie/gemma4_e2b_copy_profile_scalar_cold_20261018.json)) | 11.434 s | 1.660 s | 1.047 s |
+| [Scalar, warm](../results/aie/gemma4_e2b_copy_profile_scalar_warm_20261018.log) ([JSON](../results/aie/gemma4_e2b_copy_profile_scalar_warm_20261018.json)) | 4.349 s | 1.651 s | 1.048 s |
+| [Vector, warm](../results/aie/gemma4_e2b_copy_profile_vector_warm_20261018.log) ([JSON](../results/aie/gemma4_e2b_copy_profile_vector_warm_20261018.json)) | 3.617 s | 1.661 s | 0.464 s |
+
+The two warm samples show 55.7% lower body dispatch time and a 16.8% shorter
+hybrid loop (derived from those samples). Drafting totals fall from 2.510 to
+1.797 s; GPU verification remains 1.798 and 1.778 s. Vector-copy body wall time
+is 1.477 s, so host preparation and transport checks remain material alongside
+NPU execution. Every profile passes output/control and resource checks, and the
+wrapper observes no foreign contention. They remain single checks-only samples,
+`timing_eligible=false`, not a statistical benchmark or a serving qualification.
+The hybrid still trails its GPU-only control; net acceleration is unresolved.
+
+The [persistent Ignition check](../results/aie/gemma4_persistent_vector_copy_20261018.log)
+([provenance](../results/aie/gemma4_persistent_vector_copy_20261018.json))
+passes four requests with one loaded GPU worker, matching all emitted control
+tokens and releasing the NPU between requests, including cancellation. The
+launcher exposes this variant as `-InputDepth 2 -VectorCopy`; both defaults
+remain unchanged. Larger context, agent tools and unattended operation remain
+unverified.
+
+### Persistent request latency and native contention sampling
+
+`tools/profile_gemma4_persistent.py` measures requests through Ignition with a
+continuously consuming client, rather than the single-shot research loop.
+Each run uses one GPU model load, the public dictionary prompt, 32 output
+tokens, depth-two drafting, double-buffered input and vector copies. Request
+time includes admission, prompt prefill, NPU session setup/cleanup and streamed
+generation. Tokenizer work and assistant construction are excluded; construction
+time is recorded separately. GPU control replay runs outside the served request
+and still checks every emitted token.
+
+The [baseline](../results/aie/gemma4_persistent_latency_20261018.log)
+([provenance](../results/aie/gemma4_persistent_latency_20261018.json))
+shows the cost of starting PowerShell for every request's contention check.
+The reusable `npu/contention.py` instead samples process CPU time and native
+Windows PDH GPU Engine rate counters over the same 500 ms interval, then reads
+a fresh NPU context witness. No CPU sampling window, ownership rule or numerical
+gate is relaxed. Missing CPU/GPU/NPU telemetry rejects admission. Query handles
+are released on interruption as well as normal return.
+
+The [first sensor probe](../results/aie/native_contention_checks_20261018.log)
+detected its controlled CPU workload but then classified its own research
+supervisor as foreign work and stopped before GPU testing. The corrected
+[sensor probe](../results/aie/native_contention_checks_20261018_v2.log)
+([source provenance](../results/aie/native_contention_checks_20261018_v2.json))
+passes CPU-burn detection and identifies the same owned busy GPU worker with
+both native PDH and the existing PowerShell sensor. Native idle/busy snapshots
+take 731/606 ms in that check; these are diagnostics, not an overhead guarantee.
+No foreign process is stopped.
+
+The [first native request-latency attempt](../results/aie/gemma4_persistent_native_latency_20261018.log)
+completed its first request, then rejected a later admission without retaining
+that snapshot. Its rejection cause is unknown and it is not a full pass. The
+profiler now records rejections and waits boundedly before a new admission
+attempt; reported latency covers accepted attempts only. The
+[completed rerun](../results/aie/gemma4_persistent_native_latency_20261018_v2.log)
+([provenance](../results/aie/gemma4_persistent_native_latency_20261018_v2.json))
+has no rejected attempts, matches every control token and keeps one GPU model
+load across all four requests.
+
+| Request | PowerShell first text / complete | Native first text / complete |
+| --- | ---: | ---: |
+| First, including GPU model load | 4.094 / 7.736 s | 3.348 / 6.985 s |
+| Warm 1 | 1.763 / 5.270 s | 0.854 / 4.403 s |
+| Warm 2 | 1.754 / 5.329 s | 0.976 / 4.541 s |
+| Warm 3 | 1.778 / 5.346 s | 0.910 / 4.489 s |
+
+These separate sequential runs are checks-only diagnostics, not an interleaved
+or statistical serving benchmark. The controls time 1.54–1.59 s for generation
+plus approximately 0.10 s for prefill, excluding their admission check. Thus
+the table is useful for request-latency accounting, not a claim that the hybrid
+beats GPU-only execution. The first-request row also excludes tokenizer startup
+and assistant construction; it is not cold text-to-answer latency.
+
+The [native-sampler lifecycle check](../results/aie/gemma4_persistent_native_lifecycle_20261018.log)
+([provenance](../results/aie/gemma4_persistent_native_lifecycle_20261018.json))
+passes cancellation, later OK/Unicode/dictionary requests, control-token equality
+and NPU release between requests with one GPU worker. Focused tests cover
+missing sensor data, foreign/unknown GPU owners, the exact supervisor exception
+and interrupt cleanup. The entry point still checks contention before each
+request. Realtime generation acceleration, longer context, agent tools and
+sustained unattended operation remain unverified.
+
+### Bounded 2K-prompt Gemma assistant mode
+
+The original 512-token context mode remains the default, with a 256-token prompt
+bound. Explicit `context_tokens=2560` now accepts prompts up to 2,048 tokens;
+the existing 64-token output and depth-four draft bounds remain. The larger mode
+uses a matching precomputed rotary table. Preparation checked that every rotary
+array's first 512 positions is bitwise equal to the original table. These are
+CPU-prepared constants from the pinned reference configuration, not CPU model
+inference. Public exact-length prompts are generated through the pinned chat
+tokenizer by `tools/prepare_gemma4_context_prompts.py`.
+
+Named softmax schedules now cover multiple 512-element chunks. True-length
+patches update every chunk's valid input/output counts; unused chunks preserve
+accumulated statistics. The existing numerical kernels and tolerances are
+unchanged. The [2,560-capacity check](../results/aie/transformer_bf16_multichunk_lengths_20261018.log)
+([provenance](../results/aie/transformer_bf16_multichunk_lengths_20261018.json))
+matches exact-length attention at lengths 1, 17, 257, 511, 512, 513, 767, 768,
+1,023, 1,024, 2,047, 2,048 and 2,560, then shrinks back to 17. Invalid lengths
+remain rejected. Padding still requires zero key/value rows; inactive arena
+scores are not silently treated as active probabilities.
+
+The Gemma composer caps padded global capacity at 2,560 and sliding capacity at
+768. The pinned assistant reference uses an inclusive window with up to 513
+keys, so the sliding schedule fits that bound without padding it to global
+length. Score slots stay below the protected GELU table. The GPU bridge retains
+its original default context/batch settings and selects the larger allocation
+only explicitly. Request, tensor, frame and context bounds remain enforced.
+
+The [live 2,048-token comparison](../results/aie/gemma4_e2b_long_context_compare_20261018.log)
+([provenance](../results/aie/gemma4_e2b_long_context_compare_20261018.json))
+matches all body exports and 4,096 candidate logits against the wide exact-length
+control across five proposals. All eight generated tokens match the configured
+GPU control and all five proposals are accepted. The body builds retain the
+13,360-byte code, conservative stack and SRAM checks; this is not a model-quality
+or speed qualification across general long-context workloads.
+
+The [persistent suite](../results/aie/gemma4_persistent_long_context_20261018.log)
+([provenance](../results/aie/gemma4_persistent_long_context_20261018.json))
+passes eight-token generation at prompt lengths 511, 513, 1,024 and 2,048,
+cancellation on a later 513-token request, and a return to the 19-token OK prompt.
+All emitted tokens match their corresponding GPU controls; one model load serves
+all requests and the NPU is released between them. Two admission attempts are
+rejected before execution and retained in the report. The
+[default-mode regression](../results/aie/gemma4_context_default_regression_20261018.log)
+([provenance](../results/aie/gemma4_context_default_regression_20261018.json))
+passes the prior dictionary, OK, Unicode and cancellation checks after the bridge
+and schedule changes. The [tokenizer regression](../results/aie/gemma4_tokenizer_context_regression_20261018.json)
+also preserves the default public IDs, Unicode transport and bound recovery.
+
+The [first terminal attempt](../results/aie/gemma4_terminal_long_context_20261018.log)
+passed only 8,186 of the intended 10,191 prompt characters through its command-line
+launch path, omitting the final instruction. It is not a qualified 2,048-token
+frontend test. The frontend and PowerShell launcher now accept UTF-8 prompt files.
+The [file-input rerun](../results/aie/gemma4_terminal_long_file_20261018.log)
+([exact-input/control-prefix validation and provenance](../results/aie/gemma4_terminal_long_file_20261018.json))
+confirms the actual 2,048-token hash, matches the previously qualified eight-token
+control prefix and streams 16 tokens before closing the worker and exiting with
+an idle NPU witness. Compiler output is retained in local diagnostics instead of
+being printed between answer fragments. Optional one-shot reports are explicit,
+refuse replacement and may contain private text or paths.
+
+Use `tools/gemma4-chat.ps1 -ContextTokens 2560 -InputDepth 2 -VectorCopy`, with
+`-PromptFile` for large or multiline input. These checks establish bounded
+functionality, not sustained speed, broad task accuracy, agent tools or 24/7
+readiness. All runs remain checks-only with `timing_eligible=false`; earlier
+performance and unresolved numerical-quality caveats still apply.
+
+### Native Gemma workspace tools
+
+Checkout-only `ignition.experimental.HybridAgent` wraps reusable
+`npu/gemma4/agent.py` and `tooling.py`. A strict parser accepts only completed
+native tool handoffs. Tools provide bounded decimal arithmetic, UTF-8 text
+paging and directory listing beneath an explicit workspace. No write, command
+or network tools are registered. Defaults are four model turns, eight calls,
+64 output tokens per turn and the prepared 2,560-token context. Thinking is
+disabled; tool responses use JSON strings for the pinned chat template.
+Host tools and tokenization perform no CPU model inference.
+
+The [tokenizer check](../results/aie/gemma4_native_tool_tokenizer_20261018.json)
+preserves public prompt IDs, Unicode and rejection recovery, including native
+tool-response rendering. The [single-turn probe](../results/aie/gemma4_native_tool_turn_20261018.log)
+([provenance](../results/aie/gemma4_native_tool_turn_20261018.json)) generated
+a complete `calculate` handoff without executing a tool.
+
+The task fixture `brief.txt` contains 137 samples and retention factor 7;
+the prompt requests reading, calculating the product and answering only the
+result. The [first attempt](../results/aie/gemma4_native_agent_task_20261018.log)
+([failure report](../results/aie/gemma4_native_agent_task_20261018_failed.json))
+failed after reading: mapping-valued tool content broke the pinned template.
+String serialization fixed that mismatch. The [second attempt](../results/aie/gemma4_native_agent_task_20261018_v2.log)
+([blocked report](../results/aie/gemma4_native_agent_task_20261018_v2_blocked.json))
+stopped at the next admission check when foreign CPU inference began. Neither
+is counted as a pass; the foreign workload was left intact.
+
+The loop now waits cancellably for at most 60 seconds on busy admission,
+preserving tool results and repeating the full CPU/GPU/NPU check. It never
+stops a foreign process. The [third attempt](../results/aie/gemma4_native_agent_task_20261018_v3.log)
+([verified source/build report](../results/aie/gemma4_native_agent_task_20261018_v3.json))
+passed: `read_text`, `calculate`, then **959**. Prompt lengths were 303, 373
+and 409 tokens; output lengths were 17, 18 and 4. Accepted/proposed draft
+counts were 10/12, 12/12 and 2/2. Separate test-only GPU greedy replays matched
+every turn. One model load served the task; fixture and sources stayed
+unchanged, the worker closed and the final NPU witness was idle. Serving
+does not perform those control replays.
+
+The [terminal frontend](../results/aie/gemma4_native_agent_cli_20261018.log)
+([verified source/build report](../results/aie/gemma4_native_agent_cli_20261018.json))
+also read, calculated and answered **959**, exited zero and left an idle NPU.
+It exercised admission waiting between turns. The wrapper observed no foreign
+contention in its samples while runtime admission rejected an interval;
+this establishes retry behavior, not the absence of background activity.
+The focused tool/parser/lifecycle suite passes 34 tests, covering truncation,
+path rejection, arithmetic bounds, cancellation and contention retry.
+
+These are bounded functional checks, not broad agent accuracy, net hybrid
+acceleration, realtime performance or 24/7 readiness. Hardware runs remain
+checks-only with `timing_eligible=false`. Earlier numerical caveats still apply.
+
+### Batched host matrix packing
+
+`PreparedArena` now packs matrix payloads with batched NumPy reshapes and a
+single strided assignment into the copied packet template. Tile order, padding,
+precise/ordinary layouts and immutable template behavior are preserved. There
+is no CPU model arithmetic; this rearranges BF16 storage words. Device code,
+full input readback, output guards and numerical tolerances are unchanged.
+The source identity changes, so existing program manifests are not reused
+under the new host source revision.
+
+The [host probe](../results/aie/bf16_batched_matrix_packing_20261018.log)
+([verified source report](../results/aie/bf16_batched_matrix_packing_20261018.json))
+matches the frozen scalar tile loop for matrices of shapes 17x257, 256x512,
+512x256 and 4096x256 in both layouts, with noncontiguous inputs and unchanged
+source arrays. Each comparison also checks every measured result bitwise.
+Twenty focused packing tests cover raw BF16 patterns, padding boundaries,
+metadata preservation, immutable templates and shape/dtype rejection. Together
+with tool/runtime lifecycle checks, 54 tests pass.
+
+The host probe's timing samples are diagnostic only: preflight recorded an
+active foreign CPU embedding-validation process, while the short wrapper
+recorded no foreign work in its sampling interval. No speed claim follows
+from those samples. The model/device regression subsequently passed after the
+foreign process finished; it was not stopped. This does not qualify a new serving speed or
+resolve the hybrid's existing latency and numerical limitations.
+
+The request trace now records nonoverlapping `operation_ms` intervals for
+admission, GPU preparation, target-state conversion, NPU drafting, GPU
+verification, rollback and rendering. Timing contexts record exceptions too
+and do not span client yields. The profiler reports request time minus these
+intervals as `unattributed_ms`; this remainder includes NPU context lifetime
+overheads, other Python bookkeeping and client scheduling. It also accepts
+explicit pinned int32 prompt files and the larger context mode, registering
+the prompt file's identity. A second embedding-validation process began after
+the prior job ended. The hardware profile waited for that process to finish
+and repeated preflight before starting; neither foreign job was stopped.
+
+The [depth-two profile](../results/aie/gemma4_persistent_batched_packing_20261018.log)
+([verified source/build report](../results/aie/gemma4_persistent_batched_packing_20261018.json))
+passes three persistent 32-token requests. The [depth-one follow-up](../results/aie/gemma4_persistent_batched_depth1_20261018.log)
+([verified source/build report](../results/aie/gemma4_persistent_batched_depth1_20261018.json))
+also passes all three. Every request matches a separate test-only GPU greedy
+control, retains one model load and releases the NPU between requests. Worker
+exit, source/artifact identities and terminal idle witnesses pass. Both wrappers
+observe no foreign contention in their samples and remain checks-only with
+`timing_eligible=false`; small desktop GPU activity is recorded at admission.
+
+| Diagnostic, warm requests only | Draft depth 2 | Draft depth 1 |
+|---|---:|---:|
+| Accepted / proposed, each request | 12 / 38 | 11 / 21 |
+| Complete request including admission | 4.392–4.459 s | 3.826–3.840 s |
+| First visible text including admission | 0.908–0.911 s | 0.900–0.909 s |
+| Draft operations | 1.563–1.643 s | 1.028–1.037 s |
+| GPU verification operations | 1.743–1.746 s | 1.715–1.716 s |
+| Separate GPU-only generation loop | 1.433–1.494 s | 1.455–1.535 s |
+
+The control-loop row excludes its approximately 0.104–0.107 s prefill, admission
+and request lifecycle, so it is not a matching end-to-end service measurement.
+Nevertheless, GPU verification alone already costs more than that control loop
+on this prompt. Reducing draft depth saves speculative work here but does not
+produce net hybrid acceleration. These sequential diagnostic samples do not
+establish a generally optimal depth; defaults and numerical gates are unchanged.
+First requests are excluded from the table: depth two takes 14.234 s including
+new image compilation, while depth one takes 6.498 s with those images cached
+but a fresh GPU model worker. Neither includes tokenizer/assistant construction.
+
+Each request creates two bounded contexts, without eviction. The new body/head
+PDIs differ bytewise although their interface/topology hashes agree, so exact
+program sharing correctly retains separate contexts. Earlier single-context
+results are not isolated packing comparisons; no PDI equivalence is inferred
+from equal code size or interface hashes. Device code remains 13,360 bytes.
+
+### GPU target decode and idle gaps
+
+A separately built `ggml_gpu_target_timed.exe` adds cumulative completed-decode
+diagnostics through operation 8. The original serving executable is preserved
+and unchanged (SHA256 `d2d3b60a32d7b8a8ee4ce534ade2515de43f046f30bbb09f58f14d532264dfba`).
+The MSVC `/W4` build emits no warnings. Model response frames and model settings
+are unchanged: all model/embedding arithmetic on ROCm, FP32 target KV, flash
+attention off and fusion disabled. `Target.timing()` is only used by diagnostics;
+no serving executable or policy is promoted by this experiment.
+
+The worker records host wall time in `llama_process` plus synchronization,
+nested capture callbacks, finite-logit checking/argmax, tensor serialization
+and pipe sending. Capture callbacks include possible GPU waiting, so their
+time is not independent of model execution and must not be added to it.
+The bounded timing payload validates schema, counters and finite durations.
+Ten protocol tests plus prior packing/tool/lifecycle checks pass 64 tests.
+Serving admission is now also callable without loading model assets through
+`npu.gemma4.runtime.admit_hardware`; its policy is unchanged.
+
+The [first binary comparison](../results/aie/gemma4_target_decode_profile_20261018.log)
+([partial report](../results/aie/gemma4_target_decode_profile_20261018_partial.json))
+passed its first candidate sweep before a later admission check rejected use.
+That failed run is preserved and is not a complete pass. The
+[completed rerun](../results/aie/gemma4_target_decode_profile_20261018_v2.log)
+([verified binary/source report](../results/aie/gemma4_target_decode_profile_20261018_v2.json))
+checks two sweeps at batch sizes 1, 2, 3 and 5. Each sweep feeds the same 32
+checked public tokens. Predictions and every captured FP32 state byte match
+the preserved executable for the corresponding batch shape. These comparisons
+do not require state bytes to match across different batch shapes. Both workers
+close, sources/binaries remain unchanged and the final NPU witness is idle.
+
+For the timed worker, diagnostic 32-token GPU loops take 1.483–1.498 s at batch
+one, 0.701–0.726 s at batch two, 0.564–0.579 s at batch three and 0.507–0.544 s
+at batch five. A final short batch is included. Batch-three callback intervals
+total 7.3–7.9 ms; finite-logit/argmax work about 12.8–13.0 ms, serialization
+0.11–0.14 ms and pipe sending 0.82–0.90 ms. Small state/output handling costs
+do not account for the earlier hybrid verification time. These are fixed-input
+diagnostics including client state hashing, not sustained serving throughput.
+
+The [initial coexistence check](../results/aie/gemma4_target_npu_coexistence_20261018.log)
+([verified source/build report](../results/aie/gemma4_target_npu_coexistence_20261018.json))
+then replays identical batch-three GPU inputs before, between and after NPU
+conditions. NPU-resident mode primes the BF16 body/head once and retains its
+contexts without dispatching more work during the GPU loop. Interleaved mode
+runs two actual BF16 draft steps before each GPU decode; proposals are discarded
+and fixed checked tokens still drive the GPU. All GPU state snapshots match
+bitwise. This is a coexistence test, not an end-to-end speculative speed result.
+
+The [follow-up with idle control](../results/aie/gemma4_target_npu_coexistence_delay_20261018.log)
+([verified source/build report](../results/aie/gemma4_target_npu_coexistence_delay_20261018.json))
+adds a 40 ms host sleep before each GPU decode, with no NPU work or contexts in
+that condition. Both repeats retain identical GPU state and predictions:
+
+| Condition, 32 fixed GPU tokens in 11 calls | GPU decode calls only | Full diagnostic loop |
+|---|---:|---:|
+| GPU controls before/between/after NPU conditions | 0.548–0.583 s | 0.550–0.584 s |
+| NPU resident, one priming step outside the loop | 0.602–0.611 s | 0.604–0.613 s |
+| Two NPU steps before each GPU call | 1.005–1.006 s | 2.052–2.060 s |
+| No NPU, 40 ms sleep before each GPU call | 1.007–1.020 s | 1.453–1.465 s |
+
+The decode-only column excludes sleeps and NPU drafting. Ordinary idle gaps
+therefore reproduce the increased decode time without NPU execution. This
+supports investigating request scheduling and idle/resume behavior; it does
+not establish clock scaling, power sharing, thermal throttling or a driver
+mechanism. No power policy or system setting was changed. Resident contexts
+alone do not reproduce the full increase in these checks.
+
+Every NPU condition releases its contexts, worker closure and source identities
+pass, and final NPU witnesses are idle. Wrappers report no foreign contention
+in their sampled monitoring; small desktop GPU activity remains recorded.
+All runs are checks-only and `timing_eligible=false`. These diagnostics do not
+qualify net hybrid acceleration, general task quality or 24/7 operation.
+
+#### Rejected idle-gap mitigations
+
+The [extra-embedding probe](../results/aie/gemma4_target_npu_coexistence_primed_20261018.log)
+([verified report](../results/aie/gemma4_target_npu_coexistence_primed_20261018.json))
+adds one synchronous GPU embedding lookup immediately before each verification
+call, separately records its cost and includes it in the complete loop. The
+40 ms idle condition still takes 0.995–1.000 s in GPU decode, compared with
+1.000–1.014 s without priming. Priming costs another 18.8–30.7 ms across eleven
+calls. With interleaved NPU drafting, decode remains 0.986–1.000 s. This does
+not eliminate the penalty, so no redundant lookup was added to serving.
+Every target state still matches bitwise. The wrapper observes a short foreign
+NPU context during startup; admission waits through two rejections before use.
+This run remains functional/diagnostic evidence, not a timing qualification.
+
+The pinned llama.cpp source exposes the process-local
+`GGML_CUDA_DISABLE_GRAPHS` control in `ggml-cuda/common.cuh`. The
+[graph-enabled control](../results/aie/gemma4_target_npu_graphs_default_20261018.log)
+([report](../results/aie/gemma4_target_npu_graphs_default_20261018.json)) records
+graph warmup/reuse debug witnesses from the loaded backend and preserves all
+states against the earlier idle-control report. The
+[graph-off experiment](../results/aie/gemma4_target_npu_graphs_off_20261018.log)
+([report](../results/aie/gemma4_target_npu_graphs_off_20261018.json)) sets the
+environment variable only in its child process, records that setting and no
+graph warmup/reuse witness, and again preserves every state and reference token
+against the graph-enabled control.
+
+| Diagnostic GPU decode time, excluding idle/draft work | Graph-enabled control | Graph-off request |
+|---|---:|---:|
+| 40 ms idle gaps, eleven GPU calls | 1.013–1.015 s | 1.009–1.014 s |
+| Two NPU steps between calls | 0.988–1.006 s | 0.987–0.995 s |
+
+Graph disabling does not remove the penalty in this workload. The graph-off run
+records three admission retries, while the wrapper observes no foreign activity
+in its longer sampling intervals. Both complete, close the worker, release NPU
+contexts and retain idle terminal witnesses. Graph debug logging is enabled in
+both; all runs remain checks-only with `timing_eligible=false`. No serving
+executable, graph default, numerical gate or system power policy is changed.
+The reusable probe retains both test suites and environment controls so these
+negative results can be repeated without enabling either mitigation in serving.
+
+### Bounded GPU activity during draft gaps
+
+A process-local D3D11 helper tests maintaining a small amount of GPU activity
+during the idle gap. It does not change system power settings, model math,
+BF16 rounding or numerical gates. Its shader runs one group of 32 threads with
+a finite integer loop. The host queues at most one dispatch at a time, bounds
+completion waiting and checks every output word against an integer reference.
+Windows exposed two matching PCI adapter entries, so the
+[first smoke check](../results/aie/gemma4_gpu_activity_qualification_20261018.log)
+([failure identity record](../results/aie/gemma4_gpu_activity_qualification_20261018_failed.json))
+refused use before device creation. The corrected helper uses the loaded HIP
+runtime's Windows LUID for device zero, also requiring Radeon 780M hardware
+vendor/device IDs. AMD documents this [graphics-adapter matching API](https://rocm.docs.amd.com/projects/HIP/en/develop/reference/hip_runtime_api/modules/initialization_and_version.html).
+No adapter is chosen by name alone.
+
+The [corrected smoke check](../results/aie/gemma4_gpu_activity_qualification_20261018_v2.log)
+([verified report](../results/aie/gemma4_gpu_activity_qualification_20261018_v2.json))
+passes 1/40/100 ms requests, bound rejection, exact GPU results and exit. The
+[extended check](../results/aie/gemma4_gpu_activity_qualification_20261018_v3.log)
+([report](../results/aie/gemma4_gpu_activity_qualification_20261018_v3.json)) adds
+an early stop and cancellation with process closure. Requested windows are
+limited to 100 ms; actual elapsed time includes completion of the last bounded
+dispatch and reference checking. MSVC `/W4` and HLSL warnings-as-errors builds
+pass without warnings. The original ambiguous binary/source and the subsequent
+qualified helper revision are preserved locally as controls.
+
+The [fixed-input coexistence comparison](../results/aie/gemma4_target_npu_coexistence_activity100_20261018.log)
+([verified source/build report](../results/aie/gemma4_target_npu_coexistence_activity100_20261018.json))
+uses 100 ms activity windows beginning before the draft or sleep gap, then joins
+after GPU verification. Its two sweeps retain every captured FP32 state byte
+and reference token from the earlier no-activity report. Whole-loop times include
+helper IPC and joining, not just the faster GPU calls:
+
+| Diagnostic, 32 fixed tokens in eleven batch-three calls | Without activity | With activity |
+|---|---:|---:|
+| GPU decode calls after 40 ms sleeps | 1.011–1.015 s | 0.544–0.568 s |
+| Full sleep-control loop | 1.457–1.460 s | 1.124–1.127 s |
+| GPU decode calls with interleaved NPU steps | 0.987–1.008 s | 0.575–0.578 s |
+| Full NPU-interleaved loop | 2.017–2.267 s | 1.613–1.625 s |
+
+Every activity window verifies its integer outputs, both workers close and the
+NPU is idle on exit. This demonstrates a latency mitigation in this bounded
+comparison; it does not establish clock/power causality or energy savings.
+The [stop-before-verification attempt](../results/aie/gemma4_target_npu_coexistence_activity_stop_20261018.log)
+([blocked report](../results/aie/gemma4_target_npu_coexistence_activity_stop_20261018_blocked.json))
+waits until its admission deadline on a foreign CPU embedding-validation job.
+No coexistence cases complete in that attempt; the foreign job is untouched.
+
+The reusable runtime and both Ignition experimental wrappers now accept an
+explicit `gpu_activity_helper=PATH`. Default behavior remains off. Setup is lazy
+after the first visible bonus token. Each draft/verification round requests one
+bounded window, then joins it before yielding again, executing a tool or exiting
+through cancellation/error cleanup. The helper process persists idle between
+requests and closes with the assistant. Only its live owned handle is excluded
+from CPU/GPU contention checks; foreign jobs and unknown telemetry still block.
+Sources, helper binary, HIP and shader compiler identities are registered.
+
+The [first integrated profile](../results/aie/gemma4_persistent_gpu_activity_20261018.log)
+is preliminary only: two logged controls match, but a later reference admission
+check rejects use and no final report is produced. The profiler now waits
+boundedly for reference admission and saves partial request reports before
+replay. The [completed profile](../results/aie/gemma4_persistent_gpu_activity_20261018_v2.log)
+([verified report](../results/aie/gemma4_persistent_gpu_activity_20261018_v2.json))
+passes three 32-token requests with separate GPU control equality, one model
+load, one reused helper process, idle activity and NPU release between requests,
+and closure of both workers. Two initial admission rejections are retained.
+Warm request diagnostics are **3.688–3.724 s**, first text **0.898–0.909 s**,
+draft operations **1.635–1.653 s**, GPU verification **0.972–1.002 s**.
+The earlier no-activity depth-two profile records 4.392–4.459 s requests and
+1.743–1.746 s verification. These are sequential diagnostic observations, not
+a qualified isolated speedup or an interleaved performance sitting. The new
+separate GPU controls still take 1.466–1.492 s for their generation loops,
+excluding prefill/admission/lifecycle, so net hybrid acceleration is unproven.
+
+The [active-cancellation qualification](../results/aie/gemma4_gpu_activity_lifecycle_20261018.log)
+([report](../results/aie/gemma4_gpu_activity_lifecycle_20261018.json)) completes a
+request, cancels after an observer confirms an activity window is active, then
+resumes another request in the same model/helper workers. Complete requests
+match separate GPU controls; cancellation releases NPU contexts and leaves
+the helper idle, and both workers close at the end. The focused protocol,
+ownership, packing and lifecycle suite passes 86 tests.
+
+The actual [native agent frontend](../results/aie/gemma4_native_agent_cli_activity_20261018.log)
+([validated report](../results/aie/gemma4_native_agent_cli_activity_20261018.json))
+reads the fixture, calculates and answers **959** with the option enabled.
+Every model turn records checked activity windows, idle cleanup and EOS.
+`tools/qualify_gemma4_agent_report.py` confirms identical prompt hashes, tool
+results and output token arrays against the prior GPU-qualified three-turn
+reference, with unchanged model/runtime asset identities. This reuses that
+registered reference rather than running new GPU replays. Frontend and SDK
+wrapper source identities are now included in its optional local report.
+
+Python frontends expose `--gpu-activity-helper PATH`, with
+`-GpuActivityHelper PATH` in the PowerShell launchers. The study retains the
+helper, build wrapper, client and qualification tools. All runs remain
+checks-only with `timing_eligible=false`; desktop activity, admission rejections
+and observed foreign work are retained. No power measurement, general task
+quality, net acceleration or 24/7 qualification follows. The option adds GPU
+work and remains explicitly experimental and disabled by default.
+
+### Stopping helper activity before verification and checking package counters
+
+The preceding integrated records describe the initial implementation, which
+joined after verification. The current runtime stops and joins after drafting,
+before calling target GPU verification, and rejects verification if the helper
+still reports active. A fake-stream lifecycle test checks start, draft, join,
+verify ordering; the focused suite passes **87 tests**. The former runtime source
+is preserved locally as `runtime-activity-after-verify-20261018.py` beside the
+raw study records.
+
+The completed [early-stop fixed-input comparison](../results/aie/gemma4_target_npu_coexistence_activity_stop_20261018_v2.log)
+([verified report](../results/aie/gemma4_target_npu_coexistence_activity_stop_20261018_v2.json))
+retains all captured FP32 states and 32 reference tokens across two sweeps.
+Sleep-control loops take **1.029–1.030 s**, with **0.559–0.560 s** in GPU calls;
+NPU-interleaved loops take **1.655–1.684 s**, with **0.604–0.611 s** in GPU calls.
+Sleep windows finish around 42 ms and warm NPU windows around 76–78 ms,
+instead of the prior approximately 102 ms windows. Total dispatch counts are
+741–755 for sleep controls and 1,308–1,329 for NPU-interleaved cases. Ending
+helper work earlier trades some NPU-loop latency against less helper work;
+the prior NPU loops were 1.613–1.625 s. It is not uniformly faster.
+
+The [first integrated early-stop attempt](../results/aie/gemma4_persistent_gpu_activity_early_stop_20261018.log)
+([blocked report](../results/aie/gemma4_persistent_gpu_activity_early_stop_20261018_blocked.json))
+admits zero requests before its bounded deadline because a foreign CPU
+embedding job is active. That job is untouched. After it exits and admission
+passes, the [completed request profile](../results/aie/gemma4_persistent_gpu_activity_early_stop_20261018_v2.log)
+([verified report](../results/aie/gemma4_persistent_gpu_activity_early_stop_20261018_v2.json))
+passes all three separate 32-token GPU controls. Warm requests take
+**3.716–3.804 s**, first text **0.860–0.919 s**, target verification
+**1.008–1.028 s**, and helper joining **0.038–0.040 s**. The model loads once;
+the helper persists idle between requests, NPU contexts release between
+requests, and both workers close. These are diagnostic observations, not a
+qualified isolated performance sitting or net GPU-only acceleration.
+
+The current [cancellation and recovery check](../results/aie/gemma4_gpu_activity_lifecycle_early_stop_20261018.log)
+([verified report](../results/aie/gemma4_gpu_activity_lifecycle_early_stop_20261018.json))
+completes eight tokens, cancels after observing active helper work, and resumes
+sixteen tokens in the same workers. Completed requests match separate GPU
+controls; cancellation releases the NPU and joins activity, and both workers
+close at the end. The earlier native-agent report remains evidence for the
+initial implementation; this revision has request and cancellation controls.
+
+Package-power instrumentation reuses [power_probe.py](../tools/power_probe.py)
+and the existing package-only protocol in [llm_energy.py](../tools/llm_energy.py).
+The [availability tool](../tools/qualify_gemma4_energy_counters.py) reads the
+previously calibrated milliwatt `Power` counters, not the unresolved `Energy`
+counter. The [first attempt](../results/aie/gemma4_energy_counter_availability_20261018.log)
+([report](../results/aie/gemma4_energy_counter_availability_20261018_failed.json))
+and [second attempt](../results/aie/gemma4_energy_counter_availability_20261018_v2.log)
+([report with retained numeric rows](../results/aie/gemma4_energy_counter_availability_20261018_v2_failed.json))
+fail the unchanged minimum-two-valid-rows gate: two requested samples yield
+only one usable row per counter. Requesting three samples makes the
+[third availability check](../results/aie/gemma4_energy_counter_availability_20261018_v3.log)
+([verified report](../results/aie/gemma4_energy_counter_availability_20261018_v3.json))
+pass for the package and all eight core counters. This establishes availability
+only: `energy_eligible=false` and `timing_eligible=false`. Package-counter
+completeness remains unshown, DRAM is outside its scope, and this is not wall
+power. No joule comparison or helper energy benefit has been measured.
+
+### Frozen E2B package-energy comparison awaiting approval
+
+The [energy harness](../tools/profile_gemma4_energy.py) and
+[archived frozen protocol](../results/aie/gemma4_package_energy_prereg_20261018.json)
+are prepared; no energy sitting has run. Locked decision 10 in
+[DECISIONS](DECISIONS.md#locked-decisions-do-not-reopen) requires the user's
+approval of the energy method before a sitting. The current request for
+approval covers this new Gemma 4 workload explicitly, rather than treating
+the earlier Gemma 3 experiment as permission for it.
+
+The order is GPU-only, hybrid, hybrid with activity, then the reverse. Each
+arm constructs one persistent assistant, obtains its own GPU control and
+warms its request path, waits ten seconds, measures sixty seconds of loaded
+idle, then runs complete repeated requests for at least seventy seconds.
+Every accepted request includes admission, full prompt prefill, decoding,
+rendering and request cleanup. Constructor, warm-up and sampler startup are
+excluded. Model loading and worker teardown happen once per arm. All arms
+use the frozen public dictionary prompt, 32 accepted tokens, depth two,
+input depth two, vector copies and context 512. The helper is enabled only
+for its own arm and stops before verification.
+
+Typeperf samples package and all eight core Power counters at 1 Hz using
+the existing `llm_energy.py` sampler and CSV reader. Raw CSV files remain
+beside the output, with timestamps and hashes. Idle edges are trimmed;
+active edges discard complete requests until the interior span excludes
+at least one second at each end. Only whole one-second power intervals
+inside that span count, and only complete interior requests contribute
+accepted tokens. Mean package watts divided by accepted tokens per second
+gives joules per token, both including loaded idle and above the arm's own
+loaded-idle baseline. No per-component NPU power is inferred.
+
+The frozen gates require at least fifty valid rows, at least 90% coverage,
+no power gap above 2.5 seconds, finite nonnegative core/CPU samples and
+positive package samples. Loaded-idle CPU must be at most 12%, package
+standard deviation at most 2.5 W, and every idle mean within 2 W of the
+sitting's median. Both energy quantities must agree within 10% between
+mirrored repeats. Negative or zero above-idle deltas fail. Every request
+must match its separate 32-token GPU control; NPU cleanup, helper integer
+validation and idle joining remain mandatory. Independent CPU/GPU/NPU
+witnesses run through the measurement phases; foreign work, unknown
+telemetry, source changes or clock jumps stop the run and preserve partial
+evidence. The study supervisor additionally bounds the owned process tree.
+
+The hardware-free accounting and contention checks pass **14 tests**;
+the combined focused suite passes **101 tests**. They exercise exclusion
+of a straddling power interval, complete-request energy arithmetic,
+sparse/gapped/invalid samples, baseline drift, repeat disagreement and
+foreign CPU/GPU/NPU or unknown telemetry rejection. These are harness
+checks, not measured energy savings. The frozen protocol must be loaded
+with `--prereg PATH`; a source or protocol mismatch is rejected before
+hardware work. Existing reports and raw-sample directories are refused.
+
+### Owned prefix binding avoids repeated KV packing
+
+Inspection of `Draft.step` shows that the second proposal in a chain reapplies
+the same matrix/rotary/length patches as its first proposal. Only the token and
+hidden upload changed. The separate [candidate adapter](../tools/gemma4_prefix_candidate.py)
+and [profiler](../tools/profile_gemma4_prefix_cache.py) test reuse without editing
+the serving runtime, `PreparedArena`, kernels, assets, SDK or frozen energy
+protocol. The latter's source/model/helper pins were revalidated afterward;
+energy testing still awaits approval.
+
+The generic [content cache](../kernels/transformer_bf16/prefix_cache.py) keeps one
+immutable patched template, hashes caller-owned arrays on every call, and
+restores omitted uploads to fresh-base semantics. The
+[first comparison](../results/aie/gemma4_prefix_cache_20261018.log)
+([verified report](../results/aie/gemma4_prefix_cache_20261018.json)) preserves all
+76 NPU input/output hashes but is slower: candidate requests take
+**3.950–4.030 s**, against **3.676–3.808 s** controls. Repeated hashing of aliased
+KV arrays and an extra full-buffer copy outweighed saved packing. The
+[second comparison](../results/aie/gemma4_prefix_cache_20261018_v2.log)
+([report](../results/aie/gemma4_prefix_cache_20261018_v2.json)) hashes each distinct
+view once per call and retains the already-owned materialized buffer without
+another copy. All 76 input/output hashes still match. Body packet packing falls
+from **213.98–223.34 ms** to **156.75–157.27 ms**, but key construction adds
+**36.68–36.90 ms**. Full requests overlap: **3.768–3.838 s** candidate versus
+**3.696–3.843 s** control. Neither content-cache revision earns adoption.
+
+The first audit used `commands` as a count in hash-only records, colliding with
+the archive reader's transport-record discriminator. The
+[normalizer](../tools/normalize_gemma4_prefix_report.py) mechanically renames that
+field to `packet_count` in a derived report, pinning the untouched raw report
+and normalizer hashes. The archive then verifies the actual transport records
+and build/source artifacts. Later profiler revisions use the distinct field
+directly; no transport validation was relaxed.
+
+The [owned binding](../kernels/transformer_bf16/prefix_binding.py) candidate
+materializes prefix patches through the original prepared execution path once,
+then transfers its owned packet array to a thread-bound upload owner. Later
+proposals replace every declared upload payload in that buffer. Matrix, rotary
+and length updates require a fresh binding; overlapping upload/prefix roles,
+missing or malformed uploads, another thread and reuse after failed execution
+are rejected. The array is read-only during dispatch. Complete input readback,
+changed-page verification, output poisoning and all numerical kernels remain.
+
+The [binding comparison](../results/aie/gemma4_prefix_binding_20261018.log)
+([verified report](../results/aie/gemma4_prefix_binding_20261018.json)) first
+compares complete input and output hashes for **76 NPU dispatches** in separate
+control/candidate requests. Hashes match exactly. Hashing is then disabled for
+four continuously consumed 32-token requests in control/candidate/candidate/control
+order, with the optional GPU helper enabled identically in all arms:
+
+| Diagnostic phase | Control | Owned binding |
+|---|---:|---:|
+| Body packet packing | 219.87–220.48 ms | 106.99–109.27 ms |
+| In-place upload patching | included in packing | 0.210–0.218 ms |
+| Body NPU dispatch | 460.77–461.02 ms | 459.79–460.59 ms |
+| Full body input verification | 287.72–291.52 ms | 282.58–285.82 ms |
+| Complete drafting operations | 1.653–1.664 s | 1.516–1.523 s |
+| Accepted complete request | 3.867–3.891 s | 3.712–3.737 s |
+
+Each candidate request binds nineteen prefixes and performs nineteen later
+upload-only steps. All accepted requests match the separate 32-token GPU
+control. The model loads once, helpers join before verification, NPU contexts
+release between requests and both workers close. The supervisor observes no
+foreign CPU peers or NPU ownership violations and an idle NPU exit. The
+checks-only run retains one rejected admission for an invalid GPU counter
+instance, followed by a successful retry. Earlier strict preflights observed
+about 1.3% Windows Terminal GPU activity and started no binding job; a fresh
+runtime-policy preflight before the completed run was clear.
+
+The focused suite passes **110 tests**, including nine cache/binding checks
+against complete independently prepared packet arrays, caller-data mutation,
+omitted uploads, invalid patches, transport failure and thread ownership.
+These observations show a host-cost reduction for this bounded candidate.
+They do not qualify isolated performance, net acceleration over GPU-only,
+energy savings, general task quality or unattended operation. Default serving
+and the frozen energy comparison remain on the registered control.
+
+### Prefix binding through Ignition and the terminal frontend
+
+The separate checkout-only
+[`PrefixBoundAssistant`](../Ignition/src/ignition/experimental/prefix_bound.py)
+wraps the same GPU/NPU backend and installs the qualified host candidate. Its
+implementation imports must resolve inside the selected study checkout, and
+its source map includes the adapter, binding/cache modules and prepared arena.
+It defaults to input depth two and vector copies and rejects other values for
+those two settings. The original `HybridAssistant`, runtime, kernels, model
+files and frozen energy protocol remain the control.
+
+The [chat frontend](../tools/gemma4_chat.py) now accepts `--prefix-binding`
+with `--input-depth 2 --vector-copy`; the
+[PowerShell launcher](../tools/gemma4-chat.ps1) exposes `-PrefixBinding`.
+The SDK's [contract and command](../Ignition/docs/HYBRID-ASSISTANT.md) explain
+the opt-in interface. Neither stable vision exports nor release badges change.
+
+The [first binding lifecycle check](../results/aie/gemma4_prefix_binding_lifecycle_20261018.log)
+([report](../results/aie/gemma4_prefix_binding_lifecycle_20261018.json)) completes
+eight tokens, cancels a longer request while the bound-upload execution and
+helper are both active, then resumes sixteen tokens. The
+[SDK lifecycle check](../results/aie/gemma4_prefix_binding_sdk_lifecycle_20261018.log)
+([report](../results/aie/gemma4_prefix_binding_sdk_lifecycle_20261018.json)) repeats
+that contract through the new wrapper. Both completed requests match separate
+GPU controls, cancellation releases NPU contexts and joins the helper, one
+model/helper pair remains alive for recovery, and both workers close afterward.
+The observer waits for entry into a real bound upload rather than cancelling
+before the optimization is exercised.
+
+The first extended profiler checks pass at
+[511 tokens](../results/aie/gemma4_prefix_binding_context511_20261018.log)
+([report](../results/aie/gemma4_prefix_binding_context511_20261018.json)) and
+[513 tokens](../results/aie/gemma4_prefix_binding_context513_20261018.log)
+([report](../results/aie/gemma4_prefix_binding_context513_20261018.json)). The
+[initial 1,024-token attempt](../results/aie/gemma4_prefix_binding_context1024_20261018.log)
+([partial report](../results/aie/gemma4_prefix_binding_context1024_20261018_blocked.json))
+is rejected at the initial model admission and completes no requests. Its
+generic error does not retain the precise blocker; no cause is inferred from
+that report. The profiler now retains initial rejection details and waits up to
+sixty seconds under the unchanged policy.
+
+The completed SDK comparisons all use context 2560 and eight output tokens.
+Each first audits complete NPU input/output hashes in control and candidate
+requests, then observes control/candidate/candidate/control request latencies:
+
+| Prompt length | Exact audited dispatches | Complete request, control | Complete request, bound SDK |
+|---|---:|---:|---:|
+| [511](../results/aie/gemma4_prefix_binding_sdk_context511_20261018.json) ([log](../results/aie/gemma4_prefix_binding_sdk_context511_20261018.log)) | 14 | 2.542–2.559 s | 2.449–2.505 s |
+| [513](../results/aie/gemma4_prefix_binding_sdk_context513_20261018.json) ([log](../results/aie/gemma4_prefix_binding_sdk_context513_20261018.log)) | 10 | 2.384–2.434 s | 2.311–2.377 s |
+| [1,024](../results/aie/gemma4_prefix_binding_sdk_context1024_20261018.json) ([log](../results/aie/gemma4_prefix_binding_sdk_context1024_20261018.log)) | 10 | 3.063–3.231 s | 3.070–3.136 s |
+| [2,048](../results/aie/gemma4_prefix_binding_sdk_context2048_20261018.json) ([log](../results/aie/gemma4_prefix_binding_sdk_context2048_20261018.log)) | 10 | 5.202–5.209 s | 5.101–5.196 s |
+
+All **44 audited dispatches** match completely, and all accepted requests
+match their separate eight-token GPU controls. Each comparison retains one
+model worker, releases the NPU between requests and closes both workers at the
+end. The 513-token run retains two admission rejections and the 2,048-token run
+one; Windows Terminal GPU activity above 2% blocks admission. Supervisor logs
+observe no foreign CPU peers or NPU contexts during these completed runs.
+They remain checks-only and timing-ineligible; the 1,024-token full-request
+intervals overlap. Packing savings do not imply uniform request acceleration.
+At 2,048 tokens the candidate still spends **3.224–3.254 s** prefilling the
+complete prompt, making prompt processing the next significant bottleneck.
+
+The actual [2,048-token terminal invocation](../results/aie/gemma4_prefix_binding_chat_2048_20261018.log)
+([validated frontend report](../results/aie/gemma4_prefix_binding_chat_2048_20261018.json))
+uses the local pinned Hugging Face tokenizer, emits eight tokens matching the
+registered GPU control, releases the model worker and leaves the NPU idle.
+This first short invocation crosses two newly prepared capacities and records
+no upload-only bound step; the wrapper's active binding is instead established
+by the SDK packet/lifecycle checks above. A separate 32-token frontend check is
+kept distinct rather than claiming that the short invocation exercised it.
+
+The [first 32-token frontend attempt](../results/aie/gemma4_prefix_binding_chat_dictionary32_20261018.log)
+is rejected after a foreign NPU embedding process starts between preflight and
+request admission. No model request is accepted. The
+[second attempt](../results/aie/gemma4_prefix_binding_chat_dictionary32_20261018_v2.log)
+does not launch the child because a later foreign embedding process already
+owns NPU contexts. Both attempts preserve the foreign work. These logs are
+failed admissions, not functional or performance passes.
+
+After the foreign process exits and fresh admission passes, the
+[completed 32-token terminal run](../results/aie/gemma4_prefix_binding_chat_dictionary32_20261018_v3.log)
+([validated report](../results/aie/gemma4_prefix_binding_chat_dictionary32_20261018_v3.json))
+matches all **32 separately generated GPU control tokens** on the exact pinned
+25-token dictionary prompt. It records eighteen bound prefixes and eighteen
+upload-only steps, checked helper windows and idle cleanup, NPU release and
+worker closure. The frontend verifier accepts the registered profiler's full
+GPU control sequence only when its qualification flag, request tokens, prompt
+identity and all baseline runtime/model asset identities match. Its earlier
+flat-reference checks are unchanged. This exercises the opt-in frontend with
+active binding rather than relying on constructor selection alone.
+
+The focused suite still passes **110 tests**. Python syntax/import gates,
+PowerShell parsing, SDK links, the 248-word README and release-badge checks
+pass. The package-energy sitting remains unrun pending the requested approval.
+No 24/7 soak, general agent-quality or energy-efficiency claim follows.
+
+### GPU prompt reuse passes short cases but fails the long-prompt gate
+
+Long requests still re-evaluate the entire prompt on the GPU. The separate
+[worker candidate](../tools/ggml_gpu_target/worker_prefix.cpp),
+[FP32 KV history](../tools/ggml_gpu_target/prefix_history.hpp) and
+[client](../tools/ggml_gpu_target/prefix_client.py) explore reusing an unchanged
+prefix. They do not replace the registered worker or alter the assistant/SDK.
+Operation 9 returns complete captured KV state plus the last hidden/prediction
+for the NPU drafter. The host copies GPU-produced bits and compares token IDs;
+it performs no transformer arithmetic. GPU memory min/max positions must show
+that the cached prefix is retained. Ordinary reset and suffix rollback also
+reset/trim the host history. One saved prompt response permits exact identical
+prompt reuse without another GPU evaluation.
+
+The [qualifier](../tools/qualify_gemma4_prefix_worker.py) runs an independent
+full-prefill control, then the candidate, on identical, extended, changed-tail,
+shortened, restored and unrelated prompts. Every prepare and two teacher-forced
+continuation states compare all FP32 bits, shapes, positions and greedy tokens.
+Max-absolute errors and BF16 differences are diagnostics only. A matching
+greedy token cannot override a state mismatch. Sources, both workers, DLLs,
+headers, fixtures and the host-history test binary are pinned.
+
+The [first attempt](../results/aie/gemma4_gpu_prefix_worker_20261018.log)
+([report](../results/aie/gemma4_gpu_prefix_worker_20261018.json)) fails four of
+eight short-prompt prepares despite matching their tested greedy predictions.
+New suffix states differ substantially after conversion to BF16 as well. The
+[nine-row padding attempt](../results/aie/gemma4_gpu_prefix_worker_pad9_20261018.log)
+([report](../results/aie/gemma4_gpu_prefix_worker_pad9_20261018.json)) fixes the
+shortened/restored cases, but extensions still fail. That intermediate build
+emits MSVC's `getenv` deprecation warning. The final implementation uses the
+bounded Windows environment API and compiles with warnings as errors.
+
+The [prefill-origin correction](../results/aie/gemma4_gpu_prefix_worker_origin_20261018.log)
+([report](../results/aie/gemma4_gpu_prefix_worker_origin_20261018.json)) limits
+reuse to the previous prefill span. Tokens generated through decode are
+re-evaluated with the new suffix. With nine evaluated rows where needed,
+**all eight short cases, sixteen continuation states and the initial state
+match exactly** against the original control. The base prompt is 25 tokens.
+Identical-prompt RPCs take **0.559–0.654 ms**, against **104.598–105.131 ms**
+for full prefill. Extension/changed-tail/shorter/restored RPCs take
+**86.943–88.302 ms**, against **103.742–105.171 ms**. These are response-arrival
+diagnostics excluding admission and model load; native post-reply bookkeeping
+may follow. They are not assistant throughput or isolated performance results.
+
+The [511-token check](../results/aie/gemma4_gpu_prefix_worker_context511_20261018.log)
+([report](../results/aie/gemma4_gpu_prefix_worker_context511_20261018.json)) uses
+context 2560 and a 129-row minimum. It **fails** for extension, changed tail and
+restoration; the extension changes the next greedy prediction as well.
+Identical-prompt reuse and cold fallbacks remain exact, but this does not qualify
+ordinary conversation-prefix reuse. A planned subsequent 1,024-token run is
+not started after that failed gate.
+
+The [candidate graph-disable request](../results/aie/gemma4_gpu_prefix_worker_context511_nographs_20261018.log)
+([report](../results/aie/gemma4_gpu_prefix_worker_context511_nographs_20261018.json))
+retains the default control and sets `GGML_CUDA_DISABLE_GRAPHS=1` only for the
+candidate child. It does not make the exact gate pass. Foreign host activity is
+recorded by the supervisor in this run; it is not performance evidence or a
+kernel-dispatch trace. The
+[leading-padding alignment attempt](../results/aie/gemma4_gpu_prefix_worker_context511_aligned_20261018.log)
+([partial failed report](../results/aie/gemma4_gpu_prefix_worker_context511_aligned_20261018_failed.json))
+aborts at the extended request with `Target decode failed`; it has no completed
+gate. The [trailing-padding alignment comparison](../results/aie/gemma4_gpu_prefix_worker_context511_tail_20261018.log)
+([report](../results/aie/gemma4_gpu_prefix_worker_context511_tail_20261018.json))
+completes all cases but fails every changed long-prompt state comparison.
+These experiments do not establish a single root cause for the remaining
+failures. No tolerance or adoption criterion is changed to accept them.
+
+The independent C++ history oracle checks strided raw-bit preservation,
+prefix divergence, trim/append/reset, bounds, missing captures and removal of
+padded rows. It passes under `/W4 /WX`. The focused Python suite adds six
+regressions: even a one-ULP FP32 difference that rounds to the same BF16 value,
+signed-zero changes, different predictions, shapes or tensor names must reject.
+It now passes **116 tests**. Earlier source/binary variants are retained locally
+beside the frozen evidence.
+
+The [bounded admission wait](../tools/wait_gemma4_admission.py) records rejected
+snapshots under the existing policy without stopping processes. It neither
+reserves devices nor replaces request admission. The registered serving worker,
+model precision, NPU transport/readback gates, public assistant behavior and
+pending package-energy protocol remain unchanged. All prefix runs are
+checks-only and timing-ineligible; no energy or net-acceleration claim follows.
+
+### Control-only prefill prefix invariance
+
+The [control-only probe](../tools/probe_gemma4_prefix_invariance.py) isolates
+full-prefill behavior from the experimental GPU cache. It loads only the
+registered serving worker, derives eight greedy extension tokens, and prepares
+the same prompt, extensions by one/three/eight tokens, shortenings by one/three,
+and the original prompt again. Every common-prefix FP32 element in four KV
+exports is compared by bits, retaining changed token-row indices and BF16/error
+diagnostics. The two complete reports pin the worker, model, DLLs, sources and
+prompt bytes. There is no NPU inference in this diagnostic.
+
+In the [511-token run](../results/aie/gemma4_gpu_prefix_invariance_511_20261018.log)
+([report](../results/aie/gemma4_gpu_prefix_invariance_511_20261018.json)), repeat,
+plus one, minus one, minus three, and repeat-after are exact. Plus three and
+plus eight change rows 505 through 510 in all four common-prefix KV exports.
+In the [513-token run](../results/aie/gemma4_gpu_prefix_invariance_513_20261018.log)
+([report](../results/aie/gemma4_gpu_prefix_invariance_513_20261018.json)), all
+extensions and repeats are exact; minus one changes rows 505 through 511 and
+minus three changes rows 505 through 509 in all four exports. Row indices are
+zero-based. Repeats also match the entire captured response, including greedy
+predictions. Both diagnostics complete, close their worker, and correctly
+retain `passed=false` because shared-prefix invariance fails.
+
+Thus the candidate cache alone cannot explain the long-prompt mismatch: the
+registered full-prefill path already changes shared rows in these boundary
+comparisons. This does not identify the responsible kernel, prove a model or
+runtime defect, or qualify reuse of earlier rows at arbitrary lengths. It does
+rule out treating these particular cached rows as immutable. Keep GPU prompt
+reuse outside serving until the cause and exact replacement behavior are
+qualified. Admission and the bounded research watcher run before/during work;
+the watcher observes no foreign contention. These checks permit small desktop
+GPU activity under the existing admission policy and are timing-ineligible.
+
+### Bounded chat admission and failure diagnostics
+
+The terminal frontend now accepts `--admission-wait 0..60` (PowerShell:
+`-AdmissionWaitSeconds`), default zero. The shared
+[request helper](../tools/gemma4_request.py) catches only `HardwareBusy` before
+any output, closes the failed stream before sleeping, and retries on the same
+assistant. It never replays a partial response or retries numerical failures.
+The deadline bounds retry scheduling rather than telemetry/generation time.
+Interactive chat does not accumulate rejected snapshots; one-shot `--report`
+requests retain them. A rejected one-shot request now writes its report after
+tokenizer/assistant cleanup and exits with code 2; it previously exited before
+report serialization. A worker that was never loaded is reported as null,
+without claiming foreign hardware was released.
+
+The [first live check](../results/aie/gemma4_chat_admission_wait_20261018.log)
+([validated report](../results/aie/gemma4_chat_admission_wait_20261018.json)) and
+[final frontend check](../results/aie/gemma4_chat_admission_wait_20261018_v2.log)
+([validated report](../results/aie/gemma4_chat_admission_wait_20261018_v2.json))
+each use a five-second wait budget and match all 32 frozen GPU control tokens
+on the public dictionary prompt, with prefix binding and the opt-in activity
+helper. Both release NPU contexts and close the GPU worker. The second external
+preflight records one rejected snapshot before admission; the admitted chat
+requests themselves have no rejected attempts. Therefore these runs validate
+the normal path with waiting enabled, not live contention/recovery behavior.
+
+[Hardware-free tests](../tests/test_gemma4_request.py) cover stream closure
+before retry, unchanged prompt/options and assistant ownership, deadline expiry,
+immediate rejection by default, no replay after partial output or numerical
+failure, outer-stream cancellation, and failure-report serialization after
+cleanup. The focused suite passes 124 tests, legacy syntax/shell/import gates
+pass, and PowerShell parsing succeeds. Neither live run observes foreign
+contention after admission. Both are checks-only and timing-ineligible; no
+energy, sustained-service, or net-acceleration qualification follows. The frozen
+package-energy preregistration still verifies unchanged; no energy sitting was
+started.
+
+### Prefill divergence localized to the weighted-value product
+
+A separate [stage worker](../tools/ggml_gpu_target/worker_stages.cpp) adds one
+bounded GPU FP32 capture to the original bridge. It is built to new explicit
+executable paths with `/W4 /WX`; neither serving source/binary nor SDK/frontend
+is replaced. Operation 10 selects a stage and layer without inference. The
+[probe](../tools/probe_gemma4_prefill_stages.py) first runs an independent serving
+worker on the 511-token public prompt, generates three extension tokens, and
+captures full-prefill controls at both lengths. Every instrumented prepare must
+match all five regular serving exports, shapes, positions and predictions
+exactly before its extra capture is compared. The original serving worker
+remains unchanged. Sources, headers, worker binaries, runtime DLLs and GGUF are
+hashed in the reports.
+
+The [first layer scan](../results/aie/gemma4_gpu_prefill_stages_511_20261018.log)
+([partial report](../results/aie/gemma4_gpu_prefill_stages_511_20261018_partial.json))
+stops at a rejected admission snapshot after four stage pairs and closes its
+workers. It does not qualify the full scan. A subsequent
+[complete layer scan](../results/aie/gemma4_gpu_prefill_stages_511_20261018_v2.log)
+([report](../results/aie/gemma4_gpu_prefill_stages_511_20261018_v2.json)) finds
+divergence at the first layer output and checks the remaining layer 0 stages:
+
+| Layer 0 stage | Shared-prefix FP32 comparison |
+| --- | --- |
+| Normalized input; position-adjusted Q and K; normalized V | Exact |
+| Attention post-norm and attention residual | Row 505 differs |
+| FFN output and FFN post-norm | Exact |
+| Complete layer output | 180 elements differ at row 505; max absolute error 4.76837158203125e-7; no BF16 differences |
+
+The [attention scan](../results/aie/gemma4_gpu_prefill_attention_511_20261018.log)
+([report](../results/aie/gemma4_gpu_prefill_attention_511_20261018.json)) narrows
+the observed difference further. Its
+[follow-up with masked-probability checks](../results/aie/gemma4_gpu_prefill_attention_511_20261018_v2.log)
+([report](../results/aie/gemma4_gpu_prefill_attention_511_20261018_v2.json))
+reproduces the result and explicitly checks that all future and padding
+probabilities for common queries are bitwise positive zero at both lengths:
+
+| Layer 0 attention stage | Shared-prefix comparison |
+| --- | --- |
+| Q dot K, restricted to common causal keys | Exact |
+| Softmax probabilities, same domain | Exact; all excluded future/padding probabilities are positive zero |
+| Weighted-value product (`kqv`) | 3,525 FP32 elements differ in rows 504 through 510; max absolute error 4.76837158203125e-6; no BF16 differences |
+| Recombined weighted values (`kqv_out`) | Same difference count, rows and error |
+
+These comparisons localize the first **observed** discrepancy to the
+weighted-value operation, before the output projection. They do not prove the
+specific GPU kernel, launch geometry or reduction order responsible. Local
+llama.cpp source computes this tensor with `ggml_mul_mat(v, kq)` and rounds KV
+cache extents to multiples of at least 256. Its ROCm backend chooses a float
+vector/matrix kernel or BLAS from dimensions and types. That is source-level
+context, not a trace of the pinned DLL's selected kernel. The inspected BLAS
+compute-type setting controls that branch only; setting it is not evidence of
+forcing all float matrix operations to one implementation. No unsupported
+precision workaround is adopted. BF16 agreement at the first layer does not
+waive the FP32 gate or the later-layer failures already registered.
+
+The complete reports' `passed=true` means the diagnostic completed with exact
+serving fidelity, unchanged sources and closed workers. It does **not** mean
+prefix reuse passed: the per-stage comparisons explicitly retain failures.
+The first completed layer/attention scans observe no foreign contention. In
+the masked follow-up, a foreign NPU context appears between the original and
+instrumented worker phases; admission waits until it is idle, preserving the
+foreign process. The report retains rejected snapshots and the watcher marks
+foreign contention observed. All runs are checks-only, timing-ineligible and
+energy-ineligible. No latency or energy conclusion follows.
+
+The independent worker binaries and source snapshots are retained under local
+assistant assets (`bin/prefill-stages-layer-v1` and
+`bin/prefill-stages-attention-v1`) before subsequent diagnostic changes. Four
+hardware-free tests cover hidden/KV token-axis layouts, exact serving export
+selection, causal-domain masking, and future/padding/signed-zero detection.
+The focused suite passes 128 tests. GPU prompt reuse remains unadopted; this
+evidence identifies the operation a consistent prefill strategy must address.
+
+### Fixed-block prefill makes reuse consistent but changes serving state
+
+The [block worker](../tools/ggml_gpu_target/worker_blocks.cpp) is a separate
+research fork. Cold prepares and cached suffixes use fixed-size batches with
+causal trailing token-zero padding. Padding is removed before the response;
+only actual token rows enter the host FP32 KV history. Changed prompts retain
+complete shared blocks from prior prefill, recomputing the partial tail and
+every changed block. Generated decode rows are excluded from reusable prefill.
+Identical prompts can return their saved state after removing generated rows.
+Ordinary token decode stays unpadded. All model arithmetic remains on the GPU;
+host history only copies GPU-produced tensor bytes. New binaries are built to
+explicit output paths with `/W4 /WX`; the serving worker is preserved.
+
+The [qualifier](../tools/qualify_gemma4_block_prefill.py) runs three independent
+workers sequentially: unchanged serving, cold blocks, and cached blocks. The
+511-token prompt supplies three greedy serving extension tokens. Cases cover
+identical, extended, altered final extension token, shorter, restored,
+unrelated, restored again and identical again. Each prepare is followed by two
+teacher-forced serving tokens and rollback to prompt length plus one. Every
+comparison includes all FP32 tensor bits, shapes, positions, tensor names and
+predictions. Cache consistency, agreement with serving, and avoided work are
+separate fields. Overall `passed` requires all three; a consistent different
+numerical schedule cannot override the original serving gate.
+
+Both the [128-row experiment](../results/aie/gemma4_gpu_block_prefill_511_20261018.log)
+([report](../results/aie/gemma4_gpu_block_prefill_511_20261018.json)) and
+[256-row experiment](../results/aie/gemma4_gpu_block_prefill_256_511_20261018.log)
+([report](../results/aie/gemma4_gpu_block_prefill_256_511_20261018.json)) complete
+with the same outcome:
+
+- All eight cached prepares and sixteen continuation states match independent
+  cold blocks exactly, including restoration after an unrelated prompt.
+- Changed-prompt requests avoid GPU evaluations. Identical requests evaluate no
+  model rows. Restoring after an unrelated prompt recomputes the complete prompt.
+- Eight prepare predictions and fifteen of sixteen continuation predictions
+  match unchanged serving. The second continuation after `diverged_tail`
+  differs at both block sizes. FP32 state also differs, so both reports retain
+  `original_state_exact=false` and overall `passed=false`.
+- All owned workers close. The watcher observes no foreign contention during
+  either live run; both remain checks-only and timing/energy-ineligible.
+
+The actual evaluated rows include padding:
+
+| Request | 128-row cold / cached rows | 256-row cold / cached rows |
+| --- | ---: | ---: |
+| Identical 511-token prompt | 512 / 0 | 512 / 0 |
+| Extended to 514 tokens | 640 / 256 | 768 / 512 |
+| Altered final extension token | 640 / 128 | 768 / 256 |
+| Shortened to 510 tokens | 512 / 128 | 512 / 256 |
+| Restored to 511 tokens | 512 / 128 | 512 / 256 |
+| Restored after unrelated prompt | 512 / 512 | 512 / 512 |
+
+Diagnostic prepare RPC times reflect these savings but do not qualify sustained
+latency. In the 128-row run, extension takes 362.21 ms cached versus 809.54 ms
+cold blocks and 731.99 ms unchanged serving. The changed-tail, shortened and
+restored requests take 206.48–216.16 ms cached; unrelated/restored-after-unrelated
+requests do not benefit. In the 256-row run, extension takes 653.38 ms cached
+versus 956.09 ms cold blocks and 719.02 ms unchanged serving. Its larger
+padding cost is material. These are single ordered checks-only observations,
+not a repeated throughput sitting, stock-server comparison or net hybrid gain.
+They cannot justify adoption while serving predictions differ.
+
+The first build admission attempt rejects foreign CPU processes and an occupied
+NPU. Their handles are subsequently absent; a fresh admission precedes the build
+and each live run. No foreign process is stopped. Source and binary identities
+are verified before archival; the initial 128-row worker/qualifier sources are
+preserved under local assistant assets `bin/prefill-blocks-128-v1` before adding
+the block-size option. The final worker accepts only 128 or 256 via the bounded
+research environment setting; no runtime/frontend setting enables it. Two
+hardware-free gate tests reject a consistent cache with serving differences,
+failed continuation state, or no changed-prompt work avoidance. The original
+precision, serving executable, NPU transport gates and pending energy protocol
+remain unchanged. Further work needs serving agreement or a separately frozen
+quality study; cache consistency alone is insufficient.
+
+### Frozen distribution diagnostic for fixed-block prefill
+
+The [distribution runner](../tools/qualify_gemma4_block_distribution.py) freezes
+its workload, gates, ordered arms, source hashes and artifact identities before
+measurement. The [first registration](../results/aie/gemma4_block_distribution_prereg_20261018.json)
+is retained alongside the
+[corrected-export registration](../results/aie/gemma4_block_distribution_prereg_20261018_v2.json).
+The workload and thresholds are unchanged between them. The original study
+stops after its 24 baseline captures when the first logits export requests a
+non-output row. Its [failed report](../results/aie/gemma4_block_distribution_20261018_failed.json)
+and [log](../results/aie/gemma4_block_distribution_20261018.log) remain negative;
+it collects no distribution scores.
+
+The workload takes token IDs from the existing four-window engineering
+reference header, replaces each window's first token with the explicit BOS ID
+2, and scores the next held-out token at prefix lengths 256, 511, 512, 513, 768
+and 1,023. That produces 24 states from the existing evaluation corpus, separate
+from imatrix calibration. The BF16 reference's stored probabilities clip logits
+to a 16-nat range. They are **not used** as a distribution oracle here. The
+comparison baseline is unchanged Q5 serving with the selected PLE Q4 imatrix
+model. These sampled states are not full-corpus perplexity or an agent benchmark.
+
+Two research-only logits workers export existing GPU-produced output through
+operation 11 without model evaluation. The wire retains the client bounds with
+shape 32768 by 8 by output-row-count by 1, covering the full 262,144-token
+vocabulary. The first export attempt incorrectly requested positive row index
+zero when only the final input row was selected for output. The corrected
+worker uses the API's negative index for that case and invalidates exports on
+rollback or identical cached prepares. A
+[protocol check](../results/aie/gemma4_logits_protocol_20261018.log)
+([report](../results/aie/gemma4_logits_protocol_20261018.json)) verifies both
+workers: repeated exports are bitwise identical without increasing model-call
+counters, all greedy predictions match exports for one and sixteen output rows,
+and rollback rejects stale output. Both strict `/W4 /WX` builds pass.
+
+The six sequential study arms are unchanged serving, serving with export,
+128-row cold blocks, 128-row blocks with export, 256-row cold blocks, and
+256-row blocks with export. Each export worker must exactly match its
+unmodified counterpart's initial state and all 24 regular responses: tensor
+bits, shapes, positions and predictions. The exported full-vocabulary argmax
+must match the ordinary response. Full FP32 vectors are saved, checksummed,
+and reverified; FP64 host reductions are offline diagnostics only, not CPU
+neural inference. Gates are frozen before candidate distributions are observed:
+
+| Diagnostic metric | Frozen requirement |
+| --- | ---: |
+| Mean forward KL, serving distribution to candidate | At most 0.0001 |
+| Maximum forward KL | At most 0.001 |
+| Mean absolute next-token NLL change | At most 0.01 nats |
+| Maximum absolute next-token NLL change | At most 0.1 nats |
+| Top-1 agreement | At least 99%; with 24 states this requires all 24 |
+
+These are preliminary distribution criteria, not a replacement for the failed
+exact-state serving gate. All 24 cases must finish; scores cannot be dropped or
+thresholds loosened after observing them. The runner refuses changed cases,
+targets, gates, source identities, arm order and context configuration. A pass
+cannot erase the earlier changed continuation prediction or qualify serving,
+general accuracy, latency, energy or unattended operation. The numerical study
+is separate from the still-pending package-energy protocol.
+
+The [completed corrected run](../results/aie/gemma4_block_distribution_20261018_v2.log)
+([report](../results/aie/gemma4_block_distribution_20261018_v2.json)) finishes
+all six arms and all 144 prepares. Each of the three export arms matches all
+24 unmodified regular responses and its initial response exactly. All 72
+full-vocabulary arrays are retained outside the repo with verified hashes.
+The result is negative at both block sizes:
+
+| Metric, 24 held-out states per candidate | 128-row blocks | 256-row blocks | Frozen limit |
+| --- | ---: | ---: | ---: |
+| Mean KL | 0.0100553 | 0.0164764 | 0.0001 maximum |
+| Maximum KL | 0.0479744 | 0.1333212 | 0.001 maximum |
+| Mean absolute NLL change, nats | 0.187701 | 0.144401 | 0.01 maximum |
+| Maximum absolute NLL change, nats | 1.059183 | 0.725824 | 0.1 maximum |
+| Top-1 agreement | 24/24 | 24/24 | At least 99% |
+| Mean signed NLL change, report-only | -0.008982 | +0.038358 | No acceptance line |
+
+All four drift criteria fail for both candidates despite perfect sampled
+top-1 agreement. The lower signed mean NLL for the 128-row arm is not an
+accuracy improvement claim: this is a sparse diagnostic relative to the
+serving distribution, and its absolute errors breach the frozen lines. The
+earlier changed teacher-forced continuation remains a separate negative result.
+These outcomes reject adopting either fixed-block schedule on current evidence;
+passing cache/cold consistency cannot compensate for distribution drift.
+
+The research watcher observes no foreign contention in the completed run, all
+six model workers close, and the final NPU witness is idle. Wall duration is
+about 291 seconds; it is a bounded checks-only study, not performance evidence.
+Build and run admission records retain transient rejections without stopping
+foreign work. The focused suite passes 133 tests, including known-distribution
+KL/NLL checks, shift invariance, near-tie top-1 rejection, incomplete/nonfinite
+diagnostic rejection, and complete wire vocabulary ordering. Serving sources,
+model precision, SDK behavior and the pending energy method remain unchanged.

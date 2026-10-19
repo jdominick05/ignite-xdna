@@ -1,0 +1,555 @@
+{
+  "scope": "Archive a packet qualification report with verified build provenance.\n\nRefuses replacement, verifies referenced source/program artifacts and scrubs the\ncurrent local account prefix. Does not turn a negative report into a pass.\n",
+  "source_sha256": "b7c07c9bbfaba38344cbf1bdd66b98df9d669f58ca1c9a4f0cf18b235922be19",
+  "result_sha256": "7085acd7062c9b40f0adedefa7ecacb3190e491c817f041a171c67f4239b62f2",
+  "report": {
+    "passed": true,
+    "registration": {
+      "scope": "Check double-buffered packet DMA against the single-buffer arena control.",
+      "source_sha256": "113c73539768299ae36c89eeccee69caa0abc9da7bbb516bc74fc857c2d4ca7d",
+      "fixtures_sha256": "5eff2d544d0f48aedcae5b78662ae268ed403e14c6cd0900f7a8563fc263395b",
+      "builds": [
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\scratch\\bf16-double-buffer-20261018\\draft_state_transformer-705730638875dd32\\build.json",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\scratch\\bf16-double-buffer-20261018\\draft_state_transformer-2d3dad65c83c5c71\\build.json",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\scratch\\bf16-double-buffer-20261018\\draft_state_transformer-705730638875dd32\\build.json",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\scratch\\bf16-double-buffer-20261018\\draft_state_transformer-2d3dad65c83c5c71\\build.json"
+      ]
+    },
+    "cases": [
+      {
+        "case": 0,
+        "bitwise_equal": {
+          "projection": true,
+          "norm": true,
+          "rope": true,
+          "softmax": true,
+          "geglu": true,
+          "chain": true,
+          "topk": true
+        },
+        "control": {
+          "build": "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\scratch\\bf16-double-buffer-20261018\\draft_state_transformer-705730638875dd32\\build.json",
+          "commands": 95,
+          "prepared": true,
+          "host_phases_ms": {
+            "build_lookup": 0.0,
+            "packet_stack": 0.0014999823179095984
+          },
+          "dispatch_ms": 3.7272000045049936,
+          "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+          "input_unchanged": true,
+          "output_frames": 8,
+          "output_bytes": 33792,
+          "input_update_mode": "full",
+          "input_write_bytes": 832960,
+          "input_total_bytes": 832960,
+          "input_sync_ranges": 1,
+          "input_fully_verified": true,
+          "transport_sources_sha256": {
+            "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\persistent.py": "1c89cc860244a8b77475d6ed137d01aaa79678b87999dd517ce409e8d06839f1",
+            "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\input_residency.py": "48b988a2e354be6efff94f1b608d09fe926f8cd70dee31df16ce594f9a4235ba"
+          },
+          "transfer_phases_ms": {
+            "input_write_sync": 0.17099999240599573,
+            "output_poison_sync": 0.02649999805726111,
+            "output_sync_read": 0.20400001085363328,
+            "input_sync_verify": 0.3123000205960125
+          },
+          "persistent_transport": true,
+          "image_cache_hit": false,
+          "contexts_created": 1,
+          "context_cache_hit": false,
+          "exact_program_sharing": false,
+          "context_cache_size": 1,
+          "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+        },
+        "candidate": {
+          "build": "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\scratch\\bf16-double-buffer-20261018\\draft_state_transformer-2d3dad65c83c5c71\\build.json",
+          "commands": 95,
+          "prepared": true,
+          "host_phases_ms": {
+            "build_lookup": 0.0,
+            "packet_stack": 0.000700005330145359
+          },
+          "dispatch_ms": 3.409500000998378,
+          "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+          "input_unchanged": true,
+          "output_frames": 8,
+          "output_bytes": 33792,
+          "input_update_mode": "full",
+          "input_write_bytes": 832960,
+          "input_total_bytes": 832960,
+          "input_sync_ranges": 1,
+          "input_fully_verified": true,
+          "transport_sources_sha256": {
+            "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\persistent.py": "1c89cc860244a8b77475d6ed137d01aaa79678b87999dd517ce409e8d06839f1",
+            "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\input_residency.py": "48b988a2e354be6efff94f1b608d09fe926f8cd70dee31df16ce594f9a4235ba"
+          },
+          "transfer_phases_ms": {
+            "input_write_sync": 0.11140000424347818,
+            "output_poison_sync": 0.0433000095654279,
+            "output_sync_read": 0.028600014047697186,
+            "input_sync_verify": 0.29639998683705926
+          },
+          "persistent_transport": true,
+          "image_cache_hit": false,
+          "contexts_created": 2,
+          "context_cache_hit": false,
+          "exact_program_sharing": false,
+          "context_cache_size": 2,
+          "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+        }
+      },
+      {
+        "case": 1,
+        "bitwise_equal": {
+          "projection": true,
+          "norm": true,
+          "rope": true,
+          "softmax": true,
+          "geglu": true,
+          "chain": true,
+          "topk": true
+        },
+        "control": {
+          "build": "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\scratch\\bf16-double-buffer-20261018\\draft_state_transformer-705730638875dd32\\build.json",
+          "commands": 95,
+          "prepared": true,
+          "host_phases_ms": {
+            "build_lookup": 0.0,
+            "packet_stack": 0.000500003807246685
+          },
+          "dispatch_ms": 3.6831000179518014,
+          "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+          "input_unchanged": true,
+          "output_frames": 8,
+          "output_bytes": 33792,
+          "input_update_mode": "partial",
+          "input_write_bytes": 696320,
+          "input_total_bytes": 832960,
+          "input_sync_ranges": 9,
+          "input_fully_verified": true,
+          "transport_sources_sha256": {
+            "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\persistent.py": "1c89cc860244a8b77475d6ed137d01aaa79678b87999dd517ce409e8d06839f1",
+            "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\input_residency.py": "48b988a2e354be6efff94f1b608d09fe926f8cd70dee31df16ce594f9a4235ba"
+          },
+          "transfer_phases_ms": {
+            "input_write_sync": 0.35349998506717384,
+            "output_poison_sync": 0.01689998316578567,
+            "output_sync_read": 0.020100007532164454,
+            "input_sync_verify": 0.2548999909777194
+          },
+          "persistent_transport": true,
+          "image_cache_hit": true,
+          "contexts_created": 2,
+          "context_cache_hit": true,
+          "exact_program_sharing": false,
+          "context_cache_size": 2,
+          "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+        },
+        "candidate": {
+          "build": "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\scratch\\bf16-double-buffer-20261018\\draft_state_transformer-2d3dad65c83c5c71\\build.json",
+          "commands": 95,
+          "prepared": true,
+          "host_phases_ms": {
+            "build_lookup": 0.0,
+            "packet_stack": 0.000400003045797348
+          },
+          "dispatch_ms": 3.4531000128481537,
+          "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+          "input_unchanged": true,
+          "output_frames": 8,
+          "output_bytes": 33792,
+          "input_update_mode": "partial",
+          "input_write_bytes": 696320,
+          "input_total_bytes": 832960,
+          "input_sync_ranges": 9,
+          "input_fully_verified": true,
+          "transport_sources_sha256": {
+            "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\persistent.py": "1c89cc860244a8b77475d6ed137d01aaa79678b87999dd517ce409e8d06839f1",
+            "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\input_residency.py": "48b988a2e354be6efff94f1b608d09fe926f8cd70dee31df16ce594f9a4235ba"
+          },
+          "transfer_phases_ms": {
+            "input_write_sync": 0.38460001815110445,
+            "output_poison_sync": 0.03229998401366174,
+            "output_sync_read": 0.026599998818710446,
+            "input_sync_verify": 0.3538999881129712
+          },
+          "persistent_transport": true,
+          "image_cache_hit": true,
+          "contexts_created": 2,
+          "context_cache_hit": true,
+          "exact_program_sharing": false,
+          "context_cache_size": 2,
+          "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+        }
+      },
+      {
+        "case": 0,
+        "bitwise_equal": {
+          "projection": true,
+          "norm": true,
+          "rope": true,
+          "softmax": true,
+          "geglu": true,
+          "chain": true,
+          "topk": true
+        },
+        "control": {
+          "build": "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\scratch\\bf16-double-buffer-20261018\\draft_state_transformer-705730638875dd32\\build.json",
+          "commands": 95,
+          "prepared": true,
+          "host_phases_ms": {
+            "build_lookup": 0.0,
+            "packet_stack": 0.000600004568696022
+          },
+          "dispatch_ms": 3.7576000031549484,
+          "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+          "input_unchanged": true,
+          "output_frames": 8,
+          "output_bytes": 33792,
+          "input_update_mode": "partial",
+          "input_write_bytes": 696320,
+          "input_total_bytes": 832960,
+          "input_sync_ranges": 9,
+          "input_fully_verified": true,
+          "transport_sources_sha256": {
+            "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\persistent.py": "1c89cc860244a8b77475d6ed137d01aaa79678b87999dd517ce409e8d06839f1",
+            "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\input_residency.py": "48b988a2e354be6efff94f1b608d09fe926f8cd70dee31df16ce594f9a4235ba"
+          },
+          "transfer_phases_ms": {
+            "input_write_sync": 0.2665999927558005,
+            "output_poison_sync": 0.0171000137925148,
+            "output_sync_read": 0.025999994250014424,
+            "input_sync_verify": 0.2784999960567802
+          },
+          "persistent_transport": true,
+          "image_cache_hit": true,
+          "contexts_created": 2,
+          "context_cache_hit": true,
+          "exact_program_sharing": false,
+          "context_cache_size": 2,
+          "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+        },
+        "candidate": {
+          "build": "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\scratch\\bf16-double-buffer-20261018\\draft_state_transformer-2d3dad65c83c5c71\\build.json",
+          "commands": 95,
+          "prepared": true,
+          "host_phases_ms": {
+            "build_lookup": 0.0,
+            "packet_stack": 0.000400003045797348
+          },
+          "dispatch_ms": 3.540600009728223,
+          "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+          "input_unchanged": true,
+          "output_frames": 8,
+          "output_bytes": 33792,
+          "input_update_mode": "partial",
+          "input_write_bytes": 696320,
+          "input_total_bytes": 832960,
+          "input_sync_ranges": 9,
+          "input_fully_verified": true,
+          "transport_sources_sha256": {
+            "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\persistent.py": "1c89cc860244a8b77475d6ed137d01aaa79678b87999dd517ce409e8d06839f1",
+            "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\input_residency.py": "48b988a2e354be6efff94f1b608d09fe926f8cd70dee31df16ce594f9a4235ba"
+          },
+          "transfer_phases_ms": {
+            "input_write_sync": 0.30949999927543104,
+            "output_poison_sync": 0.016299978597089648,
+            "output_sync_read": 0.025600020308047533,
+            "input_sync_verify": 0.3147000097669661
+          },
+          "persistent_transport": true,
+          "image_cache_hit": true,
+          "contexts_created": 2,
+          "context_cache_hit": true,
+          "exact_program_sharing": false,
+          "context_cache_size": 2,
+          "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+        }
+      }
+    ],
+    "invalid_rejected": true,
+    "invalid_evidence": {
+      "dispatch_ms": 3.4312999923713505,
+      "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+      "input_unchanged": true,
+      "output_frames": 8,
+      "output_bytes": 33792,
+      "input_update_mode": "full",
+      "input_write_bytes": 832960,
+      "input_total_bytes": 832960,
+      "input_sync_ranges": 1,
+      "input_fully_verified": true,
+      "transport_sources_sha256": {
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\persistent.py": "1c89cc860244a8b77475d6ed137d01aaa79678b87999dd517ce409e8d06839f1",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\input_residency.py": "48b988a2e354be6efff94f1b608d09fe926f8cd70dee31df16ce594f9a4235ba"
+      },
+      "transfer_phases_ms": {
+        "input_write_sync": 0.17850002041086555,
+        "output_poison_sync": 0.017900019884109497,
+        "output_sync_read": 0.025699991965666413,
+        "input_sync_verify": 0.24839999969117343
+      },
+      "persistent_transport": true,
+      "image_cache_hit": true,
+      "contexts_created": 2,
+      "context_cache_hit": true,
+      "exact_program_sharing": false,
+      "context_cache_size": 2,
+      "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+    },
+    "recovery": {
+      "build": "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\scratch\\bf16-double-buffer-20261018\\draft_state_transformer-2d3dad65c83c5c71\\build.json",
+      "commands": 95,
+      "prepared": true,
+      "host_phases_ms": {
+        "build_lookup": 0.0,
+        "packet_stack": 0.000400003045797348
+      },
+      "dispatch_ms": 3.495799988741055,
+      "status": "ert_cmd_state.ERT_CMD_STATE_COMPLETED",
+      "input_unchanged": true,
+      "output_frames": 8,
+      "output_bytes": 33792,
+      "input_update_mode": "partial",
+      "input_write_bytes": 4096,
+      "input_total_bytes": 832960,
+      "input_sync_ranges": 1,
+      "input_fully_verified": true,
+      "transport_sources_sha256": {
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\persistent.py": "1c89cc860244a8b77475d6ed137d01aaa79678b87999dd517ce409e8d06839f1",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\input_residency.py": "48b988a2e354be6efff94f1b608d09fe926f8cd70dee31df16ce594f9a4235ba"
+      },
+      "transfer_phases_ms": {
+        "input_write_sync": 0.10370000381954014,
+        "output_poison_sync": 0.015600002370774746,
+        "output_sync_read": 0.026399997295811772,
+        "input_sync_verify": 0.13169998419471085
+      },
+      "persistent_transport": true,
+      "image_cache_hit": true,
+      "contexts_created": 2,
+      "context_cache_hit": true,
+      "exact_program_sharing": false,
+      "context_cache_size": 2,
+      "runtime_driver_sha256": "3ab6072fb1cf4905a6f3af69e8481cfccc689e14a138b2800c091e7a29e1848d"
+    },
+    "npu_released": true
+  },
+  "builds": {
+    "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\scratch\\bf16-double-buffer-20261018\\draft_state_transformer-2d3dad65c83c5c71\\build.json": {
+      "manifest_sha256": "d26b9217c117d36985be41ddc5a64f87161c65101c887f706e01566d3441ea19",
+      "sources": {
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\bf16_product.hpp": "a1c951a7b18fbe3c1a9d17df005e229afa0006c694a04ab53df9748fa81cc3ab",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\dispatch.cc": "3da7967ae0bc203c70ed4049bffaff6aa1daeee954473f9f011e17e576042ffb",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\geglu.cc": "f7fcad5d303eafd49b0edac7a72f5e21e432926b4dff712197be7ed765fef3b9",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\gemv.cc": "66a1da00c319f565af9554ea516254588273f0396c3d2a1b29299a8e3039690f",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\gemv_precise.cc": "6600e21079a574c4d1d3b93f497d11d75656fc062cc123fb12013ece3436087a",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\norm_exact_probe.cc": "4edc1a066fe24ba2bed71b37f422deeb076dd82cce82dc4f41d8897635753176",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\norm_state_probe.cc": "8d08f70dc3de29d8d2330aee3d3f425a70fb15c002de92415077bd54b073535d",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\residual.cc": "2bc8f445e3f86e6384260daaff200d2b456aca4b30a9aed4c5a6e14b13f468d6",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\rmsnorm.cc": "9efc3bec80f7c25e88a48ce30f851bc437e05000e7d79014cc2997399b15463f",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\rmsnorm_exact.cc": "3b3a606641b7225ac80239bf5d7d8f09313f454b80dba1ce255f73fad04c49a5",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\rmsnorm_refined.cc": "765a0591c2010b13c0ef42b8066ae9ef029214e09ff54392ea42b60d717fbc05",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\rope.cc": "3a2636d45109255e6f3a08f879b937fe59c48ca5a97a9bb04d3cf8f02b7f5421",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\softmax.cc": "32ed139ad46f7c3ee8f3edd5716eafed3306386cb81be384ede30fdf00ff397a",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\state_dispatch.cc": "582895edc0bfbade87d4209e4260805e0aab3092daa308eb2d51dd3cf9f9a2f1",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\state_dispatch_exact.cc": "b3ffe5754a3de37358772fd4dfb50e9e54c3c870d7f16ca400f379d79c140045",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\state_dispatch_small.cc": "949bdef280d362960e14848075d1a151ea4bd8c65cb1a8ded0e807d833469405",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\topk.cc": "1f680ca67d8c97a82bb41db53a6f2aad15802f16be287b9bfddbac31ca6e1868",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\state.py": "5e1e22f0036c41937e828437144719f048ddbf9869f2d86ddccb0872347a0f98",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\stream.py": "22ae1c96fb9c158236f15b47f29bdb7a30faa777a47466db55b3b79f05030629",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\common.py": "e9ea9aefc2167093490bc2716ec2895f38cb13fc3852703ebd42211526c4854e",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\compact.py": "d6e55afd307caa2ec445dd9cb6a533dad77e197b4fdda2b9628e961e06b4afc4"
+      },
+      "contract": {
+        "scope": "Compile packet commands whose BF16 intermediate values stay on the NPU.\n\nHost code packs weights and metadata only. A static initialization map rejects\nreads of unwritten arena locations before compilation or device execution.\nThis is a research command stream, outside the ONNX graph compiler.\n",
+        "spec_sha256": "2d3dad65c83c5c71"
+      },
+      "function": "draft_state_transformer",
+      "packet_words": 2192,
+      "output_words": 1056,
+      "blocks": 95,
+      "state_words": 8256,
+      "code_bytes": 13200,
+      "stack_frames": [
+        0,
+        1216,
+        352,
+        160,
+        32,
+        896,
+        0,
+        256,
+        32,
+        0,
+        128,
+        32,
+        64,
+        0,
+        0
+      ],
+      "sram_spans": [
+        [
+          458752,
+          462848,
+          "_sp_start_value_DM_stack"
+        ],
+        [
+          462848,
+          495872,
+          "carry_state"
+        ],
+        [
+          495872,
+          504640,
+          "inF_cons_buff_0"
+        ],
+        [
+          504640,
+          513408,
+          "inF_cons_buff_1"
+        ],
+        [
+          513408,
+          517632,
+          "outF_buff_0"
+        ],
+        [
+          517632,
+          521856,
+          "result_scratch"
+        ]
+      ],
+      "artifacts": {
+        "kernel.o": "2ff8b0c64ffcbae7f2ad0b5a89a2d008a01fbb47ca48e8815d55a3074451556e",
+        "harness.mlir": "a1e5c1b3f72af4e0ad530cfc2a121aeab4fa59116b04bee8a1dcf3d4619da674",
+        "insts.bin": "47d22295437ae02047570750d78f26baf2235e68721abbc89fed6be845850925",
+        "final.xclbin": "9f1cb8ad79e040f777a2a7cfcb457e4470de7272463b656eb1e54801fc2d091d"
+      },
+      "program_artifacts": {
+        "prj/main.pdi": "ec35934a14687e138564fe6d7e88333dae3e576d25322b13569233ae87a8d61c",
+        "prj/kernels_main.json": "464fc9fe6d66ee78736b4ea3248a0910cba83adaf4cefc6e67ee49c3b0edab86",
+        "prj/memTopology_main.json": "638d0d287b2e7427ce3dc86a4926216e8370d3e7783256498a67768b89d2bbc6"
+      },
+      "compiler_sha256": "b7a35e8cfe2dc2c6f489e5c9aaaeefb26bacb66cb54e29332b70cf787340aec3",
+      "optimization": "-Oz",
+      "output_packets": [
+        73,
+        76,
+        79,
+        85,
+        90,
+        92,
+        94
+      ],
+      "output_blocks": 8,
+      "input_depth": 2
+    },
+    "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\scratch\\bf16-double-buffer-20261018\\draft_state_transformer-705730638875dd32\\build.json": {
+      "manifest_sha256": "92737e562f09da2d936bdfdac66f644a2676203bebbcc5b5b08732da20b1f54f",
+      "sources": {
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\bf16_product.hpp": "a1c951a7b18fbe3c1a9d17df005e229afa0006c694a04ab53df9748fa81cc3ab",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\dispatch.cc": "3da7967ae0bc203c70ed4049bffaff6aa1daeee954473f9f011e17e576042ffb",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\geglu.cc": "f7fcad5d303eafd49b0edac7a72f5e21e432926b4dff712197be7ed765fef3b9",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\gemv.cc": "66a1da00c319f565af9554ea516254588273f0396c3d2a1b29299a8e3039690f",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\gemv_precise.cc": "6600e21079a574c4d1d3b93f497d11d75656fc062cc123fb12013ece3436087a",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\norm_exact_probe.cc": "4edc1a066fe24ba2bed71b37f422deeb076dd82cce82dc4f41d8897635753176",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\norm_state_probe.cc": "8d08f70dc3de29d8d2330aee3d3f425a70fb15c002de92415077bd54b073535d",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\residual.cc": "2bc8f445e3f86e6384260daaff200d2b456aca4b30a9aed4c5a6e14b13f468d6",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\rmsnorm.cc": "9efc3bec80f7c25e88a48ce30f851bc437e05000e7d79014cc2997399b15463f",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\rmsnorm_exact.cc": "3b3a606641b7225ac80239bf5d7d8f09313f454b80dba1ce255f73fad04c49a5",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\rmsnorm_refined.cc": "765a0591c2010b13c0ef42b8066ae9ef029214e09ff54392ea42b60d717fbc05",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\rope.cc": "3a2636d45109255e6f3a08f879b937fe59c48ca5a97a9bb04d3cf8f02b7f5421",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\softmax.cc": "32ed139ad46f7c3ee8f3edd5716eafed3306386cb81be384ede30fdf00ff397a",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\state_dispatch.cc": "582895edc0bfbade87d4209e4260805e0aab3092daa308eb2d51dd3cf9f9a2f1",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\state_dispatch_exact.cc": "b3ffe5754a3de37358772fd4dfb50e9e54c3c870d7f16ca400f379d79c140045",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\state_dispatch_small.cc": "949bdef280d362960e14848075d1a151ea4bd8c65cb1a8ded0e807d833469405",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\topk.cc": "1f680ca67d8c97a82bb41db53a6f2aad15802f16be287b9bfddbac31ca6e1868",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\state.py": "5e1e22f0036c41937e828437144719f048ddbf9869f2d86ddccb0872347a0f98",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\stream.py": "22ae1c96fb9c158236f15b47f29bdb7a30faa777a47466db55b3b79f05030629",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\common.py": "e9ea9aefc2167093490bc2716ec2895f38cb13fc3852703ebd42211526c4854e",
+        "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\transformer_bf16\\compact.py": "d6e55afd307caa2ec445dd9cb6a533dad77e197b4fdda2b9628e961e06b4afc4"
+      },
+      "contract": {
+        "scope": "Compile packet commands whose BF16 intermediate values stay on the NPU.\n\nHost code packs weights and metadata only. A static initialization map rejects\nreads of unwritten arena locations before compilation or device execution.\nThis is a research command stream, outside the ONNX graph compiler.\n",
+        "spec_sha256": "705730638875dd32"
+      },
+      "function": "draft_state_transformer",
+      "packet_words": 2192,
+      "output_words": 1056,
+      "blocks": 95,
+      "state_words": 8256,
+      "code_bytes": 13120,
+      "stack_frames": [
+        0,
+        1216,
+        352,
+        160,
+        32,
+        896,
+        0,
+        256,
+        32,
+        0,
+        128,
+        32,
+        64,
+        0,
+        0
+      ],
+      "sram_spans": [
+        [
+          458752,
+          462848,
+          "_sp_start_value_DM_stack"
+        ],
+        [
+          462848,
+          495872,
+          "carry_state"
+        ],
+        [
+          495872,
+          504640,
+          "inF_cons_buff_0"
+        ],
+        [
+          504640,
+          508864,
+          "outF_buff_0"
+        ],
+        [
+          508864,
+          513088,
+          "result_scratch"
+        ]
+      ],
+      "artifacts": {
+        "kernel.o": "2ff8b0c64ffcbae7f2ad0b5a89a2d008a01fbb47ca48e8815d55a3074451556e",
+        "harness.mlir": "606de95cc76bf12cca34a2f6e713dae215cb31aa392b8cd5fc35f5c1ad1dc1a8",
+        "insts.bin": "47d22295437ae02047570750d78f26baf2235e68721abbc89fed6be845850925",
+        "final.xclbin": "061d45a6f3588210fbc11e0b265d5fc249464ae7646477e477a5dfe365478006"
+      },
+      "program_artifacts": {
+        "prj/main.pdi": "0057900be4043fe6cbaae343dba5e7dc369c3fd221f3a7268a4aad92f43b1989",
+        "prj/kernels_main.json": "464fc9fe6d66ee78736b4ea3248a0910cba83adaf4cefc6e67ee49c3b0edab86",
+        "prj/memTopology_main.json": "638d0d287b2e7427ce3dc86a4926216e8370d3e7783256498a67768b89d2bbc6"
+      },
+      "compiler_sha256": "b7a35e8cfe2dc2c6f489e5c9aaaeefb26bacb66cb54e29332b70cf787340aec3",
+      "optimization": "-Oz",
+      "output_packets": [
+        73,
+        76,
+        79,
+        85,
+        90,
+        92,
+        94
+      ],
+      "output_blocks": 8,
+      "input_depth": 1
+    }
+  }
+}

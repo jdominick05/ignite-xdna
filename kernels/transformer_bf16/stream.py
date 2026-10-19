@@ -50,20 +50,30 @@ def harness(function, packet, output, blocks, state_words=0):
 '''
 
 
-def build(folder, source, function, packet, output, blocks, sources, contract, state_words=0, optimization="-O3"):
+def build(folder, source, function, packet, output, blocks, sources, contract, state_words=0, optimization="-O3", output_packets=None, input_depth=1):
     folder=Path(folder).resolve()
     folder.mkdir(parents=True, exist_ok=False)
     if packet % 16 or output % 16 or blocks < 1:
         raise ValueError("Invalid stream dimensions")
     if optimization not in ("-O3","-Os","-Oz"):
         raise ValueError("Unsupported kernel optimization level")
+    if input_depth not in (1,2) or input_depth!=1 and output_packets is None:
+        raise ValueError('Double buffering currently requires the compact arena')
+    if output_packets is not None:
+        if (not output_packets or any(type(i) is not int or not 0<=i<blocks for i in output_packets)
+                or list(output_packets)!=sorted(set(output_packets))):
+            raise ValueError('Compact export indices must be unique, sorted command indices')
+        from .compact import harness as compact_harness
+        text=compact_harness(function,packet,output,blocks,state_words,output_packets,input_depth=input_depth)
+    else:
+        text=harness(function,packet,output,blocks,state_words)
     clang = PEANO / "bin/clang++.exe"
     command([clang, optimization, "-std=c++20", "--target=aie2-none-unknown-elf", "-DNDEBUG",
              "-fstack-size-section", "-D__AIE_API_AIE_ADF_HPP__", f"-I{INSTALL/'include'}",
              "-Wno-attributes", "-c", source, "-o", folder / "kernel.o"], folder)
     if command([PEANO / "bin/llvm-nm.exe", "-u", folder / "kernel.o"], folder).strip():
         raise ValueError("Unresolved kernel helpers")
-    (folder / "harness.mlir").write_text(harness(function,packet,output,blocks,state_words), encoding="utf-8")
+    (folder / "harness.mlir").write_text(text, encoding="utf-8")
     command([IRON / "Scripts/aiecc.exe", folder / "harness.mlir", f"--peano={PEANO}",
              "--get-npu-insts", "--npu-insts-name=insts.bin", "--get-xclbin",
              "--xclbin-name=final.xclbin", "--dump-intermediates", f"--tmpdir={folder/'prj'}"], folder)
@@ -83,7 +93,7 @@ def build(folder, source, function, packet, output, blocks, sources, contract, s
     linker = (folder / "prj/ldScripts_main_core_0_2.ld.script").read_text()
     spans = sorted((int(a,16),int(a,16)+int(n,16),name) for a,name,n in re.findall(
         r"\. = (0x[0-9A-Fa-f]+);\s*\n\s*(\w+) = \.;\s*\n\. \+= (0x[0-9A-Fa-f]+);",linker))
-    if len(spans) != 3 + bool(state_words) or any(a < 0x70000 or b > 0x80000 for a,b,_ in spans):
+    if len(spans) != 3 + bool(state_words) + (output_packets is not None) + input_depth-1 or any(a < 0x70000 or b > 0x80000 for a,b,_ in spans):
         raise ValueError("Unexpected SRAM allocation")
     if any(a[1] > b[0] for a,b in zip(spans,spans[1:])):
         raise ValueError("Overlapping stack or buffers")
@@ -94,7 +104,9 @@ def build(folder, source, function, packet, output, blocks, sources, contract, s
                 output_words=output, blocks=blocks, state_words=state_words, code_bytes=code_bytes, stack_frames=frames,sram_spans=spans,
                 artifacts={name:sha(folder/name) for name in ("kernel.o","harness.mlir","insts.bin","final.xclbin")},
                 program_artifacts={name:sha(folder/name) for name in program_files},
-                compiler_sha256=sha(clang),optimization=optimization)
+                compiler_sha256=sha(clang),optimization=optimization,
+                output_packets=output_packets,output_blocks=blocks if output_packets is None else len(output_packets)+1,
+                input_depth=input_depth)
     save(folder / "build.json",meta)
     print(json.dumps(dict(build=str(folder),code_bytes=code_bytes,stack_frames=frames,blocks=blocks)),flush=True)
 
@@ -107,6 +119,9 @@ def execute(folder, packets):
         if sha(folder/name) != expected: raise ValueError("Build artifact changed")
     if packets.dtype != np.uint32 or packets.shape != (meta["blocks"],meta["packet_words"]):
         raise ValueError("Packet dimensions differ from compiled stream")
+    if meta.get('output_packets') is not None:
+        from .compact import validate_markers
+        validate_markers(meta,packets)
     witness = command(["C:/Windows/System32/AMD/xrt-smi.exe","examine","-r","aie-partitions"],folder)
     if "No hardware contexts running" not in witness:
         raise RuntimeError("NPU is busy; did not dispatch")
@@ -121,7 +136,8 @@ def execute(folder, packets):
             h.load_xclbin(str(folder / "final.xclbin"))
             ib,nbytes = h.create_instruction_bo(str(folder / "insts.bin"))
             bi = h.create_host_bo(packets.nbytes,3)
-            output_bytes = meta["blocks"]*meta["output_words"]*4
+            output_blocks=meta.get('output_blocks',meta['blocks'])
+            output_bytes = output_blocks*meta["output_words"]*4
             bo = h.create_host_bo(output_bytes,4)
             to = h.pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_TO_DEVICE
             fr = h.pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_FROM_DEVICE
@@ -133,7 +149,7 @@ def execute(folder, packets):
             if "COMPLETED" not in str(status):
                 raise RuntimeError(f"Dispatch {status}; stop without retry")
             bo.sync(fr)
-            result = np.frombuffer(bo.read(output_bytes,0),np.uint32).copy().reshape(meta["blocks"],meta["output_words"])
+            result = np.frombuffer(bo.read(output_bytes,0),np.uint32).copy().reshape(output_blocks,meta["output_words"])
             bi.sync(fr)
             if not np.array_equal(np.frombuffer(bi.read(packets.nbytes,0),np.uint32),packets.reshape(-1)):
                 raise ValueError("Input BO modified")

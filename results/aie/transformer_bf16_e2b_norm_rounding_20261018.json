@@ -1,0 +1,166 @@
+{
+  "scope": "Compare RMSNorm reduction and inverse-square-root rounding on saved NPU inputs.\n\nCPU diagnostics only. This does not replace activation arithmetic in NPU runs.\n",
+  "trace_sha256": "f103067f22918bce49a51554c5d8a745a533c36192f9aabbc30e521197413825",
+  "weights_sha256": "bda11a1dd40c42a3f84632cb66250f8afe1111657f0d37188e3c0234da6376fc",
+  "source_sha256": "d257608766e70dae4297a03831dc533b39cc5e0b3068ee41f3624e02a682ab54",
+  "layer": 1,
+  "native_different_from_cpu": 5,
+  "torch_variance_bits": [
+    1117577411,
+    1122038503,
+    1110374649,
+    1119209563
+  ],
+  "torch_inverse_bits": [
+    1038564756,
+    1036065784,
+    1041945486,
+    1037488426
+  ],
+  "rows": [
+    {
+      "variance": "torch",
+      "inverse": "newton4",
+      "variance_bits": [
+        1117577411,
+        1122038503,
+        1110374649,
+        1119209563
+      ],
+      "inverse_bits": [
+        1038564755,
+        1036065784,
+        1041945486,
+        1037488426
+      ],
+      "different_from_cpu": 5,
+      "different_from_native": 0
+    },
+    {
+      "variance": "torch",
+      "inverse": "compensated_newton",
+      "variance_bits": [
+        1117577411,
+        1122038503,
+        1110374649,
+        1119209563
+      ],
+      "inverse_bits": [
+        1038564756,
+        1036065784,
+        1041945486,
+        1037488426
+      ],
+      "different_from_cpu": 0,
+      "different_from_native": 5
+    },
+    {
+      "variance": "torch",
+      "inverse": "sqrt_reciprocal",
+      "variance_bits": [
+        1117577411,
+        1122038503,
+        1110374649,
+        1119209563
+      ],
+      "inverse_bits": [
+        1038564756,
+        1036065784,
+        1041945486,
+        1037488426
+      ],
+      "different_from_cpu": 0,
+      "different_from_native": 5
+    },
+    {
+      "variance": "torch",
+      "inverse": "fp64_pow_rounded",
+      "variance_bits": [
+        1117577411,
+        1122038503,
+        1110374649,
+        1119209563
+      ],
+      "inverse_bits": [
+        1038564756,
+        1036065784,
+        1041945486,
+        1037488426
+      ],
+      "different_from_cpu": 0,
+      "different_from_native": 5
+    },
+    {
+      "variance": "fp64_sum_rounded",
+      "inverse": "newton4",
+      "variance_bits": [
+        1117577410,
+        1122038503,
+        1110374649,
+        1119209563
+      ],
+      "inverse_bits": [
+        1038564756,
+        1036065784,
+        1041945486,
+        1037488426
+      ],
+      "different_from_cpu": 0,
+      "different_from_native": 5
+    },
+    {
+      "variance": "fp64_sum_rounded",
+      "inverse": "compensated_newton",
+      "variance_bits": [
+        1117577410,
+        1122038503,
+        1110374649,
+        1119209563
+      ],
+      "inverse_bits": [
+        1038564756,
+        1036065784,
+        1041945486,
+        1037488426
+      ],
+      "different_from_cpu": 0,
+      "different_from_native": 5
+    },
+    {
+      "variance": "fp64_sum_rounded",
+      "inverse": "sqrt_reciprocal",
+      "variance_bits": [
+        1117577410,
+        1122038503,
+        1110374649,
+        1119209563
+      ],
+      "inverse_bits": [
+        1038564756,
+        1036065784,
+        1041945486,
+        1037488426
+      ],
+      "different_from_cpu": 0,
+      "different_from_native": 5
+    },
+    {
+      "variance": "fp64_sum_rounded",
+      "inverse": "fp64_pow_rounded",
+      "variance_bits": [
+        1117577410,
+        1122038503,
+        1110374649,
+        1119209563
+      ],
+      "inverse_bits": [
+        1038564756,
+        1036065784,
+        1041945486,
+        1037488426
+      ],
+      "different_from_cpu": 0,
+      "different_from_native": 5
+    }
+  ]
+}

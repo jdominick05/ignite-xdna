@@ -1,0 +1,133 @@
+{
+  "scope": "Archive qualification reports with verified source/build provenance.\n\nRefuses replacement, verifies referenced source/program artifacts and scrubs the\ncurrent local account prefix. Does not turn a negative report into a pass.\n",
+  "source_sha256": "d1a776782eb356b2fe7971521bbc4ccf28df90f92a2ebeda446deb46c62d7369",
+  "result_sha256": "df7da6fc121b18a4efaf339d997b5cd12e653d78bc0b048371a8b433667ac972",
+  "report": {
+    "passed": true,
+    "scope": "Bounded Phoenix activity helper smoke check; no model inference or speed claim.",
+    "timing_eligible": false,
+    "source_sha256": {
+      "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\tools\\qualify_gpu_activity.py": "b7ada00ab5fbbec5f117f0a8612e618227402cc658f924e700a5477291ed63be",
+      "C:\\Users\\<user>\\gemma4-assistant\\bin\\gpu_activity.exe": "6280d1b1dc14e3fd7a84ee8b9ca6e7db7f89810e548b3fbe1b1eb79b56fe6fce",
+      "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\tools\\ggml_gpu_target\\gpu_activity.cpp": "ca4bb2a9167d0fe9c69f9d716cf926adb9a8b8843782b02101b891863afd217b",
+      "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\tools\\ggml_gpu_target\\activity.py": "b4cb1c4b65cd7cc998c75dfa1088215baee945a12b92ab7098063ed6bff30fc8",
+      "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\tools\\ggml_gpu_target\\build_activity.cmd": "08d89f9d350a137eba8f37d78916d5044fb4e6714bc3c1e82af25f114ba5e843",
+      "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\npu\\gemma4\\runtime.py": "4728348ecce96830512faf9019ee573b6db1353a5a237fe26b73b7c195117150",
+      "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\npu\\contention.py": "a00ac19ca6ca4b8a515628d6e8e534e71a4e5283930908bf7e5d7aad1af9a642",
+      "C:\\Windows\\System32\\D3DCompiler_47.dll": "2e3526354dbcd9cf013f7b741c549df2170fe6af607628442216a21e7d584883",
+      "C:\\Users\\<user>\\tools\\llamacpp-b1343-rocm\\amdhip64_7.dll": "3872b4aa82bbc91fcd53836bdbc2b4261c98c845eadfba31cce6ef4709a4697e"
+    },
+    "preflight": {
+      "utc": "2026-10-18T21:44:24.711238+00:00",
+      "sample_seconds": 0.502326699992409,
+      "snapshot_seconds": 0.7362912000098731,
+      "inference_processes": [
+        {
+          "pid": 11908,
+          "name": "python.exe",
+          "active_cpu_cores": 0
+        },
+        {
+          "pid": 12748,
+          "name": "python.exe",
+          "active_cpu_cores": 0
+        },
+        {
+          "pid": 26776,
+          "name": "python.exe",
+          "active_cpu_cores": 0
+        },
+        {
+          "pid": 64488,
+          "name": "python.exe",
+          "active_cpu_cores": 0
+        },
+        {
+          "pid": 75892,
+          "name": "python.exe",
+          "active_cpu_cores": 0
+        },
+        {
+          "pid": 80768,
+          "name": "python.exe",
+          "active_cpu_cores": 0.995
+        }
+      ],
+      "cpu_telemetry_known": true,
+      "gpu_telemetry_known": true,
+      "busy_gpu_engines": [
+        {
+          "pid": 11024,
+          "engine": "pid_11024_luid_0x00000000_0x0000CE7A_phys_0_eng_0_engtype_3D",
+          "utilization_percent": 1.0733205801559147
+        },
+        {
+          "pid": 4,
+          "engine": "pid_4_luid_0x00000000_0x0000CE7A_phys_0_eng_1_engtype_Copy",
+          "utilization_percent": 1.3250723783970424
+        }
+      ],
+      "gpu_details": {
+        "instances": 307,
+        "invalid_instances": 0
+      },
+      "gpu_error": null,
+      "npu_telemetry_known": true,
+      "npu_idle": true,
+      "idle_verified": false,
+      "blockers": [
+        "CPU inference work: PID 80768",
+        "GPU engine activity observed"
+      ],
+      "scope": "Read-only preflight snapshot; no process is stopped",
+      "owned_pids": [
+        75892,
+        80768
+      ]
+    },
+    "identity": {
+      "ready": true,
+      "vendor": 4098,
+      "device": 5567,
+      "luid_low": 52858,
+      "luid_high": 0,
+      "hip_luid_matched": true,
+      "node_mask": 1,
+      "hardware": true,
+      "threads": 32,
+      "iterations": 32768
+    },
+    "cases": [
+      {
+        "completed": true,
+        "gpu_validated": true,
+        "dispatches": 1,
+        "elapsed_ms": 5.1275,
+        "requested_ms": 1
+      },
+      {
+        "completed": true,
+        "gpu_validated": true,
+        "dispatches": 21,
+        "elapsed_ms": 42.0482,
+        "requested_ms": 40
+      },
+      {
+        "completed": true,
+        "gpu_validated": true,
+        "dispatches": 94,
+        "elapsed_ms": 101.5259,
+        "requested_ms": 100
+      }
+    ],
+    "rejected": [
+      0,
+      101,
+      -1,
+      true,
+      1.5
+    ],
+    "worker_closed": true
+  },
+  "builds": {}
+}

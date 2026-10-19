@@ -1,0 +1,74 @@
+RESEARCH_PLATFORM {"machine": "Desktop 2", "cpu": "AMD Ryzen 7 8700G w/ Radeon 780M Graphics", "os": "Windows-11-10.0.26200-SP0", "ram_bytes": 33381138432, "source_sha256": {"tools/research_process.py": "ffeb1857f190b482eed101b5f5a928f455de26bfa61d23f78a2eacec08e2663e", "tools/quant_calib_alphabet.py": "2dc0b2878c564853f340880209a425dfcf63b8536b2b8e9fd32344daade58d37", "tools/xint8_arithmetic_probe.py": "6aa3df08b9870c3c2264b868459d7ffbac3070dddc1349d7c6f3f480075f7041", "scripts/research-lowlevel.sh": "3455ad7933697936487712665505c216891865c6deada647302785f6e37020bd", "scripts/research-iron.sh": "4c863a262646ddab39b5005006ba8e03809895e6386c6310e2fd9d0a9e9609ee", "kernels/memory_placement/probe.py": "e8d990169ad6091fa1b53852e9f61eff495b5def72d35165a5c5cf1759e38898", "kernels/memory_placement/memory_kernels.cc": "182e7af7071a1e851afb4a7ca266069c489aea1fbaaa85eca129708daeba5ba6", "scripts/research-matrix.sh": "739254171629deae822b0ad7dabc875aee19ace56dde77d3e8aab61663f97516", "kernels/memory_placement/gemm.py": "17c905ad66110d3346bbf0db898dfc6b780df59fae1dfb0c1747057ce1e5844e", "kernels/memory_placement/gemm_placement.cc": "f21acf7250b12914ea30cc1f77613239dfa18421a85a1b9a5199017dd916278a", "tools/research_summary.py": "0c00dcceef07053d06731b41a1f1ed58d3ba4ea09f82497de354ce9cef17da20", "tools/research_toolchain.py": "f0a126a24ae213acfaa43460cfd9def0c86d9cb70cfee0228aa271688467b314"}, "commit": "f3fa8210d4ad5cb854f1f2cc53ef595303edeefc", "command": ["C:/Users/<user>/miniforge3/envs/mlir-aie-iron/python.exe", "tools/qualify_gemma4_block_distribution.py", "--artifacts", "C:/Users/<user>/gemma4-assistant", "--runtime", "C:/Users/<user>/tools/llamacpp-b1343-rocm", "--blocks", "C:/Users/<user>/gemma4-assistant/bin/ggml_gpu_target_blocks-flex-20261018.exe", "--serving-export", "C:/Users/<user>/gemma4-assistant/bin/ggml_gpu_target_logits-20261018.exe", "--block-export", "C:/Users/<user>/gemma4-assistant/bin/ggml_gpu_target_blocks_logits-20261018.exe", "--prereg", "C:/Users/<user>/gemma4-assistant/quality/block-distribution-20261018.prereg.json", "--out", "C:/Users/<user>/gemma4-assistant/quality/block-distribution-20261018.json"], "seconds_limit": 600.0, "rss_gib_limit": 8.0, "checks_only": true, "free_ram_bytes": 22515650560}
+PRE_NPU_CONTEXT_WITNESS "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [77556, 80364], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 4.453, "tree_rss_bytes": 41385984, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [76156, 77556, 80364], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 8.843, "tree_rss_bytes": 6489878528, "foreign_peers": []}
+DISTRIBUTION {'arm': 'serving_base', 'case': 'window0-prefix256', 'metrics': None}
+DISTRIBUTION {'arm': 'serving_base', 'case': 'window0-prefix511', 'metrics': None}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [76156, 77556, 77808, 80364], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 13.578, "tree_rss_bytes": 6495875072, "foreign_peers": []}
+DISTRIBUTION {'arm': 'serving_base', 'case': 'window0-prefix512', 'metrics': None}
+DISTRIBUTION {'arm': 'serving_base', 'case': 'window0-prefix513', 'metrics': None}
+DISTRIBUTION {'arm': 'serving_base', 'case': 'window0-prefix768', 'metrics': None}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [76156, 77556, 77808, 79016, 80364, 83872], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 18.125, "tree_rss_bytes": 6499381248, "foreign_peers": []}
+DISTRIBUTION {'arm': 'serving_base', 'case': 'window0-prefix1023', 'metrics': None}
+DISTRIBUTION {'arm': 'serving_base', 'case': 'window1-prefix256', 'metrics': None}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [76156, 76520, 76968, 77556, 77808, 79016, 80364, 83872], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 23.187, "tree_rss_bytes": 6523633664, "foreign_peers": []}
+DISTRIBUTION {'arm': 'serving_base', 'case': 'window1-prefix511', 'metrics': None}
+DISTRIBUTION {'arm': 'serving_base', 'case': 'window1-prefix512', 'metrics': None}
+DISTRIBUTION {'arm': 'serving_base', 'case': 'window1-prefix513', 'metrics': None}
+HOST_TIMELINE {"elapsed_seconds": 27.671, "tree_rss_bytes": 6528495616, "foreign_peers": []}
+DISTRIBUTION {'arm': 'serving_base', 'case': 'window1-prefix768', 'metrics': None}
+DISTRIBUTION {'arm': 'serving_base', 'case': 'window1-prefix1023', 'metrics': None}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [76156, 76520, 76968, 77556, 77808, 79016, 80364, 81860, 83872], "foreign_pids": []}
+DISTRIBUTION {'arm': 'serving_base', 'case': 'window2-prefix256', 'metrics': None}
+HOST_TIMELINE {"elapsed_seconds": 32.312, "tree_rss_bytes": 6526013440, "foreign_peers": []}
+DISTRIBUTION {'arm': 'serving_base', 'case': 'window2-prefix511', 'metrics': None}
+DISTRIBUTION {'arm': 'serving_base', 'case': 'window2-prefix512', 'metrics': None}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [22952, 76156, 76520, 76968, 77556, 77808, 79016, 80364, 81860, 83872], "foreign_pids": []}
+DISTRIBUTION {'arm': 'serving_base', 'case': 'window2-prefix513', 'metrics': None}
+HOST_TIMELINE {"elapsed_seconds": 36.718, "tree_rss_bytes": 6527946752, "foreign_peers": []}
+DISTRIBUTION {'arm': 'serving_base', 'case': 'window2-prefix768', 'metrics': None}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [22952, 63340, 76156, 76520, 76968, 77556, 77808, 79016, 80364, 81860, 83872], "foreign_pids": []}
+DISTRIBUTION {'arm': 'serving_base', 'case': 'window2-prefix1023', 'metrics': None}
+HOST_TIMELINE {"elapsed_seconds": 41.281, "tree_rss_bytes": 6544846848, "foreign_peers": []}
+DISTRIBUTION {'arm': 'serving_base', 'case': 'window3-prefix256', 'metrics': None}
+DISTRIBUTION {'arm': 'serving_base', 'case': 'window3-prefix511', 'metrics': None}
+DISTRIBUTION {'arm': 'serving_base', 'case': 'window3-prefix512', 'metrics': None}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [22952, 63340, 76156, 76520, 76968, 77556, 77808, 78964, 79016, 79996, 80364, 81860, 83872], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 45.75, "tree_rss_bytes": 6528032768, "foreign_peers": []}
+DISTRIBUTION {'arm': 'serving_base', 'case': 'window3-prefix513', 'metrics': None}
+DISTRIBUTION {'arm': 'serving_base', 'case': 'window3-prefix768', 'metrics': None}
+DISTRIBUTION {'arm': 'serving_base', 'case': 'window3-prefix1023', 'metrics': None}
+HOST_TIMELINE {"elapsed_seconds": 50.203, "tree_rss_bytes": 51437568, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [22952, 34892, 63340, 76156, 76520, 76968, 77556, 77808, 78964, 79016, 79996, 80364, 80524, 81860, 83872], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 54.578, "tree_rss_bytes": 6497144832, "foreign_peers": []}
+Traceback (most recent call last):
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\tools\qualify_gemma4_block_distribution.py", line 208, in <module>
+    raise SystemExit(main())
+                     ~~~~^^
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\tools\qualify_gemma4_block_distribution.py", line 166, in main
+    logits = gpu.logits()[0]
+             ~~~~~~~~~~^^
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\tools\ggml_gpu_target\logits_client.py", line 13, in logits
+    response = self.request(11,[count])
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\tools\ggml_gpu_target\client.py", line 147, in request
+    result = self.receive()
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\tools\ggml_gpu_target\client.py", line 85, in receive
+    raise RuntimeError(raw(word()).decode('utf-8', errors='replace'))
+RuntimeError: Current output logits unavailable
+POST_NPU_CONTEXT_WITNESS "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+RESEARCH_PROCESS_RESULT {"exit_code": 1, "stop": null, "peak_tree_rss_bytes": 6544846848, "rss_measurement": "maximum observed across sampled descendant working sets; zero observations reported as null", "elapsed_seconds": 56.98399999999674, "foreign_contention_observed": false, "timing_eligible": false}

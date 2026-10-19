@@ -18,16 +18,18 @@ import time
 import numpy as np
 
 from .common import STUDY,command,sha
+from .input_residency import changed_ranges
 
 _LEASE=threading.Lock()
 
 
 class PacketSession:
     """Reuse at most two contexts, optionally sharing byte-identical programs."""
-    def __init__(self,max_contexts=2,share_program=False):
+    def __init__(self,max_contexts=2,share_program=False,resident_inputs=False):
         if max_contexts not in (1,2):raise ValueError('Use one or two cached contexts')
         self.max_contexts=max_contexts
         self.share_program=share_program
+        self.resident_inputs=resident_inputs
         self.images=OrderedDict()
         self.active=False
         self.thread=None
@@ -48,6 +50,9 @@ class PacketSession:
             self._verified={}
             self._driver_sha256=sha(STUDY/'src/ignite_xdna/runtime/driver.py')
             self._registered_files={str(STUDY/'src/ignite_xdna/runtime/driver.py'):self._driver_sha256}
+            self._transport_sources={str(path):sha(path) for path in
+                                     (Path(__file__).resolve(),Path(__file__).with_name('input_residency.py').resolve())}
+            self._registered_files.update(self._transport_sources)
             self.pre_witness=witness
             return self
         except BaseException:
@@ -86,7 +91,7 @@ class PacketSession:
             raise RuntimeError('Contexts remain after packet session cleanup')
         return False
 
-    def execute(self,folder,packets):
+    def execute(self,folder,packets,reuse_input=False):
         if not self.active or threading.get_ident()!=self.thread:
             raise RuntimeError('Use packet transport on its owning thread inside a context manager')
         folder=Path(folder).resolve()
@@ -109,6 +114,9 @@ class PacketSession:
         meta,manifest_sha=self._verified[str(folder)]
         if packets.dtype!=np.uint32 or packets.shape!=(meta['blocks'],meta['packet_words']):
             raise ValueError('Packet dimensions differ from compiled stream')
+        if meta.get('output_packets') is not None:
+            from .compact import validate_markers
+            validate_markers(meta,packets)
         key=str(folder)
         if self.share_program:
             program=meta.get('program_artifacts')
@@ -146,11 +154,11 @@ class PacketSession:
                 _,old=image['streams'].popitem(last=False)
                 old['input']=old['output']=old['instructions']=None
             h=image['harness']
-            stream=dict(input=None,output=None,instructions=None,manifest_sha256=manifest_sha)
+            stream=dict(input=None,output=None,instructions=None,input_snapshot=None,manifest_sha256=manifest_sha)
             try:
                 stream['instructions'],stream['instruction_bytes']=h.create_instruction_bo(str(folder/'insts.bin'))
                 stream['input']=h.create_host_bo(packets.nbytes,3)
-                stream['output_bytes']=meta['blocks']*meta['output_words']*4
+                stream['output_bytes']=meta.get('output_blocks',meta['blocks'])*meta['output_words']*4
                 stream['output']=h.create_host_bo(stream['output_bytes'],4)
             except BaseException:
                 stream['input']=stream['output']=stream['instructions']=None
@@ -161,18 +169,49 @@ class PacketSession:
         fr=h.pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_FROM_DEVICE
         handle=None
         try:
-            bi.write(packets.tobytes(),0);bi.sync(to)
+            phase_start=time.perf_counter()
+            snapshot=stream['input_snapshot']
+            if self.resident_inputs and reuse_input and snapshot is not None:
+                spans=changed_ranges(packets,snapshot)
+                flat=packets.reshape(-1)
+                for start_byte,end_byte in spans:
+                    bi.write(flat[start_byte//4:end_byte//4].tobytes(),start_byte)
+                    bi.sync(to,end_byte-start_byte,start_byte)
+                update_mode='partial' if spans else 'unchanged'
+                written_bytes=sum(end-start for start,end in spans)
+            else:
+                bi.write(packets.tobytes(),0);bi.sync(to)
+                spans=[(0,packets.nbytes)]
+                written_bytes=packets.nbytes
+                update_mode='full'
+            input_ms=(time.perf_counter()-phase_start)*1000
+            phase_start=time.perf_counter()
             bo.write(np.full(stream['output_bytes']//4,0x7fc98765,np.uint32).tobytes(),0);bo.sync(to)
+            poison_ms=(time.perf_counter()-phase_start)*1000
             start=time.perf_counter()
             handle,status=h.dispatch_kernel(stream['instructions'],stream['instruction_bytes'],bi,bo,timeout_ms=5000)
             elapsed=(time.perf_counter()-start)*1000
             if 'COMPLETED' not in str(status):raise RuntimeError(f'Dispatch {status}; stop without retry')
+            phase_start=time.perf_counter()
             bo.sync(fr)
-            result=np.frombuffer(bo.read(stream['output_bytes'],0),np.uint32).copy().reshape(meta['blocks'],meta['output_words'])
+            result=np.frombuffer(bo.read(stream['output_bytes'],0),np.uint32).copy().reshape(meta.get('output_blocks',meta['blocks']),meta['output_words'])
+            output_ms=(time.perf_counter()-phase_start)*1000
+            phase_start=time.perf_counter()
             bi.sync(fr)
-            if not np.array_equal(np.frombuffer(bi.read(packets.nbytes,0),np.uint32),packets.reshape(-1)):
+            readback=np.frombuffer(bi.read(packets.nbytes,0),np.uint32)
+            if not np.array_equal(readback,packets.reshape(-1)):
                 raise ValueError('Input BO modified')
+            if self.resident_inputs:
+                stream['input_snapshot']=readback.copy().reshape(packets.shape)
+                stream['input_snapshot'].flags.writeable=False
+            verify_ms=(time.perf_counter()-phase_start)*1000
             return result,dict(dispatch_ms=elapsed,status=str(status),input_unchanged=True,
+                output_frames=meta.get('output_blocks',meta['blocks']),output_bytes=stream['output_bytes'],
+                input_update_mode=update_mode,input_write_bytes=written_bytes,input_total_bytes=packets.nbytes,
+                input_sync_ranges=len(spans),input_fully_verified=True,
+                transport_sources_sha256=dict(self._transport_sources),
+                transfer_phases_ms=dict(input_write_sync=input_ms,output_poison_sync=poison_ms,
+                                        output_sync_read=output_ms,input_sync_verify=verify_ms),
                 persistent_transport=True,image_cache_hit=hit,contexts_created=self.contexts_created,
                 context_cache_hit=context_hit,exact_program_sharing=self.share_program,
                 context_cache_size=len(self.images),runtime_driver_sha256=self._driver_sha256)

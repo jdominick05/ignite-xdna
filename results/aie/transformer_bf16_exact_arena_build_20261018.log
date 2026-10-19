@@ -1,0 +1,132 @@
+RESEARCH_PLATFORM {"machine": "Desktop 2", "cpu": "AMD Ryzen 7 8700G w/ Radeon 780M Graphics", "os": "Windows-11-10.0.26200-SP0", "ram_bytes": 33381138432, "source_sha256": {"tools/research_process.py": "ffeb1857f190b482eed101b5f5a928f455de26bfa61d23f78a2eacec08e2663e", "tools/quant_calib_alphabet.py": "2dc0b2878c564853f340880209a425dfcf63b8536b2b8e9fd32344daade58d37", "tools/xint8_arithmetic_probe.py": "6aa3df08b9870c3c2264b868459d7ffbac3070dddc1349d7c6f3f480075f7041", "scripts/research-lowlevel.sh": "3455ad7933697936487712665505c216891865c6deada647302785f6e37020bd", "scripts/research-iron.sh": "4c863a262646ddab39b5005006ba8e03809895e6386c6310e2fd9d0a9e9609ee", "kernels/memory_placement/probe.py": "e8d990169ad6091fa1b53852e9f61eff495b5def72d35165a5c5cf1759e38898", "kernels/memory_placement/memory_kernels.cc": "182e7af7071a1e851afb4a7ca266069c489aea1fbaaa85eca129708daeba5ba6", "scripts/research-matrix.sh": "739254171629deae822b0ad7dabc875aee19ace56dde77d3e8aab61663f97516", "kernels/memory_placement/gemm.py": "17c905ad66110d3346bbf0db898dfc6b780df59fae1dfb0c1747057ce1e5844e", "kernels/memory_placement/gemm_placement.cc": "f21acf7250b12914ea30cc1f77613239dfa18421a85a1b9a5199017dd916278a", "tools/research_summary.py": "0c00dcceef07053d06731b41a1f1ed58d3ba4ea09f82497de354ce9cef17da20", "tools/research_toolchain.py": "f0a126a24ae213acfaa43460cfd9def0c86d9cb70cfee0228aa271688467b314"}, "commit": "f3fa8210d4ad5cb854f1f2cc53ef595303edeefc", "command": ["C:/Users/<user>/miniforge3/envs/mlir-aie-iron/python.exe", "C:/Users/<user>/gemma4-assistant/scripts/qualify_state_updates.py", "--build-only", "--exact-norm", "--fixtures", "C:/Users/<user>/gemma4-assistant/npu/e2b-bf16-fixtures-1792343918871994900", "C:/Users/<user>/gemma4-assistant/npu/e2b-bf16-fixtures-1792343919410151200", "--rope", "C:/Users/<user>/gemma4-assistant/npu/rope-e2b-refinement-20261018.npz", "--lut", "C:/Users/<user>/gemma4-assistant/npu/gelu-bf16-tanh-v1.npz"], "seconds_limit": 90.0, "rss_gib_limit": 6.0, "checks_only": true, "free_ram_bytes": 22422425600}
+Traceback (most recent call last):
+  File "C:\Users\<user>\gemma4-assistant\scripts\qualify_state_updates.py", line 171, in <module>
+    run(args.fixtures, args.rope, args.lut, args.artifacts,args.exact_norm,args.build_only)
+    ~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\<user>\gemma4-assistant\scripts\qualify_state_updates.py", line 92, in run
+    templates[key]=program.prepare(cache)
+                   ~~~~~~~~~~~~~~~^^^^^^^
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\kernels\transformer_bf16\state.py", line 175, in prepare
+    return PreparedArena(self.build(cache),np.stack(self.packets),self.exports,self.uploads,
+                         ~~~~~~~~~~^^^^^^^
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\kernels\transformer_bf16\state.py", line 172, in build
+    return self.compiler.build(cache,len(self.packets))
+           ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\kernels\transformer_bf16\state.py", line 42, in build
+    stream.build(folder,source,spec['function'],WORDS,OUTPUT,blocks,
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                 self.sources,contract,state_words=STATE_WORDS,optimization='-Os')
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\kernels\transformer_bf16\stream.py", line 67, in build
+    command([IRON / "Scripts/aiecc.exe", folder / "harness.mlir", f"--peano={PEANO}",
+    ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+             "--get-npu-insts", "--npu-insts-name=insts.bin", "--get-xclbin",
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+             "--xclbin-name=final.xclbin", "--dump-intermediates", f"--tmpdir={folder/'prj'}"], folder)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\kernels\transformer_bf16\common.py", line 39, in command
+    raise RuntimeError(result.stdout[-4000:]+result.stderr[-6000:])
+RuntimeError: 
+(0/37) input.mlir
+(1/37)           
+(1/37) [0/1] placed.mlir
+(2/37)                  
+(2/37) [0/1] traced.mlir
+(3/37)                  
+(3/37) [0/1] input_with_addresses.mlirC:\Users\<user>\gemma4-assistant\npu\arena-images\draft_state_transformer-2c00197f0e9ce1fb\harness.mlir:5:14: warning: Failed to allocate buffer: "carry_state" with size: 33024 bytes.
+    %state = aie.buffer(%t) {sym_name = "carry_state"} : memref<8256xf32>
+             ^
+C:\Users\<user>\gemma4-assistant\npu\arena-images\draft_state_transformer-2c00197f0e9ce1fb\harness.mlir:5:14: note: see current operation: %carry_state = aie.buffer(%tile_0_2) {sym_name = "carry_state"} : memref<8256xf32> 
+C:\Users\<user>\gemma4-assistant\npu\arena-images\draft_state_transformer-2c00197f0e9ce1fb\harness.mlir:4:10: warning: Not all requested buffers fit in the available memory.
+
+    %t = aie.tile(0, 2)
+         ^
+C:\Users\<user>\gemma4-assistant\npu\arena-images\draft_state_transformer-2c00197f0e9ce1fb\harness.mlir:4:10: note: see current operation: %tile_0_2 = aie.tile(0, 2) {controller_id = #aie.packet_info<pkt_type = 0, pkt_id = 27>}
+C:\Users\<user>\gemma4-assistant\npu\arena-images\draft_state_transformer-2c00197f0e9ce1fb\harness.mlir:4:10: note: Current configuration of buffers in bank(s) : MemoryMap:
+		(stack) 	: 0x0-0xFFF 	(4096 bytes)
+	bank : 0	0x0-0x3FFF
+	bank : 1	0x4000-0x7FFF
+	bank : 2	0x8000-0xBFFF
+	bank : 3	0xC000-0xFFFF
+
+C:\Users\<user>\gemma4-assistant\npu\arena-images\draft_state_transformer-2c00197f0e9ce1fb\harness.mlir:4:10: warning: Bank-aware allocation failed, trying basic sequential allocation.
+    %t = aie.tile(0, 2)
+         ^
+C:\Users\<user>\gemma4-assistant\npu\arena-images\draft_state_transformer-2c00197f0e9ce1fb\harness.mlir:4:10: note: see current operation: %tile_0_2 = aie.tile(0, 2) {controller_id = #aie.packet_info<pkt_type = 0, pkt_id = 27>}
+C:\Users\<user>\gemma4-assistant\npu\arena-images\draft_state_transformer-2c00197f0e9ce1fb\harness.mlir:9:13: warning: link_with on aie.core is deprecated; attach link_with to the func.func declaration instead
+    %core = aie.core(%t) {
+            ^
+C:\Users\<user>\gemma4-assistant\npu\arena-images\draft_state_transformer-2c00197f0e9ce1fb\harness.mlir:9:13: note: see current operation: 
+%core_0_2 = aie.core(%tile_0_2) {
+  %c4294967295 = arith.constant 4294967295 : index
+  %c1 = arith.constant 1 : index
+  %c0 = arith.constant 0 : index
+  %c1_i32 = arith.constant 1 : i32
+  scf.for %arg0 = %c0 to %c4294967295 step %c1 {
+    aie.use_lock(%inF_cons_cons_lock_0, AcquireGreaterEqual, %c1_i32)
+    aie.use_lock(%outF_prod_lock_0, AcquireGreaterEqual, %c1_i32)
+    func.call @draft_state_transformer(%inF_cons_buff_0, %outF_buff_0, %carry_state) : (memref<4112xi32>, memref<1056xi32>, memref<8256xf32>) -> ()
+    aie.use_lock(%outF_cons_lock_0, Release, %c1_i32)
+    aie.use_lock(%inF_cons_prod_lock_0, Release, %c1_i32)
+  }
+  aie.end
+} {link_with = "kernel.o", stack_size = 4096 : i32}
+
+(4/37)                                
+(4/37) [0/1] input_physical.mlir
+(5/37)                          
+(5/37) perCore_{0}.mlir
+(6/37)                 
+(6/37) [0/1] npu_materialized.mlir
+(7/37)                            
+(7/37) perCoreInDevice
+(8/37)                
+(8/37) [0/1] npu_dma_lowered.mlir
+(9/37)                           
+(9/37) perCoreCompile
+(10/37)              
+(10/37) preBakedCores
+(12/37)              
+(12/37) [0/1] npu_lowered.mlir
+(13/37)                       
+(13/37) [0/1] perCoreArches_{0}.txt
+(14/37)                            
+(14/37) [0/1] lowered_{0}.mlir
+(15/37)                       
+(15/37) [0/1] perCoreIRLinkFiles_{0}.txt
+(16/37)                                 
+(16/37) [0/1] ldScripts_{0}.ld.script
+(17/37)                              
+(17/37) npu_seq_{0}.mlir
+(18/37)                 
+(18/37) [0/1] llvmIR_{0}.ll
+(19/37)                    
+(19/37) perSeqMatching
+(20/37)               
+(20/37) [0/1] peano-compat_{0}.ll
+(21/37)                          
+(21/37) [0/1] npu_program_{0}.bin
+(21/37) [0/1] peano-linked_{0}.ll, [0/1] npu_program_{0}.bin
+(22/37) [0/1] npu_program_{0}.bin                           
+(22/37) [0/1] opted_{0}.ll, [0/1] npu_program_{0}.bin
+(23/37) [0/1] npu_program_{0}.bin                    
+(23/37) [0/1] objects_{0}.o, [0/1] npu_program_{0}.bin
+(24/37) [0/1] npu_program_{0}.bin                     
+(24/37) [0/1] elfs_{0}.elf, [0/1] npu_program_{0}.bin
+(25/37) [0/1] elfs_{0}.elf                           
+(25/37) [0/1] elfs_{0}.elf, [0/1] insts.bin
+(26/37) [0/1] elfs_{0}.elf                 
+(27/37)                   
+(27/37) physical_with_elfs.mlir
+(28/37)                        
+(28/37) perDevice_{0}.mlir
+(29/37)                   
+(29/37) perDeviceMatching
+(30/37)                  
+(30/37) [0/1] cdo_{0}[AIE ERROR] _XAie_LoadProgMemSection():232: Overflow of program memory
+XAie_LoadElf failed with XAIE_INVALID_ELF
+aiecc: edge 'cdo_{0}' (key 'main') failed
+aiecc: pipeline failed
+
+HOST_TIMELINE {"elapsed_seconds": 3.985, "tree_rss_bytes": 0, "foreign_peers": []}
+RESEARCH_PROCESS_RESULT {"exit_code": 1, "stop": null, "peak_tree_rss_bytes": 388636672, "rss_measurement": "maximum observed across sampled descendant working sets; zero observations reported as null", "elapsed_seconds": 5.907000000006519, "foreign_contention_observed": false, "timing_eligible": false}

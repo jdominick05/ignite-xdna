@@ -1,0 +1,31 @@
+{
+  "scope": "Compare saved NPU proposals to actual GPU target greedy verification logits.\n\nOffline one-step checks only. The target states must match the original input\ncapture bit for bit before a verification token may be associated with a draft.\nNumerical failures remain failures regardless of the proposal agreement.\n",
+  "source_sha256": "d6a8c15bf897d45dcc44e9038c58ce13b351cf0dc33035494a186683ea36b60a",
+  "draft_result_sha256": "db47dfcf9e7393fc55fd47ddc3384dc7df4dc7a6b47264211fc573844d62aa58",
+  "cases": 2,
+  "accepted": 2,
+  "results": [
+    {
+      "model": "gemma-4-E2B-it-assistant",
+      "proposal": 6719,
+      "target_token": 6719,
+      "accepted": true,
+      "numerical_passed": true,
+      "state_tensors_bitwise_equal": 64,
+      "target_manifest_sha256": "fad542d30a8b7caa13e219ced678e940615de2a9f4c1fb49c6cf7a179d313284",
+      "original_manifest_sha256": "f669326c4b60822d347ede6345817ed0c702e98717b8b33d226a13995e05f3b1",
+      "verification_logits_sha256": "2edbea1c0ccd9c489d11e219a21ed8a0489c4852ee20770e9634b4daebb468de"
+    },
+    {
+      "model": "gemma-4-E4B-it-assistant",
+      "proposal": 563,
+      "target_token": 563,
+      "accepted": true,
+      "numerical_passed": false,
+      "state_tensors_bitwise_equal": 100,
+      "target_manifest_sha256": "95107e2f25d2a52333d47e82bb4542ee4a588ddbb867a1b734bf9d23a88284e0",
+      "original_manifest_sha256": "7feef6af0bfdb431fab44840c9ccad9205c4ffccfcda66d25c41b1abf39b8951",
+      "verification_logits_sha256": "e8adca7da78621592c2a4ba6def708db8d08b9f8fb1d770995a72c03c79ee4c7"
+    }
+  ]
+}

@@ -1,0 +1,60 @@
+{
+  "scope": "Archive GPU embedding comparison results without local account paths.",
+  "source_sha256": "cc527cd41d31e79b6eddc2643ed7e379772ec5b7c07a2c41dd3e6d9363025cf2",
+  "result_sha256": "97ee2b52b11998bfc235c7180b261a63852ed7142ac21e7a65bd773c2e8b04dc",
+  "report": {
+    "passed": true,
+    "registration": {
+      "scope": "Verify GPU-only token lookup against captured llama.cpp scaled embeddings.\n\nUses public trajectory tokens. No target evaluation or CPU dequantization runs\nin the lookup helper. This is a correctness check, not live hybrid inference.\n",
+      "source_sha256": "241e9b9eca8c66e8a7367805af11e8f8dc5eeb1211f8180c5fd7db6f984196f4",
+      "target_manifest_sha256": "2edcf058e0efa35c5df14c05f19a12f081107f1416abb15af71f2bf267a27268",
+      "tokens": [
+        2717,
+        6719,
+        107,
+        2543,
+        28751
+      ],
+      "token_file_sha256": "65846cbf62843903c70e6b368e48fd5575e1155a5671e1c0f336f420a1e94471",
+      "files": {
+        "<user-home>\\PycharmProjects\\ignite-xdna\\tools\\ggml_gpu_embedding\\embedding.cpp": "cf1dceb9f67ce2c1f24aedd80cba108028f473e13cebfac8f4c189f17abb9517",
+        "<user-home>\\gemma4-assistant\\bin\\ggml_gpu_embedding.exe": "4b60e493b7ed85195218bd5b92b64e563c0c95d2967605a530d2887409645b01",
+        "<user-home>\\gemma4-assistant\\models\\gemma-4-E2B-it-Q5_K_M-pleQ4-imatrix.gguf": "ac36a228eb6cd1b93eedc86153016612b0a60ba73c9a50e0b4e95a6a143f65e1",
+        "<user-home>\\tools\\llamacpp-b1343-rocm\\ggml-base.dll": "b0f6bcf152bbea75fe55c3d185b512ca4b3df167ec8159357da53be435db9539",
+        "<user-home>\\tools\\llamacpp-b1343-rocm\\ggml.dll": "d62c9fd3ea800ebf81b104f0b276c44105930557337c3e97ca7bf3e5a51bd889",
+        "<user-home>\\tools\\llamacpp-b1343-rocm\\ggml-hip.dll": "ea8866ab163caad203a2fa2f8afbce51584bb55eb566e1e863bb14e1b1d3f370",
+        "L:\\llm-work\\src\\llama.cpp\\ggml\\include\\ggml.h": "5e61b8054a615a1ef69e5d9ffbb1b4c3830e3134ea67eab126bc16d8c0b76e8d",
+        "L:\\llm-work\\src\\llama.cpp\\ggml\\include\\gguf.h": "4ae33e92cfe908a6068f2c5c9efe714d3290391aab0472d5d43edd6a8b00db2d",
+        "L:\\llm-work\\src\\llama.cpp\\ggml\\include\\ggml-backend.h": "2477d6cdd0bd936f8cc1004e69b87017aab72dde3de2acc49b40a22148aee4b0",
+        "L:\\llm-work\\src\\llama.cpp\\ggml\\include\\ggml-alloc.h": "4c2dc83a6bc3e8df4c8a613c56ec0a9a96a09a5b96de85cf9e1fbe2873c86608"
+      }
+    },
+    "metadata": {
+      "tokens": 5,
+      "hidden": 1536,
+      "vocabulary": 262144,
+      "weight_type": 14,
+      "weight_bytes": 330301440,
+      "scale": 39.1918373,
+      "nodes": 2,
+      "scale_op": "MUL",
+      "device_buffers": true,
+      "backend": "ROCm0",
+      "complete": true
+    },
+    "bitwise_equal": [
+      true,
+      true,
+      true,
+      true,
+      true
+    ],
+    "tokens": 5,
+    "elements": 7680,
+    "different": 0,
+    "max_abs": 0.0,
+    "actual_negative_zeros": 108,
+    "expected_negative_zeros": 108,
+    "output_sha256": "52b66ec890af3d684c8d6647227f5c4d318623e1731dfef1b594623845f92c4c"
+  }
+}
