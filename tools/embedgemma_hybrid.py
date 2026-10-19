@@ -203,6 +203,10 @@ def main():
     ap.add_argument("--round-dll", type=Path, help="npu: kernels/embedgemma/native.py build's embedgemma_round.dll "
                                                     "(AVX2 + OpenMP, bit-identical) instead of NumPy rounding")
     ap.add_argument("--out", type=Path, required=True)
+    ap.add_argument("--save-embeddings", type=Path, help="also write the embeddings as an npz (key 'embeddings'), "
+                    "e.g. to serve as a W8-emulation --reference")
+    ap.add_argument("--quality-reference", type=Path, help="W8 gate: when --reference is a W8 CPU emulation, also "
+                    "require every document to keep its nearest neighbour under this HF fp32 reference")
     a = ap.parse_args()
     if a.out.exists():
         raise FileExistsError(a.out)
@@ -309,15 +313,22 @@ def main():
             np.fill_diagonal(s, -np.inf)
             return s.argmax(axis=1)
         nn_kept = float(np.mean(nn(e) == nn(ref)))
+        nn_quality = None
+        if a.quality_reference:
+            nn_quality = float(np.mean(nn(e) == nn(np.load(a.quality_reference)["embeddings"])))
+        if a.save_embeddings:
+            np.savez_compressed(a.save_embeddings, embeddings=e)
         strict = a.backend == "cpu" and not emulation and a.attention == "exact"
         threshold = 0.99999 if strict else 0.9999
-        passed = bool(cos.min() >= threshold and (strict or nn_kept == 1.0))
+        passed = bool(cos.min() >= threshold and (strict or nn_kept == 1.0) and nn_quality in (None, 1.0))
         rec = dict(backend=a.backend, docs=str(a.docs), reference=str(a.reference), batch=a.batch, round_dll=bool(a.round_dll), attention=a.attention, geglu=a.geglu, npu_geglu=a.npu_geglu, w4=a.w4, wbits=a.wbits, wclip=a.wclip, k_block=a.k_block, exp=a.exp, tau=a.tau,
                    bf16_inputs=a.bf16_inputs, passed=passed,
                    gate=dict(cos_min=threshold, nn_kept=None if strict else 1.0),
                    cos_min=float(cos.min()), cos_mean=float(cos.mean()), nn_kept=nn_kept,
+                   quality_reference=str(a.quality_reference) if a.quality_reference else None, nn_kept_quality=nn_quality,
                    per_length={})
-        print(f"GATE {a.backend}: cos min {cos.min():.7f} (>= {threshold}), mean {cos.mean():.7f}, NN kept {nn_kept:.1%}: "
+        print(f"GATE {a.backend}: cos min {cos.min():.7f} (>= {threshold}), mean {cos.mean():.7f}, NN kept {nn_kept:.1%}"
+              + (f", NN kept vs quality reference {nn_quality:.1%}" if nn_quality is not None else "") + ": "
               f"{'PASS' if passed else 'FAIL'}", flush=True)
         for L in sorted(times):
             med = statistics.median(times[L]) * 1000

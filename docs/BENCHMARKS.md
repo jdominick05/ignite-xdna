@@ -25424,3 +25424,49 @@ Everything else is the same CPU emulation path as the W4 run above.
 - **Not separated:** how much of that came from the smaller group and how much from the clip search. Only the
   combined configuration was run.
 - **Clip search uses no data.** It picks alpha from weight error alone, so nothing was tuned on the gate documents.
+
+#### W8 weights on the device: exact and 1.88x smaller, but slower than bf16 as first built (2026-10-19, Desktop 2)
+
+This implements the [W8 decision](DECISIONS.md) on the generic GEMM.
+- **The layout.** `whole_array_generic.py --b-w8` streams B as uint8 tiles. The host pre-swizzles each one
+  ([`embedgemma_gemm_probe.py`](../tools/embedgemma_gemm_probe.py) `w8_tiles`): 64×64 sign-magnitude bytes already in
+  the bf16 matmul's L1 order, then 256 bytes of per-column scales. G = 64 is the K tile. One linear DMA per array
+  column carries the tiles.
+- **The dequant.** [`w8_dequant.cc`](../kernels/embedgemma/w8_dequant.cc) rebuilds `bf16(q·s)` into an L1 scratch
+  tile on each core before the unchanged bf16 matmul. It uses exact identities, with no conversion instruction.
+
+**The W8 reference.** CPU emulation with the device's substitutions plus W8 at the adopted configuration
+([record](../results/aie/embedgemma_w8_g64_clip20_emulation_ref_cpu_desktop2_20261019T005047Z.json)): cos min 0.9998604
+against fp32 HF, nearest neighbours 100% kept, so it meets the quality bar. Its embeddings are saved as the
+kernel-correctness reference for the end-to-end W8 run. That copy is in git-ignored
+`scratch/egemma-w8/w8_emulation_ref.npz`.
+
+**The four runs.** Stages ran in one sitting, every log exit 0 and `timing_eligible`, no foreign context. The
+figures are each forward pass's weight GEMMs.
+
+| Build | M = 256 | 512 | 2048 | Log |
+|---|---:|---:|---:|---|
+| bf16 B (baseline) | 63.5 | 97.5 | 341.8 | [log](../results/aie/embedgemma_gemm_w8_stagebf16_desktop2_20261019T010612Z.log) |
+| (a) W8 B, no dequant, no matmul: transport only | 47.1 | 67.6 | 207.3 | [log](../results/aie/embedgemma_gemm_w8_stagea_desktop2_20261019T010625Z.log) |
+| (b) W8 B + dequant, no matmul | 54.5 | 81.9 | 270.4 | [log](../results/aie/embedgemma_gemm_w8_stageb_desktop2_20261019T010639Z.log) |
+| (c) W8 B + dequant + matmul | 81.4 | 132.9 | **472.7** | [log](../results/aie/embedgemma_gemm_w8_stagec_desktop2_20261019T010556Z.log) |
+
+All figures are ms.
+
+- **Exact.** At every shape and M, stage (c) passes the product check (21 of 21). It also passes a one-hot-A probe
+  (21 of 21), whose C must equal `bf16(q·s)` bit for bit.
+- **Footprint.** The weight buffers hold **7.04 MiB, against 13.25 MiB** in bf16: 1.88x smaller. The scales cost
+  the remaining 0.12x.
+- **Speed.** W8 is **1.38x slower** than bf16 at M = 2048, because the binding resource moved:
+  - W8 cuts transport to 207.3 ms, against bf16's hollow 320.5 in the earlier sitting. W8 on its own does buy
+    speed in data movement.
+  - With the bytes gone, the core is the limit, and the dequant and the matmul run back to back. In bf16 the
+    matmul hid under transport.
+  - The dequant's compiled loop is 55 bundles per 128 weights, about 1,760 cycles per tile per core. Its
+    sign-bit shift goes through the accumulator (`vups`/`vsrs`).
+  - It runs for every 32-row A tile, because each B tile is re-dequantized per A tile on each of a column's 4
+    cores.
+- **Candidates, none run yet:**
+  - an encoding that drops the shift (sign-extending unpack plus masks);
+  - m = 64 tiles, which halve both the dequant per MAC and the B re-streaming.
+  - Both are DERIVED until measured.

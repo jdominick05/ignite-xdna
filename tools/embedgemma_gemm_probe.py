@@ -46,6 +46,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "kernels" / "embedgemma"))
 import geglu_model  # noqa: E402
+import w4  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 DESIGN = ROOT / "kernels" / "gemm_generic" / "whole_array_generic.py"
@@ -95,6 +96,29 @@ def gate_columns(c: np.ndarray, N: int) -> np.ndarray:
     return c[:, :N].reshape(c.shape[0], N // 64, 2, 32)[:, :, 0, :].reshape(c.shape[0], N // 2)
 
 
+def w8_tiles(q: np.ndarray, sc: np.ndarray, cols: int = 4) -> np.ndarray:
+    """W8 weights q int8 [K, Np] and per-64-row scales sc [K / 64, Np] -> the uint8 B buffer whole_array_generic.py
+    --b-w8 reads: array column col's tiles (nt = j * cols + col, K tile fastest) contiguous; each tile its 64 x 64
+    bytes in the bf16 matmul's L1 order (8x4 blocks, block (kb, nb) at (kb * 16 + nb) * 32) as sign << 7 | |q|, then
+    per 4-column block nb the bf16 scales [s0 s1 s2 s3 s0 s1 s2 s3] (kernels/embedgemma/w8_dequant.cc)."""
+    K, Np = q.shape
+    KT, J = K // 64, Np // 64 // cols
+    b = ((q < 0).astype(np.uint8) << 7) | np.abs(q.astype(np.int16)).astype(np.uint8)
+    b = b.reshape(KT, 8, 8, J, cols, 16, 4).transpose(4, 3, 0, 1, 5, 2, 6).reshape(cols, J, KT, 4096)
+    sb = to_bf16_bits(np.ascontiguousarray(sc, np.float32)).reshape(KT, J, cols, 16, 4).transpose(2, 1, 0, 3, 4)
+    sb = np.concatenate([sb, sb], axis=-1).reshape(cols, J, KT, 128).view(np.uint8)
+    return np.ascontiguousarray(np.concatenate([b, sb], axis=-1)).reshape(-1)
+
+
+def w8_weights(w: np.ndarray, N: int):
+    """fp32 [K, Np] with N real columns -> (q, sc, dequantized fp32 [K, Np]) at the adopted configuration (G = 64,
+    20-point clip, kernels/embedgemma/w4.py); padded columns q = 0, s = 1, dequantized 0."""
+    K, Np = w.shape
+    q, sc = np.zeros((K, Np), np.int8), np.ones((K // 64, Np), np.float32)
+    q[:, :N], sc[:, :N] = w4.quantize(w[:, :N], 64, 8, 20)
+    return q, sc, w4.dequant(q, sc)
+
+
 def gelu_tanh(x):
     x = np.asarray(x, np.float64)
     return 0.5 * x * (1 + np.tanh(np.sqrt(2 / np.pi) * (x + 0.044715 * x ** 3)))
@@ -119,6 +143,8 @@ def cmd_compile(a) -> int:
                 cmd += ["--epilogue-src", str(a.epilogue.resolve()), "--epilogue-mode", str(mode)]
             if a.hollow_matmul:
                 cmd += ["--hollow-matmul", str(a.hollow_matmul.resolve())]
+            if a.w8:
+                cmd += ["--b-w8", "1"] + (["--w8-dequant-src", str(a.w8_dequant.resolve())] if a.w8_dequant else [])
             r = subprocess.run(cmd, capture_output=True, text=True, timeout=1800)
             ok = r.returncode == 0 and Path(f"{s}.xclbin").exists()
             print(f"COMPILE {s.name} (N run as {padded(N)}): {'ok' if ok else 'FAIL rc=%d' % r.returncode}", flush=True)
@@ -151,11 +177,15 @@ def cmd_run(a) -> int:
     seq = forward(a.config)
     shapes = sorted({(K, N) for _, K, N in seq})
     rng = np.random.default_rng(3)
-    weights = {}
+    weights, w8 = {}, {}
     for K, N in shapes:
         w = np.zeros((K, padded(N)), np.float32)
         w[:, :N] = rng.standard_normal((K, N)) * 0.02
         weights[(K, N)] = to_bf16_bits(w)
+        if a.w8:   # the device reads the W8 buffer; every check is against its dequantized bf16 values
+            q, sc, dq = w8_weights(w, N)
+            w8[(K, N)] = w8_tiles(q, sc)
+            weights[(K, N)] = to_bf16_bits(dq)
     shared = Path(f"{stem(a.out, a.ms[0], *shapes[0])}.xclbin")
     dev = pyxrt.device(0)
     xb = pyxrt.xclbin(str(shared))
@@ -165,10 +195,13 @@ def cmd_run(a) -> int:
     to_dev, from_dev = pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_TO_DEVICE, pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_FROM_DEVICE
     bo = lambda nbytes: pyxrt.bo(dev, nbytes, pyxrt.bo.host_only, 0)
     Bs = {}
-    for sh, w in weights.items():
+    for sh, w in (w8 if a.w8 else weights).items():
         Bs[sh] = bo(w.nbytes)
         Bs[sh].write(w.tobytes(), 0)
         Bs[sh].sync(to_dev)   # weights written once, resident
+    footprint = sum(w.nbytes for w in (w8 if a.w8 else weights).values())
+    print(f"WEIGHTS {'W8' if a.w8 else 'bf16'}: {footprint / 2**20:.2f} MiB in B buffers over {len(Bs)} distinct shapes "
+          f"(bf16 would be {sum(w.nbytes for w in weights.values()) / 2**20:.2f} MiB)", flush=True)
     print(f"RUN one context on {shared.name}: {len(seq)} products per forward pass, {len(shapes)} distinct (K, N), "
           f"M in {a.ms}", flush=True)
     ok, report = True, {}
@@ -274,6 +307,18 @@ def cmd_run(a) -> int:
             good = err < 1e-3 and not np.abs(r1[:, N:]).any() and np.array_equal(r1.view(np.uint32), r2.view(np.uint32))
             ok &= good
             print(f"  CHECK {M}x{K}x{N}: rel err {err:.2e}: {'PASS' if good else 'FAIL'}", flush=True)
+            if a.w8:   # one-hot A rows: each output row is one dequantized B row times 1.0, so C must be bf16(q s)
+                ib, nb, A, C, act = prods[sh]
+                onehot = np.zeros((M, K), np.float32)
+                onehot[np.arange(M), np.arange(M) % K] = 1.0
+                A.write(to_bf16_bits(onehot).tobytes(), 0)
+                step(sh)
+                r = np.frombuffer(C.read(M * padded(N) * 4, 0), dtype=np.float32).reshape(M, -1)
+                exact = np.array_equal(r.view(np.uint32), bf16_float(weights[sh])[np.arange(M) % K].view(np.uint32))
+                ok &= exact
+                print(f"  W8 ONE-HOT {M}x{K}x{N}: device dequant bit-equal to bf16(q s): {'PASS' if exact else 'FAIL'}",
+                      flush=True)
+                A.write(act.tobytes(), 0)
         if not ok:
             break
         for name, K, N in seq:   # warm-up pass, untimed
@@ -323,6 +368,7 @@ def main() -> int:
         p.add_argument("--out", type=Path, required=True)
         p.add_argument("--ms", type=int, nargs="+", default=[256, 512, 2048], help="sequence rows M; this tile needs multiples of 256 (two 128-token docs = 256)")
         p.add_argument("--config", type=Path, default=CONFIG)
+        p.add_argument("--w8", action="store_true", help="B as W8 tiles (G 64, clip 20; kernels/embedgemma/w8_dequant.cc)")
         if name == "run":
             p.add_argument("--seqs", type=int, default=5, help="timed forward passes per M")
             p.add_argument("--epilogue-only", action="store_true", help="only the epilogue check (no plain checks, no timing)")
@@ -331,6 +377,7 @@ def main() -> int:
         else:
             p.add_argument("--epilogue", type=Path, help="link this egemm_epilogue source; adds gate|up mode streams")
             p.add_argument("--hollow-matmul", type=Path, help="timing probe: link this no-op in matmul's place")
+            p.add_argument("--w8-dequant", type=Path, help="with --w8: link this egemm_w8_dequant (else none: a probe)")
             p.add_argument("--modes", type=int, nargs="+", default=[1, 2],
                            help="epilogue modes to build gate|up streams for (3, 4: timing probes)")
     a = ap.parse_args()

@@ -36,7 +36,7 @@ import sys
 
 import aie.iron as iron
 import numpy as np
-from aie.helpers.taplib import TensorAccessSequence, TensorTiler2D
+from aie.helpers.taplib import TensorAccessPattern, TensorAccessSequence, TensorTiler2D  # local change: W8 B
 from aie.extras import types as T  # local change: RTP loop bounds
 from aie.extras.dialects import arith  # local change: RTP loop bounds
 from aie.iron import (
@@ -92,6 +92,8 @@ def _build_design(
     epilogue_src="",  # local change
     epilogue_mode=0,  # local change
     hollow_src="",  # local change: timing probe, a no-op in matmul's place
+    b_w8=0,  # local change: B as host pre-swizzled W8 tiles (kernels/embedgemma/w8_dequant.cc)
+    w8_dequant_src="",  # local change: the W8 dequant kernel (absent: no dequant, a transport probe)
     *,
     generate_taps=False,
 ):
@@ -183,6 +185,13 @@ def _build_design(
     A_l1_ty = np.ndarray[(m, k), np.dtype[dtype_in]]
     B_l1_ty = np.ndarray[(k, n), np.dtype[dtype_in]]
     C_l1_ty = np.ndarray[(m, n), np.dtype[dtype_out]]
+    if b_w8:  # local change: each B tile is k*n sign-magnitude bytes in matmul's L1 order + 4n bytes of scales
+        assert (k, n) == (64, 64) and (s, t) == (8, 4), "w8_dequant.cc is written for k = n = 64, bf16 4x8x4"
+        b_tile_bytes = k * n + 4 * n
+        B_ty = np.ndarray[((K // k) * (N // n) * b_tile_bytes,), np.dtype[np.uint8]]
+        B_l2_ty = np.ndarray[(b_tile_bytes,), np.dtype[np.uint8]]
+        B8_l1_ty = B_l2_ty
+        Bdq_l1_ty = np.ndarray[(k * n,), np.dtype[dtype_in]]  # the matmul kernel takes its operands flat
 
     A_l3l2_fifos: list[ObjectFifo] = []
     A_l2l1_fifos: list[ObjectFifo] = []
@@ -222,6 +231,8 @@ def _build_design(
             else [(k // s, s * n), (n // t, t), (s, n), (t, 1)]
         )
         B_l2l1_fifos.append(
+            b_l3l2.cons().forward(obj_type=B8_l1_ty, name=f"B_L2L1_{col}")  # local change: pre-swizzled, linear
+            if b_w8 else
             b_l3l2.cons().forward(
                 obj_type=B_l1_ty,
                 name=f"B_L2L1_{col}",
@@ -269,7 +280,9 @@ def _build_design(
             out_c.release(1)
 
     # Local change: the shape-generic core. rtp[0] = output tiles per core, rtp[1] = K // k.
-    def core_fn_generic(in_a, in_b, out_c, zero, matmul, rtp, barrier, *epilogue):
+    def core_fn_generic(in_a, in_b, out_c, zero, matmul, rtp, barrier, *extra):
+        dequant, bscratch = (extra[0], extra[1]) if w8_dequant_src else (None, None)  # local change: W8
+        epilogue = extra[2:] if w8_dequant_src else extra
         barrier.wait_for_value(1)
         n_tiles = arith.index_cast(rtp[0], to=T.index())
         k_tiles = arith.index_cast(rtp[1], to=T.index())
@@ -280,7 +293,11 @@ def _build_design(
             for _ in range_(k_tiles):
                 elem_in_a = in_a.acquire(1)
                 elem_in_b = in_b.acquire(1)
-                matmul(elem_in_a, elem_in_b, elem_out)
+                if dequant is not None:  # local change: W8 tile -> bf16 in L1, then the bf16 matmul
+                    dequant(elem_in_b, bscratch)
+                    matmul(elem_in_a, bscratch, elem_out)
+                else:
+                    matmul(elem_in_a, elem_in_b, elem_out)
                 in_a.release(1)
                 in_b.release(1)
             if epilogue:
@@ -299,7 +316,14 @@ def _build_design(
 
     if hollow_src:  # local change: every DMA/lock step kept, the MACs dropped (output wrong by construction)
         matmul_kernel = ExternalFunction("egemm_nomatmul", source_file=str(hollow_src),
-                                         arg_types=[A_l1_ty, B_l1_ty, C_l1_ty], include_dirs=[config.cxx_header_path()])
+                                         arg_types=[A_l1_ty, (B8_l1_ty if not w8_dequant_src else Bdq_l1_ty) if b_w8 else B_l1_ty,
+                                                    C_l1_ty], include_dirs=[config.cxx_header_path()])
+    if b_w8 and w8_dequant_src:  # local change: one dequant kernel and one bf16 B scratch tile per core
+        assert rtp_generic, "--w8-dequant-src needs --rtp-generic"
+        dequant_kernel = ExternalFunction("egemm_w8_dequant", source_file=str(w8_dequant_src),
+                                          arg_types=[B8_l1_ty, Bdq_l1_ty], include_dirs=[config.cxx_header_path()])
+        bscratch = [[Buffer(Bdq_l1_ty, name=f"bdq_{row}_{col}") for col in range(n_aie_cols)]
+                    for row in range(n_aie_rows)]
     workers = Worker.grid(
         n_aie_rows,
         n_aie_cols,
@@ -313,6 +337,7 @@ def _build_design(
                 matmul_kernel,
             ]
             + ([rtps[row][col], barriers[row][col]] if rtp_generic else [])  # local change
+            + ([dequant_kernel, bscratch[row][col]] if b_w8 and w8_dequant_src else [])  # local change
             + ([epilogue_kernel] if epilogue_kernel else []),  # local change
             stack_size=0xD00,
         ),
@@ -328,7 +353,12 @@ def _build_design(
         pattern_repeat=N // n // n_aie_cols,
         prune_step=False,
     )
-    if b_col_maj:
+    if b_w8:  # local change: column col's tiles are contiguous in the order its cores consume them
+        per_col = (K // k) * (N // n // n_aie_cols) * b_tile_bytes
+        B_tiles = [TensorAccessPattern((per_col * n_aie_cols,), col * per_col,
+                                       [1, 1, per_col // (b_tile_bytes // 4), b_tile_bytes // 4],
+                                       [0, 0, b_tile_bytes // 4, 1]) for col in range(n_aie_cols)]
+    elif b_col_maj:
         B_tiles = TensorTiler2D.step_tiler(
             (N, K),
             (n, k),
@@ -472,6 +502,8 @@ def whole_array(
     epilogue_src: CompileTime[str] = "",  # local change
     epilogue_mode: CompileTime[int] = 0,  # local change
     hollow_src: CompileTime[str] = "",  # local change
+    b_w8: CompileTime[int] = 0,  # local change
+    w8_dequant_src: CompileTime[str] = "",  # local change
 ):
     return _build_design(
         iron.get_current_device(),
@@ -494,6 +526,8 @@ def whole_array(
         epilogue_src,  # local change
         epilogue_mode,  # local change
         hollow_src,  # local change
+        b_w8,  # local change
+        w8_dequant_src,  # local change
     )
 
 
@@ -557,6 +591,8 @@ def _make_argparser():
     p.add_argument("--epilogue-src", default="", help="local change: link egemm_epilogue(c, mode) from this file")
     p.add_argument("--epilogue-mode", type=int, default=0, help="local change: the mode this shape's call runs")
     p.add_argument("--hollow-matmul", default="", help="local change: timing probe, link this no-op in matmul's place")
+    p.add_argument("--b-w8", type=int, default=0, help="local change: B as pre-swizzled W8 tiles (uint8)")
+    p.add_argument("--w8-dequant-src", default="", help="local change: link this egemm_w8_dequant (else no dequant)")
     p.add_argument(
         "--c-single-buffer",
         type=int,
@@ -653,6 +689,8 @@ def _compile_kwargs(opts):
         epilogue_src=opts.epilogue_src,  # local change
         epilogue_mode=opts.epilogue_mode,  # local change
         hollow_src=opts.hollow_matmul,  # local change
+        b_w8=opts.b_w8,  # local change
+        w8_dequant_src=opts.w8_dequant_src,  # local change
     )
 
 
@@ -713,6 +751,8 @@ def _run_and_verify(opts):
         epilogue_src=opts.epilogue_src,  # local change
         epilogue_mode=opts.epilogue_mode,  # local change
         hollow_src=opts.hollow_matmul,  # local change
+        b_w8=opts.b_w8,  # local change
+        w8_dequant_src=opts.w8_dequant_src,  # local change
         warmup=opts.warmup,
         iters=opts.iters,
     )

@@ -4468,3 +4468,31 @@ source/score/report identities of both native arms before and after the measurem
 The verifier reconstructs sample medians and checks eligibility and execution policy.
 No adoption timing before full accuracy passes; no favorable retiming or metric change.
 
+
+
+## EmbeddingGemma 2 weights go W8 (INT8, G=64, MSE clip) for consumer inference; BF16 stays the baseline (2026-10-19, Desktop 2)
+
+**The owner's decision:** this is a small model built for consumer inference, not for half-precision compute.
+- **What is adopted:** W8 weights for every one of the 146 weight products: symmetric INT8 with q in [-127, 127].
+  Each column gets one bf16 scale per 64 K rows, picked by a 20-point MSE search over alpha in [0.85, 1]
+  (`kernels/embedgemma/w4.py`, `--w4 64 --wbits 8 --wclip 20`).
+- **BF16 weights stay the measured comparison baseline.**
+- **G=64 over RTN G=128:** it is the more accurate of the two, and G=64 equals the GEMM's K-tile, so each B tile
+  carries exactly one scale per column.
+- **Evidence** ([BENCHMARKS](BENCHMARKS.md), "W8 weights"):
+  - CPU emulation, cos min 0.9998626 and 100% of nearest neighbours kept against fp32 HF.
+  - RTN G=128 reads 0.9998203.
+  - W4 RTN G=128 (0.9502, NN 82.1%) is rejected.
+
+**How a W8 device run is judged** (registered before any device W8 code was written):
+- **Kernel correctness.** Device against a W8 CPU-emulation reference that carries the device's own substitutions:
+  bf16 inputs, blockwise integer-softmax attention (`--exp fixed --tau 8`) and the mode-5 GeGLU model, which mode 6
+  matches bit for bit. The bar is cos >= 0.9999 and 100% of nearest neighbours kept (`--reference`).
+- **Quality.** 100% of nearest neighbours kept against the fp32 HF reference (`--quality-reference`).
+- **The 0.9999 fp32 cosine bar is not applied to W8.** A correct W8 kernel misses it by design, and this
+  emulation reads 0.99986. It stays the bar for every bf16-weight result.
+- **The dequant must be exact.** A probe with one-hot A rows must reproduce `bf16(q * s)` bit for bit. The 1e-3
+  rel-err product check alone could hide a 1-ulp dequant error.
+- **Timing.** W8 and the bf16 GEMM are timed in the same sitting. The main result is the weight footprint, in MB
+  from the BO sizes. Any speedup stays DERIVED until a hollow-W8 transport probe measures it: the bf16 GEMMs are
+  95-97% transport-bound.
