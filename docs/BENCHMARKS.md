@@ -26257,3 +26257,34 @@ GEMM 2048x512x2048 and attention doc512, 200 calls each:
     nothing to regroup. Its per-document switches, and with them the 128-token gap to the 780M, are unchanged.
   - What would change them: batching documents from several clients into one dispatch (not implemented), or one
     image holding both kernels (step 2).
+
+#### One XDNA1 context can switch designs from its instruction stream: one core in about 0.02 ms, LOADPDI refused (2026-10-19, Desktop 2)
+
+mlir-aie's `aiex.configure @design { aiex.run @seq(...) }`, compiled with `aiecc --expand-load-pdis`, turns each
+reconfiguration into register writes in the runtime instruction stream. `tools/txn_decode.py` reads them as:
+- core program memory (block writes at +0x20000) and core control (+0x32000);
+- DMA descriptors, locks and stream switches;
+- one LOADPDI per configure (an empty-device reset).
+
+Upstream tests this only on npu2 with a full ELF. `tools/reconfig_probe.py` tests it on XDNA1:
+- Two one-core designs of its own: add2 (out = in + 2) and add3.
+- The context is opened on add2's ordinary xclbin. Every stream runs there, one process per variant, with the NPU
+  idle after each ([log](../results/aie/reconfig_probe_desktop2_20261019T122107Z.log)).
+
+| Variant | Stream | Result | Median of 20 |
+|---|---|---|---:|
+| A | add2's own sequence | PASS | 0.131 ms |
+| B0 | configure add2 over itself, run, LOADPDI stripped | PASS | 0.149 ms |
+| B | configure add2, run twice, configure **add3**, run twice, LOADPDI stripped | PASS | 0.166 ms |
+| S | configure add3 once, run once, LOADPDI stripped | PASS | 0.150 ms |
+| C | B as aiecc emits it, LOADPDI kept | `ERT_CMD_STATE_ERROR` on the first call | n/a |
+
+- **B's output is the reconfiguration's.** [0:4] + 2, [4:8] + 3, [8:12] unchanged, [12:16] + 5. The xclbin holds
+  only add2, so the +3 can only come from program memory the stream rewrote.
+- **The cost:** one core switching design adds about 0.02 ms to a call (S against A). A context switch costs
+  1.0-1.4 ms. The stream with the switch in it is 2,204 B.
+- **LOADPDI is refused, not hung:** variant C errored on its first call, and the device was idle afterwards.
+- **What the strip leaves untested:** the empty-device reset that LOADPDI performed. Here both designs use the same
+  tiles and routes. Designs that differ (other tiles, MemTile programs, stream routes) may depend on that reset.
+- **Not measured:** the real designs. The GEMM and the attention each use 16 cores (about 11 KB of program each)
+  plus MemTile and shim configuration, so the stream and its write time grow with that. That is the next probe.
