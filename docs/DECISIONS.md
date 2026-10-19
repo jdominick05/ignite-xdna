@@ -4468,3 +4468,95 @@ source/score/report identities of both native arms before and after the measurem
 The verifier reconstructs sample medians and checks eligibility and execution policy.
 No adoption timing before full accuracy passes; no favorable retiming or metric change.
 
+
+
+## EmbeddingGemma 2 weights go W8 (INT8, G=64, MSE clip) for consumer inference; BF16 stays the baseline (2026-10-19, Desktop 2)
+
+**The owner's decision:** this is a small model built for consumer inference, not for half-precision compute.
+- **What is adopted:** W8 weights for every one of the 146 weight products: symmetric INT8 with q in [-127, 127].
+  Each column gets one bf16 scale per 64 K rows, picked by a 20-point MSE search over alpha in [0.85, 1]
+  (`kernels/embedgemma/w4.py`, `--w4 64 --wbits 8 --wclip 20`).
+- **BF16 weights stay the measured comparison baseline.**
+- **G=64 over RTN G=128:** it is the more accurate of the two, and G=64 equals the GEMM's K-tile, so each B tile
+  carries exactly one scale per column.
+- **Evidence** ([BENCHMARKS](BENCHMARKS.md), "W8 weights"):
+  - CPU emulation, cos min 0.9998626 and 100% of nearest neighbours kept against fp32 HF.
+  - RTN G=128 reads 0.9998203.
+  - W4 RTN G=128 (0.9502, NN 82.1%) is rejected.
+
+**How a W8 device run is judged** (registered before any device W8 code was written):
+- **Kernel correctness.** Device against a W8 CPU-emulation reference that carries the device's own substitutions:
+  bf16 inputs, blockwise integer-softmax attention (`--exp fixed --tau 8`) and the mode-5 GeGLU model, which mode 6
+  matches bit for bit. The bar is cos >= 0.9999 and 100% of nearest neighbours kept (`--reference`).
+- **Quality.** 100% of nearest neighbours kept against the fp32 HF reference (`--quality-reference`).
+- **The 0.9999 fp32 cosine bar is not applied to W8.** A correct W8 kernel misses it by design, and this
+  emulation reads 0.99986. It stays the bar for every bf16-weight result.
+- **The dequant must be exact.** A probe with one-hot A rows must reproduce `bf16(q * s)` bit for bit. The 1e-3
+  rel-err product check alone could hide a 1-ulp dequant error.
+- **Timing.** W8 and the bf16 GEMM are timed in the same sitting. The main result is the weight footprint, in MB
+  from the BO sizes. Any speedup stays DERIVED until a hollow-W8 transport probe measures it: the bf16 GEMMs are
+  95-97% transport-bound.
+
+
+## W8A8 for the weight GEMMs: per-channel weights, per-token activations (2026-10-19, Desktop 2)
+
+**Why.** W8A16 passes its gate but is no faster than bf16 end to end (BENCHMARKS, "End-to-end W8 on the device"):
+the bf16 matmul runs on the core, and the core binds. The owner chose W8A8: int8 activations with the native int8
+mmul (256 MAC/cycle, against bf16's 128) and int32 accumulation. W8A16 and W8A8 are not mixed.
+
+**Granularity, chosen in planning.**
+- One weight scale per output column over all of K: symmetric int8, q in [-127, 127], scale from the 20-point MSE
+  clip (`w4.quantize(w, K, 8, 20)`).
+- One activation scale per token over all of K: `w4.quantize_rows`, s = bf16(max|x| / 127), q = clip(rne(x / s)).
+- int32 then accumulates over the whole K, and the scales are applied once per output tile.
+- **A planning-time claim is corrected.** I first said per-token-per-64-group activation scales would cost "about
+  nothing extra". That was wrong: with 64-wide groups the scale step runs every 64 of K for every output element,
+  roughly 1.5-2x the MAC work (DERIVED from op counts). Per-channel / per-token makes it once per tile.
+
+**The gate, registered before the run.**
+- **Step 0, CPU emulation:** `--w4 64 --wchannel --wbits 8 --wclip 20 --a8`, plus the device substitutions (bf16
+  inputs are replaced by the int8 activations, `--attention blockwise --exp fixed --tau 8 --geglu model5`). It is
+  run once, with no sweep on the gate documents.
+- **The bar is W8's:** 100% of nearest neighbours kept against fp32 HF, with cos min and mean reported.
+- **On a FAIL, stop:** no device code; the numbers go to the owner.
+- **On a PASS:** its embeddings become the W8A8 kernel-correctness reference (device: cos >= 0.9999 and NN 100%
+  against it, NN 100% against HF).
+- **The device numerics:** fp32(P) times s_a times s_w, by an exact bf16 split, modelled with `exp_sum` and checked
+  bit-exact.
+
+**Quality bar for W8A8, registered 2026-10-19 before any run (the owner's choice).** The 56-document NN bar proved too
+coarse (BENCHMARKS, "W8A8 ... under CPU emulation"), so W8A8 is judged on MTEB SciFact retrieval (test split:
+corpus, queries, qrels), never the gate documents.
+- Prompts: the model's own, "task: search result | query: " for queries and "title: {title or none} | text: " for
+  documents. Documents are truncated at 512 tokens.
+- Scored by cosine ranking.
+- **Pass:** nDCG@10 at most 0.5 points below fp32 HF's (absolute), **and** mean top-10 overlap with fp32 HF's
+  retrieved set of at least 90%.
+- W8A16 (the device-gated configuration) is scored beside it as the control.
+- **Amended before any score was read.** The formats are fake-quantized inside HF fp32 torch
+  (`tools/embedgemma_retrieval_eval.py hf --quant`), using w4.py's exact functions. The first plan ran them through
+  the numpy emulator with the device substitutions, but that was estimated at 6-10 h and was stopped unscored. The
+  substitutions are gated separately and are common to both formats.
+- **On a fail, stop and report.**
+
+- **Runtime-sequence MemTile DMA tasks: channels 0 and 1, explicit BD ids (2026-10-19).** Two pitfalls found
+  building the one-xclbin weight-resident GEMM:
+  - `aiex.dma_configure_task` on a MemTile timed out on channels 4 and 5 in every form tried, and ran on 0 and 1.
+    Channels 2 and 3 are untried.
+  - The runtime-sequence BD-id allocator starts each tile empty, so on a MemTile with static ObjectFifo chains it
+    hands out ids those chains already own.
+
+  So: put runtime MemTile tasks on channel 0 or 1, pin the static chains above them (handle `channel=`), and pin each
+  runtime BD's `bd_id` in the channel's half (even 0-23, odd 24-47) clear of the static ids. Check those ids per
+  build. Whether the channel limit is silicon, firmware or lowering is unexplained
+  ([BENCHMARKS](BENCHMARKS.md#one-xclbin-weight-resident-gemm-every-forward-shape-bit-equal-2106-against-2323-ms-per-pass-at-2048-2026-10-19-desktop-2)).
+- **Weight-resident (B-stationary) generic GEMM, as one xclbin (2026-10-19).** Reading B once per product,
+  with one n-tile's task group kept in flight, is exact and cut 2048x512x4096 from 3.485 to 2.932 ms (no MACs: 3.435
+  to 2.359). Switching contexts costs 1.0-1.4 ms per call, so one xclbin per (M, K) is ruled out. The MemTile B path
+  goes in the runtime sequence instead. An earlier entry here rejected the approach; its measurement had every
+  n-tile's drains awaited before the next was issued, and it is superseded
+  ([BENCHMARKS](BENCHMARKS.md#weight-resident-b-with-one-task-group-in-flight-16-faster-and-exact-so-the-b-re-reads-did-bind-2026-10-19-desktop-2)).
+- **No hand-scheduled bf16 GEMM kernel for the generic GEMM while it is transport-bound (2026-10-19).** The hollow m64
+  build (no MACs) runs the forward-pass GEMMs in 231.0 ms at M = 2048, the same as the owned `mm_bf16.cc`
+  (230.0). A faster core cannot move the device time; reopen only if the transport floor drops below the kernel's
+  core time ([BENCHMARKS](BENCHMARKS.md#with-the-owned-kernel-the-m64-gemm-is-transport-bound-a-hand-scheduled-kernel-cannot-pay-on-the-device-2026-10-19-desktop-2)).

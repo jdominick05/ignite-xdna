@@ -106,6 +106,8 @@ KERNELS = {
     "tnzr_bf16": dict(fn="tensor_kernel_32x32x32_bf16_bf16_fp32", kind="bf16", src="tnzr"),
     "mm_bf16_f32": dict(fn="matmul_bf16_f32", kind="bf16", src="mm", define="bf16_f32_ONLY"),
     "mm_i8_i32": dict(fn="matmul_i8_i32", kind="i8", src="mm", define="i8_i32_ONLY"),
+    # owned C++ drop-ins for mm.cc (same symbol and layouts); src="cc" compiles `path` with MM_FLAGS and the dims
+    "own_bf16": dict(fn="matmul_bf16_f32", kind="bf16", src="cc", path=ROOT / "kernels" / "gemm_bf16" / "mm_bf16.cc"),
 }
 
 # Probe P2, the VMAC forwarding distance: `chain_<bf16|i8>_d<d>` is generated, not stored. It loads
@@ -312,7 +314,7 @@ def check_shape(name: str, args) -> None:
     k = KINDS[spec["kind"]]
     if spec["src"] == "tnzr" and (args.m, args.k, args.n) != (32, 32, 32):
         raise SystemExit("tnzr_bf16 is a fixed 32x32x32 kernel")
-    if spec["src"] == "mm" and (args.m % (4 * k["r"]) or args.k % k["s"] or args.n % (2 * k["t"] if spec["kind"] == "i8" else 4 * k["t"])):
+    if spec["src"] in ("mm", "cc") and (args.m % (4 * k["r"]) or args.k % k["s"] or args.n % (2 * k["t"] if spec["kind"] == "i8" else 4 * k["t"])):
         raise SystemExit(f"{name}: shape {args.m}x{args.k}x{args.n} violates mm.cc's static_asserts")
 
 
@@ -342,6 +344,9 @@ def compile_kernel(spec: dict, out: Path, args) -> list[str]:
     elif spec["src"] in ("tnzr", "asm"):
         src = tnzr_source() if spec["src"] == "tnzr" else spec["path"]
         cmd = [clang, "--target=aie2-none-unknown-elf", "-c", src, "-o", out]
+    elif spec["src"] == "cc":
+        cmd = [clang, *MM_FLAGS, f"-DDIM_M={args.m}", f"-DDIM_K={args.k}", f"-DDIM_N={args.n}",
+               *(f"-D{d}" for d in spec.get("defines", ())), f"-I{AIE_INCLUDE}", "-c", spec["path"], "-o", out]
     else:
         src = MLIR_AIE_SRC / "aie_kernels" / "aie2" / "mm.cc"
         cmd = [clang, *MM_FLAGS, f"-DDIM_M={args.m}", f"-DDIM_K={args.k}", f"-DDIM_N={args.n}",

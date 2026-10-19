@@ -1,0 +1,42 @@
+RESEARCH_PLATFORM {"machine": "Desktop 2", "cpu": "AMD Ryzen 7 8700G w/ Radeon 780M Graphics", "os": "Windows-11-10.0.26200-SP0", "ram_bytes": 33381138432, "source_sha256": {"tools/research_process.py": "ffeb1857f190b482eed101b5f5a928f455de26bfa61d23f78a2eacec08e2663e", "tools/quant_calib_alphabet.py": "2dc0b2878c564853f340880209a425dfcf63b8536b2b8e9fd32344daade58d37", "tools/xint8_arithmetic_probe.py": "6aa3df08b9870c3c2264b868459d7ffbac3070dddc1349d7c6f3f480075f7041", "scripts/research-lowlevel.sh": "3455ad7933697936487712665505c216891865c6deada647302785f6e37020bd", "scripts/research-iron.sh": "4c863a262646ddab39b5005006ba8e03809895e6386c6310e2fd9d0a9e9609ee", "kernels/memory_placement/probe.py": "e8d990169ad6091fa1b53852e9f61eff495b5def72d35165a5c5cf1759e38898", "kernels/memory_placement/memory_kernels.cc": "182e7af7071a1e851afb4a7ca266069c489aea1fbaaa85eca129708daeba5ba6", "scripts/research-matrix.sh": "739254171629deae822b0ad7dabc875aee19ace56dde77d3e8aab61663f97516", "kernels/memory_placement/gemm.py": "17c905ad66110d3346bbf0db898dfc6b780df59fae1dfb0c1747057ce1e5844e", "kernels/memory_placement/gemm_placement.cc": "f21acf7250b12914ea30cc1f77613239dfa18421a85a1b9a5199017dd916278a", "tools/research_summary.py": "0c00dcceef07053d06731b41a1f1ed58d3ba4ea09f82497de354ce9cef17da20", "tools/research_toolchain.py": "f0a126a24ae213acfaa43460cfd9def0c86d9cb70cfee0228aa271688467b314"}, "commit": "a93838badc5524369bebfe277563decd072227ce", "command": ["bash", "scripts/research-iron.sh", "tools/embedgemma_gemm_probe.py", "run", "--ms", "256", "512", "2048", "--seqs", "5", "--out", "scratch/egemm-w8-a", "--w8", "--timing-only"], "seconds_limit": 1200.0, "rss_gib_limit": 12.0, "checks_only": false, "free_ram_bytes": 22463397888}
+HOST_LOAD busy_cores=0.22 logical_cores=16 free_ram_gb=20.9 sample_sec=1
+HOST_LOAD_TOP 0.08 Taskmgr:62436 ws_mb=224
+HOST_LOAD_TOP 0.05 llm-top-new:17996 ws_mb=67
+HOST_LOAD_TOP 0.03 powershell:78612 ws_mb=83
+HOST_LOAD_TOP 0.02 WindowsTerminal:11024 ws_mb=174
+HOST_LOAD_TOP 0.02 conhost:16864 ws_mb=10
+HOST_LOAD_VERDICT CLEAR
+
+PRE_NPU_CONTEXT_WITNESS "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+WEIGHTS W8: 7.04 MiB in B buffers over 7 distinct shapes (bf16 would be 13.25 MiB)
+RUN one context on g_256_512_512.xclbin: 148 products per forward pass, 7 distinct (K, N), M in [256, 512, 2048]
+PASS M=256: forward-pass weight GEMMs median 47.1 ms (min 45.9, max 47.6, 5 passes), 70.0 GFLOP -> 1487 GFLOPS
+    256x512x512: median 0.214 ms/call, 627 GFLOPS
+    256x512x768: median 0.260 ms/call, 774 GFLOPS
+    256x512x2048: median 0.330 ms/call, 1629 GFLOPS
+    256x512x3072: median 0.413 ms/call, 1948 GFLOPS
+    256x512x4096: median 0.481 ms/call, 2233 GFLOPS
+    256x1024x512: median 0.242 ms/call, 1112 GFLOPS
+    256x2048x512: median 0.312 ms/call, 1722 GFLOPS
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 85 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |78048               |58         |1776        |0           |0    |Normal   |\n      |python.exe          |Active     |1776        |0           |     |N/A      |\n      |85 MB               |160 KB     |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [78048], "owned_pids": [72840, 78048, 80336, 82204, 82312], "foreign_pids": []}
+PASS M=512: forward-pass weight GEMMs median 67.6 ms (min 66.3, max 72.9, 5 passes), 140.0 GFLOP -> 2071 GFLOPS
+    512x512x512: median 0.269 ms/call, 998 GFLOPS
+    512x512x768: median 0.292 ms/call, 1378 GFLOPS
+    512x512x2048: median 0.518 ms/call, 2075 GFLOPS
+    512x512x3072: median 0.659 ms/call, 2445 GFLOPS
+    512x512x4096: median 0.810 ms/call, 2650 GFLOPS
+    512x1024x512: median 0.338 ms/call, 1589 GFLOPS
+    512x2048x512: median 0.454 ms/call, 2365 GFLOPS
+PASS M=2048: forward-pass weight GEMMs median 207.3 ms (min 206.6, max 210.3, 5 passes), 560.0 GFLOP -> 2702 GFLOPS
+    2048x512x512: median 0.661 ms/call, 1624 GFLOPS
+    2048x512x768: median 0.800 ms/call, 2013 GFLOPS
+    2048x512x2048: median 1.552 ms/call, 2767 GFLOPS
+    2048x512x3072: median 2.087 ms/call, 3087 GFLOPS
+    2048x512x4096: median 2.660 ms/call, 3229 GFLOPS
+    2048x1024x512: median 0.987 ms/call, 2177 GFLOPS
+    2048x2048x512: median 1.513 ms/call, 2839 GFLOPS
+RESULT {"ok": true, "report": {"256": {"pass_ms": [46.6885999776423, 47.081899974728, 45.92360000242479, 47.413599997526035, 47.64380000415258], "median_ms": 47.081899974728, "gflops": 1486.6550667999961, "per_shape_ms": {"512x4096": 0.4808999947272241, "512x2048": 0.32964999263640493, "1024x512": 0.2415000053588301, "2048x512": 0.311699986923486, "512x512": 0.21405000006780028, "512x3072": 0.4134500049985945, "512x768": 0.26000000070780516}}, "512": {"pass_ms": [72.18329998431727, 72.89390001096763, 66.9859999907203, 66.30249999579974, 67.60049998410977], "median_ms": 67.60049998410977, "gflops": 2070.8292148269015, "per_shape_ms": {"512x4096": 0.8104000007733703, "512x2048": 0.5175499973120168, "1024x512": 0.33784999686758965, "2048x512": 0.45395002234727144, "512x512": 0.2690499823074788, "512x3072": 0.6588000105693936, "512x768": 0.29219998396001756}}, "2048": {"pass_ms": [206.61709998967126, 210.29149999958463, 207.26739999372512, 207.2692000074312, 207.77730000554584], "median_ms": 207.2692000074312, "gflops": 2701.5898222983633, "per_shape_ms": {"512x4096": 2.659899997524917, "512x2048": 1.552249988890253, "1024x512": 0.9865499887382612, "2048x512": 1.5129499952308834, "512x512": 0.6613500008825213, "512x3072": 2.0871000015176833, "512x768": 0.8002000104170293}}}}
+idle after: True
+POST_NPU_CONTEXT_WITNESS "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+RESEARCH_PROCESS_RESULT {"exit_code": 0, "stop": null, "peak_tree_rss_bytes": 304766976, "rss_measurement": "maximum observed across sampled descendant working sets; zero observations reported as null", "elapsed_seconds": 4.35999999998603, "foreign_contention_observed": false, "timing_eligible": true}

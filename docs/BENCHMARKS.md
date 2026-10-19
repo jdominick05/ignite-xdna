@@ -26966,3 +26966,1539 @@ foreign work. The focused suite passes 133 tests, including known-distribution
 KL/NLL checks, shift invariance, near-tie top-1 rejection, incomplete/nonfinite
 diagnostic rejection, and complete wire vocabulary ordering. Serving sources,
 model precision, SDK behavior and the pending energy method remain unchanged.
+
+## EmbeddingGemma 2's weight GEMMs on the one-context generic design (2026-10-18, Desktop 2)
+
+**The question.** EmbeddingGemma 2 (`google/embeddinggemma-2`, rev `914f7f89`) is a bidirectional BF16 text encoder:
+24 layers, width 512, 4 query heads (local layers head_dim 256 with 2 KV heads and a +-512 window, global layers
+5/11/17/23 head_dim 512 with 1 KV head), a GELU-tanh gated FFN 512 -> 2048 -> 512 and a per-layer-input block. Unlike
+a one-token drafter step, a document is a batch of rows, so its weight products are GEMMs. What do they cost on
+Phoenix when one loaded design serves every shape?
+
+**Method.** [`tools/embedgemma_gemm_probe.py`](../tools/embedgemma_gemm_probe.py) reads the shapes from the HF
+config and concatenates the products that share an input (q|k|v as one GEMM per layer, gate|up as one). The
+per-layer-input projection (512 -> 24 x 512) runs as three 4096-column chunks: N = 12288 failed to compile, a shim
+`aie.dma_bd` stride beyond the [1:1048576] range. That gives 148 products per forward pass over 7 distinct (K, N).
+All run in ONE context of `kernels/gemm_generic/whole_array_generic.py --rtp-generic` (m32 k64 n64, C
+single-buffered, bf16 in, f32 out, 4 columns), the design Laya's hybrid runs on. This tile needs M to be a
+multiple of 256, so M = 128 does not compile. M = 256 stands for two 128-token documents batched together. Every
+product is checked against numpy (relative max error < 1e-3, padded columns zero, repeat bit-equal) before any
+timing. Each product is timed as sync A in, call, wait, sync C out, with weights resident; random activations.
+
+**Result** ([log](../results/aie/embedgemma_gemm_onectx_desktop2_20261018T194330Z.log); research wrapper, host
+CLEAR, no foreign contexts, exit 0, `timing_eligible: true`). All 21 products pass, relative error <= 1.13e-6.
+
+| M (rows) | Forward-pass weight GEMMs, median of 5 | GFLOP | Effective |
+|---|---:|---:|---:|
+| 256 (two 128-token documents) | 63.1 ms (31.6 ms per document) | 70.0 | 1,109 GFLOPS |
+| 512 | 98.5 ms | 140.0 | 1,422 GFLOPS |
+| 2048 | 334.4 ms | 560.0 | 1,674 GFLOPS |
+
+Per call, the smallest product (256 x 512 x 512) takes 0.252 ms and the widest (2048 x 512 x 4096) 4.880 ms. Rates
+rise with N: at M = 512, 800 GFLOPS at N = 512 against 1,605-1,654 at N = 3072-4096. That is why concatenating
+q|k|v and gate|up pays.
+
+**Not included.** Attention's score and value products, the norms, RoPE, softmax, the GeGLU, residuals, pooling,
+and the f32 -> bf16 conversion of every output. The last of these cost Laya's hybrid 99 ms on the host. So this is
+the weight-GEMM floor of an NPU encoder, not an end-to-end latency, and not yet a comparison with the CPU or GPU.
+
+**Failed runs kept.** Three earlier runs of the same probe printed equal numbers but exited 139
+([1](../results/aie/embedgemma_gemm_onectx_desktop2_20261018T193940Z.log),
+[2](../results/aie/embedgemma_gemm_onectx_desktop2_20261018T194056Z.log),
+[3](../results/aie/embedgemma_gemm_onectx_desktop2_20261018T194231Z.log)), so the wrapper marked them not
+timing-eligible. `faulthandler` placed the crash at `cmd_run`'s return. The setup loop's own `ib`/`A`/`C` names
+still held the last M's BOs, so they were freed after the device. A staged repro (register, context, kernel, BOs,
+one call), each released in order, exited 0 at every stage, which ruled out pyxrt teardown itself. Releasing those
+names fixed it.
+
+### EmbeddingGemma 2 hybrid: weight GEMMs on the NPU, the rest on the host, is correct and transport-bound (2026-10-18)
+
+[`kernels/embedgemma/model.py`](../kernels/embedgemma/model.py) is an independent NumPy encoder, written from
+`transformers` 5.19's `EmbeddingGemma2TextModel`. Every weight product goes through one `matmul` hook, and the
+weights are read straight from the checkpoint's BF16 safetensors.
+[`tools/embedgemma_hybrid.py`](../tools/embedgemma_hybrid.py) runs it on 56 held-out engineering documents (32 x
+128, 16 x 512 and 8 x 2048 tokens, `title: none | text: ` prefix). Its gates were written into the tool's
+docstring before any run.
+- **`cpu` backend (fp32 products):** cosine 1.0000000 to HF fp32 on every document, against a gate of >= 0.99999.
+  The oracle agrees.
+- **`npu` backend:** all 146 weight products per document run through one generic-GEMM context, with activations
+  rounded to BF16 before each product, f32 out, rows zero-padded to M = 256/512/2048 and weights resident.
+  - Gates: cosine >= 0.9999 and every nearest neighbour kept.
+  - Result ([log](../results/aie/embedgemma_hybrid_npu_desktop2_20261018T203211Z.log); host CLEAR, no foreign
+    contexts, exit 0, `timing_eligible: true`): cosine min 0.9999942, mean 0.9999975, nearest neighbour kept 100%.
+    **PASS.**
+
+Per-document medians, attributed by phase (ms):
+
+| Phase | 128 tokens | 512 tokens | 2048 tokens |
+|---|---:|---:|---:|
+| NPU call (submit + wait) | 67.0 | 114.0 | 346.8 |
+| NPU read (C sync + f32 readback) | 40.0 | 127.3 | 415.9 |
+| NPU write (A write + sync) | 11.9 | 21.3 | 88.2 |
+| fp32 -> BF16 rounding of each product input (`round_in`) | 50.0 | 244.2 | 903.3 |
+| Total in `gemm` (NPU rows plus a second rounding, padding and copies; excludes `round_in`, see the correction below) | 190.5 | 574.0 | 2051.5 |
+| Host attention (NumPy fp32) | 33.8 | 147.2 | 2161.5 |
+| Host GELU / norms / RoPE (NumPy fp32) | 46.1 / 27.7 / 14.1 | 204.9 / 158.5 / 70.9 | 799.1 / 598.1 / 281.2 |
+| **Whole document** | **391.3** | **1545.1** | **7277.8** |
+
+**What it shows.** *(Superseded 2026-10-18 by the correction below. The phase split was mostly harness overhead:
+every input rounded twice, and every readback copied twice. The two claims marked SUPERSEDED do not stand.)*
+- **SUPERSEDED. The NPU's own compute is the smallest part of its share.** Reading back f32 results and converting
+  activations to BF16 costs 2-4x the device's call time at every length: at 512 tokens, 114 ms of calls against
+  about 460 ms of transfer, rounding and packing.
+- **SUPERSEDED. A design that returns activations to the host between operations cannot win**, however fast the GEMMs are.
+  This repeats Laya's 99 ms of host rounding.
+- **The host-side ops here are single-threaded NumPy fp32**, not a tuned CPU path, so their times overstate what a
+  CPU remainder must cost. The transfer and rounding rows do not depend on that.
+- **Fusion has to keep activations resident on the device** and move the elementwise work (norms, GeGLU, RoPE,
+  residuals) next to the GEMMs, and attention after them.
+
+Not measured here: batching documents into one M, BF16-output GEMMs, and any CPU or GPU comparison. The
+[CPU NumPy run](../results/aie/embedgemma_hybrid_cpu_desktop2_20261018T203017Z.json) is the oracle check only.
+
+#### Correction: the split was harness overhead; torch bf16 sets the real bar (2026-10-18, Desktop 2)
+
+**What was wrong.** The first run's harness rounded every product input twice: once in the model (`round_in`) and
+again while packing it, booked inside `gemm` outside every NPU row. It also read every result through `bo.read`
+and then `.copy()`, two full copies of each f32 C. The fixed harness:
+- rounds once, nearest-even, straight into the mapped A buffer;
+- reads C through its mapped view;
+- can batch same-length documents as one row batch, with block-diagonal attention and per-document positions and
+  pooling.
+
+The batched NumPy oracle still reads cosine 1.0000000 on every document. The gates are unchanged.
+
+**Two failed runs are kept** as harness bugs, not findings:
+- [one gate FAIL](../results/aie/embedgemma_hybrid_npu_b1_desktop2_20261018T204410Z.log), cosine min 0.569. The
+  three chunks of the per-layer-input product share one (M, K, N), so the mapped views aliased one C buffer.
+- [one crash](../results/aie/embedgemma_hybrid_npu_b2_desktop2_20261018T204543Z.log): 2 x 2048 rows exceeded the
+  largest compiled M.
+
+Re-run on the same sitting's conditions (host CLEAR, no foreign contexts, exit 0, `timing_eligible: true`). Both
+pass the frozen gate with cosine min 0.9999942 and nearest neighbour kept 100%:
+[batch 1](../results/aie/embedgemma_hybrid_npu_b1_desktop2_20261018T204716Z.log)
+([record](../results/aie/embedgemma_hybrid_npu_b1_desktop2_20261018T204716Z.json)) and
+[batch 2](../results/aie/embedgemma_hybrid_npu_b2_desktop2_20261018T204849Z.log)
+([record](../results/aie/embedgemma_hybrid_npu_b2_desktop2_20261018T204849Z.json)).
+
+Per document, in ms. 128 tokens is batch 2 (M = 256); 512 and 2048 are batch 1, because two 512-token documents
+would pad to M = 2048 with no M = 1024 build.
+
+| Phase | 128 | 512 | 2048 |
+|---|---:|---:|---:|
+| NPU call (submit + wait) | 34.6 | 110.6 | 344.3 |
+| A sync / C sync (mapped) | 1.1 / 1.2 | 4.1 / 5.4 | 8.4 / 16.6 |
+| Round to BF16 into A (NumPy, once) | 60.7 | 286.8 | 1052.8 |
+| Host attention / GELU / norms / RoPE (NumPy fp32, single-threaded) | 29.9 / 46.0 / 29.4 / 18.3 | 146.4 / 212.6 / 167.6 / 74.5 | 2180.4 / 822.9 / 608.4 / 277.0 |
+| **Whole document** | **249.5** | **1155.8** | **5804.0** |
+
+- **Transfer is not the cost.** With mapped buffers, A and C syncs take 2-25 ms per document. The 40-416 ms
+  "readback" in the first table was the copies.
+- **What remains on the host is NumPy's own speed**: rounding, plus single-threaded fp32 elementwise ops.
+
+**The bar is torch bf16 on the CPU, split.**
+[`tools/embedgemma_hf_split.py`](../tools/embedgemma_hf_split.py) times HF transformers 5.19 / torch 2.14.1 bf16 on
+the same documents and 8 threads, in three passes:
+- as is;
+- with every `nn.Linear` stubbed to zeros of its output shape;
+- with eager attention stubbed too.
+
+These ops' cost does not depend on their values, so the stubs time the rest fairly.
+([record](../results/aie/embedgemma_hf_split_bf16_cpu_desktop2_20261018T205249Z.json); contention checked first,
+CPU 3-6%, no NPU context.)
+
+| Tokens | Whole model | Linear | Attention | Everything else | NPU weight GEMMs (above) |
+|---|---:|---:|---:|---:|---:|
+| 128 | 85.0 | 49.7 | 9.9 | 25.4 | 34.6 |
+| 512 | 241.6 | 144.9 | 43.9 | 52.8 | 110.6 |
+| 2048 | 1500.0 | 500.1 | 764.2 | 235.7 | 344.3 |
+
+**What it shows.**
+- **Moving the weight GEMMs alone saves little:** 15 / 34 / 156 ms against the CPU's Linear time. A hybrid with the
+  rest on a tuned CPU path is bounded near 70 / 207 / 1344 ms, before any rounding or synchronisation. That is
+  0.82 / 0.86 / 0.90 of the CPU's whole model.
+- **At 2048 tokens attention is 51% of the CPU's time**, the largest single block. Long documents are where moving
+  it pays most.
+- **At 512 tokens and below, the elementwise remainder is as large as attention.** Norms, GELU, RoPE and the
+  residuals have to move into the GEMMs' epilogues for the NPU to clear the CPU by a real margin.
+- **Not measured:** an NPU attention path, a native or vectorised rounding, BF16-output GEMMs, and an
+  M = 1024 build for batched 512-token documents.
+
+#### Unfused attention on the NPU only ties the CPU at 2048 tokens (2026-10-18, Desktop 2)
+
+[`tools/embedgemma_attn_gemm_probe.py`](../tools/embedgemma_attn_gemm_probe.py) issues attention's score and
+value products to the same one-context generic GEMM as the weights. Query heads that share a KV head are stacked
+along M, so one call serves them (GQA):
+- local layers, per KV head: `[2L, 256] x [256, L]` and `[2L, L] x [L, 256]`;
+- global layers: `[4L, 512] x [512, L]` and `[4L, L] x [L, 512]`.
+
+Every score is computed; the local band is not exploited. All eight products pass the numpy check (relative error
+<= 1.52e-6, repeat bit-equal).
+([log](../results/aie/embedgemma_attn_gemm_onectx_desktop2_20261018T210047Z.log); host CLEAR, no foreign
+contexts, exit 0, `timing_eligible: true`.) An
+[earlier attempt was refused](../results/aie/embedgemma_attn_gemm_onectx_desktop2_20261018T205834Z.log) with
+another session's context on the NPU, before any dispatch.
+
+[`tools/embedgemma_host_softmax.py`](../tools/embedgemma_host_softmax.py) times the host half between the two
+products: band mask, fp32 softmax, P to bf16, in torch 2.14.1 with 8 threads, at the same shapes and call counts.
+([record](../results/aie/embedgemma_host_softmax_cpu_desktop2_20261018T210131Z.json); contention checked first,
+CPU 8-11%, no NPU context.)
+
+| Per document | 512 tokens | 2048 tokens |
+|---|---:|---:|
+| NPU score + value GEMMs (local / global calls: 40 + 40 / 4 + 4) | 37.9 ms | 291.3 ms |
+| Host mask + softmax + bf16 (torch, 8 threads) | 21.4 ms | 437.5 ms |
+| **Unfused NPU attention** (sum of two measurements, same sitting, not one run) | **59.3 ms** | **728.8 ms** |
+| CPU torch bf16 attention ([split](../results/aie/embedgemma_hf_split_bf16_cpu_desktop2_20261018T205249Z.json)) | 43.9 ms | 764.2 ms |
+
+- **Unfused, NPU attention loses at 512 tokens and ties at 2048.**
+- **At 2048 tokens the host softmax costs more than the products it sits between.** A fused kernel keeps scores and
+  probabilities on the core and removes that row.
+- **The fused kernel can also skip the band.** On average 896.75 of 2048 keys are visible to a local query, so a
+  kernel that skips key blocks outside the band does 44% of the local MACs that these full-score products do.
+- **Unexplained here:** per-call rates (700-2072 GFLOPS) depend on shape as in the weight probe. The small local
+  products at L = 512 run at 700-716 GFLOPS.
+
+#### A fused kernel's arithmetic passes the end-to-end gate (CPU emulation, 2026-10-18)
+
+[`kernels/embedgemma/attention_oracle.py`](../kernels/embedgemma/attention_oracle.py) computes attention the way a
+fused AIE kernel would:
+- 32-key blocks in online-softmax (flash) order;
+- BF16 Q, K and V;
+- every exp rounded to BF16, as a lookup-table exp returns it;
+- probabilities rounded to BF16 before the value product, while the row sum stays fp32;
+- key blocks outside the local band skipped.
+
+`tools/embedgemma_hybrid.py --backend cpu --attention blockwise --bf16-inputs --batch 2` runs it in place of the
+host attention, with every weight product's input rounded to BF16 as the NPU GEMM does. That emulation is held to
+the NPU gate, fixed beforehand ([record](../results/aie/embedgemma_fused_attn_numerics_cpu_desktop2_20261018T210745Z.json)):
+cosine min 0.9999918, mean 0.9999966, nearest neighbour kept 100%. **PASS.**
+
+- **BF16 probabilities are precise enough for this model.** Unlike Laya's FP32-probability path, the kernel does not
+  need the hi/lo split of P.
+- **The first attempt produced NaN at 2048 tokens.** The cause was an oracle bug: a row that had seen no visible key
+  computed `exp(-inf - -inf)`. A kernel needs the same guard (select on `l == 0`).
+- **Not emulated:** the device's own exp error (the LUT's, beyond BF16 rounding) and accumulation order inside a
+  32-key block. The on-device kernel needs its own exact oracle check before its timing means anything.
+
+#### Native BF16 rounding removes the host packing cost (2026-10-18, Desktop 2)
+
+[`kernels/embedgemma/round.c`](../kernels/embedgemma/round.c) rounds fp32 to BF16 (nearest-even) straight into
+the mapped A buffer, using AVX2 and OpenMP. It is built and checked by
+[`kernels/embedgemma/native.py`](../kernels/embedgemma/native.py) and matches the NumPy reference bit for bit on:
+- random data;
+- raw bit patterns;
+- edge values;
+- every finite exact tie (65,280).
+
+With `--round-dll` the hybrid passes the frozen gate with exactly the same figures as NumPy rounding (cosine min
+0.9999942, nearest neighbour kept 100%), as bit-identical inputs must.
+([log](../results/aie/embedgemma_hybrid_npu_b2_native_desktop2_20261018T211805Z.log),
+[record](../results/aie/embedgemma_hybrid_npu_b2_native_desktop2_20261018T211805Z.json); host CLEAR, no foreign
+contexts, exit 0, `timing_eligible: true`. Batch 2 throughout, so 512 tokens pads to M = 2048 here.)
+
+| Per document, ms | 128 | 512 (M = 2048) | 2048 |
+|---|---:|---:|---:|
+| Rounding into A, NumPy (batch-2 run above) | 60.7 | 271.6 | 1051.4 |
+| Rounding into A, native | **3.9** | **12.3** | **44.0** |
+| Whole `gemm` phase, native | 40.7 | 204.8 | 453.3 |
+| of which NPU call | 31.6 | 167.3 | 340.4 |
+| Whole document (host ops still NumPy fp32) | 171.3 | 885.0 | 4789.5 |
+
+- **The weight-product path is now its NPU calls plus about 20-35%** (the `gemm` phase is 1.22-1.33x the calls).
+- **What remains on the host is the single-threaded NumPy fp32 ops:** attention, GELU, norms and RoPE, 109 ms at
+  128 tokens and 3,885 ms at 2048. Those are what the fused kernels replace.
+
+#### Fused local attention on one core: correct, about 4x off its DMA bound (2026-10-18, Desktop 2)
+
+[`kernels/embedgemma/attn_local.cc`](../kernels/embedgemma/attn_local.cc) computes one head of local attention
+(head_dim 256) for 16 query rows on one core, in flash order:
+- Q stays resident.
+- A window of 32-key blocks streams as 4 KiB chunks: four K^T chunks, then four V chunks per block.
+- The band |i - j| <= W is built on the core from indices. Blocks no row can see are skipped. Rows that have seen
+  no key are guarded.
+- Exp uses Laya's fp32 table exp.
+- P is BF16, O and the row sums fp32, and the output is BF16 through a Newton reciprocal.
+
+Linked core program 11,456 B (limit 16,384), deepest frame 832 B (2 KiB stack).
+
+[`kernels/embedgemma/attn_probe.py`](../kernels/embedgemma/attn_probe.py) feeds it from the shim. Each case is
+compared with a NumPy emulation of the kernel's arithmetic: the table exp and the Newton reciprocal op for op,
+fp64 products rounded to fp32.
+
+| Case | L | W | Key blocks | Result | Dispatch |
+|---|---:|---:|---:|---|---:|
+| dense | 128 | 512 | 4 | PASS, worst 0.500 | 0.978 ms |
+| band | 256 | 48 | 5 | PASS, worst 0.125 | 1.765 ms |
+| model | 1088 | 512 | 33 | PASS, worst 0.500 | 41.401 ms |
+
+([log](../results/aie/embedgemma_attn_local_onecore_desktop2_20261018T213101Z.log); host CLEAR, no foreign
+contexts, exit 0, `timing_eligible: true`. "Worst" is the largest |device - emulation| over 2 BF16 ulps of that
+output row's largest |value|. Every case is finite and bit-equal across 4 dispatches.)
+
+**The criterion was changed after a failure, and the failed run is kept.**
+[Run 1](../results/aie/embedgemma_attn_local_onecore_desktop2_20261018T212916Z.log) compared against numpy exp
+and exact division, requiring every output within 2 BF16 ulps of its own value. It FAILED: up to 377 ulps on
+0.03-0.26% of outputs. A per-value ulp distance is unbounded where O cancels near zero; the same outputs are
+within 1.58e-3 of the largest value. Before run 2, the emulation was made op-for-op for exp and reciprocal, and the
+criterion became row-scaled (written into the tool's docstring before the run). The frozen end-to-end gate stays
+the final judge, and the kernel has not met it yet.
+
+**Speed.** The model case runs 68 tiles of 16 rows against 33 blocks each, about 0.61 ms per tile.
+- Ideal MAC time is about 37 µs per tile: 2,048 `mmul` per block x 33 at 1.8 GHz.
+- Streaming the window's 1.06 MiB at one shim channel's 4 B/cycle takes about 150 µs.
+- So the kernel is about 16x off compute and 4x off that DMA bound. Where the rest goes is not yet measured.
+
+#### Fused local attention on one core: from 41.1 to 19.0 ms by moving softmax off emulated fp32 (2026-10-18, Desktop 2)
+
+All runs are the model case (L = 1088, W = 512, 68 tiles x 33 key blocks), each checked against
+[`attn_probe.py`](../kernels/embedgemma/attn_probe.py)'s emulation of the kernel version it runs. The research
+wrapper reports host CLEAR and no foreign context unless noted.
+
+**Where v1's time went.** Builds with phases hollowed out (`--variant`; their output is wrong by construction, so
+they exit 1 and read `timing_eligible: false`) timed the parts in
+[one sitting](../results/aie/embedgemma_attn_local_phases_desktop2_20261018T213352Z.log):
+
+| Variant | Model case |
+|---|---:|
+| full | 41.1 ms |
+| data movement + calls only | 11.5 ms |
+| + QK | 12.0 ms |
+| + QK and PV | 12.0 ms |
+| + QK and softmax | 40.4 ms |
+
+- **The data-movement floor matches the shim stream:** 73.5 MB at about 7.2 GB/s is about 10.2 ms.
+- **Both products together cost about 0.5 ms. Softmax cost about 29 ms**, about 14 µs a block.
+- **Two runs were discarded.** A five-variant loop under one wrapper was flagged for foreign contention twice
+  ([1](../results/aie/embedgemma_attn_local_softmax_parts_desktop2_20261018T213605Z.log),
+  [2](../results/aie/embedgemma_attn_local_softmax_parts_desktop2_20261018T213647Z.log)). The context's pid had
+  already exited, and it may have been one of the loop's own children, started after the wrapper's ownership
+  sample.
+- **Re-run with one wrapper per variant**
+  ([full](../results/aie/embedgemma_attn_local_softmax_full_desktop2_20261018T213733Z.log),
+  [no max](../results/aie/embedgemma_attn_local_softmax_nomax_desktop2_20261018T213733Z.log),
+  [no rescale](../results/aie/embedgemma_attn_local_softmax_norescale_desktop2_20261018T213733Z.log),
+  [no exp](../results/aie/embedgemma_attn_local_softmax_noexp_desktop2_20261018T213733Z.log),
+  [no layout](../results/aie/embedgemma_attn_local_softmax_nolayout_desktop2_20261018T213733Z.log)):
+
+  | Softmax part | Cost |
+  |---|---:|
+  | per-row max pass | about 7.8 ms |
+  | O rescale | about 7.1 ms |
+  | exp + P | about 11.5 ms |
+
+- **The row-major pass cost nothing measurable.** Removing it read 1.4 ms *slower*, unexplained.
+
+| Version | Change | Model case | Worst | Log |
+|---|---|---:|---:|---|
+| v1 | baseline above | 41.1 ms | 0.500 | above |
+| v2 | softmax kept in tile layout; lazy rescale | 32.7 ms | 0.500 | [v2](../results/aie/embedgemma_attn_local_onecore_v2_desktop2_20261018T214258Z.log) |
+| v3 | exp inlined | 32.4 ms | 0.500 | [v3](../results/aie/embedgemma_attn_local_onecore_v3_desktop2_20261018T214525Z.log) |
+| v4 | BF16 table exp from fp32 scores, lookups in floor mode | 31.9 ms | 0.500 | [v4](../results/aie/embedgemma_attn_local_onecore_v4_desktop2_20261018T220151Z.log) |
+| v5 | integer softmax | **19.0 ms** | 0.500 | [v5](../results/aie/embedgemma_attn_local_onecore_v5_desktop2_20261018T221557Z.log) |
+
+"Worst" is row-scaled, as before.
+
+**What each version changed:**
+- **v2:** a vector max over tiles, then `filter_even`/`filter_odd` halvings, then `interleave_zip` into the P
+  tiles. The lazy rescale's threshold is 8.
+- **v4:** the BF16 table exp is taken from fp32 scores, with the lookups in floor mode.
+- **v5:** S and the running max are fixed point (x 256), with int32 max, mask and difference. The index is split
+  by a shift and a mask, and the row sums are a BF16 MAC.
+
+**What the v2 profile showed**
+([full](../results/aie/embedgemma_attn_local_v2_full_desktop2_20261018T214349Z.log),
+[no softmax](../results/aie/embedgemma_attn_local_v2_nosoftmax_desktop2_20261018T214349Z.log),
+[no max](../results/aie/embedgemma_attn_local_v2_nomax_desktop2_20261018T214349Z.log),
+[no rescale](../results/aie/embedgemma_attn_local_v2_norescale_desktop2_20261018T214349Z.log),
+[no exp](../results/aie/embedgemma_attn_local_v2_noexp_desktop2_20261018T214349Z.log)):
+- Max and rescale fell under 1 ms each, which left the exp + P loop at about 18.8 ms.
+- **v3 and v4 barely moved that.** The assembly shows why. 426 of softmax's 1,193 bundles were NOP-only. The
+  fp32 compares and adds compiled to emulation sequences (`vlt.bf16` compares, accumulator round trips). The cost
+  was fp32 vector work in general, not the exp.
+- **v5's softmax is 849 bundles, 237 NOP-only**, and costs about 7 ms: about 3.5 µs per visible block.
+
+**A bug found on the way (v4), kept with its logs.** The BF16 table exp first failed, up to 115 row ulps:
+- with [generated tables](../results/aie/embedgemma_attn_local_onecore_v4_desktop2_20261018T215448Z.log);
+- with [upstream's byte-identical tables](../results/aie/embedgemma_attn_local_onecore_v4upl_desktop2_20261018T215752Z.log).
+
+A direct [4,096-point exp probe](../results/aie/embedgemma_attn_local_expprobe_desktop2_20261018T215844Z.log) found
+it right on 87% of inputs and exactly e times too large on the rest. The wrong ones had a high low index byte. **The
+lookup's integer-part shift follows the rounding mode**, which the kernel had set to nearest-even for its BF16
+conversions. Laya's `dispatch.cc` records the same need.
+
+Under floor mode the [probe](../results/aie/embedgemma_attn_local_expprobe_desktop2_20261018T215956Z.log) is
+bit-equal on all 4,096 points to a model with a round-half-even index and a floor split. v5 removes the dependence:
+it splits the index itself and both lookups use step 0.
+
+**The rounding of `to_fixed` is not pinned, so each run tests it.** v5's check fits both a round and a floor model.
+The device matched round on every case: worst 0.250 / 0.031 / 0.500, against floor's 0.500 / 1.000 / 1.000.
+
+**End to end, CPU emulation, same frozen gate.** Both keep every nearest neighbour:
+
+| Model | Cosine min | Record |
+|---|---:|---|
+| exact table-exp model with the lazy rescale | 0.9999936 | [record](../results/aie/embedgemma_fused_attn_numerics_lut_cpu_desktop2_20261018T214800Z.json) |
+| v5's integer softmax | 0.9999890 | [record](../results/aie/embedgemma_fused_attn_numerics_fixed_cpu_desktop2_20261018T220711Z.json) |
+
+The kernel itself has not yet run end to end on device.
+
+**For the array.**
+- At about 0.28 ms per 16-row tile, a column's four cores take about 0.28 ms per 32-row window.
+- Broadcasting that window takes about 0.15 ms on one channel.
+- So the array should be compute-bound and near its ingress bound. That is DERIVED, not measured.
+
+#### Fused local attention on the 16-core array, and the first on-device end-to-end gate (2026-10-18, Desktop 2)
+
+[`attn_array.py`](../kernels/embedgemma/attn_array.py) runs the v5 core program unchanged on all 16 reachable cores.
+It changes only the feed:
+- **Work items.** One item is a 64-row group of one head.
+- **Per column:** four Q packets go shim → MemTile, which splits one to each core. The group's K/V window
+  (NKB = 34 blocks at W = 512) goes shim → MemTile and is broadcast to all four cores. The outputs join in the
+  MemTile on the way out.
+- **Skipping.** Each core walks the shared window and skips the blocks outside its own 16-row band, one or two of
+  the 34.
+
+Each run is checked against an emulation of the same blocks with the single-core probe's row-scaled criterion. The
+research wrapper recorded no foreign context for any run.
+
+**Round robin, one head per dispatch**
+([log](../results/aie/embedgemma_attn_local_array16_desktop2_20261018T224556Z.log)). All four cases PASS, worst
+0.500 row-scaled:
+
+| Case | 16 cores | One core |
+|---|---:|---:|
+| model, L = 1088 | **1.476 ms** | 19.0 ms (12.9x) |
+| long, L = 2048, one head | **2.365 ms** | — |
+
+- **The estimate held.** Eight groups at about 0.28 ms each per column predicted 2.24 ms. Each column streamed
+  about 4 GB/s, so the array is compute-bound, not ingress-bound.
+
+**Four heads per dispatch** (two KV heads) ([log](../results/aie/embedgemma_attn_local_array16_heads_desktop2_20261018T225138Z.log)).
+One local layer is one dispatch: all seven cases PASS.
+- **One xclbin serves every length.** All seven cases ran on doc2048's xclbin. Every case's core ELFs and
+  configuration CDOs are byte-identical; only `main.pdi` differs. So one context plus a per-length instruction
+  stream is enough.
+- **One layer, four heads:** 0.297 / 1.302 / 8.644 ms at 128 / 512 / 2048 tokens.
+
+**Strided windows** ([log](../results/aie/embedgemma_attn_local_array16_strided_desktop2_20261018T225756Z.log)).
+- **Layout.** Items in (head, group) order are split into four contiguous runs, one head per column.
+- **Transport.** Along a run the window start moves by a constant step except where it is clamped. So each column
+  reads its windows as at most three strided DMAs that overlap in a single copy of the head's K/V.
+- **Host-side K/V at 2048 tokens fell from 151 MB to 4.2 MB.** Before, each window was duplicated host side.
+- **Checks.** The DMA addressing was replayed offline against every item's window before the build. Device time is
+  unchanged: 8.976 ms at doc2048. All seven PASS.
+
+**End-to-end gate on device, the same frozen npu gate.** Weight GEMMs are on the NPU (`b2_native`
+configuration), all 20 local layers' attention is on the array (`--attention npu-local`), and the 4 global layers
+stay host fp32. Every run PASSED with cosine min 0.9999832, mean 0.9999964 and nearest neighbours 100% kept,
+against 0.9999942 with host attention.
+
+| Run | 128 | 512 | 2048 | local attention at 2048 | Log |
+|---|---:|---:|---:|---:|---|
+| host attention (`b2_native`, above) | 171.3 | 885.0 | 4789.5 | (2192.1, all layers) | [log](../results/aie/embedgemma_hybrid_npu_b2_native_desktop2_20261018T211805Z.log) |
+| duplicated windows, NumPy pack | 247.3 | 1108.6 | 5013.1 | 1798.6 | [log](../results/aie/embedgemma_hybrid_npu_b2_native_attnlocal_desktop2_20261018T225343Z.log) |
+| strided windows, NumPy pack | 236.8 | 995.2 | 3927.4 | 911.7 | [log](../results/aie/embedgemma_hybrid_npu_b2_native_attnlocal_strided_desktop2_20261018T225824Z.log) |
+| strided, native pack ([`attn_pack.c`](../kernels/embedgemma/attn_pack.c)) | **198.5** | **844.4** | **3264.9** | **286.4** | [log](../results/aie/embedgemma_hybrid_npu_b2_native_attnlocal_native_desktop2_20261018T230328Z.log) |
+
+All figures are ms per document. One earlier attempt exited 3 before running
+([log](../results/aie/embedgemma_hybrid_npu_b2_native_attnlocal_desktop2_20261018T225259Z.log)). The harness's
+own attention context failed the GEMM backend's idle check; the check now runs once, before either context opens.
+
+**Where the host time went.** The Session's own phases were timed alone, with no GEMM context
+([NumPy](../results/aie/embedgemma_attn_array16_session_phases_desktop2_20261018T230021Z.log),
+[native](../results/aie/embedgemma_attn_array16_session_native_desktop2_20261018T230304Z.log)). At 2048 tokens:
+
+| Pack | Per call | Pack | Device | Unpack |
+|---|---:|---:|---:|---:|
+| NumPy | 42.5 ms | 28.4 ms | 8.6 ms | 3.7 ms |
+| native, bit-identical (`check-native`) | 11.1 ms | 1.2 ms | 8.7 ms | 0.7 ms |
+
+- **In the hybrid, `attn_call` is 213 ms per 2048 document**, against about 174 ms of device time for 20 layers.
+- **At 128 tokens it is 19.8 ms against about 5.4.** The likely cause is the switch between the GEMM context and
+  the attention context on every call (+0.75 ms each, measured earlier). That is not isolated here: unexplained
+  until a one-context build exists.
+- **This is still not a CPU win.** The whole document is now dominated by host NumPy elementwise work: GELU 808,
+  norms 592, RoPE 278, global attention 405 ms at 2048. CPU torch bf16 does the whole document in 1,500 ms. The
+  fused MLP and the elementwise ops are next.
+
+#### Fused GeGLU as a GEMM epilogue, and the end-to-end gate with it (2026-10-18/19, Desktop 2)
+
+[`geglu_epilogue.cc`](../kernels/embedgemma/geglu_epilogue.cc) is linked into the generic GEMM's core program
+(`whole_array_generic.py --epilogue-src`). A third RTP word picks a mode, so one xclbin still serves every
+weight product. Mode 0 leaves the tile alone.
+- **Layout.** The host interleaves gate|up's columns at weight upload. Each 64-column output tile then holds 32
+  gate columns and the same 32 up columns, in 4×4 blocks. `gelu_tanh(gate) * up` replaces the gate block in place
+  and stays fp32 in C, so no DMA changes.
+- **GELU.** It uses the exact identity `x·σ(2√(2/π)(x + 0.044715x³))`, not an approximation.
+- **Checks.** [`embedgemma_gemm_probe.py`](../tools/embedgemma_gemm_probe.py) runs mode 0 and each mode on the same
+  A, judges each against criteria fixed before its first run, and re-runs every plain product as a regression.
+- **Every run's regression: all 21 plain products PASS** at M = 256 / 512 / 2048. Forward-pass weight GEMMs read
+  62.7–63.7 / 96.6–98.1 / 332.1–333.6 ms, unchanged from before the epilogue.
+- **Exit codes.** Runs that exit 1 did so from a JSON dump of a NumPy bool after every result printed. Runs that
+  exit 139 segfaulted in teardown after every result printed and with the device idle; that is still unexplained.
+
+| Mode | Arithmetic | Accuracy (device) | Added per gate\|up call, M = 256 / 512 / 2048 | Log |
+|---|---|---|---:|---|
+| 1 | fp32 (emulated on AIE2), 2^f by a degree-7 polynomial, Newton reciprocal | 2.6–3.1e-07 of row max vs fp64 | 2.14 / 4.35 / 17.23 ms | [log](../results/aie/embedgemma_gemm_epilogue_geglu_desktop2_20261018T232643Z.log) |
+| 2 | native bf16 products, fp32 accumulation, exp from v5's two tables | **bit-exact to its model**; 1.1–1.3e-02 of row max vs fp64 | 0.75 / 1.35 / 6.00 | [log](../results/aie/embedgemma_gemm_epilogue_geglu_m2_desktop2_20261018T234426Z.log) |
+| 5 | mode 2 without tables (2^f by a degree-3 polynomial in bf16 MACs) | bit-exact to its model | 0.35 / 1.47 / 6.04 | [log](../results/aie/embedgemma_gemm_epilogue_geglu_m5_desktop2_20261018T235740Z.log) |
+| 6 | mode 5 with two vectors per iteration | bit-exact to the mode-5 model | **0.59 / 1.31 / 5.05** | [log](../results/aie/embedgemma_gemm_epilogue_geglu_m6_desktop2_20261019T000310Z.log) |
+
+**The first mode-1 run FAILED** ([log](../results/aie/embedgemma_gemm_epilogue_geglu_desktop2_20261018T231940Z.log),
+[diagnosis](../results/aie/embedgemma_gemm_epilogue_geglu_diag_desktop2_20261018T232039Z.log)): worst 0.359 of the
+row max.
+- The output was right to 2.7e-7 where z ≥ 0 and wrong only where z < 0.
+- It matched `aie::abs` on a float vector taking the **integer** abs of the bits. For example, z = −0.8 reads as
+  about 5.6, so e^−5.6 ≈ 0.0037, which is the observed ratio.
+- The kernel now clears the sign bit.
+
+**Mode 2's numerics passed the frozen gate under CPU emulation first**
+([record](../results/aie/embedgemma_geglu_mode2_numerics_cpu_desktop2_20261018T232830Z.json)): cosine min 0.9999880,
+nearest neighbours 100% kept. That run emulated bf16 inputs and the integer softmax on every layer. The same
+emulation with host GeGLU read 0.9999890.
+
+**Where the epilogue's time goes is unexplained.** Hollow probes timed parts of mode 2
+([log](../results/aie/embedgemma_gemm_epilogue_profile_desktop2_20261018T235109Z.log)) at M = 2048:
+
+| Probe | Added per call |
+|---|---:|
+| loads and stores only | +0.0 ms |
+| the lookups replaced by a constant | +1.47 ms |
+| full mode 2 | +5.87 ms |
+
+- **I first read that as "the lookups cost 4.4 ms". Mode 5 refuted it:** with no tables at all it costs the same.
+  The constant had also let the compiler fold away the whole 1 / (1 + e) chain.
+- **The bundle count does not explain it either.** SILICON.md measures a hardware loop at exactly its bundle count.
+  Mode 6's loop is about 117 bundles per vector, which predicts about 1.1 ms at M = 2048, against 5.05 measured.
+  The likely candidates are waits on DMA or locks, or a stall source not yet characterised. Nothing here isolates
+  them.
+- **A cycle-counter probe was attempted twice.** `get_cycles()` does not link under Peano
+  ([log](../results/aie/embedgemma_gemm_epilogue_cycles_desktop2_20261019T000445Z.log)). Reading 0x340F8 through
+  `read_tm` hung the core: dispatch timeout ([log](../results/aie/embedgemma_gemm_epilogue_cycles_desktop2_20261019T000938Z.log)).
+  The device was idle again right afterwards.
+
+**End-to-end gate on device** (`--npu-geglu 6`, with NPU weight GEMMs and NPU local attention)
+([log](../results/aie/embedgemma_hybrid_npu_attnlocal_geglu6_desktop2_20261019T001519Z.log)): **PASS**, cosine min
+0.9999855, mean 0.9999932, nearest neighbours 100% kept.
+
+| Run | 128 | 512 | 2048 |
+|---|---:|---:|---:|
+| host GeGLU (previous section) | 198.5 | 844.4 | 3264.9 |
+| fused GeGLU, mode 6 | **165.5** | **735.6** | **2689.0** |
+
+- All figures are ms per document.
+- **The host `gelu` left (148 ms at 2048) is the per-layer-input gate's GELU.**
+- **`npu_call` rose by 121 ms at 2048**, as predicted from the probe.
+- **The comparison point is unmeasured.** The saving is against single-threaded NumPy. A native host GeGLU pass
+  (AVX2/OpenMP) has not been measured yet, so the saving against a tuned host is not established.
+- **Still not a CPU win.** CPU torch bf16 does the 2048-token document in 1,500 ms. What remains on the host is
+  norms 591, global attention 405 and RoPE 284 ms.
+
+**The host comparison point, measured** ([log](../results/aie/embedgemma_host_geglu_bench_desktop2_20261019T001900Z.log),
+[`embedgemma_host_geglu_bench.py`](../tools/embedgemma_host_geglu_bench.py),
+[`host_geglu.c`](../kernels/embedgemma/host_geglu.c)). This fills the "comparison point is unmeasured" bullet above.
+- **The run.** The MLP's GeGLU on the CPU at 24 layers per document, same input layout, research wrapper, no
+  foreign context. Both host versions are accurate to ≤ 1.0e-07 of the max against fp64.
+- **The NPU figure** is mode 6's added device time per gate|up call. At 128 tokens one M = 256 call carries two
+  documents, so the per-call figure is halved per document.
+
+| ms per document | 128 | 512 | 2048 |
+|---|---:|---:|---:|
+| NumPy, single-threaded (the hybrid's old host path) | 53.8 | 246.9 | 801.6 |
+| native host, OpenMP + AVX2 (`/fp:fast`) | 12.2 | 47.5 | 188.9 |
+| NPU epilogue, mode 6 | ~7.1 | ~31.4 | ~121 |
+
+- **Against a tuned host the epilogue is 1.5–1.7x faster**, not the ~6x the NumPy baseline suggests.
+- **It also takes this work off the CPU.**
+- **It has headroom by its own bundle count:** about 1.1 ms predicted against 5.05 measured at 2048, unexplained
+  above.
+
+**The epilogue table above is SUPERSEDED by one eligible same-sitting run**
+([log](../results/aie/embedgemma_gemm_epilogue_allmodes_desktop2_20261019T002827Z.log)).
+- **Why.** Every per-mode log in that table exited 1 (the JSON bool) or 139 (teardown). The research wrapper marks
+  such a run `timing_eligible: false`.
+- **Its rows also came from different sittings.** Mode 5's row has a mode-0 baseline of 1.021 ms at M = 256,
+  against about 0.75 elsewhere.
+- **The fix.** The 139 was a BO handle (`ib0`) outliving the device in the probe's teardown, now deleted. This run
+  exits 0 with no foreign context, and all 21 plain products PASS.
+
+| Mode | Added per call, M = 256 / 512 / 2048 (same sitting, mode 0 = 0.735 / 1.318 / 4.714 ms) |
+|---|---:|
+| 1 fp32 | 2.197 / 4.253 / 17.709 |
+| 2 bf16 + tables | 0.772 / 1.350 / 6.292 |
+| 5 bf16, no tables | 0.747 / 1.358 / 6.342 |
+| 6 mode 5 unrolled | **0.716 / 1.301 / 5.598** |
+
+All modes are again bit-exact to their models (modes 2/5/6), or within 3.1e-07 of fp64 (mode 1).
+
+**Against the native host GeGLU, re-read on these figures.** Mode 6 per document is ~8.6 / ~31.2 / ~134 ms,
+against native 12.2 / 47.5 / 188.9. That is **1.4–1.5x faster**, superseding the 1.5–1.7x above, which used the
+ineligible mode-6 log.
+
+#### W4 weights (int4, RTN, group 128) fail the frozen gate under CPU emulation (2026-10-19, Desktop 2)
+
+[`w4.py`](../kernels/embedgemma/w4.py) quantizes every weight product to int4 with a configuration fixed before the
+run and not swept on the gate documents:
+- symmetric round-to-nearest, q in [-8, 7];
+- one bf16 scale (max |w| / 7) per 128 K-rows of each output column;
+- the GEMM sees bf16(q * s).
+
+`--backend cpu --bf16-inputs --w4 128`, everything else exact ([record](../results/aie/embedgemma_w4_g128_numerics_cpu_desktop2_20261019T003002Z.json)):
+**cosine min 0.9502285, mean 0.9632142, nearest neighbours 82.1% kept: FAIL** (gate: 0.9999 and 100%). The same
+path with bf16 weights PASSES at 0.99999+. So plain RTN W4 changes this model far beyond the bar the bf16 work is
+held to. No device W4 code was written: the quality bar and quantization method W4 must meet are the owner's call.
+Candidates, none run: a finer group, calibrated methods (GPTQ / AWQ), or keeping the most sensitive products in
+bf16, each chosen on documents other than the gate set.
+
+#### The weight GEMMs are transport-bound: removing every MAC leaves 95-97% of the time (2026-10-19, Desktop 2)
+
+- **The probe.** A hollow build (`whole_array_generic.py --hollow-matmul`,
+  [`nomatmul.cc`](../kernels/gemm_generic/nomatmul.cc)) links a no-op in place of `matmul`. Every DMA, lock and
+  object-FIFO step is kept; only the MACs go.
+- **The run.** Hollow and real ran back to back, both exit 0 and `timing_eligible`, no foreign context:
+  [hollow](../results/aie/embedgemma_gemm_transport_hollow_desktop2_20261019T003621Z.log), [real](../results/aie/embedgemma_gemm_transport_real_desktop2_20261019T003634Z.log).
+
+| M | Hollow forward pass | Real | Hollow / real |
+|---|---:|---:|---:|
+| 256 | 61.3 ms | 63.8 ms | 96% |
+| 512 | 94.2 ms | 97.6 ms | 97% |
+| 2048 | 320.5 ms | 335.9 ms | 95% |
+
+- **This refutes "compute-bound at M >= 256"** for this design. The measured 1.1-1.7 TFLOPS (15-23% of the
+  7.4 TFLOPS bf16 peak at 1.80 GHz) is a data-movement ceiling, not a MAC one.
+- **Traffic per gate|up call at M = 2048, DERIVED from the tiling, not measured:**
+  - A re-streamed per 256-column block: about 32 MB.
+  - B re-streamed per 128-row block: about 64 MB.
+  - C in f32: about 32 MB.
+  - In all about 128 MB in 4.9 ms, about 26 GB/s.
+- **What binds is not identified.** It could be DDR or NoC bandwidth, or MemTile or stream overhead.
+- **What follows.** Cutting bytes should speed these products up: W4 B (64 -> 16 MB), a bf16 C (32 -> 16 MB), or
+  a larger M block per B read. That is DERIVED until a build measures it.
+
+#### W8 weights: 100% nearest neighbours kept, but just under the 0.9999 cosine gate (2026-10-19, Desktop 2)
+
+The user proposed two configurations, and each was run once as stated, with no other configuration tried.
+Everything else is the same CPU emulation path as the W4 run above.
+
+| Configuration | cos min | mean | NN kept | Gate | Record |
+|---|---:|---:|---:|---|---|
+| W4 RTN G=128 (above) | 0.9502285 | 0.9632142 | 82.1% | FAIL | above |
+| W8 RTN G=128 | 0.9998203 | 0.9998771 | 100% | FAIL (cos) | [json](../results/aie/embedgemma_w8_g128_clip0_numerics_cpu_desktop2_20261019T003914Z.json) |
+| W8 G=64 + 20-point per-group MSE clip, alpha in [0.85, 1] | 0.9998626 | 0.9998943 | 100% | FAIL (cos) | [json](../results/aie/embedgemma_w8_g64_clip20_numerics_cpu_desktop2_20261019T004100Z.json) |
+
+- **The RTN prediction held.** The user predicted cos min about 0.99981 for W8 RTN; 0.9998203 was measured.
+- **The G=64 + clip prediction did not.** It predicted a 2.1x cut in 1 - cos, enough to pass. The measured cut is
+  1.797e-4 to 1.374e-4, which is 1.31x, and it does not pass.
+- **Not separated:** how much of that came from the smaller group and how much from the clip search. Only the
+  combined configuration was run.
+- **Clip search uses no data.** It picks alpha from weight error alone, so nothing was tuned on the gate documents.
+
+#### W8 weights on the device: exact and 1.88x smaller, but slower than bf16 as first built (2026-10-19, Desktop 2)
+
+This implements the [W8 decision](DECISIONS.md) on the generic GEMM.
+- **The layout.** `whole_array_generic.py --b-w8` streams B as uint8 tiles. The host pre-swizzles each one
+  ([`embedgemma_gemm_probe.py`](../tools/embedgemma_gemm_probe.py) `w8_tiles`): 64×64 sign-magnitude bytes already in
+  the bf16 matmul's L1 order, then 256 bytes of per-column scales. G = 64 is the K tile. One linear DMA per array
+  column carries the tiles.
+- **The dequant.** [`w8_dequant.cc`](../kernels/embedgemma/w8_dequant.cc) rebuilds `bf16(q·s)` into an L1 scratch
+  tile on each core before the unchanged bf16 matmul. It uses exact identities, with no conversion instruction.
+
+**The W8 reference.** CPU emulation with the device's substitutions plus W8 at the adopted configuration
+([record](../results/aie/embedgemma_w8_g64_clip20_emulation_ref_cpu_desktop2_20261019T005047Z.json)): cos min 0.9998604
+against fp32 HF, nearest neighbours 100% kept, so it meets the quality bar. Its embeddings are saved as the
+kernel-correctness reference for the end-to-end W8 run. That copy is in git-ignored
+`scratch/egemma-w8/w8_emulation_ref.npz`.
+
+**The four runs.** Stages ran in one sitting, every log exit 0 and `timing_eligible`, no foreign context. The
+figures are each forward pass's weight GEMMs.
+
+| Build | M = 256 | 512 | 2048 | Log |
+|---|---:|---:|---:|---|
+| bf16 B (baseline) | 63.5 | 97.5 | 341.8 | [log](../results/aie/embedgemma_gemm_w8_stagebf16_desktop2_20261019T010612Z.log) |
+| (a) W8 B, no dequant, no matmul: transport only | 47.1 | 67.6 | 207.3 | [log](../results/aie/embedgemma_gemm_w8_stagea_desktop2_20261019T010625Z.log) |
+| (b) W8 B + dequant, no matmul | 54.5 | 81.9 | 270.4 | [log](../results/aie/embedgemma_gemm_w8_stageb_desktop2_20261019T010639Z.log) |
+| (c) W8 B + dequant + matmul | 81.4 | 132.9 | **472.7** | [log](../results/aie/embedgemma_gemm_w8_stagec_desktop2_20261019T010556Z.log) |
+
+All figures are ms.
+
+- **Exact.** At every shape and M, stage (c) passes the product check (21 of 21). It also passes a one-hot-A probe
+  (21 of 21), whose C must equal `bf16(q·s)` bit for bit.
+- **Footprint.** The weight buffers hold **7.04 MiB, against 13.25 MiB** in bf16: 1.88x smaller. The scales cost
+  the remaining 0.12x.
+- **Speed.** W8 is **1.38x slower** than bf16 at M = 2048, because the binding resource moved:
+  - W8 cuts transport to 207.3 ms, against bf16's hollow 320.5 in the earlier sitting. W8 on its own does buy
+    speed in data movement.
+  - With the bytes gone, the core is the limit, and the dequant and the matmul run back to back. In bf16 the
+    matmul hid under transport.
+  - The dequant's compiled loop is 55 bundles per 128 weights, about 1,760 cycles per tile per core. Its
+    sign-bit shift goes through the accumulator (`vups`/`vsrs`).
+  - It runs for every 32-row A tile, because each B tile is re-dequantized per A tile on each of a column's 4
+    cores.
+- **Candidates, none run yet:**
+  - an encoding that drops the shift (sign-extending unpack plus masks);
+  - m = 64 tiles, which halve both the dequant per MAC and the B re-streaming.
+  - Both are DERIVED until measured.
+
+#### W8 optimisation: a shift-free dequant and 64-row tiles; both builds now bound by the matmul kernel (2026-10-19, Desktop 2)
+
+**Two changes to the W8 build above:**
+- **A shift-free dequant** ([`w8_dequant.cc`](../kernels/embedgemma/w8_dequant.cc)). The host keeps its sign-magnitude
+  byte; a sign-extending unpack and three masks build both bf16 operands. The loop goes from 55 bundles per 128
+  weights to 94 per 256, which is 15% fewer per weight. What remains is 36 `vmov` (the 16-lane bf16 MACs want a
+  zeroed upper half), address moves, and the two MACs per lane.
+- **m = 64 tiles** (`--tile-m 64`, for bf16 and W8 alike). Each dequantized B tile then serves 64 A rows, not 32,
+  and B is re-streamed half as often. The cost: M must be a multiple of 512, so 128-token documents batch four per
+  call. The GeGLU epilogue is still written for m = 32.
+
+**Timed runs.** The timed builds ran in one sitting, then the hollow builds right after it. Every log exits 0,
+`timing_eligible`, with no foreign context. Every W8 build passes the product check and the one-hot exactness check
+(14 of 14).
+
+| Build | M = 512 | 2048 | Log |
+|---|---:|---:|---|
+| bf16, m = 32 | 98.3 | 340.8 | [log](../results/aie/embedgemma_gemm_w8opt_bf16m32_desktop2_20261019T012017Z.log) |
+| W8 first dequant, m = 32 | 133.0 | 474.6 | [log](../results/aie/embedgemma_gemm_w8opt_w8v1m32_desktop2_20261019T012030Z.log) |
+| W8 shift-free, m = 32 | 120.5 | 429.2 | [log](../results/aie/embedgemma_gemm_w8opt_w8v2m32_desktop2_20261019T012046Z.log) |
+| bf16, m = 64 | 92.7 | **302.0** | [log](../results/aie/embedgemma_gemm_w8opt_bf16m64_desktop2_20261019T012102Z.log) |
+| W8 shift-free, m = 64 | 106.7 | **348.0** | [log](../results/aie/embedgemma_gemm_w8opt_w8v2m64_desktop2_20261019T012115Z.log) |
+| hollow bf16, m = 64 (transport) | 77.9 | 236.1 | [log](../results/aie/embedgemma_gemm_w8opt_m64hbf16_desktop2_20261019T012806Z.log) |
+| hollow W8, m = 64 (transport) | 66.2 | 182.1 | [log](../results/aie/embedgemma_gemm_w8opt_m64hw8a_desktop2_20261019T012818Z.log) |
+| hollow W8 + dequant, m = 64 | 66.6 | 180.4 | [log](../results/aie/embedgemma_gemm_w8opt_m64hw8b_desktop2_20261019T012831Z.log) |
+
+All figures are ms per forward pass of weight GEMMs.
+
+- **W8 went from 474.6 to 348.0 ms at 2048**, now 15% behind bf16 at m = 64 rather than 39%.
+- **m = 64 also makes bf16 11% faster** (340.8 to 302.0).
+- **With the matmul removed, the dequant costs nothing.** It hides under W8's transport (180.4 vs 182.1).
+- **Both builds are core-bound.** An interim correction, written the same day and now withdrawn, said "lost
+  overlap, not MAC speed". It compared the L1 matmul estimate against the hollow runs, but those include a fixed
+  cost per dispatch.
+  - **The fit.** Per shape, [`embedgemma_gemm_fit.py`](../tools/embedgemma_gemm_fit.py) gives:
+    real call = **0.34-0.35 ms fixed + 1.16-1.21 x the L1-resident core estimate**. The estimate is `mm.cc` 64x64x64
+    bf16 at 5,427 cycles ([log](../results/aie/l1_tile_mm_direct_64x64x64_desktop2_20260923T0538Z.log)), plus the
+    dequant's static 1,504. The worst residual over 7 shapes is 0.056 ms.
+  - **Per forward pass at M = 2048:** core 243 ms (bf16) and 297 (W8), fixed 50 ms over 148 dispatches. Transport
+    with its fixed part taken out is 208 and 118 ms, below the core in both builds.
+  - **Ruled out:** per-shape imbalance (the sum of per-shape max(transport, core) is 234.7 ms, against 293.9
+    measured). The single-buffered C drain is only 2-4% (m = 32 double-buffered, below).
+  - **Not separated:** what the 1.2x over the L1 bench is (per-K-tile lock and call overhead, bank conflicts).
+- **W8's transport floor is 23% below bf16's** (182.1 vs 236.1).
+- **The levers, in order of size for W8:**
+  - the matmul kernel (37.9% of peak in L1, and 1.2x slower than that in the design);
+  - the dequant;
+  - about 50 ms of fixed dispatch cost.
+  - W8's transport (118 ms) sits far below its core (297), so a faster matmul is what W8 needs to beat bf16
+    (DERIVED).
+
+| Same-sitting check | M = 512 | 2048 | Log |
+|---|---:|---:|---|
+| bf16 m = 32, C double-buffered | 97.4 | 332.0 | [log](../results/aie/embedgemma_gemm_w8opt_m32cdbf16_desktop2_20261019T013504Z.log) |
+| W8 m = 32, C double-buffered | 116.5 | 410.9 | [log](../results/aie/embedgemma_gemm_w8opt_m32cdw8_desktop2_20261019T013518Z.log) |
+| bf16 m = 64 (repeat) | 93.3 | 292.9 | [log](../results/aie/embedgemma_gemm_w8opt_m64bf16b_desktop2_20261019T013534Z.log) |
+| W8 m = 64 (repeat) | 106.6 | 351.0 | [log](../results/aie/embedgemma_gemm_w8opt_m64w8b_desktop2_20261019T013547Z.log) |
+
+#### End-to-end W8 on the device: the registered gate PASSES; time equals bf16 in the same sitting (2026-10-19, Desktop 2)
+
+**Setup.**
+- All 146 weight products run as W8 tiles (`--w4 64 --wbits 8 --wclip 20 --npu-w8`, builds `--w8 --w8-dequant`, m = 32).
+- The gate|up GeGLU is fused (mode 6). The gate|up interleave is applied to both q and s.
+- Local attention runs on the NPU.
+- Judged as [registered](DECISIONS.md) before the run.
+
+**Result** ([log](../results/aie/embedgemma_hybrid_npu_w8_gate_desktop2_20261019T014509Z.log)): **PASS**.
+- **Against the W8 CPU-emulation reference:** cos min 0.9999810, mean 0.9999926, nearest neighbours 100% kept.
+- **Against fp32 HF (the quality bar):** nearest neighbours 100% kept.
+
+**Bits per weight.**
+- **Logically 8.25:** 8-bit q plus one bf16 scale per 64 weights.
+- **As stored on the device, 8.5:** 4,352 bytes per 4,096-weight tile, because each column's scale is stored twice
+  to build a 16-lane scale vector without shuffles.
+- bf16 is 16.
+
+| ms per document | 128 | 512 | 2048 |
+|---|---:|---:|---:|
+| bf16 weights, fused GeGLU, same sitting ([log](../results/aie/embedgemma_hybrid_npu_bf16_samesitting_desktop2_20261019T014659Z.log), gate PASS 0.9999855) | 158.4 | 704.5 | 2615.3 |
+| W8 weights, fused GeGLU | **148.4** | **703.9** | **2616.8** |
+
+- **W8 costs the same as bf16 end to end.** `npu_call` is 483.4 against 480.0 ms at 2048.
+- **That disagrees with the isolated probe, and the reason is unexplained.** There, W8 at m = 32 was 26% slower
+  than bf16 (429.2 vs 340.8 ms per forward pass). Candidates not separated:
+  - the hybrid's batching and M choice differ from the probe's;
+  - per-call host and sync time dominates `npu_call` in the hybrid;
+  - the probe's random weights and the model's real weights take different paths. They shouldn't: the dequant is
+    data-independent.
+- **The 128-token row's 10 ms gap is not attributed.** It is within run-to-run host variance (`norm` alone moved
+  3.5 ms).
+- **What W8 buys here is the 1.88x weight footprint**, not speed.
+
+#### W8A8 (per-channel weights, per-token activations) under CPU emulation: NN 100%, but cos min falls to 0.998, and the NN bar proves too coarse (2026-10-19, Desktop 2)
+
+The configuration was [registered](DECISIONS.md) before the run, and the run was made once. The other substitutions
+match the W8A16 reference.
+
+| Configuration | cos min | mean | NN kept vs HF | Record |
+|---|---:|---:|---:|---|
+| W8A16, G = 64 + clip (adopted; device-gated) | 0.9998604 | 0.9998894 | 100% | [W8 reference](../results/aie/embedgemma_w8_g64_clip20_emulation_ref_cpu_desktop2_20261019T005047Z.json) |
+| **W8A8**, per-channel W + clip, per-token A | **0.9979589** | 0.9989986 | **100%** | [json](../results/aie/embedgemma_w8a8_channel_token_emulation_cpu_desktop2_20261019T020359Z.json) |
+| diagnostic: per-channel W8 + clip, bf16 A | 0.9997064 | 0.9997979 | 98.2% | [json](../results/aie/embedgemma_w8channel_a16_diag_cpu_desktop2_20261019T021414Z.json) |
+
+- **W8A8 meets the registered bar** (NN 100%), but its worst-document error (1 - cos) is about 15x W8A16's.
+- **The diagnostic shows the NN bar is too coarse at 56 documents.** The per-channel-weights-only run has *less*
+  error than W8A8, yet one document changes its nearest neighbour. The flip is a near-tie, not graded quality.
+- **So the pass is not robust evidence that W8A8 preserves retrieval.** Device work is paused for the owner's call
+  on a sturdier quality measure.
+- **Attribution, from these two runs:** per-token activations carry most of the cosine loss (0.9997 to 0.9980);
+  per-channel weights cost about 2x W8A16's error on their own.
+
+#### bf16 maturation, item 1a: a native fused post-QKV pass (q/k/v norms + RoPE) cuts 22% at 2048 (2026-10-19, Desktop 2)
+
+[`qkv_norm_rope.c`](../kernels/embedgemma/qkv_norm_rope.c) does in one OpenMP + AVX2 pass over each row what
+`model.py` does with three `_rms` and two `_rope` calls (`--native-qkv`, `model.py` `qkv_hook`). Offline it matches
+the numpy path to 1.8e-7 of the max, on both local and global head shapes.
+
+**Same sitting:** both runs exit 0 and `timing_eligible`, with no foreign context. Each has bf16 weights, the fused
+GeGLU (mode 6) and NPU local attention.
+
+| ms per document | 128 | 512 | 2048 | Log |
+|---|---:|---:|---:|---|
+| numpy norms and RoPE | 158.6 | 701.5 | 2613.9 | [log](../results/aie/embedgemma_hybrid_npu_qkv_numpy_desktop2_20261019T040357Z.log) |
+| native fused QKV pass | **127.3** | **556.3** | **2035.0** | [log](../results/aie/embedgemma_hybrid_npu_qkv_native_desktop2_20261019T040306Z.log) |
+
+- **Gate PASS:** cos min 0.9999783, nearest neighbours 100%.
+- **At 2048, norms + RoPE fall from 831 to 344 ms:** 306 ms for the remaining numpy norms and 38 for the fused
+  pass.
+- **What is left on the host at 2048:**
+  - norms before and after the GEMMs: 306 ms;
+  - global attention: 409;
+  - the per-layer-input GELU: 141;
+  - packing and copies: about 120.
+- **The CPU comparison point:** torch bf16 does this document in 1,500 ms, and the GPU (llama-server, 780M) in
+  717.5.
+- **Quantization thread parked** at the owner's call. The SciFact fake-quant scoring was stopped unscored.
+  `tools/embedgemma_retrieval_eval.py` and the SciFact fp32 HF reference (nDCG@10 85.42, 300 queries, in
+  `scratch/`) are kept for when it resumes.
+
+#### bf16 maturation, item 1b: native row ops for every other norm, residual add and the per-layer-input GELU: 2032.7 to 1539.1 ms at 2048 (2026-10-19, Desktop 2)
+
+[`rowops.c`](../kernels/embedgemma/rowops.c) covers the rest of the host work, through `model.py`'s `native` hook
+(`--native-rowops`): `eg_rms`, `eg_add_rms` (each post-norm with its residual add and the layer scalar folded in)
+and `eg_gelu_mul`. Offline each matches numpy to 1.8e-7 of the max.
+
+**Same sitting:** both runs exit 0 and `timing_eligible`, with no foreign context. Each has bf16 weights, the fused
+GeGLU, NPU local attention and the native QKV pass.
+
+| ms per document | 128 | 512 | 2048 | Log |
+|---|---:|---:|---:|---|
+| native QKV pass only | 126.9 | 555.9 | 2032.7 | [log](../results/aie/embedgemma_hybrid_npu_native_qkvonly_desktop2_20261019T040858Z.log) |
+| + native row ops | **111.0** | **435.1** | **1539.1** | [log](../results/aie/embedgemma_hybrid_npu_native_rowops_desktop2_20261019T040816Z.log) |
+
+- **Gate PASS:** cos min 0.9999883, nearest neighbours 100%.
+- **At 2048, norm + GELU fall from 447 to 111 ms.** The total saving is 494 ms, which is larger than that. The
+  difference is mostly the residual adds and layer-scalar multiplies that numpy ran *outside* any timed phase.
+  That attribution is DERIVED from the phase split, not measured separately.
+- **Since the start of the bf16 maturation the 2048 document has gone from 2613.9 to 1539.1 ms.** CPU torch bf16
+  is 1,500 and the GPU (llama-server) 717.5.
+- **The largest items left at 2048:**
+  - weight GEMMs: 460 ms `npu_call`, 624 ms `gemm` with host packing;
+  - host global attention: 410;
+  - NPU local attention: 269.
+
+#### The 780M iGPU against the NPU, op by op: the iGPU is faster at every op measured (2026-10-19, Desktop 2)
+
+**Why measure it.** This is the data for the iGPU/NPU "logical device" decision.
+- [`opbench.cpp`](../tools/ggml_gpu_opbench/opbench.cpp) runs each op through public GGML APIs on the llama.cpp ROCm
+  backend (`ROCm0`). That is the same runtime as the llama-server GPU baseline (717.5 ms per 2048-token document).
+- It allows no CPU fallback. An op ROCm0 does not support is reported, never run.
+- [`embedgemma_igpu_opbench.py`](../tools/embedgemma_igpu_opbench.py) drives it over the model's real op list and counts.
+- Each op is timed as 8 independent copies in one graph, so launch cost is amortized as in a forward graph.
+- [Record](../results/aie/embedgemma_igpu_opbench_desktop2_20261019T041603Z.json), contention checked first: no foreign
+  load, NPU idle.
+- **The NPU figures come from earlier sittings the same day**, not this one (CLAUDE.md's cross-sitting caveat).
+
+**Weight GEMMs** (bf16 weights, f32 activations), forward-pass weight GEMMs in ms:
+
+| M | iGPU | NPU bf16, m = 64 tiles | NPU bf16, m = 32 tiles |
+|---|---:|---:|---:|
+| 256 | **36.3** | n/a (needs M % 512) | 63.5 |
+| 512 | **68.8** | 92.7 | 97.5 |
+| 2048 | **176.7** | 292.9 | 340.8 |
+
+Per shape at M = 2048, the iGPU is 1.5-1.8x the NPU m = 64 build: 2.29 against 4.04 ms for gate|up, 3.75 TFLOPS.
+
+**Attention per layer** (q f32, K/V f16, ms):
+
+| L | local, flash | local, classic | global (hd 512), flash | global, classic |
+|---|---:|---:|---:|---:|
+| 128 | 0.19 | **0.14** | unsupported | **0.10** |
+| 512 | **0.71** | 1.28 | 1.37 | **1.12** |
+| 2048 | **2.93** | 11.77 | 17.81 | **15.41** |
+
+- **Best per document at 2048:** 20 x 2.93 + 4 x 15.41, about 120 ms. The NPU local attention costs 269 ms
+  (`attn_npu`), and host global attention 410.
+- **Not checked:** whether the 512-token window mask lets the flash kernel skip work.
+
+**Hand-off cost (ROCm0 device buffer, not host-visible).** Writes run at 33-61 GB/s and reads at 7-16 GB/s:
+4 MiB (one 2048 x 512 f32 activation) takes 0.07 ms in and 0.27 ms out.
+
+**What this says, DERIVED:**
+- **For one document's latency, the iGPU beats the NPU at every op measured.** Splitting a single document
+  across the two would add hand-offs to a path that is already faster on one device.
+- **The NPU's possible roles are throughput** (a second document in parallel with the GPU's) **or energy.**
+  Neither is measured. Both need a concurrent run, to see how much the shared DRAM bandwidth slows each device,
+  plus a power reading.
+- **Unexplained:** the iGPU's summed per-op estimate, about 300 ms at 2048, sits far below llama-server's
+  717.5 ms per request. The server's request path and its remaining ops are the candidates; neither is separated.
+
+#### The 780M and the NPU together on 2048-token documents: a throughput role for the NPU; an energy role only against the -fa off GPU (2026-10-19, Desktop 2)
+
+**What ran.** [`embedgemma_concurrency_energy.py`](../tools/embedgemma_concurrency_energy.py) runs three arms:
+- **G:** llama-server on ROCm0, one document per request;
+- **N:** the best bf16 hybrid, after its 56-document gate;
+- **GN:** both at once.
+
+Each arm takes 60 s of idle and then a 60 s window. Each sitting runs two passes, the second in reverse order.
+Energy comes from the RAPL package counter only (locked decision 10). Both chips are inside it.
+
+The rules were committed before the first sitting (`5e7ab65`):
+- **T (throughput role):** GN docs/s >= 1.10 x G, in both passes;
+- **E (energy role):** N or GN J/doc above idle <= 0.90 x G, in both passes.
+
+The second sitting ran G with flash attention (`--gpu-fa on`, `0358150`), under the same rules. All 8 NPU arms
+passed the gate (cos min 0.9999883, NN 100%) with no foreign contention flagged. The GPU worker recorded cos min
+0.9999817 against HF with `-fa on`.
+
+Pass 1 / pass 2:
+
+| Sitting | Arm | Docs/s | ms/doc | dPKG W | J/doc above idle | J/doc with idle |
+|---|---|---|---|---|---|---|
+| -fa off ([record](../results/aie/embedgemma_concurrency_energy_desktop2_20261019T043151Z.json)) | G | 1.457 / 1.468 | 686 / 681 | 59.2 / 60.1 | 40.6 / 40.9 | 55.1 / 54.9 |
+| | N | 0.652 / 0.656 | 1535 / 1524 | 34.7 / 33.7 | 53.3 / 51.3 | 84.5 / 84.0 |
+| | GN | 1.808 / 1.818 | GPU 777 / 770, NPU 1920 / 1924 | 63.7 / 63.6 | **35.2 / 35.0** | 46.9 / 46.7 |
+| -fa on ([record](../results/aie/embedgemma_concurrency_energy_fa_on_desktop2_20261019T045001Z.json)) | G | 2.309 / 2.285 | 433 / 438 | 52.9 / 55.6 | 22.9 / 24.3 | 32.0 / 31.4 |
+| | N | 0.654 / 0.649 | 1530 / 1540 | 33.9 / 37.1 | 51.9 / 57.1 | 83.7 / 82.0 |
+| | GN | 2.612 / 2.604 | GPU 483 / 486, NPU 1850 / 1833 | 60.1 / 65.4 | 23.0 / 25.1 | 31.3 / 31.5 |
+
+**Verdicts (mechanical):**
+- **-fa off: T YES** (GN/G 1.24, 1.24); **E YES**, through GN (0.87, 0.86 of G).
+- **-fa on: T YES** (1.13, 1.14); **E NO** (GN 1.01 and 1.03 of G; N 2.3x).
+- **Against the GPU at its best, the NPU adds 13-14% throughput beside it, at the GPU's energy per document.**
+  Running both costs the GPU 11% of its own rate (433 -> 483 ms).
+
+**Notes.**
+- **The GPU's flash attention alone gives it 1.57x** (681-686 -> 433-438 ms). The llama-server baseline's
+  717.5 ms used `-fa off`.
+- **Idle moved between the sittings.** It was about 21 W in the first and in pass 1 of the second, then about
+  16 W in pass 2. Every arm is read against its own idle.
+- **One NPU-engine counter reading in -fa on pass 1 N is garbage** (3.4e12%). It feeds no rule.
+- **What is NOT measured:** whether the slowdown when both run comes from DRAM bandwidth, the shared CPU host work
+  (N uses 20-23% CPU) or thermal limits; the arms do not separate them.
+- **NPU logs:**
+  - -fa off: [N p1](../results/aie/embedgemma_concurrency_n_npu_desktop2_20261019T043151Z_p1.log),
+    [N p2](../results/aie/embedgemma_concurrency_n_npu_desktop2_20261019T043151Z_p2.log),
+    [GN p1](../results/aie/embedgemma_concurrency_gn_npu_desktop2_20261019T043151Z_p1.log),
+    [GN p2](../results/aie/embedgemma_concurrency_gn_npu_desktop2_20261019T043151Z_p2.log);
+  - -fa on: [N p1](../results/aie/embedgemma_concurrency_n_npu_desktop2_20261019T045002Z_p1.log),
+    [N p2](../results/aie/embedgemma_concurrency_n_npu_desktop2_20261019T045002Z_p2.log),
+    [GN p1](../results/aie/embedgemma_concurrency_gn_npu_desktop2_20261019T045002Z_p1.log),
+    [GN p2](../results/aie/embedgemma_concurrency_gn_npu_desktop2_20261019T045002Z_p2.log).
+
+#### An owned bf16 matmul kernel: 1.57x upstream mm.cc in L1, from freeing the move slot (2026-10-19, Desktop 2)
+
+**Why `mm.cc` is slow.** [Schedule notes](../results/aie/notes_mm_bf16_schedule.md), from Peano's disassembly at
+64^3:
+- The K loop issues 16 `vmac.f` in 33 bundles, because 30 of those bundles are pointer moves on the single move
+  slot. The source keeps eight post-incremented A and B pointers.
+- Each of the 16 output blocks also pays a 51-bundle C-load prologue and a 45-bundle store epilogue.
+
+[`kernels/gemm_bf16/mm_bf16.cc`](../kernels/gemm_bf16/mm_bf16.cc) (AGPL, written here) is a drop-in for
+`matmul_bf16_f32` and `zero_f32`:
+- same layouts and the same per-accumulator K order;
+- one A and one B base pointer per block, the other rows and columns at fixed offsets.
+
+Its K loop is 19 bundles for 16 `vmac.f`.
+
+`tools/l1_tile_bench.py` direct mode at 64^3, one sitting, contention clean
+([log](../results/aie/l1_tile_own_bf16_v1_64x64x64_desktop2_20261019T053617Z.log), [wrapper](../results/aie/l1_tile_own_bf16_v1_64x64x64_desktop2_20261019T053617Z_wrapper.log)). Both outputs are exact on the bench's small-integer
+case:
+
+| kernel | cycles/call | over empty | % peak | GFLOPS |
+|---|---:|---:|---:|---:|
+| `mm.cc` | 5427.7 | 5408.3 | 37.7% | 173.9 |
+| `mm_bf16.cc` v1 | **3446.9** | 3427.4 | **59.4%** | 273.8 |
+
+- **The remaining cost is the C traffic per block**, about 82 of about 215 cycles. One accumulator load or store
+  fits per bundle, and 64 half-transfers are needed per block.
+- **Only a hand schedule can overlap that traffic with the next block's MACs** (notes, target 2). That is stage
+  2; v1 is below its 70% bar for stopping at C++.
+- **Not yet checked:** bit-identity to `mm.cc` on random bf16. The bench's integers are exact in any order, so
+  that check runs on the device GEMM.
+
+#### The owned bf16 kernel on the device: bit-identical to mm.cc; the m32 GEMM build is now transport-bound (2026-10-19, Desktop 2)
+
+**Bit-identity.** The generic GEMM was rebuilt with `--mm-src kernels/gemm_bf16/mm_bf16.cc`, at m32 with the GeGLU
+epilogue mode 6. `tools/embedgemma_gemm_probe.py run --save-outputs` fed it and the `mm.cc` build the same seeded
+inputs, and [`gemm_bitdiff.py`](../tools/gemm_bitdiff.py) compared every output: **all 27 bit-equal**
+([diff](../results/aie/embedgemma_gemm_mmown_bitdiff_m32_desktop2_20261019.log)). That covers 21 forward products at M = 256, 512 and 2048, and the GeGLU mode-0 and
+mode-6 streams.
+
+**Timing.** Same sitting, contention clean ([mm.cc](../results/aie/embedgemma_gemm_mmown_mmcc_m32_desktop2_20261019T054404Z.log), [owned](../results/aie/embedgemma_gemm_mmown_own_m32_desktop2_20261019T054433Z.log)). Forward-pass
+weight GEMMs, ms:
+
+| build | M = 256 | 512 | 2048 |
+|---|---:|---:|---:|
+| `mm.cc` m32 | 63.4 | 97.0 | 346.2 |
+| owned m32 | **61.0** | **91.4** | **313.8** |
+
+**In L1 at the m32 tile** ([log](../results/aie/l1_tile_own_bf16_v1_32x64x64_desktop2_20261019T054525Z.log), [wrapper](../results/aie/l1_tile_own_bf16_v1_32x64x64_desktop2_20261019T054525Z_wrapper.log)), the owned kernel is the same
+1.57x: 2730.0 against 1734.8 cycles per 32x64x64 call, 37.5% against 59.0%.
+
+**The device shows 9% of the 1.57x, DERIVED:**
+- Core time per pass at M = 2048 falls from about 203 to about 129 ms (280 GMAC over 16 cores at 1.80 GHz).
+- Only 32 ms of that shows. The earlier fit put the m32 build's data movement plus its fixed cost near 258 ms, so
+  the m32 GEMM is now close to transport-bound.
+- The m64 tile halves B re-streaming; its build with the owned kernel is next.
+
+**At m64 the owned kernel pays** (same sitting, contention clean; [mm.cc](../results/aie/embedgemma_gemm_mmown_mmcc_m64_desktop2_20261019T054835Z.log), [owned](../results/aie/embedgemma_gemm_mmown_own_m64_desktop2_20261019T054850Z.log),
+[bit-diff](../results/aie/embedgemma_gemm_mmown_bitdiff_m64_desktop2_20261019.log): all 14 bit-equal). Forward-pass weight GEMMs, ms:
+
+| build | M = 512 | 2048 |
+|---|---:|---:|
+| `mm.cc` m64 | 91.6 | 292.1 |
+| owned m64 | **77.5** | **232.6** |
+
+- That is -20% at 2048 (2407 GFLOPS).
+- **The hybrid still runs m32**, because the GeGLU epilogue is written for m32. Porting it to m64 is what turns this
+  build into an end-to-end gain.
+
+**End to end** (hybrid, m32 + GeGLU mode 6, all native passes; same sitting, contention clean;
+[owned](../results/aie/embedgemma_hybrid_npu_mmown_own_desktop2_20261019T054948Z.log), [mm.cc](../results/aie/embedgemma_hybrid_npu_mmown_mmcc_desktop2_20261019T055029Z.log)):
+- Gate PASS for both: cos min 0.9999883, nearest neighbours 100%.
+- **The 56 embeddings are bit-equal between the two.**
+- ms per document at 128 / 512 / 2048: `mm.cc` 108.7 / 438.2 / 1544.4, owned **108.2 / 423.8 / 1515.8** (-2% at
+  2048). This is the m32 build's transport floor, as above.
+
+#### The GeGLU epilogue at m64 turns the owned kernel into an end-to-end gain: -10% at 2048, -42% at 512 (2026-10-19, Desktop 2)
+
+**The port.** The C tile's 4x4-block stride does not depend on the tile's rows, and the epilogue is element-wise.
+So [`geglu_epilogue.cc`](../kernels/embedgemma/geglu_epilogue.cc) now loops over `EPI_M / 4` row blocks, with
+`whole_array_generic.py` passing `-DEPI_M=m`. The hybrid's shared context is now the smallest built M's
+`g_<M>_512_512.xclbin`, since m64 builds M % 512 only.
+
+**The m64 + GeGLU build** ([probe](../results/aie/embedgemma_gemm_mmown_own_m64_epi_desktop2_20261019T055644Z.log)):
+- mode 6 matches the GeGLU model exactly (worst 0) at M = 512 and 2048, and repeats bit-equal;
+- forward GEMMs 76.9 / 230.0 ms;
+- the epilogue adds 3.56 ms per gate|up call at 2048, against 5.22 at m32.
+
+**End to end** (all native passes, NPU local attention; one sitting, contention clean). ms per document:
+
+| build | batch | 128 | 512 | 2048 | log |
+|---|---|---:|---:|---:|---|
+| `mm.cc` m32 | 2 | 109.7 | 437.1 | 1533.4 | [log](../results/aie/embedgemma_hybrid_npu_mmown_mmcc32_desktop2_20261019T055814Z.log) |
+| owned m64 | 2 | 120.8 | 359.9 | **1371.9** | [log](../results/aie/embedgemma_hybrid_npu_mmown_own64_desktop2_20261019T055735Z.log) |
+| owned m64 | 4 | **84.2** | **255.4** | 1406.2 | [log](../results/aie/embedgemma_hybrid_npu_mmown_own64_b4_desktop2_20261019T055923Z.log) |
+
+- All three pass the gate (cos min 0.9999883, nearest neighbours 100%). **All their embeddings are bit-equal.**
+- **Batch 2 at m64 wastes half a 512-row call on 128-token documents**, which is why that cell is slower. Batch 4
+  fills it.
+- **At 2048 the batch is one document either way.** 1371.9 against 1406.2 is the spread between sittings, not an
+  effect of the batch.
+- **Since the start of the bf16 maturation, the 2048-token document has gone from 2613.9 to 1371.9-1406.2 ms.**
+
+#### With the owned kernel, the m64 GEMM is transport-bound: a hand-scheduled kernel cannot pay on the device (2026-10-19, Desktop 2)
+
+The hollow m64 build (`--hollow-matmul`) keeps every DMA and lock step and drops the MACs
+([log](../results/aie/embedgemma_gemm_hollow_m64_floor_desktop2_20261019T062037Z.log); contention clean, same day as the owned m64 runs above). Forward-pass weight GEMMs, ms:
+
+| m64 build | M = 512 | 2048 |
+|---|---:|---:|
+| `mm.cc` | 91.6 | 292.1 |
+| owned `mm_bf16.cc` | 76.9 | 230.0 |
+| hollow (no MACs) | 76.7 | 231.0 |
+
+**What this means:**
+- The owned kernel already sits at the transport floor. A faster kernel, even one that cost zero cycles, saves
+  nothing here.
+- **Plan stage 2 (a hand-scheduled `.s`) is stopped on this measurement before any code was written.**
+- **Its own ceiling was modest anyway (DERIVED).** At a 64-wide K tile, each 4x4 block's 64 accumulator transfers
+  bunch at the block boundary under the one-per-bundle accumulator port. That leaves about 35-43 boundary bundles
+  per 128 MAC bundles, about 75-80% of peak.
+- **The lever is now data movement:** the DMA and tiling of the generic GEMM, and the fixed cost per call.
+
+#### W8 on the owned kernel: 23% faster than W8 on mm.cc, still slower than bf16 - the dequant makes it core-bound (2026-10-19, Desktop 2)
+
+**Setup.** m64, W8 weights (G = 64, clip 20) with `w8_dequant.cc` and the owned `mm_bf16.cc`. The probe's GeGLU check
+now uploads W8 tiles under `--w8`. One sitting, contention clean. Forward-pass weight GEMMs, ms:
+
+| m64 build | M = 512 | 2048 | log |
+|---|---:|---:|---|
+| bf16, owned | **79.2** | **234.1** | [log](../results/aie/embedgemma_gemm_w8own_bf16own_m64_desktop2_20261019T063053Z.log) |
+| W8, owned | 86.7 | 270.9 | [log](../results/aie/embedgemma_gemm_w8own_w8own_m64_desktop2_20261019T063005Z.log) |
+| W8, `mm.cc` | 106.1 | 352.2 | [log](../results/aie/embedgemma_gemm_w8own_w8mmcc_m64_desktop2_20261019T063024Z.log) |
+| W8 hollow (no MACs, no dequant) | 66.7 | 181.9 | [log](../results/aie/embedgemma_gemm_w8own_w8hollow_m64_desktop2_20261019T063040Z.log) |
+
+- **Checks:** W8 owned passes every check. The dequant one-hot is bit-equal, and GeGLU mode 6 matches the model
+  exactly.
+- **Why W8 still loses (DERIVED):** it halves the weight bytes, so its floor is 182 ms against bf16's 231. But the
+  on-core dequant adds work to each tile (about 1,500 cycles against the matmul's 3,447 at 64^3), and W8 runs
+  about 89 ms above its floor. bf16 is transport-bound; W8 is core-bound.
+- **What could make W8 pay:** dequantizing inside the matmul's K loop, so B never goes through a bf16 scratch
+  tile in L1. That is not built.
+- **Not run:** the end-to-end W8 hybrid, since its GEMMs are slower than bf16's.
+
+Also: `embedgemma_gemm_probe.py compile --jobs N` (default 8) now builds xclbins in parallel. 5 builds took 3 min.
+
+#### Byte accounting of the m64 GEMM: it moves 2.4x the minimum, and its floor can drop from 231 to about 116 ms (2026-10-19, Desktop 2)
+
+[`gemm_byte_accounting.py`](../tools/gemm_byte_accounting.py) models the design's DDR traffic (DERIVED from
+`whole_array_generic.py`) and divides it by the hollow build's measured per-shape times
+([table](../results/aie/embedgemma_gemm_byte_accounting_m64_desktop2_20261019.log)).
+
+**The traffic model.** Each 256 x 256 block of C streams A's 256 rows over all of K and B's K x 256 strip. So A is
+read N/256 times, B M/256 times (8 at M = 2048), and C is written once in f32.
+
+**Per forward pass at M = 2048:**
+
+| | A | B | C | total |
+|---|---:|---:|---:|---:|
+| moved, MB | 2,187 | 2,187 | 1,751 | 6,126 |
+| minimum (each once), MB | 528 | 273 | 1,751 | 2,553 |
+
+- **The rate reached.** The hollow build takes 228.8 ms per pass. Without the fixed 0.34 ms x 148 calls (50 ms),
+  that is 34.3 GB/s.
+- **Reads use about half the measured read ceiling:** 24.5 GB/s, against 47.6 GB/s on all 8 shim channels
+  (SILICON.md 1.6, MEASURED).
+
+**Where the bytes and the time could go** (each DERIVED at the measured 34.3 GB/s, none built):
+
+| Change | Bytes saved | ms saved | Exact? |
+|---|---:|---:|---|
+| B resident per column in its MemTile, read once (K x 64 strip <= 256 KB fits the 512 KB MemTile beside A and C) | 1,914 MB | ~56 | yes |
+| GeGLU stores only the gate half it computes (gate|up C is 906 MB, half of it unused) | 453 MB | ~13 | yes |
+| bf16 C for the remaining products | ~649 MB | ~19 | no: needs the gate |
+| half the calls (merge products per layer) | | ~25 | yes |
+
+- **All four together:** about 3.1 GB moved, about 91 ms of transport plus about 25 ms fixed, so **about 116 ms
+  against 231** (the iGPU's GEMMs: 177).
+- **A higher DMA rate** (more shim channels busy, toward the 47.6 GB/s ceiling) would cut it further.
+- **Not measured:** whether the reordered loop keeps the rate, and whether the MemTile buffers fit once allocated.
+- **The B row, measured the same day:** with one task group in flight, B resident cuts the no-MAC 2048x512x4096
+  call 31% for the 29% of bytes this model removes, so the model holds for B on that shape
+  ([measured](#weight-resident-b-with-one-task-group-in-flight-16-faster-and-exact-so-the-b-re-reads-did-bind-2026-10-19-desktop-2)).
+  A first build that awaited every n-tile read 3% and was briefly taken to refute it.
+
+#### Weight-resident B is exact and not faster: the B re-reads do not bind the m64 GEMM (2026-10-19, Desktop 2)
+
+> **Superseded the same day** ([below](#weight-resident-b-with-one-task-group-in-flight-16-faster-and-exact-so-the-b-re-reads-did-bind-2026-10-19-desktop-2)). This build's runtime sequence awaited every n-tile's C drains
+> before issuing the next n-tile (64 awaits per call against the generic build's 16), so nothing was in flight at
+> 16 boundaries and the strip never prefetched. The conclusion "B re-reads do not bind" came from that confound, and
+> the four contexts open at once put the real build below the no-MAC build. The numbers below stay as measured.
+
+`whole_array_generic.py --b-resident 1` keeps each column's K x 64 B strip in its MemTile (depth 2 at K = 512) and
+re-sends it to the column's cores once per 256-row block (`ObjectFifo` `repeat_count` = M / 256, a compile-time
+value). The sequence runs n-tile outer, row block inner, so B leaves DDR once per product. The core program is
+unchanged. [`gemm_resident_ab.py`](../tools/gemm_resident_ab.py) opened four contexts in one sitting on 2048x512x4096
+(gate|up, the largest byte share) with the same seeded A and B
+([log](../results/aie/embedgemma_gemm_bresident_ab_2048x512x4096_desktop2_20261019T065654Z.log)). The NPU was idle before and after; host load CLEAR.
+
+| Build | ms/call (median of 30) | DDR MB per call (DERIVED) |
+|---|---:|---:|
+| generic, owned kernel | 3.155 | 100.7 |
+| resident, owned kernel | 3.643 | 71.3 |
+| generic, no MACs | 3.414 | 100.7 |
+| resident, no MACs | 3.312 | 71.3 |
+
+- **Exact:** the resident C equals the generic C in all 8,388,608 words, repeats bit-equal, rel err 4.7e-07
+  against fp32.
+- **Not faster.** 29% fewer bytes cut the no-MAC call by 3%, and the real resident call is 15% slower than the
+  generic one. So B's DDR reads are not what binds this shape, and the byte model's rate assumption (time scales with
+  bytes) fails here.
+- **What binds is still unexplained.** Candidates not yet ruled out:
+  - the shim DMAs read A and B in 128-byte runs (one 64-wide bf16 tile row), far from the linear reads that reached
+    47.6 GB/s;
+  - the per-tile lock and BD handshakes at the MemTile and the cores;
+  - the C drain, single-buffered, which the core waits on after every tile.
+- **The real build sits below the generic no-MAC build in this sitting** (3.155 against 3.414 ms), so the no-MAC
+  build is not a strict floor with four contexts open. Earlier sittings had one context.
+- **Switching contexts is expensive:** calls alternating between the generic and resident contexts take 4.674 and
+  5.129 ms, 1.5 ms more each. A per-(M, K) xclbin set would add about that per switch, so that form of Stage B is
+  out regardless.
+
+#### Weight-resident B with one task group in flight: 16% faster and exact, so the B re-reads did bind (2026-10-19, Desktop 2)
+
+The [build above](#weight-resident-b-is-exact-and-not-faster-the-b-re-reads-do-not-bind-the-m64-gemm-2026-10-19-desktop-2) changed two things at once: B residency and
+the barrier structure. This one keeps one n-tile's task group in flight. It issues n-tile j, then awaits j - 1, so the
+awaits fall after the next group's starts, checked in the lowered MLIR. Two sittings, two contexts each, NPU idle
+before and after, host load CLEAR, 2048x512x4096:
+
+| Sitting | generic ms/call | resident ms/call | change | DDR MB per call (DERIVED) |
+|---|---:|---:|---:|---:|
+| owned kernel ([log](../results/aie/embedgemma_gemm_bresident_rot_real_2048x512x4096_desktop2_20261019T070153Z.log)) | 3.485 | 2.932 | -16% | 100.7 -> 71.3 |
+| no MACs ([log](../results/aie/embedgemma_gemm_bresident_rot_hollow_2048x512x4096_desktop2_20261019T070225Z.log)) | 3.435 | 2.359 | -31% | 100.7 -> 71.3 |
+
+- **Exact:** the resident C equals the generic C in all 8,388,608 words, repeats bit-equal, rel err 4.7e-07.
+- **B's DDR reads did bind.** The no-MAC call fell 31% for 29% fewer bytes.
+  - An earlier no-MAC sitting ([log](../results/aie/embedgemma_gemm_bresident_rot_hollow_2048x512x4096_desktop2_20261019T070159Z.log)) read 3.422 / 2.360 ms. It exited 1 only because the
+    runner then judged the meaningless no-MAC check, which marked it timing-ineligible; `--timing-only` fixes that.
+- **The real build is now core-bound on this shape:** 2.932 ms against a 2.359 ms floor.
+- **Switching contexts costs 1.0-1.4 ms per call:** alternating calls take 4.667 / 4.217 ms (real) and
+  4.874 / 3.873 ms (no MACs). Stage B therefore needs one xclbin: B's MemTile path as runtime-sequence BDs, so the
+  repeat count and strip length live in each shape's `.bin`. The per-(M, K) xclbin form is ruled out.
+- **Not measured:** the other six shapes, and whole forward passes.
+
+#### End to end, W8 owned and bf16 owned m64 are the same speed (2026-10-19, Desktop 2)
+
+The hybrid ran both builds back to back in one sitting, with the same settings: batch 4, GeGLU mode 6 on the NPU,
+NPU local attention, and the native QKV and rowops passes. The NPU was idle before each run, host load CLEAR, and
+both runs are timing-eligible. W8 (`--w4 64 --wbits 8 --wclip 20 --npu-w8`) is gated against its own emulation
+reference, with HF fp32 as the quality reference; bf16 is gated against HF fp32.
+
+| Build | 128 | 512 | 2048 ms/doc | gate cos min | NN kept |
+|---|---:|---:|---:|---:|---:|
+| W8 owned ([log](../results/aie/embedgemma_hybrid_w8own_m64_desktop2_20261019T070456Z.log)) | 82.1 | 258.4 | 1401.3 | 0.9999618 | 100% (and vs fp32) |
+| bf16 owned ([log](../results/aie/embedgemma_hybrid_bf16own_m64_desktop2_20261019T070558Z.log)) | 84.0 | 255.3 | 1389.9 | 0.9999883 | 100% |
+
+- **No difference that one sitting can resolve:** -2.3%, +1.2% and +0.8% for W8 at the three lengths, with one run per
+  build.
+- **Where the probe's gap went.** The probe's 36.8 ms per GEMM pass at 2048 for W8 shows here only as npu_call
+  341.0 against 330.7 ms per document, and the stages around it vary by as much.
+- **What W8 buys is half the weight memory, not speed.** bf16 stays the default because it gates tighter against
+  fp32 and needs no quantized weights.
+
+#### One-xclbin weight-resident GEMM: every forward shape bit-equal, 210.6 against 232.3 ms per pass at 2048 (2026-10-19, Desktop 2)
+
+`whole_array_generic.py --b-resident 2` serves every (M, K, N) from one static design. The weight strip's
+on-chip path is written into each shape's runtime sequence instead of the xclbin:
+- **MemTile side.** Each column's MemTile holds a 256 KB strip region (two 128 KB slots, or both for K = 2048).
+  Runtime-sequence tasks fill it from DDR and send it to the column's cores once per 256-row block. Their length,
+  repeat count (M / 256 - 1) and lock amounts are per shape.
+- **Core side.** Each core receives B into its own static pair of 64 x 64 buffers.
+- **Host side.** The runtime descriptor has three data dimensions, one short of the generic design's tile swizzle,
+  so the host lays B out once in the cores' L1 tile order (`swizzle_b_resident`, checked offline against the
+  generic pattern). Every hop then moves the strip linearly.
+
+The six shapes' static designs are identical apart from source paths in debug locations.
+
+**Per shape, the resident build against the generic owned build,** each on one shared xclbin, bit-equal in every
+word:
+
+| Shape | generic ms/call | resident ms/call | change |
+|---|---:|---:|---:|
+| 2048x512x4096 ([log](../results/aie/embedgemma_gemm_bres2_ch0_ab_2048x512x4096_desktop2_20261019T075048Z.log)) | 3.173 | 2.687 | -15% |
+| 2048x1024x512 ([log](../results/aie/embedgemma_gemm_bres2_ch0_ab_2048x1024x512_desktop2_20261019T075101Z.log)) | 0.837 | 0.778 | -7% |
+| 512x2048x512 ([log](../results/aie/embedgemma_gemm_bres2_ch0_ab_512x2048x512_desktop2_20261019T075055Z.log)) | 0.482 | 0.555 | +15% |
+
+**Whole forward passes,** one sitting, NPU idle and host load CLEAR, five passes each
+([resident](../results/aie/embedgemma_gemm_fwd_bres_m64_desktop2_20261019T075244Z.log), [owned m64](../results/aie/embedgemma_gemm_fwd_owned_m64_desktop2_20261019T075258Z.log)):
+
+| M | owned m64 ms | resident ms | change |
+|---:|---:|---:|---:|
+| 512 | 79.2 | 81.7 | +3% |
+| 2048 | 232.3 | 210.6 | -9% |
+
+- **Exact:** all 14 checked products and the GeGLU epilogue (modes 0 and 6 at both M) are bit-equal to the owned m64
+  build (`gemm_bitdiff.py`, 18 outputs). The mode 6 check reads worst 0 against the model.
+- **Why 512 is slower: unexplained.** Two candidates, neither isolated:
+  - each strip is re-sent only twice at M = 512;
+  - a K = 2048 strip fills both slots, so the next one cannot load while the current one streams (512x2048x512 is
+    the one slower shape on its own).
+- **Against the derived target:** the byte accounting's ~56 ms for reading B once
+  ([above](#byte-accounting-of-the-m64-gemm-it-moves-24x-the-minimum-and-its-floor-can-drop-from-231-to-about-116-ms-2026-10-19-desktop-2))
+  came out as 21.7 ms at 2048. The 2048x512x4096 shape is now core-bound (2.687 ms against its 2.359 ms no-MAC
+  floor, measured on the compile-time form), and no no-MAC build of this form has been timed.
+- **End to end** (`embedgemma_hybrid.py --npu-b-resident`, which uploads B swizzled): one sitting, same flags
+  (batch 4, GeGLU 6, npu-local attention, native passes), both timing-eligible
+  ([resident](../results/aie/embedgemma_hybrid_bres_m64_desktop2_20261019T075635Z.log), [owned m64](../results/aie/embedgemma_hybrid_owned_m64_desktop2_20261019T075708Z.log)):
+
+  | Build | 128 | 512 | 2048 ms/doc | npu_call at 2048 |
+  |---|---:|---:|---:|---:|
+  | resident | 84.6 | 246.7 | 1360.8 | 278.4 |
+  | owned m64 | 84.2 | 257.9 | 1385.2 | 323.7 |
+
+  - Both gates PASS (cos min 0.9999883, NN 100%), and the 56 embeddings are bit-equal between the two builds.
+  - The GEMM saving shows at 512 (-4.3%) and 2048 (-1.8%) per document. At 2048 the document is dominated by
+    attention and host work.
+
+**How it was debugged** (each step one variable; the logs are the record):
+1. **Six hangs.** The first builds hung on every shape
+   ([1](../results/aie/embedgemma_gemm_bres2_ab_2048x512x4096_desktop2_20261019T072258Z.log), [2](../results/aie/embedgemma_gemm_bres2_ab_512x2048x512_desktop2_20261019T072312Z.log), [3](../results/aie/embedgemma_gemm_bres2_ab_2048x1024x512_desktop2_20261019T072326Z.log), [4](../results/aie/embedgemma_gemm_bres2_ab_2048x512x4096_desktop2_20261019T072643Z.log), [5](../results/aie/embedgemma_gemm_bres2_ab_512x2048x512_desktop2_20261019T072657Z.log), [6](../results/aie/embedgemma_gemm_bres2_ab_2048x1024x512_desktop2_20261019T072711Z.log)).
+   - The first three ran with BD ids that the runtime-sequence allocator picked, and those overlapped the static
+     MemTile chains' ids. That allocator starts every tile empty and does not reserve static ids.
+   - The next three pinned ids 40-43, and an offline decode of the instruction stream found every field as designed.
+2. **Static MemTile program: bit-exact** ([log](../results/aie/embedgemma_gemm_bres3_static_ab_2048x512x4096_desktop2_20261019T074301Z.log), 2.820 ms). The same design with only the MemTile half made
+   static. This cleared the pinned tiles, the hand-written core channel, the core loop, the swizzle and the shim
+   task.
+3. **Locks taken once per task instead of per repeat: still hangs** ([log](../results/aie/embedgemma_gemm_bres2_lockonce_ab_2048x512x4096_desktop2_20261019T074407Z.log)).
+4. **A shim -> MemTile -> shim loopback** ([log](../results/aie/memtile_runtime_bd_probe_desktop2_20261019T074600Z.log), [channels](../results/aie/memtile_runtime_bd_probe_channels_desktop2_20261019T074731Z.log)):
+   - runtime MemTile tasks with locks, repeats and the GEMM's lock values ran exact on channels 0 and 1, including
+     beside a static program on the same MemTile;
+   - every form timed out on channels 4 and 5, whatever the BD ids;
+   - channels 2 and 3 were not tried;
+   - the lockless variant on channel 0 also timed out; it awaits a MemTile task's token, which is not otherwise
+     tested here.
+5. **Fix:** B moved to channel 0 both ways, and the static chains were pinned onto 1-5.
+
+Whether the channel 4/5 limit is silicon, firmware or the lowering is **unexplained**. Static programs on
+channel 5 work.
+
+#### Global attention on the NPU: head_dim 512, exact against its emulation, 1158.9 against 1360.2 ms per 2048-token document (2026-10-19, Desktop 2)
+
+EmbeddingGemma 2's four global layers (5, 11, 17, 23) ran on the host in fp32, about 405 ms of every 2048-token
+document. They are not unmasked local layers: per the model's `per_layer_config` they have **head_dim 512 and one
+KV head**, against 256 and two in the local layers.
+
+**The kernel.** `attn_local.cc` now takes `-DEGATTN_HD` (256 or 512):
+- At 512 a core takes **8 query rows a call instead of 16**, so every buffer keeps its 256 size: Q 2,048 words,
+  O 4,096 and out 2,048. The 64 KB core memory has no room for more.
+- A 32-key block streams eight K^T chunks then eight V chunks; S, P, m and l use the first 8 rows.
+- The head_dim 256 object is byte-identical to the one before the change.
+
+**The array harness.** `attn_array.py` reads the head dim from the case:
+- a column group is 32 rows;
+- the global cases `g128`, `g512` and `g2048` set W = L, so every key is visible and every window starts at 0;
+- they build their own xclbin, opened in a second context.
+
+The native packer `attn_pack.c` takes the head dim too, and `check-native` matches it bit for bit against the NumPy
+pack on every case.
+
+**Device check** ([log](../results/aie/embedgemma_attn_hd512_global_device_desktop2_20261019T111726Z.log), one context on g2048's xclbin, NPU idle before and after):
+
+| Case | worst / (2 row ulps) | repeat bit-equal | dispatch ms (median of 5) |
+|---|---:|---|---:|
+| g2048 | 0.500 | yes | 42.560 |
+| g512 | 0.500 | yes | 3.174 |
+| g128 | 0.250 | yes | 0.431 |
+
+Every output is within half the 2-ulp bound of the kernel's NumPy emulation, all finite. The emulation itself
+tracks an fp64 softmax to 0.34% (g128) and 0.44% (g512) relative.
+
+**Slower than estimated.** A layer at 2048 takes 42.6 ms, against the 31 ms estimated beforehand from the local kernel.
+DERIVED rates: 34.4 GFLOP in 42.6 ms is 0.81 TFLOPS. The local doc2048 case is about 1.05 TFLOPS (9.1 GFLOP,
+counting every streamed key, in 8.69 ms, [log](../results/aie/embedgemma_attn_glob2048_device_desktop2_20261019T110056Z.log)). Per FLOP, head_dim 512 is about 23% slower.
+- One candidate: the per-block softmax at 8 rows leaves half of each 16-lane vector idle, and a core makes twice
+  as many calls.
+- Not isolated; **unexplained** until a profile separates it.
+
+**End to end**, one sitting, both arms on the same GEMM build (weight-resident m64, GeGLU mode 6) and the same
+attention build, `--batch 4`:
+
+| Length | local only ms/doc ([log](../results/aie/embedgemma_hybrid_bres_attn-npu-local_desktop2_20261019T111932Z.log)) | local + global ms/doc ([log](../results/aie/embedgemma_hybrid_bres_attn-npu-all_desktop2_20261019T111902Z.log)) | change |
+|---:|---:|---:|---:|
+| 128 | 85.3 | 87.5 | +2.2 |
+| 512 | 248.9 | 242.8 | -6.1 |
+| 2048 | 1360.2 | 1158.9 | -201.3 |
+
+- **Gate:** both arms PASS. Cos min is 0.9999879 with global on the NPU and 0.9999883 without; NN kept 100.0%.
+- **At 2048:** the global layers cost 198.4 ms per document on the NPU, against 404.7 ms on the host. Of the 198.4,
+  about 176 ms is dispatch (`attn_call` 385.2 less the local arm's 209.6).
+- **At 128 it is slower.** The host's global attention there is 4.3 ms, and the NPU path costs 5.3 ms. The rest of
+  the +2.2 ms is not attributed; the second context's switches are one candidate.
+- The 780M runs a 2048-token document in 433 ms; the NPU is now at 1158.9.
+
+**What was tried first** (kept as logs):
+- The global mask on the local layers' geometry (head_dim 256, two KV heads) passes on the device, 15.5 ms at 2048
+  ([log](../results/aie/embedgemma_attn_glob2048_device_desktop2_20261019T110056Z.log)). It is not the model's shape.
+- The first hybrid run of `--attention npu-all` failed with `no build for L=128 W=512 heads=4 kv=1`, which is how
+  the one-KV-head geometry came to light ([log](../results/aie/embedgemma_hybrid_bres_attn-npu-all_desktop2_20261019T110212Z.log); its paired local-only run is [here](../results/aie/embedgemma_hybrid_bres_attn-npu-local_desktop2_20261019T110224Z.log)).
+
+#### An NPU broker: one owner process, bit-equal through it, and 20-34% faster than two processes contending (2026-10-19, Desktop 2)
+
+> **The 20-34% in this heading is superseded the same day** ([below](#broker-under-contention-from-a-common-start-21-shorter-makespan-at-depth-4-and-31-longer-at-depth-1-2026-10-19-desktop-2)). The contention table compared
+> direct processes at depth 1 (serial copies) with broker clients at depth 4, so pipelining and ownership were
+> confounded. Each client was also timed over its own window, and those windows overlapped by different amounts
+> in each arm. From a common start, the makespan is 21% shorter at depth 4, and the broker at depth 1 is slower
+> than no broker. The overhead table and the per-switch cost below stand.
+
+`src/ignite_xdna/runtime/broker.py` is a user-space broker. One process owns the NPU, and other processes submit
+kernel calls to it over a local named pipe, with data in a shared-memory arena per client. It handles:
+- **Contexts:** cached per xclbin, at most four open, the least recently used evicted. The driver allows five,
+  and the sixth fails with 0xc01e0009.
+- **Instruction streams:** kept by SHA-256 and re-uploaded by the broker itself after an eviction.
+- **Scheduling:** it keeps running calls for the context it is on (up to `streak` in a row) without reordering any
+  one client's calls.
+- **Pipelining:** up to `depth` calls in flight per client. The device thread also overlaps the next call's copy-in
+  and the previous call's copy-out with the running call, using two buffer sets per shape.
+- **Timeouts:** a timed-out dispatch latches the broker unhealthy and fails everything queued.
+
+Offline, `tests/test_broker_offline.py` covers these with a fake device:
+- results through the real IPC path, blocking and pipelined;
+- same-context grouping, and the streak limit;
+- eviction with re-upload;
+- the unhealthy latch;
+- that no running call's buffer is overwritten.
+
+**Device probe** (`tools/npu_broker_probe.py`, real kernels, seeded inputs): two sittings, NPU idle before and after.
+The first ([log](../results/aie/npu_broker_probe_desktop2_20261019T115836Z.log)) had no device-thread overlap; the second ([log](../results/aie/npu_broker_probe_pipelined_desktop2_20261019T120107Z.log)) has it. In every case, through
+the broker or not, the output's SHA-256 equals the direct run's.
+
+Overhead, one client, 200 calls (second sitting; per-call wall time, device-call median in brackets):
+
+| Workload | direct, in-process | broker, depth 1 | broker, depth 4 |
+|---|---:|---:|---:|
+| GEMM 512x512x512 | 0.514 ms (0.274) | 1.012 (0.283) | 0.560 (0.285) |
+| GEMM 2048x512x2048 | 3.926 (1.509) | 5.517 (1.477) | 3.634 (1.502) |
+| attention doc512 | 1.545 (1.244) | 2.217 (1.270) | 1.552 (1.254) |
+
+- **A blocking call costs about 0.5-0.7 ms more** than in-process: the round trip, plus one extra copy of the inputs
+  and outputs through the arena.
+- **At depth 4 that cost is hidden:** at most +0.05 ms, and the large GEMM is 7% faster than direct because its
+  copies overlap the device.
+
+Contention: GEMM 2048x512x2048 and attention doc512 as two concurrent processes, 200 calls each. Totals are measured
+in each client from its first timed call to its last:
+
+| Arrangement | GEMM total | attention total | context switches |
+|---|---:|---:|---:|
+| two processes, each with its own context | 1100.8 ms | 947.7 ms | not counted |
+| broker, streak 32, no device-thread overlap (first sitting) | 968.5 | 989.9 | 58 |
+| broker, streak 32 | **876.5** | **627.8** | 66 |
+| broker, streak 1 (forced alternation) | 1067.4 | 963.3 | 266 |
+
+- **Against two contending processes the broker is 20% and 34% faster.** With the processes contending, each
+  one's device-call median was inflated (GEMM 2.887 ms, attention 4.980 ms, against 1.509 and 1.244 alone).
+- **Grouping by context is what pays.** Streak 1 added 200 switches and 276 ms of device time against streak 32,
+  about 1.4 ms per switch (first sitting: 262 extra switches, 363 ms, 1.39 ms). That matches the 1.0-1.4 ms
+  measured in weight-resident Stage A.
+- Under overlap a call's `call_s` runs from its start to its observed completion, so its median is an upper bound.
+- **Not measured:**
+  - more than two clients;
+  - batching that merges two clients' calls into one dispatch, which needs the workload's semantics and is not in
+    the broker;
+  - power;
+  - the hybrid ported onto the broker.
+
+**Parked, with what was found:** in-context reconfiguration (`aiex.configure` with `--expand-load-pdis`), the
+step toward one image for several kernels.
+- Upstream's `reconfigure_loadpdi` test, retargeted to npu1, compiles to an instruction stream. `tools/txn_decode.py`
+  decodes it: it rewrites core program memory (block writes at +0x20000), core control (+0x32000), DMA descriptors
+  and locks from the stream.
+- It still carries two LOADPDI ops (PDI ids 2 and 1, size 0), which name PDIs that an xclbin does not contain.
+- The next probe strips them (`txn_decode.py --strip-loadpdi`) and runs on a context opened on one design's xclbin.
+  Not run on the device yet.
+
+#### Broker under contention, from a common start: 21% shorter makespan at depth 4, and 31% longer at depth 1 (2026-10-19, Desktop 2)
+
+The [first broker sittings](#an-npu-broker-one-owner-process-bit-equal-through-it-and-20-34-faster-than-two-processes-contending-2026-10-19-desktop-2) are re-measured here, with the confounds removed
+([log](../results/aie/npu_broker_probe_barrier_desktop2_20261019T121037Z.log)). `tools/npu_broker_probe.py` now:
+- warms each child up (context, instructions, both BO sets, one call);
+- has each child print READY and block, then starts both children on one go line;
+- times the makespan from the go to the later child's last completion. `perf_counter` is system-wide on Windows,
+  so the two processes' timestamps compare directly;
+- runs four arms, alternated forward and back over 3 rounds, in one sitting with the NPU idle before and after.
+
+Every output equals the solo run's SHA-256.
+
+GEMM 2048x512x2048 and attention doc512, 200 calls each:
+
+| Arm | makespan, median of 3 (min-max) | context switches | device-call medians, GEMM / attention |
+|---|---:|---:|---:|
+| two processes, each with its own context, depth 1 | 1110.2 ms (1101.5-1117.0) | not counted | 2.89 / 5.00 ms |
+| broker, depth 1, streak 32 | 1458.6 (1447.5-1480.5) | 358-400 | 2.87 / 2.70 |
+| broker, depth 4, streak 1 | 1057.4 (1047.5-1060.9) | 258-268 | 2.91 / 2.85 |
+| broker, depth 4, streak 32 | **875.0** (869.9-878.1) | 70-76 | 2.05 / 1.29 |
+
+- **At depth 1 the broker is 31% slower than no broker.** Each client has one call queued at a time, so the broker
+  switches context on nearly every call (up to 400 in 404 calls). Two contending processes switch less than that.
+  How often the driver interleaves their contexts is not observable here.
+- **Pipelining gives the scheduler something to group.** At depth 4 with grouping (streak 32) the makespan is 21%
+  shorter than two processes, at 70-76 switches.
+- **Each knob's share:**
+  - depth 4 with forced alternation (streak 1) is 5% shorter than direct;
+  - grouping takes it from 1057.4 to 875.0 ms (-17%);
+  - the direct arm runs at depth 1, since a pipelined direct client was not measured. So the 5% is not a pure
+    ownership effect.
+- **Stop paths, one sitting:**
+  - A depth-4 client killed mid-run: the broker finished its queued calls into the still-mapped arena, and the next
+    client's outputs equal the solo run's.
+  - Ctrl+Break to the broker mid-run: it finished the running call and exited 0 (the client got a call error, as
+    expected).
+  - The NPU was idle after each.
+  - Ctrl+C is not tested on the device. It goes through the same handler (the broker re-enables it for
+    background-job children), but a console Ctrl+C cannot target one process group here.
+- **Authkey:** `serve` now makes a random key per run (or takes `IGNITE_BROKER_KEY`) and writes it to a key file in
+  the user's profile.
+  - Messages are pickled, so any process that can connect can run code in the broker.
+  - The key keeps out processes that do not hold it, and nothing more.
+- **Interpreter:** the device children ran on `research-iron.sh`'s mlir-aie `ironenv` Python. The supervisor's
+  header line in the log names `resnet_env17`, which is the supervisor's own interpreter.
+- **What the broker does not change: the EmbeddingGemma hybrid.**
+  - It is one process, and its GEMM -> attention -> GEMM order within each layer is a data dependency, so there is
+    nothing to regroup. Its per-document switches, and with them the 128-token gap to the 780M, are unchanged.
+  - What would change them: batching documents from several clients into one dispatch (not implemented), or one
+    image holding both kernels (step 2).
+
+#### One XDNA1 context can switch designs from its instruction stream: one core in about 0.02 ms, LOADPDI refused (2026-10-19, Desktop 2)
+
+mlir-aie's `aiex.configure @design { aiex.run @seq(...) }`, compiled with `aiecc --expand-load-pdis`, turns each
+reconfiguration into register writes in the runtime instruction stream. `tools/txn_decode.py` reads them as:
+- core program memory (block writes at +0x20000) and core control (+0x32000);
+- DMA descriptors, locks and stream switches;
+- one LOADPDI per configure (an empty-device reset).
+
+Upstream tests this only on npu2 with a full ELF. `tools/reconfig_probe.py` tests it on XDNA1:
+- Two one-core designs of its own: add2 (out = in + 2) and add3.
+- The context is opened on add2's ordinary xclbin. Every stream runs there, one process per variant, with the NPU
+  idle after each ([log](../results/aie/reconfig_probe_desktop2_20261019T122107Z.log)).
+
+| Variant | Stream | Result | Median of 20 |
+|---|---|---|---:|
+| A | add2's own sequence | PASS | 0.131 ms |
+| B0 | configure add2 over itself, run, LOADPDI stripped | PASS | 0.149 ms |
+| B | configure add2, run twice, configure **add3**, run twice, LOADPDI stripped | PASS | 0.166 ms |
+| S | configure add3 once, run once, LOADPDI stripped | PASS | 0.150 ms |
+| C | B as aiecc emits it, LOADPDI kept | `ERT_CMD_STATE_ERROR` on the first call | n/a |
+
+- **B's output is the reconfiguration's.** [0:4] + 2, [4:8] + 3, [8:12] unchanged, [12:16] + 5. The xclbin holds
+  only add2, so the +3 can only come from program memory the stream rewrote.
+- **The cost:** one core switching design adds about 0.02 ms to a call (S against A). A context switch costs
+  1.0-1.4 ms. The stream with the switch in it is 2,204 B.
+- **LOADPDI is refused, not hung:** variant C errored on its first call, and the device was idle afterwards.
+- **What the strip leaves untested:** the empty-device reset that LOADPDI performed. Here both designs use the same
+  tiles and routes. Designs that differ (other tiles, MemTile programs, stream routes) may depend on that reset.
+- **Not measured:** the real designs. The GEMM and the attention each use 16 cores (about 11 KB of program each)
+  plus MemTile and shim configuration, so the stream and its write time grow with that. That is the next probe.
+
+#### Swapping the 16-core GEMM and attention inside one context: about 1 ms a swap, no cheaper than a context switch, and not yet correct (2026-10-19, Desktop 2)
+
+`tools/reconfig_gemm_attn_probe.py` scales the [one-core probe](#one-xdna1-context-can-switch-designs-from-its-instruction-stream-one-core-in-about-002-ms-loadpdi-refused-2026-10-19-desktop-2)
+to the real designs: the weight-resident GEMM (512x512x512) and the fused attention (doc512), each on 16 cores.
+- `aiex.run` cannot inline the GEMM's runtime sequence: it references MemTile `aie.buffer`s, and the
+  materialization pass accepts only tiles and locks.
+- So the host assembles the stream from parts: per-design configuration blobs (an empty `aiex.configure`, expanded,
+  LOADPDI stripped), plus each kernel's own compiled instruction stream, with its DDR_PATCH arguments renumbered
+  onto one 5-buffer kernel call.
+
+One process per plan, with the NPU idle after every plan, in every sitting:
+
+| Plan | Result | Median |
+|---|---|---:|
+| GEMM stream, re-assembled, on its own context | bit-equal | 0.288 ms |
+| attention stream, re-assembled, on its own context | bit-equal | 1.263 ms |
+| GEMM configuration over itself, then GEMM | `ERT_CMD_STATE_TIMEOUT` ([log](../results/aie/reconfig_gemm_attn_probe_desktop2_20261019T122803Z.log); first try [here](../results/aie/reconfig_gemm_attn_probe_desktop2_20261019T122726Z.log): a header bug stopped it before the merged stream reached the device) | n/a |
+| GEMM, then attention; and GEMM, attention, GEMM | `ERT_CMD_STATE_TIMEOUT` (same log) | n/a |
+| attention configuration over itself, then attention | completes, **output not bit-equal** ([log](../results/aie/reconfig_gemm_attn_isolate_desktop2_20261019T122939Z.log)) | 2.171 ms |
+| GEMM configuration alone, 331 KB | completes | 1.020 ms |
+| attention configuration alone, 280 KB | completes | 0.931 ms |
+
+**Cost model** ([log](../results/aie/reconfig_gemm_attn_cost_desktop2_20261019T123045Z.log), configuration writes alone, median of 20):
+
+| Written | GEMM | attention |
+|---|---:|---:|
+| everything | 330,960 B, 1.022 ms | 280,320 B, 0.897 ms |
+| without core program memory | 101,072 B, 0.449 ms | 101,120 B, 0.443 ms |
+| DMA, locks and routes only (no program or data memory) | 34,832 B, 0.282 ms | 35,328 B, 0.257 ms |
+
+- **Configuration writes run at about 0.4 GB/s** (DERIVED: 229,888 B of program memory cost 0.573 ms).
+- **A full 16-core swap costs about 1 ms**, the same as a context switch (1.0-1.4 ms).
+- **A swap that kept both programs and their data resident** would write only the ~35 KB of DMA, locks and routes:
+  0.26-0.28 ms per stream including the dispatch, against ~0.13 ms for an empty one-core call.
+- **That does not fit on this array.** Per core the GEMM's program is ~14.4 KB and the attention's ~11.2 KB, with
+  16 KB of program memory. Each design also writes ~4 KB of data memory per core.
+- **Correctness: unexplained.** Rewriting a live 16-core design hangs (GEMM) or gives wrong output (attention).
+  The one-core probe was correct without the LOADPDI that was stripped, which is an empty-device reset. The
+  candidate is that cores, DMA queues and lock values left by the running design need that reset at this scale.
+  It is not isolated.
+- **Consequence for the VM:** swapping whole 16-core designs inside one context saves nothing over the broker's
+  context switches. What remains:
+  - designs that share the array by columns (no swap at all);
+  - kernels small enough to stay resident together, so only the ~35 KB of DMA state changes.

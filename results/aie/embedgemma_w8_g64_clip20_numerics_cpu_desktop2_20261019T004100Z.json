@@ -1,0 +1,69 @@
+{
+  "backend": "cpu",
+  "docs": "C:\\Users\\<user>\\gemma4-embedding-baseline\\logs\\docs-heldout-v1.json",
+  "reference": "C:\\Users\\<user>\\gemma4-embedding-baseline\\logs\\hf-fp32-cpu-20261018T174113Z.npz",
+  "batch": 2,
+  "round_dll": false,
+  "attention": "exact",
+  "geglu": "host",
+  "npu_geglu": 0,
+  "w4": 64,
+  "wbits": 8,
+  "wclip": 20,
+  "k_block": 32,
+  "exp": "exact",
+  "tau": 0.0,
+  "bf16_inputs": true,
+  "passed": false,
+  "gate": {
+    "cos_min": 0.9999,
+    "nn_kept": 1.0
+  },
+  "cos_min": 0.9998626227817324,
+  "cos_mean": 0.9998942749039446,
+  "nn_kept": 1.0,
+  "per_length": {
+    "128": {
+      "batches": 16,
+      "median_ms_per_doc": 345.03102500457317,
+      "cos_min": 0.9998729522674871,
+      "phases_ms_per_doc": {
+        "embed": 0.08427500142715871,
+        "round_in": 53.23975006467663,
+        "gemm": 124.42174993338995,
+        "norm": 27.548699945327826,
+        "rope": 19.44212498347042,
+        "attention": 36.17460001987638,
+        "gelu": 47.565474967996124
+      }
+    },
+    "512": {
+      "batches": 8,
+      "median_ms_per_doc": 1281.7908250071923,
+      "cos_min": 0.9998654595773379,
+      "phases_ms_per_doc": {
+        "embed": 0.530849996721372,
+        "round_in": 256.80690010631224,
+        "gemm": 253.20740004099207,
+        "norm": 163.8316751414095,
+        "rope": 82.8585999988718,
+        "attention": 145.25277500069933,
+        "gelu": 226.84397498960607
+      }
+    },
+    "2048": {
+      "batches": 4,
+      "median_ms_per_doc": 6460.203224996803,
+      "cos_min": 0.9998626227817324,
+      "phases_ms_per_doc": {
+        "embed": 1.5242000081343576,
+        "round_in": 984.0517500051646,
+        "gemm": 738.9038250257727,
+        "norm": 708.9031499999692,
+        "rope": 320.9288500074763,
+        "attention": 2213.3268250108813,
+        "gelu": 918.5020250006346
+      }
+    }
+  }
+}
