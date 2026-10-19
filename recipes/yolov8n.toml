@@ -52,3 +52,26 @@ run = ["-m", "ignite_xdna.compiler.cli", "--engine", "graph", "--input", "models
 inputs = ["models/yolov8n_cut_xint8.onnx"]
 outputs = ["build/yolov8n_full_barrier.ignite"]
 note = "the same with the layer barrier: per-layer timing and shim-trace windows need it"
+
+[[step]]
+id = "fetch-coco128"
+env = "shell"
+run = ["powershell.exe", "-NoProfile", "-Command", "iwr https://github.com/ultralytics/assets/releases/download/v0.0.0/coco128.zip -OutFile coco128.zip; Expand-Archive coco128.zip data"]
+outputs = ["data/coco128/images/train2017"]
+note = "the quickstart calibration set Ignition's README walks a user through: 128 COCO train2017 images, about 7 MB"
+
+[[step]]
+id = "quantize-quickstart"
+env = "resnet_env"
+run = ["pipelines/yolov8n/3b_quantize_cut.py", "--in", "models/yolov8n_cut.onnx", "--out", "models/yolov8n_cut_xint8_coco128.onnx", "--calib-dir", "data/coco128/images/train2017"]
+inputs = ["models/yolov8n_cut.onnx", "data/coco128/images/train2017"]
+outputs = ["models/yolov8n_cut_xint8_coco128.onnx"]
+note = "Ignition's README step 3, run in its model-tools venv (Quark 0.11.2) rather than resnet_env. A different calibration set from the quantize step, so this is NOT the model the benchmarks and badges measure; it writes its own file so it can never overwrite that one"
+
+[[step]]
+id = "compile-quickstart"
+env = "iron"
+run = ["-m", "ignite_xdna.compiler.cli", "--engine", "graph", "--input", "models/yolov8n_cut_xint8_coco128.onnx", "--output", "build/yolov8n_quickstart.ignite", "--silu-sigmoid"]
+inputs = ["models/yolov8n_cut_xint8_coco128.onnx"]
+outputs = ["build/yolov8n_quickstart.ignite"]
+note = "Ignition's README step 4"
