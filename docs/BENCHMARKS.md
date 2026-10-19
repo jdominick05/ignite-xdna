@@ -29303,6 +29303,10 @@ Logs:
 
 #### Against AMD's stack on the overlap default: YOLOv8s flips to Ignition (15.82 against 17.29 ms), YOLOv8n and pose widen their lead, AMD keeps SESR M7 (2026-10-15, Desktop 2)
 
+**Superseded for the frame-time comparison by [the 2026-10-19 release re-sit](#the-release-re-sit-against-amds-stack-ignition-faster-on-yolov8n-pose-yolo11n-and-yolo26n-amd-faster-on-sesr-m7-yolov8m-l-and-x-and-on-yolov8s-once-tuned-2026-10-19-desktop-2)**, which adds AMD's tuned
+configuration (faster than Ignition on YOLOv8s), YOLO11n, YOLO26n and YOLOv8m, l and x. The numbers below stand
+as this sitting's.
+
 **The question.** Does the layer-overlap default reach the frame, and who is faster now? This re-runs the
 [v0.3.3 release sitting](#the-v033-release-sitting-sigmoid-silu-containers-on-the-host-fast-paths-against-amds-stack-2026-09-17-desktop-2)
 with its method, plus one more arm per model: the same build with `--no-overlap-layers`.
@@ -29387,3 +29391,70 @@ are therefore against the CPU and the 780M iGPU on the same chip.
 hybrid. Decoding a 7B LLM on the NPU alone stays ruled out by DDR read bandwidth: 47.6 GB/s, against the 56–64 GB/s
 at which the CPU and the 780M read int4 weights
 ([working](#the-npu-reads-ddr-at-476-gbs-when-nothing-is-written-back-silicons-2628-gbs-cap-does-not-bind-reads-and-7b-decode-stays-killed-2026-09-23-desktop-2)).
+
+## The release re-sit against AMD's stack: Ignition faster on YOLOv8n, pose, YOLO11n and YOLO26n; AMD faster on SESR M7, YOLOv8m, l and x, and on YOLOv8s once tuned (2026-10-19, Desktop 2)
+
+**The question.** Before the release: on containers rebuilt through their [recipes](../recipes/README.md), who is faster
+end to end, model by model, including the models the earlier sittings left out? This is the
+[2026-10-15 head to head](#against-amds-stack-on-the-overlap-default-yolov8s-flips-to-ignition-1582-against-1729-ms-yolov8n-and-pose-widen-their-lead-amd-keeps-sesr-m7-2026-10-15-desktop-2)'s
+method on nine models, plus AMD's tuned configuration (`enable_cost_model_tiling`) as a second AMD arm on YOLOv8n and
+YOLOv8s.
+- **Pre-registered** (sha256 `d80beac3...`), with an addendum written after the first sitting and before the re-sit
+  (sha256 `21295b54...`); both are quoted in the [notes](../results/aie/release_resit_20261019/notes_release_resit.md).
+- **Containers:** every one built by its recipe's `compile` step, compiler `v0.1.0-phoenix-npu-717-gb58994f71373`,
+  layer overlap on wherever it applies (not YOLO11n or YOLO26n, whose host segments keep the barrier). YOLOv8m, l and
+  x compile as single containers for the first time; they had been split. Each was verified layer-exact on the NPU
+  first (0 mismatches), and checked to be compiled from the quantized ONNX file AMD's arm runs.
+- **Runs:** 50 warm-up and 500 timed frames of `bus.jpg` per run, balanced mode, two interleaved rounds (the second
+  reversed), `xrt-smi` idle before every run, AMD's caches compiled fresh by an untimed run. Ignition through
+  `live_ignition.py` (Ignition `c16abb2`).
+- **Rule:** a side is faster only if its mean is lower in both rounds.
+
+**A disturbed first pass, re-sat.** The operator ran edits, checks and commits during some of the first sitting's
+timed runs. Matching their timestamps to each run's window, pose, YOLO26n and YOLOv8m, l, x were untouched; YOLOv8n,
+YOLOv8s, SESR M7 and YOLO11n were not, so those four were re-sat in full with nothing else running. The re-sit's
+verdicts replace the first pass's by the addendum's rule; they agree on every one, and the first pass's numbers stay
+in its log and the notes.
+
+Glass to glass, mean ms, rounds 1 / 2:
+
+| Model | Ignition | AMD's stack | AMD, tuned | Verdict |
+|---|---:|---:|---:|---|
+| YOLOv8n | **7.157 / 7.147** | 10.834 / 10.837 | 10.165 / 10.262 | Ignition faster than both |
+| YOLOv8s | 15.765 / 15.770 | 17.220 / 17.248 | **14.599 / 14.661** | Ignition faster than default; **AMD tuned faster** |
+| YOLOv8n-pose | **7.499 / 7.497** | ≥ 9.18 / 9.15 (below) | — | Ignition faster |
+| YOLO11n | **9.850 / 9.878** | 36.976 / 36.216 | — | Ignition faster, 3.7× |
+| YOLO26n | **10.825 / 10.765** | 37.188 / 37.182 | — | Ignition faster, 3.4× |
+| SESR M7 | 4.464 / 4.541 | **3.974 / 4.255** | — | AMD faster |
+| YOLOv8m | 39.182 / 39.230 | **31.950 / 31.950** | — | AMD faster, 1.23× |
+| YOLOv8l | 69.960 / 69.970 | **51.470 / 51.473** | — | AMD faster, 1.36× |
+| YOLOv8x | 112.900 / 112.998 | **78.927 / 78.996** | — | AMD faster, 1.43× |
+
+**What it shows.**
+- **YOLOv8s is level only against AMD's default.** Its tuned compile shortens `session.run` from 13.2 to 10.6 ms,
+  and the frame from 17.2 to 14.6 ms, 1.1 ms under Ignition's. The 2026-10-15 "YOLOv8s flips" stands against the
+  default configuration only; that sitting did not run the tuned one. On YOLOv8n tuning is worth 0.6 ms, not enough.
+- **Where attention blocks AMD's compiler, Ignition is 3.4–3.7× faster.** YOLO11n and YOLO26n each keep one or two
+  attention cores on the host (0.69 and 1.34 ms) and still finish in about 10 ms, against AMD's 36–37.
+- **AMD's lead grows with model size**, as on [2026-09-22](#yolov8x-ptr-scales-to--60-and-the-engines-standing-against-amd-inverts-with-model-size-2026-09-22-desktop-2):
+  1.23×, 1.36×, 1.43× on m, l, x. Single overlap containers made Ignition faster than its split builds (43.6, 78.2,
+  115.9 ms on 2026-09-20, a different sitting) but did not close it. In every model AMD wins, its `session.run` is
+  shorter than Ignition's NPU stage; Ignition's lead elsewhere includes its native pre- and post-processing, which
+  AMD's arm takes from Ignition's numpy reference (1.8 + 2.2 ms per YOLO frame).
+- **Detections on `bus.jpg` differ** on YOLO11n (5 against AMD's 7), YOLO26n (5 / 6), YOLOv8m, l, x (5 / 6, 6, 8)
+  and pose (4 / 3 people). Not separated here between the SiLU approximation, the decode and the thresholds:
+  unexplained, and no accuracy claim follows from it.
+- **Accuracy is not re-measured.** The containers are exact against their references, so the
+  [mAP figures](#the-sigmoid-silu-containers-against-amds-stack-more-accurate-on-all-5000-coco-images-faster-on-yolov8n-and-yolov8n-pose-slower-on-yolov8s-2026-09-17-desktop-2)
+  of the same quantized models and flags stand.
+
+**AMD's pose arm** (`4_pose.py --ep npu`) prints no frame mean: `infer` (`session.run`) 9.18 / 9.15 ms and `pre`
+3.15 / 3.18 ms; its per-100-frame samples read 11.8–13.8 ms. Ignition's whole frame is below even `infer` alone in
+both rounds, the addendum's rule.
+
+Logs and notes:
+- [notes](../results/aie/release_resit_20261019/notes_release_resit.md): pre-registration, addendum, per-stage table;
+- [first attempt](../results/aie/release_resit_20261019/release_resit_desktop2_20261019T151835Z.log), stopped before timing: the runtime refuses the
+  2026-09-20 `yolo11n_core_silu.ignite` (no placement `dtype`), so every container was rebuilt through its recipe;
+- [sitting](../results/aie/release_resit_20261019/release_resit_desktop2_20261019T160617Z.log), all nine models;
+- [clean re-sit](../results/aie/release_resit_20261019/release_resit_clean_desktop2_20261019T162436Z.log), YOLOv8n, YOLOv8s, SESR M7 and YOLO11n.
