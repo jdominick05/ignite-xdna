@@ -388,7 +388,7 @@ def main() -> int:
                            "(kernels/gemm_bf16/mm_bf16.cc)")
             p.add_argument("--c-double", action="store_true", help="double-buffer the C tile (default single)")
             p.add_argument("--tile-m", type=int, default=TILE["m"], help="rows per core tile (32; 64 halves B "
-                           "re-streaming and W8 dequant per MAC; the GeGLU epilogue is written for 32)")
+                           "re-streaming and W8 dequant per MAC; the GeGLU epilogue follows it via -DEPI_M)")
             p.add_argument("--w8-dequant", type=Path, help="with --w8: link this egemm_w8_dequant (else none: a probe)")
             p.add_argument("--modes", type=int, nargs="+", default=[1, 2],
                            help="epilogue modes to build gate|up streams for (3, 4: timing probes)")

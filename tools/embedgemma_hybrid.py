@@ -78,7 +78,7 @@ class Npu:
         self.to_dev = pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_TO_DEVICE
         self.from_dev = pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_FROM_DEVICE
         self.dev = pyxrt.device(0)
-        self.xb = pyxrt.xclbin(str(builds / "g_256_512_512.xclbin"))
+        self.xb = pyxrt.xclbin(str(builds / f"g_{min(ms)}_512_512.xclbin"))   # every shape shares one context
         self.dev.register_xclbin(self.xb)
         self.ctx = pyxrt.hw_context(self.dev, self.xb.get_uuid())
         self.kern = pyxrt.kernel(self.ctx, self.xb.get_kernels()[0].get_name())
@@ -190,6 +190,31 @@ class Npu:
         gc.collect()
 
 
+def serve_queue(addr, enc, matmul, bf16, rows):
+    """The bulk lane: pull a pack of documents (at most `rows` tokens), embed it as one row batch, send it back."""
+    import base64
+    import socket
+    host, port = addr.rsplit(":", 1)
+    with socket.create_connection((host, int(port))) as sk:
+        f = sk.makefile("rw", encoding="utf-8", newline="\n")
+        f.write(json.dumps(dict(hello="npu", rows=rows)) + "\n")
+        f.flush()
+        n = 0
+        while True:
+            f.write(json.dumps(dict(want=rows)) + "\n")
+            f.flush()
+            msg = json.loads(f.readline())
+            if msg.get("done"):
+                break
+            idx = [i for i, _ in msg["docs"]]
+            e = enc.embed_documents([ids for _, ids in msg["docs"]], matmul, bf16).astype(np.float32)
+            f.write(json.dumps(dict(results=[[i, base64.b64encode(v.tobytes()).decode()] for i, v in zip(idx, e)]))
+                    + "\n")
+            f.flush()
+            n += len(idx)
+    print(f"QUEUE_DONE {n} documents", flush=True)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--backend", choices=["cpu", "npu"], required=True)
@@ -232,6 +257,9 @@ def main():
                     "until STOP and write OUT.loop.json with each group's wall-clock span "
                     "(tools/embedgemma_concurrency_energy.py)")
     ap.add_argument("--loop-length", type=int, default=2048)
+    ap.add_argument("--queue", help="after the gated run: serve as the NPU lane of tools/embedgemma_bulk.py at "
+                    "HOST:PORT (one JSON line each way: {want: rows} -> {docs: [[i, ids]...]} or {done: true}; "
+                    "then {results: [[i, base64 float32 embedding]...]})")
     ap.add_argument("--save-embeddings", type=Path, help="also write the embeddings as an npz (key 'embeddings'), "
                     "e.g. to serve as a W8-emulation --reference")
     ap.add_argument("--quality-reference", type=Path, help="W8 gate: when --reference is a W8 CPU emulation, also "
@@ -437,6 +465,8 @@ def main():
                   + ", ".join(f"{k} {v:.1f}" for k, v in sorted(ph.items(), key=lambda kv: -kv[1])), flush=True)
         a.out.write_text(json.dumps(rec, indent=2) + "\n", encoding="utf-8")
         print(a.out, flush=True)
+        if a.queue and passed:
+            serve_queue(a.queue, enc, matmul, bf16, rows if npu else 2048)
         if a.loop_go and passed:
             loop_groups = [[docs[j]["ids"] for j in g] for g in groups if docs[g[0]]["length"] == a.loop_length]
             Path(str(a.loop_go) + ".ready").write_text(f"{time.time()}\n", encoding="utf-8")

@@ -134,6 +134,7 @@ def _build_design(
         epilogue_kernel = ExternalFunction(
             "egemm_epilogue",
             source_file=str(epilogue_src),
+            compile_flags=[f"-DEPI_M={m}"],  # local change: the epilogue's row blocks follow the tile
             arg_types=[np.ndarray[(m, n), np.dtype[str_to_dtype(dtype_out_str)]], np.int32],
             include_dirs=[config.cxx_header_path()],
         )

@@ -1,7 +1,7 @@
 // Copyright (C) 2026 The ignite-xdna contributors
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
-// Output-tile epilogue for kernels/gemm_generic/whole_array_generic.py --epilogue-src (m 32, n 64, f32 C),
+// Output-tile epilogue for kernels/gemm_generic/whole_array_generic.py --epilogue-src (m 32 or 64, n 64, f32 C),
 // called by every core after a tile's last K step with the mode its runtime sequence wrote:
 //   mode 0: nothing (every plain weight product).
 //   mode 1: GeGLU. The host interleaves gate|up's columns at weight upload so output tile p holds gate columns
@@ -128,13 +128,19 @@ static inline __attribute__((always_inline)) F geglu_poly(F g, F u) {
   return aie::mul(aie::mul(gb, s).to_vector<bfloat16>(), acc(u).to_vector<bfloat16>()).to_vector<float>();
 }
 
+#ifndef EPI_M
+#define EPI_M 32   // the tile's rows (whole_array_generic.py passes -DEPI_M=m); the 4x4 blocks' stride is m-independent
+#endif
+constexpr int ZB = EPI_M / 4;   // row blocks per tile
+static_assert(EPI_M % 4 == 0, "rows in 4-row blocks");
+
 extern "C" void egemm_epilogue(float *c, int32_t mode) {
   if (mode < 1 || mode > 6) return;
   // (A cycle-counter probe reading 0x340F8 through read_tm hung the core: dispatch timeout,
   // results/aie/embedgemma_gemm_epilogue_cycles_desktop2_20261019T000938Z. Removed.)
   if (mode == 6) {   // mode 5, two independent vectors per iteration (its loop was 52% NOP-only bundles)
     aie::set_rounding(aie::rounding_mode::conv_even);
-    for (int z = 0; z < 8; ++z)
+    for (int z = 0; z < ZB; ++z)
       for (int j = 0; j < 8; j += 2) {
         float *g0 = c + (z * 16 + j) * 16, *g1 = g0 + 16;
         F a0 = aie::load_v<16>(g0), b0 = aie::load_v<16>(g0 + 8 * 16);
@@ -147,7 +153,7 @@ extern "C" void egemm_epilogue(float *c, int32_t mode) {
   }
   if (mode == 5) {
     aie::set_rounding(aie::rounding_mode::conv_even);
-    for (int z = 0; z < 8; ++z)
+    for (int z = 0; z < ZB; ++z)
       for (int j = 0; j < 8; ++j) {
         float *g = c + (z * 16 + j) * 16;
         aie::store_v(g, geglu_poly(aie::load_v<16>(g), aie::load_v<16>(g + 8 * 16)));
@@ -156,7 +162,7 @@ extern "C" void egemm_epilogue(float *c, int32_t mode) {
   }
   aie::set_rounding(aie::rounding_mode::conv_even);
   if (mode == 3 || mode == 4) {
-    for (int z = 0; z < 8; ++z)
+    for (int z = 0; z < ZB; ++z)
       for (int j = 0; j < 8; ++j) {
         float *g = c + (z * 16 + j) * 16;
         F gv = aie::load_v<16>(g), uv = aie::load_v<16>(g + 8 * 16);
@@ -165,14 +171,14 @@ extern "C" void egemm_epilogue(float *c, int32_t mode) {
     return;
   }
   if (mode == 2) {
-    for (int z = 0; z < 8; ++z)
+    for (int z = 0; z < ZB; ++z)
       for (int j = 0; j < 8; ++j) {
         float *g = c + (z * 16 + j) * 16;
         aie::store_v(g, geglu_bf16(aie::load_v<16>(g), aie::load_v<16>(g + 8 * 16)));
       }
     return;
   }
-  for (int z = 0; z < 8; ++z)
+  for (int z = 0; z < ZB; ++z)
     for (int j = 0; j < 8; ++j) {
       float *g = c + (z * 16 + j) * 16;
       aie::store_v(g, mul(gelu_tanh(aie::load_v<16>(g)), aie::load_v<16>(g + 8 * 16)));

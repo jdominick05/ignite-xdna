@@ -25808,3 +25808,30 @@ weight GEMMs, ms:
 - **The 56 embeddings are bit-equal between the two.**
 - ms per document at 128 / 512 / 2048: `mm.cc` 108.7 / 438.2 / 1544.4, owned **108.2 / 423.8 / 1515.8** (-2% at
   2048). This is the m32 build's transport floor, as above.
+
+#### The GeGLU epilogue at m64 turns the owned kernel into an end-to-end gain: -10% at 2048, -42% at 512 (2026-10-19, Desktop 2)
+
+**The port.** The C tile's 4x4-block stride does not depend on the tile's rows, and the epilogue is element-wise.
+So [`geglu_epilogue.cc`](../kernels/embedgemma/geglu_epilogue.cc) now loops over `EPI_M / 4` row blocks, with
+`whole_array_generic.py` passing `-DEPI_M=m`. The hybrid's shared context is now the smallest built M's
+`g_<M>_512_512.xclbin`, since m64 builds M % 512 only.
+
+**The m64 + GeGLU build** ([probe](../results/aie/embedgemma_gemm_mmown_own_m64_epi_desktop2_20261019T055644Z.log)):
+- mode 6 matches the GeGLU model exactly (worst 0) at M = 512 and 2048, and repeats bit-equal;
+- forward GEMMs 76.9 / 230.0 ms;
+- the epilogue adds 3.56 ms per gate|up call at 2048, against 5.22 at m32.
+
+**End to end** (all native passes, NPU local attention; one sitting, contention clean). ms per document:
+
+| build | batch | 128 | 512 | 2048 | log |
+|---|---|---:|---:|---:|---|
+| `mm.cc` m32 | 2 | 109.7 | 437.1 | 1533.4 | [log](../results/aie/embedgemma_hybrid_npu_mmown_mmcc32_desktop2_20261019T055814Z.log) |
+| owned m64 | 2 | 120.8 | 359.9 | **1371.9** | [log](../results/aie/embedgemma_hybrid_npu_mmown_own64_desktop2_20261019T055735Z.log) |
+| owned m64 | 4 | **84.2** | **255.4** | 1406.2 | [log](../results/aie/embedgemma_hybrid_npu_mmown_own64_b4_desktop2_20261019T055923Z.log) |
+
+- All three pass the gate (cos min 0.9999883, nearest neighbours 100%). **All their embeddings are bit-equal.**
+- **Batch 2 at m64 wastes half a 512-row call on 128-token documents**, which is why that cell is slower. Batch 4
+  fills it.
+- **At 2048 the batch is one document either way.** 1371.9 against 1406.2 is the spread between sittings, not an
+  effect of the batch.
+- **Since the start of the bf16 maturation, the 2048-token document has gone from 2613.9 to 1371.9-1406.2 ms.**
