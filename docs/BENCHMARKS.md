@@ -25634,3 +25634,49 @@ GeGLU, NPU local attention and the native QKV pass.
   - weight GEMMs: 460 ms `npu_call`, 624 ms `gemm` with host packing;
   - host global attention: 410;
   - NPU local attention: 269.
+
+#### The 780M iGPU against the NPU, op by op: the iGPU is faster at every op measured (2026-10-19, Desktop 2)
+
+**Why measure it.** This is the data for the iGPU/NPU "logical device" decision.
+- [`opbench.cpp`](../tools/ggml_gpu_opbench/opbench.cpp) runs each op through public GGML APIs on the llama.cpp ROCm
+  backend (`ROCm0`). That is the same runtime as the llama-server GPU baseline (717.5 ms per 2048-token document).
+- It allows no CPU fallback. An op ROCm0 does not support is reported, never run.
+- [`embedgemma_igpu_opbench.py`](../tools/embedgemma_igpu_opbench.py) drives it over the model's real op list and counts.
+- Each op is timed as 8 independent copies in one graph, so launch cost is amortized as in a forward graph.
+- [Record](../results/aie/embedgemma_igpu_opbench_desktop2_20261019T041603Z.json), contention checked first: no foreign
+  load, NPU idle.
+- **The NPU figures come from earlier sittings the same day**, not this one (CLAUDE.md's cross-sitting caveat).
+
+**Weight GEMMs** (bf16 weights, f32 activations), forward-pass weight GEMMs in ms:
+
+| M | iGPU | NPU bf16, m = 64 tiles | NPU bf16, m = 32 tiles |
+|---|---:|---:|---:|
+| 256 | **36.3** | n/a (needs M % 512) | 63.5 |
+| 512 | **68.8** | 92.7 | 97.5 |
+| 2048 | **176.7** | 292.9 | 340.8 |
+
+Per shape at M = 2048, the iGPU is 1.5-1.8x the NPU m = 64 build: 2.29 against 4.04 ms for gate|up, 3.75 TFLOPS.
+
+**Attention per layer** (q f32, K/V f16, ms):
+
+| L | local, flash | local, classic | global (hd 512), flash | global, classic |
+|---|---:|---:|---:|---:|
+| 128 | 0.19 | **0.14** | unsupported | **0.10** |
+| 512 | **0.71** | 1.28 | 1.37 | **1.12** |
+| 2048 | **2.93** | 11.77 | 17.81 | **15.41** |
+
+- **Best per document at 2048:** 20 x 2.93 + 4 x 15.41, about 120 ms. The NPU local attention costs 269 ms
+  (`attn_npu`), and host global attention 410.
+- **Not checked:** whether the 512-token window mask lets the flash kernel skip work.
+
+**Hand-off cost (ROCm0 device buffer, not host-visible).** Writes run at 33-61 GB/s and reads at 7-16 GB/s:
+4 MiB (one 2048 x 512 f32 activation) takes 0.07 ms in and 0.27 ms out.
+
+**What this says, DERIVED:**
+- **For one document's latency, the iGPU beats the NPU at every op measured.** Splitting a single document
+  across the two would add hand-offs to a path that is already faster on one device.
+- **The NPU's possible roles are throughput** (a second document in parallel with the GPU's) **or energy.**
+  Neither is measured. Both need a concurrent run, to see how much the shared DRAM bandwidth slows each device,
+  plus a power reading.
+- **Unexplained:** the iGPU's summed per-op estimate, about 300 ms at 2048, sits far below llama-server's
+  717.5 ms per request. The server's request path and its remaining ops are the candidates; neither is separated.
