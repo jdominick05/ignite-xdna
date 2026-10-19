@@ -23,6 +23,12 @@ baking ``(M//m)*(N//n)//cores`` and ``K//k`` into the core program. With m, k, n
 fixed, every (M, K, N) then compiles to the same core program and differs only in its runtime sequence, so one
 loaded design can serve several GEMM shapes through their instruction streams alone. Whether the device images
 really are identical across shapes is checked by tools/gemm_generic_probe.py, not assumed here.
+
+Local change (ignite-xdna): ``--epilogue-src FILE --epilogue-mode N`` (with --rtp-generic). Links FILE's
+``egemm_epilogue(float *c_tile, int32_t mode)`` into every core, which calls it on each output tile after its last
+K step, with a third RTP word that this shape's runtime sequence sets to N. With the epilogue linked, every
+shape's core program is again identical, so one xclbin serves all modes; mode 0 must leave the tile alone.
+kernels/embedgemma/geglu_epilogue.cc is the one in use (mode 1 = GeGLU).
 """
 
 import argparse
@@ -30,7 +36,7 @@ import sys
 
 import aie.iron as iron
 import numpy as np
-from aie.helpers.taplib import TensorAccessSequence, TensorTiler2D
+from aie.helpers.taplib import TensorAccessPattern, TensorAccessSequence, TensorTiler2D  # local change: W8 B
 from aie.extras import types as T  # local change: RTP loop bounds
 from aie.extras.dialects import arith  # local change: RTP loop bounds
 from aie.iron import (
@@ -49,6 +55,13 @@ from aie.iron import (
     str_to_dtype,
 )
 from aie.iron.controlflow import range_
+from aie.iron import Acquire, Bd, DmaChannel, Flow, Lock, Release, TileDma  # local change: --b-resident 2
+from aie.iron.device import Tile  # local change: --b-resident 2 pins every tile
+from aie.dialects._aie_enum_gen import AIETileType, DMAChannelDir  # local change
+from aie.dialects.aie import EndOp, LockAction, dma_bd, use_lock  # local change
+from aie.dialects.aiex import bds, dma_configure_task, dma_free_task, dma_start_task, shim_dma_bd  # local change
+from aie.iron.kernel import ExternalFunction  # local change: epilogue
+from aie.utils import config  # local change: epilogue
 from aie.iron.device import NPU2, from_name
 from aie.utils.benchmark import run_iters
 from aie.utils.hostruntime.argparse import add_benchmark_args, add_compile_args
@@ -61,6 +74,16 @@ def _device_for(dev_str, n_aie_cols):
     # n_aie_cols == max = 4).  On NPU2 use the unrestricted device
     # regardless of n_aie_cols so the placer has the full 8-column array.
     return from_name(dev_str, n_cols=n_aie_cols if dev_str == "npu" else None)
+
+
+def swizzle_b_resident(B, k=64, n=64, s=8, t=4):
+    """local change: B (K x N) in the order --b-resident 2 streams it: for each 64-column strip, its K / k tiles in K
+    order, each tile in the core's L1 layout (the [(k/s, s n), (n/t, t), (s, n), (t, 1)] pattern the generic design
+    applies on the MemTile). The runtime-sequence MemTile descriptor has three data dimensions, too few for that
+    pattern, so the host lays the weights out once instead."""
+    K, N = B.shape
+    tiles = B.reshape(K // k, k // s, s, N // n, n // t, t)       # kt, ks, si, nb, nt, ti
+    return np.ascontiguousarray(tiles.transpose(3, 0, 1, 4, 2, 5)).reshape(-1)   # nb, kt, ks, nt, si, ti
 
 
 def _build_design(
@@ -81,6 +104,13 @@ def _build_design(
     scalar,
     c_single_buffer=False,
     rtp_generic=False,  # local change
+    epilogue_src="",  # local change
+    epilogue_mode=0,  # local change
+    hollow_src="",  # local change: timing probe, a no-op in matmul's place
+    b_w8=0,  # local change: B as host pre-swizzled W8 tiles (kernels/embedgemma/w8_dequant.cc)
+    w8_dequant_src="",  # local change: the W8 dequant kernel (absent: no dequant, a transport probe)
+    mm_src="",  # local change: an owned bf16 matmul in mm.cc's place (kernels/gemm_bf16/mm_bf16.cc)
+    b_resident=0,  # local change: each column's K x n B strip leaves DDR once; its MemTile re-sends it per row block
     *,
     generate_taps=False,
 ):
@@ -114,6 +144,16 @@ def _build_design(
     )
     zero_kernel = matmul_kernel.zero
     r, s, t = matmul_kernel.mac_dims
+    epilogue_kernel = None  # local change: the tile epilogue
+    if epilogue_src:
+        assert rtp_generic, "--epilogue-src needs --rtp-generic (its mode is an RTP word)"
+        epilogue_kernel = ExternalFunction(
+            "egemm_epilogue",
+            source_file=str(epilogue_src),
+            compile_flags=[f"-DEPI_M={m}"],  # local change: the epilogue's row blocks follow the tile
+            arg_types=[np.ndarray[(m, n), np.dtype[str_to_dtype(dtype_out_str)]], np.int32],
+            include_dirs=[config.cxx_header_path()],
+        )
 
     if dev_str == "npu" and n_aie_cols > 4:
         raise AssertionError("Invalid configuration: NPU (Phoenix/Hawk) has 4 columns")
@@ -163,6 +203,13 @@ def _build_design(
     A_l1_ty = np.ndarray[(m, k), np.dtype[dtype_in]]
     B_l1_ty = np.ndarray[(k, n), np.dtype[dtype_in]]
     C_l1_ty = np.ndarray[(m, n), np.dtype[dtype_out]]
+    if b_w8:  # local change: each B tile is k*n sign-magnitude bytes in matmul's L1 order + 4n bytes of scales
+        assert (k, n) == (64, 64) and (s, t) == (8, 4), "w8_dequant.cc is written for k = n = 64, bf16 4x8x4"
+        b_tile_bytes = k * n + 4 * n
+        B_ty = np.ndarray[((K // k) * (N // n) * b_tile_bytes,), np.dtype[np.uint8]]
+        B_l2_ty = np.ndarray[(b_tile_bytes,), np.dtype[np.uint8]]
+        B8_l1_ty = B_l2_ty
+        Bdq_l1_ty = np.ndarray[(k * n,), np.dtype[dtype_in]]  # the matmul kernel takes its operands flat
 
     A_l3l2_fifos: list[ObjectFifo] = []
     A_l2l1_fifos: list[ObjectFifo] = []
@@ -171,6 +218,47 @@ def _build_design(
     C_l1l2_fifos: list[list[ObjectFifo]] = [[] for _ in range(n_aie_rows)]
     C_l2l3_fifos: list[ObjectFifo] = []
 
+    b_repeat = M // (m * n_aie_rows)  # local change: row blocks per B strip under --b-resident
+    bres3 = b_resident == 3  # local change: bisect probe - --b-resident 2's B path with a STATIC MemTile program (fixed M, K)
+    bres2 = b_resident in (2, 3)  # local change: the MemTile B path lives in the runtime sequence, so M and K are not baked in
+    if bres2:
+        # Every tile pinned (the hand-written B flows must name the cores): worker (row, col) on (row, 2 + col), as the
+        # placer chose for this design; MemTile col holds A for column col, C and B for row 2 + col.
+        assert not (b_w8 or b_col_maj or c_col_maj) and (n_aie_rows, n_aie_cols) == (4, 4), "--b-resident 2: bf16, 4 x 4"
+        assert (K // k) % 2 == 0, "--b-resident 2: the core takes B tiles in pairs (ping-pong)"
+        shim_t = [Tile(cc, 0, tile_type=AIETileType.ShimNOCTile) for cc in range(n_aie_cols)]
+        mem_t = [Tile(cc, 1, tile_type=AIETileType.MemTile) for cc in range(n_aie_cols)]
+        core_t = [[Tile(rr, 2 + cc, tile_type=AIETileType.CoreTile) for cc in range(n_aie_cols)] for rr in range(n_aie_rows)]
+        # Runtime-sequence MemTile tasks run on channels 0 and 1 and time out on 4 and 5 (2 and 3 untested;
+        # results/aie/memtile_runtime_bd_probe_*), so B takes channel 0 both ways and the static chains are pinned
+        # above it: A in S2MM 5, C in S2MM 1..4, A out MM2S 4, C out MM2S 5.
+        BRES_CH = 0
+        BRES_UNITS = 16  # MemTile space-lock units: two 128 KB slots of 8 units each; a K > 1024 strip takes both
+        bres_buf, bres_space, bres_full, bres_locks, bres_flows, bres_dmas, bres_core = [], [], [], [], [], [], {}
+        for cc in range(n_aie_cols):
+            bres_buf.append(Buffer(np.ndarray[(131072,), np.dtype[dtype_in]], name=f"bres_strip_{cc}", tile=mem_t[cc]))
+            bres_space.append(Lock(mem_t[cc], init=8 if bres3 else BRES_UNITS, name=f"bres_space_{cc}"))
+            bres_full.append(Lock(mem_t[cc], init=0, name=f"bres_full_{cc}"))
+            bres_flows.append(Flow(shim_t[cc], mem_t[cc], src_channel=1, dst_channel=BRES_CH))
+            for rr in range(n_aie_rows):
+                bres_flows.append(Flow(mem_t[cc], core_t[rr][cc], src_channel=BRES_CH, dst_channel=1))
+                bb = [Buffer(B_l1_ty, name=f"bres_b_{rr}_{cc}_{i}", tile=core_t[rr][cc]) for i in range(2)]
+                sp, fu = Lock(core_t[rr][cc], init=2, name=f"bres_bsp_{rr}_{cc}"), Lock(core_t[rr][cc], init=0, name=f"bres_bfu_{rr}_{cc}")
+                bres_dmas.append(TileDma(core_t[rr][cc], [DmaChannel(DMAChannelDir.S2MM, 1, [
+                    Bd(bb[i], acquires=[Acquire(sp)], releases=[Release(fu)], next=1 - i) for i in range(2)])]))
+                bres_locks += [sp, fu]
+                bres_core[(rr, cc)] = (bb[0], bb[1], fu, sp)
+        bres_locks += bres_space + bres_full
+        if bres3:  # one slot; the protocol bres-b's ObjectFifo lowering ran bit-exact: R BDs, each full 1 -> space 1
+            rb3 = M // (m * n_aie_rows)
+            assert K * n <= 65536 and 8 % rb3 == 0
+            for cc in range(n_aie_cols):
+                s2mm = [Bd(bres_buf[cc], offset=0, length=K * n, acquires=[Acquire(bres_space[cc], 8)],
+                           releases=[Release(bres_full[cc], rb3)], next=0)]
+                mm2s = [Bd(bres_buf[cc], offset=0, length=K * n, acquires=[Acquire(bres_full[cc], 1)],
+                           releases=[Release(bres_space[cc], 8 // rb3)], next=(i + 1) % rb3) for i in range(rb3)]
+                bres_dmas.append(TileDma(mem_t[cc], [DmaChannel(DMAChannelDir.S2MM, BRES_CH, s2mm),
+                                                     DmaChannel(DMAChannelDir.MM2S, BRES_CH, mm2s)]))
     for i in range(n_shim_mem_A):
         a_l3l2 = ObjectFifo(A_l2_ty, name=f"A_L3L2_{i}", depth=fifo_depth)
         A_l3l2_fifos.append(a_l3l2)
@@ -185,29 +273,56 @@ def _build_design(
                 (s, 1),
             ]
         ] * (stop_row - start_row)
-        a_tmp_fifos = a_l3l2.cons().split(
+        a_tmp_fifos = a_l3l2.cons(**({"channel": 5} if bres2 else {})).split(
             of_offsets,
             obj_types=[A_l1_ty] * (stop_row - start_row),
             names=[f"A_L2L1_{row}" for row in range(start_row, stop_row)],
             dims_to_stream=a_dims,
+            **({"tile": mem_t[i]} if bres2 else {}),  # local change
         )
+        if bres2:  # local change: split() takes no channel pin; its producer handle carries one
+            for f_ in a_tmp_fifos:
+                f_._prod._channel = 4
         A_l2l1_fifos.extend(a_tmp_fifos)
 
+    if b_resident:
+        assert not (b_w8 or b_col_maj or c_col_maj), "--b-resident: bf16 row-major B and C only"
+        assert 1 <= b_repeat <= 255, "MemTile repeat_count is 1..255"
+        B_strip_ty = np.ndarray[(K * n,), np.dtype[dtype_in]]
+        strip_depth = 2 if 2 * K * n * np.dtype(dtype_in).itemsize <= 256 * 1024 else 1
     for col in range(n_aie_cols):
-        b_l3l2 = ObjectFifo(B_l2_ty, name=f"B_L3L2_{col}", depth=fifo_depth)
-        B_l3l2_fifos.append(b_l3l2)
-        b_dims: StreamDims = (
-            [(n // t, t * k), (k // s, s), (t, k), (s, 1)]
-            if b_col_maj
-            else [(k // s, s * n), (n // t, t), (s, n), (t, 1)]
-        )
-        B_l2l1_fifos.append(
-            b_l3l2.cons().forward(
-                obj_type=B_l1_ty,
+        if bres2:
+            pass  # local change: B is the hand-written path above
+        elif b_resident:  # local change: L2 holds the whole K x n strip; the cores still take k x n tiles
+            b_l3l2 = ObjectFifo(B_strip_ty, name=f"B_L3L2_{col}", depth=strip_depth)
+            B_l3l2_fifos.append(b_l3l2)
+            fwd = b_l3l2.cons().forward(
+                obj_type=B_strip_ty,
+                depth=strip_depth,
                 name=f"B_L2L1_{col}",
-                dims_to_stream=b_dims,
+                # today's per-tile pattern over all of K: the strip's k x n tiles are consecutive rows
+                dims_to_stream=[(K // s, s * n), (n // t, t), (s, n), (t, 1)],
+                repeat_count=b_repeat,
             )
-        )
+            fwd._consumer_obj_type = B_l1_ty  # asymmetric granularity (ObjectFifo consumer_obj_type); forward() lacks it
+            B_l2l1_fifos.append(fwd)
+        else:
+            b_l3l2 = ObjectFifo(B_l2_ty, name=f"B_L3L2_{col}", depth=fifo_depth)
+            B_l3l2_fifos.append(b_l3l2)
+            b_dims: StreamDims = (
+                [(n // t, t * k), (k // s, s), (t, k), (s, 1)]
+                if b_col_maj
+                else [(k // s, s * n), (n // t, t), (s, n), (t, 1)]
+            )
+            B_l2l1_fifos.append(
+                b_l3l2.cons().forward(obj_type=B8_l1_ty, name=f"B_L2L1_{col}")  # local change: pre-swizzled, linear
+                if b_w8 else
+                b_l3l2.cons().forward(
+                    obj_type=B_l1_ty,
+                    name=f"B_L2L1_{col}",
+                    dims_to_stream=b_dims,
+                )
+            )
 
         c_dims: StreamDims = (
             [(m // r, r * n), (r, t), (n // t, r * t), (t, 1)]
@@ -223,13 +338,16 @@ def _build_design(
         C_l2l3_fifos.append(c_l2l3)
         of_offsets = [m * n * i for i in range(n_aie_rows)]
 
-        c_tmp_fifos = c_l2l3.prod().join(
+        c_tmp_fifos = c_l2l3.prod(**({"channel": 5} if bres2 else {})).join(
             of_offsets,
             obj_types=[C_l1_ty] * n_aie_rows,
             names=[f"C_L1L2_{col}_{row}" for row in range(n_aie_rows)],
             depths=[c_l1l2_depth] * n_aie_rows,
+            **({"tile": mem_t[col]} if bres2 else {}),  # local change
         )
         for j in range(n_aie_rows):
+            if bres2:  # local change: join() takes no channel pin; the MemTile end of each core's fifo carries one
+                c_tmp_fifos[j]._cons[0]._channel = 1 + j
             C_l1l2_fifos[j].append(c_tmp_fifos[j])
 
     def core_fn(in_a, in_b, out_c, zero, matmul):
@@ -249,44 +367,97 @@ def _build_design(
             out_c.release(1)
 
     # Local change: the shape-generic core. rtp[0] = output tiles per core, rtp[1] = K // k.
-    def core_fn_generic(in_a, in_b, out_c, zero, matmul, rtp, barrier):
+    def core_fn_generic(in_a, in_b, out_c, zero, matmul, rtp, barrier, *extra):
+        dequant, bscratch = (extra[0], extra[1]) if w8_dequant_src else (None, None)  # local change: W8
+        epilogue = extra[2:] if w8_dequant_src else extra
         barrier.wait_for_value(1)
         n_tiles = arith.index_cast(rtp[0], to=T.index())
         k_tiles = arith.index_cast(rtp[1], to=T.index())
+        mode = rtp[2] if epilogue else None  # local change: the epilogue's mode, read once per call
         for _ in range_(n_tiles):
             elem_out = out_c.acquire(1)
             zero(elem_out)
             for _ in range_(k_tiles):
                 elem_in_a = in_a.acquire(1)
                 elem_in_b = in_b.acquire(1)
-                matmul(elem_in_a, elem_in_b, elem_out)
+                if dequant is not None:  # local change: W8 tile -> bf16 in L1, then the bf16 matmul
+                    dequant(elem_in_b, bscratch)
+                    matmul(elem_in_a, bscratch, elem_out)
+                else:
+                    matmul(elem_in_a, elem_in_b, elem_out)
                 in_a.release(1)
                 in_b.release(1)
+            if epilogue:
+                epilogue[0](elem_out, mode)
             out_c.release(1)
         # Hand the barrier back: acquire-equal does not consume it, so without this the core never waits
         # again and runs the next call on this call's parameters (results/laya/laya_gemm_onectx_desktop2_20261013T012132Z.log). Upstream's
         # ml/mm_activation_epilogue ends each epoch the same way.
         barrier.release_with_value(1)
 
-    rtps = [[Buffer(np.ndarray[(2,), np.dtype[np.int32]], initial_value=np.zeros(2, np.int32),
+    def core_fn_bres(in_a, b0, b1, b_full, b_space, out_c, zero, matmul, rtp, barrier, *epilogue):
+        # local change (--b-resident 2): rtp[1] is K tiles / 2; B arrives in the core's own two buffers, in turn
+        barrier.wait_for_value(1)
+        n_tiles = arith.index_cast(rtp[0], to=T.index())
+        k_pairs = arith.index_cast(rtp[1], to=T.index())
+        mode = rtp[2] if epilogue else None
+        for _ in range_(n_tiles):
+            elem_out = out_c.acquire(1)
+            zero(elem_out)
+            for _ in range_(k_pairs):
+                for bb in (b0, b1):
+                    elem_in_a = in_a.acquire(1)
+                    b_full.acquire(1)
+                    matmul(elem_in_a, bb, elem_out)
+                    in_a.release(1)
+                    b_space.release(1)
+            if epilogue:
+                epilogue[0](elem_out, mode)
+            out_c.release(1)
+        barrier.release_with_value(1)
+
+    n_rtp = 3 if epilogue_kernel else 2  # local change: [tiles, K tiles, epilogue mode]
+    rtps = [[Buffer(np.ndarray[(n_rtp,), np.dtype[np.int32]], initial_value=np.zeros(n_rtp, np.int32),
                     name=f"rtp_{row}_{col}", use_write_rtp=True)
              for col in range(n_aie_cols)] for row in range(n_aie_rows)] if rtp_generic else None
     barriers = [[WorkerRuntimeBarrier() for _ in range(n_aie_cols)] for _ in range(n_aie_rows)] if rtp_generic else None
 
+    if mm_src:  # local change: the owned matmul (same layouts and K order as mm.cc); mm.cc keeps zero_f32
+        assert (dtype_in_str, dtype_out_str) == ("bf16", "f32") and (r, s, t) == (4, 8, 4), "--mm-src is bf16 -> f32"
+        matmul_kernel = ExternalFunction("egemm_mm_bf16", source_file=str(mm_src),
+                                         arg_types=[A_l1_ty, Bdq_l1_ty if b_w8 else B_l1_ty, C_l1_ty],
+                                         compile_flags=[f"-DDIM_M={m}", f"-DDIM_K={k}", f"-DDIM_N={n}",
+                                                        "-DMM_SYM=egemm_mm_bf16", "-DMM_NO_ZERO"],
+                                         include_dirs=[config.cxx_header_path()])
+    if hollow_src:  # local change: every DMA/lock step kept, the MACs dropped (output wrong by construction)
+        matmul_kernel = ExternalFunction("egemm_nomatmul", source_file=str(hollow_src),
+                                         arg_types=[A_l1_ty, (B8_l1_ty if not w8_dequant_src else Bdq_l1_ty) if b_w8 else B_l1_ty,
+                                                    C_l1_ty], include_dirs=[config.cxx_header_path()])
+    if b_w8 and w8_dequant_src:  # local change: one dequant kernel and one bf16 B scratch tile per core
+        assert rtp_generic, "--w8-dequant-src needs --rtp-generic"
+        dequant_kernel = ExternalFunction("egemm_w8_dequant", source_file=str(w8_dequant_src),
+                                          arg_types=[B8_l1_ty, Bdq_l1_ty], include_dirs=[config.cxx_header_path()])
+        bscratch = [[Buffer(Bdq_l1_ty, name=f"bdq_{row}_{col}") for col in range(n_aie_cols)]
+                    for row in range(n_aie_rows)]
     workers = Worker.grid(
         n_aie_rows,
         n_aie_cols,
         lambda row, col: Worker(
-            core_fn_generic if rtp_generic else core_fn,  # local change
+            core_fn_bres if bres2 else core_fn_generic if rtp_generic else core_fn,  # local change
+            ([A_l2l1_fifos[row].cons(), *bres_core[(row, col)], C_l1l2_fifos[row][col].prod(), zero_kernel,
+              matmul_kernel] if bres2 else  # local change
             [
                 A_l2l1_fifos[row].cons(),
                 B_l2l1_fifos[col].cons(),
                 C_l1l2_fifos[row][col].prod(),
                 zero_kernel,
                 matmul_kernel,
-            ]
-            + ([rtps[row][col], barriers[row][col]] if rtp_generic else []),  # local change
+            ])
+            + ([rtps[row][col], barriers[row][col]] if rtp_generic else [])  # local change
+            + ([dequant_kernel, bscratch[row][col]] if b_w8 and w8_dequant_src else [])  # local change
+            + ([epilogue_kernel] if epilogue_kernel else []),  # local change
             stack_size=0xD00,
+            **({"tile": core_t[row][col]} if bres2 else {}),  # local change
         ),
     )
 
@@ -300,7 +471,12 @@ def _build_design(
         pattern_repeat=N // n // n_aie_cols,
         prune_step=False,
     )
-    if b_col_maj:
+    if b_w8:  # local change: column col's tiles are contiguous in the order its cores consume them
+        per_col = (K // k) * (N // n // n_aie_cols) * b_tile_bytes
+        B_tiles = [TensorAccessPattern((per_col * n_aie_cols,), col * per_col,
+                                       [1, 1, per_col // (b_tile_bytes // 4), b_tile_bytes // 4],
+                                       [0, 0, b_tile_bytes // 4, 1]) for col in range(n_aie_cols)]
+    elif b_col_maj:
         B_tiles = TensorTiler2D.step_tiler(
             (N, K),
             (n, k),
@@ -347,10 +523,84 @@ def _build_design(
             for row in range(n_aie_rows):
                 for col in range(n_aie_cols):
                     rtps[row][col][0] = n_tiles_per_core
-                    rtps[row][col][1] = K // k
+                    rtps[row][col][1] = K // k // 2 if bres2 else K // k
+                    if epilogue_kernel:
+                        rtps[row][col][2] = epilogue_mode
             for row in range(n_aie_rows):
                 for col in range(n_aie_cols):
                     barriers[row][col].set(1)
+        if b_resident:  # local change: per column n-tile j, its B strip once; A and C over every row block
+            J, rb = N // n // n_aie_cols, M // (m * n_aie_rows)
+            if bres2:
+                units = 8 if (K * n <= 65536 or bres3) else BRES_UNITS  # a strip fits one 128 KB slot up to K = 1024
+                assert K * n <= 131072 and units % rb == 0, "--b-resident 2: K <= 2048 and M / 256 dividing the units"
+                B_arg = getattr(B, "op", B)
+                lock_once = False  # bisect probe result: a task's repeat re-takes its BD's locks (lock-once hangs too)
+                from aie import ir as _ir
+                with _ir.InsertionPoint(_ir.InsertionPoint.current.block.owner):  # before the runtime_sequence op
+                    for b in ([] if bres3 else bres_buf):  # bres3's static program resolves them  # only the sequence uses these, so nothing else resolves them
+                        b.resolve()
+
+            def b_tasks(jj):
+                tasks = []
+                for col in range(n_aie_cols):
+                    nb = col + jj * n_aie_cols
+                    off = (jj % 2) * 65536 if units == 8 else 0
+                    t_sh = dma_configure_task(shim_t[col].op, DMAChannelDir.MM2S, 1)
+                    with bds(t_sh) as bd:
+                        with bd[0]:
+                            # B pre-swizzled by the host (swizzle_b_resident): strip nb is K x n contiguous, in L1 tile order
+                            shim_dma_bd(B_arg, offset=nb * K * n, sizes=[1, 1, 1, K * n], strides=[0, 0, 0, 1])
+                            EndOp()
+                    if bres3:  # the MemTile side is the static program
+                        tasks.append(t_sh)
+                        continue
+                    t_in = dma_configure_task(mem_t[col].op, DMAChannelDir.S2MM, BRES_CH)
+                    with bds(t_in) as bd:
+                        with bd[0]:
+                            use_lock(bres_space[col].op, LockAction.AcquireGreaterEqual, units)
+                            # explicit BD ids: the runtime-sequence allocator does not reserve the static MemTile
+                            # chains' ids (it starts each tile empty), so its picks overwrite A and C descriptors.
+                            # Channel 0 is even -> ids 0..23; 20..23 stay clear of the static chains (checked per build).
+                            dma_bd(bres_buf[col].op, offset=off, transfer_len=K * n, bd_id=20 + jj % 2)
+                            use_lock(bres_full[col].op, LockAction.Release, 1 if lock_once else rb)
+                            EndOp()
+                    # one strip out per row block: each repeat takes one full unit and hands back units / rb of space
+                    t_out = dma_configure_task(mem_t[col].op, DMAChannelDir.MM2S, BRES_CH, repeat_count=rb - 1)
+                    with bds(t_out) as bd:
+                        with bd[0]:
+                            use_lock(bres_full[col].op, LockAction.AcquireGreaterEqual, 1)
+                            dma_bd(bres_buf[col].op, offset=off, transfer_len=K * n, bd_id=22 + jj % 2)  # linear
+                            use_lock(bres_space[col].op, LockAction.Release, units if lock_once else units // rb)
+                            EndOp()
+                    tasks += [t_sh, t_in, t_out]
+                dma_start_task(*tasks)
+                return tasks
+
+            prev = None
+            prev_raw = None  # one n-tile's group stays in flight while the next is issued (awaiting each drains the pipe)
+            for jj in range(J):
+                tg = TaskGroup()
+                for col in range(n_aie_cols):
+                    nb = col + jj * n_aie_cols  # this column's jj-th n-tile
+                    C_hs[col].drain(C, tap=TensorAccessPattern((M, N), nb * n, [1, rb, m * n_aie_rows, n],
+                                                               [0, m * n_aie_rows * N, N, 1]), wait=True, group=tg)
+                    if col < n_aie_rows:  # A shim col feeds core row col: its m rows of every row block, K tiles inner
+                        A_hs[col].fill(A, tap=TensorAccessPattern((M, K), col * m * K, [rb, K // k, m, k],
+                                                                  [m * n_aie_rows * K, k, K, 1]), group=tg)
+                    if not bres2:
+                        B_hs[col].fill(B, tap=TensorAccessPattern((K, N), nb * n, [1, K // k, k, n], [0, k * N, N, 1]),
+                                       group=tg)
+                raw = b_tasks(jj) if bres2 else None
+                if prev is not None:
+                    prev.finish()
+                    if prev_raw:  # this n-tile's C has landed, so its B tasks have run
+                        dma_free_task(*prev_raw)
+                prev, prev_raw = tg, raw
+            prev.finish()
+            if prev_raw:
+                dma_free_task(*prev_raw)
+            return
         c_index = 0
         tg = TaskGroup()
         for tb in range(iron.ceildiv(M // m // n_aie_rows, tb_max_n_rows)):
@@ -400,6 +650,13 @@ def _build_design(
         sequence,
         [A_ty, B_ty, C_ty, A_prods, B_prods, C_conses],
     )
+    if b_resident in (2, 3):  # local change: the hand-written B path's flows, locks and core DMA programs
+        for f in bres_flows:
+            rt.add_flow(f)
+        for lk in bres_locks:
+            rt.add_lock(lk)
+        for d in bres_dmas:
+            rt.add_tile_dma(d)
 
     # resolve_program() runs the sequence body, which populates the closure
     # A_taps/B_taps/C_taps lists as a side effect. The generate_taps path needs
@@ -439,6 +696,13 @@ def whole_array(
     scalar: CompileTime[bool] = False,
     c_single_buffer: CompileTime[bool] = False,
     rtp_generic: CompileTime[bool] = False,  # local change
+    epilogue_src: CompileTime[str] = "",  # local change
+    epilogue_mode: CompileTime[int] = 0,  # local change
+    hollow_src: CompileTime[str] = "",  # local change
+    b_w8: CompileTime[int] = 0,  # local change
+    w8_dequant_src: CompileTime[str] = "",  # local change
+    mm_src: CompileTime[str] = "",  # local change
+    b_resident: CompileTime[int] = 0,  # local change
 ):
     return _build_design(
         iron.get_current_device(),
@@ -458,6 +722,13 @@ def whole_array(
         scalar,
         c_single_buffer,
         rtp_generic,  # local change
+        epilogue_src,  # local change
+        epilogue_mode,  # local change
+        hollow_src,  # local change
+        b_w8,  # local change
+        w8_dequant_src,  # local change
+        mm_src,  # local change
+        b_resident,  # local change
     )
 
 
@@ -518,6 +789,16 @@ def _make_argparser():
         action="store_true",
         help="shape-generic core: loop counts come from a runtime parameter, not the compiled program",
     )
+    p.add_argument("--epilogue-src", default="", help="local change: link egemm_epilogue(c, mode) from this file")
+    p.add_argument("--epilogue-mode", type=int, default=0, help="local change: the mode this shape's call runs")
+    p.add_argument("--hollow-matmul", default="", help="local change: timing probe, link this no-op in matmul's place")
+    p.add_argument("--b-w8", type=int, default=0, help="local change: B as pre-swizzled W8 tiles (uint8)")
+    p.add_argument("--w8-dequant-src", default="", help="local change: link this egemm_w8_dequant (else no dequant)")
+    p.add_argument("--b-resident", type=int, default=0, help="local change: weight-resident B - each column's K x n "
+                   "strip leaves DDR once and its MemTile re-sends it to the column's cores for every row block "
+                   "(ObjectFifo repeat_count = M / (rows m), so M and K are compile-time)")
+    p.add_argument("--mm-src", default="", help="local change: an owned bf16 x bf16 -> f32 matmul in mm.cc's place, same "
+                   "layouts (kernels/gemm_bf16/mm_bf16.cc); mm.cc still supplies zero_f32")
     p.add_argument(
         "--c-single-buffer",
         type=int,
@@ -611,6 +892,13 @@ def _compile_kwargs(opts):
         scalar=bool(opts.scalar),
         c_single_buffer=bool(opts.c_single_buffer),
         rtp_generic=bool(opts.rtp_generic),  # local change
+        epilogue_src=opts.epilogue_src,  # local change
+        epilogue_mode=opts.epilogue_mode,  # local change
+        hollow_src=opts.hollow_matmul,  # local change
+        b_w8=opts.b_w8,  # local change
+        w8_dequant_src=opts.w8_dequant_src,  # local change
+        mm_src=opts.mm_src,  # local change
+        b_resident=opts.b_resident,  # local change
     )
 
 
@@ -668,6 +956,13 @@ def _run_and_verify(opts):
         scalar=bool(opts.scalar),
         c_single_buffer=bool(opts.c_single_buffer),
         rtp_generic=bool(opts.rtp_generic),  # local change
+        epilogue_src=opts.epilogue_src,  # local change
+        epilogue_mode=opts.epilogue_mode,  # local change
+        hollow_src=opts.hollow_matmul,  # local change
+        b_w8=opts.b_w8,  # local change
+        w8_dequant_src=opts.w8_dequant_src,  # local change
+        mm_src=opts.mm_src,  # local change
+        b_resident=opts.b_resident,  # local change
         warmup=opts.warmup,
         iters=opts.iters,
     )

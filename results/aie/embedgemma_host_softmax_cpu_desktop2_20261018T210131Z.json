@@ -1,0 +1,45 @@
+{
+  "threads": 8,
+  "torch": "2.14.1+cpu",
+  "window": 512,
+  "per_length": {
+    "512": {
+      "calls": [
+        {
+          "name": "global scores",
+          "rows": 2048,
+          "keys": 512,
+          "calls": 4,
+          "median_ms": 0.7882999780122191
+        },
+        {
+          "name": "local scores",
+          "rows": 1024,
+          "keys": 512,
+          "calls": 40,
+          "median_ms": 0.4573000187519938
+        }
+      ],
+      "per_document_ms": 21.445200662128627
+    },
+    "2048": {
+      "calls": [
+        {
+          "name": "global scores",
+          "rows": 8192,
+          "keys": 2048,
+          "calls": 4,
+          "median_ms": 13.704399985726923
+        },
+        {
+          "name": "local scores",
+          "rows": 4096,
+          "keys": 2048,
+          "calls": 40,
+          "median_ms": 9.567100001731887
+        }
+      ],
+      "per_document_ms": 437.5016000121832
+    }
+  }
+}

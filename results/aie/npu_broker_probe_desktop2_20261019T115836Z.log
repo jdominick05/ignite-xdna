@@ -1,0 +1,53 @@
+RESEARCH_PLATFORM {"machine": "Desktop 2", "cpu": "AMD Ryzen 7 8700G w/ Radeon 780M Graphics", "os": "Windows-11-10.0.26200-SP0", "ram_bytes": 33381138432, "source_sha256": {"tools/research_process.py": "ffeb1857f190b482eed101b5f5a928f455de26bfa61d23f78a2eacec08e2663e", "tools/quant_calib_alphabet.py": "2dc0b2878c564853f340880209a425dfcf63b8536b2b8e9fd32344daade58d37", "tools/xint8_arithmetic_probe.py": "6aa3df08b9870c3c2264b868459d7ffbac3070dddc1349d7c6f3f480075f7041", "scripts/research-lowlevel.sh": "3455ad7933697936487712665505c216891865c6deada647302785f6e37020bd", "scripts/research-iron.sh": "4c863a262646ddab39b5005006ba8e03809895e6386c6310e2fd9d0a9e9609ee", "kernels/memory_placement/probe.py": "e8d990169ad6091fa1b53852e9f61eff495b5def72d35165a5c5cf1759e38898", "kernels/memory_placement/memory_kernels.cc": "182e7af7071a1e851afb4a7ca266069c489aea1fbaaa85eca129708daeba5ba6", "scripts/research-matrix.sh": "739254171629deae822b0ad7dabc875aee19ace56dde77d3e8aab61663f97516", "kernels/memory_placement/gemm.py": "17c905ad66110d3346bbf0db898dfc6b780df59fae1dfb0c1747057ce1e5844e", "kernels/memory_placement/gemm_placement.cc": "f21acf7250b12914ea30cc1f77613239dfa18421a85a1b9a5199017dd916278a", "tools/research_summary.py": "0c00dcceef07053d06731b41a1f1ed58d3ba4ea09f82497de354ce9cef17da20", "tools/research_toolchain.py": "f0a126a24ae213acfaa43460cfd9def0c86d9cb70cfee0228aa271688467b314"}, "commit": "96d5adaf2f6bf0d46394727d4088bb0aa6704487", "command": ["bash", "scripts/research-iron.sh", "tools/npu_broker_probe.py", "run", "--calls", "200"], "seconds_limit": 1500.0, "rss_gib_limit": 8.0, "checks_only": false, "free_ram_bytes": 23142338560}
+HOST_LOAD busy_cores=0.22 logical_cores=16 free_ram_gb=21.5 sample_sec=1
+HOST_LOAD_TOP 0.06 Taskmgr:83048 ws_mb=137
+HOST_LOAD_TOP 0.03 powershell:79772 ws_mb=82
+HOST_LOAD_TOP 0.03 dev-agent:4816 ws_mb=533
+HOST_LOAD_TOP 0.02 WindowsTerminal:11024 ws_mb=96
+HOST_LOAD_TOP 0.02 conhost:16864 ws_mb=9
+HOST_LOAD_VERDICT CLEAR
+
+PRE_NPU_CONTEXT_WITNESS "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+PHASE A: overhead, 200 calls each
+  direct     gemm512   200 calls in    105.1 ms: per-call wall   0.503 ms, device call   0.274 ms, out f065a19a78e52399
+  broker d1  gemm512   200 calls in    199.9 ms: per-call wall   1.000 ms, device call   0.285 ms, out f065a19a78e52399; broker calls 201 switches 0 opens 1
+    output vs direct: bit-equal
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 66 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |83480               |197        |201         |0           |0    |Normal   |\n      |python.exe          |Active     |201         |0           |     |N/A      |\n      |66 MB               |352 KB     |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [83480], "owned_pids": [9028, 24768, 26580, 79596, 83480, 83684, 84520, 85284, 85972], "foreign_pids": []}
+  broker d4  gemm512   200 calls in    112.4 ms: per-call wall   0.562 ms, device call   0.284 ms, out f065a19a78e52399; broker calls 402 switches 0 opens 1
+    output vs direct: bit-equal
+    broker stopped: {'calls': 402, 'switches': 0, 'opens': 1, 'evictions': 0, 'insts_uploads': 1, 'device_s': 0.11759490013355389, 'queue_s': 0.014062199916224927}
+  direct     gemm2048  200 calls in    851.7 ms: per-call wall   3.776 ms, device call   1.508 ms, out cf90e28ca5fc81c0
+HOST_TIMELINE {"elapsed_seconds": 4.422, "tree_rss_bytes": 142049280, "foreign_peers": []}
+  broker d1  gemm2048  200 calls in   1100.7 ms: per-call wall   5.503 ms, device call   1.478 ms, out cf90e28ca5fc81c0; broker calls 201 switches 0 opens 1
+    output vs direct: bit-equal
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [9028, 24768, 26580, 35520, 63920, 76936, 79596, 79688, 82752, 83480, 83684, 84520, 84648, 85284, 85380, 85900, 85972], "foreign_pids": []}
+  broker d4  gemm2048  200 calls in    712.0 ms: per-call wall   3.560 ms, device call   1.511 ms, out cf90e28ca5fc81c0; broker calls 402 switches 0 opens 1
+    output vs direct: bit-equal
+    broker stopped: {'calls': 402, 'switches': 0, 'opens': 1, 'evictions': 0, 'insts_uploads': 1, 'device_s': 0.6071556001843419, 'queue_s': 0.06905069996719249}
+  direct     attn512   200 calls in    315.1 ms: per-call wall   1.557 ms, device call   1.249 ms, out e6709b20972a105a
+HOST_TIMELINE {"elapsed_seconds": 9.063, "tree_rss_bytes": 264630272, "foreign_peers": []}
+  broker d1  attn512   200 calls in    442.1 ms: per-call wall   2.211 ms, device call   1.277 ms, out e6709b20972a105a; broker calls 201 switches 0 opens 1
+    output vs direct: bit-equal
+  broker d4  attn512   200 calls in    322.1 ms: per-call wall   1.611 ms, device call   1.256 ms, out e6709b20972a105a; broker calls 402 switches 0 opens 1
+    output vs direct: bit-equal
+    broker stopped: {'calls': 402, 'switches': 0, 'opens': 1, 'evictions': 0, 'insts_uploads': 1, 'device_s': 0.5115887996798847, 'queue_s': 0.07587029985734262}
+PHASE B: contention, gemm2048 and attn512 at once, 200 calls each
+  two direct processes: pair wall 1585.7 ms (includes process start and warm-up)
+  direct     gemm2048  200 calls in   1093.0 ms: per-call wall   5.382 ms, device call   2.828 ms, out cf90e28ca5fc81c0
+  direct     attn512   200 calls in    921.5 ms: per-call wall   5.331 ms, device call   4.978 ms, out e6709b20972a105a
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [9028, 14876, 19544, 19952, 20604, 20944, 22844, 24768, 26580, 35520, 45224, 63784, 63920, 76936, 77260, 79596, 79688, 82752, 83180, 83480, 83684, 84520, 84648, 84860, 85012, 85052, 85284, 85380, 85900, 85972, 86004], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 13.344, "tree_rss_bytes": 718381056, "foreign_peers": []}
+  broker streak 32: pair wall 1694.9 ms (includes process start and warm-up)
+  broker d4  gemm2048  200 calls in    968.5 ms: per-call wall   4.842 ms, device call   1.563 ms, out cf90e28ca5fc81c0; broker calls 397 switches 58 opens 2
+  broker d4  attn512   200 calls in    989.9 ms: per-call wall   4.950 ms, device call   1.285 ms, out e6709b20972a105a; broker calls 402 switches 58 opens 2
+    broker stopped: {'calls': 402, 'switches': 58, 'opens': 2, 'evictions': 0, 'insts_uploads': 2, 'device_s': 0.6547909998334944, 'queue_s': 3.861968900397187}
+  broker streak 1: pair wall 2061.4 ms (includes process start and warm-up)
+  broker d4  gemm2048  200 calls in   1335.9 ms: per-call wall   6.679 ms, device call   2.866 ms, out cf90e28ca5fc81c0; broker calls 402 switches 320 opens 2
+  broker d4  attn512   200 calls in   1308.1 ms: per-call wall   6.541 ms, device call   2.695 ms, out e6709b20972a105a; broker calls 394 switches 320 opens 2
+    broker stopped: {'calls': 402, 'switches': 320, 'opens': 2, 'evictions': 0, 'insts_uploads': 2, 'device_s': 1.0181449999799952, 'queue_s': 7.135785899445182}
+idle after: True
+POST_NPU_CONTEXT_WITNESS "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+RESEARCH_PROCESS_RESULT {"exit_code": 0, "stop": null, "peak_tree_rss_bytes": 729354240, "rss_measurement": "maximum observed across sampled descendant working sets; zero observations reported as null", "elapsed_seconds": 16.953999999997905, "foreign_contention_observed": false, "timing_eligible": true}

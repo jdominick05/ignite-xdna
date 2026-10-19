@@ -1,0 +1,33 @@
+RESEARCH_PLATFORM {"machine": "Desktop 2", "cpu": "AMD Ryzen 7 8700G w/ Radeon 780M Graphics", "os": "Windows-11-10.0.26200-SP0", "ram_bytes": 33381138432, "source_sha256": {"tools/research_process.py": "ffeb1857f190b482eed101b5f5a928f455de26bfa61d23f78a2eacec08e2663e", "tools/quant_calib_alphabet.py": "2dc0b2878c564853f340880209a425dfcf63b8536b2b8e9fd32344daade58d37", "tools/xint8_arithmetic_probe.py": "6aa3df08b9870c3c2264b868459d7ffbac3070dddc1349d7c6f3f480075f7041", "scripts/research-lowlevel.sh": "3455ad7933697936487712665505c216891865c6deada647302785f6e37020bd", "scripts/research-iron.sh": "4c863a262646ddab39b5005006ba8e03809895e6386c6310e2fd9d0a9e9609ee", "kernels/memory_placement/probe.py": "e8d990169ad6091fa1b53852e9f61eff495b5def72d35165a5c5cf1759e38898", "kernels/memory_placement/memory_kernels.cc": "182e7af7071a1e851afb4a7ca266069c489aea1fbaaa85eca129708daeba5ba6", "scripts/research-matrix.sh": "739254171629deae822b0ad7dabc875aee19ace56dde77d3e8aab61663f97516", "kernels/memory_placement/gemm.py": "17c905ad66110d3346bbf0db898dfc6b780df59fae1dfb0c1747057ce1e5844e", "kernels/memory_placement/gemm_placement.cc": "f21acf7250b12914ea30cc1f77613239dfa18421a85a1b9a5199017dd916278a", "tools/research_summary.py": "0c00dcceef07053d06731b41a1f1ed58d3ba4ea09f82497de354ce9cef17da20", "tools/research_toolchain.py": "f0a126a24ae213acfaa43460cfd9def0c86d9cb70cfee0228aa271688467b314"}, "commit": "b647b89e44290793a8d0dc916fcebb6764e9590e", "command": ["bash", "scripts/research-iron.sh", "tools/embedgemma_attn_gemm_probe.py", "run", "--out", "scratch/egemma-gemm", "--ls", "512", "2048", "--reps", "5"], "seconds_limit": 1500.0, "rss_gib_limit": 10.0, "checks_only": false, "free_ram_bytes": 23336415232}
+HOST_LOAD busy_cores=0.26 logical_cores=16 free_ram_gb=21.7 sample_sec=1
+HOST_LOAD_TOP 0.09 Taskmgr:62436 ws_mb=188
+HOST_LOAD_TOP 0.06 powershell:5408 ws_mb=82
+HOST_LOAD_TOP 0.03 llm-top-new:17996 ws_mb=67
+HOST_LOAD_TOP 0.02 WindowsTerminal:11024 ws_mb=160
+HOST_LOAD_TOP 0.02 syncthing:10644 ws_mb=30
+HOST_LOAD_VERDICT CLEAR
+
+PRE_NPU_CONTEXT_WITNESS "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+RUN one context on g_256_512_512.xclbin: attention products at L in [512, 2048]
+  CHECK L=512 global scores 2048x512x512: rel err 5.26e-07: PASS
+    global scores 2048x512x512: median 0.963 ms/call (min 0.911), 1115 GFLOPS, x4 per document
+  CHECK L=512 global values 2048x512x512: rel err 6.17e-07: PASS
+    global values 2048x512x512: median 0.917 ms/call (min 0.868), 1171 GFLOPS, x4 per document
+  CHECK L=512 local scores 1024x256x512: rel err 4.16e-07: PASS
+    local scores 1024x256x512: median 0.375 ms/call (min 0.356), 716 GFLOPS, x40 per document
+  CHECK L=512 local values 1024x512x256: rel err 5.22e-07: PASS
+    local values 1024x512x256: median 0.384 ms/call (min 0.359), 700 GFLOPS, x40 per document
+PASS L=512: attention score+value GEMMs per document 37.9 ms (host softmax/mask/rounding excluded)
+  CHECK L=2048 global scores 8192x512x2048: rel err 6.24e-07: PASS
+    global scores 8192x512x2048: median 9.093 ms/call (min 9.051), 1889 GFLOPS, x4 per document
+  CHECK L=2048 global values 8192x2048x512: rel err 1.52e-06: PASS
+    global values 8192x2048x512: median 8.291 ms/call (min 8.178), 2072 GFLOPS, x4 per document
+  CHECK L=2048 local scores 4096x256x2048: rel err 3.55e-07: PASS
+    local scores 4096x256x2048: median 2.858 ms/call (min 2.837), 1503 GFLOPS, x40 per document
+  CHECK L=2048 local values 4096x2048x256: rel err 1.34e-06: PASS
+    local values 4096x2048x256: median 2.688 ms/call (min 2.666), 1598 GFLOPS, x40 per document
+PASS L=2048: attention score+value GEMMs per document 291.3 ms (host softmax/mask/rounding excluded)
+RESULT {"ok": true, "report": {"512": {"products": [{"name": "global scores", "M": 2048, "K": 512, "N": 512, "calls": 4, "median_ms": 0.9627999970689416, "min_ms": 0.910999980987981, "gflops": 1115.2283208026583, "c_mbytes": 4.194304}, {"name": "global values", "M": 2048, "K": 512, "N": 512, "calls": 4, "median_ms": 0.9169999975711107, "min_ms": 0.8681000035721809, "gflops": 1170.9289278561141, "c_mbytes": 4.194304}, {"name": "local scores", "M": 1024, "K": 256, "N": 512, "calls": 40, "median_ms": 0.3749000024981797, "min_ms": 0.3564999788068235, "gflops": 716.0188162476829, "c_mbytes": 2.097152}, {"name": "local values", "M": 1024, "K": 512, "N": 256, "calls": 40, "median_ms": 0.38369998219422996, "min_ms": 0.3586999955587089, "gflops": 699.5972594653842, "c_mbytes": 1.048576}], "per_document_ms": 37.863199366256595}, "2048": {"products": [{"name": "global scores", "M": 8192, "K": 512, "N": 2048, "calls": 4, "median_ms": 9.09259999752976, "min_ms": 9.050799999386072, "gflops": 1889.4341759966737, "c_mbytes": 67.108864}, {"name": "global values", "M": 8192, "K": 2048, "N": 512, "calls": 4, "median_ms": 8.290500001749024, "min_ms": 8.17849999293685, "gflops": 2072.235592590991, "c_mbytes": 16.777216}, {"name": "local scores", "M": 4096, "K": 256, "N": 2048, "calls": 40, "median_ms": 2.8575999895110726, "min_ms": 2.8372000087983906, "gflops": 1502.9980794249852, "c_mbytes": 33.554432}, {"name": "local values", "M": 4096, "K": 2048, "N": 256, "calls": 40, "median_ms": 2.687699976377189, "min_ms": 2.665799984242767, "gflops": 1598.0084584400981, "c_mbytes": 4.194304}], "per_document_ms": 291.3443986326456}}}
+idle after: True
+POST_NPU_CONTEXT_WITNESS "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+RESEARCH_PROCESS_RESULT {"exit_code": 0, "stop": null, "peak_tree_rss_bytes": null, "rss_measurement": "maximum observed across sampled descendant working sets; zero observations reported as null", "elapsed_seconds": 2.4070000000065193, "foreign_contention_observed": false, "timing_eligible": true}

@@ -1,0 +1,87 @@
+RESEARCH_PLATFORM {"machine": "Desktop 2", "cpu": "AMD Ryzen 7 8700G w/ Radeon 780M Graphics", "os": "Windows-11-10.0.26200-SP0", "ram_bytes": 33381138432, "source_sha256": {"tools/research_process.py": "ffeb1857f190b482eed101b5f5a928f455de26bfa61d23f78a2eacec08e2663e", "tools/quant_calib_alphabet.py": "2dc0b2878c564853f340880209a425dfcf63b8536b2b8e9fd32344daade58d37", "tools/xint8_arithmetic_probe.py": "6aa3df08b9870c3c2264b868459d7ffbac3070dddc1349d7c6f3f480075f7041", "scripts/research-lowlevel.sh": "3455ad7933697936487712665505c216891865c6deada647302785f6e37020bd", "scripts/research-iron.sh": "4c863a262646ddab39b5005006ba8e03809895e6386c6310e2fd9d0a9e9609ee", "kernels/memory_placement/probe.py": "e8d990169ad6091fa1b53852e9f61eff495b5def72d35165a5c5cf1759e38898", "kernels/memory_placement/memory_kernels.cc": "182e7af7071a1e851afb4a7ca266069c489aea1fbaaa85eca129708daeba5ba6", "scripts/research-matrix.sh": "739254171629deae822b0ad7dabc875aee19ace56dde77d3e8aab61663f97516", "kernels/memory_placement/gemm.py": "17c905ad66110d3346bbf0db898dfc6b780df59fae1dfb0c1747057ce1e5844e", "kernels/memory_placement/gemm_placement.cc": "f21acf7250b12914ea30cc1f77613239dfa18421a85a1b9a5199017dd916278a", "tools/research_summary.py": "0c00dcceef07053d06731b41a1f1ed58d3ba4ea09f82497de354ce9cef17da20", "tools/research_toolchain.py": "f0a126a24ae213acfaa43460cfd9def0c86d9cb70cfee0228aa271688467b314"}, "commit": "dc7f23b01c52a835609feefc267a52a1eaf1f227", "command": ["bash", "scripts/research-iron.sh", "tools/l1_tile_bench.py", "run", "--kernels", "empty,mm_bf16_f32,own_bf16", "--mode", "direct", "--m", "64", "--k", "64", "--n", "64", "--calls", "0,100000,200000,400000", "--out", "results/aie/l1_tile_own_bf16_v1_64x64x64_desktop2_20261019T053617Z.log"], "seconds_limit": 1800.0, "rss_gib_limit": 8.0, "checks_only": false, "free_ram_bytes": 22751305728}
+HOST_LOAD busy_cores=0.23 logical_cores=16 free_ram_gb=21.1 sample_sec=1
+HOST_LOAD_TOP 0.08 Taskmgr:83048 ws_mb=128
+HOST_LOAD_TOP 0.05 dev-agent:4816 ws_mb=501
+HOST_LOAD_TOP 0.03 dev-agent:7824 ws_mb=11
+HOST_LOAD_TOP 0.03 powershell:82952 ws_mb=83
+HOST_LOAD_TOP 0.02 dev-agent:82224 ws_mb=117
+HOST_LOAD_VERDICT CLEAR
+
+PRE_NPU_CONTEXT_WITNESS "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+L1-resident GEMM tile: compiler vs hand schedule (tools/l1_tile_bench.py)
+date: 2026-10-19T01:36:21  host: DESKTOP-CBL5NUA
+peano: clang version 22.0.0 (https://github.com/Xilinx/llvm-aie a36c62b9d26291fb06604bc976c897791f0bb578)
+aiecc: mlir-aie ironenv v1.4.2; mm.cc from the mlir-aie checkout (not vendored)
+xrt-smi: Version              : 2.21.0
+xrt-smi: NPU Driver Version   : 32.0.20101.3760
+xrt-smi: NPU Firmware Version : 1.5.5.391
+pmode: default (not changed by this run; docs/SILICON.md measured 1.80 GHz in default)
+shape: M64 x K64 x N64; mode direct; loop counter i32
+seed 20260923; calls [0, 100000, 200000, 400000], 5 reps each, 3 warm-ups
+partitions before: idle
+
+## empty  (`empty_call`, bf16, M64 x K64 x N64, direct mode)
+compile: clang++.exe --target=aie2-none-unknown-elf -c empty_call.s -o kernel.o
+placement (tile-local offset, bank): outC_buff_0 0x4000-0x8000 b1, inB_cons_buff_0 0x8000-0xa040 b2, inA_cons_buff_0 0xc000-0xe000 b3
+static: 7 bundles in `empty_call`, 0 issue a vmac; loops none
+correctness layout=tiled calls=1: EXACT (C unchanged)
+correctness layout=tiled calls=3: EXACT (C unchanged)
+calls=       0: mean     0.261 ms  (min 0.247, max 0.291, n=5)
+calls=  100000: mean     1.311 ms  (min 1.284, max 1.342, n=5)
+calls=  200000: mean     2.388 ms  (min 2.358, max 2.410, n=5)
+calls=  400000: mean     4.583 ms  (min 4.511, max 4.704, n=5)
+fit: time = 0.242 ms + 10.82 ns x calls   (R^2 0.999383)
+per call: 19.5 cycles at 1.8 GHz -- the harness's own cost per call, no MACs
+
+## mm_bf16_f32  (`matmul_bf16_f32`, bf16, M64 x K64 x N64, direct mode)
+compile: clang++.exe -O2 -std=c++20 --target=aie2-none-unknown-elf -DNDEBUG -Wno-parentheses -Wno-attributes -Wno-macro-redefined -Wno-empty-body -D__AIE_API_AIE_ADF_HPP__ -DVECTORIZED_ONLY -DDIM_M=64 -DDIM_K=64 -DDIM_N=64 -Dbf16_f32_ONLY -IC:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\mlir_aie\include -c mm.cc -o kernel.o
+placement (tile-local offset, bank): outC_buff_0 0x4000-0x8000 b1, inB_cons_buff_0 0x8000-0xa040 b2, inA_cons_buff_0 0xc000-0xe000 b3
+static: 197 bundles in `matmul_bf16_f32`, 32 issue a vmac; loops .L_LEnd0 16/32
+correctness layout=tiled calls=1: EXACT (C0 + calls*A@B)
+correctness layout=tiled calls=3: EXACT (C0 + calls*A@B)
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 64 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |36756               |105        |3           |0           |0    |Normal   |\n      |python.exe          |Active     |2           |0           |     |N/A      |\n      |64 MB               |64 KB      |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [36756], "owned_pids": [36756, 77872, 80724, 82316, 84496], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 4.046, "tree_rss_bytes": 239456256, "foreign_peers": []}
+calls=       0: mean     0.286 ms  (min 0.250, max 0.365, n=5)
+calls=  100000: mean   301.972 ms  (min 301.848, max 302.221, n=5)
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 64 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |36756               |105        |17          |0           |0    |Normal   |\n      |python.exe          |Active     |16          |0           |     |N/A      |\n      |64 MB               |64 KB      |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [36756], "owned_pids": [36756, 77872, 80724, 82316, 84496], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 7.968, "tree_rss_bytes": 172347392, "foreign_peers": []}
+calls=  200000: mean   603.555 ms  (min 603.308, max 603.914, n=5)
+HOST_TIMELINE {"elapsed_seconds": 11.859, "tree_rss_bytes": 172347392, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 64 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |36756               |105        |24          |0           |0    |Normal   |\n      |python.exe          |Active     |23          |0           |     |N/A      |\n      |64 MB               |64 KB      |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [36756], "owned_pids": [36756, 77872, 80724, 82316, 84496], "foreign_pids": []}
+calls=  400000: mean  1206.476 ms  (min 1206.311, max 1206.801, n=5)
+fit: time = 0.376 ms + 3015.41 ns x calls   (R^2 1.000000)
+per call: 5427.7 cycles at 1.8 GHz; ideal 2048 (64*64*64 MACs / 128 per cycle) -> 37.7% issue efficiency
+rate: 173.9 GFLOPS from the slope (37.7% of 460.8); 173.8 by the reference's method (2*MACs*400000 / mean wall at 400000 calls)
+
+## own_bf16  (`matmul_bf16_f32`, bf16, M64 x K64 x N64, direct mode)
+compile: clang++.exe -O2 -std=c++20 --target=aie2-none-unknown-elf -DNDEBUG -Wno-parentheses -Wno-attributes -Wno-macro-redefined -Wno-empty-body -D__AIE_API_AIE_ADF_HPP__ -DVECTORIZED_ONLY -DDIM_M=64 -DDIM_K=64 -DDIM_N=64 -IC:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\mlir_aie\include -c mm_bf16.cc -o kernel.o
+placement (tile-local offset, bank): outC_buff_0 0x4000-0x8000 b1, inB_cons_buff_0 0x8000-0xa040 b2, inA_cons_buff_0 0xc000-0xe000 b3
+static: 121 bundles in `matmul_bf16_f32`, 32 issue a vmac; loops .L_LEnd0 16/19
+correctness layout=tiled calls=1: EXACT (C0 + calls*A@B)
+correctness layout=tiled calls=3: EXACT (C0 + calls*A@B)
+HOST_TIMELINE {"elapsed_seconds": 15.734, "tree_rss_bytes": 239460352, "foreign_peers": []}
+calls=       0: mean     0.352 ms  (min 0.251, max 0.517, n=5)
+calls=  100000: mean   192.036 ms  (min 191.918, max 192.214, n=5)
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 64 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |36756               |106        |16          |0           |0    |Normal   |\n      |python.exe          |Active     |15          |0           |     |N/A      |\n      |64 MB               |64 KB      |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [36756], "owned_pids": [36756, 77872, 80724, 82316, 84496], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 19.671, "tree_rss_bytes": 239460352, "foreign_peers": []}
+calls=  200000: mean   383.552 ms  (min 383.378, max 383.827, n=5)
+HOST_TIMELINE {"elapsed_seconds": 23.578, "tree_rss_bytes": 172351488, "foreign_peers": []}
+calls=  400000: mean   766.373 ms  (min 766.245, max 766.558, n=5)
+fit: time = 0.462 ms + 1914.95 ns x calls   (R^2 1.000000)
+per call: 3446.9 cycles at 1.8 GHz; ideal 2048 (64*64*64 MACs / 128 per cycle) -> 59.4% issue efficiency
+rate: 273.8 GFLOPS from the slope (59.4% of 460.8); 273.6 by the reference's method (2*MACs*400000 / mean wall at 400000 calls)
+
+partitions after close: idle
+
+harness loop: i32; empty control: 19.5 cycles per call
+
+| kernel | output | static vmac/bundles | cycles/call | over empty | ideal | eff. (over empty) | rate (slope) | % peak | reference method |
+|---|---|---|---|---|---|---|---|---|---|
+| mm_bf16_f32 | exact (tiled) | 32/197 | 5427.7 | 5408.3 | 2048 | 37.9% | 173.9 GFLOPS | 37.7% | 173.8 |
+| own_bf16 | exact (tiled) | 32/121 | 3446.9 | 3427.4 | 2048 | 59.8% | 273.8 GFLOPS | 59.4% | 273.6 |
+POST_NPU_CONTEXT_WITNESS "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+RESEARCH_PROCESS_RESULT {"exit_code": 0, "stop": null, "peak_tree_rss_bytes": 239460352, "rss_measurement": "maximum observed across sampled descendant working sets; zero observations reported as null", "elapsed_seconds": 25.59299999999348, "foreign_contention_observed": false, "timing_eligible": true}

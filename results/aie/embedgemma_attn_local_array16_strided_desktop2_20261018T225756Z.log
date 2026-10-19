@@ -1,0 +1,32 @@
+RESEARCH_PLATFORM {"machine": "Desktop 2", "cpu": "AMD Ryzen 7 8700G w/ Radeon 780M Graphics", "os": "Windows-11-10.0.26200-SP0", "ram_bytes": 33381138432, "source_sha256": {"tools/research_process.py": "ffeb1857f190b482eed101b5f5a928f455de26bfa61d23f78a2eacec08e2663e", "tools/quant_calib_alphabet.py": "2dc0b2878c564853f340880209a425dfcf63b8536b2b8e9fd32344daade58d37", "tools/xint8_arithmetic_probe.py": "6aa3df08b9870c3c2264b868459d7ffbac3070dddc1349d7c6f3f480075f7041", "scripts/research-lowlevel.sh": "3455ad7933697936487712665505c216891865c6deada647302785f6e37020bd", "scripts/research-iron.sh": "4c863a262646ddab39b5005006ba8e03809895e6386c6310e2fd9d0a9e9609ee", "kernels/memory_placement/probe.py": "e8d990169ad6091fa1b53852e9f61eff495b5def72d35165a5c5cf1759e38898", "kernels/memory_placement/memory_kernels.cc": "182e7af7071a1e851afb4a7ca266069c489aea1fbaaa85eca129708daeba5ba6", "scripts/research-matrix.sh": "739254171629deae822b0ad7dabc875aee19ace56dde77d3e8aab61663f97516", "kernels/memory_placement/gemm.py": "17c905ad66110d3346bbf0db898dfc6b780df59fae1dfb0c1747057ce1e5844e", "kernels/memory_placement/gemm_placement.cc": "f21acf7250b12914ea30cc1f77613239dfa18421a85a1b9a5199017dd916278a", "tools/research_summary.py": "0c00dcceef07053d06731b41a1f1ed58d3ba4ea09f82497de354ce9cef17da20", "tools/research_toolchain.py": "f0a126a24ae213acfaa43460cfd9def0c86d9cb70cfee0228aa271688467b314"}, "commit": "e0bcc1ed780a1afb822d8408d3ad66cddbefb94c", "command": ["bash", "scripts/research-iron.sh", "kernels/embedgemma/attn_array.py", "run", "--out", "scratch/egemma-attn-strided", "--reps", "5", "--xclbin-from", "doc2048", "--save", "scratch/egemma-attn-strided/device_20261018T225756Z.npz"], "seconds_limit": 1200.0, "rss_gib_limit": 12.0, "checks_only": false, "free_ram_bytes": 22851424256}
+HOST_LOAD busy_cores=0.65 logical_cores=16 free_ram_gb=21.2 sample_sec=1
+HOST_LOAD_TOP 0.41 powershell:79084 ws_mb=98
+HOST_LOAD_TOP 0.08 Taskmgr:62436 ws_mb=209
+HOST_LOAD_TOP 0.06 dev-agent:13204 ws_mb=350
+HOST_LOAD_TOP 0.05 powershell:80496 ws_mb=83
+HOST_LOAD_TOP 0.03 llm-top-new:17996 ws_mb=67
+HOST_LOAD_VERDICT CLEAR
+
+PRE_NPU_CONTEXT_WITNESS "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+every case runs on doc2048's xclbin (cross-use check)
+  to_fixed model fit: round 0.250, floor 0.625 -> round
+CASE dense: L=256 W=512 heads=1 NKB=8 items/col [1, 1, 1, 1]: worst |diff| / (2 row ulps) 0.250, rel err 9.26e-04, finite True, repeat bit-equal True: PASS; dispatch median 0.318 ms over 5 (min 0.272); 0.5 MB moved, 1.65 GB/s
+  to_fixed model fit: round 0.500, floor 1.000 -> round
+CASE band: L=512 W=48 heads=1 NKB=6 items/col [2, 2, 2, 2]: worst |diff| / (2 row ulps) 0.500, rel err 2.70e-03, finite True, repeat bit-equal True: PASS; dispatch median 0.391 ms over 5 (min 0.374); 1.1 MB moved, 2.69 GB/s
+  to_fixed model fit: round 0.500, floor 1.000 -> round
+CASE model: L=1088 W=512 heads=1 NKB=34 items/col [5, 4, 4, 4]: worst |diff| / (2 row ulps) 0.500, rel err 1.94e-03, finite True, repeat bit-equal True: PASS; dispatch median 1.412 ms over 5 (min 1.380); 2.2 MB moved, 1.58 GB/s
+  to_fixed model fit: round 0.500, floor 1.500 -> round
+CASE long: L=2048 W=512 heads=1 NKB=34 items/col [8, 8, 8, 8]: worst |diff| / (2 row ulps) 0.500, rel err 7.58e-04, finite True, repeat bit-equal True: PASS; dispatch median 2.490 ms over 5 (min 2.405); 4.2 MB moved, 1.69 GB/s
+  to_fixed model fit: round 0.500, floor 0.625 -> round
+CASE doc128: L=128 W=512 heads=4 NKB=4 items/col [2, 2, 2, 2]: worst |diff| / (2 row ulps) 0.500, rel err 1.48e-03, finite True, repeat bit-equal True: PASS; dispatch median 0.273 ms over 5 (min 0.271); 0.8 MB moved, 2.89 GB/s
+  to_fixed model fit: round 0.500, floor 1.000 -> round
+CASE doc512: L=512 W=512 heads=4 NKB=16 items/col [8, 8, 8, 8]: worst |diff| / (2 row ulps) 0.500, rel err 7.76e-04, finite True, repeat bit-equal True: PASS; dispatch median 1.293 ms over 5 (min 1.265); 3.2 MB moved, 2.44 GB/s
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 75 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |80904               |32         |36          |0           |0    |Normal   |\n      |python.exe          |Active     |36          |0           |     |N/A      |\n      |75 MB               |480 KB     |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [80904], "owned_pids": [16368, 79632, 80904, 81836, 82632], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 4.188, "tree_rss_bytes": 202305536, "foreign_peers": []}
+  to_fixed model fit: round 0.500, floor 1.000 -> round
+CASE doc2048: L=2048 W=512 heads=4 NKB=34 items/col [32, 32, 32, 32]: worst |diff| / (2 row ulps) 0.500, rel err 7.18e-04, finite True, repeat bit-equal True: PASS; dispatch median 8.976 ms over 5 (min 8.688); 12.6 MB moved, 1.41 GB/s
+saved device outputs: scratch\egemma-attn-strided\device_20261018T225756Z.npz
+idle after: True
+POST_NPU_CONTEXT_WITNESS "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+RESEARCH_PROCESS_RESULT {"exit_code": 0, "stop": null, "peak_tree_rss_bytes": 202305536, "rss_measurement": "maximum observed across sampled descendant working sets; zero observations reported as null", "elapsed_seconds": 6.5, "foreign_contention_observed": false, "timing_eligible": true}
