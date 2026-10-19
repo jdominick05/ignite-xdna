@@ -1,0 +1,39 @@
+name = "scriberec"
+description = "ScribeRec SMALL text-line recogniser (CTC), run release-01: the int8 backbone as four static width buckets (80x320/640/960/1280) for ignite-scribe; the BiLSTM tail and CTC decoding stay on the CPU"
+status = "reconstructed"
+evidence = ["models/scriberec/release-01/README.md", "ignite-scribe build/scriberec_rand_s/*.ignite manifest build records (the same flags on random weights, 2026-10-19)"]
+
+# The weights are not made here. ScribeRec was trained from scratch on Desktop 1 (RX 7900 XTX, ROCm 7.2 PyTorch,
+# 2026-10-19, public-domain text only) and quantized there per bucket with Quark 0.13 XINT8 on 128 seed-7 lines.
+# The hand-back is models/scriberec/release-01/ (README, train.log, results.json): float vs XINT8 CER is 0.00181 /
+# 0.00181 on seed-100. Its training and quantization scripts live with ignite-scribe's tools/scriberec.py.
+# ignite-scribe loads build/scriberec_<W>.ignite from its own build/ directory: copy the four there.
+
+[[step]]
+id = "compile-320"
+env = "iron"
+run = ["-m", "ignite_xdna.compiler.cli", "--engine", "graph", "--input", "models/scriberec/release-01/backbone_320_xint8.onnx", "--output", "build/scriberec_320.ignite", "--task", "segment"]
+inputs = ["models/scriberec/release-01/backbone_320_xint8.onnx"]
+outputs = ["build/scriberec_320.ignite"]
+note = "x 1x3x80x320 -> features 1x96x20x80"
+
+[[step]]
+id = "compile-640"
+env = "iron"
+run = ["-m", "ignite_xdna.compiler.cli", "--engine", "graph", "--input", "models/scriberec/release-01/backbone_640_xint8.onnx", "--output", "build/scriberec_640.ignite", "--task", "segment"]
+inputs = ["models/scriberec/release-01/backbone_640_xint8.onnx"]
+outputs = ["build/scriberec_640.ignite"]
+
+[[step]]
+id = "compile-960"
+env = "iron"
+run = ["-m", "ignite_xdna.compiler.cli", "--engine", "graph", "--input", "models/scriberec/release-01/backbone_960_xint8.onnx", "--output", "build/scriberec_960.ignite", "--task", "segment"]
+inputs = ["models/scriberec/release-01/backbone_960_xint8.onnx"]
+outputs = ["build/scriberec_960.ignite"]
+
+[[step]]
+id = "compile-1280"
+env = "iron"
+run = ["-m", "ignite_xdna.compiler.cli", "--engine", "graph", "--input", "models/scriberec/release-01/backbone_1280_xint8.onnx", "--output", "build/scriberec_1280.ignite", "--task", "segment"]
+inputs = ["models/scriberec/release-01/backbone_1280_xint8.onnx"]
+outputs = ["build/scriberec_1280.ignite"]
