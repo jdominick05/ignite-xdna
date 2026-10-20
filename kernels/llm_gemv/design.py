@@ -271,11 +271,11 @@ def token_balance(insts: bytes) -> dict:
             size = int(w[pos + 3])
         elif op == 3:                                 # maskwrite: [op, 0, addr, 0, value, mask, bytes]
             size = int(w[pos + 6])
-        elif op == 0x80:                              # sync: [op, bytes, col<<16 | row<<8 | dir, rows/cols/channel]
+        elif op == 0x80:     # sync: [op, bytes, col<<16 | row<<8 | dir, channel<<24 | cols<<16 | rows<<8]
             size, a, b = int(w[pos + 1]), int(w[pos + 2]), int(w[pos + 3])
-            if (b >> 8) & 0xFF != 1 or (b >> 16) & 0xFF != 1 or (a >> 8) & 0xFF:
+            if (b >> 8) & 0xFF != 1 or (b >> 16) & 0xFF != 1 or b & 0xFF or (a >> 8) & 0xFF:
                 raise ValueError("a sync over more than one shim channel")
-            key = ((a >> 16) & 0xFF, ("s2mm", "mm2s")[a & 1], b & 0xFF)
+            key = ((a >> 16) & 0xFF, ("s2mm", "mm2s")[a & 1], (b >> 24) & 0xFF)
             waited[key] = waited.get(key, 0) + 1
         elif op >= 0x80:                              # address patch and other custom ops: [op, bytes, ...]
             size = int(w[pos + 1])

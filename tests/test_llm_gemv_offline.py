@@ -249,6 +249,10 @@ def test_token_balance_refuses_a_token_nobody_waits_for():
         design.token_balance(_stream(push(2, 15), push(2, 14), sync(2)))
     with pytest.raises(ValueError):
         design.token_balance(_stream(push(2, 15), sync(3)))
+    mm2s1 = [0, 0, (1 << 25) | 0x1D21C, 0, 0x80000006, 24]          # column 1, MM2S channel 1
+    assert design.token_balance(_stream(mm2s1, [0x80, 16, (1 << 16) | 1, 0x1010100])) == {"1/mm2s1": 1}
+    with pytest.raises(ValueError):                                   # waited on channel 0 instead
+        design.token_balance(_stream(mm2s1, [0x80, 16, (1 << 16) | 1, 0x10100]))
 
 
 def test_a_split_output_waits_once_per_piece():
