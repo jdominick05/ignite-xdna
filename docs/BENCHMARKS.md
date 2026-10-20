@@ -3911,7 +3911,7 @@ without it (`chain_short` alone) stayed healthy. The head programs were never ru
 does not yet show the RoPE call wedges the device on its own. The head goes wrong only when it follows the down call
 in the same dispatch after a RoPE call; fed from the host after a RoPE call, it is exact.
 
-**A likely cause, found offline and not yet confirmed on the device: unbalanced completion tokens.** The KV append
+**The cause: unbalanced completion tokens** (found offline, confirmed on the device below). The KV append
 splits columns 2 and 3's output into two S2MM transfers, and the design asked for a completion token only on the
 second. The compiled stream sets the token bit on both (task-queue writes `0x8000000F` and `0x8000000E`), and each
 column still waited once. So every such call left one token per split column that nobody waited for. Decoding every
@@ -3927,8 +3927,17 @@ A spare token also explains the bad head:
 
 The fix: the design now waits once per output piece, and every build is refused unless tokens issued equal tokens
 waited for on every shim channel (`design.token_balance`, over the compiled `insts.bin`). The rebuilt programs
-balance. The next sitting runs `rope_one` then `chain_short` per seed in one context, and checks that a fresh
-context still opens afterwards.
+balance. The same check over the graph engine's ScribeRec (four widths) and icon_detect (four variants) containers
+finds every shim channel balanced.
+
+**Confirmed after a user reset** ([log](../results/aie/llm_ops_token_fix_desktop2_20261020T005023Z.log)): `rope_one`
+then `chain_short`, per seed, in one context. Before the fix this order put −inf/NaN into the head's column-0
+quarter. Now all 110,976 checked elements on both seeds are **EXACT**, all seven weight blocks read back unchanged,
+and a context-creation probe right after **succeeded**. The full regression then ran in the next context
+([log](../results/aie/llm_ops_regression_desktop2_20261020T005101Z.log)): `one` then `chain` per seed, the two
+programs that wedged the device before. Every output was **EXACT** (231,168 elements over both seeds), including
+RoPE, the KV append, SiLU and the chained head. The weights read back unchanged, and a fresh context opened
+afterwards. Kernel v2 is exact on the device, and step 2 continues with attention.
 
 ### Gemma 3 4B decode on the CPU and DirectML: INCOMPLETE in both sittings on the page-in witness, and the three complete arms decode at 10.8–17.6 tok/s (2026-09-24, Desktop 2)
 
