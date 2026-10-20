@@ -54,10 +54,11 @@ WSPEC = {"qkv": (960, HIDDEN, F.F_NORM), "o": (HIDDEN, HIDDEN, F.F_INIT), "gu": 
          "qkv_r": (960, HIDDEN, F.F_NORM | F.F_ROPE), "gu_s": (MLP, HIDDEN, F.F_NORM | F.F_SILU)}
 ROPE_END = {"qkv_r": QK}
 WAIT_MS = 5000
-ORDER = ("one", "chain_short", "chain")    # --only narrows this
+ORDER = ("one", "chain_short", "chain")    # --sequence replaces this (any order, repeats allowed)
 OUTPUTS = {"one": ("qkv", "o", "gu", "down", "head", "plain_o", "q1", "kc1", "vc1", "m1"),
            "chain_short": ("s_o", "s_gu", "s_down", "s_head"),
-           "chain": ("c_o", "c_gu", "c_down", "c_head", "c_q", "kc2", "vc2", "c_m")}
+           "chain": ("c_o", "c_gu", "c_down", "c_head", "c_q", "kc2", "vc2", "c_m"),
+           "rope_one": ("q1", "kc1", "vc1"), "silu_one": ("m1",)}
 
 W_OFF, _w = {}, 0
 for _s, (_n, _k, _f) in WSPEC.items():
@@ -154,7 +155,7 @@ def programs():
                   x_out=None if c.x_out is None else OUT["s" + {OUT["c_o"]: "_o", OUT["c_gu"]: "_gu",
                                                                 OUT["c_down"]: "_down"}[c.x_out]],
                   flags=c.flags, h_out=None if c.h_out is None else OUT["s_o"]) for c in chain[:4]]
-    return {"one": one, "chain_short": short, "chain": chain}
+    return {"one": one, "chain_short": short, "chain": chain, "rope_one": [one[6]], "silu_one": [one[7]]}
 
 
 def _qkv_rope(w, h):
@@ -256,7 +257,13 @@ def run(seeds):
                 xb.sync(to)
                 ob.write(np.full(OUT_WORDS, POISON, np.uint32).tobytes(), 0)
                 ob.sync(to)
-                for label in ORDER:
+                # every step re-poisons its own outputs, runs, and is checked at once, so a step that goes wrong
+                # after an earlier one names which earlier calls it followed in this context
+                for step, label in enumerate(ORDER):
+                    for name in OUTPUTS[label]:
+                        if name in ref:
+                            ob.write(np.full(ref[name].size // 2, POISON, np.uint32).tobytes(), OUT[name] * 4)
+                    ob.sync(to)
                     bo, count = insts[label]
                     r = xrt.run(h.kernel)
                     for i, v in enumerate((3, bo, count, arena, xb, ob)):
@@ -266,29 +273,31 @@ def run(seeds):
                     if state != xrt.ert_cmd_state.ERT_CMD_STATE_COMPLETED:
                         raise RuntimeError(f"{label} did not complete: {state}; stopping without retry")
                     r = bo = None
-                ob.sync(fr)
-                words = np.frombuffer(ob.read(OUT_WORDS * 4, 0), np.uint32)
-                bad = {}
-                checked = {k: v for k, v in ref.items() if any(k in OUTPUTS[lb] for lb in ORDER)}
-                for name, want in checked.items():
-                    got = words[OUT[name]:OUT[name] + want.size // 2].view(np.uint16)
-                    bad[name] = int(np.count_nonzero(got != want))
-                    if bad[name]:     # where, and whether the device left poison (never written) or a value
-                        idx = np.flatnonzero(got != want)
-                        pw = got.view(np.uint32) == POISON
-                        print("MISMATCH_DETAIL " + json.dumps(dict(
-                            seed=seed, name=name, first=int(idx[0]), last=int(idx[-1]), count=int(idx.size),
-                            quarters=np.bincount(idx * 4 // want.size, minlength=4).tolist(),
-                            poison_words=int(pw.sum()), sample_got=got[idx[:4]].tolist(),
-                            sample_want=want[idx[:4]].tolist(),
-                            equals_other={o: int(np.count_nonzero(got[idx[:64]] == ref[o][idx[:64]]))
-                                          for o in ref if o != name and ref[o].size == want.size},
-                            got_in_other={o: bool(np.isin(got[idx[:8]], ref[o]).all())
-                                          for o in ref if o != name})), flush=True)
-                total += sum(bad.values())
-                print("EXACT_JSON " + json.dumps(dict(
-                    seed=seed, programs=list(ORDER), checked=len(bad), elements=int(sum(v.size for v in checked.values())),
-                    mismatched_elements=sum(bad.values()), failures={k: v for k, v in bad.items() if v})), flush=True)
+                    ob.sync(fr)
+                    words = np.frombuffer(ob.read(OUT_WORDS * 4, 0), np.uint32)
+                    bad = {}
+                    for name in OUTPUTS[label]:
+                        want = ref[name]
+                        got = words[OUT[name]:OUT[name] + want.size // 2].view(np.uint16)
+                        bad[name] = int(np.count_nonzero(got != want))
+                        if bad[name]:     # where, and whether the device left poison (never written) or a value
+                            idx = np.flatnonzero(got != want)
+                            pw = got.view(np.uint32) == POISON
+                            print("MISMATCH_DETAIL " + json.dumps(dict(
+                                seed=seed, step=step, program=label, name=name, first=int(idx[0]), last=int(idx[-1]),
+                                count=int(idx.size), quarters=np.bincount(idx * 4 // want.size, minlength=4).tolist(),
+                                poison_words=int(pw.sum()), sample_got=got[idx[:4]].tolist(),
+                                sample_want=want[idx[:4]].tolist(),
+                                equals_other={o: int(np.count_nonzero(got[idx[:64]] == ref[o][idx[:64]]))
+                                              for o in ref if o != name and ref[o].size == want.size},
+                                got_in_other={o: bool(np.isin(got[idx[:8]], ref[o]).all())
+                                              for o in ref if o != name})), flush=True)
+                    total += sum(bad.values())
+                    print("EXACT_JSON " + json.dumps(dict(
+                        seed=seed, step=step, program=label, checked=len(bad),
+                        elements=int(sum(ref[n].size for n in OUTPUTS[label])),
+                        mismatched_elements=sum(bad.values()), failures={k: v for k, v in bad.items() if v})),
+                        flush=True)
             arena = xb = ob = insts = view = None
     finally:
         gc.collect()
@@ -304,10 +313,12 @@ def main():
     sub.add_parser("compile")
     r = sub.add_parser("run")
     r.add_argument("--seeds", type=int, nargs="+", default=[0, 1])
-    r.add_argument("--only", nargs="+", choices=ORDER, help="run only these programs (checks only their outputs)")
+    r.add_argument("--sequence", nargs="+", choices=tuple(OUTPUTS),
+                   help="the programs to run per seed, in this order in one context (repeats allowed); each is "
+                        "checked right after it runs")
     a = ap.parse_args()
-    if a.cmd == "run" and a.only:
-        ORDER = tuple(x for x in ORDER if x in a.only)
+    if a.cmd == "run" and a.sequence:
+        ORDER = tuple(a.sequence)
     if a.cmd == "compile":
         compile_all()
         return 0

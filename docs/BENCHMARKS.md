@@ -3881,9 +3881,24 @@ on the NPU. Those three refused attempts are kept:
 [2](../results/aie/llm_ops_rope_silu_exact_desktop2_20261019T210906Z.log),
 [3](../results/aie/llm_ops_rope_silu_exact_desktop2_20261019T211237Z.log).
 
-Whether the run caused the refusal is not established. The next sitting runs `chain_short` alone first: v1's chain
-on the v2 kernel. That separates "the kernel broke the chained head" from "a later call disturbs the head's
-column". Its mismatch detail compares a bad stretch against every other expected output.
+After a device reset by the user, the next sitting (2026-10-20) ran each program in its own process:
+- **`chain_short` alone** (v1's chain on the v2 kernel; [log](../results/aie/llm_ops_chain_short_desktop2_20261020T002048Z.log)):
+  exact on both seeds, and the device stayed healthy.
+- **The full chain alone** ([log](../results/aie/llm_ops_chain_detail_desktop2_20261020T002105Z.log)): seed 0 exact,
+  seed 1 wrong again. Exactly column 0's quarter of the chained head, 12,288 elements, came out as **−inf and NaN**.
+  That is not poison left unwritten, and not a copy of any other output. Afterwards the device refused every context
+  again (0xc01e0009).
+
+So far the bad head and the wedge have occurred together twice, and both exact runs left the device healthy. Across
+every run, the chained head was wrong exactly when a gate/up+SiLU or RoPE call had run earlier in the same hardware
+context: the first sitting's `one`, and seed 0's full chain before seed 1. It was exact otherwise: in a fresh
+context, and after a `chain_short`. The two candidates always ran together, so which one it is, and the mechanism,
+are **unexplained**. A static check rules out an overlap in core memory: the 16 core ELFs' tables (0x7C180–0x7F980),
+buffers and stack are disjoint, and every buffer is its declared size.
+
+The next sitting runs, in one context: `chain_short`, then a qkv+RoPE call, `chain_short`, a gate/up+SiLU call, and
+`chain_short`. The first `chain_short` to go wrong names the call. The full chain is not run again until this is
+fixed.
 
 ### Gemma 3 4B decode on the CPU and DirectML: INCOMPLETE in both sittings on the page-in witness, and the three complete arms decode at 10.8–17.6 tok/s (2026-09-24, Desktop 2)
 
