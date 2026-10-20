@@ -4021,6 +4021,31 @@ At 13.71 ms the device streams the 269 MB of weights at about 19.6 GB/s (DERIVED
 waiting on the previous one's output. That makes it the place to look for more speed (fewer, wider calls), not the
 arithmetic.
 
+**Against the CPU and the 780M, the NPU is the slowest of the four (MEASURED, 2026-10-20, Desktop 2).** The rivals
+are ONNX Runtime GenAI 0.11.2 builds of the same Hub weights (`tools/llm_rivals.py`, the stack of the Gemma
+study). They greedy-decode the same two chat prompts' token ids, 3 rounds after a warm-up, 66 decode steps per arm.
+Each ran timed under `research-lowlevel.sh`: `HOST_LOAD_VERDICT CLEAR` and `timing_eligible: true` for each. The
+preflight's only blocker was 1% GPU 3D from Windows Terminal, and scribe held its runs. The rivals process a prompt
+in one batched pass; the NPU decoder does it one token at a time.
+
+| arm | ms per generated token, median (p90) | tokens/s | prompt of 42 tokens | tokens equal to the exact reference | log |
+| --- | ---: | ---: | ---: | --- | --- |
+| **NPU**, bf16, every op on the device | 13.99 (14.34) | **71.5** | 42 steps, about 588 ms (DERIVED, 42 × 13.99) | all, bit-exact logits | [log](../results/aie/llm_decode_timed_desktop2_20261020T015232Z.log) |
+| CPU, fp32 | 11.07 (11.81) | 90.4 | 25.8 ms | all (8/8, 16/16, every round) | [log](../results/llm/llm_rivals_cpu-fp32_desktop2_20261020T021500Z.log) |
+| DirectML fp16, 780M | 9.64 (10.74) | 103.7 | 151.2 ms | 0/8 and 0/16, diverging at the first new token | [log](../results/llm/llm_rivals_dml-fp16_desktop2_20261020T021502Z.log) |
+| CPU, int4 weights, int8 compute | 4.18 (4.77) | **239.5** | 30.8 ms | 8/8, 0/16 | [log](../results/llm/llm_rivals_cpu-int4_desktop2_20261020T021501Z.log) |
+
+**Reading:**
+- **Speed:** on a 135M model the NPU decoder loses to every rival. The CPU at fp32 is 1.26× faster, and int4 on
+  the CPU 3.35× faster.
+- **What the NPU offers here:** the host's share of a token is 0.25 ms, so the CPU and GPU stay free, and the
+  output is bit-exact with a pinned reference.
+- **What is not measured:** energy per token, the axis where the NPU earned a role in the Gemma study's prefill.
+- **CPU timings:** ORT's default threads are unpinned, which this repo's noise study found bimodal. The medians are
+  reported as measured.
+- **Agreement column:** positional token equality with the exact reference, not a quality score. fp16 and int4
+  round differently by design.
+
 ### Gemma 3 4B decode on the CPU and DirectML: INCOMPLETE in both sittings on the page-in witness, and the three complete arms decode at 10.8–17.6 tok/s (2026-09-24, Desktop 2)
 
 The question, (c) of the Gemma plan with its rule (d)
