@@ -4071,6 +4071,31 @@ them. The embedding lookup stays bf16.
 - **Per-row int8 is coarse on the folded weights:** layer 0's QKV weights read 4.6% mean relative error (a smoke
   check, not logged). Per-block scales are untried.
 
+**The W8A16 speed gate: GO, narrowly, at 0.686 (MEASURED, 2026-10-20, Desktop 2,
+[log](../results/aie/llm_w8_gate_desktop2_20261020T032844Z.log)).** The planned int8 object is the size of today's
+bf16 one (4,608 B: 24 outputs × 192 inputs instead of 12 × 192). A W8A16 token therefore moves the same objects as
+a bf16 token whose projections have half the rows, padded to multiples of 24 per core: qkv 960 → 1152, o and down
+576 → 768, and the head in 4 calls. `tools/llm_w8_gate.py` times that DMA pattern with today's bf16 kernel
+(149.96 MB in 124 calls), against step 1's arm C (268.96 MB in 121 calls), in one sitting. The rule was written
+into the tool before the sitting: GO if the pattern's median is at most 0.70 × the bf16 median in both rounds.
+
+| program | calls | weight MB | median ms, round 1 / 2 | GB/s |
+| --- | ---: | ---: | --- | ---: |
+| bf16, arm C | 121 | 268.96 | 8.120 / 8.124 | 33.1 |
+| W8A16 pattern | 124 | 149.96 | 5.566 / 5.572 | 26.9 |
+
+- **Run conditions:** both programs were exact against the oracle first (one output of each shape, 0 mismatched
+  elements). `HOST_LOAD_VERDICT CLEAR`, `xrt-smi` idle before and after, `timing_eligible: true`.
+- **Ratio 0.686 in both rounds: GO.** Time does not fall with bytes: 56% of the bytes take 69% of the time, and the
+  rate drops from 33.1 to 26.9 GB/s. A fixed cost per call or per object weighs about 2.5 ms of the 5.57.
+- **Not in the pattern:** the core's extra work. A compiled draft of the int8 inner loop (int8 widened to bf16 in
+  the core, six accumulators) reads about 48 bundles per 8-input step, about 1,150 cycles per object, against about
+  384 for today's. By that static count the core outruns the DMA at any clock above about 0.75 GHz. This is
+  DERIVED, not measured on the device.
+- **What it buys, DERIVED:** if the full kernel keeps the pattern's time, a token drops from 13.99 ms to about
+  11.4 ms, about 87 tokens/s. That is still below the CPU at fp32 (90.4) and the 780M (103.7). Merging the
+  remaining 5.9 ms of attention and per-call waiting matters as much as int8 does.
+
 ### Gemma 3 4B decode on the CPU and DirectML: INCOMPLETE in both sittings on the page-in witness, and the three complete arms decode at 10.8–17.6 tok/s (2026-09-24, Desktop 2)
 
 The question, (c) of the Gemma plan with its rule (d)
