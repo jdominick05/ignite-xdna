@@ -233,3 +233,28 @@ def test_a_chained_call_reads_x_from_the_out_argument_and_stays_within_16_bds():
     assert max(ids) < 16
     with pytest.raises(ValueError):                              # chained x past the out argument
         design.harness([design.Call(0, 0, 0, n, n, x_out=400)], pack.block_words(n, n), pack.OBJ_WORDS, 576)
+
+
+def _stream(*ops):
+    words = [w for op in ops for w in op]
+    return np.array([0x06030100, 0x104, len(ops), 16 + 4 * len(words)] + words, np.uint32).tobytes()
+
+
+def test_token_balance_refuses_a_token_nobody_waits_for():
+    from kernels.llm_gemv import design
+    push = lambda col, bd: [0, 0, (col << 25) | 0x1D204, 0, 0x80000000 | bd, 24]
+    sync = lambda col: [0x80, 16, col << 16, 0x10100]
+    assert design.token_balance(_stream(push(2, 15), push(2, 14), sync(2), sync(2))) == {"2/s2mm0": 2}
+    with pytest.raises(ValueError):            # the KV-append split as first compiled: two tokens, one wait
+        design.token_balance(_stream(push(2, 15), push(2, 14), sync(2)))
+    with pytest.raises(ValueError):
+        design.token_balance(_stream(push(2, 15), sync(3)))
+
+
+def test_a_split_output_waits_once_per_piece():
+    from kernels.llm_gemv import design
+    n = 576
+    call = design.Call(0, 0, 0, n, n, out_map=((0, 480, 0), (480, 96, 400)))    # column 3 (432..576) splits at 480
+    text = design.harness([call], pack.block_words(n, n), pack.X_SLOT_WORDS, 600)
+    assert [text.count(f"dma_wait {{symbol = @oL{c}}}") for c in range(4)] == [1, 1, 1, 2]
+    assert text.count("issue_token = true") == 5

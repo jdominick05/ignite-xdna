@@ -3909,9 +3909,26 @@ So the bad head and the wedge are **separate symptoms**: the wedge happens even 
 context that wedged contained the qkv+RoPE+KV-append call (`one`, `chain`, `rope_one`); the only kind of context
 without it (`chain_short` alone) stayed healthy. The head programs were never run alone in a fresh context, so this
 does not yet show the RoPE call wedges the device on its own. The head goes wrong only when it follows the down call
-in the same dispatch after a RoPE call; fed from the host after a RoPE call, it is exact. Both mechanisms are
-**unexplained**. `one` and `chain` are not run on the device again until this is fixed; the next steps are offline
-(object and lock balance of the RoPE call per core, the RoPE emit's runtime index bounds, the split S2MM).
+in the same dispatch after a RoPE call; fed from the host after a RoPE call, it is exact.
+
+**A likely cause, found offline and not yet confirmed on the device: unbalanced completion tokens.** The KV append
+splits columns 2 and 3's output into two S2MM transfers, and the design asked for a completion token only on the
+second. The compiled stream sets the token bit on both (task-queue writes `0x8000000F` and `0x8000000E`), and each
+column still waited once. So every such call left one token per split column that nobody waited for. Decoding every
+`insts.bin` that ran, tokens issued against syncs per shim channel, flags exactly the three programs present in the
+contexts that wedged (`one`, 9 against 8 on columns 2 and 3; `chain`, 7 against 6; `rope_one`, 2 against 1). The
+four that left the device healthy (`chain_short`, `silu_one`, `head_one`, `headc`) and both v1 programs balance.
+A spare token also explains the bad head:
+- In the next dispatch, the first wait on column 2 or 3 consumes the old token, so every later wait on those columns
+  returns one call early.
+- The head's column 0 streams its x (the down output) first, while columns 2 and 3 of the down call may still be
+  writing, so it reads unwritten poison there and turns NaN.
+- Columns 1 to 3 start later and read finished data.
+
+The fix: the design now waits once per output piece, and every build is refused unless tokens issued equal tokens
+waited for on every shim channel (`design.token_balance`, over the compiled `insts.bin`). The rebuilt programs
+balance. The next sitting runs `rope_one` then `chain_short` per seed in one context, and checks that a fresh
+context still opens afterwards.
 
 ### Gemma 3 4B decode on the CPU and DirectML: INCOMPLETE in both sittings on the page-in witness, and the three complete arms decode at 10.8–17.6 tok/s (2026-09-24, Desktop 2)
 

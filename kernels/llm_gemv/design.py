@@ -205,13 +205,15 @@ def harness(program: Sequence[Call], w_words: int, x_words: int, out_words: int)
             outs = call.out_pieces(c)
             if len(xs) * 2 + 2 + len(outs) > 16:
                 raise ValueError(f"{call}: column {c} needs more than the shim tile's 16 BDs")
-            for j, (off, length) in enumerate(outs):     # S2MM BDs from 15 down; only the last issues the token
-                last = j == len(outs) - 1
+            # S2MM BDs from 15 down. Every S2MM push issues a completion token (the lowering sets the bit whatever
+            # the attribute says), so the column waits once per piece: an unconsumed token makes a later call's wait
+            # return a call early, and was left behind at teardown by the KV-append split (token_balance checks it)
+            for j, (off, length) in enumerate(outs):
                 L.append(f"      aiex.npu.dma_memcpy_nd(%o[0,0,0,{off}][1,1,1,{length}][0,0,0,1]) "
-                         f"{{id = {15 - j} : i64, metadata = @oL{c}{', issue_token = true' if last else ''}}} "
+                         f"{{id = {15 - j} : i64, metadata = @oL{c}, issue_token = true}} "
                          f": memref<{out_words}xi32>")
         for c in range(pack.COLS):
-            L.append(f"      aiex.npu.dma_wait {{symbol = @oL{c}}}")
+            L += [f"      aiex.npu.dma_wait {{symbol = @oL{c}}}"] * len(call.out_pieces(c))
     L += ["    }", "  }", "}"]
     return "\n".join(L) + "\n"
 
@@ -248,6 +250,47 @@ def compile_kernel(folder: Path) -> Path:
     return obj
 
 
+SHIM_QUEUES = {0x1D204: ("s2mm", 0), 0x1D20C: ("s2mm", 1), 0x1D214: ("mm2s", 0), 0x1D21C: ("mm2s", 1)}
+
+
+def token_balance(insts: bytes) -> dict:
+    """Walk the binary instruction stream: per shim (column, direction, channel), the task pushes that issue a
+    completion token and the syncs that consume one. Refused unless every pair is equal."""
+    w = np.frombuffer(insts, np.uint32)
+    pos, ops = 4, int(w[2])
+    pushed, waited = {}, {}
+    for _ in range(ops):
+        op = int(w[pos]) & 0xFF
+        if op == 0:                                   # write32: [op, 0, addr, 0, value, bytes]
+            addr, value, size = int(w[pos + 2]), int(w[pos + 4]), int(w[pos + 5])
+            reg = SHIM_QUEUES.get(addr & 0x1FFFFFF) if (addr >> 20) & 0x1F == 0 else None
+            if reg is not None and value >> 31:
+                key = ((addr >> 25) & 0x7F,) + reg
+                pushed[key] = pushed.get(key, 0) + 1
+        elif op == 1:                                 # blockwrite: [op, 0, addr, bytes, data...]
+            size = int(w[pos + 3])
+        elif op == 3:                                 # maskwrite: [op, 0, addr, 0, value, mask, bytes]
+            size = int(w[pos + 6])
+        elif op == 0x80:                              # sync: [op, bytes, col<<16 | row<<8 | dir, rows/cols/channel]
+            size, a, b = int(w[pos + 1]), int(w[pos + 2]), int(w[pos + 3])
+            if (b >> 8) & 0xFF != 1 or (b >> 16) & 0xFF != 1 or (a >> 8) & 0xFF:
+                raise ValueError("a sync over more than one shim channel")
+            key = ((a >> 16) & 0xFF, ("s2mm", "mm2s")[a & 1], b & 0xFF)
+            waited[key] = waited.get(key, 0) + 1
+        elif op >= 0x80:                              # address patch and other custom ops: [op, bytes, ...]
+            size = int(w[pos + 1])
+        else:
+            raise ValueError(f"unknown instruction opcode {op:#x} at word {pos}")
+        if size <= 0 or size % 4:
+            raise ValueError(f"bad instruction size {size} at word {pos}")
+        pos += size // 4
+    if pos != w.size:
+        raise ValueError(f"the stream is {w.size} words, its instructions {pos}")
+    if pushed != waited:
+        raise ValueError(f"completion tokens issued {pushed} but waited for {waited}")
+    return {f"{c}/{d}{ch}": n for (c, d, ch), n in sorted(pushed.items())}
+
+
 def audit(folder: Path) -> List[dict]:
     """Every core ELF: code <= 16 KiB, stack within STACK, no software float helper."""
     out = []
@@ -282,6 +325,7 @@ def build(folder: Path, program: Sequence[Call], w_words: int, x_words: int, out
         raise ValueError("a source changed during compilation")
     meta = dict(label=label, sources=before, program=[asdict(c) for c in program], w_words=w_words, x_words=x_words,
                 out_words=out_words, cores=audit(folder),
+                tokens=token_balance((folder / "insts.bin").read_bytes()),
                 artifacts={n: sha(folder / n) for n in ("gemv.o", "harness.mlir", "final.xclbin", "insts.bin")})
     save(folder / "build.json", meta)
     print("LLM_GEMV_BUILD " + json.dumps(dict(label=label, folder=str(folder), calls=len(program),
