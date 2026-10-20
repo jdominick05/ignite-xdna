@@ -219,8 +219,48 @@ def matvec(w: np.ndarray, x: np.ndarray, exact: bool, init: np.ndarray | None = 
         from kernels.llm_gemv import oracle
         start = None if init is None else em.bf16_bits(init)
         return em.from_bf16_bits(oracle.gemv(em.bf16_bits(w), em.bf16_bits(x), init=start))
-    acc = w @ x.astype(np.float64)
+    x = x.astype(np.float64)
+    if ACT_BITS:            # fake per-token symmetric activation quantization (quantize_weights' W8A8 study)
+        qmax = 2 ** (ACT_BITS - 1) - 1
+        s = np.abs(x).max() / qmax
+        if s > 0:
+            x = np.clip(np.rint(x / s), -qmax, qmax) * s
+    acc = w @ x
     return bf16_from64(acc if init is None else acc + init.astype(np.float64))
+
+
+ACT_BITS = 0                # 0: activations stay bf16; 8: W8A8's per-token int8 (fast mode only)
+
+
+def quantize(w: np.ndarray, bits: int, group: int = 0) -> np.ndarray:
+    """Symmetric round-to-nearest fake quantization, returned dequantized (float64): one scale per output row, or
+    per ``group`` inputs of a row; codes in [-(2^(bits-1)-1), 2^(bits-1)-1]."""
+    qmax = 2 ** (bits - 1) - 1
+    n, k = w.shape
+    g = w.reshape(n, k // group, group) if group else w.reshape(n, 1, k)
+    s = np.abs(g).max(axis=2, keepdims=True) / qmax
+    s = np.where(s == 0, 1.0, s)
+    return (np.clip(np.rint(g / s), -qmax, qmax) * s).reshape(n, k)
+
+
+SCHEMES = {"w8a16": (8, 0, 0), "w8a8": (8, 0, 8), "w4a16": (4, 32, 0)}
+
+
+def quantize_weights(w: "Weights", scheme: str) -> "Weights":
+    """The fused decoder's weights under ``scheme`` (SCHEMES: weight bits, group, activation bits), fast mode: every
+    projection with its gamma folded in, and the head; the embedding lookup stays bf16. Sets ACT_BITS."""
+    global ACT_BITS
+    bits, group, act = SCHEMES[scheme]
+    ACT_BITS = act
+    layers = []
+    for L in w.layers:
+        L = dict(L)
+        for name in ("qkv_g", "o", "gu_g", "down"):
+            L[name] = quantize(L[name], bits, group)
+        layers.append(L)
+    out = Weights(w.embed, layers, w.norm)
+    out.head_g = quantize(w.head_g, bits, group)
+    return out
 
 
 RSQ_BASE, RSQ_SIZE = 0x3F80, 0x1000     # bf16 bits of 1.0 up to the largest bf16 below 2^32

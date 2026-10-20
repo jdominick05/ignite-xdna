@@ -29,6 +29,15 @@ sys.path[:0] = [str(ROOT / "src"), str(ROOT)]
 
 # By file path: resnet_env has Hugging Face's own `kernels` package installed, which shadows this repo's kernels/.
 import importlib.util  # noqa: E402
+import types  # noqa: E402
+
+# reference.py imports kernels.llm_gemv.pack: register this repo's package and pack under those names first
+_pkg = types.ModuleType("kernels.llm_gemv")
+_pkg.__path__ = [str(ROOT / "kernels" / "llm_gemv")]
+sys.modules["kernels.llm_gemv"] = _pkg
+_pspec = importlib.util.spec_from_file_location("kernels.llm_gemv.pack", ROOT / "kernels" / "llm_gemv" / "pack.py")
+sys.modules["kernels.llm_gemv.pack"] = _pack = importlib.util.module_from_spec(_pspec)
+_pspec.loader.exec_module(_pack)
 
 _spec = importlib.util.spec_from_file_location("llm_reference", ROOT / "kernels" / "llm_gemv" / "reference.py")
 R = importlib.util.module_from_spec(_spec)
@@ -89,6 +98,9 @@ def main():
     ap.add_argument("--tokens", type=int, default=64)
     ap.add_argument("--out", type=Path)
     ap.add_argument("--unfused", action="store_true", help="v0 semantics: norms as their own op, rounded residual adds")
+    ap.add_argument("--quant", choices=("w8a16", "w8a8", "w4a16"),
+                    help="fake-quantize the fused reference: int8 per-row or int4 per-32 weights, W8A8's per-token "
+                         "int8 activations (reference.quantize_weights)")
     a = ap.parse_args()
     if a.out and a.out.exists():
         raise SystemExit(f"{a.out} exists")
@@ -100,7 +112,11 @@ def main():
     hf = {d: AutoModelForCausalLM.from_pretrained(MODEL, dtype=getattr(torch, d)).eval()
           for d in ("float32", "bfloat16")}
     w = R.Weights.load(safetensors(model_file()))
-    rec = dict(model=MODEL, tokens=a.tokens, reference_mode="fast (float64 sums, one rounding)",
+    if a.quant:
+        if a.unfused:
+            raise SystemExit("--quant applies to the fused semantics")
+        w = R.quantize_weights(w, a.quant)
+    rec = dict(model=MODEL, tokens=a.tokens, reference_mode="fast (float64 sums, one rounding)", quant=a.quant,
                semantics="v0 unfused" if a.unfused else "fused (norm in the projection, residual as accumulator start)",
                prompts=[])
     totals = {k: [0, 0] for k in ("ref_vs_fp32", "ref_vs_bf16", "bf16_vs_fp32")}

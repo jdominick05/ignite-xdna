@@ -4046,6 +4046,31 @@ in one batched pass; the NPU decoder does it one token at a time.
 - **Agreement column:** positional token equality with the exact reference, not a quality score. fp16 and int4
   round differently by design.
 
+**Quantized weights, before any kernel: W8A16 holds, W8A8 and W4A16 do not, with plain rounding (MEASURED, CPU
+only, 2026-10-20, Desktop 2).** The same quality gate as the bf16 decoder (`tools/llm_reference_quality.py
+--quant`, 5 chat prompts × 128 tokens and the fixed passage) on the fused reference in fast mode, with every
+projection and the head fake-quantized by symmetric round-to-nearest (`reference.quantize_weights`; no
+calibration, no AdaRound or AutoRound). The gamma-folded weights are the ones quantized, as the NPU would hold
+them. The embedding lookup stays bf16.
+
+| scheme | weights | activations | greedy = HF fp32 | greedy = HF bf16 | perplexity | log |
+| --- | --- | --- | ---: | ---: | ---: | --- |
+| HF bf16 (the yardstick) | bf16 | bf16 | 176/439 | — | 7.223 | |
+| bf16 NPU decoder (reference, tables) | bf16 | bf16 | 214/441 | 265/441 | 7.269 | [log](../results/llm/llm_reference_quality_tables_desktop2_20261019T210202Z.log) |
+| **W8A16** | int8, one scale per row | bf16 | 152/443 | 177/443 | **7.279** | [log](../results/llm/llm_reference_quality_w8a16_desktop2_20261020T025420Z.log) |
+| W8A8 | int8, one scale per row | int8, one scale per token | 38/464 | 44/464 | 7.560 | [log](../results/llm/llm_reference_quality_w8a8_desktop2_20261020T025420Z.log) |
+| W4A16 | int4, one scale per 32 | bf16 | 26/439 | 28/439 | 16.506 | [log](../results/llm/llm_reference_quality_w4a16_desktop2_20261020T025420Z.log) |
+
+**Reading:**
+- **W8A16** costs 0.01 of perplexity against the bf16 decoder, and its greedy match to HF bf16 (177/443) is HF
+  bf16's own match to fp32 (176/439). Its texts stay fluent. It is the scheme worth a kernel.
+- **W8A8** diverges from the first or third token on 3 of 5 prompts and adds 0.29 of perplexity. The texts stay
+  fluent, but they are different answers. Per-token int8 activations are the cause: the weights are W8A16's.
+- **W4A16** breaks the model: perplexity 16.5, repeated sentences and a duplicated list item. Learned rounding
+  (AutoRound, AdaRound, GPTQ) is untested; RTN is the baseline only.
+- **Per-row int8 is coarse on the folded weights:** layer 0's QKV weights read 4.6% mean relative error (a smoke
+  check, not logged). Per-block scales are untried.
+
 ### Gemma 3 4B decode on the CPU and DirectML: INCOMPLETE in both sittings on the page-in witness, and the three complete arms decode at 10.8–17.6 tok/s (2026-09-24, Desktop 2)
 
 The question, (c) of the Gemma plan with its rule (d)
