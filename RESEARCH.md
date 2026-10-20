@@ -682,8 +682,12 @@ been closed:
     - Does the hardware decode the 8 MAC control-word codes Peano never emits, i.e. is there a
       4-bit-A mode the toolchain does not expose? That needs a hand-built control word on
       silicon.
-    - Does int4 pay where weights dominate, as in M = 1 GEMV (LLM decode)? No design in this repo
-      can express M < 32, so the note's "~2×" there is DERIVED and untested.
+    - Does int4 pay where weights dominate, as in M = 1 GEMV (LLM decode)? The note's "~2×" there is
+      DERIVED and untested.
+      - Since 2026-10-20, `kernels/llm_gemv` does M = 1 on the whole array in bf16 and W8A16. The
+        SmolLM2-135M decode runs exact at 121.9 tokens/s and still loses to the CPU at int4 by 2.0×
+        (BENCHMARKS, the small-LLM verdict).
+      - No int4 path was built: round-to-nearest W4A16 broke the model (perplexity 16.5).
       - AMD got there first. RyzenAI-SW 1.1 (2024-02-17) shipped a Phoenix bf16 × uint4 overlay
         with a dedicated M = 1 path at Llama-2-7B's shapes. The kernel is closed, and no source
         read gives its bandwidth ([prior art](results/llm/notes_prior_art_phoenix_llm.md)).

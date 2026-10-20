@@ -114,6 +114,9 @@ NPU. The engine runs bf16 transformers there, so these compare against the CPU a
   2,048-token document at cosine ≥ 0.99998 to fp32. **The 780M is 2.7× faster**; running both together adds
   13–14% documents per second.
 - **Energy**: the NPU reads a GB for **0.33 J**, against DirectML's 0.75 and the CPU's 0.88.
+- **SmolLM2-135M chat**, every neural op on the NPU: bit-exact at **121.9 tokens/s** in W8A16. That beats the CPU at
+  fp32 (90.4) and the 780M (103.7), but **the CPU at int4 is 2.0× faster** (239.5). XDNA1 can decode an LLM, but
+  not competitively ([verdict](docs/BENCHMARKS.md#small-llm-decode-step-1-a-tokens-smollm2-135m-projections-run-exact-on-the-whole-array-819842-ms-in-one-dispatch-at-3233-gbs-2026-10-19-desktop-2)).
 - **Not here:** decoding a 7B LLM. The NPU reads DDR at 47.6 GB/s, below the 56–64 GB/s at which the CPU and the
   780M read int4 weights.
 

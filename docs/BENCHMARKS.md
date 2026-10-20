@@ -3689,6 +3689,35 @@ NPU INSIDE.**
 
 ### Small-LLM decode, step 1: a token's SmolLM2-135M projections run exact on the whole array, 8.19–8.42 ms in one dispatch at 32–33 GB/s (2026-10-19, Desktop 2)
 
+**Verdict (2026-10-20): XDNA1 can decode an LLM, but not competitively.**
+- **What runs:** SmolLM2-135M-Instruct, with every neural op on the NPU in one dispatch per token: projections,
+  RMSNorm, RoPE, attention, SiLU and the head. It is bit-exact against the reference's device semantics, and it
+  writes the chat answers ("The capital of France is Paris.").
+- **Fastest arm, W8A16:** **8.20 ms a token, 121.9 tokens/s**
+  ([log](../results/aie/llm_decode_timed_w8onehead_desktop2_20261020T044614Z.log)).
+  - In bf16: 10.89 ms, 91.9 tokens/s.
+  - The W8A16 reference's perplexity is 7.21, against 7.22 for the Hugging Face model in bf16.
+- **The rivals** (ONNX Runtime GenAI, same chip, median):
+  - CPU at fp32: 11.07 ms, 90.4 tokens/s ([log](../results/llm/llm_rivals_cpu-fp32_desktop2_20261020T021500Z.log)).
+  - 780M at fp16 through DirectML: 9.64 ms, 103.7 tokens/s ([log](../results/llm/llm_rivals_dml-fp16_desktop2_20261020T021502Z.log)).
+  - CPU at int4: **4.18 ms, 239.5 tokens/s** ([log](../results/llm/llm_rivals_cpu-int4_desktop2_20261020T021501Z.log)).
+- **Where it stands:** the NPU passes the CPU at fp32 and the 780M, but **the CPU at int4 is 2.0× faster**, and
+  that is the comparison that matters.
+- **Why the gap is unlikely to close** (DERIVED):
+  - A token still pays about 2 ms of DMA control and attention before any weight moves.
+  - The 140 MB of W8 weights alone need 2.9 ms even at the 47.6 GB/s bare read rate.
+  - W4 would halve the bytes, but round-to-nearest W4A16 broke the model (perplexity 16.5), so it would need a
+    better quantizer just to reach parity.
+- **Long contexts get worse** (DERIVED, not measured):
+  - The cache holds 576 positions.
+  - Each token's scores read all 576 cached K rows, at about 1.0 ms of the token.
+  - A 4,096-position cache would scale that read about 7×.
+  - The prompt goes in one token at a time, through the decode step.
+- **What it is good for:** a demonstration that the engine's path covers a whole transformer decode on XDNA1, where
+  Ryzen AI ships no LLM path. It also leaves the CPU and GPU free while it runs. Energy per token was not measured.
+- **The working,** in order of the sittings: step 1 below, then the fused ops, the layer, the decoder, the PV and
+  lead-task speed-ups, and W8A16.
+
 The 7B decode above is killed by DDR bandwidth. A 135M model is not: SmolLM2-135M-Instruct reads 269 MB of bf16
 weights per token. The open question for running a small LLM with every neural op on the NPU was whether an M=1
 projection could stream those weights through compute cores near the 47.62 GB/s that the bare read probe reached,

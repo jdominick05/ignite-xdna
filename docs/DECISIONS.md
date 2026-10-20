@@ -782,6 +782,12 @@ The measurement and verdict will be folded into BENCHMARKS after the run.
   engine's own path, not the vendor's:** a SmolLM2-135M token's 121 weight projections run exact
   on the whole array in one dispatch, 8.19–8.42 ms at 32–33 GB/s (BENCHMARKS, "Small-LLM decode,
   step 1"). The vendor statement still stands: Ryzen AI ships no LLM path for XDNA1.
+  **Outcome (2026-10-20): it works, and it is not competitive.**
+  - The whole SmolLM2-135M decode runs on the NPU, bit-exact, at 121.9 tokens/s in W8A16.
+  - That beats the CPU at fp32 (90.4) and the 780M at fp16 (103.7), but the CPU at int4 is 2.0× faster (239.5).
+  - Long contexts would degrade (DERIVED).
+  - Kept as a demo (a `generate` command in Ignition), not optimised further. The verdict and its working are in
+    BENCHMARKS.
 - Ryzen AI 1.8.0 for inference: no Phoenix xclbin (see locked #1).
 - Driver-resolved firmware (no xclbin) on Phoenix: compiles for Strix, DPU timeout.
 - Driver xclbins from `System32\AMD` with the 1.8 EP: fingerprint mismatch.
