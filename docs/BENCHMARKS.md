@@ -3975,6 +3975,30 @@ Per position the host writes only the token's embedding, the cos/sin row, p, and
   case: q, the appended k and v rows, attention, h after the o-projection, the SiLU product and the layer output.
   A fresh context opened afterwards.
 
+**SmolLM2-135M-Instruct generates text with every neural op on the NPU, bit-exact with the reference at every
+step (2026-10-20, Desktop 2, `--checks-only`; [log](../results/aie/llm_decode_exact_desktop2_20261020T014915Z.log)).**
+A token is one dispatch of 181 chained calls (`kernels/llm_gemv/decode.py`): 30 layers as above, then the tied
+head with the final norm. The program is 1.03 MB of instructions and reads a 269 MB weight arena, packed once. The
+KV cache is the device's, 576 positions per layer. The host's whole share of a token is:
+- copy the token's embedding row into the input region;
+- write the cos/sin row and p into the shared tails;
+- patch the 30 KV appends' destinations in the cached stream;
+- take the argmax of the 49,152 logits the device returns.
+
+The reference is `reference.Decoder` in exact mode, computed beforehand on the CPU (about 3 s a token). Two chat
+prompts, through the model's chat template:
+- *"What is the capital of France? Answer in one sentence."*: 42 prompt tokens and 8 generated, *"The capital of
+  France is Paris."*, ending on `<|im_end|>`.
+- *"List three uses for a paperclip."*: 38 prompt tokens and 16 generated (the cap).
+
+**Result:**
+- **Teacher-forced on the reference's tokens:** all 103 steps' 49,152 logits are **EXACT**.
+- **Free-running on the device's own argmax:** both generations are **token-identical** to the reference.
+- **Device health:** a fresh context opened afterwards.
+
+The run took 11.4 s end to end, including loading and packing the weights. That is not a speed measurement: it was
+a `--checks-only` sitting with a CPU job running beside it. Tokens per second is the next sitting.
+
 ### Gemma 3 4B decode on the CPU and DirectML: INCOMPLETE in both sittings on the page-in witness, and the three complete arms decode at 10.8–17.6 tok/s (2026-09-24, Desktop 2)
 
 The question, (c) of the Gemma plan with its rule (d)
