@@ -3956,6 +3956,25 @@ of the same core program (`F_SCORE`, `F_PV`), so attention configures the array 
 - **Regression on this kernel** ([log](../results/aie/llm_ops_regression_attn_kernel_desktop2_20261020T012759Z.log)):
   `one` then `chain` per seed, **EXACT** on all 18 outputs, and a fresh context opened afterwards.
 
+**A whole decoder layer as one dispatch: exact at 42 positions (2026-10-20, Desktop 2, `--checks-only`;
+[log](../results/aie/llm_layer_exact_desktop2_20261020T014018Z.log)).** SmolLM2's layer 0 runs as six chained
+calls in one instruction stream, each reading the previous call's output from DDR:
+1. norm + qkv + RoPE, with the KV append;
+2. scores;
+3. softmax·V;
+4. o-projection + residual, with W_o's columns in attention's output order;
+5. norm + gate/up + SiLU;
+6. down-projection + residual.
+
+Per position the host writes only the token's embedding, the cos/sin row, p, and the KV append's two destinations
+(patched in the cached instruction stream). The cache stays the device's from one position to the next.
+- **Walk:** positions 0–39 in order from an empty (poisoned) cache, one random token each. These cross the
+  36-position K-object boundary.
+- **Jump:** host-written cache rows, then one step at p = 150 and at p = 575, the last cached position.
+- **Result:** every intermediate is **EXACT** against `reference.Decoder.layer` in exact mode, 4,224 elements per
+  case: q, the appended k and v rows, attention, h after the o-projection, the SiLU product and the layer output.
+  A fresh context opened afterwards.
+
 ### Gemma 3 4B decode on the CPU and DirectML: INCOMPLETE in both sittings on the page-in witness, and the three complete arms decode at 10.8–17.6 tok/s (2026-09-24, Desktop 2)
 
 The question, (c) of the Gemma plan with its rule (d)

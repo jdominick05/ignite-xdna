@@ -1,0 +1,56 @@
+RESEARCH_PLATFORM {"machine": "Desktop 2", "cpu": "AMD Ryzen 7 8700G w/ Radeon 780M Graphics", "os": "Windows-11-10.0.26200-SP0", "ram_bytes": 33381138432, "source_sha256": {"tools/research_process.py": "7850b61ddfb175ec919bf464cc1dd326176bea6f4f8088f2a04562385fc0c13d", "tools/npu_quiet.py": "75be7453617d15c09ab67508eb200233ff4dbd08ad8a7980c7edebf9327705ed", "tools/quant_calib_alphabet.py": "2dc0b2878c564853f340880209a425dfcf63b8536b2b8e9fd32344daade58d37", "tools/xint8_arithmetic_probe.py": "6aa3df08b9870c3c2264b868459d7ffbac3070dddc1349d7c6f3f480075f7041", "scripts/research-lowlevel.sh": "d9780364485b5328850dcfbafe69a1d941ecc8f7b4cec8989031fd27abeb670c", "scripts/research-iron.sh": "4c863a262646ddab39b5005006ba8e03809895e6386c6310e2fd9d0a9e9609ee", "kernels/memory_placement/probe.py": "e8d990169ad6091fa1b53852e9f61eff495b5def72d35165a5c5cf1759e38898", "kernels/memory_placement/memory_kernels.cc": "182e7af7071a1e851afb4a7ca266069c489aea1fbaaa85eca129708daeba5ba6", "scripts/research-matrix.sh": "739254171629deae822b0ad7dabc875aee19ace56dde77d3e8aab61663f97516", "kernels/memory_placement/gemm.py": "17c905ad66110d3346bbf0db898dfc6b780df59fae1dfb0c1747057ce1e5844e", "kernels/memory_placement/gemm_placement.cc": "f21acf7250b12914ea30cc1f77613239dfa18421a85a1b9a5199017dd916278a", "tools/research_summary.py": "0c00dcceef07053d06731b41a1f1ed58d3ba4ea09f82497de354ce9cef17da20", "tools/research_toolchain.py": "f0a126a24ae213acfaa43460cfd9def0c86d9cb70cfee0228aa271688467b314"}, "commit": "1dcc78bd8191eff0be726dc3d6c796b48a0af7d9", "command": ["C:/Users/<user>/miniforge3/envs/mlir-aie-iron/python.exe", "tools/llm_layer_probe.py", "run", "--walk", "40", "--jump", "150", "575"], "seconds_limit": 600.0, "rss_gib_limit": 8, "checks_only": true, "free_ram_bytes": 19936268288}
+NPU_QUIET_REQUEST {"file": "C:\\Users\\<user>\\AppData\\Local\\ignite-xdna\\npu-quiet.8856.request", "pid": 8856}
+PRE_NPU_CONTEXT_WITNESS "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [8856, 85604], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 4.063, "tree_rss_bytes": 1941618688, "foreign_peers": []}
+ORACLE 42 cases ready
+WITNESS pre idle=True
+EXACT_JSON {"case": "walk tok 41809", "p": 0, "elements": 4224, "mismatched": 0, "failures": {}}
+EXACT_JSON {"case": "walk tok 31307", "p": 1, "elements": 4224, "mismatched": 0, "failures": {}}
+EXACT_JSON {"case": "walk tok 25123", "p": 2, "elements": 4224, "mismatched": 0, "failures": {}}
+EXACT_JSON {"case": "walk tok 13260", "p": 3, "elements": 4224, "mismatched": 0, "failures": {}}
+EXACT_JSON {"case": "walk tok 15130", "p": 4, "elements": 4224, "mismatched": 0, "failures": {}}
+EXACT_JSON {"case": "walk tok 2013", "p": 5, "elements": 4224, "mismatched": 0, "failures": {}}
+EXACT_JSON {"case": "walk tok 3698", "p": 6, "elements": 4224, "mismatched": 0, "failures": {}}
+EXACT_JSON {"case": "walk tok 812", "p": 7, "elements": 4224, "mismatched": 0, "failures": {}}
+EXACT_JSON {"case": "walk tok 8614", "p": 8, "elements": 4224, "mismatched": 0, "failures": {}}
+EXACT_JSON {"case": "walk tok 39973", "p": 9, "elements": 4224, "mismatched": 0, "failures": {}}
+EXACT_JSON {"case": "walk tok 31920", "p": 10, "elements": 4224, "mismatched": 0, "failures": {}}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 71 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |85604               |14         |32          |0           |0    |Normal   |\n      |python.exe          |Active     |32          |0           |     |N/A      |\n      |71 MB               |448 KB     |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [85604], "owned_pids": [8856, 23948, 85604], "foreign_pids": []}
+EXACT_JSON {"case": "walk tok 44863", "p": 11, "elements": 4224, "mismatched": 0, "failures": {}}
+EXACT_JSON {"case": "walk tok 24754", "p": 12, "elements": 4224, "mismatched": 0, "failures": {}}
+EXACT_JSON {"case": "walk tok 29817", "p": 13, "elements": 4224, "mismatched": 0, "failures": {}}
+EXACT_JSON {"case": "walk tok 47713", "p": 14, "elements": 4224, "mismatched": 0, "failures": {}}
+EXACT_JSON {"case": "walk tok 35856", "p": 15, "elements": 4224, "mismatched": 0, "failures": {}}
+EXACT_JSON {"case": "walk tok 31077", "p": 16, "elements": 4224, "mismatched": 0, "failures": {}}
+EXACT_JSON {"case": "walk tok 26720", "p": 17, "elements": 4224, "mismatched": 0, "failures": {}}
+EXACT_JSON {"case": "walk tok 27521", "p": 18, "elements": 4224, "mismatched": 0, "failures": {}}
+EXACT_JSON {"case": "walk tok 45960", "p": 19, "elements": 4224, "mismatched": 0, "failures": {}}
+EXACT_JSON {"case": "walk tok 13632", "p": 20, "elements": 4224, "mismatched": 0, "failures": {}}
+EXACT_JSON {"case": "walk tok 40100", "p": 21, "elements": 4224, "mismatched": 0, "failures": {}}
+EXACT_JSON {"case": "walk tok 32974", "p": 22, "elements": 4224, "mismatched": 0, "failures": {}}
+EXACT_JSON {"case": "walk tok 134", "p": 23, "elements": 4224, "mismatched": 0, "failures": {}}
+EXACT_JSON {"case": "walk tok 19373", "p": 24, "elements": 4224, "mismatched": 0, "failures": {}}
+EXACT_JSON {"case": "walk tok 42143", "p": 25, "elements": 4224, "mismatched": 0, "failures": {}}
+EXACT_JSON {"case": "walk tok 27245", "p": 26, "elements": 4224, "mismatched": 0, "failures": {}}
+EXACT_JSON {"case": "walk tok 1650", "p": 27, "elements": 4224, "mismatched": 0, "failures": {}}
+EXACT_JSON {"case": "walk tok 37595", "p": 28, "elements": 4224, "mismatched": 0, "failures": {}}
+EXACT_JSON {"case": "walk tok 35864", "p": 29, "elements": 4224, "mismatched": 0, "failures": {}}
+EXACT_JSON {"case": "walk tok 41610", "p": 30, "elements": 4224, "mismatched": 0, "failures": {}}
+EXACT_JSON {"case": "walk tok 8633", "p": 31, "elements": 4224, "mismatched": 0, "failures": {}}
+EXACT_JSON {"case": "walk tok 4388", "p": 32, "elements": 4224, "mismatched": 0, "failures": {}}
+EXACT_JSON {"case": "walk tok 42426", "p": 33, "elements": 4224, "mismatched": 0, "failures": {}}
+EXACT_JSON {"case": "walk tok 1086", "p": 34, "elements": 4224, "mismatched": 0, "failures": {}}
+EXACT_JSON {"case": "walk tok 26613", "p": 35, "elements": 4224, "mismatched": 0, "failures": {}}
+EXACT_JSON {"case": "walk tok 3951", "p": 36, "elements": 4224, "mismatched": 0, "failures": {}}
+EXACT_JSON {"case": "walk tok 14731", "p": 37, "elements": 4224, "mismatched": 0, "failures": {}}
+EXACT_JSON {"case": "walk tok 23645", "p": 38, "elements": 4224, "mismatched": 0, "failures": {}}
+EXACT_JSON {"case": "walk tok 20775", "p": 39, "elements": 4224, "mismatched": 0, "failures": {}}
+EXACT_JSON {"case": "jump tok 20560", "p": 150, "elements": 4224, "mismatched": 0, "failures": {}}
+EXACT_JSON {"case": "jump tok 9531", "p": 575, "elements": 4224, "mismatched": 0, "failures": {}}
+WITNESS post_in_process idle=True
+VERDICT EXACT
+POST_NPU_CONTEXT_WITNESS "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+RESEARCH_PROCESS_RESULT {"exit_code": 0, "stop": null, "peak_tree_rss_bytes": 2595237888, "rss_measurement": "maximum observed across sampled descendant working sets; zero observations reported as null", "elapsed_seconds": 7.48399999999674, "foreign_contention_observed": false, "timing_eligible": false}
