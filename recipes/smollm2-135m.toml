@@ -1,0 +1,39 @@
+name = "smollm2-135m"
+description = "SmolLM2-135M-Instruct greedy text generation with every neural op on the NPU: one dispatch of 181 whole-array kernel calls per token (kernels/llm_gemv/decode.py), bf16 weights packed at load, KV cache of 576 positions on the device"
+status = "verified"
+evidence = ["results/aie/llm_decode_exact_desktop2_20261020T014915Z.log", "results/aie/llm_decode_timed_desktop2_20261020T015232Z.log"]
+
+[verified]
+date = "2026-10-20"
+machine = "Desktop 2"
+check = "llm_decode_probe.py check: every step's 49,152 logits EXACT against reference.Decoder in exact mode on two chat prompts, free-running greedy token-identical; bench: 71.5 tokens/s"
+
+# No quantization and no ONNX: the weights are the Hub's bf16 safetensors (HuggingFaceTB/SmolLM2-135M-Instruct,
+# Apache-2.0), read from HF_HOME and packed into the 269 MB arena when the decoder opens. The one built artifact is
+# the xclbin and its instruction stream; the reference file is only the check's expected values.
+# Run the NPU steps through scripts/research-lowlevel.sh --npu for a logged sitting (as the evidence logs were).
+
+[[step]]
+id = "compile"
+env = "engine"
+run = ["tools/llm_decode_probe.py", "compile"]
+inputs = ["kernels/llm_gemv/gemv.cc", "kernels/llm_gemv/decode.py"]
+outputs = ["build/llm_decode/token/final.xclbin", "build/llm_decode/token/insts.bin"]
+note = "about a minute; refuses an existing folder, so delete build/llm_decode/token to rebuild"
+
+[[step]]
+id = "reference"
+env = "engine"
+run = ["tools/llm_decode_probe.py", "reference", "--tokens", "16", "--out", "build/llm_decode/ref_2x16.npz"]
+inputs = []
+outputs = ["build/llm_decode/ref_2x16.npz"]
+note = "CPU only, about 5 minutes: the exact reference (3 s a token) for the check's two chat prompts"
+
+[[step]]
+id = "check"
+env = "engine"
+run = ["tools/llm_decode_probe.py", "check", "build/llm_decode/ref_2x16.npz"]
+inputs = ["build/llm_decode/token/final.xclbin", "build/llm_decode/ref_2x16.npz"]
+outputs = []
+npu = true
+note = "about 15 s on the NPU: every step's logits bit for bit, then free-running greedy"
