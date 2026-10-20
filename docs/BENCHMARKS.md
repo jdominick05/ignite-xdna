@@ -3939,6 +3939,23 @@ programs that wedged the device before. Every output was **EXACT** (231,168 elem
 RoPE, the KV append, SiLU and the chained head. The weights read back unchanged, and a fresh context opened
 afterwards. Kernel v2 is exact on the device, and step 2 continues with attention.
 
+**Attention on the device: exact on the first sitting (2026-10-20, Desktop 2, `--checks-only`).** Two more modes
+of the same core program (`F_SCORE`, `F_PV`), so attention configures the array identically to the projections
+(same CDOs and core ELFs) and a token can stay one context. Columns 0–2 each own one KV head and its three q heads.
+- **`F_SCORE`:** streams the K cache and writes bf16(K·q) per position and head.
+- **`F_PV`:** takes those scores and the V cache, then softmax(scores/8)·V over positions ≤ p, with the exp and
+  reciprocal from range-reduced tables. Positions past p are zeroed in both operands.
+- **Fixed cap:** every call streams CAP = 576 positions, and only the header's p changes.
+- **Reference:** `reference.attention_group`, the device's semantics, now used by the exact decoder: dims in
+  rope_perm order, scores ÷ 8 on the exponent with a flush, the MAC walk.
+- **The run** ([log](../results/aie/llm_attn_exact_desktop2_20261020T012650Z.log)): 2 seeds × p ∈ {0, 1, 5, 37,
+  150, 575}, V poison past p on every case, and K poison past p on seed 1. Every case was **EXACT**: 38,070
+  scores and 6,912 outputs, all equal to the reference, and a fresh context opened afterwards.
+- **Data memory:** the new tables did not fit in core data memory. rsqrt octaves 8–31 are octave e−2 halved exactly,
+  so the core now keeps 8 of 32 octaves (2 KB, was 8 KB), and an offline test checks all 4,096 entries.
+- **Regression on this kernel** ([log](../results/aie/llm_ops_regression_attn_kernel_desktop2_20261020T012759Z.log)):
+  `one` then `chain` per seed, **EXACT** on all 18 outputs, and a fresh context opened afterwards.
+
 ### Gemma 3 4B decode on the CPU and DirectML: INCOMPLETE in both sittings on the page-in witness, and the three complete arms decode at 10.8–17.6 tok/s (2026-09-24, Desktop 2)
 
 The question, (c) of the Gemma plan with its rule (d)
