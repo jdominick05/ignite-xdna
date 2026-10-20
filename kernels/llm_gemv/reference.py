@@ -38,6 +38,7 @@ from typing import Dict, List
 import numpy as np
 
 from ignite_xdna.compiler import engine_bf16_emulator as em
+from kernels.llm_gemv.pack import attn_out_perm
 
 MODEL = "HuggingFaceTB/SmolLM2-135M-Instruct"
 LAYERS, HIDDEN, HEADS, KV_HEADS, HEAD_DIM, MLP, VOCAB = 30, 576, 9, 3, 64, 1536, 49152
@@ -413,33 +414,45 @@ class Decoder:
     def step(self, token: int, p: int) -> np.ndarray:
         """One decode step at position p: returns the bf16 logits [V]."""
         h = self.w.embed[token].copy()
-        cos, sin = self.cos[p], self.sin[p]
-        x = self.exact
-        for i, L in enumerate(self.w.layers):
-            if self.fused:
-                qkv = normed_matvec(L["qkv_g"], h, x)
-            else:
-                qkv = matvec(L["qkv"], rmsnorm(h, L["n1"], x), x)
-            q = rope(qkv[:HIDDEN].reshape(HEADS, HEAD_DIM), cos, sin, x)
-            k = rope(qkv[HIDDEN:HIDDEN + KV_HEADS * HEAD_DIM].reshape(KV_HEADS, HEAD_DIM), cos, sin, x)
-            v = qkv[HIDDEN + KV_HEADS * HEAD_DIM:].reshape(KV_HEADS, HEAD_DIM)
-            self.k[i].append(k)
-            self.v[i].append(v)
-            attn = self.attention(i, q, p)
-            if self.fused:      # the residual is the accumulator's start: one rounding of h + W x
-                h = matvec(L["o"], attn, x, init=h)
-                gu = normed_matvec(L["gu_g"], h, x)
-            else:
-                h = bf16_from64(h.astype(np.float64) + matvec(L["o"], attn, x))
-                gu = matvec(L["gu"], rmsnorm(h, L["n2"], x), x)
-            m = bf16(dev(silu_bits, gu[:MLP]) * gu[MLP:])
-            if self.fused:
-                h = matvec(L["down"], m, x, init=h)
-            else:
-                h = bf16_from64(h.astype(np.float64) + matvec(L["down"], m, x))
+        for i in range(len(self.w.layers)):
+            h = self.layer(i, h, p)
         if self.fused:
-            return normed_matvec(self.w.head_g, h, x)
-        return matvec(self.w.embed, rmsnorm(h, self.w.norm, x), x)
+            return normed_matvec(self.w.head_g, h, self.exact)
+        return matvec(self.w.embed, rmsnorm(h, self.w.norm, self.exact), self.exact)
+
+    def layer(self, i: int, h: np.ndarray, p: int, trace: dict | None = None) -> np.ndarray:
+        """Decoder layer i at position p: appends its k and v, returns the new h. ``trace`` collects the
+        intermediates (qkv, attn, h1, gu, m) when given."""
+        L, x = self.w.layers[i], self.exact
+        cos, sin = self.cos[p], self.sin[p]
+        if self.fused:
+            qkv = normed_matvec(L["qkv_g"], h, x)
+        else:
+            qkv = matvec(L["qkv"], rmsnorm(h, L["n1"], x), x)
+        q = rope(qkv[:HIDDEN].reshape(HEADS, HEAD_DIM), cos, sin, x)
+        k = rope(qkv[HIDDEN:HIDDEN + KV_HEADS * HEAD_DIM].reshape(KV_HEADS, HEAD_DIM), cos, sin, x)
+        v = qkv[HIDDEN + KV_HEADS * HEAD_DIM:].reshape(KV_HEADS, HEAD_DIM)
+        self.k[i].append(k)
+        self.v[i].append(v)
+        attn = self.attention(i, q, p)
+        if self.fused:      # the residual is the accumulator's start: one rounding of h + W x
+            if x:           # the device's o-projection takes attention's output in its own order
+                perm = attn_out_perm()
+                h1 = matvec(L["o"][:, perm], attn[perm], x, init=h)
+            else:
+                h1 = matvec(L["o"], attn, x, init=h)
+            gu = normed_matvec(L["gu_g"], h1, x)
+        else:
+            h1 = bf16_from64(h.astype(np.float64) + matvec(L["o"], attn, x))
+            gu = matvec(L["gu"], rmsnorm(h1, L["n2"], x), x)
+        m = bf16(dev(silu_bits, gu[:MLP]) * gu[MLP:])
+        if self.fused:
+            out = matvec(L["down"], m, x, init=h1)
+        else:
+            out = bf16_from64(h1.astype(np.float64) + matvec(L["down"], m, x))
+        if trace is not None:
+            trace.update(q=q, k=k, v=v, attn=attn, h1=h1, m=m, h2=out)
+        return out
 
     def generate(self, prompt: List[int], new_tokens: int, eos: int | None = None) -> List[int]:
         out = []

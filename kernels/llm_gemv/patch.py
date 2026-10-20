@@ -36,6 +36,15 @@ class Site:
 def _expected(call) -> List[tuple]:
     """(arg, role, column, channel, copy, word offset) in design.harness's emission order for one call."""
     rows = []
+    if call.flags & (pack.F_SCORE | pack.F_PV):        # design.Attn.sequence: columns 0..KV_COLS-1
+        lead = call.lead_words()
+        for c in range(pack.KV_COLS):
+            for h in range(2):
+                for e in range(2):
+                    rows += [("o", "x", c, h, e, call.x_out + c * lead), ("x", "tail", c, h, e, call.x_offset)]
+                rows.append(("o", "w", c, h, 0, call.stream(c, h)[0]))
+            rows.append(("o", "out", c, -1, 0, call.out_offset + c * call.out_words_per_column()))
+        return rows
     sw = pack.stream_elems(call.n, call.k, call.flags) // 2
     roles = ["x"] if call.x_out is None else (["x", "h", "tail"] if call.flags & pack.F_INIT else ["x", "tail"])
     pieces = list(zip(roles, call.lead()))
