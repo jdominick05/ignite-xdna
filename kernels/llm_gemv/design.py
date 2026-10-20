@@ -145,15 +145,18 @@ class Attn:
                 or self.x_offset + pack.OBJ_WORDS - self.lead_words() > x_words):
             raise ValueError(f"{self}: a region runs past its argument")
 
-    def sequence(self, x_words: int, out_words: int) -> List[str]:
+    def sequence(self, x_words: int, out_words: int, ssa=None) -> List[str]:
         L, lead, tail = [], self.lead_words(), pack.OBJ_WORDS - self.lead_words()
         for c in range(pack.KV_COLS):
             for h in range(2):
                 fifo = f"@wL{c}_{h}"
-                pieces = [("o", self.x_out + c * lead, lead, out_words), ("x", self.x_offset, tail, x_words)] * 2
-                for j, (arg, off, length, size) in enumerate(pieces):
-                    L.append(f"      aiex.npu.dma_memcpy_nd(%{arg}[0,0,0,{off}][1,1,1,{length}][0,0,0,1]) "
-                             f"{{id = {7 * h + j} : i64, metadata = {fifo}}} : memref<{size}xi32>")
+                pieces = [("o", self.x_out + c * lead, lead, out_words), ("x", self.x_offset, tail, x_words)]
+                if pack.LEAD_COPIES == 1:
+                    L += lead_task(c, h, [(a, o, n) for a, o, n, _ in pieces], ssa)
+                else:
+                    for j, (arg, off, length, size) in enumerate(pieces * 2):
+                        L.append(f"      aiex.npu.dma_memcpy_nd(%{arg}[0,0,0,{off}][1,1,1,{length}][0,0,0,1]) "
+                                 f"{{id = {7 * h + j} : i64, metadata = {fifo}}} : memref<{size}xi32>")
                 off, sizes, strides = self.stream(c, h)
                 L.append(f"      aiex.npu.dma_memcpy_nd(%o[0,0,0,{off}][{','.join(map(str, sizes))}]"
                          f"[{','.join(map(str, strides))}]) {{id = {7 * h + 6} : i64, metadata = {fifo}}} "
@@ -166,6 +169,37 @@ class Attn:
 
 
 ACC = 96          # two accumulator sets of 3 x 16 fp32 (gate and up with F_SILU)
+
+
+ARG = {"w": 0, "x": 1, "o": 2}
+SHIM_BD_BASE, SHIM_BD_BYTES = 0x1D000, 0x20
+
+
+def lead_task(c: int, h: int, pieces: Sequence[Tuple[str, int, int]], ssa) -> List[str]:
+    """One chained BD task on shim column c, MM2S channel h (BDs 7h..): each (argument, word offset, words) piece a
+    BD whose address is patched to its argument, chained in order, pushed once with repeat 1, so the pair's two
+    cores each receive the whole lead (pack.LEAD_COPIES). The lowering's dma_memcpy_nd would write one BD and one
+    push per piece per core: two to three times the control operations, and those set a call's fixed cost."""
+    L = []
+    for j, (arg, off, length) in enumerate(pieces):
+        bd, last = 7 * h + j, j == len(pieces) - 1
+        L.append(f"      aiex.npu.writebd {{bd_id = {bd} : i32, buffer_length = {length} : i32, buffer_offset = 0 : i32, "
+                 f"column = {c} : i32, d0_size = 0 : i32, d0_stride = 0 : i32, d0_zero_after = 0 : i32, "
+                 "d0_zero_before = 0 : i32, d1_size = 0 : i32, d1_stride = 0 : i32, d1_zero_after = 0 : i32, "
+                 "d1_zero_before = 0 : i32, d2_size = 0 : i32, d2_stride = 0 : i32, d2_zero_after = 0 : i32, "
+                 "d2_zero_before = 0 : i32, enable_packet = 0 : i32, iteration_current = 0 : i32, "
+                 "iteration_size = 0 : i32, iteration_stride = 0 : i32, lock_acq_enable = 0 : i32, "
+                 "lock_acq_id = 0 : i32, lock_acq_val = 0 : i32, lock_rel_id = 0 : i32, lock_rel_val = 0 : i32, "
+                 f"next_bd = {0 if last else bd + 1} : i32, out_of_order_id = 0 : i32, packet_id = 0 : i32, "
+                 f"packet_type = 0 : i32, row = 0 : i32, use_next_bd = {0 if last else 1} : i32, valid_bd = 1 : i32}}")
+        v = next(ssa)
+        L.append(f"      %lp{v} = arith.constant {off * 4} : i32")
+        L.append(f"      aiex.npu.address_patch(%lp{v} : i32) {{addr = {(c << 25) | (SHIM_BD_BASE + bd * SHIM_BD_BYTES + 4)}"
+                 f" : ui32, arg_idx = {ARG[arg]} : i32}}")
+    v = next(ssa)
+    L += [f"      %lb{v} = arith.constant {7 * h} : i32", f"      %lr{v} = arith.constant 1 : i32",
+          f"      aiex.npu.push_queue({c}, 0, MM2S : {h}) bd_id %lb{v} repeat %lr{v} {{issue_token = false}} : i32, i32"]
+    return L
 
 
 def _core(i: int) -> str:
@@ -261,22 +295,27 @@ def harness(program: Sequence, w_words: int, x_words: int, out_words: int) -> st
     L += cores
     L.append(f"    aie.runtime_sequence(%w: memref<{w_words}xi32>, %x: memref<{x_words}xi32>, "
              f"%o: memref<{out_words}xi32>) {{")
+    ssa = iter(range(1 << 30))
     for call in program:
         if isinstance(call, Attn):
-            L += call.sequence(x_words, out_words)
+            L += call.sequence(x_words, out_words, ssa)
             continue
         sw = pack.stream_elems(call.n, call.k, call.flags) // 2
         # the host-built pair is one transfer; a chained first object is x (and h) from earlier outputs, then the
         # constant tail, once per core of the pair. BD ids per shim tile: channel h uses 7h..7h+5 for these and
         # 7h+6 for its weights, the output 14 (16 per tile).
-        xs = call.lead() if call.x_out is None else call.lead() * 2
+        chained = call.x_out is not None and pack.LEAD_COPIES == 1
+        xs = call.lead() if call.x_out is None else call.lead() * pack.LEAD_COPIES
         sizes = {"x": x_words, "o": out_words}
         for c in range(pack.COLS):
             for h in range(2):
                 ch, fifo = c * 2 + h, f"@wL{c}_{h}"
-                for j, (arg, off, length) in enumerate(xs):
-                    L.append(f"      aiex.npu.dma_memcpy_nd(%{arg}[0,0,0,{off}][1,1,1,{length}][0,0,0,1]) "
-                             f"{{id = {7 * h + j} : i64, metadata = {fifo}}} : memref<{sizes[arg]}xi32>")
+                if chained:
+                    L += lead_task(c, h, xs, ssa)
+                else:
+                    for j, (arg, off, length) in enumerate(xs):
+                        L.append(f"      aiex.npu.dma_memcpy_nd(%{arg}[0,0,0,{off}][1,1,1,{length}][0,0,0,1]) "
+                                 f"{{id = {7 * h + j} : i64, metadata = {fifo}}} : memref<{sizes[arg]}xi32>")
                 L.append(f"      aiex.npu.dma_memcpy_nd(%w[0,0,0,{call.w_offset + ch * sw}][1,1,1,{sw}][0,0,0,1]) "
                          f"{{id = {7 * h + 6} : i64, metadata = {fifo}}} : memref<{w_words}xi32>")
             outs = call.out_pieces(c)

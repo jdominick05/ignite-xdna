@@ -4158,6 +4158,32 @@ Code is 13,200 B. Checked and timed in one sitting, each run `timing_eligible: t
 
 The bench's positions run up to about 58. PV's saving shrinks as p grows, since the work up to p is still done.
 
+**One lead task per channel: 91.8 tokens/s, still exact (MEASURED, 2026-10-20 04:11–04:12Z, Desktop 2).**
+- **What changed:** a chained call's lead (x, h when present, tail) went to the two cores of a channel's pair as
+  two copies, each with its own BDs and queue pushes. Now the pieces are written once as chained BDs
+  (`aiex.npu.writebd` with `next_bd`, `npu.address_patch`). One `npu.push_queue` with repeat 1 sends the lead
+  twice (`design.lead_task`, `pack.LEAD_COPIES = 1`).
+- **The BDs are unchanged:** the compiled BD words equal the lowering's (the same burst and cache fields). Word 7
+  carries the chain, and the push carries repeat 1.
+- **Fewer operations:** a channel's lead costs 5 control operations instead of 12. The token's stream falls from
+  about 26,400 operations to 15,204 (5,188 BDs, down from 8,324).
+- **The patch mapper follows the new form:** `patch.py` expects one copy, and all 31 offline tests pass on the
+  rebuilt chain.
+
+| run | result | log |
+| --- | --- | --- |
+| decode check, the two chat prompts | EXACT: every step's 49,152 logits, tokens equal | [log](../results/aie/llm_decode_exact_chained_desktop2_20261020T041151Z.log) |
+| decode bench, 309 steps | **10.90 ms a token median, 91.8 tokens/s** (was 12.27 and 81.5); dispatch 10.63, host 0.24 | [log](../results/aie/llm_decode_timed_chained_desktop2_20261020T041212Z.log) |
+| breakdown, round 2 | full 10.74 ms; projections 9.01; attention 2.12 (scores 1.00, PV 1.15) | [log](../results/aie/llm_decode_breakdown_chained_desktop2_20261020T041230Z.log) |
+
+Each run was `timing_eligible: true`.
+- **Against the rivals:** the decoder now edges past the CPU at fp32 (90.4 tokens/s) and still trails the 780M
+  (103.7) and the CPU at int4 (239.5).
+- **The chained 192×192 call costs about 30 µs** (was 34), and the host-slot call 20 µs as before. Round 2's
+  181-call program spread from 4.40 to 5.69 ms, so this slope is rough.
+- **What remains of the fixed cost** is the weight BD, the output BDs and the syncs of each call. W8A16 comes
+  next.
+
 ### Gemma 3 4B decode on the CPU and DirectML: INCOMPLETE in both sittings on the page-in witness, and the three complete arms decode at 10.8–17.6 tok/s (2026-09-24, Desktop 2)
 
 The question, (c) of the Gemma plan with its rule (d)

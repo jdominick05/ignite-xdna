@@ -40,7 +40,7 @@ def _expected(call) -> List[tuple]:
         lead = call.lead_words()
         for c in range(pack.KV_COLS):
             for h in range(2):
-                for e in range(2):
+                for e in range(pack.LEAD_COPIES):
                     rows += [("o", "x", c, h, e, call.x_out + c * lead), ("x", "tail", c, h, e, call.x_offset)]
                 rows.append(("o", "w", c, h, 0, call.stream(c, h)[0]))
             rows.append(("o", "out", c, -1, 0, call.out_offset + c * call.out_words_per_column()))
@@ -50,7 +50,7 @@ def _expected(call) -> List[tuple]:
     pieces = list(zip(roles, call.lead()))
     for c in range(pack.COLS):
         for h in range(2):
-            for e in range(1 if call.x_out is None else 2):
+            for e in range(1 if call.x_out is None else pack.LEAD_COPIES):
                 rows += [(arg, role, c, h, e, off) for role, (arg, off, _) in pieces]
             rows.append(("w", "w", c, h, 0, call.w_offset + (c * 2 + h) * sw))
         rows += [("o", "out", c, -1, j, off) for j, (off, _) in enumerate(call.out_pieces(c))]
@@ -119,6 +119,6 @@ def move_piece(sites: List[Site], call, piece: int, dest_words: int) -> Dict[int
 def move_x(sites: List[Site], from_out_words: int) -> Dict[int, int]:
     """Changes that make a chained call read its x from ``from_out_words`` of the out argument."""
     found = [s for s in sites if s.role == "x" and s.arg == "o"]
-    if len(found) != 2 * pack.CHANNELS:
+    if len(found) != pack.LEAD_COPIES * pack.CHANNELS:
         raise ValueError("not a chained call: its x does not come from the out argument")
     return {s.value_offset: from_out_words * 4 for s in found}

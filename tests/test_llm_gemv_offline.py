@@ -164,12 +164,15 @@ def test_a_chained_residual_call_reads_x_and_h_from_out_within_16_bds():
     call = design.Call(0, 0, 1000, n, k, x_out=0, flags=pack.F_INIT, h_out=768)
     tail = call.header().size
     text = design.harness([call], pack.block_words(n, k), tail, 2000)
-    assert text.count("%o[0,0,0,0][1,1,1,768]") == 16 and text.count("%o[0,0,0,768][1,1,1,288]") == 16
-    assert text.count(f"%x[0,0,0,0][1,1,1,{tail}]") == 16
+    # one chained lead task per channel (x, h, tail), pushed with repeat 1 for the pair's two cores
+    assert text.count("buffer_length = 768 : i32") == 8 and text.count("buffer_length = 288 : i32") == 8
+    assert text.count(f"buffer_length = {tail} : i32") == 8 and text.count("repeat %lr") == 8
+    assert text.count("use_next_bd = 1 : i32") == 16 and text.count("arith.constant 3072 : i32") == 8
+    bds = [int(i) for i in __import__("re").findall(r"bd_id = (\d+) : i32", text)]
     ids = [int(i) for i in __import__("re").findall(r"id = (\d+) : i64", text)]
-    assert max(ids) == 15 and len(set(ids)) == 15
-    roles = [(e[0], e[1]) for e in patch._expected(call)[:7]]
-    assert roles == [("o", "x"), ("o", "h"), ("x", "tail")] * 2 + [("w", "w")]
+    assert set(bds) == {0, 1, 2, 7, 8, 9} and max(ids) == 15 and not set(bds) & {6, 13, 14, 15}
+    roles = [(e[0], e[1]) for e in patch._expected(call)[:4]]
+    assert roles == [("o", "x"), ("o", "h"), ("x", "tail"), ("w", "w")]
     with pytest.raises(ValueError):
         design.Call(0, 0, 1000, n, k, x_out=0, flags=pack.F_INIT)            # no h source
 
@@ -207,9 +210,9 @@ def test_patch_finds_every_transfer_of_the_compiled_chain_and_moves_only_what_it
     calls = P.chain_calls(design.Call)
     raw = insts.read_bytes()
     sites = patch.calls(raw, calls)
-    assert [len(s) for s in sites] == [20] + [44] * (len(calls) - 1)
+    assert [len(s) for s in sites] == [20] + [28] * (len(calls) - 1)
     changes = {**patch.move_output(sites[-2], calls[-2], P.OUT["o"]), **patch.move_x(sites[-1], P.OUT["o"])}
-    assert len(changes) == 4 + 16
+    assert len(changes) == 4 + 8
     new = patch.apply(raw, changes)
     moved = patch.calls(new, calls[:-2] + [design.Call(calls[-2].w_offset, calls[-2].x_offset, P.OUT["o"],
                                                        calls[-2].n, calls[-2].k, calls[-2].x_out),
@@ -227,8 +230,9 @@ def test_a_chained_call_reads_x_from_the_out_argument_and_stays_within_16_bds():
              design.Call(pack.block_words(n, n), pack.X_SLOT_WORDS, 288, n, n, x_out=0)]   # x = call 0's output
     text = design.harness(calls, 2 * pack.block_words(n, n), pack.X_SLOT_WORDS + pack.OBJ_WORDS, 576)
     second = text.split("aiex.npu.dma_wait")[4]
-    assert second.count("%o[0,0,0,0][1,1,1,288]") == 16         # x from out: 8 channels x the 2 cores each feeds
-    assert second.count(f"%x[0,0,0,{pack.X_SLOT_WORDS}][1,1,1,{pack.OBJ_WORDS - 288}]") == 16
+    assert second.count("buffer_length = 288 : i32") == 8        # x from out: one chained task per channel,
+    assert second.count(f"buffer_length = {pack.OBJ_WORDS - 288} : i32") == 8   # repeated for the pair's 2 cores
+    assert second.count("repeat %lr") == 8 and second.count(f"arith.constant {pack.X_SLOT_WORDS * 4} : i32") == 8
     ids = {int(i) for i in __import__("re").findall(r"id = (\d+) : i64", text)}
     assert max(ids) < 16
     with pytest.raises(ValueError):                              # chained x past the out argument

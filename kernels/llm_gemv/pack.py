@@ -27,6 +27,10 @@ HDR_WORDS = 16                       # the header is the LAST HDR_WORDS of a cal
 MAX_K = (OBJ_WORDS - HDR_WORDS) * 2 // KCHUNK * KCHUNK
 X_SLOT_WORDS = 2 * OBJ_WORDS         # one x object per core of a channel's pair
 N_QUANTUM = CORES * OUT_GROUP        # 192
+# A chained call's lead (x, h, tail: pieces of the out and x arguments) goes to both cores of a channel's pair. With
+# LEAD_COPIES = 1 the pieces are one chained BD task pushed with repeat 1 (design.lead_task), so the shim sends the
+# lead twice from one set of BDs; with 2, each core's copy has its own BDs, as the lowering of dma_memcpy_nd emits.
+LEAD_COPIES = 1
 
 
 def check_shape(n: int, k: int) -> None:
