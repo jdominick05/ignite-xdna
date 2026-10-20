@@ -12,10 +12,17 @@ logits. Greedy selection is np.argmax on those logits (the device's bf16 values,
 
 Regions are shared by every layer: a layer reads h from H and writes its output back to H once nothing reads the
 old h any more (the o call took it as its residual before the down call runs).
+
+With LLM_DECODE_W8=1 in the environment when this module is imported, the projections and the head take W8A16
+weights (reference.Q8 of the gamma-folded matrices, pack.pack8): qkv pads to 1,152 rows (the padding to a junk
+region), o and down to 768 on 3 columns, and the head runs as four calls of 12,288 rows. Each W8 call's scales and
+header sit in the weight arena; the x argument holds only the cos/sin row and the attention tails. The decoder then
+expects reference.quantize_weights(w, "w8a16-dev") as its weights. 184 calls a token.
 """
 from __future__ import annotations
 
 import dataclasses
+import os
 import time
 from pathlib import Path
 from typing import List, Optional
@@ -32,6 +39,27 @@ SPEC = {"qkv_r": (960, HIDDEN, F.F_NORM | F.F_ROPE), "o": (HIDDEN, HIDDEN, F.F_I
         "gu_s": (MLP, HIDDEN, F.F_NORM | F.F_SILU), "down": (HIDDEN, MLP, F.F_INIT)}
 HEAD = (VOCAB, HIDDEN, F.F_NORM)
 CACHE_WORDS = CAP * KV // 2
+W8 = os.environ.get("LLM_DECODE_W8") == "1"
+# W8: name -> (padded N, columns); the head as HEAD_PARTS calls of VOCAB / HEAD_PARTS rows
+W8_SHAPE = {"qkv_r": (1152, 4), "o": (768, 3), "gu_s": (MLP, 4), "down": (768, 3)}
+HEAD_PARTS = 4 if W8 else 1
+JUNK = 192                                   # W8: qkv's padding rows land here
+
+
+def _w8_call(w_off, x_off, out_off, name, **kw):
+    """A W8 Call of block ``name`` (W8_SHAPE, or "head" for one quarter)."""
+    from kernels.llm_gemv.design import Call
+    if name == "head":
+        n, k, f, cols = VOCAB // HEAD_PARTS, HIDDEN, HEAD[2], 4
+    else:
+        (n, cols), (_, k, f) = W8_SHAPE[name], SPEC[name]
+    return Call(w_off, x_off, out_off, n, k, flags=f, w8=True, cols=cols, **kw)
+
+
+def _w8_words(name):
+    kw = dict(x_out=0, h_out=0 if (name in SPEC and SPEC[name][2] & F.F_INIT) else None,
+              rope_end=QK if name == "qkv_r" else 0)
+    return _w8_call(0, 0, 0, name, **kw).weight_words()
 
 
 def _layout():
@@ -39,12 +67,13 @@ def _layout():
     for i in range(LAYERS):
         for s, (n, k, f) in SPEC.items():
             w[(i, s)] = at
-            at += pack.weight_words(n, k, f)
-    w["head"] = at
-    at += pack.weight_words(*HEAD)
+            at += _w8_words(s) if W8 else pack.weight_words(n, k, f)
+    for j in range(HEAD_PARTS):
+        w["head" if j == 0 else ("head", j)] = at
+        at += _w8_words("head") if W8 else pack.weight_words(*HEAD)
     o, ot = {}, 0
     for name, n in [("h", HIDDEN), ("q", HIDDEN), ("s", pack.KV_COLS * CAP * pack.GQA), ("a", HIDDEN),
-                    ("h1", HIDDEN), ("m", MLP), ("logits", VOCAB)]:
+                    ("h1", HIDDEN), ("m", MLP), ("logits", VOCAB)] + ([("junk", JUNK)] if W8 else []):
         o[name] = ot
         ot += n // 2
     for i in range(LAYERS):
@@ -70,6 +99,25 @@ def program():
         return tails[key]
 
     calls = []
+    if W8:
+        cs_at = tail("cs", pack.CS_ELEMS // 2)
+        for i in range(LAYERS):
+            kv0 = ((0, HIDDEN, OUT["q"]), (HIDDEN, KV, OUT[("kc", i)]), (QK, KV, OUT[("vc", i)]),
+                   (960, JUNK, OUT["junk"]))
+            layer = [_w8_call(W_OFF[(i, "qkv_r")], cs_at, 0, "qkv_r", x_out=OUT["h"], rope_end=QK, out_map=kv0),
+                     Attn(F.F_SCORE, CAP, OUT["q"], 0, OUT[("kc", i)], OUT["s"]),
+                     Attn(F.F_PV, CAP, OUT["s"], 0, OUT[("vc", i)], OUT["a"]),
+                     _w8_call(W_OFF[(i, "o")], 0, OUT["h1"], "o", x_out=OUT["a"], h_out=OUT["h"]),
+                     _w8_call(W_OFF[(i, "gu_s")], 0, OUT["m"], "gu_s", x_out=OUT["h1"]),
+                     _w8_call(W_OFF[(i, "down")], 0, OUT["h"], "down", x_out=OUT["m"], h_out=OUT["h1"])]
+            for j, c in enumerate(layer):
+                if isinstance(c, Attn):
+                    c = dataclasses.replace(c, x_offset=tail(j, pack.OBJ_WORDS - c.lead_words()))
+                calls.append(c)
+        q = VOCAB // HEAD_PARTS
+        calls += [_w8_call(W_OFF["head" if j == 0 else ("head", j)], 0, OUT["logits"] + j * q // 2, "head",
+                           x_out=OUT["h"]) for j in range(HEAD_PARTS)]
+        return calls, xw, tails
     for i in range(LAYERS):
         kv0 = ((0, HIDDEN, OUT["q"]), (HIDDEN, KV, OUT[("kc", i)]), (QK, KV, OUT[("vc", i)]))
         layer = [Call(W_OFF[(i, "qkv_r")], 0, 0, 960, HIDDEN, x_out=OUT["h"], flags=SPEC["qkv_r"][2], rope_end=QK,
@@ -100,16 +148,56 @@ def x_arg(p: int) -> np.ndarray:
     for c in CALLS[:6] + CALLS[-1:]:
         if isinstance(c, Attn):
             t = pack.attn_tail(c.flags, CAP, p if c.flags == F.F_PV else 0)
+        elif c.w8:
+            if not c.flags & F.F_ROPE:
+                continue
+            t = cs.view(np.uint32)
         else:
             t = c.header(cs if c.flags & F.F_ROPE else None)
         out[c.x_offset:c.x_offset + t.size] = t
     return out
 
 
+def _w8_block(name, *qs) -> np.ndarray:
+    """Q8 matrices (gate, up for gu_s) -> the call's block and channel tails, rows zero-padded to its N."""
+    call = _w8_call(0, 0, 0, name, x_out=0, h_out=0 if (name in SPEC and SPEC[name][2] & F.F_INIT) else None,
+                    rope_end=QK if name == "qkv_r" else 0)
+    codes, scales = [], []
+    for q in qs:
+        c = np.zeros((call.n, call.k), np.int8)
+        c[:q.codes.shape[0]] = q.codes
+        sc = np.zeros(call.n, np.uint16)
+        sc[:q.s.shape[0]] = R.em.bf16_bits(np.asarray(q.s, np.float32))
+        codes.append(c), scales.append(sc)
+    out = np.concatenate([pack.pack8(*codes, cols=call.cols),
+                          pack.tails8(call.n, call.k, call.flags, *scales, rope_end=call.rope_end, cols=call.cols)])
+    assert out.size == call.weight_words()
+    return out
+
+
+def _rows(q: "R.Q8", rows) -> "R.Q8":
+    return R.Q8(q.codes[rows], q.s[rows])
+
+
 def arena(w: "R.Weights") -> np.ndarray:
-    """uint32 [W_WORDS]: every layer's four blocks and the head, packed once."""
+    """uint32 [W_WORDS]: every layer's four blocks and the head, packed once (Q8 matrices under W8)."""
     bits = lambda a: R.em.bf16_bits(np.asarray(a, np.float32))  # noqa: E731
     out = np.zeros(W_WORDS, np.uint32)
+    if W8:
+        perm_qkv, perm_o = pack.rope_perm(960, QK), pack.attn_out_perm()
+        for i, L in enumerate(w.layers):
+            gu = L["gu_g"]
+            blocks = {"qkv_r": _w8_block("qkv_r", _rows(L["qkv_g"], perm_qkv)), "o": _w8_block("o", L["o"][:, perm_o]),
+                      "gu_s": _w8_block("gu_s", _rows(gu, slice(0, MLP)), _rows(gu, slice(MLP, 2 * MLP))),
+                      "down": _w8_block("down", L["down"])}
+            for s, b in blocks.items():
+                out[W_OFF[(i, s)]:W_OFF[(i, s)] + b.size] = b
+        q = VOCAB // HEAD_PARTS
+        for j in range(HEAD_PARTS):
+            b = _w8_block("head", _rows(w.head_g, slice(j * q, (j + 1) * q)))
+            at = W_OFF["head" if j == 0 else ("head", j)]
+            out[at:at + b.size] = b
+        return out
     perm_qkv, perm_o = pack.rope_perm(960, QK), pack.attn_out_perm()
     for i, L in enumerate(w.layers):
         blocks = {"qkv_r": pack.pack(bits(L["qkv_g"][perm_qkv])), "o": pack.pack(bits(L["o"][:, perm_o])),
@@ -130,7 +218,7 @@ class Patcher:
         self.raw, self.patch = raw, patch
         sites = patch.calls(raw, CALLS)
         self.row0 = {}                     # {byte offset in the stream: argument offset in bytes at row 0}
-        for n in range(0, LAYERS * 6, 6):
+        for n in range(0, LAYERS * 6, 6):            # the head's calls follow the 30 layers
             for piece, region in ((1, OUT[("kc", n // 6)]), (2, OUT[("vc", n // 6)])):
                 self.row0.update(patch.move_piece(sites[n], CALLS[n], piece, region))
 

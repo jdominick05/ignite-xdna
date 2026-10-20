@@ -4211,6 +4211,30 @@ Each run was `timing_eligible: true`.
 - **Next:** the W8 decoder. That means 4 head calls of 12,288 rows, since a 24,576-row call's scales overflow
   the core's buffer.
 
+**The W8A16 decoder: 8.36 ms a token, 119.6 tokens/s, exact (MEASURED, 2026-10-20 04:38Z, Desktop 2).**
+- **What runs:** `decode.py` with `LLM_DECODE_W8=1` (`tools/llm_decode_probe.py --w8`). Every projection and
+  the head take Q8 of the gamma-folded weights: 140.0 MB a token, against 269.0 MB in bf16.
+- **The calls:** 184 a token, in one dispatch:
+  - qkv padded to 1,152 rows;
+  - o and down on 3 columns;
+  - the head as 4 calls.
+- **Attention and the embedding stay bf16.**
+- **The reference:** the exact-mode reference on the same Q8 weights writes the same text as the bf16 decoder on
+  both chat prompts. Its perplexity is 7.21, against 7.22 for the Hugging Face model in bf16 and 7.24 in fp32
+  ([log](../results/llm/llm_reference_quality_w8a16dev_desktop2_20261020T033330Z.log)).
+
+| run | result | log |
+| --- | --- | --- |
+| decode check, the two chat prompts, against the W8 reference | EXACT: every step's 49,152 logits, tokens equal ("The capital of France is Paris.") | [log](../results/aie/llm_decode_exact_w8_desktop2_20261020T043814Z.log) |
+| decode bench, 309 steps | **8.36 ms a token median (p90 8.67), 119.6 tokens/s**; dispatch 8.11, host 0.24 | [log](../results/aie/llm_decode_timed_w8_desktop2_20261020T043829Z.log) |
+
+- **Against bf16:** the dispatch falls from 10.63 to 8.11 ms. That is 2.52 ms less (DERIVED), a 24% cut for
+  48% fewer weight bytes. Control costs and attention (about 2.1 ms) did not shrink.
+- **Against the rivals:** the NPU decoder now passes the CPU at fp32 (90.4 tokens/s) and the 780M at fp16
+  (103.7). It trails the CPU at int4 (239.5), which reads about a quarter of the bf16 bytes.
+- **The pre-check failed again** on Windows Terminal's renderer (2% of the 3D engine). Both runs were
+  `timing_eligible: true`, with no foreign contention observed.
+
 ### Gemma 3 4B decode on the CPU and DirectML: INCOMPLETE in both sittings on the page-in witness, and the three complete arms decode at 10.8–17.6 tok/s (2026-09-24, Desktop 2)
 
 The question, (c) of the Gemma plan with its rule (d)

@@ -18,9 +18,13 @@ picks the argmax of the device's logits.
     python tools/llm_decode_probe.py reference --tokens 16 --out ref.npz
     python tools/llm_decode_probe.py check ref.npz          # NPU, through research-lowlevel.sh --npu --checks-only
     python tools/llm_decode_probe.py chat "What is the capital of France?"
+
+Any command with --w8 (first, before the command) runs the W8A16 decoder (decode.py's LLM_DECODE_W8): its own
+build folder, Q8 weights in the reference and on the device.
 """
 import argparse
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -32,10 +36,18 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "tools"))
 
+if "--w8" in sys.argv[1:2]:
+    os.environ["LLM_DECODE_W8"] = "1"
 from kernels.llm_gemv import decode as D  # noqa: E402
 from kernels.llm_gemv import reference as R  # noqa: E402
 
-BUILD = ROOT / "build" / "llm_decode" / "token"
+BUILD = ROOT / "build" / "llm_decode" / ("token_w8" if D.W8 else "token")
+
+
+def weights():
+    """The decoder's weights: bf16, or under --w8 Q8 of the gamma-folded matrices (the embedding stays bf16)."""
+    w = R.Weights.load(R.safetensors(R.model_file()))
+    return R.quantize_weights(w, "w8a16-dev") if D.W8 else w
 SYSTEM = "You are a helpful AI assistant named SmolLM, trained by Hugging Face"
 PROMPTS = ["What is the capital of France? Answer in one sentence.", "List three uses for a paperclip."]
 
@@ -55,7 +67,7 @@ def chat_ids(tok, prompt):
 def compile_all():
     from kernels.llm_gemv import design
     if not (BUILD / "build.json").exists():
-        design.build(BUILD, D.CALLS, D.W_WORDS, D.X_WORDS, D.OUT_WORDS, "token")
+        design.build(BUILD, D.CALLS, D.W_WORDS, D.X_WORDS, D.OUT_WORDS, BUILD.name)
     meta = json.loads((BUILD / "build.json").read_text())
     D.Patcher((BUILD / "insts.bin").read_bytes()).stream(D.CAP - 1)
     print("BUILD token " + json.dumps(dict(calls=len(D.CALLS), insts_bytes=(BUILD / "insts.bin").stat().st_size,
@@ -66,7 +78,7 @@ def compile_all():
 def reference(prompts, new_tokens, out_path):
     tok = tokenizer()
     eos = tok.token_to_id("<|im_end|>")
-    w = R.Weights.load(R.safetensors(R.model_file()))
+    w = weights()
     save = {}
     for n, prompt in enumerate(prompts):
         ids = chat_ids(tok, prompt)
@@ -99,7 +111,7 @@ def check(ref_path):
     from llm_gemv_probe import witness
     tok = tokenizer()
     eos = tok.token_to_id("<|im_end|>")
-    w = R.Weights.load(R.safetensors(R.model_file()))
+    w = weights()
     ref = np.load(ref_path)
     plans = []
     for n, prompt in enumerate(ref["prompts"].tolist()):
@@ -154,7 +166,7 @@ def bench(ref_path, rounds):
     from llm_gemv_probe import witness
     tok = tokenizer()
     eos = tok.token_to_id("<|im_end|>")
-    w = R.Weights.load(R.safetensors(R.model_file()))
+    w = weights()
     ref = np.load(ref_path)
     prompts = [(ref[f"{n}_ids"].tolist(), ref[f"{n}_out"].tolist()) for n in range(len(ref["prompts"]))]
     if not witness("pre"):
@@ -207,7 +219,7 @@ def chat(prompt, new_tokens):
     from ignite_xdna.runtime.driver import XrtSiliconHarness
     tok = tokenizer()
     eos = tok.token_to_id("<|im_end|>")
-    w = R.Weights.load(R.safetensors(R.model_file()))
+    w = weights()
     ids = chat_ids(tok, prompt)
     try:
         with XrtSiliconHarness(0) as h:
@@ -236,6 +248,7 @@ def chat(prompt, new_tokens):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--w8", action="store_true", help="the W8A16 decoder (must come first)")
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("compile")
     r = sub.add_parser("reference")
