@@ -12,6 +12,8 @@ layout, timed as one dispatch:
     attn    the 60 attention calls; score and pv: their 30 each
     tiny61, tiny121, tiny181   that many chained 192x192 projections (36 KB of weights each): the fixed cost of a
             call, from the slope
+    host61, host181   the same calls with x from a host-written slot: 20 shim BDs a call instead of 44, so the slope
+            separates a cost per control operation from a fixed latency per call
 
 The programs read whatever earlier dispatches left in the buffers; nothing here is checked for values except the
 full stream's identity with the verified build. Run on the NPU through the wrapper:
@@ -50,7 +52,8 @@ def _tiny_tail():
     return Call(0, D.X_WORDS, D.OUT["a"], *TINY, x_out=D.OUT["h"]).header().size
 
 
-X_WORDS = D.X_WORDS + _tiny_tail()
+HOST_SLOT = D.X_WORDS + _tiny_tail()
+X_WORDS = HOST_SLOT + pack.X_SLOT_WORDS
 
 
 def programs():
@@ -58,12 +61,14 @@ def programs():
     calls = D.CALLS
     tiny = lambda n: [Call(D.W_OFF[(i % D.LAYERS, "o")], D.X_WORDS, D.OUT["a" if i % 2 else "h1"], *TINY,  # noqa
                            x_out=D.OUT["h1" if i % 2 else "a"]) for i in range(n)]
+    host = lambda n: [Call(D.W_OFF[(i % D.LAYERS, "o")], HOST_SLOT, D.OUT["a" if i % 2 else "h1"], *TINY)  # noqa
+                      for i in range(n)]
     return {"full": calls,
             "proj": [c for c in calls if not isinstance(c, Attn)],
             "attn": [c for c in calls if isinstance(c, Attn)],
             "score": [c for c in calls if isinstance(c, Attn) and c.flags == pack.F_SCORE],
             "pv": [c for c in calls if isinstance(c, Attn) and c.flags == pack.F_PV],
-            "tiny61": tiny(61), "tiny121": tiny(121), "tiny181": tiny(181)}
+            "tiny61": tiny(61), "tiny121": tiny(121), "tiny181": tiny(181), "host61": host(61), "host181": host(181)}
 
 
 def compile_all():
@@ -108,6 +113,7 @@ def run():
             x[:D.X_WORDS] = D.x_arg(P)
             t = Call(0, D.X_WORDS, D.OUT["a"], *TINY, x_out=D.OUT["h"]).header()
             x[D.X_WORDS:D.X_WORDS + t.size] = t
+            x[HOST_SLOT:] = pack.x_slot(np.zeros(TINY[1], np.uint16), TINY[0])
             xb = h.create_host_bo(X_WORDS * 4, 4)
             xb.write(x.tobytes(), 0)
             xb.sync(to)
@@ -147,8 +153,9 @@ def run():
             for rnd in range(1, ROUNDS + 1):
                 m = {k[1]: v for k, v in med.items() if k[0] == rnd}
                 slope = (m["tiny181"] - m["tiny61"]) / 120
+                host = (m["host181"] - m["host61"]) / 120
                 print("DERIVED_JSON " + json.dumps(dict(
-                    round=rnd, ms_per_tiny_call=slope, tiny_intercept_ms=m["tiny61"] - 61 * slope,
+                    round=rnd, ms_per_tiny_call=slope, ms_per_host_call=host, tiny_intercept_ms=m["tiny61"] - 61 * slope,
                     proj_plus_attn_minus_full=m["proj"] + m["attn"] - m["full"],
                     score_plus_pv_minus_attn=m["score"] + m["pv"] - m["attn"])), flush=True)
             del runs

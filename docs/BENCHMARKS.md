@@ -4106,6 +4106,39 @@ into the tool before the sitting: GO if the pattern's median is at most 0.70 × 
   11.4 ms, about 87 tokens/s. That is still below the CPU at fp32 (90.4) and the 780M (103.7). Merging the
   remaining 5.9 ms of attention and per-call waiting matters as much as int8 does.
 
+**Where a token's device time goes: about 6.4 ms of the 13.8 is the controller configuring DMA (MEASURED and
+DERIVED, 2026-10-20, Desktop 2).** `tools/llm_decode_breakdown.py` times subsets of the decoder's own calls as
+single dispatches, on its own buffers. The full program's instruction stream equals the verified build's byte for
+byte, and all programs share one array configuration. Two sittings, each `timing_eligible: true`, 2 rounds × 20
+timed dispatches: [first](../results/aie/llm_decode_breakdown_desktop2_20261020T033946Z.log),
+[second](../results/aie/llm_decode_breakdown_desktop2_20261020T035033Z.log), which adds the host-slot calls.
+
+| program | calls | median ms (4 rounds over the two sittings) |
+| --- | ---: | --- |
+| full token | 181 | 13.79–13.86 |
+| projections only (with their flags) | 121 | 9.75–9.80 |
+| attention only | 60 | 4.15–4.20 |
+| scores only / PV only | 30 / 30 | 1.11–1.12 / 3.21–3.24 |
+| 192×192 calls chained from the out argument, 44 shim BDs each | 61 / 121 / 181 | 2.17–2.22 / 4.22–4.33 / 6.27–6.34 |
+| the same calls with x from a host slot, 20 BDs each | 61 / 181 | 1.33 / 3.72–3.75 |
+
+- **The parts add up:** projections plus attention exceed the full token by only 0.12–0.16 ms.
+- **A call has a large fixed cost.** The chained 192×192 call (36 KB of weights) costs 33.7–34.7 µs. The same call
+  with 20 BDs costs 20.0–20.2 µs.
+- **The cost scales with control operations.** The rule written before the second sitting was "control-bound if the
+  host slope is at most 0.6 × the chained one". It read 0.58: control-bound, narrowly. The two slopes fit about
+  0.60 µs per shim BD (a blockwrite, an address patch and a queue push: about 0.2 µs per operation) plus about 8 µs
+  per call (DERIVED).
+- **The full token configures 8,324 BDs and 724 syncs** (counted from its stream). By that fit, about 5.0 ms is BD
+  writes and about 1.4 ms is the fixed cost of 181 calls, about 6.4 ms in all (DERIVED). Most BDs are call leads:
+  each core of a pair receives its own [x, (h), tail], so a channel spends 4–6 BDs per call before its weights.
+- **PV is mostly core compute.** PV calls cost 107 µs each, of which about 28 µs is control by the fit, so about
+  79 µs is compute (DERIVED). Its loops are scalar, and `pv_begin` walks all 576 positions whatever p is (here
+  p = 40).
+- **What the token's time comes to (DERIVED):** control about 6.4 ms, weights about 5.7 ms (269 MB at the 47 GB/s
+  the projections reach once control is set aside), PV compute about 2.4 ms. The order of work that follows: the
+  PV loops, W8A16, and fewer BDs per call (leads that serve both cores of a pair).
+
 ### Gemma 3 4B decode on the CPU and DirectML: INCOMPLETE in both sittings on the page-in witness, and the three complete arms decode at 10.8–17.6 tok/s (2026-09-24, Desktop 2)
 
 The question, (c) of the Gemma plan with its rule (d)
