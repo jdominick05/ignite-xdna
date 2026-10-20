@@ -3889,16 +3889,29 @@ After a device reset by the user, the next sitting (2026-10-20) ran each program
   That is not poison left unwritten, and not a copy of any other output. Afterwards the device refused every context
   again (0xc01e0009).
 
-So far the bad head and the wedge have occurred together twice, and both exact runs left the device healthy. Across
-every run, the chained head was wrong exactly when a gate/up+SiLU or RoPE call had run earlier in the same hardware
-context: the first sitting's `one`, and seed 0's full chain before seed 1. It was exact otherwise: in a fresh
-context, and after a `chain_short`. The two candidates always ran together, so which one it is, and the mechanism,
-are **unexplained**. A static check rules out an overlap in core memory: the 16 core ELFs' tables (0x7C180–0x7F980),
-buffers and stack are disjoint, and every buffer is its declared size.
+Across these runs, the chained head was wrong exactly when a gate/up+SiLU or RoPE call had run earlier in the same
+hardware context: the first sitting's `one`, and seed 0's full chain before seed 1. It was exact otherwise: in a
+fresh context, and after a `chain_short`. A static check rules out an overlap in core memory: the 16 core ELFs'
+tables (0x7C180–0x7F980), buffers and stack are disjoint, and every buffer is its declared size.
 
-The next sitting runs, in one context: `chain_short`, then a qkv+RoPE call, `chain_short`, a gate/up+SiLU call, and
-`chain_short`. The first `chain_short` to go wrong names the call. The full chain is not run again until this is
-fixed.
+Two more sittings, each after a user reset, each with every program in one context (`--sequence`):
+- **The bisect** ([log](../results/aie/llm_ops_bisect_desktop2_20261020T003214Z.log)): `chain_short`, a qkv+RoPE call
+  (`rope_one`), `chain_short`, a gate/up+SiLU call (`silu_one`), `chain_short`, per seed. Seed 0's first `chain_short`
+  was exact. Every `chain_short` after the RoPE call, from step 2 on and through seed 1, had the same column-0
+  quarter of its head wrong (12,288 elements, −inf/NaN), already **before** the SiLU call ran. The RoPE and SiLU
+  outputs themselves were exact. **SiLU is cleared; the bad head follows the RoPE call.** A context-creation probe run right after got 0xc01e0009.
+- **The head diagnostic** ([log](../results/aie/llm_ops_head_diag_desktop2_20261020T003458Z.log)): `headc` (the
+  chained head's own call, alone in a dispatch, its x the expected down output written by the host), the one-shot
+  head, `rope_one`, the one-shot head, `headc`. **Every output was exact**, before and after the RoPE call, and a
+  read-back of all seven weight blocks found 0 changed words. A context-creation probe run right after **still** got 0xc01e0009.
+
+So the bad head and the wedge are **separate symptoms**: the wedge happens even when every output is exact. Every
+context that wedged contained the qkv+RoPE+KV-append call (`one`, `chain`, `rope_one`); the only kind of context
+without it (`chain_short` alone) stayed healthy. The head programs were never run alone in a fresh context, so this
+does not yet show the RoPE call wedges the device on its own. The head goes wrong only when it follows the down call
+in the same dispatch after a RoPE call; fed from the host after a RoPE call, it is exact. Both mechanisms are
+**unexplained**. `one` and `chain` are not run on the device again until this is fixed; the next steps are offline
+(object and lock balance of the RoPE call per core, the RoPE emit's runtime index bounds, the split S2MM).
 
 ### Gemma 3 4B decode on the CPU and DirectML: INCOMPLETE in both sittings on the page-in witness, and the three complete arms decode at 10.8–17.6 tok/s (2026-09-24, Desktop 2)
 

@@ -58,7 +58,9 @@ ORDER = ("one", "chain_short", "chain")    # --sequence replaces this (any order
 OUTPUTS = {"one": ("qkv", "o", "gu", "down", "head", "plain_o", "q1", "kc1", "vc1", "m1"),
            "chain_short": ("s_o", "s_gu", "s_down", "s_head"),
            "chain": ("c_o", "c_gu", "c_down", "c_head", "c_q", "kc2", "vc2", "c_m"),
-           "rope_one": ("q1", "kc1", "vc1"), "silu_one": ("m1",)}
+           "rope_one": ("q1", "kc1", "vc1"), "silu_one": ("m1",),
+           "head_one": ("head",), "headc": ("s_head",)}
+# headc reads its x from s_down, which the host fills with the expected down output before each seed
 
 W_OFF, _w = {}, 0
 for _s, (_n, _k, _f) in WSPEC.items():
@@ -155,7 +157,8 @@ def programs():
                   x_out=None if c.x_out is None else OUT["s" + {OUT["c_o"]: "_o", OUT["c_gu"]: "_gu",
                                                                 OUT["c_down"]: "_down"}[c.x_out]],
                   flags=c.flags, h_out=None if c.h_out is None else OUT["s_o"]) for c in chain[:4]]
-    return {"one": one, "chain_short": short, "chain": chain, "rope_one": [one[6]], "silu_one": [one[7]]}
+    return {"one": one, "chain_short": short, "chain": chain, "rope_one": [one[6]], "silu_one": [one[7]],
+            "head_one": [one[4]], "headc": [short[3]]}
 
 
 def _qkv_rope(w, h):
@@ -256,6 +259,8 @@ def run(seeds):
                 xb.write(x_buffer(x).tobytes(), 0)
                 xb.sync(to)
                 ob.write(np.full(OUT_WORDS, POISON, np.uint32).tobytes(), 0)
+                if "headc" in ORDER:      # headc's x: the down output, as the device computes it (oracle)
+                    ob.write(ref["s_down"].view(np.uint32).tobytes(), OUT["s_down"] * 4)
                 ob.sync(to)
                 # every step re-poisons its own outputs, runs, and is checked at once, so a step that goes wrong
                 # after an earlier one names which earlier calls it followed in this context
@@ -298,6 +303,16 @@ def run(seeds):
                         elements=int(sum(ref[n].size for n in OUTPUTS[label])),
                         mismatched_elements=sum(bad.values()), failures={k: v for k, v in bad.items() if v})),
                         flush=True)
+            # the weights the device read: unchanged in DDR after every step?
+            arena.sync(fr)
+            back = np.frombuffer(arena.map(), np.uint32)
+            for s_ in WSPEC:
+                want_w = packed(w, s_)
+                diff = int(np.count_nonzero(back[W_OFF[s_]:W_OFF[s_] + want_w.size] != want_w))
+                print("ARENA_JSON " + json.dumps(dict(block=s_, words=int(want_w.size), changed_words=diff)),
+                      flush=True)
+                total += diff
+            back = None
             arena = xb = ob = insts = view = None
     finally:
         gc.collect()
