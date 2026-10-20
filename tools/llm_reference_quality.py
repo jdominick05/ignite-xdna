@@ -98,9 +98,10 @@ def main():
     ap.add_argument("--tokens", type=int, default=64)
     ap.add_argument("--out", type=Path)
     ap.add_argument("--unfused", action="store_true", help="v0 semantics: norms as their own op, rounded residual adds")
-    ap.add_argument("--quant", choices=("w8a16", "w8a8", "w4a16"),
+    ap.add_argument("--quant", choices=("w8a16", "w8a8", "w4a16", "w8a16-dev"),
                     help="fake-quantize the fused reference: int8 per-row or int4 per-32 weights, W8A8's per-token "
-                         "int8 activations (reference.quantize_weights)")
+                         "int8 activations (reference.quantize_weights); w8a16-dev is the device's W8A16 (bf16 "
+                         "scales, the scale applied after the sum)")
     a = ap.parse_args()
     if a.out and a.out.exists():
         raise SystemExit(f"{a.out} exists")

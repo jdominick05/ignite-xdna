@@ -350,3 +350,28 @@ def test_attention_group_at_p0_is_v_and_tracks_the_float_softmax():
 def test_the_cores_short_rsqrt_table_gives_every_entry_of_the_full_one():
     from kernels.llm_gemv import reference as R
     assert [R.rsq_stored_bits(R.RSQ_BASE + i) for i in range(R.RSQ_SIZE)] == R.RSQ.astype(int).tolist()
+
+
+def test_mac_rows_is_the_emulators_mac_one_row_at_a_time():
+    from kernels.llm_gemv import reference as R
+    rng = np.random.default_rng(5)
+    a = em.from_bf16_bits(bf16(rng, (64, 8))) * np.ldexp(1.0, rng.integers(-20, 20, (64, 8)))
+    b = em.from_bf16_bits(bf16(rng, (64, 8)))
+    a, b = em.to_bf16(a.astype(np.float32)), em.to_bf16(b.astype(np.float32))
+    want = [em.mac(np.zeros((1, 1, 1, 1), np.float32), a[r].reshape(1, 1, 8), b[r].reshape(1, 8, 1),
+                   em.MAC_MODEL).item() for r in range(64)]
+    assert np.array_equal(R.mac_rows(a, b), np.array(want, np.float32))
+
+
+def test_q8_codes_fit_int8_against_the_stored_bf16_scale_and_both_modes_agree():
+    from kernels.llm_gemv import reference as R
+    rng = np.random.default_rng(6)
+    w = em.from_bf16_bits(bf16(rng, (48, 192), 0.05)).astype(np.float64)
+    w[:, 7] *= 20
+    q = R.Q8.of(w)
+    assert np.all(np.abs(q.codes) <= 127) and np.all(q.codes == np.rint(q.codes))
+    assert np.array_equal(R.bf16(q.s), q.s)
+    assert np.abs(q.codes * q.s[:, None] - w).max() <= 0.5 * q.s.max() * (1 + 1e-6) + 1e-12
+    x, h = em.from_bf16_bits(bf16(rng, 192)), em.from_bf16_bits(bf16(rng, 48))
+    for init in (None, h):
+        assert np.array_equal(R.w8_matvec(q, x, False, init), R.w8_matvec(q, x, True, init))

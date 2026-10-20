@@ -4060,6 +4060,16 @@ them. The embedding lookup stays bf16.
 | **W8A16** | int8, one scale per row | bf16 | 152/443 | 177/443 | **7.279** | [log](../results/llm/llm_reference_quality_w8a16_desktop2_20261020T025420Z.log) |
 | W8A8 | int8, one scale per row | int8, one scale per token | 38/464 | 44/464 | 7.560 | [log](../results/llm/llm_reference_quality_w8a8_desktop2_20261020T025420Z.log) |
 | W4A16 | int4, one scale per 32 | bf16 | 26/439 | 28/439 | 16.506 | [log](../results/llm/llm_reference_quality_w4a16_desktop2_20261020T025420Z.log) |
+| **W8A16, the device's semantics** | int8 against a stored bf16 scale per row | bf16 | 188/439 | 178/439 | **7.208** | [log](../results/llm/llm_reference_quality_w8a16dev_desktop2_20261020T033330Z.log) |
+
+The last row is what the kernel will compute (`reference.Q8`, `w8_matvec`):
+- **Codes:** each row's codes are rounded against its stored bf16 scale.
+- **Sum:** codes · x is accumulated in fp32 by the same MAC walk as bf16.
+- **Scale and residual:** one more MAC forms bf16(hi·s + lo·s + h), with hi = bf16(acc) and lo = bf16(acc − hi).
+  The scale lands at fp32 grade with one rounding, and the residual rides in the same MAC.
+
+Fast and exact modes agree bit for bit on it (`tests/test_llm_gemv_offline.py`). Its perplexity, 7.208, sits
+within the spread of HF fp32 (7.239), HF bf16 (7.223) and the bf16 decoder (7.269). One passage cannot rank them.
 
 **Reading:**
 - **W8A16** costs 0.01 of perplexity against the bf16 decoder, and its greedy match to HF bf16 (177/443) is HF

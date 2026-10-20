@@ -16,6 +16,11 @@ from ignite_xdna.compiler import engine_bf16_emulator as em
 def gemv(w: np.ndarray, x: np.ndarray, model: str | None = None, init: np.ndarray | None = None) -> np.ndarray:
     """uint16 [N][K] and uint16 [K] bf16 bits -> uint16 [N] bf16 bits of W x, as the device computes it. ``init``
     (uint16 [N] bf16 bits) is the accumulator's starting value instead of zero: a residual added in the projection."""
+    return em.bf16_bits(em.to_bf16(gemv_acc(w, x, model, init)))
+
+
+def gemv_acc(w: np.ndarray, x: np.ndarray, model: str | None = None, init: np.ndarray | None = None) -> np.ndarray:
+    """gemv's fp32 accumulator [N] before its final rounding (a W8A16 epilogue starts from it)."""
     model = em.MAC_MODEL if model is None else model
     n, k = w.shape
     if n % 4 or k % 8 or x.shape != (k,) or (init is not None and init.shape != (n,)):
@@ -26,7 +31,7 @@ def gemv(w: np.ndarray, x: np.ndarray, model: str | None = None, init: np.ndarra
            else em.from_bf16_bits(init).reshape(n // 4, 1, 1, 4).copy())
     for s in range(k // 8):
         acc = em.mac(acc, xf[s], wf[:, s], model)
-    return em.bf16_bits(em.to_bf16(acc.reshape(n)))
+    return acc.reshape(n)
 
 
 def reference_fp64(w: np.ndarray, x: np.ndarray) -> np.ndarray:

@@ -215,6 +215,8 @@ def dot(a: np.ndarray, b: np.ndarray, exact: bool) -> np.ndarray:
 def matvec(w: np.ndarray, x: np.ndarray, exact: bool, init: np.ndarray | None = None) -> np.ndarray:
     """bf16 W [N][K] times bf16 x -> bf16 y, one rounding: the GEMV. ``init`` (bf16 [N]) is the accumulator's
     starting value, which is how a residual add rides in the projection: y = bf16(init + W x), rounded once."""
+    if isinstance(w, Q8):
+        return w8_matvec(w, x, exact, init)
     if exact:
         from kernels.llm_gemv import oracle
         start = None if init is None else em.bf16_bits(init)
@@ -232,6 +234,67 @@ def matvec(w: np.ndarray, x: np.ndarray, exact: bool, init: np.ndarray | None = 
 ACT_BITS = 0                # 0: activations stay bf16; 8: W8A8's per-token int8 (fast mode only)
 
 
+@dataclass
+class Q8:
+    """A W8A16 projection as the device holds it: int8 codes [N][K] (as float64) and one bf16 scale per row [N]."""
+    codes: np.ndarray
+    s: np.ndarray
+
+    @classmethod
+    def of(cls, w: np.ndarray) -> "Q8":
+        """Symmetric round-to-nearest against the STORED scale: s = bf16(max|row| / 127), codes = rint(w / s) in
+        [-127, 127] (bf16 rounding can leave s just under max/127; the clip takes the one code it would exceed)."""
+        s = bf16_from64(np.abs(w).max(axis=1) / 127.0).astype(np.float64)
+        safe = np.where(s == 0, 1.0, s)
+        return cls(np.clip(np.rint(w / safe[:, None]), -127, 127), s)
+
+    def __getitem__(self, idx):         # column selection only (the exact o-projection's input order)
+        rows, cols = idx
+        if rows != slice(None):
+            raise IndexError("Q8 selects columns only")
+        return Q8(self.codes[:, cols], self.s)
+
+    @property
+    def shape(self):
+        return self.codes.shape
+
+
+def w8_matvec(w: Q8, x: np.ndarray, exact: bool, init: np.ndarray | None = None) -> np.ndarray:
+    """The W8A16 GEMV: acc = codes x in fp32 (the bf16 GEMV's MAC walk: int8 codes are exact in bf16), then one MAC
+    y = bf16(hi*s + lo*s + init) with hi = bf16(acc), lo = bf16(acc - hi): the scale applied at fp32-grade with one
+    rounding, and a residual riding in the same MAC."""
+    if not exact:
+        acc = w.codes @ x.astype(np.float64)
+        return bf16_from64(w.s * acc + (0.0 if init is None else init.astype(np.float64)))
+    from kernels.llm_gemv import oracle
+    acc = oracle.gemv_acc(em.bf16_bits(w.codes.astype(np.float32)), em.bf16_bits(x)).astype(np.float32)
+    hi = em.to_bf16(acc).astype(np.float32)
+    lo = em.to_bf16((acc - hi).astype(np.float32)).astype(np.float32)
+    a = np.zeros((acc.size, 8), np.float32)
+    b = np.zeros((acc.size, 8), np.float32)
+    a[:, 0], a[:, 1] = hi, lo
+    b[:, 0] = b[:, 1] = w.s
+    if init is not None:
+        a[:, 2], b[:, 2] = np.asarray(init, np.float32), 1.0
+    return bf16(mac_rows(a, b))
+
+
+def mac_rows(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+    """One exp_sum MAC from zero per row, a[r] . b[r] (8 terms each): engine_bf16_emulator.mac's model with a
+    different B per row, which its shared-operand form cannot express. float32 [rows]."""
+    if em.MAC_MODEL != "exp_sum":
+        raise ValueError(f"mac_rows implements exp_sum, not {em.MAC_MODEL}")
+    a64, b64 = a.astype(np.float64), b.astype(np.float64)
+    prod = a64 * b64
+    place = (np.frexp(a64)[1] - 1) + (np.frexp(b64)[1] - 1)
+    place = np.where(prod != 0, place, np.iinfo(np.int32).min)
+    top = place.max(axis=1)
+    top = np.where(top == np.iinfo(np.int32).min, 0, top)
+    quantum = np.ldexp(1.0, top - 23)
+    units = np.rint(prod / quantum[:, None]).sum(axis=1)
+    return (units * quantum + 0.0).astype(np.float32)
+
+
 def quantize(w: np.ndarray, bits: int, group: int = 0) -> np.ndarray:
     """Symmetric round-to-nearest fake quantization, returned dequantized (float64): one scale per output row, or
     per ``group`` inputs of a row; codes in [-(2^(bits-1)-1), 2^(bits-1)-1]."""
@@ -243,7 +306,8 @@ def quantize(w: np.ndarray, bits: int, group: int = 0) -> np.ndarray:
     return (np.clip(np.rint(g / s), -qmax, qmax) * s).reshape(n, k)
 
 
-SCHEMES = {"w8a16": (8, 0, 0), "w8a8": (8, 0, 8), "w4a16": (4, 32, 0)}
+SCHEMES = {"w8a16": (8, 0, 0), "w8a8": (8, 0, 8), "w4a16": (4, 32, 0), "w8a16-dev": (8, 0, 0)}
+# w8a16-dev: the device's W8A16 (Q8 and w8_matvec), exact mode included; the other three are fast-mode studies
 
 
 def quantize_weights(w: "Weights", scheme: str) -> "Weights":
@@ -252,14 +316,15 @@ def quantize_weights(w: "Weights", scheme: str) -> "Weights":
     global ACT_BITS
     bits, group, act = SCHEMES[scheme]
     ACT_BITS = act
+    q = Q8.of if scheme == "w8a16-dev" else (lambda m: quantize(m, bits, group))  # noqa: E731
     layers = []
     for L in w.layers:
         L = dict(L)
         for name in ("qkv_g", "o", "gu_g", "down"):
-            L[name] = quantize(L[name], bits, group)
+            L[name] = q(L[name])
         layers.append(L)
     out = Weights(w.embed, layers, w.norm)
-    out.head_g = quantize(w.head_g, bits, group)
+    out.head_g = q(w.head_g)
     return out
 
 
