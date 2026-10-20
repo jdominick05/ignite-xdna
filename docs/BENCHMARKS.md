@@ -3999,6 +3999,28 @@ prompts, through the model's chat template:
 The run took 11.4 s end to end, including loading and packing the weights. That is not a speed measurement: it was
 a `--checks-only` sitting with a CPU job running beside it. Tokens per second is the next sitting.
 
+**Speed: 71.5 tokens/s, 13.99 ms a token (MEASURED, 2026-10-20, Desktop 2;
+[log](../results/aie/llm_decode_timed_desktop2_20261020T015232Z.log)).**
+- **Method:** `tools/llm_decode_probe.py bench`, both prompts generated 3 times after one warm-up dispatch. Every
+  step is timed, prompt steps included: a prompt token costs the same single dispatch as a generated one, since
+  there is no batching. That gives 309 steps.
+- **Conditions:** the preflight's only blocker was 1% GPU 3D activity from Windows Terminal, with the CPU at 0–1%,
+  and scribe's CPU job had finished. The wrapper reported `HOST_LOAD_VERDICT CLEAR`,
+  `foreign_contention_observed: false` and `timing_eligible: true`.
+- **Still correct:** all 6 generations were token-identical to the exact reference.
+- **Time per token:**
+
+| per token | median | p90 |
+| --- | ---: | ---: |
+| host wall, one `step()` | 13.99 ms | 14.34 ms |
+| dispatch start to completion | 13.71 ms | |
+| host share (tails, embedding row, patch, logits read) | 0.25 ms | |
+
+At 13.71 ms the device streams the 269 MB of weights at about 19.6 GB/s (DERIVED: 268.96 MB / 13.71 ms). That is
+41% of the 47.6 GB/s this array's read pattern measured in step 1. The rest is per-call latency: 181 calls, each
+waiting on the previous one's output. That makes it the place to look for more speed (fewer, wider calls), not the
+arithmetic.
+
 ### Gemma 3 4B decode on the CPU and DirectML: INCOMPLETE in both sittings on the page-in witness, and the three complete arms decode at 10.8–17.6 tok/s (2026-09-24, Desktop 2)
 
 The question, (c) of the Gemma plan with its rule (d)
