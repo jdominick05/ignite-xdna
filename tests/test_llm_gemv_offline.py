@@ -379,3 +379,127 @@ def test_q8_codes_fit_int8_against_the_stored_bf16_scale_and_both_modes_agree():
     x, h = em.from_bf16_bits(bf16(rng, 192)), em.from_bf16_bits(bf16(rng, 48))
     for init in (None, h):
         assert np.array_equal(R.w8_matvec(q, x, False, init), R.w8_matvec(q, x, True, init))
+
+
+def test_mac_rows_with_a_start_is_the_emulators_mac_from_that_accumulator():
+    from kernels.llm_gemv import reference as R
+    rng = np.random.default_rng(8)
+    a = em.to_bf16(em.from_bf16_bits(bf16(rng, (64, 8))).astype(np.float32))
+    b = em.to_bf16(em.from_bf16_bits(bf16(rng, (64, 8))).astype(np.float32))
+    c = (rng.normal(0, 4, 64) * np.ldexp(1.0, rng.integers(-6, 6, 64))).astype(np.float32)
+    want = [em.mac(np.full((1, 1, 1, 1), c[r], np.float32), a[r].reshape(1, 1, 8), b[r].reshape(1, 8, 1),
+                   em.MAC_MODEL).item() for r in range(64)]
+    assert np.array_equal(R.mac_rows(a, b, c), np.array(want, np.float32))
+
+
+def run_streams8(block: np.ndarray, tails: dict, x: np.ndarray, n: int, k: int, h=None) -> np.ndarray:
+    """Read a W8 block and its channel tails the way the cores do (gemv.cc, F_W8): int8 objects into six mmul
+    accumulators from zero, then per output hi = bf16(acc), lo = bf16(MAC(acc - hi)), y = bf16(MAC(h + hi*s + lo*s))
+    with s from the pair's tail at H_SC + e*rows. y as float32 [N]."""
+    from kernels.llm_gemv import reference as R
+    codes = block.view(np.int8)
+    obj_b = pack.W8_GROUP * pack.KCHUNK
+    per_ch = n // pack.W8_QUANTUM * pack.chunks(k) * 2 * obj_b
+    xf = em.from_bf16_bits(x)
+    y = np.zeros(n, np.float32)
+    rows = pack.rows8(n, 0)
+    for c in range(pack.COLS):
+        for h2 in range(2):
+            stream = codes[(c * 2 + h2) * per_ch:(c * 2 + h2 + 1) * per_ch].reshape(-1, obj_b)
+            tail = tails[c, h2].view(np.uint16)
+            pos = 0
+            for g in range(n // pack.W8_QUANTUM):
+                acc = {e: np.zeros((6, 1, 1, 4), np.float32) for e in range(2)}
+                for q in range(pack.chunks(k)):
+                    for e in range(2):
+                        obj = stream[pos].astype(np.float32).reshape(pack.KCHUNK // 8, 6, 8, 4)
+                        pos += 1
+                        for s in range(pack.KCHUNK // 8):
+                            row = xf[q * pack.KCHUNK + s * 8:q * pack.KCHUNK + s * 8 + 8].reshape(1, 1, 8)
+                            acc[e] = em.mac(acc[e], row, obj[s], em.MAC_MODEL)
+                for e in range(2):
+                    out = pack.core_rows8(n, c, 2 * h2 + e, g)
+                    a = acc[e].reshape(24)
+                    s = em.from_bf16_bits(tail[e * rows + g * 24:e * rows + g * 24 + 24]).astype(np.float32)
+                    hi = em.to_bf16(a).astype(np.float32)
+                    m1, m2 = np.zeros((24, 8), np.float32), np.zeros((24, 8), np.float32)
+                    m1[:, 0], m2[:, 0] = hi, -1.0
+                    lo = em.to_bf16(R.mac_rows(m1, m2, a)).astype(np.float32)
+                    m1, m2 = np.zeros((24, 8), np.float32), np.zeros((24, 8), np.float32)
+                    m1[:, 0], m1[:, 1], m2[:, 0], m2[:, 1] = hi, lo, s, s
+                    start = np.zeros(24, np.float32) if h is None else em.from_bf16_bits(h)[out].astype(np.float32)
+                    y[out] = R.bf16(R.mac_rows(m1, m2, start))
+    return y
+
+
+@pytest.mark.parametrize("n,k,init", [(384, 192, False), (768, 576, True), (384, 1536, True)])
+def test_w8_streams_read_back_the_exact_w8_matvec(n, k, init):
+    from kernels.llm_gemv import reference as R
+    rng = np.random.default_rng(n + k)
+    w = em.from_bf16_bits(bf16(rng, (n, k), 0.05)).astype(np.float64)
+    w[:, 5] *= 30
+    q = R.Q8.of(w)
+    x = bf16(rng, k)
+    h = bf16(rng, n) if init else None
+    block = pack.pack8(q.codes.astype(np.int8))
+    assert block.size * 4 == n * k
+    sbits = em.bf16_bits(q.s.astype(np.float32))
+    flags = pack.F_INIT if init else 0
+    tails = {(c, h2): pack.tail8(n, k, flags, pack.pair_scales8(n, c, h2, sbits)) for c in range(pack.COLS)
+             for h2 in range(2)}
+    got = run_streams8(block, tails, x, n, k, h)
+    want = R.w8_matvec(q, em.from_bf16_bits(x), True, None if h is None else em.from_bf16_bits(h))
+    assert np.array_equal(got, want.astype(np.float32))
+
+
+def test_w8_silu_streams_keep_gate_and_up_in_their_sets():
+    from kernels.llm_gemv import reference as R
+    n, k = 384, 384
+    rng = np.random.default_rng(11)
+    wg, wu = (em.from_bf16_bits(bf16(rng, (n, k), 0.05)).astype(np.float64) for _ in range(2))
+    qg, qu = R.Q8.of(wg), R.Q8.of(wu)
+    x = bf16(rng, k)
+    block = pack.pack8(qg.codes.astype(np.int8), qu.codes.astype(np.int8))
+    sg, su = (em.bf16_bits(q.s.astype(np.float32)) for q in (qg, qu))
+    tails = {(c, h2): pack.tail8(n, k, pack.F_SILU, pack.pair_scales8(n, c, h2, sg, su)) for c in range(pack.COLS)
+             for h2 in range(2)}
+    rows = pack.rows8(n, 0)
+    # the gate set is objects [g][q < Q] of each core, up the rest: read each set with its own scales
+    per = pack.stream_words8(n, k, pack.F_SILU) * 4
+    codes = block.view(np.int8)
+    gate_blk, up_blk = [], []
+    for ch in range(pack.CHANNELS):
+        s = codes[ch * per:(ch + 1) * per].reshape(n // pack.W8_QUANTUM, 2, pack.chunks(k), 2, -1)
+        gate_blk.append(s[:, 0].reshape(-1))
+        up_blk.append(s[:, 1].reshape(-1))
+    # a pair's tail holds [core 2h: gate, up][core 2h+1: gate, up], rows scales each
+    gate =run_streams8(np.concatenate(gate_blk).view(np.uint32), {key: np.concatenate(
+        [t.view(np.uint16)[0:rows], t.view(np.uint16)[2 * rows:3 * rows]]).view(np.uint32) for key, t in tails.items()},
+        x, n, k)
+    up = run_streams8(np.concatenate(up_blk).view(np.uint32), {key: np.concatenate(
+        [t.view(np.uint16)[rows:2 * rows], t.view(np.uint16)[3 * rows:4 * rows]]).view(np.uint32)
+        for key, t in tails.items()}, x, n, k)
+    xf = em.from_bf16_bits(x)
+    assert np.array_equal(gate, R.w8_matvec(qg, xf, True).astype(np.float32))
+    assert np.array_equal(up, R.w8_matvec(qu, xf, True).astype(np.float32))
+
+
+def test_a_w8_call_reads_its_tails_from_the_arena_and_skips_a_padding_column():
+    from kernels.llm_gemv import design
+    import re
+    n, k = 768, 1536
+    call = design.Call(0, 0, 4000, n, k, x_out=0, flags=pack.F_INIT, h_out=1000, w8=True, cols=3)
+    blk = 3 * 2 * pack.stream_words8(n, k)
+    tw = pack.OBJ_WORDS - (k + 576) // 2
+    assert call.weight_words() == blk + 6 * tw
+    text = design.harness([call], call.weight_words(), 64, 6000)
+    assert "@wL3_" not in text.split("aie.runtime_sequence")[1] and "@oL3" not in text.split("aie.runtime_sequence")[1]
+    assert text.count(f"buffer_length = {k // 2} : i32") == 6 and text.count("buffer_length = 288 : i32") == 6
+    patched = [int(v) for v in re.findall(r"%lp\d+ = arith.constant (\d+) : i32", text)]
+    assert sorted(set(patched) - {0, 4000}) == [(blk + ch * tw) * 4 for ch in range(6)]
+    copy = pack.copy_elems8(n, k, pack.F_INIT, 3)
+    assert copy == 2208 and copy <= 2 * pack.X_BUF
+    with pytest.raises(ValueError):
+        design.Call(0, 0, 0, n, 576, x_out=0, w8=True, cols=2)
+    with pytest.raises(ValueError):
+        design.Call(0, 0, 0, 576, 576, x_out=0, w8=True)                    # N not padded to 384

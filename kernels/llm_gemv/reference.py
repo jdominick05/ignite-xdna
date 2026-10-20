@@ -268,30 +268,34 @@ def w8_matvec(w: Q8, x: np.ndarray, exact: bool, init: np.ndarray | None = None)
         return bf16_from64(w.s * acc + (0.0 if init is None else init.astype(np.float64)))
     from kernels.llm_gemv import oracle
     acc = oracle.gemv_acc(em.bf16_bits(w.codes.astype(np.float32)), em.bf16_bits(x)).astype(np.float32)
+    n = acc.size
     hi = em.to_bf16(acc).astype(np.float32)
-    lo = em.to_bf16((acc - hi).astype(np.float32)).astype(np.float32)
-    a = np.zeros((acc.size, 8), np.float32)
-    b = np.zeros((acc.size, 8), np.float32)
+    # the core takes lo = acc - hi through the MAC as well: the accumulator starts at acc, plus hi x (-1)
+    a, b = np.zeros((n, 8), np.float32), np.zeros((n, 8), np.float32)
+    a[:, 0], b[:, 0] = hi, -1.0
+    lo = em.to_bf16(mac_rows(a, b, acc)).astype(np.float32)
+    a, b = np.zeros((n, 8), np.float32), np.zeros((n, 8), np.float32)
     a[:, 0], a[:, 1] = hi, lo
     b[:, 0] = b[:, 1] = w.s
-    if init is not None:
-        a[:, 2], b[:, 2] = np.asarray(init, np.float32), 1.0
-    return bf16(mac_rows(a, b))
+    start = np.zeros(n, np.float32) if init is None else np.asarray(init, np.float32)
+    return bf16(mac_rows(a, b, start))
 
 
-def mac_rows(a: np.ndarray, b: np.ndarray) -> np.ndarray:
-    """One exp_sum MAC from zero per row, a[r] . b[r] (8 terms each): engine_bf16_emulator.mac's model with a
-    different B per row, which its shared-operand form cannot express. float32 [rows]."""
+def mac_rows(a: np.ndarray, b: np.ndarray, init: np.ndarray | None = None) -> np.ndarray:
+    """One exp_sum MAC per row, init[r] + a[r] . b[r] (8 terms each, init zero by default): engine_bf16_emulator.mac's
+    model with a different B per row, which its shared-operand form cannot express. float32 [rows]."""
     if em.MAC_MODEL != "exp_sum":
         raise ValueError(f"mac_rows implements exp_sum, not {em.MAC_MODEL}")
     a64, b64 = a.astype(np.float64), b.astype(np.float64)
+    c64 = np.zeros(a.shape[0]) if init is None else np.asarray(init, np.float32).astype(np.float64)
     prod = a64 * b64
     place = (np.frexp(a64)[1] - 1) + (np.frexp(b64)[1] - 1)
     place = np.where(prod != 0, place, np.iinfo(np.int32).min)
-    top = place.max(axis=1)
+    top = np.maximum(place.max(axis=1), np.where(c64 != 0, np.frexp(c64)[1] - 1, np.iinfo(np.int32).min))
     top = np.where(top == np.iinfo(np.int32).min, 0, top)
     quantum = np.ldexp(1.0, top - 23)
-    units = np.rint(prod / quantum[:, None]).sum(axis=1)
+    ops = np.concatenate([c64[:, None], prod], axis=1)
+    units = np.rint(ops / quantum[:, None]).sum(axis=1)
     return (units * quantum + 0.0).astype(np.float32)
 
 

@@ -36,8 +36,8 @@ constexpr int SET = 48;               // floats in one accumulator set (3 x 16)
 
 // Header words (the last HDR_WORDS of a call's first object)
 enum { H_G = 0, H_Q = 1, H_K = 2, H_N = 3, H_FLAGS = 4, H_AUX_OFF = 5, H_COPY = 6, H_E = 7, H_ROPE_END = 8,
-       H_POS = 9 };
-enum { F_INIT = 1, F_NORM = 2, F_ROPE = 4, F_SILU = 8, F_SCORE = 16, F_PV = 32 };
+       H_POS = 9, H_SC = 10 };
+enum { F_INIT = 1, F_NORM = 2, F_ROPE = 4, F_SILU = 8, F_SCORE = 16, F_PV = 32, F_W8 = 64 };
 // ctl words the core keeps for the call: the header, then r's bits at C_R
 enum { C_R = 15 };
 
@@ -265,6 +265,76 @@ NOINLINE static void pv_emit(const float *acc, int32_t *out, int e) {
         out[i / 2] = static_cast<int32_t>(uint32_t(y[i]) | (uint32_t(y[i + 1]) << 16));
 }
 
+// ---- W8A16 (pack.py's F_W8; reference.w8_matvec holds the semantics bit for bit) ----
+// An object is 24 outputs x 192 inputs of int8, [kstep 24][acc 6][kk 8][n 4]; the codes widen to bf16 exactly and run
+// through the same MAC walk into six accumulators from zero. Emit e takes accumulators 3e..3e+2 (12 outputs) and
+// forms y = bf16(h + hi*s + lo*s), hi = bf16(acc), lo = bf16(acc - hi), both sums as one mmul each.
+constexpr int W8_SET = 2 * SET;                 // floats of one accumulator set: six of 16
+
+NOINLINE static void w8_chunk(const int32_t *obj, const int32_t *x_local, float *acc_all, int q, const int32_t *ctl) {
+    const int per_set = (ctl[H_FLAGS] & F_SILU) ? ctl[H_Q] / 2 : ctl[H_Q];
+    const int set = q >= per_set ? 1 : 0;
+    const int qq = q - set * per_set;
+    const auto *x = reinterpret_cast<const bfloat16 *>(x_local) + qq * KCHUNK;
+    // two passes of three accumulators (one emit's 12 outputs each): six at once spill to the stack
+    ROLLED for (int e = 0; e < 2; ++e) {
+        float *acc = acc_all + set * W8_SET + e * SET;
+        const int8_t *w = reinterpret_cast<const int8_t *>(obj) + e * 3 * TILE;
+        aie::vector<float, 16> s0, s1, s2;
+        if (qq != 0) {
+            s0 = aie::load_v<16>(acc); s1 = aie::load_v<16>(acc + 16); s2 = aie::load_v<16>(acc + 32);
+        } else {
+            s0 = s1 = s2 = aie::zeros<float, 16>();
+        }
+        MM c0(s0), c1(s1), c2(s2);
+        for (int k = 0; k < KSTEPS; ++k) {
+            auto row = aie::load_v<8>(x + k * 8);
+            aie::vector<bfloat16, 32> a;
+            a.insert<8>(0, row); a.insert<8>(1, row); a.insert<8>(2, row); a.insert<8>(3, row);
+            const int8_t *p = w + k * 6 * TILE;
+            const auto b01 = aie::to_float<bfloat16>(aie::unpack(aie::load_v<64>(p)));
+            const auto b2 = aie::to_float<bfloat16>(aie::unpack(aie::load_v<32>(p + 64)));
+            c0.mac(a, b01.extract<32>(0)); c1.mac(a, b01.extract<32>(1)); c2.mac(a, b2);
+        }
+        aie::store_v(acc, c0.to_vector<float>());
+        aie::store_v(acc + 16, c1.to_vector<float>());
+        aie::store_v(acc + 32, c2.to_vector<float>());
+    }
+}
+
+// 12 outputs from three accumulators (row 0 of each): s their bf16 scales, h their residual (or null).
+NOINLINE static void w8_out(const float *acc, uint16_t *y, const uint16_t *s, const uint16_t *h) {
+    const auto *bits = reinterpret_cast<const uint32_t *>(acc);
+    aie::vector<uint16, 32> neg = aie::zeros<uint16, 32>();
+    for (int n = 0; n < 4; ++n) neg[n * 4 + n] = 0xBF80;              // B[k][n] = -1 at k == n
+    ROLLED for (int t = 0; t < 3; ++t) {
+        uint16_t hi[4];
+        aie::vector<uint32, 16> start;
+        for (int n = 0; n < 4; ++n) {
+            hi[n] = uint16_t(rne16(bits[t * 16 + n]));
+            for (int m = 0; m < 4; ++m) start[m * 4 + n] = bits[t * 16 + n];
+        }
+        aie::vector<uint16, 32> a = aie::zeros<uint16, 32>();
+        for (int n = 0; n < 4; ++n) a[n] = hi[n];                     // row 0 of A: [hi0 hi1 hi2 hi3 0 0 0 0]
+        MM d(start.cast_to<float>());
+        d.mac(a.cast_to<bfloat16>(), neg.cast_to<bfloat16>());
+        const auto lo = d.to_vector<float>().cast_to<uint32>();
+        aie::vector<uint16, 32> a2 = aie::zeros<uint16, 32>(), b2 = aie::zeros<uint16, 32>();
+        aie::vector<uint32, 16> init = aie::zeros<uint32, 16>();
+        for (int n = 0; n < 4; ++n) {
+            a2[2 * n] = hi[n];
+            a2[2 * n + 1] = uint16_t(rne16(lo[n]));
+            b2[(2 * n) * 4 + n] = s[t * 4 + n];
+            b2[(2 * n + 1) * 4 + n] = s[t * 4 + n];
+            if (h) for (int m = 0; m < 4; ++m) init[m * 4 + n] = uint32_t(h[t * 4 + n]) << 16;
+        }
+        MM f(init.cast_to<float>());
+        f.mac(a2.cast_to<bfloat16>(), b2.cast_to<bfloat16>());
+        const auto r = f.to_vector<float>().cast_to<uint32>();
+        for (int n = 0; n < 4; ++n) y[t * 4 + n] = uint16_t(rne16(r[n]));
+    }
+}
+
 extern "C" {
 
 void gemv_begin(const int32_t *obj, int32_t *x_local, int32_t *ctl, int32_t core) {
@@ -284,6 +354,7 @@ void gemv_chunk(const int32_t *obj, int32_t *x_local, float *acc_all, int32_t q,
                 int32_t core, int32_t g) {
     if (ctl[H_FLAGS] & F_SCORE) { score_chunk(obj, x_local); return; }
     if (ctl[H_FLAGS] & F_PV) { pv_chunk(obj, x_local, acc_all, q, ctl); return; }
+    if (ctl[H_FLAGS] & F_W8) { w8_chunk(obj, x_local, acc_all, q, ctl); return; }
     const int per_set = (ctl[H_FLAGS] & F_SILU) ? ctl[H_Q] / 2 : ctl[H_Q];
     const int set = q >= per_set ? 1 : 0;
     const int qq = q - set * per_set;
@@ -324,14 +395,11 @@ void gemv_chunk(const int32_t *obj, int32_t *x_local, float *acc_all, int32_t q,
     aie::store_v(acc + 32, c2.to_vector<float>());
 }
 
-// Row 0 of each accumulator of a set, rounded to bf16 on the bits (ties to even), then the flags' epilogue.
-static void set_out(const float *acc, uint16_t *y, const int32_t *ctl) {
+// Row 0 of each accumulator of a set, rounded to bf16 on the bits (ties to even).
+static void set_out(const float *acc, uint16_t *y) {
     const auto *bits = reinterpret_cast<const uint32_t *>(acc);
     for (int i = 0; i < GROUP; ++i)
         y[i] = uint16_t(rne16(bits[(i / 4) * 16 + i % 4]));
-    if (ctl[H_FLAGS] & F_NORM)
-        for (int i = 0; i < GROUP; ++i)
-            y[i] = bf16_mul(y[i], uint16_t(ctl[C_R]));
 }
 
 // Rotate the six (a, b) pairs of a group: two pairs per mmul, A's row 0 = [a0, b0, a1, b1, 0...], B's columns 0-3 =
@@ -355,6 +423,37 @@ static void rope(uint16_t *y, int base, const int32_t *x_local, const int32_t *c
     }
 }
 
+// The flags' epilogue on a group's 12 outputs (and the up set's with F_SILU), then the six output words: y and up
+// times r with F_NORM, bf16(silu(y) * up) with F_SILU, RoPE below ROPE_END.
+NOINLINE static void finish(uint16_t *y, uint16_t *up, const int32_t *ctl, const int32_t *x_local, int base,
+                            int32_t *out) {
+    const int flags = ctl[H_FLAGS];
+    if (flags & F_NORM)
+        ROLLED for (int i = 0; i < GROUP; ++i) {
+            y[i] = bf16_mul(y[i], uint16_t(ctl[C_R]));
+            if (flags & F_SILU) up[i] = bf16_mul(up[i], uint16_t(ctl[C_R]));
+        }
+    if (flags & F_SILU)
+        ROLLED for (int i = 0; i < GROUP; ++i) y[i] = bf16_mul(silu16(y[i]), up[i]);
+    if ((flags & F_ROPE) && base < ctl[H_ROPE_END]) rope(y, base, x_local, ctl);
+    ROLLED for (int i = 0; i < GROUP; i += 2)
+        out[i / 2] = static_cast<int32_t>(uint32_t(y[i]) | (uint32_t(y[i + 1]) << 16));
+}
+
+NOINLINE static void w8_emit(const float *acc, int32_t *out, const int32_t *ctl, const int32_t *x_local, int core,
+                             int g, int e) {
+    const auto *x16 = reinterpret_cast<const uint16_t *>(x_local);
+    const int flags = ctl[H_FLAGS], n_total = ctl[H_N];
+    const int rows_set = n_total >> 4;                                  // N / 16 cores
+    const int rows = (flags & F_SILU) ? 2 * rows_set : rows_set;
+    const uint16_t *sc = x16 + ctl[H_SC] + (core & 1) * rows + g * 24 + e * GROUP;
+    const int base = (core / ROWS) * (n_total / 4) + g * (ROWS * 24) + e * (ROWS * GROUP) + (core % ROWS) * GROUP;
+    alignas(32) uint16_t y[16], up[16];
+    w8_out(acc + e * SET, y, sc, (flags & F_INIT) ? x16 + ctl[H_AUX_OFF] + base : nullptr);
+    if (flags & F_SILU) w8_out(acc + W8_SET + e * SET, up, sc + rows_set, nullptr);
+    finish(y, up, ctl, x_local, base, out);
+}
+
 void gemv_emit(const float *acc, int32_t *out, const int32_t *ctl, const int32_t *x_local, int32_t core, int32_t g,
                int32_t e) {
     if (ctl[H_FLAGS] & F_SCORE) {
@@ -364,23 +463,12 @@ void gemv_emit(const float *acc, int32_t *out, const int32_t *ctl, const int32_t
         return;
     }
     if (ctl[H_FLAGS] & F_PV) { pv_emit(acc, out, e); return; }
-    alignas(32) uint16_t y[16];
-    const int flags = ctl[H_FLAGS];
-    set_out(acc, y, ctl);
-    if (flags & F_SILU) {
-        alignas(32) uint16_t up[16];
-        set_out(acc + SET, up, ctl);
-        for (int i = 0; i < GROUP; ++i)
-            y[i] = bf16_mul(silu16(y[i]), up[i]);
-    }
-    if (flags & F_ROPE) {
-        const int n_total = ctl[H_N];
-        const int base = (core / ROWS) * (n_total / 4) + g * (ROWS * GROUP) + (core % ROWS) * GROUP;
-        if (base < ctl[H_ROPE_END])
-            rope(y, base, x_local, ctl);
-    }
-    for (int i = 0; i < GROUP; i += 2)
-        out[i / 2] = static_cast<int32_t>(uint32_t(y[i]) | (uint32_t(y[i + 1]) << 16));
+    if (ctl[H_FLAGS] & F_W8) { w8_emit(acc, out, ctl, x_local, core, g, e); return; }
+    alignas(32) uint16_t y[16], up[16];
+    set_out(acc, y);
+    if (ctl[H_FLAGS] & F_SILU) set_out(acc + SET, up);
+    const int base = (core / ROWS) * (ctl[H_N] / 4) + g * (ROWS * GROUP) + (core % ROWS) * GROUP;
+    finish(y, up, ctl, x_local, base, out);
     (void)e;
 }
 

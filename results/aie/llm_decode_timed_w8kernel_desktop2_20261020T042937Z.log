@@ -1,0 +1,26 @@
+RESEARCH_PLATFORM {"machine": "Desktop 2", "cpu": "AMD Ryzen 7 8700G w/ Radeon 780M Graphics", "os": "Windows-11-10.0.26200-SP0", "ram_bytes": 33381138432, "source_sha256": {"tools/research_process.py": "7850b61ddfb175ec919bf464cc1dd326176bea6f4f8088f2a04562385fc0c13d", "tools/npu_quiet.py": "75be7453617d15c09ab67508eb200233ff4dbd08ad8a7980c7edebf9327705ed", "tools/quant_calib_alphabet.py": "2dc0b2878c564853f340880209a425dfcf63b8536b2b8e9fd32344daade58d37", "tools/xint8_arithmetic_probe.py": "6aa3df08b9870c3c2264b868459d7ffbac3070dddc1349d7c6f3f480075f7041", "scripts/research-lowlevel.sh": "d9780364485b5328850dcfbafe69a1d941ecc8f7b4cec8989031fd27abeb670c", "scripts/research-iron.sh": "4c863a262646ddab39b5005006ba8e03809895e6386c6310e2fd9d0a9e9609ee", "kernels/memory_placement/probe.py": "e8d990169ad6091fa1b53852e9f61eff495b5def72d35165a5c5cf1759e38898", "kernels/memory_placement/memory_kernels.cc": "182e7af7071a1e851afb4a7ca266069c489aea1fbaaa85eca129708daeba5ba6", "scripts/research-matrix.sh": "739254171629deae822b0ad7dabc875aee19ace56dde77d3e8aab61663f97516", "kernels/memory_placement/gemm.py": "17c905ad66110d3346bbf0db898dfc6b780df59fae1dfb0c1747057ce1e5844e", "kernels/memory_placement/gemm_placement.cc": "f21acf7250b12914ea30cc1f77613239dfa18421a85a1b9a5199017dd916278a", "tools/research_summary.py": "0c00dcceef07053d06731b41a1f1ed58d3ba4ea09f82497de354ce9cef17da20", "tools/research_toolchain.py": "f0a126a24ae213acfaa43460cfd9def0c86d9cb70cfee0228aa271688467b314"}, "commit": "cf3ba2ab037fe6c69db6fd4367a7a7646a6ee328", "command": ["C:/Users/<user>/miniforge3/envs/mlir-aie-iron/python.exe", "tools/llm_decode_probe.py", "bench", "build/llm_decode/ref_2x16.npz"], "seconds_limit": 900.0, "rss_gib_limit": 8, "checks_only": false, "free_ram_bytes": 17875968000}
+HOST_LOAD busy_cores=0.5 logical_cores=16 free_ram_gb=16.7 sample_sec=1
+HOST_LOAD_TOP 0.16 dev-agent:4816 ws_mb=620
+HOST_LOAD_TOP 0.12 explorer:5888 ws_mb=314
+HOST_LOAD_TOP 0.06 pythonw:10516 ws_mb=77
+HOST_LOAD_TOP 0.05 powershell:23960 ws_mb=83
+HOST_LOAD_TOP 0.05 WindowsTerminal:64072 ws_mb=216
+HOST_LOAD_VERDICT CLEAR
+
+NPU_QUIET_REQUEST {"file": "C:\\Users\\<user>\\AppData\\Local\\ignite-xdna\\npu-quiet.82300.request", "pid": 82300}
+PRE_NPU_CONTEXT_WITNESS "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+WITNESS pre idle=True
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 333 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |87704               |41         |22          |0           |0    |Normal   |\n      |python.exe          |Active     |21          |0           |     |N/A      |\n      |333 MB              |1088 KB    |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [87704], "owned_pids": [82300, 87704], "foreign_pids": []}
+ROUND {"round": 0, "prompt_tokens": 42, "new_tokens": 8, "tokens_equal": true, "median_ms": 11.062}
+ROUND {"round": 0, "prompt_tokens": 38, "new_tokens": 16, "tokens_equal": true, "median_ms": 10.964}
+ROUND {"round": 1, "prompt_tokens": 42, "new_tokens": 8, "tokens_equal": true, "median_ms": 10.853}
+HOST_TIMELINE {"elapsed_seconds": 4.687, "tree_rss_bytes": 2365583360, "foreign_peers": []}
+ROUND {"round": 1, "prompt_tokens": 38, "new_tokens": 16, "tokens_equal": true, "median_ms": 10.942}
+ROUND {"round": 2, "prompt_tokens": 42, "new_tokens": 8, "tokens_equal": true, "median_ms": 10.797}
+ROUND {"round": 2, "prompt_tokens": 38, "new_tokens": 16, "tokens_equal": true, "median_ms": 10.866}
+WITNESS post_in_process idle=True
+TIMING_JSON {"steps": 309, "ms_per_token_median": 10.895, "ms_per_token_p90": 11.369, "tokens_per_second_median": 91.79, "dispatch_ms_median": 10.626, "host_ms_median": 0.246}
+VERDICT EXACT
+POST_NPU_CONTEXT_WITNESS "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+RESEARCH_PROCESS_RESULT {"exit_code": 0, "stop": null, "peak_tree_rss_bytes": 2365583360, "rss_measurement": "maximum observed across sampled descendant working sets; zero observations reported as null", "elapsed_seconds": 7.35899999999674, "foreign_contention_observed": false, "timing_eligible": true}

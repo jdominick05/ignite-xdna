@@ -281,13 +281,18 @@ def attn_out_perm() -> np.ndarray:
 # W8A16: int8 weights with one bf16 scale per row (reference.Q8, w8_matvec). An object is still OBJ_WORDS: 24 outputs
 # x 192 inputs of int8 in mmul<4,8,4> order [kstep 24][acc 6][kk 8][n 4], so a core's group is 24 outputs and it
 # emits them as two runs of 12, rows c*N/4 + g*96 + e*48 + j*12 + [0, 12) for emit e: the column's join still writes
-# natural order. N pads up to a multiple of W8_QUANTUM with zero rows (the caller routes them to a junk region).
-# Each core's scales ride in its own tail, after x (and h, and cos/sin): the lead is per core, not per pair.
+# natural order. N pads up to a multiple of W8_QUANTUM. A 576-row projection pads to 768, and its last column is all
+# padding: such a call runs on 3 columns (cols=3; the fourth gets no transfer and its cores wait for the next call),
+# keeping N = 768 in the header so the row formula holds. Other padding rows are computed and routed to a junk region.
+# A call's first object per channel is [x][h with F_INIT, or cos/sin with F_ROPE][scales][pad][header]: the scales,
+# pad and header (the channel's tail8) are constant, so they live in the weight arena next to the call's block; the
+# pair's two cores' scales sit back to back, so one lead task serves both (LEAD_COPIES). The accumulators start from
+# zero and the epilogue adds h (reference.w8_matvec).
 F_W8 = 64
 W8_GROUP = 2 * OUT_GROUP                 # 24 outputs per core group
 W8_QUANTUM = CORES * W8_GROUP            # 384
-H_SC = 10                                # element offset of the core's scales in its x buffer
-X_BUF = OBJ_WORDS - HDR_WORDS            # words of the core's x buffer under F_W8 (lead, cos/sin and scales)
+H_SC = 10                                # element offset of the pair's scales in a core's x buffer
+X_BUF = OBJ_WORDS - HDR_WORDS            # words of the core's x buffer (a W8 lead and scales fill up to all of it)
 
 
 def w8_pad(n: int) -> int:
@@ -306,84 +311,102 @@ def chunk8(codes: np.ndarray, rows: np.ndarray, q: int) -> np.ndarray:
     return t.reshape(6, 4, KCHUNK // 8, 8).transpose(2, 0, 3, 1).reshape(-1)
 
 
-def check_w8(n: int, k: int) -> None:
+def check_w8(n: int, k: int, cols: int = COLS) -> None:
     if n <= 0 or n % W8_QUANTUM:
         raise ValueError(f"W8: N={n} is not a positive multiple of {W8_QUANTUM} (pad with w8_pad)")
     if k <= 0 or k % KCHUNK:
         raise ValueError(f"W8: K={k} is not a positive multiple of {KCHUNK}")
+    if cols not in (3, COLS):
+        raise ValueError("W8: a call runs on all 4 columns, or on 3 when the last is all padding")
 
 
-def pack8(*mats: np.ndarray) -> np.ndarray:
+def stream_words8(n: int, k: int, flags: int = 0) -> int:
+    """Words one channel reads for the weights of one W8 call."""
+    return n // W8_QUANTUM * objects_per_group(k, flags) * 2 * OBJ_WORDS
+
+
+def pack8(*mats: np.ndarray, cols: int = COLS) -> np.ndarray:
     """int8 [N][K] codes (two of one shape for F_SILU: gate, up) -> uint32 words of the W8 weight block: for each
-    channel, group, (set,) chunk and core of the pair, one object."""
+    channel of the call's columns, group, (set,) chunk and core of the pair, one object."""
     mats = [np.ascontiguousarray(m) for m in mats]
     if not 1 <= len(mats) <= 2 or any(m.dtype != np.int8 or m.shape != mats[0].shape for m in mats):
         raise TypeError("pack8 takes one or two int8 [N][K] arrays of one shape")
     n, k = mats[0].shape
-    check_w8(n, k)
-    out = np.empty(len(mats) * n * k, np.int8)
-    pos, size = 0, W8_GROUP * KCHUNK
-    for c in range(COLS):
+    check_w8(n, k, cols)
+    size = W8_GROUP * KCHUNK
+    out = []
+    for c in range(cols):
         for h in range(2):
             for g in range(n // W8_QUANTUM):
                 for m in mats:
                     for q in range(chunks(k)):
                         for e in range(2):
-                            out[pos:pos + size] = chunk8(m, core_rows8(n, c, 2 * h + e, g), q)
-                            pos += size
-    assert pos == out.size
-    return out.view(np.uint32)
+                            out.append(chunk8(m, core_rows8(n, c, 2 * h + e, g), q))
+    block = np.concatenate(out)
+    assert block.size == cols * 2 * stream_words8(n, k, (F_SILU if len(mats) == 2 else 0)) * 4
+    return block.view(np.uint32)
 
 
-def scales8(n: int, *s: np.ndarray) -> np.ndarray:
-    """bf16 scale bits [N] (two for F_SILU) -> uint16 [CORES][rows per core]: each core's scales in the order its
-    accumulators make them (set, group, emit, row)."""
-    out = []
-    for c in range(COLS):
-        for j in range(ROWS):
-            out.append(np.concatenate([v[core_rows8(n, c, j, g)] for v in s for g in range(n // W8_QUANTUM)]))
-    return np.array(out, np.uint16)
+def lead_elems8(n: int, k: int, flags: int, cols: int = COLS) -> int:
+    """The per-call part of a W8 first object: x; with F_INIT the h rows the call's columns own (N*cols/4); with
+    F_ROPE the position's cos/sin row."""
+    return k + (n * cols // COLS if flags & F_INIT else 0) + (CS_ELEMS if flags & F_ROPE else 0)
 
 
-def lead_elems8(n: int, k: int, flags: int, h_rows: int | None = None) -> int:
-    """A W8 call's lead: x, then with F_INIT only the h_rows real rows of h (the padded rows read past it and land
-    in the junk region)."""
-    return k + ((n if h_rows is None else h_rows) if flags & F_INIT else 0)
+def rows8(n: int, flags: int) -> int:
+    """Scales one core holds: its N/16 rows, twice with F_SILU (gate, up)."""
+    return n // CORES * (2 if flags & F_SILU else 1)
 
 
-def copy_elems8(n: int, k: int, flags: int, h_rows: int | None = None) -> int:
-    """What a W8 core copies into its x buffer: lead, cos/sin with F_ROPE, its scales; rounded up to 32."""
-    rows = n // CORES * (2 if flags & F_SILU else 1)
-    cs = CS_ELEMS if flags & F_ROPE else 0
-    return -(-(lead_elems8(n, k, flags, h_rows) + cs + rows) // 32) * 32
+def copy_elems8(n: int, k: int, flags: int, cols: int = COLS) -> int:
+    """What a W8 core copies into its x buffer: the lead, then both cores' scales of its pair; rounded up to 32."""
+    return -(-(lead_elems8(n, k, flags, cols) + 2 * rows8(n, flags)) // 32) * 32
 
 
-def tail8(n: int, k: int, flags: int, scales: np.ndarray, rope_end: int = 0,
-          cs: np.ndarray | None = None, h_rows: int | None = None) -> np.ndarray:
-    """One core's tail under F_W8 (flags without F_W8): [cos/sin][its scales][pad][header], to follow its lead."""
-    check_w8(n, k)
+def check_call8(n: int, k: int, flags: int = 0, rope_end: int = 0, cols: int = COLS) -> None:
+    check_w8(n, k, cols)
     if flags & ~FLAGS_ALL:
         raise ValueError(f"unknown flags {flags:#x}")
-    if (cs is not None) != bool(flags & F_ROPE):
-        raise ValueError("cos/sin are given exactly when F_ROPE is set")
-    copy = copy_elems8(n, k, flags, h_rows)
+    if flags & F_INIT and flags & (F_SILU | F_NORM | F_ROPE):
+        raise ValueError("a residual call takes no other flag")
+    if flags & F_ROPE and flags & F_SILU:
+        raise ValueError("RoPE and SiLU do not combine")
+    if bool(flags & F_ROPE) != (rope_end > 0) or rope_end % W8_GROUP or rope_end > n:
+        raise ValueError("ROPE_END is a positive multiple of 24 up to N exactly when F_ROPE is set")
+    copy = copy_elems8(n, k, flags, cols)
     if copy > 2 * X_BUF:
         raise ValueError(f"W8: the core would copy {copy} elements, past its {2 * X_BUF}")
-    lead = lead_elems8(n, k, flags, h_rows)
-    if lead % 2:
+    if lead_elems8(n, k, flags, cols) % 2:
         raise ValueError("the lead is whole words")
-    t = np.zeros(OBJ_WORDS - lead // 2, np.uint16).repeat(2)
-    at = 0
-    if cs is not None:
-        t[:CS_ELEMS] = np.ascontiguousarray(cs, dtype=np.uint16)
-        at = CS_ELEMS
+
+
+def tail8(n: int, k: int, flags: int, scales: np.ndarray, rope_end: int = 0, cols: int = COLS) -> np.ndarray:
+    """One channel's tail under F_W8 (flags without F_W8): [scales of core 2h][of core 2h+1][pad][header], to follow
+    the lead. Both cores of the pair receive the same lead and tail; core e reads its scales at H_SC + e*rows."""
+    check_call8(n, k, flags, rope_end, cols)
+    lead = lead_elems8(n, k, flags, cols)
     scales = np.ascontiguousarray(scales, dtype=np.uint16)
-    if scales.shape != (n // CORES * (2 if flags & F_SILU else 1),):
-        raise ValueError("one core's scales: N/16 rows, twice with F_SILU")
-    t[at:at + scales.size] = scales
+    if scales.shape != (2 * rows8(n, flags),):
+        raise ValueError("a pair's scales: core 2h's N/16 rows then core 2h+1's (each twice with F_SILU)")
+    t = np.zeros(2 * (OBJ_WORDS - lead // 2), np.uint16)
+    t[:scales.size] = scales
     t = t.view(np.uint32)
     hdr = t[-HDR_WORDS:]
     hdr[H_G], hdr[H_Q], hdr[H_K], hdr[H_N] = n // W8_QUANTUM, objects_per_group(k, flags), k, n
-    hdr[H_FLAGS], hdr[H_AUX_OFF], hdr[H_COPY], hdr[H_E] = flags | F_W8, k if flags & F_INIT else lead, copy, 2
-    hdr[H_ROPE_END], hdr[H_SC] = rope_end, lead + at
+    hdr[H_FLAGS], hdr[H_AUX_OFF], hdr[H_COPY], hdr[H_E] = flags | F_W8, k, copy_elems8(n, k, flags, cols), 2
+    hdr[H_ROPE_END], hdr[H_SC] = rope_end, lead
     return t
+
+
+def pair_scales8(n: int, c: int, h: int, *s: np.ndarray) -> np.ndarray:
+    """bf16 scale bits [N] (gate, up for F_SILU) -> the scales of channel (c, h)'s pair, core 2h then 2h+1, each in
+    its accumulators' order (set, group, emit, row)."""
+    return np.concatenate([v[core_rows8(n, c, 2 * h + e, g)] for e in range(2) for v in s
+                           for g in range(n // W8_QUANTUM)]).astype(np.uint16)
+
+
+def tails8(n: int, k: int, flags: int, *s: np.ndarray, rope_end: int = 0, cols: int = COLS) -> np.ndarray:
+    """The 2*cols channel tails of one W8 call, back to back (channel c*2+h at its index times the tail's size):
+    the constant part that sits in the weight arena after the call's block."""
+    return np.concatenate([tail8(n, k, flags, pair_scales8(n, c, h, *s), rope_end, cols)
+                           for c in range(cols) for h in range(2)])

@@ -4183,6 +4183,33 @@ Each run was `timing_eligible: true`.
   181-call program spread from 4.40 to 5.69 ms, so this slope is rough.
 - **What remains of the fixed cost** is the weight BD, the output BDs and the syncs of each call. W8A16 comes
   next.
+- **The pre-check before this sitting failed:** `check-inference-contention.ps1 -RequireIdle` flagged Windows
+  Terminal (pid 64072) at 3% of the GPU's 3D engine, and the runs went ahead. The wrapper's witnesses recorded no
+  foreign contention for any run.
+
+**W8A16 projections: exact on the device (MEASURED, 2026-10-20 04:29Z, Desktop 2).**
+- **The format:** int8 codes with one bf16 scale per row, against the reference's device semantics
+  (`reference.Q8`, `w8_matvec`). That reference holds SmolLM2 at perplexity 7.21.
+- **The kernel (`gemv.cc`, `F_W8`):** the codes widen exactly to bf16 and run through the same MAC walk, in two
+  passes of three accumulators. Six at once spilled 512 B to the stack.
+- **The epilogue:** hi = bf16(acc), then lo = bf16(acc − hi) through one mmul. Then y = bf16(h + hi·s + lo·s)
+  through one mmul.
+- **The layout:** a core's group is 24 rows, so N pads to a multiple of 384.
+  - A 576-row call runs on 3 columns, and the fourth gets no transfer.
+  - qkv's 960 rows pad to 1,152, with the padding routed to a junk region.
+- **Where the scales come from:** each channel's scales, pad and header sit in the weight arena after the call's
+  block. They are one more piece of the chained lead task.
+- **Code:** 15,200 B per core, with no stack frame in the W8 loop.
+
+| run | result | log |
+| --- | --- | --- |
+| W8 probe: layer 0's qkv (norm + RoPE), o (+ residual), gate/up (norm + SiLU), down (+ residual), the head's first 12,288 rows, plain o, and the head on the device's down output; seeds 0 and 1 | **EXACT**: 28,800 elements a seed, every bit; arena unchanged | [log](../results/aie/llm_w8_exact_desktop2_20261020T042908Z.log) |
+| bf16 decode on the changed kernel (shared epilogue, larger buffers) | EXACT on both prompts; 10.90 ms a token, 91.8 tokens/s, as before | [check](../results/aie/llm_decode_exact_w8kernel_desktop2_20261020T042925Z.log), [bench](../results/aie/llm_decode_timed_w8kernel_desktop2_20261020T042937Z.log) |
+
+- **The pre-check before this sitting also failed,** on desktop rendering: Windows Terminal 2% and dwm 1% on the
+  3D engine, System 1% on copy. Each run was `timing_eligible: true` with no foreign contention observed.
+- **Next:** the W8 decoder. That means 4 head calls of 12,288 rows, since a 24,576-row call's scales overflow
+  the core's buffer.
 
 ### Gemma 3 4B decode on the CPU and DirectML: INCOMPLETE in both sittings on the page-in witness, and the three complete arms decode at 10.8–17.6 tok/s (2026-09-24, Desktop 2)
 

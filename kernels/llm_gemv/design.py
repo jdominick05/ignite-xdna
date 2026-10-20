@@ -46,9 +46,19 @@ class Call:
     # out_map: (first output, outputs, out-argument word offset) pieces covering [0, N) in order; the output goes to
     # out_offset + position/2 without one. A column's S2MM takes one BD per piece it overlaps (the KV append: k and v
     # land in the cache rows of the position, q in its own region).
+    w8: bool = False              # int8 weights (pack.pack8), the channel tails after the block (pack.tails8); always
+                                  # chained, x_offset naming the cos/sin row with F_ROPE
+    cols: int = pack.COLS         # W8 only: 3 when the last column would be all padding (its rows past N*3/4)
 
     def __post_init__(self):
-        pack.check_call(self.n, self.k, self.flags, self.rope_end)
+        if self.w8:
+            pack.check_call8(self.n, self.k, self.flags, self.rope_end, self.cols)
+            if self.x_out is None:
+                raise ValueError("a W8 call is chained: x comes from the out argument")
+        else:
+            pack.check_call(self.n, self.k, self.flags, self.rope_end)
+            if self.cols != pack.COLS:
+                raise ValueError("a bf16 call runs on every column")
         if (self.h_out is not None) != (self.x_out is not None and bool(self.flags & pack.F_INIT)):
             raise ValueError("h_out is given exactly for a chained call with F_INIT")
         if self.out_map is not None:
@@ -68,7 +78,19 @@ class Call:
         return pack.tail(self.n, self.k, self.flags, self.rope_end, cs)
 
     def weight_words(self) -> int:
+        if self.w8:
+            return self.cols * 2 * (self.stream_words() + self.tail_words())
         return pack.weight_words(self.n, self.k, self.flags)
+
+    def stream_words(self) -> int:
+        """Words of weights one channel reads; channel ch's start at w_offset + ch * this."""
+        if self.w8:
+            return pack.stream_words8(self.n, self.k, self.flags)
+        return pack.stream_elems(self.n, self.k, self.flags) // 2
+
+    def tail_words(self) -> int:
+        """W8: words of one channel's tail8, the channels' back to back after the block."""
+        return pack.OBJ_WORDS - pack.lead_elems8(self.n, self.k, self.flags, self.cols) // 2
 
     def out_pieces(self, c: int) -> list:
         """(out-argument word offset, words) for column c's quarter of the output, in stream order."""
@@ -82,10 +104,20 @@ class Call:
         return out
 
     def x_words_used(self) -> int:
+        if self.w8:
+            return pack.CS_ELEMS // 2 if self.flags & pack.F_ROPE else 0
         return pack.X_SLOT_WORDS if self.x_out is None else self.header().size
 
-    def lead(self) -> list:
-        """(argument, word offset, words) for each piece of one first object, in stream order."""
+    def lead(self, ch: int = 0) -> list:
+        """(argument, word offset, words) for each piece of channel ch's first object, in stream order."""
+        if self.w8:
+            pieces = [("o", self.x_out, self.k // 2)]
+            if self.flags & pack.F_INIT:
+                pieces.append(("o", self.h_out, self.n * self.cols // pack.COLS // 2))
+            if self.flags & pack.F_ROPE:
+                pieces.append(("x", self.x_offset, pack.CS_ELEMS // 2))
+            tw = self.tail_words()
+            return pieces + [("w", self.w_offset + self.cols * 2 * self.stream_words() + ch * tw, tw)]
         if self.x_out is None:
             return [("x", self.x_offset, pack.X_SLOT_WORDS)]
         pieces = [("o", self.x_out, self.k // 2)]
@@ -168,7 +200,7 @@ class Attn:
         return L
 
 
-ACC = 96          # two accumulator sets of 3 x 16 fp32 (gate and up with F_SILU)
+ACC = 192         # two accumulator sets (gate and up with F_SILU) of 3 x 16 fp32, or 6 x 16 with F_W8
 
 
 ARG = {"w": 0, "x": 1, "o": 2}
@@ -215,7 +247,7 @@ def _core(i: int) -> str:
       scf.for %it = %z to %forever step %one {{
         %hs = aie.objectfifo.acquire @wF{i}(Consume, 1) : {view}
         %h = aie.objectfifo.subview.access %hs[0] : {view} -> memref<{O}xi32>
-        func.call @gemv_begin(%h, %xl{i}, %ctl{i}, %core) : (memref<{O}xi32>, memref<{pack.MAX_K // 2}xi32>, memref<16xi32>, i32) -> ()
+        func.call @gemv_begin(%h, %xl{i}, %ctl{i}, %core) : (memref<{O}xi32>, memref<{pack.X_BUF}xi32>, memref<16xi32>, i32) -> ()
         aie.objectfifo.release @wF{i}(Consume, 1)
         %g32 = memref.load %ctl{i}[%z] : memref<16xi32>
         %q32 = memref.load %ctl{i}[%one] : memref<16xi32>
@@ -229,14 +261,14 @@ def _core(i: int) -> str:
             %ws = aie.objectfifo.acquire @wF{i}(Consume, 1) : {view}
             %w = aie.objectfifo.subview.access %ws[0] : {view} -> memref<{O}xi32>
             %qi = arith.index_cast %q : index to i32
-            func.call @gemv_chunk(%w, %xl{i}, %acc{i}, %qi, %ctl{i}, %core, %gi) : (memref<{O}xi32>, memref<{pack.MAX_K // 2}xi32>, memref<{ACC}xf32>, i32, memref<16xi32>, i32, i32) -> ()
+            func.call @gemv_chunk(%w, %xl{i}, %acc{i}, %qi, %ctl{i}, %core, %gi) : (memref<{O}xi32>, memref<{pack.X_BUF}xi32>, memref<{ACC}xf32>, i32, memref<16xi32>, i32, i32) -> ()
             aie.objectfifo.release @wF{i}(Consume, 1)
           }}
           scf.for %e = %z to %E step %one {{
             %ei = arith.index_cast %e : index to i32
             %os = aie.objectfifo.acquire @oF{i}(Produce, 1) : {oview}
             %o = aie.objectfifo.subview.access %os[0] : {oview} -> memref<6xi32>
-            func.call @gemv_emit(%acc{i}, %o, %ctl{i}, %xl{i}, %core, %gi, %ei) : (memref<{ACC}xf32>, memref<6xi32>, memref<16xi32>, memref<{pack.MAX_K // 2}xi32>, i32, i32, i32) -> ()
+            func.call @gemv_emit(%acc{i}, %o, %ctl{i}, %xl{i}, %core, %gi, %ei) : (memref<{ACC}xf32>, memref<6xi32>, memref<16xi32>, memref<{pack.X_BUF}xi32>, i32, i32, i32) -> ()
             aie.objectfifo.release @oF{i}(Produce, 1)
           }}
         }}
@@ -246,7 +278,7 @@ def _core(i: int) -> str:
 
 
 def harness(program: Sequence, w_words: int, x_words: int, out_words: int) -> str:
-    O, XK = pack.OBJ_WORDS, pack.MAX_K // 2
+    O, XK = pack.OBJ_WORDS, pack.X_BUF
     for call in program:
         if isinstance(call, Attn):
             call.check(x_words, out_words)
@@ -255,11 +287,11 @@ def harness(program: Sequence, w_words: int, x_words: int, out_words: int) -> st
             raise ValueError(f"{call}: weights run past the {w_words}-word argument")
         if call.x_offset + call.x_words_used() > x_words:
             raise ValueError(f"{call}: x runs past its argument")
-        if any(off + n > out_words for c in range(pack.COLS) for off, n in call.out_pieces(c)):
+        if any(off + n > out_words for c in range(call.cols) for off, n in call.out_pieces(c)):
             raise ValueError(f"{call}: out runs past its argument")
         if call.x_out is not None and call.x_out + call.k // 2 > out_words:
             raise ValueError(f"{call}: chained x runs past the out argument")
-        if call.h_out is not None and call.h_out + call.n // 2 > out_words:
+        if call.h_out is not None and call.h_out + call.n * call.cols // pack.COLS // 2 > out_words:
             raise ValueError(f"{call}: chained h runs past the out argument")
     L = ["module {", "  aie.device(npu1) {",
          f"    func.func private @gemv_begin(memref<{O}xi32>, memref<{XK}xi32>, memref<16xi32>, i32)",
@@ -300,16 +332,16 @@ def harness(program: Sequence, w_words: int, x_words: int, out_words: int) -> st
         if isinstance(call, Attn):
             L += call.sequence(x_words, out_words, ssa)
             continue
-        sw = pack.stream_elems(call.n, call.k, call.flags) // 2
+        sw = call.stream_words()
         # the host-built pair is one transfer; a chained first object is x (and h) from earlier outputs, then the
         # constant tail, once per core of the pair. BD ids per shim tile: channel h uses 7h..7h+5 for these and
         # 7h+6 for its weights, the output 14 (16 per tile).
         chained = call.x_out is not None and pack.LEAD_COPIES == 1
-        xs = call.lead() if call.x_out is None else call.lead() * pack.LEAD_COPIES
-        sizes = {"x": x_words, "o": out_words}
-        for c in range(pack.COLS):
+        sizes = {"x": x_words, "o": out_words, "w": w_words}
+        for c in range(call.cols):
             for h in range(2):
                 ch, fifo = c * 2 + h, f"@wL{c}_{h}"
+                xs = call.lead(ch) if call.x_out is None else call.lead(ch) * pack.LEAD_COPIES
                 if chained:
                     L += lead_task(c, h, xs, ssa)
                 else:
@@ -328,7 +360,7 @@ def harness(program: Sequence, w_words: int, x_words: int, out_words: int) -> st
                 L.append(f"      aiex.npu.dma_memcpy_nd(%o[0,0,0,{off}][1,1,1,{length}][0,0,0,1]) "
                          f"{{id = {15 - j} : i64, metadata = @oL{c}, issue_token = true}} "
                          f": memref<{out_words}xi32>")
-        for c in range(pack.COLS):
+        for c in range(call.cols):
             L += [f"      aiex.npu.dma_wait {{symbol = @oL{c}}}"] * len(call.out_pieces(c))
     L += ["    }", "  }", "}"]
     return "\n".join(L) + "\n"
