@@ -4139,6 +4139,25 @@ timed dispatches: [first](../results/aie/llm_decode_breakdown_desktop2_20261020T
   the projections reach once control is set aside), PV compute about 2.4 ms. The order of work that follows: the
   PV loops, W8A16, and fewer BDs per call (leads that serve both cores of a pair).
 
+**The PV loops, first: 81.5 tokens/s, still exact (MEASURED, 2026-10-20 04:03–04:04Z, Desktop 2).** Two changes to
+`gemv.cc`, both exact by construction:
+- **`pv_begin` stops at p's block.** It forms d and e only up to the end of the 8-position block holding p, the
+  last one `pv_chunk` reads, where it used to run over all 576 positions.
+- **`pv_chunk` reads whole V blocks as vectors.** It takes each row's 8 dims with one load and splits the dims into
+  the four 4-wide B tiles with `filter_even` / `filter_odd`. The block holding p keeps the scalar path that zeroes
+  rows past p.
+
+Code is 13,200 B. Checked and timed in one sitting, each run `timing_eligible: true`:
+
+| run | result | log |
+| --- | --- | --- |
+| attention probe, p = 0, 1, 5, 37, 150, 575, seeds 0 and 1 | EXACT: every score and output | [log](../results/aie/llm_attn_exact_pvfast_desktop2_20261020T040327Z.log) |
+| decode check, the two chat prompts | EXACT: every step's 49,152 logits, tokens equal | [log](../results/aie/llm_decode_exact_pvfast_desktop2_20261020T040340Z.log) |
+| breakdown (p = 40), round 2 | full 12.07 ms; PV 1.30 (was 3.21); attention 2.30 (was 4.20); projections 9.81 | [log](../results/aie/llm_decode_breakdown_pvfast_desktop2_20261020T040355Z.log) |
+| decode bench, 309 steps | **12.27 ms a token median, 81.5 tokens/s** (was 13.99 and 71.5); dispatch 12.00, host 0.25 | [log](../results/aie/llm_decode_timed_pvfast_desktop2_20261020T040417Z.log) |
+
+The bench's positions run up to about 58. PV's saving shrinks as p grows, since the work up to p is still done.
+
 ### Gemma 3 4B decode on the CPU and DirectML: INCOMPLETE in both sittings on the page-in witness, and the three complete arms decode at 10.8–17.6 tok/s (2026-09-24, Desktop 2)
 
 The question, (c) of the Gemma plan with its rule (d)

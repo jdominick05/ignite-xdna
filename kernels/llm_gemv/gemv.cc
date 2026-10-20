@@ -154,8 +154,9 @@ NOINLINE static void pv_begin(int32_t *x_local, const int32_t *ctl) {
     ROLLED for (int i = 0; i < 2 * TILE; ++i) at[i] = 0;
     for (int n = 0; n < GQA; ++n) { bt[n * 4 + n] = 0x3F80; bt[(GQA + n) * 4 + n] = 0xBF80; }
     const auto b = aie::load_v<TILE>(bt).cast_to<bfloat16>();
-    ROLLED for (int g = 0; g < objects; ++g)
-        ROLLED for (int w = 0; w < PV_ROWS; w += 4) {
+    const int last = p | 7;                             // pv_chunk reads whole 8-position blocks up to p's
+    ROLLED for (int g = 0; g < objects && g * PV_ROWS <= last; ++g)
+        ROLLED for (int w = 0; w < PV_ROWS && g * PV_ROWS + w <= last; w += 4) {
             const int pos0 = g * PV_ROWS + w;
             uint16_t *run = x + score_run(g, w) * GROUP;
             ROLLED for (int m = 0; m < 4; ++m)                  // row m of A is [s.. max..]
@@ -219,15 +220,31 @@ NOINLINE static void pv_chunk(const int32_t *obj, int32_t *x_local, float *acc, 
                 ROLLED for (int h = 0; h < GQA; ++h)
                     at[h * 8 + half * 4 + m] = run[m * GQA + h];
         }
-        ROLLED for (int i = 0; i < 8 * PV_DIMS; ++i) {      // i = kk*16 + dim; tile dim/4, element kk*4 + dim%4
-            const int kk = i >> 4, d = i & 15;
-            bt[(d >> 2) * TILE + kk * 4 + (d & 3)] = pos0 + kk <= p ? v[blk * 8 * PV_DIMS + i] : uint16_t(0);
-        }
         const auto ab = aie::load_v<TILE>(at).cast_to<bfloat16>();
-        c0.mac(ab, aie::load_v<TILE>(bt).cast_to<bfloat16>());
-        c1.mac(ab, aie::load_v<TILE>(bt + TILE).cast_to<bfloat16>());
-        c2.mac(ab, aie::load_v<TILE>(bt + 2 * TILE).cast_to<bfloat16>());
-        c3.mac(ab, aie::load_v<TILE>(bt + 3 * TILE).cast_to<bfloat16>());
+        const uint16_t *vb = v + blk * 8 * PV_DIMS;
+        if (pos0 + 7 <= p) {                                // a whole block: tile t is rows 0-7 x dims 4t..4t+3
+            // r[h][half] = rows 4*half..4*half+3, dims 8h..8h+7 each: groups of 4 alternate tile 2h, tile 2h+1
+            aie::vector<uint16, 32> r[2][2];
+            for (int h = 0; h < 2; ++h)
+                for (int half = 0; half < 2; ++half)
+                    for (int m = 0; m < 4; ++m)
+                        r[h][half].insert<8>(m, aie::load_v<8>(vb + (half * 4 + m) * PV_DIMS + 8 * h));
+            const auto b0 = aie::concat(aie::filter_even(r[0][0], 4), aie::filter_even(r[0][1], 4));
+            const auto b1 = aie::concat(aie::filter_odd(r[0][0], 4), aie::filter_odd(r[0][1], 4));
+            const auto b2 = aie::concat(aie::filter_even(r[1][0], 4), aie::filter_even(r[1][1], 4));
+            const auto b3 = aie::concat(aie::filter_odd(r[1][0], 4), aie::filter_odd(r[1][1], 4));
+            c0.mac(ab, b0.cast_to<bfloat16>()); c1.mac(ab, b1.cast_to<bfloat16>());
+            c2.mac(ab, b2.cast_to<bfloat16>()); c3.mac(ab, b3.cast_to<bfloat16>());
+        } else {                                            // p's block: rows past p zero (0 x NaN is NaN)
+            ROLLED for (int i = 0; i < 8 * PV_DIMS; ++i) {  // i = kk*16 + dim; tile dim/4, element kk*4 + dim%4
+                const int kk = i >> 4, d = i & 15;
+                bt[(d >> 2) * TILE + kk * 4 + (d & 3)] = pos0 + kk <= p ? vb[i] : uint16_t(0);
+            }
+            c0.mac(ab, aie::load_v<TILE>(bt).cast_to<bfloat16>());
+            c1.mac(ab, aie::load_v<TILE>(bt + TILE).cast_to<bfloat16>());
+            c2.mac(ab, aie::load_v<TILE>(bt + 2 * TILE).cast_to<bfloat16>());
+            c3.mac(ab, aie::load_v<TILE>(bt + 3 * TILE).cast_to<bfloat16>());
+        }
         cz.mac(ab, ones);
     }
     aie::store_v(acc, c0.to_vector<float>()); aie::store_v(acc + 16, c1.to_vector<float>());
