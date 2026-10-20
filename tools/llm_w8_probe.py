@@ -5,16 +5,16 @@
 
 The W8 path (pack.py's F_W8, gemv.cc's w8_chunk and w8_emit) streams int8 codes with one bf16 scale per row and
 forms y = bf16(h + hi*s + lo*s) from the fp32 accumulator (reference.w8_matvec). This checks it on SmolLM2-135M's
-layer 0 (Q8 of the gamma-folded weights) and the head's first quarter, bit for bit against the reference's exact mode,
+layer 0 (Q8 of the gamma-folded weights) and the whole head, bit for bit against the reference's exact mode,
 in one dispatch of seven calls:
 
     qkv    norm + RoPE, 960 rows padded to 1,152 (the padding to a junk region)
     o      o + residual, 576 rows on 3 columns (padded to 768: the fourth column gets no transfer)
     gu     gate/up + norm + SiLU
     down   down + residual, 576 rows on 3 columns
-    head   norm, rows 0..12,287 of the head
+    head   norm, all 49,152 rows in one call (the scales run on into two extra lead objects)
     plain  the o projection with no flag
-    chead  the head quarter again, its x DMA'd from the down call's output
+    chead  the head again, its x DMA'd from the down call's output
 
 Every x and h is DMA'd from the out argument (W8 calls are chained), where the host writes the inputs.
 
@@ -38,8 +38,9 @@ sys.path.insert(0, str(ROOT / "tools"))
 from kernels.llm_gemv import pack  # noqa: E402
 from kernels.llm_gemv import reference as R  # noqa: E402
 
-BUILD = ROOT / "build" / "llm_w8"
-HIDDEN, MLP, KV, QUARTER = 576, 1536, 192, 12288
+# v2: the whole head in one call; v1 (a head quarter) stays in build/llm_w8
+BUILD = ROOT / "build" / "llm_w8_v2"
+HIDDEN, MLP, KV, VOCAB = 576, 1536, 192, 49152
 QK = HIDDEN + KV
 POS = 37
 POISON = 0x7FC9_8765
@@ -48,8 +49,8 @@ F = pack
 NORM_ROPE, NORM_SILU = F.F_NORM | F.F_ROPE, F.F_NORM | F.F_SILU
 # name -> (padded N, K, flags, cols)
 SPEC = {"qkv": (1152, HIDDEN, NORM_ROPE, 4), "o": (768, HIDDEN, F.F_INIT, 3), "gu": (MLP, HIDDEN, NORM_SILU, 4),
-        "down": (768, MLP, F.F_INIT, 3), "head": (QUARTER, HIDDEN, F.F_NORM, 4), "plain": (768, HIDDEN, 0, 3)}
-CHECKED = {"qkv": 960, "o": HIDDEN, "m": MLP, "down": HIDDEN, "head": QUARTER, "plain": HIDDEN, "chead": QUARTER}
+        "down": (768, MLP, F.F_INIT, 3), "head": (VOCAB, HIDDEN, F.F_NORM, 4), "plain": (768, HIDDEN, 0, 3)}
+CHECKED = {"qkv": 960, "o": HIDDEN, "m": MLP, "down": HIDDEN, "head": VOCAB, "plain": HIDDEN, "chead": VOCAB}
 
 
 def bits(a):
@@ -66,8 +67,8 @@ def _offsets(sizes):
 
 OUT, OUT_WORDS = _offsets([("in_h", HIDDEN // 2), ("in_attn", HIDDEN // 2), ("in_h2", HIDDEN // 2),
                            ("in_m", MLP // 2), ("qkv", 960 // 2), ("junk", 192 // 2), ("o", HIDDEN // 2),
-                           ("m", MLP // 2), ("down", HIDDEN // 2), ("head", QUARTER // 2), ("plain", HIDDEN // 2),
-                           ("chead", QUARTER // 2)])
+                           ("m", MLP // 2), ("down", HIDDEN // 2), ("head", VOCAB // 2), ("plain", HIDDEN // 2),
+                           ("chead", VOCAB // 2)])
 X_CS, X_WORDS = 0, F.CS_ELEMS // 2
 
 
@@ -110,11 +111,11 @@ def cs_row():
 
 
 def quantized():
-    """name -> Q8 of layer 0's gamma-folded projections (natural row order) and the head quarter."""
+    """name -> Q8 of layer 0's gamma-folded projections (natural row order) and the head."""
     w = R.Weights.load(R.safetensors(R.model_file()))
     L = w.layers[0]
     return {"qkv": R.Q8.of(L["qkv_g"]), "o": R.Q8.of(L["o"]), "gate": R.Q8.of(L["gu_g"][:MLP]),
-            "up": R.Q8.of(L["gu_g"][MLP:]), "down": R.Q8.of(L["down"]), "head": R.Q8.of(w.head_g[:QUARTER])}
+            "up": R.Q8.of(L["gu_g"][MLP:]), "down": R.Q8.of(L["down"]), "head": R.Q8.of(w.head_g)}
 
 
 def _padded(q, n):

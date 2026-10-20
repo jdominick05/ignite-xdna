@@ -503,3 +503,31 @@ def test_a_w8_call_reads_its_tails_from_the_arena_and_skips_a_padding_column():
         design.Call(0, 0, 0, n, 576, x_out=0, w8=True, cols=2)
     with pytest.raises(ValueError):
         design.Call(0, 0, 0, 576, 576, x_out=0, w8=True)                    # N not padded to 384
+
+
+def test_a_whole_head_call_runs_its_scales_on_into_extra_lead_objects():
+    import re
+    from kernels.llm_gemv import design
+    n, k, f = 49152, 576, pack.F_NORM
+    assert pack.xobj8(n, k, f) == 2 and pack.xobj8(12288, k, f) == 0
+    rng = np.random.default_rng(5)
+    s = rng.integers(0x3800, 0x3C00, n).astype(np.uint16)
+    lead = pack.lead_elems8(n, k, f)
+    for c, h in ((0, 0), (3, 1)):
+        pair = pack.pair_scales8(n, c, h, s)
+        tail, extra = pack.tail8(n, k, f, pair), pack.extra8(n, k, f, pair)
+        hdr = tail[-pack.HDR_WORDS:]
+        assert hdr[pack.H_XOBJ] == 2 and hdr[pack.H_SC] == lead and hdr[pack.H_COPY] == 2 * pack.X_COPY0
+        first = np.concatenate([np.zeros(lead // 2, np.uint32), tail])          # what the channel sends first
+        objs = extra.reshape(-1, pack.OBJ_WORDS)
+        assert np.array_equal(objs[0], objs[1]) and np.array_equal(objs[2], objs[3])   # once per core of the pair
+        for e in range(2):                                    # the core: gemv_begin's copy, then gemv_more's
+            x_local = np.zeros(pack.X_BUF, np.uint32)
+            x_local[:pack.X_COPY0] = first[:pack.X_COPY0]
+            for i, obj in enumerate(objs[e::2]):
+                x_local[pack.X_COPY0 + i * pack.OBJ_WORDS:pack.X_COPY0 + (i + 1) * pack.OBJ_WORDS] = obj
+            assert np.array_equal(x_local.view(np.uint16)[lead:lead + pair.size], pair)
+    call = design.Call(0, 0, 0, n, k, x_out=0, flags=f, w8=True)
+    text = design.harness([call], call.weight_words(), 64, n // 2 + 288)
+    assert text.count(f"buffer_length = {2 * 2 * pack.OBJ_WORDS} : i32") == 8 and text.count("repeat %lr") == 16
+    assert len(re.findall(r"bd_id = (5|12) : i32", text)) == 8

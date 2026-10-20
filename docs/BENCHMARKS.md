@@ -4235,6 +4235,26 @@ Each run was `timing_eligible: true`.
 - **The pre-check failed again** on Windows Terminal's renderer (2% of the 3D engine). Both runs were
   `timing_eligible: true`, with no foreign contention observed.
 
+**The W8 head in one call: 8.20 ms a token, 121.9 tokens/s, exact (MEASURED, 2026-10-20 04:45–04:46Z,
+Desktop 2).**
+- **The obstacle:** one head call's scales (6,144 for a pair) overflow the first lead object.
+- **The fix:** a new header field `H_XOBJ` counts extra lead objects. The core copies them after the first
+  (`gemv_more`), so the scales run on contiguously in a 3,440-word x buffer.
+- **The DMA side:** one more arena piece per channel (BD 7h+5, pushed once). It is stored twice in the arena, so
+  each core of the pair gets its copy.
+- **Every other call has none:** the W8 decoder is back to 181 calls, the same as bf16.
+
+| run | result | log |
+| --- | --- | --- |
+| W8 probe with the whole head (49,152 rows) as one call, and its chained repeat; seeds 0 and 1 | EXACT: 102,528 elements a seed; arena unchanged | [log](../results/aie/llm_w8_exact_onehead_desktop2_20261020T044545Z.log) |
+| W8 decode check, both prompts | EXACT on every logit, tokens equal | [log](../results/aie/llm_decode_exact_w8onehead_desktop2_20261020T044602Z.log) |
+| W8 decode bench, 309 steps | **8.20 ms a token median (p90 8.59), 121.9 tokens/s** (was 8.36, 119.6); dispatch 7.97 | [log](../results/aie/llm_decode_timed_w8onehead_desktop2_20261020T044614Z.log) |
+| bf16 decode on this kernel | EXACT; 10.89 ms a token, 91.9 tokens/s (unchanged) | [check](../results/aie/llm_decode_exact_xobjkernel_desktop2_20261020T044630Z.log), [bench](../results/aie/llm_decode_timed_xobjkernel_desktop2_20261020T044642Z.log) |
+
+- **The saving:** three fewer calls save 0.14 ms of dispatch (DERIVED), about 46 µs a call.
+- **The pre-check failed** on desktop rendering (Windows Terminal 3%, dwm 2% of the 3D engine). Every run was
+  `timing_eligible: true`, with no foreign contention observed.
+
 ### Gemma 3 4B decode on the CPU and DirectML: INCOMPLETE in both sittings on the page-in witness, and the three complete arms decode at 10.8–17.6 tok/s (2026-09-24, Desktop 2)
 
 The question, (c) of the Gemma plan with its rule (d)

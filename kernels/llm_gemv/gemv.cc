@@ -36,7 +36,7 @@ constexpr int SET = 48;               // floats in one accumulator set (3 x 16)
 
 // Header words (the last HDR_WORDS of a call's first object)
 enum { H_G = 0, H_Q = 1, H_K = 2, H_N = 3, H_FLAGS = 4, H_AUX_OFF = 5, H_COPY = 6, H_E = 7, H_ROPE_END = 8,
-       H_POS = 9, H_SC = 10 };
+       H_POS = 9, H_SC = 10, H_XOBJ = 11 };
 enum { F_INIT = 1, F_NORM = 2, F_ROPE = 4, F_SILU = 8, F_SCORE = 16, F_PV = 32, F_W8 = 64 };
 // ctl words the core keeps for the call: the header, then r's bits at C_R
 enum { C_R = 15 };
@@ -348,6 +348,14 @@ void gemv_begin(const int32_t *obj, int32_t *x_local, int32_t *ctl, int32_t core
     if (hdr[H_FLAGS] & F_SCORE) score_begin(x_local);
     if (hdr[H_FLAGS] & F_PV) pv_begin(x_local, ctl);
     (void)core;
+}
+
+// Extra lead object i (H_XOBJ of them follow the first): the rest of a W8 pair's scales, whole, after the first
+// object's copy region, so the scales run on contiguously from H_SC.
+void gemv_more(const int32_t *obj, int32_t *x_local, int32_t i) {
+    int32_t *dst = x_local + (OBJ_WORDS - HDR_WORDS) + i * OBJ_WORDS;
+    for (int j = 0; j < OBJ_WORDS; j += 16)
+        aie::store_v(dst + j, aie::load_v<16>(obj + j));
 }
 
 void gemv_chunk(const int32_t *obj, int32_t *x_local, float *acc_all, int32_t q, const int32_t *ctl,

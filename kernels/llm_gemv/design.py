@@ -79,7 +79,7 @@ class Call:
 
     def weight_words(self) -> int:
         if self.w8:
-            return self.cols * 2 * (self.stream_words() + self.tail_words())
+            return self.cols * 2 * (self.stream_words() + self.tail_words() + self.extra_words())
         return pack.weight_words(self.n, self.k, self.flags)
 
     def stream_words(self) -> int:
@@ -91,6 +91,17 @@ class Call:
     def tail_words(self) -> int:
         """W8: words of one channel's tail8, the channels' back to back after the block."""
         return pack.OBJ_WORDS - pack.lead_elems8(self.n, self.k, self.flags, self.cols) // 2
+
+    def extra_words(self) -> int:
+        """W8: words of one channel's extra lead objects (pack.extra8, both cores' copies), after the tails."""
+        return 2 * pack.xobj8(self.n, self.k, self.flags, self.cols) * pack.OBJ_WORDS if self.w8 else 0
+
+    def extra(self, ch: int) -> list:
+        """W8: channel ch's extra lead objects as one ("w", word offset, words) piece, or none."""
+        if not self.extra_words():
+            return []
+        at = self.w_offset + self.cols * 2 * (self.stream_words() + self.tail_words())
+        return [("w", at + ch * self.extra_words(), self.extra_words())]
 
     def out_pieces(self, c: int) -> list:
         """(out-argument word offset, words) for column c's quarter of the output, in stream order."""
@@ -207,14 +218,15 @@ ARG = {"w": 0, "x": 1, "o": 2}
 SHIM_BD_BASE, SHIM_BD_BYTES = 0x1D000, 0x20
 
 
-def lead_task(c: int, h: int, pieces: Sequence[Tuple[str, int, int]], ssa) -> List[str]:
+def lead_task(c: int, h: int, pieces: Sequence[Tuple[str, int, int]], ssa, bd0: Optional[int] = None,
+              repeat: int = 1) -> List[str]:
     """One chained BD task on shim column c, MM2S channel h (BDs 7h..): each (argument, word offset, words) piece a
     BD whose address is patched to its argument, chained in order, pushed once with repeat 1, so the pair's two
     cores each receive the whole lead (pack.LEAD_COPIES). The lowering's dma_memcpy_nd would write one BD and one
     push per piece per core: two to three times the control operations, and those set a call's fixed cost."""
-    L = []
+    L, bd0 = [], 7 * h if bd0 is None else bd0
     for j, (arg, off, length) in enumerate(pieces):
-        bd, last = 7 * h + j, j == len(pieces) - 1
+        bd, last = bd0 + j, j == len(pieces) - 1
         L.append(f"      aiex.npu.writebd {{bd_id = {bd} : i32, buffer_length = {length} : i32, buffer_offset = 0 : i32, "
                  f"column = {c} : i32, d0_size = 0 : i32, d0_stride = 0 : i32, d0_zero_after = 0 : i32, "
                  "d0_zero_before = 0 : i32, d1_size = 0 : i32, d1_stride = 0 : i32, d1_zero_after = 0 : i32, "
@@ -229,7 +241,7 @@ def lead_task(c: int, h: int, pieces: Sequence[Tuple[str, int, int]], ssa) -> Li
         L.append(f"      aiex.npu.address_patch(%lp{v} : i32) {{addr = {(c << 25) | (SHIM_BD_BASE + bd * SHIM_BD_BYTES + 4)}"
                  f" : ui32, arg_idx = {ARG[arg]} : i32}}")
     v = next(ssa)
-    L += [f"      %lb{v} = arith.constant {7 * h} : i32", f"      %lr{v} = arith.constant 1 : i32",
+    L += [f"      %lb{v} = arith.constant {bd0} : i32", f"      %lr{v} = arith.constant {repeat} : i32",
           f"      aiex.npu.push_queue({c}, 0, MM2S : {h}) bd_id %lb{v} repeat %lr{v} {{issue_token = false}} : i32, i32"]
     return L
 
@@ -242,6 +254,7 @@ def _core(i: int) -> str:
       %z = arith.constant 0 : index
       %one = arith.constant 1 : index
       %seven = arith.constant 7 : index
+      %eleven = arith.constant 11 : index
       %forever = arith.constant 4294967295 : index
       %core = arith.constant {i} : i32
       scf.for %it = %z to %forever step %one {{
@@ -255,6 +268,15 @@ def _core(i: int) -> str:
         %Q = arith.index_cast %q32 : i32 to index
         %e32 = memref.load %ctl{i}[%seven] : memref<16xi32>
         %E = arith.index_cast %e32 : i32 to index
+        %xo32 = memref.load %ctl{i}[%eleven] : memref<16xi32>
+        %XO = arith.index_cast %xo32 : i32 to index
+        scf.for %x = %z to %XO step %one {{
+          %xs = aie.objectfifo.acquire @wF{i}(Consume, 1) : {view}
+          %xw = aie.objectfifo.subview.access %xs[0] : {view} -> memref<{O}xi32>
+          %xi = arith.index_cast %x : index to i32
+          func.call @gemv_more(%xw, %xl{i}, %xi) : (memref<{O}xi32>, memref<{pack.X_BUF}xi32>, i32) -> ()
+          aie.objectfifo.release @wF{i}(Consume, 1)
+        }}
         scf.for %g = %z to %G step %one {{
           %gi = arith.index_cast %g : index to i32
           scf.for %q = %z to %Q step %one {{
@@ -295,6 +317,7 @@ def harness(program: Sequence, w_words: int, x_words: int, out_words: int) -> st
             raise ValueError(f"{call}: chained h runs past the out argument")
     L = ["module {", "  aie.device(npu1) {",
          f"    func.func private @gemv_begin(memref<{O}xi32>, memref<{XK}xi32>, memref<16xi32>, i32)",
+         f"    func.func private @gemv_more(memref<{O}xi32>, memref<{XK}xi32>, i32)",
          f"    func.func private @gemv_chunk(memref<{O}xi32>, memref<{XK}xi32>, memref<{ACC}xf32>, i32, memref<16xi32>, "
          "i32, i32)",
          f"    func.func private @gemv_emit(memref<{ACC}xf32>, memref<6xi32>, memref<16xi32>, memref<{XK}xi32>, i32, i32, i32)"]
@@ -344,6 +367,8 @@ def harness(program: Sequence, w_words: int, x_words: int, out_words: int) -> st
                 xs = call.lead(ch) if call.x_out is None else call.lead(ch) * pack.LEAD_COPIES
                 if chained:
                     L += lead_task(c, h, xs, ssa)
+                    # extra lead objects: already doubled in the arena, so sent once (BD 7h+5)
+                    L += lead_task(c, h, call.extra(ch), ssa, bd0=7 * h + 5, repeat=0) if call.extra(ch) else []
                 else:
                     for j, (arg, off, length) in enumerate(xs):
                         L.append(f"      aiex.npu.dma_memcpy_nd(%{arg}[0,0,0,{off}][1,1,1,{length}][0,0,0,1]) "

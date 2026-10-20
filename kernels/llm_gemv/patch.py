@@ -51,6 +51,8 @@ def _expected(call) -> List[tuple]:
     for c in range(call.cols):
         for h in range(2):
             pieces = list(zip(roles, call.lead(c * 2 + h), strict=True))
+            if call.x_out is not None and call.w8:
+                pieces += [("extra", p) for p in call.extra(c * 2 + h)]
             for e in range(1 if call.x_out is None else pack.LEAD_COPIES):
                 rows += [(arg, role, c, h, e, off) for role, (arg, off, _) in pieces]
             rows.append(("w", "w", c, h, 0, call.w_offset + (c * 2 + h) * sw))

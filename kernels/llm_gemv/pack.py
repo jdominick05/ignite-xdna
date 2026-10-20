@@ -292,7 +292,10 @@ F_W8 = 64
 W8_GROUP = 2 * OUT_GROUP                 # 24 outputs per core group
 W8_QUANTUM = CORES * W8_GROUP            # 384
 H_SC = 10                                # element offset of the pair's scales in a core's x buffer
-X_BUF = OBJ_WORDS - HDR_WORDS            # words of the core's x buffer (a W8 lead and scales fill up to all of it)
+H_XOBJ = 11                              # extra lead objects after the first: the scales that overflow it
+X_COPY0 = OBJ_WORDS - HDR_WORDS          # words the first object leaves for x, h or cos/sin, and scales
+XOBJ_MAX = 2                             # the head in one call (49,152 rows) needs both
+X_BUF = X_COPY0 + XOBJ_MAX * OBJ_WORDS   # words of the core's x buffer
 
 
 def w8_pad(n: int) -> int:
@@ -358,8 +361,17 @@ def rows8(n: int, flags: int) -> int:
     return n // CORES * (2 if flags & F_SILU else 1)
 
 
+def xobj8(n: int, k: int, flags: int, cols: int = COLS) -> int:
+    """Extra lead objects a W8 call needs: the pair's scales that do not fit in the first object after the lead."""
+    over = lead_elems8(n, k, flags, cols) + 2 * rows8(n, flags) - 2 * X_COPY0
+    return max(0, -(-over // (2 * OBJ_WORDS)))
+
+
 def copy_elems8(n: int, k: int, flags: int, cols: int = COLS) -> int:
-    """What a W8 core copies into its x buffer: the lead, then both cores' scales of its pair; rounded up to 32."""
+    """What a W8 core copies from its first object: the lead, then both cores' scales of its pair; rounded up to 32
+    (all of the copy region when scales run on into extra objects)."""
+    if xobj8(n, k, flags, cols):
+        return 2 * X_COPY0
     return -(-(lead_elems8(n, k, flags, cols) + 2 * rows8(n, flags)) // 32) * 32
 
 
@@ -373,9 +385,8 @@ def check_call8(n: int, k: int, flags: int = 0, rope_end: int = 0, cols: int = C
         raise ValueError("RoPE and SiLU do not combine")
     if bool(flags & F_ROPE) != (rope_end > 0) or rope_end % W8_GROUP or rope_end > n:
         raise ValueError("ROPE_END is a positive multiple of 24 up to N exactly when F_ROPE is set")
-    copy = copy_elems8(n, k, flags, cols)
-    if copy > 2 * X_BUF:
-        raise ValueError(f"W8: the core would copy {copy} elements, past its {2 * X_BUF}")
+    if xobj8(n, k, flags, cols) > XOBJ_MAX:
+        raise ValueError(f"W8: the scales need {xobj8(n, k, flags, cols)} extra lead objects, past {XOBJ_MAX}")
     if lead_elems8(n, k, flags, cols) % 2:
         raise ValueError("the lead is whole words")
 
@@ -389,13 +400,25 @@ def tail8(n: int, k: int, flags: int, scales: np.ndarray, rope_end: int = 0, col
     if scales.shape != (2 * rows8(n, flags),):
         raise ValueError("a pair's scales: core 2h's N/16 rows then core 2h+1's (each twice with F_SILU)")
     t = np.zeros(2 * (OBJ_WORDS - lead // 2), np.uint16)
-    t[:scales.size] = scales
+    first = min(scales.size, 2 * X_COPY0 - lead)
+    t[:first] = scales[:first]
     t = t.view(np.uint32)
     hdr = t[-HDR_WORDS:]
     hdr[H_G], hdr[H_Q], hdr[H_K], hdr[H_N] = n // W8_QUANTUM, objects_per_group(k, flags), k, n
     hdr[H_FLAGS], hdr[H_AUX_OFF], hdr[H_COPY], hdr[H_E] = flags | F_W8, k, copy_elems8(n, k, flags, cols), 2
-    hdr[H_ROPE_END], hdr[H_SC] = rope_end, lead
+    hdr[H_ROPE_END], hdr[H_SC], hdr[H_XOBJ] = rope_end, lead, xobj8(n, k, flags, cols)
     return t
+
+
+def extra8(n: int, k: int, flags: int, scales: np.ndarray, cols: int = COLS) -> np.ndarray:
+    """One channel's extra lead objects: the pair's scales past the first object, in whole objects, each twice in a
+    row (the memory tile hands a channel's objects to the pair's cores alternately). Empty when none are needed."""
+    x = xobj8(n, k, flags, cols)
+    rest = np.zeros(x * 2 * OBJ_WORDS, np.uint16)
+    tail = np.ascontiguousarray(scales, dtype=np.uint16)[2 * X_COPY0 - lead_elems8(n, k, flags, cols):]
+    rest[:tail.size] = tail
+    objs = rest.view(np.uint32).reshape(x, OBJ_WORDS)
+    return np.repeat(objs, 2, axis=0).reshape(-1)
 
 
 def pair_scales8(n: int, c: int, h: int, *s: np.ndarray) -> np.ndarray:
@@ -406,7 +429,9 @@ def pair_scales8(n: int, c: int, h: int, *s: np.ndarray) -> np.ndarray:
 
 
 def tails8(n: int, k: int, flags: int, *s: np.ndarray, rope_end: int = 0, cols: int = COLS) -> np.ndarray:
-    """The 2*cols channel tails of one W8 call, back to back (channel c*2+h at its index times the tail's size):
-    the constant part that sits in the weight arena after the call's block."""
-    return np.concatenate([tail8(n, k, flags, pair_scales8(n, c, h, *s), rope_end, cols)
-                           for c in range(cols) for h in range(2)])
+    """The 2*cols channel tails of one W8 call, back to back (channel c*2+h at its index times the tail's size),
+    then the channels' extra lead objects likewise: the constant part that sits in the weight arena after the call's
+    block."""
+    pairs = [pair_scales8(n, c, h, *s) for c in range(cols) for h in range(2)]
+    return np.concatenate([tail8(n, k, flags, v, rope_end, cols) for v in pairs]
+                          + [extra8(n, k, flags, v, cols) for v in pairs])

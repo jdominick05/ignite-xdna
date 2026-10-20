@@ -15,9 +15,10 @@ old h any more (the o call took it as its residual before the down call runs).
 
 With LLM_DECODE_W8=1 in the environment when this module is imported, the projections and the head take W8A16
 weights (reference.Q8 of the gamma-folded matrices, pack.pack8): qkv pads to 1,152 rows (the padding to a junk
-region), o and down to 768 on 3 columns, and the head runs as four calls of 12,288 rows. Each W8 call's scales and
-header sit in the weight arena; the x argument holds only the cos/sin row and the attention tails. The decoder then
-expects reference.quantize_weights(w, "w8a16-dev") as its weights. 184 calls a token.
+region), o and down to 768 on 3 columns; the head stays one call, its scales overflowing into two extra lead
+objects (pack.xobj8). Each W8 call's scales and header sit in the weight arena; the x argument holds only the cos/sin
+row and the attention tails. The decoder then expects reference.quantize_weights(w, "w8a16-dev") as its weights.
+181 calls a token, as in bf16.
 """
 from __future__ import annotations
 
@@ -40,17 +41,16 @@ SPEC = {"qkv_r": (960, HIDDEN, F.F_NORM | F.F_ROPE), "o": (HIDDEN, HIDDEN, F.F_I
 HEAD = (VOCAB, HIDDEN, F.F_NORM)
 CACHE_WORDS = CAP * KV // 2
 W8 = os.environ.get("LLM_DECODE_W8") == "1"
-# W8: name -> (padded N, columns); the head as HEAD_PARTS calls of VOCAB / HEAD_PARTS rows
+# W8: name -> (padded N, columns)
 W8_SHAPE = {"qkv_r": (1152, 4), "o": (768, 3), "gu_s": (MLP, 4), "down": (768, 3)}
-HEAD_PARTS = 4 if W8 else 1
 JUNK = 192                                   # W8: qkv's padding rows land here
 
 
 def _w8_call(w_off, x_off, out_off, name, **kw):
-    """A W8 Call of block ``name`` (W8_SHAPE, or "head" for one quarter)."""
+    """A W8 Call of block ``name`` (W8_SHAPE, or "head")."""
     from kernels.llm_gemv.design import Call
     if name == "head":
-        n, k, f, cols = VOCAB // HEAD_PARTS, HIDDEN, HEAD[2], 4
+        (n, k, f), cols = HEAD, 4
     else:
         (n, cols), (_, k, f) = W8_SHAPE[name], SPEC[name]
     return Call(w_off, x_off, out_off, n, k, flags=f, w8=True, cols=cols, **kw)
@@ -68,9 +68,8 @@ def _layout():
         for s, (n, k, f) in SPEC.items():
             w[(i, s)] = at
             at += _w8_words(s) if W8 else pack.weight_words(n, k, f)
-    for j in range(HEAD_PARTS):
-        w["head" if j == 0 else ("head", j)] = at
-        at += _w8_words("head") if W8 else pack.weight_words(*HEAD)
+    w["head"] = at
+    at += _w8_words("head") if W8 else pack.weight_words(*HEAD)
     o, ot = {}, 0
     for name, n in [("h", HIDDEN), ("q", HIDDEN), ("s", pack.KV_COLS * CAP * pack.GQA), ("a", HIDDEN),
                     ("h1", HIDDEN), ("m", MLP), ("logits", VOCAB)] + ([("junk", JUNK)] if W8 else []):
@@ -114,9 +113,7 @@ def program():
                 if isinstance(c, Attn):
                     c = dataclasses.replace(c, x_offset=tail(j, pack.OBJ_WORDS - c.lead_words()))
                 calls.append(c)
-        q = VOCAB // HEAD_PARTS
-        calls += [_w8_call(W_OFF["head" if j == 0 else ("head", j)], 0, OUT["logits"] + j * q // 2, "head",
-                           x_out=OUT["h"]) for j in range(HEAD_PARTS)]
+        calls.append(_w8_call(W_OFF["head"], 0, OUT["logits"], "head", x_out=OUT["h"]))
         return calls, xw, tails
     for i in range(LAYERS):
         kv0 = ((0, HIDDEN, OUT["q"]), (HIDDEN, KV, OUT[("kc", i)]), (QK, KV, OUT[("vc", i)]))
@@ -192,11 +189,8 @@ def arena(w: "R.Weights") -> np.ndarray:
                       "down": _w8_block("down", L["down"])}
             for s, b in blocks.items():
                 out[W_OFF[(i, s)]:W_OFF[(i, s)] + b.size] = b
-        q = VOCAB // HEAD_PARTS
-        for j in range(HEAD_PARTS):
-            b = _w8_block("head", _rows(w.head_g, slice(j * q, (j + 1) * q)))
-            at = W_OFF["head" if j == 0 else ("head", j)]
-            out[at:at + b.size] = b
+        b = _w8_block("head", w.head_g)
+        out[W_OFF["head"]:W_OFF["head"] + b.size] = b
         return out
     perm_qkv, perm_o = pack.rope_perm(960, QK), pack.attn_out_perm()
     for i, L in enumerate(w.layers):
