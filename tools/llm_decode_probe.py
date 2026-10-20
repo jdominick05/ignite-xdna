@@ -146,6 +146,62 @@ def check(ref_path):
     return 0 if total == 0 else 1
 
 
+def bench(ref_path, rounds):
+    """Timed: each saved prompt generated ``rounds`` times on the device, every step timed (host wall, and dispatch
+    start to completion). Each generation must stay token-identical to the reference."""
+    import gc
+    from ignite_xdna.runtime.driver import XrtSiliconHarness
+    from llm_gemv_probe import witness
+    tok = tokenizer()
+    eos = tok.token_to_id("<|im_end|>")
+    w = R.Weights.load(R.safetensors(R.model_file()))
+    ref = np.load(ref_path)
+    prompts = [(ref[f"{n}_ids"].tolist(), ref[f"{n}_out"].tolist()) for n in range(len(ref["prompts"]))]
+    if not witness("pre"):
+        raise SystemExit("NPU is busy; did not dispatch")
+    wall, device, bad = [], [], 0
+    try:
+        with XrtSiliconHarness(0) as h:
+            npu = D.NpuDecoder(h, BUILD, w)
+            try:
+                npu.generate(prompts[0][0][:4], 1)                 # warm: first dispatch, caches, page-in
+                for rnd in range(rounds):
+                    for ids, want in prompts:
+                        times = []
+                        step = npu.step
+
+                        def timed(t, p):
+                            t0 = time.perf_counter()
+                            out = step(t, p)
+                            times.append((time.perf_counter() - t0, npu.device_s))
+                            return out
+                        npu.step = timed
+                        got = npu.generate(ids, len(want), eos)
+                        npu.step = step
+                        bad += got != want
+                        wall += [a for a, _ in times]
+                        device += [b for _, b in times]
+                        print("ROUND " + json.dumps(dict(round=rnd, prompt_tokens=len(ids), new_tokens=len(got),
+                                                         tokens_equal=got == want,
+                                                         median_ms=round(1e3 * float(np.median([a for a, _ in times])), 3))),
+                              flush=True)
+            finally:
+                npu.close()
+                npu = None
+    finally:
+        gc.collect()
+        witness("post_in_process", wait_s=5)
+    wall, device = np.array(wall) * 1e3, np.array(device) * 1e3
+    print("TIMING_JSON " + json.dumps(dict(
+        steps=int(wall.size), ms_per_token_median=round(float(np.median(wall)), 3),
+        ms_per_token_p90=round(float(np.percentile(wall, 90)), 3),
+        tokens_per_second_median=round(1e3 / float(np.median(wall)), 2),
+        dispatch_ms_median=round(float(np.median(device)), 3),
+        host_ms_median=round(float(np.median(wall - device)), 3))), flush=True)
+    print("VERDICT", "EXACT" if bad == 0 else f"MISMATCH {bad}", flush=True)
+    return 0 if bad == 0 else 1
+
+
 def chat(prompt, new_tokens):
     import gc
     from ignite_xdna.runtime.driver import XrtSiliconHarness
@@ -188,6 +244,9 @@ def main():
     r.add_argument("--out", required=True)
     c = sub.add_parser("check")
     c.add_argument("reference_file")
+    b = sub.add_parser("bench")
+    b.add_argument("reference_file")
+    b.add_argument("--rounds", type=int, default=3)
     g = sub.add_parser("chat")
     g.add_argument("prompt")
     g.add_argument("--tokens", type=int, default=64)
@@ -199,6 +258,8 @@ def main():
         return reference(a.prompt, a.tokens, a.out)
     if a.cmd == "check":
         return check(a.reference_file)
+    if a.cmd == "bench":
+        return bench(a.reference_file, a.rounds)
     return chat(a.prompt, a.tokens)
 
 

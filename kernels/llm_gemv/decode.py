@@ -16,6 +16,7 @@ old h any more (the o call took it as its residual before the down call runs).
 from __future__ import annotations
 
 import dataclasses
+import time
 from pathlib import Path
 from typing import List, Optional
 
@@ -128,17 +129,20 @@ class Patcher:
         from kernels.llm_gemv import patch
         self.raw, self.patch = raw, patch
         sites = patch.calls(raw, CALLS)
-        self.kv = [(sites[n], CALLS[n], OUT[("kc", n // 6)], OUT[("vc", n // 6)])
-                   for n in range(0, LAYERS * 6, 6)]
+        self.row0 = {}                     # {byte offset in the stream: argument offset in bytes at row 0}
+        for n in range(0, LAYERS * 6, 6):
+            for piece, region in ((1, OUT[("kc", n // 6)]), (2, OUT[("vc", n // 6)])):
+                self.row0.update(patch.move_piece(sites[n], CALLS[n], piece, region))
 
-    def stream(self, p: int) -> bytes:
+    def changes(self, p: int) -> dict:
+        """{byte offset in the stream: new argument offset} that move the KV-append transfers to row p."""
         if not 0 <= p < CAP:
             raise ValueError(f"position {p} is past the cache's {CAP}")
-        changes = {}
-        for sites, call, kc, vc in self.kv:
-            changes.update(self.patch.move_piece(sites, call, 1, kc + p * KV // 2))
-            changes.update(self.patch.move_piece(sites, call, 2, vc + p * KV // 2))
-        return self.patch.apply(self.raw, changes)
+        return {off: v + p * KV * 2 for off, v in self.row0.items()}
+
+    def stream(self, p: int) -> bytes:
+        """The whole stream for position p, re-parsed (a check; the decoder rewrites only the changed words)."""
+        return self.patch.apply(self.raw, self.changes(p))
 
 
 class NpuDecoder:
@@ -158,30 +162,46 @@ class NpuDecoder:
         self.wb.sync(self.to)
         self.xb, self.ob = h.create_host_bo(X_WORDS * 4, 4), h.create_host_bo(OUT_WORDS * 4, 5)
         self.patcher = Patcher((Path(folder) / "insts.bin").read_bytes())
-        self.streams = {}
+        self.patcher.stream(CAP - 1)                      # the patch sites parse at the far end of the cache
+        self.insts = h.create_instruction_bo_from_bytes(self.patcher.raw)
+        self.at = None
+        # x tails per position: only the cos/sin row and p change
+        self.tails = {}
 
     def close(self):
-        self.wb = self.xb = self.ob = None
-        self.streams = {}
+        self.wb = self.xb = self.ob = self.insts = None
+
+    def _move(self, p: int):
+        """Rewrite the 60 KV-append offsets of the cached instruction buffer in place for position p."""
+        if self.at == p:
+            return
+        bo, _ = self.insts
+        for off, value in self.patcher.changes(p).items():
+            bo.write(int(value).to_bytes(4, "little"), off)
+        bo.sync(self.to)
+        self.at = p
 
     def step(self, token: int, p: int) -> np.ndarray:
         """Embed ``token`` at position p, run the 30 layers and the head: uint16 bf16 logits [VOCAB]."""
-        self.xb.write(x_arg(p).tobytes(), 0)
+        if p not in self.tails:
+            self.tails[p] = x_arg(p).tobytes()
+        self.xb.write(self.tails[p], 0)
         self.xb.sync(self.to)
         self.ob.write(self.embed[token].view(np.uint32).tobytes(), OUT["h"] * 4)
-        self.ob.sync(self.to)
-        if p not in self.streams:
-            self.streams[p] = self.h.create_instruction_bo_from_bytes(self.patcher.stream(p))
-        bo, count = self.streams[p]
+        self.ob.sync(self.to, HIDDEN * 2, OUT["h"] * 4)    # only h: the cache and the rest are the device's
+        self._move(p)
+        bo, count = self.insts
         r = self.xrt.run(self.h.kernel)
         for i, v in enumerate((3, bo, count, self.wb, self.xb, self.ob)):
             r.set_arg(i, v)
+        t0 = time.perf_counter()
         r.start()
         state = r.wait(self.WAIT_MS)
+        self.device_s = time.perf_counter() - t0          # start to completion, as the host sees it
         if state != self.xrt.ert_cmd_state.ERT_CMD_STATE_COMPLETED:
             raise RuntimeError(f"position {p} did not complete: {state}")
         r = None
-        self.ob.sync(self.fr)
+        self.ob.sync(self.fr, VOCAB * 2, OUT["logits"] * 4)
         return np.frombuffer(self.ob.read(VOCAB * 2, OUT["logits"] * 4), np.uint16).copy()
 
     def generate(self, prompt: List[int], new_tokens: int, eos: Optional[int] = None, on_token=None) -> List[int]:
