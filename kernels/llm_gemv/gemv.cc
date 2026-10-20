@@ -35,8 +35,9 @@ constexpr int GROUP = 12;             // outputs per group
 constexpr int SET = 48;               // floats in one accumulator set (3 x 16)
 
 // Header words (the last HDR_WORDS of a call's first object)
-enum { H_G = 0, H_Q = 1, H_K = 2, H_N = 3, H_FLAGS = 4, H_AUX_OFF = 5, H_COPY = 6, H_E = 7, H_ROPE_END = 8 };
-enum { F_INIT = 1, F_NORM = 2, F_ROPE = 4, F_SILU = 8 };
+enum { H_G = 0, H_Q = 1, H_K = 2, H_N = 3, H_FLAGS = 4, H_AUX_OFF = 5, H_COPY = 6, H_E = 7, H_ROPE_END = 8,
+       H_POS = 9 };
+enum { F_INIT = 1, F_NORM = 2, F_ROPE = 4, F_SILU = 8, F_SCORE = 16, F_PV = 32 };
 // ctl words the core keeps for the call: the header, then r's bits at C_R
 enum { C_R = 15 };
 
@@ -63,7 +64,11 @@ static uint32_t norm_scale(const bfloat16 *x, int k) {
     // clamp to the table: [1.0, 2^32), bf16 bits 0x3F80 .. 0x4F7F (ss is never negative)
     if (u < RSQ_BASE) u = RSQ_BASE;
     if (u > RSQ_BASE + RSQ_SIZE - 1) u = RSQ_BASE + RSQ_SIZE - 1;
-    return RSQ[u - RSQ_BASE];
+    // reference.rsq_stored_bits: octaves past RSQ_STORED are octave e-2 halved, so only the first ones are stored
+    const int e = int(u >> 7) - 127, m = int(u & 0x7F);
+    if (e < RSQ_STORED) return RSQ[e * 128 + m];
+    const int base = RSQ_STORED - 2 + ((e - RSQ_STORED) & 1);
+    return uint32_t(RSQ[base * 128 + m]) - uint32_t(((e - base) >> 1) << 7);
 }
 
 // reference.silu_bits
@@ -81,6 +86,168 @@ static inline uint16_t bf16_mul(uint16_t a, uint16_t b) {   // bf16 x bf16, exac
     return uint16_t(rne16(p[0]));
 }
 
+// ---- Attention (pack.py's F_SCORE and F_PV; reference.attention_group holds the semantics bit for bit) ----
+// A column owns one KV head and its GQA = 3 q heads. The KV cache rows are [position][192] bf16; K objects are 36
+// positions x the head's 64 dims, V objects 144 positions x this core's 16 dims. Scores travel in F_SCORE's output
+// order: runs of 12 = (4 positions x 3 heads), run r = (g*9 + e)*4 + core for position (4g + core)*36 + 4e.
+constexpr int GQA = 3, HEAD_DIM = 64, SCORE_ROWS = 36, SCORE_EMITS = 9, PV_ROWS = 144, PV_DIMS = 16;
+constexpr int QB_OFF = GQA * HEAD_DIM;          // x_local elements: q, then the 8 B tiles of q, then the scores
+constexpr int SC_OFF = QB_OFF + 8 * TILE;
+constexpr int Z_ACC = 4 * 16;                   // F_PV: four dim tiles, then z
+constexpr int TB_OFF = 1792;                    // F_PV: tiles built element by element (past 3 x CAP <= 1728)
+#define NOINLINE __attribute__((noinline))
+#define ROLLED _Pragma("clang loop unroll(disable)")
+
+// The run holding positions g*144 + w .. +3 (w < 144, a multiple of 4): object 4g + c of the column, c = w / 36
+// (pack.score_index / 12). No division: the core has no integer divide.
+static inline int score_run(int g, int w) {
+    const int c = (w >= SCORE_ROWS) + (w >= 2 * SCORE_ROWS) + (w >= 3 * SCORE_ROWS);
+    return (g * SCORE_EMITS + ((w - c * SCORE_ROWS) >> 2)) * ROWS + c;
+}
+
+static inline uint16_t div8_16(uint16_t u) {    // reference.div8_bits
+    return ((u >> 7) & 0xFF) > 3 ? uint16_t(u - (3 << 7)) : uint16_t(u & 0x8000);
+}
+
+static inline uint16_t exp16(uint16_t u) {      // reference.exp_bits, d <= 0
+    const uint16_t mag = u & 0x7FFF;
+    if (mag < 0x3B00) return 0x3F80;
+    if (mag >= 0x4300) return 0;
+    return EXP_T[u - 0xBB00];
+}
+
+static inline uint16_t recip16(uint16_t u) {    // reference.recip_bits, 1 <= z < 2^64
+    return uint16_t(RECIP_T[u & 0x7F] - ((int(u >> 7) - 127) << 7));
+}
+
+static inline int order_key(uint16_t u) {       // bf16 bits -> an int that sorts like the value
+    return (u & 0x8000) ? int(0x7FFF - (u & 0x7FFF)) : int(0x8000 + u);
+}
+
+// F_SCORE begin: the 8 B tiles of q, [kk 8][n 4] with column n = head n, column 3 zero.
+NOINLINE static void score_begin(int32_t *x_local) {
+    auto *x = reinterpret_cast<uint16_t *>(x_local);
+    ROLLED for (int i = 0; i < 8 * TILE; ++i) {          // i = s*32 + kk*4 + n
+        const int s = i >> 5, kk = (i >> 2) & 7, n = i & 3;
+        x[QB_OFF + i] = n < GQA ? x[n * HEAD_DIM + s * 8 + kk] : uint16_t(0);
+    }
+}
+
+// F_PV begin: the scores become e in place. s = div8(score); max over positions <= p; d = bf16(s - max) as one MAC
+// of A row [s0 s1 s2 max0 max1 max2 0 0] by B columns (+1 at s_n, -1 at max_n); e = EXP; positions past p get 0.
+NOINLINE static void pv_begin(int32_t *x_local, const int32_t *ctl) {
+    auto *x = reinterpret_cast<uint16_t *>(x_local);
+    uint16_t *at = x + TB_OFF, *bt = x + TB_OFF + TILE;
+    const int objects = ctl[H_Q], p = ctl[H_POS];     // CAP / 144 V objects
+    int key[GQA];
+    uint16_t mx[GQA];
+    for (int h = 0; h < GQA; ++h) { key[h] = -1; mx[h] = 0; }
+    ROLLED for (int g = 0; g < objects; ++g)
+        ROLLED for (int w = 0, base = g * PV_ROWS; w < PV_ROWS && base + w <= p; w += 4) {
+            const uint16_t *run = x + score_run(g, w) * GROUP;
+            ROLLED for (int m = 0; m < 4 && base + w + m <= p; ++m)
+                ROLLED for (int h = 0; h < GQA; ++h) {
+                    const uint16_t sv = div8_16(run[m * GQA + h]);
+                    if (order_key(sv) > key[h]) { key[h] = order_key(sv); mx[h] = sv; }
+                }
+        }
+    ROLLED for (int i = 0; i < 2 * TILE; ++i) at[i] = 0;
+    for (int n = 0; n < GQA; ++n) { bt[n * 4 + n] = 0x3F80; bt[(GQA + n) * 4 + n] = 0xBF80; }
+    const auto b = aie::load_v<TILE>(bt).cast_to<bfloat16>();
+    ROLLED for (int g = 0; g < objects; ++g)
+        ROLLED for (int w = 0; w < PV_ROWS; w += 4) {
+            const int pos0 = g * PV_ROWS + w;
+            uint16_t *run = x + score_run(g, w) * GROUP;
+            ROLLED for (int m = 0; m < 4; ++m)                  // row m of A is [s.. max..]
+                ROLLED for (int h = 0; h < GQA; ++h) {
+                    at[m * 8 + h] = pos0 + m <= p ? div8_16(run[m * GQA + h]) : uint16_t(0);
+                    at[m * 8 + GQA + h] = mx[h];
+                }
+            MM c(aie::zeros<float, 16>());
+            c.mac(aie::load_v<TILE>(at).cast_to<bfloat16>(), b);
+            aie::store_v(reinterpret_cast<uint32_t *>(at + TILE + TILE), c.to_vector<float>().cast_to<uint32>());
+            const auto *d = reinterpret_cast<const uint32_t *>(at + TILE + TILE);
+            ROLLED for (int m = 0; m < 4; ++m)
+                ROLLED for (int h = 0; h < GQA; ++h)
+                    run[m * GQA + h] = pos0 + m <= p ? exp16(uint16_t(rne16(d[m * 4 + h]))) : uint16_t(0);
+        }
+}
+
+// F_SCORE chunk: one K object, 9 blocks of 4 positions, each 8 dim steps from zero; 12 bf16 per block to scratch.
+NOINLINE static void score_chunk(const int32_t *obj, int32_t *x_local) {
+    const auto *k = reinterpret_cast<const bfloat16 *>(obj);
+    const auto *qb = reinterpret_cast<const bfloat16 *>(x_local) + QB_OFF;
+    auto *out = reinterpret_cast<uint16_t *>(x_local) + SC_OFF;
+    for (int blk = 0; blk < SCORE_EMITS; ++blk) {
+        MM c(aie::zeros<float, 16>());
+        for (int s = 0; s < 8; ++s) {
+            aie::vector<bfloat16, 32> a;
+            for (int m = 0; m < 4; ++m)
+                a.insert<8>(m, aie::load_v<8>(k + (blk * 4 + m) * HEAD_DIM + s * 8));
+            c.mac(a, aie::load_v<TILE>(qb + s * TILE));
+        }
+        auto r = c.to_vector<float>().cast_to<uint32>();
+        for (int m = 0; m < 4; ++m)
+            for (int n = 0; n < GQA; ++n)
+                out[blk * GROUP + m * GQA + n] = uint16_t(rne16(r[m * 4 + n]));
+    }
+}
+
+// F_PV chunk q: V object of positions q*144.., this core's 16 dims per row. Per block of 8 positions (stopping past
+// p): A = e [3 heads + 0][8], B = V [8][4 dims] for each dim tile, rows past p zero, and B = ones into z.
+NOINLINE static void pv_chunk(const int32_t *obj, int32_t *x_local, float *acc, int q, const int32_t *ctl) {
+    const auto *v = reinterpret_cast<const uint16_t *>(obj);
+    auto *x = reinterpret_cast<uint16_t *>(x_local);
+    uint16_t *at = x + TB_OFF, *bt = x + TB_OFF + TILE;    // A, then the four B tiles
+    const int p = ctl[H_POS];
+    aie::vector<float, 16> t0, t1, t2, t3, z;
+    if (q == 0) {
+        t0 = t1 = t2 = t3 = z = aie::zeros<float, 16>();
+    } else {
+        t0 = aie::load_v<16>(acc); t1 = aie::load_v<16>(acc + 16); t2 = aie::load_v<16>(acc + 32);
+        t3 = aie::load_v<16>(acc + 48); z = aie::load_v<16>(acc + Z_ACC);
+    }
+    MM c0(t0), c1(t1), c2(t2), c3(t3), cz(z);
+    const auto ones = aie::broadcast<uint16, 32>(0x3F80).cast_to<bfloat16>();
+    ROLLED for (int i = 0; i < TILE; ++i) at[i] = 0;
+    ROLLED for (int blk = 0; blk < PV_ROWS / 8; ++blk) {
+        const int pos0 = q * PV_ROWS + blk * 8;
+        if (pos0 > p) break;
+        ROLLED for (int half = 0; half < 2; ++half) {
+            const uint16_t *run = x + score_run(q, blk * 8 + 4 * half) * GROUP;
+            ROLLED for (int m = 0; m < 4; ++m)
+                ROLLED for (int h = 0; h < GQA; ++h)
+                    at[h * 8 + half * 4 + m] = run[m * GQA + h];
+        }
+        ROLLED for (int i = 0; i < 8 * PV_DIMS; ++i) {      // i = kk*16 + dim; tile dim/4, element kk*4 + dim%4
+            const int kk = i >> 4, d = i & 15;
+            bt[(d >> 2) * TILE + kk * 4 + (d & 3)] = pos0 + kk <= p ? v[blk * 8 * PV_DIMS + i] : uint16_t(0);
+        }
+        const auto ab = aie::load_v<TILE>(at).cast_to<bfloat16>();
+        c0.mac(ab, aie::load_v<TILE>(bt).cast_to<bfloat16>());
+        c1.mac(ab, aie::load_v<TILE>(bt + TILE).cast_to<bfloat16>());
+        c2.mac(ab, aie::load_v<TILE>(bt + 2 * TILE).cast_to<bfloat16>());
+        c3.mac(ab, aie::load_v<TILE>(bt + 3 * TILE).cast_to<bfloat16>());
+        cz.mac(ab, ones);
+    }
+    aie::store_v(acc, c0.to_vector<float>()); aie::store_v(acc + 16, c1.to_vector<float>());
+    aie::store_v(acc + 32, c2.to_vector<float>()); aie::store_v(acc + 48, c3.to_vector<float>());
+    aie::store_v(acc + Z_ACC, cz.to_vector<float>());
+}
+
+// F_PV emit e: values t = 12e..12e+11 of this core's 48, t = head*16 + dim; out = bf16(bf16(acc) * RECIP[bf16(z)]).
+NOINLINE static void pv_emit(const float *acc, int32_t *out, int e) {
+    const auto *bits = reinterpret_cast<const uint32_t *>(acc);
+    alignas(32) uint16_t y[GROUP];
+    for (int i = 0; i < GROUP; ++i) {
+        const int t = e * GROUP + i, head = t >> 4, d = t & 15;
+        const uint16_t val = uint16_t(rne16(bits[(d >> 2) * 16 + head * 4 + (d & 3)]));
+        y[i] = bf16_mul(val, recip16(uint16_t(rne16(bits[Z_ACC + head * 4]))));
+    }
+    for (int i = 0; i < GROUP; i += 2)
+        out[i / 2] = static_cast<int32_t>(uint32_t(y[i]) | (uint32_t(y[i + 1]) << 16));
+}
+
 extern "C" {
 
 void gemv_begin(const int32_t *obj, int32_t *x_local, int32_t *ctl, int32_t core) {
@@ -91,11 +258,15 @@ void gemv_begin(const int32_t *obj, int32_t *x_local, int32_t *ctl, int32_t core
     for (int i = 0; i < words; i += 16)
         aie::store_v(x_local + i, aie::load_v<16>(obj + i));
     ctl[C_R] = (hdr[H_FLAGS] & F_NORM) ? norm_scale(reinterpret_cast<const bfloat16 *>(x_local), hdr[H_K]) : 0;
+    if (hdr[H_FLAGS] & F_SCORE) score_begin(x_local);
+    if (hdr[H_FLAGS] & F_PV) pv_begin(x_local, ctl);
     (void)core;
 }
 
-void gemv_chunk(const int32_t *obj, const int32_t *x_local, float *acc_all, int32_t q, const int32_t *ctl,
+void gemv_chunk(const int32_t *obj, int32_t *x_local, float *acc_all, int32_t q, const int32_t *ctl,
                 int32_t core, int32_t g) {
+    if (ctl[H_FLAGS] & F_SCORE) { score_chunk(obj, x_local); return; }
+    if (ctl[H_FLAGS] & F_PV) { pv_chunk(obj, x_local, acc_all, q, ctl); return; }
     const int per_set = (ctl[H_FLAGS] & F_SILU) ? ctl[H_Q] / 2 : ctl[H_Q];
     const int set = q >= per_set ? 1 : 0;
     const int qq = q - set * per_set;
@@ -169,6 +340,13 @@ static void rope(uint16_t *y, int base, const int32_t *x_local, const int32_t *c
 
 void gemv_emit(const float *acc, int32_t *out, const int32_t *ctl, const int32_t *x_local, int32_t core, int32_t g,
                int32_t e) {
+    if (ctl[H_FLAGS] & F_SCORE) {
+        const auto *s = reinterpret_cast<const uint16_t *>(x_local) + SC_OFF + e * GROUP;
+        for (int i = 0; i < GROUP; i += 2)
+            out[i / 2] = static_cast<int32_t>(uint32_t(s[i]) | (uint32_t(s[i + 1]) << 16));
+        return;
+    }
+    if (ctl[H_FLAGS] & F_PV) { pv_emit(acc, out, e); return; }
     alignas(32) uint16_t y[16];
     const int flags = ctl[H_FLAGS];
     set_out(acc, y, ctl);

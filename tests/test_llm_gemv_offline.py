@@ -262,3 +262,91 @@ def test_a_split_output_waits_once_per_piece():
     text = design.harness([call], pack.block_words(n, n), pack.X_SLOT_WORDS, 600)
     assert [text.count(f"dma_wait {{symbol = @oL{c}}}") for c in range(4)] == [1, 1, 1, 2]
     assert text.count("issue_token = true") == 5
+
+
+# ---- attention ----
+CAP = 576
+
+
+def _bd(words: np.ndarray, offset: int, sizes, strides) -> np.ndarray:
+    """What a shim BD reads: sizes/strides outermost first, as dma_memcpy_nd takes them."""
+    idx = np.array([offset])
+    for s, t in zip(sizes, strides):
+        idx = (idx[:, None] + np.arange(s)[None, :] * t).reshape(-1)
+    return words[idx]
+
+
+def _attn_calls():
+    from kernels.llm_gemv import design
+    k0, v0 = 288, 288 + CAP * pack.CACHE_WORDS
+    sc = v0 + CAP * pack.CACHE_WORDS
+    out = sc + pack.KV_COLS * CAP * pack.GQA // 2
+    return (design.Attn(pack.F_SCORE, CAP, 0, 0, k0, sc), design.Attn(pack.F_PV, CAP, sc, 1056, v0, out),
+            out + 288)
+
+
+def test_each_core_receives_the_cache_rows_the_kernel_assumes():
+    score, pv, words = _attn_calls()
+    arg = np.arange(words, dtype=np.int64)            # every word names its own address
+    for c in range(pack.KV_COLS):
+        for h in range(2):
+            stream = _bd(arg, *score.stream(c, h)).reshape(-1, 2, pack.OBJ_WORDS)
+            for g, step in enumerate(stream):
+                for e in range(2):
+                    chunk = 4 * g + 2 * h + e          # core 2h+e takes K object 4g + j
+                    rows = chunk * pack.SCORE_ROWS + np.arange(pack.SCORE_ROWS)
+                    want = (score.cache + rows[:, None] * pack.CACHE_WORDS + c * 32 + np.arange(32)).reshape(-1)
+                    assert np.array_equal(step[e], want)
+            stream = _bd(arg, *pv.stream(c, h)).reshape(-1, 2, pack.OBJ_WORDS)
+            for q, step in enumerate(stream):
+                for e in range(2):
+                    j = 2 * h + e                      # core j: dims 16j..16j+15, 8 words per row
+                    rows = q * pack.PV_ROWS + np.arange(pack.PV_ROWS)
+                    want = (pv.cache + rows[:, None] * pack.CACHE_WORDS + c * 32 + j * 8 + np.arange(8)).reshape(-1)
+                    assert np.array_equal(step[e], want)
+
+
+def test_attention_calls_balance_and_wait_on_the_three_columns_they_use():
+    from kernels.llm_gemv import design
+    score, pv, words = _attn_calls()
+    text = design.harness([score, pv], 16, 2048, words)
+    assert [text.count(f"dma_wait {{symbol = @oL{c}}}") for c in range(4)] == [2, 2, 2, 0]
+    assert "%s3" not in text.split("aie.runtime_sequence")[1]
+    with pytest.raises(ValueError):
+        design.Attn(pack.F_PV, 432, 0, 0, 0, 0)        # 3 x CAP must be a whole number of 16-word copies
+    with pytest.raises(ValueError):
+        design.harness([score, pv], 16, 2048, words - 1)
+
+
+def test_score_layout_is_one_to_one_and_matches_the_cores_run_formula():
+    pos, head = np.meshgrid(np.arange(CAP), np.arange(pack.GQA), indexing="ij")
+    idx = pack.score_index(pos, head)
+    assert np.array_equal(np.sort(idx.reshape(-1)), np.arange(CAP * pack.GQA))
+
+    def core_run(g, w):                                # gemv.cc score_run
+        c = (w >= 36) + (w >= 72) + (w >= 108)
+        return (g * 9 + ((w - c * 36) >> 2)) * 4 + c
+    for p0 in range(0, CAP, 4):
+        assert pack.score_index(p0, 0) == core_run(p0 // 144, p0 % 144) * 12
+    perm = pack.attn_out_perm()
+    assert np.array_equal(np.sort(perm), np.arange(576))
+
+
+def test_attention_group_at_p0_is_v_and_tracks_the_float_softmax():
+    from kernels.llm_gemv import reference as R
+    rng = np.random.default_rng(3)
+    q, K, V = (em.from_bf16_bits(bf16(rng, s)) for s in ((3, 64), (200, 64), (200, 64)))
+    assert np.array_equal(R.attention_group(q, K, V, 0), np.repeat(V[:1], 3, 0))
+    for p in (1, 5, 37, 150):
+        got = R.attention_group(q, K, V, p)
+        s = (K[:p + 1].astype(np.float64) @ q.T.astype(np.float64)) / 8
+        e = np.exp(s - s.max(0))
+        want = (e / e.sum(0)).T @ V[:p + 1]
+        assert np.abs(got - want).max() < 0.05 * np.abs(want).max()
+    rows = R.attention_scores(q, K[:9])                 # each lane is its own dot, wherever it sits in the batch
+    assert np.array_equal(rows[4:5], R.attention_scores(q, K[4:5]))
+
+
+def test_the_cores_short_rsqrt_table_gives_every_entry_of_the_full_one():
+    from kernels.llm_gemv import reference as R
+    assert [R.rsq_stored_bits(R.RSQ_BASE + i) for i in range(R.RSQ_SIZE)] == R.RSQ.astype(int).tolist()

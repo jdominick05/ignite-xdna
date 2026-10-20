@@ -209,3 +209,66 @@ def x_slot(x: np.ndarray, n: int, h: np.ndarray | None = None, flags: int = 0, r
 def unpack_y(words: np.ndarray, n: int) -> np.ndarray:
     """The output region's first N/2 words -> uint16 [N] bf16 bits, already in natural order."""
     return np.ascontiguousarray(words[:n // 2], dtype=np.uint32).view(np.uint16).copy()
+
+
+# Attention: two more modes of the same core program. Columns 0..KV_COLS-1 each own one KV head and the GQA q heads
+# that share it; the last column takes no part. The KV cache is [position][KV_COLS * HEAD_DIM] bf16 (the KV append's
+# rows), K in rope_perm order within a head, V natural. CAP positions are streamed whatever p is, so every stream
+# length is fixed and p rides in the header.
+H_POS = 9
+F_SCORE = 16      # K chunks of SCORE_ROWS positions in, bf16(K q) out per (4 positions x GQA heads) block
+F_PV = 32         # the scores in, softmax over positions <= p, then e V over this core's 16 dims
+KV_COLS, GQA, HEAD_DIM = 3, 3, 64
+CACHE_WORDS = KV_COLS * HEAD_DIM // 2      # one cache row
+SCORE_ROWS = OBJ_ELEMS // HEAD_DIM         # 36 positions of one head's K per object
+PV_ROWS = OBJ_ELEMS // (HEAD_DIM // ROWS)  # 144 positions of a core's 16 V dims per object
+SCORE_EMITS = SCORE_ROWS // 4              # 9 blocks of 4 positions per K object
+
+
+def check_cap(cap: int) -> None:
+    if cap <= 0 or cap % (2 * PV_ROWS) or GQA * cap > MAX_K:
+        raise ValueError(f"CAP={cap} must be a positive multiple of {2 * PV_ROWS} with {GQA}*CAP <= {MAX_K}")
+
+
+def attn_tail(flags: int, cap: int, p: int = 0) -> np.ndarray:
+    """The tail of an attention call's first object (after the q heads or the scores): zero pad and the header."""
+    check_cap(cap)
+    if flags not in (F_SCORE, F_PV) or not 0 <= p < cap:
+        raise ValueError("one of F_SCORE and F_PV, and 0 <= p < CAP")
+    lead = attn_lead_words(flags, cap)
+    t = np.zeros(OBJ_WORDS - lead, np.uint32)
+    hdr = t[-HDR_WORDS:]
+    if flags == F_SCORE:      # one group per K object a core takes, one chunk each, 9 emits
+        hdr[H_G], hdr[H_Q], hdr[H_E] = cap // (SCORE_ROWS * ROWS), 1, SCORE_EMITS
+    else:                     # one group of 48 outputs: CAP/144 V objects, 4 emits
+        hdr[H_G], hdr[H_Q], hdr[H_E] = 1, cap // PV_ROWS, GQA * (HEAD_DIM // ROWS) // OUT_GROUP
+    hdr[H_K], hdr[H_N], hdr[H_FLAGS], hdr[H_COPY], hdr[H_POS] = cap, HEAD_DIM, flags, 2 * lead, p
+    return t
+
+
+def attn_lead_words(flags: int, cap: int) -> int:
+    """Words at the front of a column's first object: its GQA q heads, or its GQA x CAP scores."""
+    return GQA * HEAD_DIM // 2 if flags == F_SCORE else GQA * cap // 2
+
+
+def score_index(pos: np.ndarray, head: np.ndarray) -> np.ndarray:
+    """Where the score of (position, head) sits in its column's F_SCORE output: core j of the column takes K objects
+    4g+j, and each round of the join is 12 values from each of the four cores, one (4 positions x 3 heads) block."""
+    pos, head = np.asarray(pos), np.asarray(head)
+    chunk, within = pos // SCORE_ROWS, pos % SCORE_ROWS
+    g, core, e, pib = chunk // ROWS, chunk % ROWS, within // 4, within % 4
+    return ((g * SCORE_EMITS + e) * ROWS + core) * OUT_GROUP + pib * GQA + head
+
+
+def attn_out_perm() -> np.ndarray:
+    """Natural index (head*64 + dim) of each element of the attention output as the device writes it: column c's
+    96 words hold heads 3c..3c+2; core j makes dims 16j..16j+15 of each, value t = head*16 + d, 12 per emit."""
+    out = np.empty(KV_COLS * GQA * HEAD_DIM, np.int64)
+    for c in range(KV_COLS):
+        for e in range(GQA * HEAD_DIM // ROWS // OUT_GROUP):
+            for j in range(ROWS):
+                for i in range(OUT_GROUP):
+                    t = e * OUT_GROUP + i
+                    out[c * GQA * HEAD_DIM + (e * ROWS + j) * OUT_GROUP + i] = \
+                        (c * GQA + t // 16) * HEAD_DIM + 16 * j + t % 16
+    return out

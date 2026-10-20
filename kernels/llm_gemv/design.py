@@ -94,6 +94,77 @@ class Call:
         return pieces + [("x", self.x_offset, self.header().size)]
 
 
+@dataclass(frozen=True)
+class Attn:
+    """One attention phase over CAP cached positions, on columns 0..KV_COLS-1 (the last column gets no transfer).
+    F_SCORE: x_out is the q region (9 heads x 64, rope_perm order), cache the K cache, out the scores. F_PV: x_out
+    is F_SCORE's out, cache the V cache, out the attention output in pack.attn_out_perm order. Offsets in words of
+    the out argument, except x_offset (the call's pack.attn_tail, in the x argument)."""
+    flags: int
+    cap: int
+    x_out: int
+    x_offset: int
+    cache: int
+    out_offset: int
+
+    def __post_init__(self):
+        pack.attn_tail(self.flags, self.cap)
+
+    def lead_words(self) -> int:
+        return pack.attn_lead_words(self.flags, self.cap)
+
+    def out_words_per_column(self) -> int:
+        return self.cap * pack.GQA // 2 if self.flags == pack.F_SCORE else pack.GQA * pack.HEAD_DIM // 2
+
+    def stream(self, c: int, h: int) -> Tuple[int, list, list]:
+        """(offset, sizes, strides) in the out argument of channel h of column c: two cores' objects per step."""
+        row, step = pack.CACHE_WORDS, pack.PV_ROWS * pack.CACHE_WORDS
+        if self.flags == pack.F_SCORE:      # objects 4g+2h and 4g+2h+1: 72 contiguous positions, 32 words of head c
+            return (self.cache + 2 * h * pack.SCORE_ROWS * row + c * pack.HEAD_DIM // 2,
+                    [self.cap // (pack.SCORE_ROWS * pack.ROWS), 1, 2 * pack.SCORE_ROWS, pack.HEAD_DIM // 2],
+                    [step, 0, row, 1])
+        dims = pack.HEAD_DIM // pack.ROWS // 2     # a core's 16 dims: 8 words
+        return (self.cache + c * pack.HEAD_DIM // 2 + 2 * h * dims,
+                [self.cap // pack.PV_ROWS, 2, pack.PV_ROWS, dims], [step, dims, row, 1])
+
+    def check(self, x_words: int, out_words: int) -> None:
+        """Every core consumes exactly what its channel sends and the join emits exactly what its S2MM takes, from
+        the header the core reads; every region inside its argument."""
+        hdr = pack.attn_tail(self.flags, self.cap)[-pack.HDR_WORDS:]
+        objects = 1 + int(hdr[pack.H_G]) * int(hdr[pack.H_Q])
+        for h in range(2):
+            _, sizes, strides = self.stream(0, h)
+            if 2 * pack.OBJ_WORDS + int(np.prod(sizes)) != 2 * objects * pack.OBJ_WORDS:
+                raise ValueError(f"{self}: channel {h} sends {np.prod(sizes)} stream words for {objects} objects")
+        if int(hdr[pack.H_G]) * int(hdr[pack.H_E]) * 6 * pack.ROWS != self.out_words_per_column():
+            raise ValueError(f"{self}: the join emits a different count than the S2MM takes")
+        last = max(self.stream(c, h)[0] + sum((s - 1) * t for s, t in zip(*self.stream(c, h)[1:])) + 1
+                   for c in range(pack.KV_COLS) for h in range(2))
+        if (last > out_words or self.x_out + pack.KV_COLS * self.lead_words() > out_words
+                or self.out_offset + pack.KV_COLS * self.out_words_per_column() > out_words
+                or self.x_offset + pack.OBJ_WORDS - self.lead_words() > x_words):
+            raise ValueError(f"{self}: a region runs past its argument")
+
+    def sequence(self, x_words: int, out_words: int) -> List[str]:
+        L, lead, tail = [], self.lead_words(), pack.OBJ_WORDS - self.lead_words()
+        for c in range(pack.KV_COLS):
+            for h in range(2):
+                fifo = f"@wL{c}_{h}"
+                pieces = [("o", self.x_out + c * lead, lead, out_words), ("x", self.x_offset, tail, x_words)] * 2
+                for j, (arg, off, length, size) in enumerate(pieces):
+                    L.append(f"      aiex.npu.dma_memcpy_nd(%{arg}[0,0,0,{off}][1,1,1,{length}][0,0,0,1]) "
+                             f"{{id = {7 * h + j} : i64, metadata = {fifo}}} : memref<{size}xi32>")
+                off, sizes, strides = self.stream(c, h)
+                L.append(f"      aiex.npu.dma_memcpy_nd(%o[0,0,0,{off}][{','.join(map(str, sizes))}]"
+                         f"[{','.join(map(str, strides))}]) {{id = {7 * h + 6} : i64, metadata = {fifo}}} "
+                         f": memref<{out_words}xi32>")
+            n = self.out_words_per_column()
+            L.append(f"      aiex.npu.dma_memcpy_nd(%o[0,0,0,{self.out_offset + c * n}][1,1,1,{n}][0,0,0,1]) "
+                     f"{{id = 15 : i64, metadata = @oL{c}, issue_token = true}} : memref<{out_words}xi32>")
+        L += [f"      aiex.npu.dma_wait {{symbol = @oL{c}}}" for c in range(pack.KV_COLS)]
+        return L
+
+
 ACC = 96          # two accumulator sets of 3 x 16 fp32 (gate and up with F_SILU)
 
 
@@ -140,9 +211,12 @@ def _core(i: int) -> str:
     }} {{link_with = "gemv.o", stack_size = {STACK} : i32}}'''
 
 
-def harness(program: Sequence[Call], w_words: int, x_words: int, out_words: int) -> str:
+def harness(program: Sequence, w_words: int, x_words: int, out_words: int) -> str:
     O, XK = pack.OBJ_WORDS, pack.MAX_K // 2
     for call in program:
+        if isinstance(call, Attn):
+            call.check(x_words, out_words)
+            continue
         if call.w_offset + call.weight_words() > w_words:
             raise ValueError(f"{call}: weights run past the {w_words}-word argument")
         if call.x_offset + call.x_words_used() > x_words:
@@ -188,6 +262,9 @@ def harness(program: Sequence[Call], w_words: int, x_words: int, out_words: int)
     L.append(f"    aie.runtime_sequence(%w: memref<{w_words}xi32>, %x: memref<{x_words}xi32>, "
              f"%o: memref<{out_words}xi32>) {{")
     for call in program:
+        if isinstance(call, Attn):
+            L += call.sequence(x_words, out_words)
+            continue
         sw = pack.stream_elems(call.n, call.k, call.flags) // 2
         # the host-built pair is one transfer; a chained first object is x (and h) from earlier outputs, then the
         # constant tail, once per core of the pair. BD ids per shim tile: channel h uses 7h..7h+5 for these and
@@ -235,7 +312,8 @@ def tables_header() -> str:
     return ("// generated by design.py from kernels/llm_gemv/reference.py; do not edit\n"
             "#pragma once\n#include <stdint.h>\n"
             f"constexpr uint32_t RSQ_BASE = 0x{R.RSQ_BASE:04x};\nconstexpr int RSQ_SIZE = {R.RSQ_SIZE};\n"
-            + array("RSQ", R.RSQ) + array("SILU_T", R.SILU_T) + array("EXP_T", R.EXP_T) + array("RECIP_T", R.RECIP_T))
+            f"constexpr int RSQ_STORED = {R.RSQ_STORED};\n"
+            + array("RSQ", R.RSQ[:R.RSQ_STORED * 128]) + array("SILU_T", R.SILU_T) + array("EXP_T", R.EXP_T) + array("RECIP_T", R.RECIP_T))
 
 
 def compile_kernel(folder: Path) -> Path:

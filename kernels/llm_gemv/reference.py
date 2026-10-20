@@ -233,6 +233,17 @@ def rsq_table() -> np.ndarray:
 
 
 RSQ = rsq_table()
+# The core stores only ss's first RSQ_STORED octaves: from there on eps no longer shows in the rounding, and octave e
+# is octave e-2 halved, exactly (tests check every entry). rsq_stored_bits is the core's lookup.
+RSQ_STORED = 8
+
+
+def rsq_stored_bits(u: int) -> int:
+    e, m = (u >> 7) - 127, u & 0x7F
+    if e < RSQ_STORED:
+        return int(RSQ[e * 128 + m])
+    base = RSQ_STORED - 2 + ((e - RSQ_STORED) & 1)
+    return int(RSQ[base * 128 + m]) - (((e - base) >> 1) << 7)
 
 
 def rscale(h, exact):
@@ -286,6 +297,57 @@ def rope(x, cos, sin, exact=False):
     return out
 
 
+# The device's dim order within a head: q and K leave the RoPE projection with each (i, i+32) pair adjacent.
+DEV_DIMS = np.column_stack([np.arange(HEAD_DIM // 2), np.arange(HEAD_DIM // 2) + HEAD_DIM // 2]).reshape(-1)
+
+
+def div8_bits(u: np.ndarray) -> np.ndarray:
+    """x/8 on bf16 bits: the exponent less 3, and a result below the normal range flushed to a signed zero."""
+    u = np.asarray(u, np.uint16)
+    return np.where((u >> 7) & 0xFF > 3, u - np.uint16(3 << 7), u & np.uint16(0x8000)).astype(np.uint16)
+
+
+def _mac(acc, a, w):
+    return em.mac(acc, np.asarray(a, np.float32), np.asarray(w, np.float32), em.MAC_MODEL)
+
+
+def attention_scores(q: np.ndarray, K: np.ndarray) -> np.ndarray:
+    """bf16 [positions][g]: the F_SCORE output before div8, K rows by q heads over DEV_DIMS, 8 steps from zero."""
+    kd, qd = np.asarray(K, np.float32)[:, DEV_DIMS], np.asarray(q, np.float32)[:, DEV_DIMS]
+    acc = np.zeros((1, 1, kd.shape[0], qd.shape[0]), np.float32)
+    for s in range(0, HEAD_DIM, 8):
+        acc = _mac(acc, kd[None, :, s:s + 8], qd[:, s:s + 8].T[None])
+    return bf16(acc[0, 0])
+
+
+def attention_group(q: np.ndarray, K: np.ndarray, V: np.ndarray, p: int) -> np.ndarray:
+    """The device's attention for one KV head and the q heads that share it, exact: q [g][64], K and V [>p][64],
+    all bf16 values in natural dim order; returns bf16 [g][64]. One core's mmul walk, lane for lane:
+    - scores: A = cache rows x 8 dims, B = 8 dims x the q heads, dims in DEV_DIMS order, 8 steps from zero, then
+      bf16 and div8;
+    - d = bf16(s - max) as one MAC of [s, max] x [1, -1]; e = EXP table at d;
+    - per block of 8 positions from 0 (positions past p zero in both operands): A = e [heads][8 positions],
+      B = V [8 positions][dims] into acc, and B = ones into z; out = bf16(bf16(acc) * RECIP[bf16(z)])."""
+    g, n = q.shape[0], p + 1
+    s = dev(div8_bits, attention_scores(q, np.asarray(K)[:n]))             # [n][g]
+    m = s.max(axis=0)
+    d = np.stack([bf16(mac_terms([(s[:, h], 1.0), (np.full(n, m[h], np.float32), -1.0)])) for h in range(g)], 1)
+    e = dev(exp_bits, d)
+    blocks = -(-n // 8)
+    ez = np.zeros((blocks * 8, g), np.float32)
+    ez[:n] = e
+    vz = np.zeros((blocks * 8, HEAD_DIM), np.float32)
+    vz[:n] = np.asarray(V, np.float32)[:n]
+    out = np.zeros((1, 1, g, HEAD_DIM), np.float32)
+    z = np.zeros((1, 1, g, 1), np.float32)
+    for b in range(blocks):
+        a = ez[b * 8:(b + 1) * 8].T[None]                                  # [1][g][8]
+        out = _mac(out, a, vz[b * 8:(b + 1) * 8][None])
+        z = _mac(z, a, np.ones((1, 8, 1), np.float32))
+    r = dev(recip_bits, z[0, 0, :, 0])
+    return bf16(bf16(out[0, 0]) * r[:, None])
+
+
 @dataclass
 class Weights:
     embed: np.ndarray                       # [V][576] bf16 as float32; also the head
@@ -331,6 +393,12 @@ class Decoder:
         K = np.stack(self.k[i])                         # [p+1][3][64]
         V = np.stack(self.v[i])
         out = np.zeros((HEADS, HEAD_DIM), np.float32)
+        if self.exact:
+            g = HEADS // KV_HEADS
+            for kv in range(KV_HEADS):
+                out[kv * g:(kv + 1) * g] = attention_group(q.reshape(HEADS, HEAD_DIM)[kv * g:(kv + 1) * g],
+                                                           K[:, kv], V[:, kv], p)
+            return out.reshape(-1)
         for hd in range(HEADS):
             kv = hd // (HEADS // KV_HEADS)
             s = bf16(dot(K[:, kv], q[hd], self.exact)) / 8.0      # exact: /8 is a power of two
