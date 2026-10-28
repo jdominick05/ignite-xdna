@@ -1,0 +1,60 @@
+RESEARCH_PLATFORM {"machine": "Laptop (Linux)", "cpu": "AMD Ryzen 5 8645HS w/ Radeon 760M Graphics", "os": "Linux-7.2.11-arch1-1-x86_64-with-glibc2.44", "ram_bytes": 16025116672, "linux_stack": {"kernel": "7.2.11-arch1-1", "npu_vbnv": "RyzenAI-npu1", "npu_firmware": "1.5.5.391", "amdxdna_srcversion": "CEAE025A317872A9A6B3FC8", "xrt": {"Version": "2.21.0", "Branch": "HEAD", "Hash": "4eb1f4392a012b4e6eca759762389c612537f7c7"}, "platform_profile": "balanced", "cpu_governor": "powersave", "cpu_epp": "balance_performance", "ac_online": "1"}, "source_sha256": {"tools/research_process.py": "36a5b58f8beb602f06f80487cef0baffbc8f88b1ff6bd5350c172fca38620954", "tools/npu_quiet.py": "51cc3c5bae81c8b892f667ecd10ece970a95a2fd6abda1fa038365b75bb916cf", "tools/quant_calib_alphabet.py": "88cbdf7ceeb39e7de5a6bca25c360b89b93da0e7182516e3960c4414087248e9", "tools/xint8_arithmetic_probe.py": "64e377c883c87d8921d940be4e8efee02669fc48701ecc81b338d11dde1e4228", "scripts/research-lowlevel.sh": "5b973f4b13e79b9b206e156b1845045828fee2a6d3241575d4f8089ca0d88a4f", "scripts/research-iron.sh": "30eeff26850f2b5a2c260548e65d6f6f3da115e51a10868a7e95458bdcac340b", "kernels/memory_placement/probe.py": "0101b0beaabfba974bd98e94521932e535c98f45f80ced4638c5b55780e9099e", "kernels/memory_placement/memory_kernels.cc": "01fbe2cb8ed6ed153eef0f20512422e3eb44e5a1f5b8759956d039f04eef46f3", "scripts/research-matrix.sh": "d6bad11de9011f75a4942d2d6f5c1e8155eef00f0bbc1bdde85a785d69545ecc", "kernels/memory_placement/gemm.py": "8dbf48f8f4a356cc69bc65793b8dd7eab9b18074d414a1e01fb7e0abe42319a3", "kernels/memory_placement/gemm_placement.cc": "2fa1d57cf316cdd8c3599eae4581284c26ee392ad7dbbf289bafd175342ad9bc", "tools/research_summary.py": "e5d1913068f293914d67034d982ffd5363e5187d035108da8d6cdf4a09386efb", "tools/research_toolchain.py": "c6c01235e9eb9ca7f83e9f42e61d1c98bff86c5284a9ab1cd7fd91e571b010ca", "tools/host_load.py": "b09332f21028b209f1df25feb4af9f919c295bd4f2ccf4ee392a0eb209b350d5"}, "commit": "ecd158e9d69aa22c215ca7e981c3dcb12e5492f3", "command": [".venv-iron/bin/python", "tools/context_limit_probe.py", "build/ignite_cache/engine_2a1700172dc22a73.xclbin"], "seconds_limit": 300, "rss_gib_limit": 8, "checks_only": true, "free_ram_bytes": 9873842176}
+NPU_QUIET_REQUEST {"file": "/home/<user>/.local/state/ignite-xdna/npu-quiet.35989.request", "pid": 35989}
+PRE_NPU_CONTEXT_WITNESS "\n------------------------------\n[0000:05:00.1] : RyzenAI-npu1\n------------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+context 1: ok
+NPU_TIMELINE "\n------------------------------\n[0000:05:00.1] : RyzenAI-npu1\n------------------------------\nAIE Partitions\n  Total Memory Usage: N/A\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |36035               |1          |0           |0           |0    |N/A      |\n      |N/A                 |Active     |0           |0           |     |N/A      |\n      |N/A                 |1272 KB    |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n      |36035               |2          |0           |0           |0    |N/A      |\n      |N/A                 |Active     |0           |0           |     |N/A      |\n      |N/A                 |1272 KB    |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n      |36035               |3          |0           |0           |0    |N/A      |\n      |N/A                 |Active     |0           |0           |     |N/A      |\n      |N/A                 |1272 KB    |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n      |36035               |4          |0           |0           |0    |N/A      |\n      |N/A                 |Active     |0           |0           |     |N/A      |\n      |N/A                 |1272 KB    |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n      |36035               |5          |0           |0           |0    |N/A      |\n      |N/A                 |Active     |0           |0           |     |N/A      |\n      |N/A                 |1272 KB    |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n      |36035               |6          |0           |0           |0    |N/A      |\n      |N/A                 |Active     |0           |0           |     |N/A      |\n      |N/A                 |1272 KB    |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [36035], "owned_pids": [35989, 36035], "foreign_pids": []}
+context 2: ok
+context 3: ok
+context 4: ok
+context 5: ok
+context 6: ok
+context 7: FAILED RuntimeError: DRM_IOCTL_AMDXDNA_CREATE_HWCTX IOCTL failed (err=-22): Invalid argument
+CONTEXTS_GRANTED 6 (cap probed 12); first failure: RuntimeError: DRM_IOCTL_AMDXDNA_CREATE_HWCTX IOCTL failed (err=-22): Invalid argument
+
+------------------------------
+[0000:05:00.1] : RyzenAI-npu1
+------------------------------
+AIE Partitions
+  Total Memory Usage: N/A
+  Partition Index   : 0
+    Columns: [1, 2, 3, 4]
+    HW Contexts:
+      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |
+      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |
+      |Memory Usage        |Instr BO   |            |            |     |FPS      |
+      |                    |           |            |            |     |Latency  |
+      |====================|===========|============|============|=====|=========|
+      |36035               |1          |0           |0           |0    |N/A      |
+      |N/A                 |Active     |0           |0           |     |N/A      |
+      |N/A                 |1272 KB    |            |            |     |N/A      |
+      |                    |           |            |            |     |N/A      |
+      |--------------------|-----------|------------|------------|-----|---------|
+      |36035               |2          |0           |0           |0    |N/A      |
+      |N/A                 |Active     |0           |0           |     |N/A      |
+      |N/A                 |1272 KB    |            |            |     |N/A      |
+      |                    |           |            |            |     |N/A      |
+      |--------------------|-----------|------------|------------|-----|---------|
+      |36035               |3          |0           |0           |0    |N/A      |
+      |N/A                 |Active     |0           |0           |     |N/A      |
+      |N/A                 |1272 KB    |            |            |     |N/A      |
+      |                    |           |            |            |     |N/A      |
+      |--------------------|-----------|------------|------------|-----|---------|
+      |36035               |4          |0           |0           |0    |N/A      |
+      |N/A                 |Active     |0           |0           |     |N/A      |
+      |N/A                 |1272 KB    |            |            |     |N/A      |
+      |                    |           |            |            |     |N/A      |
+      |--------------------|-----------|------------|------------|-----|---------|
+      |36035               |5          |0           |0           |0    |N/A      |
+      |N/A                 |Active     |0           |0           |     |N/A      |
+      |N/A                 |1272 KB    |            |            |     |N/A      |
+      |                    |           |            |            |     |N/A      |
+      |--------------------|-----------|------------|------------|-----|---------|
+      |36035               |6          |0           |0           |0    |N/A      |
+      |N/A                 |Active     |0           |0           |     |N/A      |
+      |N/A                 |1272 KB    |            |            |     |N/A      |
+      |                    |           |            |            |     |N/A      |
+      |--------------------|-----------|------------|------------|-----|---------|
+
+POST_NPU_CONTEXT_WITNESS "\n------------------------------\n[0000:05:00.1] : RyzenAI-npu1\n------------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+RESEARCH_PROCESS_RESULT {"exit_code": 0, "stop": null, "peak_tree_rss_bytes": 33710080, "rss_measurement": "maximum observed across sampled descendant working sets; zero observations reported as null", "elapsed_seconds": 0.2865875940001388, "foreign_contention_observed": false, "timing_eligible": false}

@@ -1,0 +1,163 @@
+RESEARCH_PLATFORM {"machine": "Laptop (Linux)", "cpu": "AMD Ryzen 5 8645HS w/ Radeon 760M Graphics", "os": "Linux-7.2.11-arch1-1-x86_64-with-glibc2.44", "ram_bytes": 16025116672, "linux_stack": {"kernel": "7.2.11-arch1-1", "npu_vbnv": "RyzenAI-npu1", "npu_firmware": "1.5.5.391", "amdxdna_srcversion": "CEAE025A317872A9A6B3FC8", "xrt": {"Version": "2.21.0", "Branch": "HEAD", "Hash": "4eb1f4392a012b4e6eca759762389c612537f7c7"}, "platform_profile": "balanced", "cpu_governor": "powersave", "cpu_epp": "balance_performance", "ac_online": "1"}, "source_sha256": {"tools/research_process.py": "36a5b58f8beb602f06f80487cef0baffbc8f88b1ff6bd5350c172fca38620954", "tools/npu_quiet.py": "51cc3c5bae81c8b892f667ecd10ece970a95a2fd6abda1fa038365b75bb916cf", "tools/quant_calib_alphabet.py": "88cbdf7ceeb39e7de5a6bca25c360b89b93da0e7182516e3960c4414087248e9", "tools/xint8_arithmetic_probe.py": "64e377c883c87d8921d940be4e8efee02669fc48701ecc81b338d11dde1e4228", "scripts/research-lowlevel.sh": "5b973f4b13e79b9b206e156b1845045828fee2a6d3241575d4f8089ca0d88a4f", "scripts/research-iron.sh": "30eeff26850f2b5a2c260548e65d6f6f3da115e51a10868a7e95458bdcac340b", "kernels/memory_placement/probe.py": "0101b0beaabfba974bd98e94521932e535c98f45f80ced4638c5b55780e9099e", "kernels/memory_placement/memory_kernels.cc": "01fbe2cb8ed6ed153eef0f20512422e3eb44e5a1f5b8759956d039f04eef46f3", "scripts/research-matrix.sh": "d6bad11de9011f75a4942d2d6f5c1e8155eef00f0bbc1bdde85a785d69545ecc", "kernels/memory_placement/gemm.py": "8dbf48f8f4a356cc69bc65793b8dd7eab9b18074d414a1e01fb7e0abe42319a3", "kernels/memory_placement/gemm_placement.cc": "2fa1d57cf316cdd8c3599eae4581284c26ee392ad7dbbf289bafd175342ad9bc", "tools/research_summary.py": "e5d1913068f293914d67034d982ffd5363e5187d035108da8d6cdf4a09386efb", "tools/research_toolchain.py": "c6c01235e9eb9ca7f83e9f42e61d1c98bff86c5284a9ab1cd7fd91e571b010ca", "tools/host_load.py": "b09332f21028b209f1df25feb4af9f919c295bd4f2ccf4ee392a0eb209b350d5"}, "commit": "ecd158e9d69aa22c215ca7e981c3dcb12e5492f3", "command": ["bash", "scripts/research-iron.sh", "-m", "ignite_xdna.compiler.cli", "--engine", "graph", "--input", "models/yolov8n_cut_xint8.onnx", "--output", "build/linux/yolov8n_full.ignite", "--silu-sigmoid"], "seconds_limit": 1500.0, "rss_gib_limit": 8, "checks_only": true, "free_ram_bytes": 9906733056}
+[*] Lowered 66 layers (0 on the host); workspace 14.9 MB; 1415 rounds, 8.16 MB static packets
+HOST_TIMELINE {"elapsed_seconds": 2.065, "tree_rss_bytes": 438448128, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 4.095, "tree_rss_bytes": 645042176, "foreign_peers": []}
+
+[ERROR] Compilation failed: [Peano] compilation failed:
+PLEASE submit a bug report to https://github.com/llvm/llvm-project/issues/ and include the crash backtrace, preprocessed source, and associated run script.
+Stack dump:
+0.	Program arguments: /home/<user>/src/ignite-xdna/.venv-iron/lib/python3.13/site-packages/llvm-aie/bin/clang++ /home/<user>/src/ignite-xdna/build/linux/conv_engine/yolov8n_full/design.prj/engine.cc -c -o /home/<user>/src/ignite-xdna/build/linux/conv_engine/yolov8n_full/design.prj/engine.o -I/home/<user>/src/ignite-xdna/.venv-iron/lib/python3.13/site-packages/mlir_aie/include -std=c++20 -Wno-parentheses -Wno-attributes -Wno-macro-redefined -Wno-empty-body -O2 -DNDEBUG -MD -MF /home/<user>/src/ignite-xdna/build/linux/conv_engine/yolov8n_full/design.prj/engine.o.d -D__AIE_API_AIE_ADF_HPP__ --target=aie2-none-unknown-elf -I /home/<user>/src/ignite-xdna/.venv-iron/lib/python3.13/site-packages/mlir_aie/include -I /home/<user>/src/ignite-xdna/kernels/aie2/conv_engine -O2 -DENGINE_OP_FUSED_CONV=0 -DENGINE_OP_MUL=0 -DENGINE_OP_POOL=0 -DENGINE_OP_SCALE=0
+1.	<eof> parser at end of file
+2.	Code generation
+3.	Running pass 'Function Pass Manager' on module '/home/<user>/src/ignite-xdna/build/linux/conv_engine/yolov8n_full/design.prj/engine.cc'.
+4.	Running pass 'InstructionSelect' on function '@engine'
+ #0 0x00007f57af4611ab llvm::sys::PrintStackTrace(llvm::raw_ostream&, int) (/home/<user>/src/ignite-xdna/.venv-iron/lib/python3.13/site-packages/llvm-aie/bin/../lib/libLLVM.so+0xc611ab)
+ #1 0x00007f57af45e6f4 llvm::sys::CleanupOnSignal(unsigned long) (/home/<user>/src/ignite-xdna/.venv-iron/lib/python3.13/site-packages/llvm-aie/bin/../lib/libLLVM.so+0xc5e6f4)
+ #2 0x00007f57af3441a0 CrashRecoverySignalHandler(int) CrashRecoveryContext.cpp:0:0
+ #3 0x00007f57ae03e6f0 (/usr/lib/libc.so.6+0x3e6f0)
+ #4 0x00007f57b275ff6f llvm::getLoadStoreSize(llvm::MachineInstr const&) (/home/<user>/src/ignite-xdna/.venv-iron/lib/python3.13/site-packages/llvm-aie/bin/../lib/libLLVM.so+0x3f5ff6f)
+ #5 0x00007f57b2760088 (anonymous namespace)::AIE2InstructionSelector::getCombinedOpcodeUNPACKLoad(llvm::MachineInstr const&, llvm::MachineInstr const&, std::optional<llvm::APInt>, bool) AIE2InstructionSelector.cpp:0:0
+ #6 0x00007f57b27606c4 (anonymous namespace)::AIE2InstructionSelector::canCombineUNPACKLoad(llvm::MachineInstr&, llvm::MachineInstr&, llvm::MachineRegisterInfo&) AIE2InstructionSelector.cpp:0:0
+ #7 0x00007f57b265cd97 llvm::AIEBaseInstructionSelector::selectG_AIE_LOAD_UNPACK(llvm::MachineInstr&, llvm::MachineRegisterInfo&) (/home/<user>/src/ignite-xdna/.venv-iron/lib/python3.13/site-packages/llvm-aie/bin/../lib/libLLVM.so+0x3e5cd97)
+ #8 0x00007f57b2776c4b (anonymous namespace)::AIE2InstructionSelector::select(llvm::MachineInstr&) AIE2InstructionSelector.cpp:0:0
+ #9 0x00007f57b04f623b llvm::InstructionSelect::selectMachineFunction(llvm::MachineFunction&) (/home/<user>/src/ignite-xdna/.venv-iron/lib/python3.13/site-packages/llvm-aie/bin/../lib/libLLVM.so+0x1cf623b)
+#10 0x00007f57b04f866c llvm::InstructionSelect::runOnMachineFunction(llvm::MachineFunction&) (/home/<user>/src/ignite-xdna/.venv-iron/lib/python3.13/site-packages/llvm-aie/bin/../lib/libLLVM.so+0x1cf866c)
+#11 0x00007f57afac75d1 llvm::MachineFunctionPass::runOnFunction(llvm::Function&) (.part.0) MachineFunctionPass.cpp:0:0
+#12 0x00007f57af67bf9c llvm::FPPassManager::runOnFunction(llvm::Function&) (/home/<user>/src/ignite-xdna/.venv-iron/lib/python3.13/site-packages/llvm-aie/bin/../lib/libLLVM.so+0xe7bf9c)
+#13 0x00007f57af67c3b1 llvm::FPPassManager::runOnModule(llvm::Module&) (/home/<user>/src/ignite-xdna/.venv-iron/lib/python3.13/site-packages/llvm-aie/bin/../lib/libLLVM.so+0xe7c3b1)
+#14 0x00007f57af67cd0d llvm::legacy::PassManagerImpl::run(llvm::Module&) (/home/<user>/src/ignite-xdna/.venv-iron/lib/python3.13/site-packages/llvm-aie/bin/../lib/libLLVM.so+0xe7cd0d)
+#15 0x00007f57b78f39f2 (anonymous namespace)::EmitAssemblyHelper::emitAssembly(clang::BackendAction, std::unique_ptr<llvm::raw_pwrite_stream, std::default_delete<llvm::raw_pwrite_stream>>, clang::BackendConsumer*) BackendUtil.cpp:0:0
+#16 0x00007f57b78f42c2 clang::emitBackendOutput(clang::CompilerInstance&, clang::CodeGenOptions&, llvm::StringRef, llvm::Module*, clang::BackendAction, llvm::IntrusiveRefCntPtr<llvm::vfs::FileSystem>, std::unique_ptr<llvm::raw_pwrite_stream, std::default_delete<llvm::raw_pwrite_stream>>, clang::BackendConsumer*) (/home/<user>/src/ignite-xdna/.venv-iron/lib/python3.13/site-packages/llvm-aie/bin/../lib/libclang-cpp.so+0x24f42c2)
+#17 0x00007f57b7d08a14 clang::BackendConsumer::HandleTranslationUnit(clang::ASTContext&) (/home/<user>/src/ignite-xdna/.venv-iron/lib/python3.13/site-packages/llvm-aie/bin/../lib/libclang-cpp.so+0x2908a14)
+#18 0x00007f57b6006d3c clang::ParseAST(clang::Sema&, bool, bool) (/home/<user>/src/ignite-xdna/.venv-iron/lib/python3.13/site-packages/llvm-aie/bin/../lib/libclang-cpp.so+0xc06d3c)
+#19 0x00007f57b87b9d63 clang::FrontendAction::Execute() (/home/<user>/src/ignite-xdna/.venv-iron/lib/python3.13/site-packages/llvm-aie/bin/../lib/libclang-cpp.so+0x33b9d63)
+#20 0x00007f57b8731a7e clang::CompilerInstance::ExecuteAction(clang::FrontendAction&) (/home/<user>/src/ignite-xdna/.venv-iron/lib/python3.13/site-packages/llvm-aie/bin/../lib/libclang-cpp.so+0x3331a7e)
+#21 0x00007f57b8864c27 clang::ExecuteCompilerInvocation(clang::CompilerInstance*) (/home/<user>/src/ignite-xdna/.venv-iron/lib/python3.13/site-packages/llvm-aie/bin/../lib/libclang-cpp.so+0x3464c27)
+#22 0x0000000000415ff7 cc1_main(llvm::ArrayRef<char const*>, char const*, void*) (/home/<user>/src/ignite-xdna/.venv-iron/lib/python3.13/site-packages/llvm-aie/bin/clang+++0x415ff7)
+#23 0x000000000040b980 ExecuteCC1Tool(llvm::SmallVectorImpl<char const*>&, llvm::ToolContext const&) driver.cpp:0:0
+#24 0x00007f57b82bc3c9 void llvm::function_ref<void ()>::callback_fn<clang::driver::CC1Command::Execute(llvm::ArrayRef<std::optional<llvm::StringRef>>, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char>>*, bool*) const::'lambda'()>(long) Job.cpp:0:0
+#25 0x00007f57af344652 llvm::CrashRecoveryContext::RunSafely(llvm::function_ref<void ()>) (/home/<user>/src/ignite-xdna/.venv-iron/lib/python3.13/site-packages/llvm-aie/bin/../lib/libLLVM.so+0xb44652)
+#26 0x00007f57b82be7ae clang::driver::CC1Command::Execute(llvm::ArrayRef<std::optional<llvm::StringRef>>, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char>>*, bool*) const (.part.0) Job.cpp:0:0
+#27 0x00007f57b8277e7b clang::driver::Compilation::ExecuteCommand(clang::driver::Command const&, clang::driver::Command const*&, bool) const (/home/<user>/src/ignite-xdna/.venv-iron/lib/python3.13/site-packages/llvm-aie/bin/../lib/libclang-cpp.so+0x2e77e7b)
+#28 0x00007f57b8278eef clang::driver::Compilation::ExecuteJobs(clang::driver::JobList const&, llvm::SmallVectorImpl<std::pair<int, clang::driver::Command const*>>&, bool) const (/home/<user>/src/ignite-xdna/.venv-iron/lib/python3.13/site-packages/llvm-aie/bin/../lib/libclang-cpp.so+0x2e78eef)
+#29 0x00007f57b8287324 clang::driver::Driver::ExecuteCompilation(clang::driver::Compilation&, llvm::SmallVectorImpl<std::pair<int, clang::driver::Command const*>>&) (/home/<user>/src/ignite-xdna/.venv-iron/lib/python3.13/site-packages/llvm-aie/bin/../lib/libclang-cpp.so+0x2e87324)
+#30 0x0000000000411392 clang_main(int, char**, llvm::ToolContext const&) (/home/<user>/src/ignite-xdna/.venv-iron/lib/python3.13/site-packages/llvm-aie/bin/clang+++0x411392)
+#31 0x000000000040af63 main (/home/<user>/src/ignite-xdna/.venv-iron/lib/python3.13/site-packages/llvm-aie/bin/clang+++0x40af63)
+#32 0x00007f57ae027781 (/usr/lib/libc.so.6+0x27781)
+#33 0x00007f57ae0278b9 __libc_start_main (/usr/lib/libc.so.6+0x278b9)
+#34 0x000000000040afae _start (/home/<user>/src/ignite-xdna/.venv-iron/lib/python3.13/site-packages/llvm-aie/bin/clang+++0x40afae)
+clang++: error: clang frontend command failed with exit code 139 (use -v to see invocation)
+clang version 21.0.0 (https://github.com/Xilinx/llvm-aie c9c5ecb725fc8c765e4b687356e6ec1e54da7a0e)
+Target: aie2-none-unknown-elf
+Thread model: posix
+InstalledDir: /home/<user>/src/ignite-xdna/.venv-iron/lib/python3.13/site-packages/llvm-aie/bin
+Build config: +assertions
+clang++: note: diagnostic msg: 
+********************
+
+PLEASE ATTACH THE FOLLOWING FILES TO THE BUG REPORT:
+Preprocessed source(s) and associated run script(s) are located at:
+clang++: note: diagnostic msg: /tmp/engine-7f3556.cpp
+clang++: note: diagnostic msg: /tmp/engine-7f3556.sh
+clang++: note: diagnostic msg: 
+
+********************
+
+Traceback (most recent call last):
+  File "/home/<user>/src/ignite-xdna/src/ignite_xdna/compiler/cli.py", line 647, in main
+    compile_graph_engine(parsed.input, parsed.output, parsed.build_dir, host_regions=parsed.host_region,
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                         silu_sigmoid=parsed.silu_sigmoid, topology_policy=parsed.topology_policy,
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+                         trace_shims=parsed.trace_shims, trace_size=parsed.trace_size,
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                         overlap_layers=parsed.overlap_layers, build=build_record(argv))
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/<user>/src/ignite-xdna/src/ignite_xdna/compiler/cli.py", line 563, in compile_graph_engine
+    manifest = compile_graph_container(input_path, output_path, build_dir=build_dir,
+                                       host_regions=tuple(host_regions or ()), silu_sigmoid=silu_sigmoid,
+    ...<4 lines>...
+                                       trace_shims=([int(v) for v in trace_shims.split(",")] if trace_shims else None),
+                                       trace_size=trace_size, overlap_layers=overlap_layers, build=build)
+  File "/home/<user>/src/ignite-xdna/src/ignite_xdna/compiler/engine_compile.py", line 792, in compile_graph_container
+    compile_mlir_module(module, insts_path=insts_path, xclbin_path=xclbin_path, work_dir=work,
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                        device=iron.get_current_device())
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/<user>/src/ignite-xdna/.venv-iron/lib/python3.13/site-packages/mlir_aie/python/aie/utils/compile/utils.py", line 522, in compile_mlir_module
+    compile_external_kernel(func, str(work_dir), target_arch)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/<user>/src/ignite-xdna/.venv-iron/lib/python3.13/site-packages/mlir_aie/python/aie/utils/compile/utils.py", line 633, in compile_external_kernel
+    compile_cxx_core_function(
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^
+        source_path=source_file,
+        ^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<9 lines>...
+        use_chess=getattr(func, "_use_chess", False),
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/<user>/src/ignite-xdna/.venv-iron/lib/python3.13/site-packages/mlir_aie/python/aie/utils/compile/utils.py", line 354, in compile_cxx_core_function
+    raise RuntimeError(f"[{tool}] compilation failed:\n{ret.stderr.decode()}")
+RuntimeError: [Peano] compilation failed:
+PLEASE submit a bug report to https://github.com/llvm/llvm-project/issues/ and include the crash backtrace, preprocessed source, and associated run script.
+Stack dump:
+0.	Program arguments: /home/<user>/src/ignite-xdna/.venv-iron/lib/python3.13/site-packages/llvm-aie/bin/clang++ /home/<user>/src/ignite-xdna/build/linux/conv_engine/yolov8n_full/design.prj/engine.cc -c -o /home/<user>/src/ignite-xdna/build/linux/conv_engine/yolov8n_full/design.prj/engine.o -I/home/<user>/src/ignite-xdna/.venv-iron/lib/python3.13/site-packages/mlir_aie/include -std=c++20 -Wno-parentheses -Wno-attributes -Wno-macro-redefined -Wno-empty-body -O2 -DNDEBUG -MD -MF /home/<user>/src/ignite-xdna/build/linux/conv_engine/yolov8n_full/design.prj/engine.o.d -D__AIE_API_AIE_ADF_HPP__ --target=aie2-none-unknown-elf -I /home/<user>/src/ignite-xdna/.venv-iron/lib/python3.13/site-packages/mlir_aie/include -I /home/<user>/src/ignite-xdna/kernels/aie2/conv_engine -O2 -DENGINE_OP_FUSED_CONV=0 -DENGINE_OP_MUL=0 -DENGINE_OP_POOL=0 -DENGINE_OP_SCALE=0
+1.	<eof> parser at end of file
+2.	Code generation
+3.	Running pass 'Function Pass Manager' on module '/home/<user>/src/ignite-xdna/build/linux/conv_engine/yolov8n_full/design.prj/engine.cc'.
+4.	Running pass 'InstructionSelect' on function '@engine'
+ #0 0x00007f57af4611ab llvm::sys::PrintStackTrace(llvm::raw_ostream&, int) (/home/<user>/src/ignite-xdna/.venv-iron/lib/python3.13/site-packages/llvm-aie/bin/../lib/libLLVM.so+0xc611ab)
+ #1 0x00007f57af45e6f4 llvm::sys::CleanupOnSignal(unsigned long) (/home/<user>/src/ignite-xdna/.venv-iron/lib/python3.13/site-packages/llvm-aie/bin/../lib/libLLVM.so+0xc5e6f4)
+ #2 0x00007f57af3441a0 CrashRecoverySignalHandler(int) CrashRecoveryContext.cpp:0:0
+ #3 0x00007f57ae03e6f0 (/usr/lib/libc.so.6+0x3e6f0)
+ #4 0x00007f57b275ff6f llvm::getLoadStoreSize(llvm::MachineInstr const&) (/home/<user>/src/ignite-xdna/.venv-iron/lib/python3.13/site-packages/llvm-aie/bin/../lib/libLLVM.so+0x3f5ff6f)
+ #5 0x00007f57b2760088 (anonymous namespace)::AIE2InstructionSelector::getCombinedOpcodeUNPACKLoad(llvm::MachineInstr const&, llvm::MachineInstr const&, std::optional<llvm::APInt>, bool) AIE2InstructionSelector.cpp:0:0
+ #6 0x00007f57b27606c4 (anonymous namespace)::AIE2InstructionSelector::canCombineUNPACKLoad(llvm::MachineInstr&, llvm::MachineInstr&, llvm::MachineRegisterInfo&) AIE2InstructionSelector.cpp:0:0
+ #7 0x00007f57b265cd97 llvm::AIEBaseInstructionSelector::selectG_AIE_LOAD_UNPACK(llvm::MachineInstr&, llvm::MachineRegisterInfo&) (/home/<user>/src/ignite-xdna/.venv-iron/lib/python3.13/site-packages/llvm-aie/bin/../lib/libLLVM.so+0x3e5cd97)
+ #8 0x00007f57b2776c4b (anonymous namespace)::AIE2InstructionSelector::select(llvm::MachineInstr&) AIE2InstructionSelector.cpp:0:0
+ #9 0x00007f57b04f623b llvm::InstructionSelect::selectMachineFunction(llvm::MachineFunction&) (/home/<user>/src/ignite-xdna/.venv-iron/lib/python3.13/site-packages/llvm-aie/bin/../lib/libLLVM.so+0x1cf623b)
+#10 0x00007f57b04f866c llvm::InstructionSelect::runOnMachineFunction(llvm::MachineFunction&) (/home/<user>/src/ignite-xdna/.venv-iron/lib/python3.13/site-packages/llvm-aie/bin/../lib/libLLVM.so+0x1cf866c)
+#11 0x00007f57afac75d1 llvm::MachineFunctionPass::runOnFunction(llvm::Function&) (.part.0) MachineFunctionPass.cpp:0:0
+#12 0x00007f57af67bf9c llvm::FPPassManager::runOnFunction(llvm::Function&) (/home/<user>/src/ignite-xdna/.venv-iron/lib/python3.13/site-packages/llvm-aie/bin/../lib/libLLVM.so+0xe7bf9c)
+#13 0x00007f57af67c3b1 llvm::FPPassManager::runOnModule(llvm::Module&) (/home/<user>/src/ignite-xdna/.venv-iron/lib/python3.13/site-packages/llvm-aie/bin/../lib/libLLVM.so+0xe7c3b1)
+#14 0x00007f57af67cd0d llvm::legacy::PassManagerImpl::run(llvm::Module&) (/home/<user>/src/ignite-xdna/.venv-iron/lib/python3.13/site-packages/llvm-aie/bin/../lib/libLLVM.so+0xe7cd0d)
+#15 0x00007f57b78f39f2 (anonymous namespace)::EmitAssemblyHelper::emitAssembly(clang::BackendAction, std::unique_ptr<llvm::raw_pwrite_stream, std::default_delete<llvm::raw_pwrite_stream>>, clang::BackendConsumer*) BackendUtil.cpp:0:0
+#16 0x00007f57b78f42c2 clang::emitBackendOutput(clang::CompilerInstance&, clang::CodeGenOptions&, llvm::StringRef, llvm::Module*, clang::BackendAction, llvm::IntrusiveRefCntPtr<llvm::vfs::FileSystem>, std::unique_ptr<llvm::raw_pwrite_stream, std::default_delete<llvm::raw_pwrite_stream>>, clang::BackendConsumer*) (/home/<user>/src/ignite-xdna/.venv-iron/lib/python3.13/site-packages/llvm-aie/bin/../lib/libclang-cpp.so+0x24f42c2)
+#17 0x00007f57b7d08a14 clang::BackendConsumer::HandleTranslationUnit(clang::ASTContext&) (/home/<user>/src/ignite-xdna/.venv-iron/lib/python3.13/site-packages/llvm-aie/bin/../lib/libclang-cpp.so+0x2908a14)
+#18 0x00007f57b6006d3c clang::ParseAST(clang::Sema&, bool, bool) (/home/<user>/src/ignite-xdna/.venv-iron/lib/python3.13/site-packages/llvm-aie/bin/../lib/libclang-cpp.so+0xc06d3c)
+#19 0x00007f57b87b9d63 clang::FrontendAction::Execute() (/home/<user>/src/ignite-xdna/.venv-iron/lib/python3.13/site-packages/llvm-aie/bin/../lib/libclang-cpp.so+0x33b9d63)
+#20 0x00007f57b8731a7e clang::CompilerInstance::ExecuteAction(clang::FrontendAction&) (/home/<user>/src/ignite-xdna/.venv-iron/lib/python3.13/site-packages/llvm-aie/bin/../lib/libclang-cpp.so+0x3331a7e)
+#21 0x00007f57b8864c27 clang::ExecuteCompilerInvocation(clang::CompilerInstance*) (/home/<user>/src/ignite-xdna/.venv-iron/lib/python3.13/site-packages/llvm-aie/bin/../lib/libclang-cpp.so+0x3464c27)
+#22 0x0000000000415ff7 cc1_main(llvm::ArrayRef<char const*>, char const*, void*) (/home/<user>/src/ignite-xdna/.venv-iron/lib/python3.13/site-packages/llvm-aie/bin/clang+++0x415ff7)
+#23 0x000000000040b980 ExecuteCC1Tool(llvm::SmallVectorImpl<char const*>&, llvm::ToolContext const&) driver.cpp:0:0
+#24 0x00007f57b82bc3c9 void llvm::function_ref<void ()>::callback_fn<clang::driver::CC1Command::Execute(llvm::ArrayRef<std::optional<llvm::StringRef>>, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char>>*, bool*) const::'lambda'()>(long) Job.cpp:0:0
+#25 0x00007f57af344652 llvm::CrashRecoveryContext::RunSafely(llvm::function_ref<void ()>) (/home/<user>/src/ignite-xdna/.venv-iron/lib/python3.13/site-packages/llvm-aie/bin/../lib/libLLVM.so+0xb44652)
+#26 0x00007f57b82be7ae clang::driver::CC1Command::Execute(llvm::ArrayRef<std::optional<llvm::StringRef>>, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char>>*, bool*) const (.part.0) Job.cpp:0:0
+#27 0x00007f57b8277e7b clang::driver::Compilation::ExecuteCommand(clang::driver::Command const&, clang::driver::Command const*&, bool) const (/home/<user>/src/ignite-xdna/.venv-iron/lib/python3.13/site-packages/llvm-aie/bin/../lib/libclang-cpp.so+0x2e77e7b)
+#28 0x00007f57b8278eef clang::driver::Compilation::ExecuteJobs(clang::driver::JobList const&, llvm::SmallVectorImpl<std::pair<int, clang::driver::Command const*>>&, bool) const (/home/<user>/src/ignite-xdna/.venv-iron/lib/python3.13/site-packages/llvm-aie/bin/../lib/libclang-cpp.so+0x2e78eef)
+#29 0x00007f57b8287324 clang::driver::Driver::ExecuteCompilation(clang::driver::Compilation&, llvm::SmallVectorImpl<std::pair<int, clang::driver::Command const*>>&) (/home/<user>/src/ignite-xdna/.venv-iron/lib/python3.13/site-packages/llvm-aie/bin/../lib/libclang-cpp.so+0x2e87324)
+#30 0x0000000000411392 clang_main(int, char**, llvm::ToolContext const&) (/home/<user>/src/ignite-xdna/.venv-iron/lib/python3.13/site-packages/llvm-aie/bin/clang+++0x411392)
+#31 0x000000000040af63 main (/home/<user>/src/ignite-xdna/.venv-iron/lib/python3.13/site-packages/llvm-aie/bin/clang+++0x40af63)
+#32 0x00007f57ae027781 (/usr/lib/libc.so.6+0x27781)
+#33 0x00007f57ae0278b9 __libc_start_main (/usr/lib/libc.so.6+0x278b9)
+#34 0x000000000040afae _start (/home/<user>/src/ignite-xdna/.venv-iron/lib/python3.13/site-packages/llvm-aie/bin/clang+++0x40afae)
+clang++: error: clang frontend command failed with exit code 139 (use -v to see invocation)
+clang version 21.0.0 (https://github.com/Xilinx/llvm-aie c9c5ecb725fc8c765e4b687356e6ec1e54da7a0e)
+Target: aie2-none-unknown-elf
+Thread model: posix
+InstalledDir: /home/<user>/src/ignite-xdna/.venv-iron/lib/python3.13/site-packages/llvm-aie/bin
+Build config: +assertions
+clang++: note: diagnostic msg: 
+********************
+
+PLEASE ATTACH THE FOLLOWING FILES TO THE BUG REPORT:
+Preprocessed source(s) and associated run script(s) are located at:
+clang++: note: diagnostic msg: /tmp/engine-7f3556.cpp
+clang++: note: diagnostic msg: /tmp/engine-7f3556.sh
+clang++: note: diagnostic msg: 
+
+********************
+
+RESEARCH_PROCESS_RESULT {"exit_code": 1, "stop": null, "peak_tree_rss_bytes": 737890304, "rss_measurement": "maximum observed across sampled descendant working sets; zero observations reported as null", "elapsed_seconds": 4.581393642999956, "foreign_contention_observed": false, "timing_eligible": false}

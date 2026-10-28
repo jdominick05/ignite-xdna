@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run a bounded Windows low-level research experiment with scrubbed UTF-8 evidence.
+# Run a bounded low-level research experiment (Windows or Linux) with scrubbed UTF-8 evidence.
 #
 #   ./scripts/research-lowlevel.sh --log results/quant/<unique>.log [--npu] [--checks-only] [--seconds 300] [--rss-gib 8] -- python tools/<experiment>.py <args>
 #   ./scripts/research-lowlevel.sh --log results/aie/<unique>.log --npu -- bash scripts/research-iron.sh kernels/memory_placement/probe.py <args>
@@ -27,7 +27,13 @@ while [ $# -gt 0 ]; do
 done
 [ -n "$LOG" ] && [ $# -gt 0 ] || die "need --log and a command after --"
 [ ! -e "$LOG" ] || die "log already exists"
-use_env resnet_env17
-export RYZEN_AI_INSTALLATION_PATH="$RYZEN_AI_PATH" XLNX_ONNX_EP_REPORT_FILE=vitisai_ep_report.json
+if [ "$(uname -s)" = Linux ]; then
+    # Linux: the parent runs in the repo's .venv-iron with XRT's setup sourced, so xrt-smi is the Linux build.
+    source "$REPO_ROOT/.venv-iron/bin/activate"
+    source "${XILINX_XRT:-/opt/xilinx/xrt}/setup.sh" >/dev/null
+else
+    use_env resnet_env17
+    export RYZEN_AI_INSTALLATION_PATH="$RYZEN_AI_PATH" XLNX_ONNX_EP_REPORT_FILE=vitisai_ep_report.json
+fi
 export PYTHONIOENCODING=utf-8 PYTHONUNBUFFERED=1
 run_logged "$LOG" python tools/research_process.py "${opts[@]}" -- "$@"

@@ -31,6 +31,8 @@ MIN_WAIT_S = 5.0
 
 
 def folder() -> Path:
+    if os.name != "nt":
+        return Path(os.environ.get("XDG_STATE_HOME", Path.home() / ".local" / "state")) / "ignite-xdna"
     return Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local")) / "ignite-xdna"
 
 
