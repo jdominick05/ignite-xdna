@@ -9,7 +9,7 @@ The runbook for rounds `win1` and `win2` of
 
 | | Where it comes from | Check |
 |---|---|---|
-| This branch at the pre-registration commit | `git fetch` + `git checkout linux-bringup` if it was pushed, or `git clone ignite-xdna.gitbundle -b linux-bringup ignite-xdna` from the transfer drive | `git log -1` shows the commit the pre-registration names |
+| The `testing` branch at the pre-registration commit | `git fetch` + `git checkout testing` once it is pushed, or `git clone ignite-xdna.gitbundle -b testing ignite-xdna` from the transfer drive | `git log -1` shows the commit the pre-registration names |
 | Ignition at `ebfc077` | `git clone https://github.com/jdominick05/Ignition` beside `ignite-xdna`, then `git checkout ebfc077` | `..\Ignition\live_ignition.py` exists |
 | The bundle | copy `os_bench_bundle_20261028\` from the transfer drive, e.g. to `C:\os_bench_bundle_20261028` | `os_bench run` checks every file against `manifest.json` and refuses on a mismatch |
 | pyxrt | the XRT SDK 2.21.75 at `C:\Xilinx\XRT\xrt_sdk\xrt` (the version Desktop 2 uses). `runtime\driver.py` finds `python\pyxrt*.pyd` there | `python -c "from ignite_xdna.runtime.driver import setup_xrt_environment as s; s(); import pyxrt; print(pyxrt.device(0))"` |
