@@ -54,7 +54,9 @@ WORKLOADS = ["passthrough", "cpp_runner", "clock"] + [f"e2e:{c}" for c in CONTAI
 PASSTHROUGH_N = 4096                       # int32 per buffer, the 32 KB payload of every dispatch-floor log
 BATCHES = [1, 2, 4, 8, 16, 32, 64]
 CLOCK_TARGETS = [1 << k for k in range(20, 26)]
-CLOCK_CYCLES_PER_ITER = 9.0                # scalar loop, trace-measured on Linux 2026-10-28 (cycles = 9 * iters + 4)
+# Scalar loop, trace-measured on Linux with the bundle's toolchain (cycles = 9 * iters + 4 at every length):
+# results/linux/clock_probe_default_a36c62b9_laptop-linux_20261028T181724Z.log
+CLOCK_CYCLES_PER_ITER = 9.0
 COUNTS = {   # (timed, warmup) per workload; --checks-only uses the second set
     "timed": {"raw": (1000, 50), "runlist": (100, 10), "cpp": (1000, 50), "clock": (20, 3), "e2e": (500, 50)},
     "checks": {"raw": (20, 2), "runlist": (5, 1), "cpp": (20, 2), "clock": (3, 1), "e2e": (30, 5)},
@@ -126,10 +128,10 @@ def cmd_bundle(a) -> int:
     return 0
 
 
-def git_commit() -> str:
+def git_commit(repo: Path = ROOT) -> str:
     try:
-        sha = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
-        dirty = subprocess.run(["git", "diff", "--quiet", "HEAD"], cwd=ROOT).returncode != 0
+        sha = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo, text=True).strip()
+        dirty = subprocess.run(["git", "diff", "--quiet", "HEAD"], cwd=repo).returncode != 0
         return sha + ("-dirty" if dirty else "")
     except (OSError, subprocess.CalledProcessError):
         return "unknown"
@@ -151,10 +153,47 @@ def xrt_smi(*args) -> str:
     return run_xrt_smi(list(args))[1]
 
 
+def power_state() -> dict:
+    """AC and the host power policy, on either OS: what the pre-registration's conditions are checked against."""
+    import psutil
+    battery = psutil.sensors_battery()
+    state = {"ac_online": None if battery is None else bool(battery.power_plugged)}
+    if os.name == "nt":
+        out = subprocess.run(["powercfg", "/getactivescheme"], capture_output=True, text=True).stdout.strip()
+        state["power_scheme"] = out
+        try:
+            import winreg
+            with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE,
+                                r"SYSTEM\CurrentControlSet\Control\Power\User\PowerSchemes") as k:
+                # Settings' Power mode slider: an overlay GUID (Best performance is ded574b5-45a0-4f42-8737-46345c09c238).
+                state["power_mode_overlay_ac"] = winreg.QueryValueEx(k, "ActiveOverlayAcPowerScheme")[0]
+        except OSError as exc:
+            state["power_mode_overlay_ac"] = f"unreadable: {exc}"
+    else:
+        import research_process as rp
+        stack = rp.linux_stack()
+        state.update({k: stack[k] for k in ("platform_profile", "cpu_epp", "cpu_governor")})
+    return state
+
+
+def power_refusals(state: dict) -> list:
+    """Pre-registered conditions a timed workload must meet; empty when it may run."""
+    refuse = []
+    if state.get("ac_online") is False:
+        refuse.append("on battery")
+    if os.name != "nt" and state.get("platform_profile") != "performance":
+        refuse.append(f"platform_profile {state.get('platform_profile')!r}, not performance (powerprofilesctl set performance)")
+    if os.name == "nt" and state.get("power_mode_overlay_ac") != "ded574b5-45a0-4f42-8737-46345c09c238":
+        refuse.append(f"Windows power mode overlay {state.get('power_mode_overlay_ac')!r}, not Best performance")
+    return refuse
+
+
 def witness() -> dict:
     import research_process as rp
     w = rp.machine()
     w["python"] = sys.version.split()[0]
+    w["power"] = power_state()
+    w["xrt_smi_version"] = xrt_smi("--version")
     w["xrt_smi_examine"] = xrt_smi("examine")
     w["xrt_smi_platform"] = xrt_smi("examine", "-r", "platform")
     try:
@@ -166,8 +205,9 @@ def witness() -> dict:
 
 
 def host_load(wait_s: float) -> dict:
-    guard = (["powershell", "-NoProfile", "-File", str(ROOT / "tools/host_load.ps1")] if os.name == "nt"
-             else [sys.executable, str(ROOT / "tools/host_load.py")])
+    # -ExecutionPolicy Bypass: a machine left at the default policy refuses the script, and the verdict would read UNKNOWN.
+    guard = (["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(ROOT / "tools/host_load.ps1")]
+             if os.name == "nt" else [sys.executable, str(ROOT / "tools/host_load.py")])
     deadline = time.monotonic() + wait_s
     while True:
         out = subprocess.run(guard, capture_output=True, text=True, timeout=60).stdout
@@ -357,18 +397,26 @@ def cmd_run(a) -> int:
     if a.only:
         order = [w for w in order if w in a.only.split(",")]
     meta = {"schema": 1, "round": a.round, "os": platform.system(), "checks_only": a.checks_only,
-            "order": order, "bundle": info, "code_commit": git_commit(), "witness": witness(),
+            "order": order, "bundle": info, "code_commit": git_commit(),
+            "ignition_commit": git_commit(Path(a.ignition).resolve().parent), "witness": witness(),
             "started_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
     (out_dir / "round.json").write_text(json.dumps(meta, indent=1) + "\n")
     print(f"[os_bench] round {a.round} on {meta['witness']['machine']}: {', '.join(order)}", flush=True)
     for w in order:
-        pre = {"npu": npu_state(), "host_load": host_load(0 if a.checks_only else 60)}
+        pre = {"npu": npu_state(), "host_load": host_load(0 if a.checks_only else 60), "power": power_state()}
         refuse = []
+        if pre["host_load"]["verdict"] not in ("CLEAR", "BUSY", "PEER"):
+            refuse.append(f"host-load guard gave no verdict ({pre['host_load']['verdict']})")   # a broken guard, even in a smoke
+        for reason in power_refusals(pre["power"]):
+            if a.checks_only:
+                print(f"[os_bench] WARNING (a timed round would refuse): {reason}", flush=True)
+            else:
+                refuse.append(reason)
         if pre["npu"]["pmode"] != "default":
             refuse.append(f"NPU power mode {pre['npu']['pmode']!r}, not default")
         if pre["npu"]["context_pids"] != []:
             refuse.append(f"NPU not idle: contexts {pre['npu']['context_pids']}")
-        if not a.checks_only and pre["host_load"]["verdict"] != "CLEAR":
+        if not a.checks_only and pre["host_load"]["verdict"] != "CLEAR" and not any("guard" in r for r in refuse):
             refuse.append(f"host load {pre['host_load']['verdict']}")
         tag = w.replace(":", "_")
         record = {"round": a.round, "workload": w, "os": meta["os"], "bundle_manifest_sha256": info["manifest_sha256"],
@@ -390,7 +438,7 @@ def cmd_run(a) -> int:
             record["timing_eligible"] = (not a.checks_only and p.returncode == 0 and record["result"] is not None
                                          and record["postflight"]["npu"]["pmode"] == "default")
         (out_dir / f"{tag}.json").write_text(json.dumps(record, indent=1, allow_nan=True) + "\n")
-        print(f"[os_bench] {w}: {headline(record)}", flush=True)
+        print(f"[os_bench] {w}: [host {pre['host_load']['verdict']}] {headline(record)}", flush=True)
     return 0
 
 
@@ -456,6 +504,9 @@ def cmd_compare(a) -> int:
     bundles = {m["bundle"]["manifest_sha256"] for m, _ in rounds.values()}
     if len(bundles) > 1:
         sys.exit(f"rounds come from {len(bundles)} different bundles; refusing to compare: {sorted(bundles)}")
+    code = {(m["code_commit"], m.get("ignition_commit")) for m, _ in rounds.values()}
+    if len(code) > 1 and not a.include_checks:
+        sys.exit(f"rounds ran different code (ignite-xdna, Ignition): {sorted(code)}; refusing to compare")
     table = {}   # metric -> os -> [(round, value)]
     for name, (meta, recs) in rounds.items():
         for rec in recs:

@@ -181,7 +181,8 @@ def main():
     if not a.checks_only:
         deadline = time.monotonic() + a.wait_clear
         while True:
-            guard = (['powershell', '-NoProfile', '-File', str(ROOT / 'tools/host_load.ps1')] if os.name == 'nt'
+            guard = (['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', str(ROOT / 'tools/host_load.ps1')]
+                     if os.name == 'nt'
                      else [sys.executable, str(ROOT / 'tools/host_load.py')])
             result = subprocess.run(guard, capture_output=True, text=True, timeout=30)
             print(scrub(result.stdout + result.stderr), flush=True)

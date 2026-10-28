@@ -1,0 +1,84 @@
+RESEARCH_PLATFORM {"machine": "Laptop (Linux)", "cpu": "AMD Ryzen 5 8645HS w/ Radeon 760M Graphics", "os": "Linux-7.2.11-arch1-1-x86_64-with-glibc2.44", "ram_bytes": 16025116672, "linux_stack": {"kernel": "7.2.11-arch1-1", "npu_vbnv": "RyzenAI-npu1", "npu_firmware": "1.5.5.391", "amdxdna_srcversion": "CEAE025A317872A9A6B3FC8", "xrt": {"Version": "2.21.0", "Branch": "HEAD", "Hash": "4eb1f4392a012b4e6eca759762389c612537f7c7"}, "platform_profile": "balanced", "cpu_governor": "powersave", "cpu_epp": "balance_performance", "ac_online": "1"}, "source_sha256": {"tools/research_process.py": "36a5b58f8beb602f06f80487cef0baffbc8f88b1ff6bd5350c172fca38620954", "tools/npu_quiet.py": "51cc3c5bae81c8b892f667ecd10ece970a95a2fd6abda1fa038365b75bb916cf", "tools/quant_calib_alphabet.py": "88cbdf7ceeb39e7de5a6bca25c360b89b93da0e7182516e3960c4414087248e9", "tools/xint8_arithmetic_probe.py": "64e377c883c87d8921d940be4e8efee02669fc48701ecc81b338d11dde1e4228", "scripts/research-lowlevel.sh": "5b973f4b13e79b9b206e156b1845045828fee2a6d3241575d4f8089ca0d88a4f", "scripts/research-iron.sh": "30eeff26850f2b5a2c260548e65d6f6f3da115e51a10868a7e95458bdcac340b", "kernels/memory_placement/probe.py": "0101b0beaabfba974bd98e94521932e535c98f45f80ced4638c5b55780e9099e", "kernels/memory_placement/memory_kernels.cc": "01fbe2cb8ed6ed153eef0f20512422e3eb44e5a1f5b8759956d039f04eef46f3", "scripts/research-matrix.sh": "d6bad11de9011f75a4942d2d6f5c1e8155eef00f0bbc1bdde85a785d69545ecc", "kernels/memory_placement/gemm.py": "8dbf48f8f4a356cc69bc65793b8dd7eab9b18074d414a1e01fb7e0abe42319a3", "kernels/memory_placement/gemm_placement.cc": "2fa1d57cf316cdd8c3599eae4581284c26ee392ad7dbbf289bafd175342ad9bc", "tools/research_summary.py": "e5d1913068f293914d67034d982ffd5363e5187d035108da8d6cdf4a09386efb", "tools/research_toolchain.py": "c6c01235e9eb9ca7f83e9f42e61d1c98bff86c5284a9ab1cd7fd91e571b010ca", "tools/host_load.py": "b09332f21028b209f1df25feb4af9f919c295bd4f2ccf4ee392a0eb209b350d5"}, "commit": "7a5267e33c1a18dcf80bdb3a165f6dba4e726aba", "command": ["bash", "scripts/research-iron.sh", "kernels/clock_probe/clock_probe.py", "--label", "default", "--iters", "10", "--warmup", "2"], "seconds_limit": 600.0, "rss_gib_limit": 8, "checks_only": true, "free_ram_bytes": 9311539200}
+NPU_QUIET_REQUEST {"file": "/home/<user>/.local/state/ignite-xdna/npu-quiet.39639.request", "pid": 39639}
+PRE_NPU_CONTEXT_WITNESS "\n------------------------------\n[0000:05:00.1] : RyzenAI-npu1\n------------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_TIMELINE "\n------------------------------\n[0000:05:00.1] : RyzenAI-npu1\n------------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [39639, 39685], "foreign_pids": []}
+AIE core clock via trace-unit event stamps -- one Worker, scalar / vector loops, label=default
+iters=10 warmup=2 trace_size=65536 (compile excluded, kernel cached)
+
+--- xrt-smi --batch examine -r platform, and XRT's clock field (captured by this run) ---
+(xrt-smi not captured: [Errno 2] No such file or directory: 'C:\\Windows\\System32\\AMD\\xrt-smi.exe')
+(pyxrt max_clock_frequency_mhz not captured: No such query request (72))
+--- end ---
+HOST_TIMELINE {"elapsed_seconds": 2.111, "tree_rss_bytes": 154902528, "foreign_peers": []}
+
+first call (includes compile/cache lookup): 1.90 s wall; tile r2c1 (get_coreid), cycles=73732, hw 0.9244 ms, trace events=491, pairs=245, verify=ok
+trace packet header says the traced core is row 2, col 1
+decoder cross-check on a no-sync run: this script 73732 cycles, mlir-aie parse.py 73732 cycles (agree; parsed against /home/<user>/src/ignite-xdna/scratch/iron-cache/06605a6f2c11deab484110e7/input_with_addresses.mlir)
+
+=== loop: scalar ===
+     iters       cycles  cyc/iter      hw ms     hw min    wall ms cyc/hw GHz  first GHz  tile  ok
+----------------------------------------------------------------------------------------------------------------
+    262144      2359300     9.000     1.8501     1.6288   104.2258     1.2752     1.2825  r2c1  yes
+HOST_TIMELINE {"elapsed_seconds": 4.167, "tree_rss_bytes": 155504640, "foreign_peers": []}
+    524288      4718596     9.000     3.1174     2.9504   105.9105     1.5136     1.5845  r2c1  yes
+NPU_TIMELINE "\n------------------------------\n[0000:05:00.1] : RyzenAI-npu1\n------------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [39639, 39685, 39730, 39778], "foreign_pids": []}
+   1048576      9437188     9.000     5.6618     5.5377   107.2290     1.6668     1.5863  r2c1  yes
+HOST_TIMELINE {"elapsed_seconds": 6.255, "tree_rss_bytes": 155504640, "foreign_peers": []}
+   2097152     18874372     9.000    10.9776    10.8197   113.9960     1.7194     1.7114  r2c1  yes
+HOST_TIMELINE {"elapsed_seconds": 8.285, "tree_rss_bytes": 155504640, "foreign_peers": []}
+   4194304     37748740     9.000    21.3763    21.3159   122.9982     1.7659     1.7621  r2c1  yes
+NPU_TIMELINE "\n------------------------------\n[0000:05:00.1] : RyzenAI-npu1\n------------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [39639, 39685, 39730, 39778], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 10.428, "tree_rss_bytes": 155504640, "foreign_peers": []}
+   8388608     75497476     9.000    42.4982    42.2782   147.0246     1.7765     1.7688  r2c1  yes
+HOST_TIMELINE {"elapsed_seconds": 12.489, "tree_rss_bytes": 155504640, "foreign_peers": []}
+  16777216    150994948     9.000    84.5784    84.2542   188.3092     1.7853     1.7776  r2c1  yes
+HOST_TIMELINE {"elapsed_seconds": 14.566, "tree_rss_bytes": 155508736, "foreign_peers": []}
+NPU_TIMELINE "\n------------------------------\n[0000:05:00.1] : RyzenAI-npu1\n------------------------------\nAIE Partitions\n  Total Memory Usage: N/A\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |39685               |94         |1           |0           |0    |N/A      |\n      |N/A                 |Active     |0           |0           |     |N/A      |\n      |N/A                 |24576 Byte |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [39685], "owned_pids": [39639, 39685, 39730, 39778], "foreign_pids": []}
+  33554432    301989892     9.000   168.6220   168.3706   267.9024     1.7909     1.7951  r2c1  yes
+
+SCALAR / HARDWARE bracket (submit+wait):  time_ms = intercept + slope * cycles   (R^2 = 0.999999)
+  intercept (per-dispatch cost, cancels)  : 456.8 us
+  slope                                   : 0.556875 ns/cycle
+  CORE CLOCK  1/slope                     : 1.7957 GHz
+
+SCALAR / WALL: not fitted. With trace on, every call allocates a 65536-byte trace buffer and dumps it to disk inside the wall bracket (tens of ms); only the hardware bracket is meaningful here.
+
+=== loop: vector ===
+     iters       cycles  cyc/iter      hw ms     hw min    wall ms cyc/hw GHz  first GHz  tile  ok
+----------------------------------------------------------------------------------------------------------------
+HOST_TIMELINE {"elapsed_seconds": 16.658, "tree_rss_bytes": 155508736, "foreign_peers": []}
+    262144       524309     2.000     0.7840     0.5485   103.4251     0.6687     0.3381  r2c1  yes
+HOST_TIMELINE {"elapsed_seconds": 18.706, "tree_rss_bytes": 155508736, "foreign_peers": []}
+    524288      1048597     2.000     0.9487     0.8612   104.1583     1.1053     0.9977  r2c1  yes
+   1048576      2097173     2.000     1.5724     1.4330   100.5923     1.3338     1.4155  r2c1  yes
+NPU_TIMELINE "\n------------------------------\n[0000:05:00.1] : RyzenAI-npu1\n------------------------------\nAIE Partitions\n  Total Memory Usage: N/A\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |39685               |136        |1           |0           |0    |N/A      |\n      |N/A                 |Active     |0           |0           |     |N/A      |\n      |N/A                 |24576 Byte |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [39685], "owned_pids": [39639, 39685, 39730, 39778], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 20.815, "tree_rss_bytes": 155508736, "foreign_peers": []}
+   2097152      4194325     2.000     2.7365     2.5949   103.0321     1.5327     1.5430  r2c1  yes
+   4194304      8388629     2.000     5.3594     5.0276   105.2132     1.5652     1.6088  r2c1  yes
+HOST_TIMELINE {"elapsed_seconds": 22.839, "tree_rss_bytes": 155508736, "foreign_peers": []}
+   8388608     16777237     2.000    10.0681     9.7228   110.5801     1.6664     1.7090  r2c1  yes
+HOST_TIMELINE {"elapsed_seconds": 24.964, "tree_rss_bytes": 155508736, "foreign_peers": []}
+NPU_TIMELINE "\n------------------------------\n[0000:05:00.1] : RyzenAI-npu1\n------------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [39639, 39685, 39730, 39778], "foreign_pids": []}
+  16777216     33554453     2.000    19.0535    18.9268   120.3406     1.7611     1.7445  r2c1  yes
+HOST_TIMELINE {"elapsed_seconds": 27.095, "tree_rss_bytes": 155508736, "foreign_peers": []}
+  33554432     67108885     2.000    38.0676    37.6928   133.6150     1.7629     1.7812  r2c1  yes
+
+VECTOR / HARDWARE bracket (submit+wait):  time_ms = intercept + slope * cycles   (R^2 = 0.999877)
+  intercept (per-dispatch cost, cancels)  : 468.7 us
+  slope                                   : 0.559794 ns/cycle
+  CORE CLOCK  1/slope                     : 1.7864 GHz
+
+VECTOR / WALL: not fitted. With trace on, every call allocates a 65536-byte trace buffer and dumps it to disk inside the wall bracket (tens of ms); only the hardware bracket is meaningful here.
+
+SUMMARY label=default trace=on
+  scalar: core clock 1.7957 GHz (hw bracket); hw intercept 456.8 us
+  vector: core clock 1.7864 GHz (hw bracket); hw intercept 468.7 us
+  scalar vs vector agreement: 0.52%
+POST_NPU_CONTEXT_WITNESS "\n------------------------------\n[0000:05:00.1] : RyzenAI-npu1\n------------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+RESEARCH_PROCESS_RESULT {"exit_code": 0, "stop": null, "peak_tree_rss_bytes": 395157504, "rss_measurement": "maximum observed across sampled descendant working sets; zero observations reported as null", "elapsed_seconds": 27.5298023549999, "foreign_contention_observed": false, "timing_eligible": false}
