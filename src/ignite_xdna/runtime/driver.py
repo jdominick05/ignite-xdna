@@ -17,7 +17,13 @@ def get_repo_root() -> Path:
 
 
 def setup_xrt_environment():
-    """Register Windows XRT SDK search paths and DLL directories."""
+    """Register the XRT SDK's pyxrt search path (and, on Windows, its DLL directories)."""
+    if os.name != "nt":
+        # Linux: pyxrt lives in $XILINX_XRT/python (set by /opt/xilinx/xrt/setup.sh); fall back to the default prefix.
+        xrt_python = os.path.join(os.environ.get("XILINX_XRT", "/opt/xilinx/xrt"), "python")
+        if os.path.isdir(xrt_python) and xrt_python not in sys.path:
+            sys.path.append(xrt_python)
+        return
     dll_paths = [
         r'C:\Xilinx\XRT\xrt_sdk\xrt\lib',
         r'C:\Windows\System32',

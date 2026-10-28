@@ -23,7 +23,8 @@ import sys
 import time
 from pathlib import Path
 
-SMI = Path("C:/Windows/System32/AMD/xrt-smi.exe")
+SMI = (Path("C:/Windows/System32/AMD/xrt-smi.exe") if os.name == "nt"
+       else Path(os.environ.get("XILINX_XRT", "/opt/xilinx/xrt")) / "bin" / "xrt-smi")
 IDLE = "No hardware contexts running"
 # A cooperating holder releases within ~2 s of seeing a request it polls for once a second; waiting 5 s covers it.
 MIN_WAIT_S = 5.0

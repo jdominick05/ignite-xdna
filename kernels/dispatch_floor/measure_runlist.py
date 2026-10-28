@@ -49,6 +49,7 @@ USAGE (from the mlir-aie ironenv, NOT resnet_env17 -- see kernels/README.md)
 """
 
 import argparse
+import os
 import statistics
 import sys
 import time
@@ -179,14 +180,15 @@ def compile_and_find_cache(n):
     #
     # The .lock diff is exact: IRON acquires the lock inside the design's own kernel_dir
     # on every compile() call, cache hit included, so exactly one entry moves.
-    cache_dir = Path.home() / ".npu" / "cache"
-    if not cache_dir.exists():
-        sys.exit("Cannot find IRON cache at ~/.npu/cache/ — run measure_floor.py first")
-
+    # The captured paths are authoritative wherever the cache lives (NPU_CACHE_HOME moves it out of ~/.npu/cache).
     xclbin_path = captured.get("xclbin")
     insts_path = captured.get("insts")
     if xclbin_path and insts_path and xclbin_path.is_file() and insts_path.is_file():
         return str(xclbin_path.resolve()), str(insts_path.resolve()), None
+
+    cache_dir = Path(os.environ.get("NPU_CACHE_HOME", Path.home() / ".npu" / "cache"))
+    if not cache_dir.exists():
+        sys.exit(f"Cannot find IRON cache at {cache_dir} — run measure_floor.py first")
 
     # Refuse rather than guess. A wrong design here is not a failed run, it is a
     # plausible number for the wrong thing.

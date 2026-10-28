@@ -24,6 +24,13 @@
 #define HAVE_AVX2 1
 #endif
 
+// 32-byte stack alignment for the __m256i weight tables: MSVC and gcc/clang spell it differently
+#if defined(_MSC_VER)
+#define ALIGN32 __declspec(align(32))
+#else
+#define ALIGN32 __attribute__((aligned(32)))
+#endif
+
 #ifdef _OPENMP
 #include <omp.h>
 #endif
@@ -162,8 +169,8 @@ PREPROCESS_API int fused_preprocess_bgr_to_chw_int8(
 
 #if defined(HAVE_AVX2)
     int n_pairs = nw / 2;
-    __declspec(align(32)) __m256i w_bx0_stack[512];
-    __declspec(align(32)) __m256i w_bx1_stack[512];
+    ALIGN32 __m256i w_bx0_stack[512];
+    ALIGN32 __m256i w_bx1_stack[512];
     __m256i* w_bx0 = w_bx0_stack;
     __m256i* w_bx1 = w_bx1_stack;
     __m256i* w_bx0_heap = NULL;
@@ -431,8 +438,8 @@ PREPROCESS_API int fused_preprocess_bgr_to_c8_plane(
 
 #if defined(HAVE_AVX2)
     int n_pairs = nw / 2;
-    __declspec(align(32)) __m256i w_bx0_stack[512];
-    __declspec(align(32)) __m256i w_bx1_stack[512];
+    ALIGN32 __m256i w_bx0_stack[512];
+    ALIGN32 __m256i w_bx1_stack[512];
     __m256i* w_bx0 = w_bx0_stack;
     __m256i* w_bx1 = w_bx1_stack;
     __m256i* w_bx0_heap = NULL;
@@ -855,8 +862,8 @@ PREPROCESS_API int fused_resize_bgr_to_c8_plane(
 
 #if defined(HAVE_AVX2)
     int n_pairs = dst_w / 2;
-    __declspec(align(32)) __m256i w_bx0_stack[512];
-    __declspec(align(32)) __m256i w_bx1_stack[512];
+    ALIGN32 __m256i w_bx0_stack[512];
+    ALIGN32 __m256i w_bx1_stack[512];
     __m256i* w_bx0 = w_bx0_stack;
     __m256i* w_bx1 = w_bx1_stack;
     __m256i* w_bx0_heap = NULL;

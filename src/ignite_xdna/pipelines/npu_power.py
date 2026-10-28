@@ -42,7 +42,9 @@ import time
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Sequence, Tuple
 
-XRT_SMI = os.environ.get("IGNITE_XDNA_XRT_SMI", r"C:\Windows\System32\AMD\xrt-smi.exe")
+XRT_SMI = os.environ.get("IGNITE_XDNA_XRT_SMI",
+                         r"C:\Windows\System32\AMD\xrt-smi.exe" if os.name == "nt"
+                         else os.path.join(os.environ.get("XILINX_XRT", "/opt/xilinx/xrt"), "bin", "xrt-smi"))
 ENV_NPU_POWER = "IGNITE_XDNA_NPU_POWER"          # "auto" (default) or "off"
 ENV_WATCH_S = "IGNITE_XDNA_NPU_POWER_WATCH_S"     # seconds between checks for other NPU applications
 ENV_LEASE = "IGNITE_XDNA_NPU_POWER_LEASE"         # lease file path (tests)

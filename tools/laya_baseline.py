@@ -32,7 +32,6 @@ import statistics
 import subprocess
 import sys
 import time
-import winreg
 from collections import Counter, defaultdict
 from pathlib import Path
 
@@ -288,8 +287,14 @@ def cmd_platform(a) -> int:
     import onnxruntime as ort
     print(f"PLATFORM onnxruntime {ort.__version__}, providers {ort.get_available_providers()}, python "
           f"{sys.version.split()[0]}, numpy {np.__version__}")
-    with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"HARDWARE\DESCRIPTION\System\CentralProcessor\0") as k:
-        print(f"PLATFORM CPU {winreg.QueryValueEx(k, 'ProcessorNameString')[0].strip()}, {os.cpu_count()} logical")
+    if os.name == "nt":
+        import winreg
+        with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"HARDWARE\DESCRIPTION\System\CentralProcessor\0") as k:
+            cpu = winreg.QueryValueEx(k, 'ProcessorNameString')[0].strip()
+    else:
+        cpu = next((l.split(":", 1)[1].strip() for l in Path("/proc/cpuinfo").read_text().splitlines()
+                    if l.startswith("model name")), "unknown")
+    print(f"PLATFORM CPU {cpu}, {os.cpu_count()} logical")
     gpu = subprocess.run(["powershell", "-NoProfile", "-Command",
                           "Get-CimInstance Win32_VideoController | ForEach-Object { $_.Name + ', driver ' + "
                           "$_.DriverVersion }"], capture_output=True, text=True)

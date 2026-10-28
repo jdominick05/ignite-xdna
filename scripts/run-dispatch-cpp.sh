@@ -37,17 +37,30 @@ done
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-IRONENV="$HOME/mlir-aie/ironenv/Scripts"
-export PATH="$IRONENV:$PATH"
-export PYTHONPATH="/c/Xilinx/XRT/xrt_sdk/xrt/python${PYTHONPATH:+:$PYTHONPATH}"
-
-XRT_SMI="/c/Windows/System32/AMD/xrt-smi.exe"
+if [ "$(uname -s)" = Linux ]; then
+    # Linux: the repo's .venv-iron and XRT in /opt/xilinx/xrt; the runner is built by scripts/build_dispatch_runner.sh.
+    : "${XILINX_XRT:=/opt/xilinx/xrt}"
+    source "$ROOT/.venv-iron/bin/activate"
+    source "$XILINX_XRT/setup.sh" >/dev/null
+    XRT_SMI="$XILINX_XRT/bin/xrt-smi"
+    HOST_LOAD=(python3 tools/host_load.py)
+    RUNNER=kernels/dispatch_floor/dispatch_runner
+    winpath() { printf '%s' "$1"; }
+else
+    IRONENV="$HOME/mlir-aie/ironenv/Scripts"
+    export PATH="$IRONENV:$PATH"
+    export PYTHONPATH="/c/Xilinx/XRT/xrt_sdk/xrt/python${PYTHONPATH:+:$PYTHONPATH}"
+    XRT_SMI="/c/Windows/System32/AMD/xrt-smi.exe"
+    HOST_LOAD=(powershell -ExecutionPolicy Bypass -File tools/host_load.ps1)
+    RUNNER=kernels/dispatch_floor/dispatch_runner.exe
+    winpath() { cygpath -w "$1"; }
+fi
 
 echo "=============================================================================="
 echo "PRECONDITIONS"
 echo "=============================================================================="
 "$XRT_SMI" examine -r aie-partitions 2>&1 | tail -5
-powershell -ExecutionPolicy Bypass -File tools/host_load.ps1 2>&1 | tail -8
+"${HOST_LOAD[@]}" 2>&1 | tail -8
 
 echo
 echo "=============================================================================="
@@ -72,8 +85,8 @@ echo
 echo "=============================================================================="
 echo "ARM 2: C++ (dispatch_runner.exe) -- same xclbin, same insts, no Python"
 echo "=============================================================================="
-kernels/dispatch_floor/dispatch_runner.exe \
-    --xclbin "$(cygpath -w "$XCLBIN")" --insts "$(cygpath -w "$INSTS")" \
+"$RUNNER" \
+    --xclbin "$(winpath "$XCLBIN")" --insts "$(winpath "$INSTS")" \
     --iters "$ITERS" --payload "$PAYLOAD" --batch-sizes "$BATCHES"
 
 echo
@@ -81,4 +94,4 @@ echo "==========================================================================
 echo "POST-RUN WITNESS"
 echo "=============================================================================="
 "$XRT_SMI" examine -r aie-partitions 2>&1 | tail -3
-powershell -ExecutionPolicy Bypass -File tools/host_load.ps1 2>&1 | tail -8
+"${HOST_LOAD[@]}" 2>&1 | tail -8

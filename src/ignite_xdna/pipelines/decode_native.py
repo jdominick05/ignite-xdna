@@ -16,6 +16,7 @@ built, ``for_grid`` returns ``None`` and the decoder keeps its numpy path.
 
 import ctypes
 import platform
+import sys
 import threading
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
@@ -91,9 +92,11 @@ class _DecodeC8(ctypes.Structure):
 
 def _load_library() -> Optional[ctypes.CDLL]:
     here = Path(__file__).parent.resolve()
-    dll = here / ("decode_native.dll" if platform.system() == "Windows" else "decode_native.so")
+    # Not decode_native.so on Linux: the import system takes a .so beside this module as the module itself.
+    dll = here / ("decode_native.dll" if platform.system() == "Windows" else "libdecode_native.so")
     if not dll.exists() and not _compile_native_dll(here / "decode_native.c", dll, "/O2 /fp:precise",
                                                     ["-O3", "-ffp-contract=off"]):
+        sys.stderr.write(f"Warning: could not build {dll.name}; using the numpy decode path\n")
         return None
     try:
         lib = ctypes.CDLL(str(dll))

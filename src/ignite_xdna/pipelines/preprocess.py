@@ -76,6 +76,8 @@ def _load_preprocess_lib() -> Optional[ctypes.CDLL]:
     if not dll_path.exists():
         success = _compile_simd_dll(c_path, dll_path)
         if not success or not dll_path.exists():
+            # Say so: the numpy ingress it falls back to costs ~3.5 ms a frame, and a silent fallback reads as a slow NPU.
+            sys.stderr.write(f"Warning: could not build {dll_path.name}; using the numpy preprocessing path\n")
             return None
 
     # The power mode (how OpenMP's workers wait, and how many run) must be in the environment before this DLL loads:

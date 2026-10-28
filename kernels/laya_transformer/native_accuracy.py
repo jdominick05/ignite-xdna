@@ -9,6 +9,7 @@ import ctypes
 from datetime import datetime, timezone
 import hashlib
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -132,7 +133,10 @@ def save_snapshot(path,logits,act_probs,items,arm,commit,completed,complete,orac
           cpu_neural_oracle_calls=np.int64(oracle_calls))
         output.flush()
     if path.exists() and path.name.endswith('.checkpoint.npz'): temporary.replace(path)
-    else: temporary.rename(path)
+    else:
+        # A hard link fails with FileExistsError on both OSes; rename() would silently overwrite on POSIX.
+        try: os.link(temporary,path)
+        finally: temporary.unlink()
 
 
 def validate_scored(path,arm,items):

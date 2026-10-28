@@ -15,14 +15,17 @@ import subprocess
 import sys
 import threading
 import time
-import winreg
+
+if os.name == 'nt':
+    import winreg
 
 import psutil
 
 import npu_quiet
 
 ROOT = Path(__file__).resolve().parents[1]
-SMI = Path('C:/Windows/System32/AMD/xrt-smi.exe')
+SMI = (Path('C:/Windows/System32/AMD/xrt-smi.exe') if os.name == 'nt'
+       else Path(os.environ.get('XILINX_XRT', '/opt/xilinx/xrt')) / 'bin' / 'xrt-smi')
 PRODUCER = re.compile(r'3\w*_quantize|1_export\.py|-m\s+quant\b|quant_adaround|acc_spill_probe|aie_disasm', re.I)
 BUILD = re.compile(r'^(cl|link|ninja|cmake|make|clang\+\+|clang|llc|opt|aie-opt|aie-translate|xchesscc)(\.exe)?$', re.I)
 
@@ -40,6 +43,7 @@ TOOLING_DIR = re.compile(r'(?i)([\\/])\.(?:claude|codex|gemini|qwen|agy|antigrav
 def scrub(value):
     value = re.sub(r'(?i)([a-z]:[\\/]+Users[\\/]+)[^\\/\s"\'<>]+', r'\1<user>', str(value))
     value = re.sub(r'(?i)(/[a-z]/Users/)[^/\s"\'<>]+', r'\1<user>', value)
+    value = re.sub(r'(/home/)[^/\s"\'<>]+', r'\1<user>', value)
     value = TOOLING_DIR.sub(r'\1<tooling>', value)
     return AGENT_PROCESS.sub('dev-agent', value)
 
@@ -48,13 +52,45 @@ def emit(label, value):
     print(scrub(label + ' ' + json.dumps(value, allow_nan=False)), flush=True)
 
 
+def _read(path):
+    try:
+        return Path(path).read_text().strip()
+    except OSError:
+        return None
+
+
+def linux_stack():
+    """The Linux half of what a timing depends on: driver, firmware, XRT and the host power policy."""
+    dev = Path('/sys/class/accel/accel0/device')
+    xrt = None
+    try:
+        out = subprocess.run([str(SMI), '--version'], capture_output=True, text=True, timeout=15).stdout
+        xrt = {k.strip(): v.strip() for k, v in re.findall(r'^\s*(Version|Branch|Hash)\s*:\s*(.+)$', out, re.M)} or None
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+    return {'kernel': platform.release(), 'npu_vbnv': _read(dev / 'vbnv'), 'npu_firmware': _read(dev / 'fw_version'),
+            'amdxdna_srcversion': _read('/sys/module/amdxdna/srcversion'), 'xrt': xrt,
+            'platform_profile': _read('/sys/firmware/acpi/platform_profile'),
+            'cpu_governor': _read('/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor'),
+            'cpu_epp': _read('/sys/devices/system/cpu/cpu0/cpufreq/energy_performance_preference'),
+            'ac_online': next((_read(p) for p in sorted(Path('/sys/class/power_supply').glob('AC*/online'))), None)}
+
+
 def machine():
-    with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r'HARDWARE\DESCRIPTION\System\CentralProcessor\0') as key:
-        cpu = winreg.QueryValueEx(key, 'ProcessorNameString')[0].strip()
+    if os.name == 'nt':
+        with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r'HARDWARE\DESCRIPTION\System\CentralProcessor\0') as key:
+            cpu = winreg.QueryValueEx(key, 'ProcessorNameString')[0].strip()
+    else:
+        cpu = next((l.split(':', 1)[1].strip() for l in (_read('/proc/cpuinfo') or '').splitlines()
+                    if l.startswith('model name')), platform.processor())
     role = ('Desktop 2' if '8700G' in cpu else 'Laptop' if '8645HS' in cpu else
             'Desktop 1 (no NPU)' if '7800X3D' in cpu else 'unclassified')
-    return {'machine': role, 'cpu': cpu, 'os': platform.platform(),
-            'ram_bytes': psutil.virtual_memory().total}
+    if os.name != 'nt':
+        role += ' (Linux)'
+    info = {'machine': role, 'cpu': cpu, 'os': platform.platform(), 'ram_bytes': psutil.virtual_memory().total}
+    if os.name != 'nt':
+        info['linux_stack'] = linux_stack()
+    return info
 
 
 def source_manifest():
@@ -63,7 +99,7 @@ def source_manifest():
              'scripts/research-iron.sh', 'kernels/memory_placement/probe.py',
              'kernels/memory_placement/memory_kernels.cc', 'scripts/research-matrix.sh',
              'kernels/memory_placement/gemm.py', 'kernels/memory_placement/gemm_placement.cc',
-             'tools/research_summary.py', 'tools/research_toolchain.py')]
+             'tools/research_summary.py', 'tools/research_toolchain.py', 'tools/host_load.py')]
     return {p.relative_to(ROOT).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest() for p in paths}
 
 
@@ -145,8 +181,9 @@ def main():
     if not a.checks_only:
         deadline = time.monotonic() + a.wait_clear
         while True:
-            result = subprocess.run(['powershell', '-NoProfile', '-File', str(ROOT / 'tools/host_load.ps1')],
-                                    capture_output=True, text=True, timeout=30)
+            guard = (['powershell', '-NoProfile', '-File', str(ROOT / 'tools/host_load.ps1')] if os.name == 'nt'
+                     else [sys.executable, str(ROOT / 'tools/host_load.py')])
+            result = subprocess.run(guard, capture_output=True, text=True, timeout=30)
             print(scrub(result.stdout + result.stderr), flush=True)
             if not result.returncode and 'HOST_LOAD_VERDICT CLEAR' in result.stdout:
                 break

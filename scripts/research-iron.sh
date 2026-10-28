@@ -6,6 +6,22 @@
 set -euo pipefail
 if [ "${1:-}" = --help ]; then sed -n '2,4s/^# //p' "${BASH_SOURCE[0]}"; exit 0; fi
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+if [ "$(uname -s)" = Linux ]; then
+  # Linux: the repo's .venv-iron (mlir-aie + llvm-aie wheels, requirements-linux.txt) and XRT built into /opt/xilinx/xrt.
+  : "${IRON_VENV:=$REPO_ROOT/.venv-iron}"
+  : "${XILINX_XRT:=/opt/xilinx/xrt}"
+  source "$IRON_VENV/bin/activate"
+  source "$XILINX_XRT/setup.sh" >/dev/null
+  SITE="$(python -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])')"
+  export MLIR_AIE_INSTALL_DIR="$SITE/mlir_aie"
+  export PEANO_INSTALL_DIR="$SITE/llvm-aie"
+  export PATH="$MLIR_AIE_INSTALL_DIR/bin:$PATH"
+  export XRT_ROOT="$XILINX_XRT"
+  export PYTHONPATH="$REPO_ROOT/src:$REPO_ROOT:$XILINX_XRT/python${PYTHONPATH:+:$PYTHONPATH}"
+  export NPU2=0
+  export NPU_CACHE_HOME="$(pwd)/scratch/iron-cache"
+  exec python "$@"
+fi
 : "${MLIR_AIE_ROOT:=$HOME/mlir-aie}"
 source "$MLIR_AIE_ROOT/ironenv/Scripts/activate"
 export MLIR_AIE_INSTALL_DIR="$(cygpath -w "$MLIR_AIE_ROOT/ironenv/Lib/site-packages/mlir_aie")"

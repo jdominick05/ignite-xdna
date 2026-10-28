@@ -84,6 +84,7 @@ bench_*_cache/
 __pycache__/
 *.py[cod]
 .venv/
+.venv-*/
 venv/
 *.egg-info/
 
@@ -173,6 +174,10 @@ tools/dist/
 *.lib
 *.exe
 src/ignite_xdna/c_api/*.dll
+# Linux builds of the native ingress/decode kernels, compiled in place on first import
+src/ignite_xdna/pipelines/*.so
+# Linux build of the C++ dispatch-floor host (scripts/build_dispatch_runner.sh)
+kernels/dispatch_floor/dispatch_runner
 .stfolder/
 AMD/
 *.bak

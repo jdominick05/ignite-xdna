@@ -819,7 +819,8 @@ def _compile_preprocess_dll(work: Path) -> Path | None:
     for cc in ("clang", "gcc"):
         out = work / "preprocess_simd_test.so"
         try:
-            res = subprocess.run([cc, "-O3", "-shared", "-fPIC", "-fopenmp", str(work / "preprocess_simd.c"),
+            # -mavx2 as in preprocess._compile_simd_dll: without it the AVX2 path, the one that ships, is never compiled.
+            res = subprocess.run([cc, "-O3", "-shared", "-fPIC", "-fopenmp", "-mavx2", str(work / "preprocess_simd.c"),
                                   "-o", str(out)], capture_output=True, text=True, timeout=120)
         except FileNotFoundError:
             continue
