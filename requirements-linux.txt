@@ -1,0 +1,39 @@
+# The Linux engine environment (.venv-iron), as frozen on the laptop 2026-10-28: the counterpart of environment.yml.
+#
+#   uv venv -p 3.13 .venv-iron          # CPython 3.13.18 from uv
+#   .venv-iron/bin/python -m pip install -r requirements-linux.txt
+#   .venv-iron/bin/python -m pip install -e . -e ../Ignition
+#
+# pyxrt is not here: it is built with XRT 2.21.75 (amd/xdna-driver tag 2.21.75) into /opt/xilinx/xrt/python
+# against this venv's Python and pybind11. See docs/SETUP.md.
+# llvm-aie is the a36c62b9 nightly the Windows builds name, NOT mlir-aie 1.4.2's own pin (21.0.0.2026080301),
+# which segfaults compiling kernels/aie2/conv_engine/engine.cc (results/linux/README.md).
+-f https://github.com/Xilinx/mlir-aie/releases/expanded_assets/v1.4.2
+-f https://github.com/Xilinx/llvm-aie/releases/expanded_assets/nightly
+-f https://llvm.github.io/eudsl
+aiofiles==25.1.0
+click==8.5.0
+cloudpickle==3.1.2
+flatbuffers==25.12.19
+iniconfig==2.3.1
+llvm-aie==22.0.0.2026090201+a36c62b9
+markdown-it-py==4.2.0
+mdurl==0.1.2
+ml_dtypes==0.6.0
+mlir-aie==1.4.2
+numpy==2.5.3
+onnx==1.22.0
+onnxruntime==1.30.0
+opencv-python==5.0.0.93
+packaging==26.3
+pillow==12.3.0
+pluggy==1.7.0
+protobuf==7.36.2
+psutil==7.2.2
+pybind11==3.1.0
+pycocotools==2.0.11
+Pygments==2.21.0
+pytest==9.1.1
+rich==15.0.0
+typing_extensions==4.16.0
+eudsl-python-extras==0.1.0.20260801.905+68a0d7a --config-settings=EUDSL_PYTHON_EXTRAS_HOST_PACKAGE_PREFIX=aie
